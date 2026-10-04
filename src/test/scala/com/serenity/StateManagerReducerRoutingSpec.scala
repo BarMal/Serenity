@@ -287,7 +287,9 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
     IO.sleep(150.millis).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("need", Nil, 0)))
+    updatedState.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.Find("need", Vector.empty, 0))
+    )
     updatedState.persisted.buffers(bufferId).findState shouldBe None
   }
 

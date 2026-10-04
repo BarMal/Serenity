@@ -18,7 +18,11 @@ class CommandRegistry(private val commands: List[Command]):
       category -> categoryCommands
     }.toMap
 
+  private lazy val commandIds: Set[CommandId] = commands.map(command => CommandId(command.name)).toSet
+
   def getAllCommands: List[Command] = commands
+
+  def isRegistered(id: CommandId): Boolean = commandIds.contains(id)
 
   /** The commands usable in `mode` on `shell`, in registry order (the palette's recency ranking is a stable sort over
     * it).

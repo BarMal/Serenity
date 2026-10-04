@@ -35,8 +35,8 @@ private[reducers] object EditorTextEditReducer:
         else if isMulti then applyEditedBuffer(groupable = true)(applyMultiCursorInsertion(_, char.toString))
         else
           smartPunctuationReplacement(buffer, head, char, currentState) match
-            case Some((startOffset, endOffset, insertedText)) =>
-              replaceRangeAtCursor(buffer, startOffset, endOffset, insertedText, currentState, paneId, groupable = true)
+            case Some(substitution) =>
+              insertWithSmartPunctuation(buffer, head, char, substitution, currentState, paneId)
             case None =>
               insertAtCursor(buffer, head, char.toString, currentState, paneId, groupable = true)
 
@@ -184,62 +184,95 @@ private[reducers] object EditorTextEditReducer:
     (baseBuffer, MultiCursorEdit(0, startOffset, endOffset, ""))
 
   /** The single-cursor, no-selection typing path only (#1442-adjacent QoL feature): the multi-cursor/selection cases
-    * are rarer for the kind of quote/dash/ellipsis runs this looks at, and are left as plain insertion for now.
+    * are rarer for the kind of quote/dash/ellipsis runs this looks at, and are left as plain insertion for now. Returns
+    * how many characters before the caret the substitution replaces, and its text.
     */
   private def smartPunctuationReplacement(
     buffer: Buffer,
     cursor: CursorPosition,
     char: Char,
     currentState: AppState
-  ): Option[(Int, Int, String)] =
+  ): Option[(Int, String)] =
     if !currentState.persisted.config.languageToolsConfig.smartPunctuationEnabled then None
     else
-      val offset = buffer.document.content.lineColumnToOffset(cursor.line, cursor.column)
-      val precedingText =
-        buffer.document.content.sliceString(math.max(0, offset - SmartPunctuation.lookbehind), offset)
-      SmartPunctuation.replacementFor(char, precedingText).map {
-        case (charsToReplace, insertedText) => (offset - charsToReplace, offset, insertedText)
-      }
+      val content           = buffer.document.content
+      val lineStart         = content.lineColumnToOffset(cursor.line, 0)
+      val offset            = content.lineColumnToOffset(cursor.line, cursor.column)
+      val precedingLineText = content.sliceString(lineStart, offset)
+      val replacement       = SmartPunctuation.replacementFor(char, precedingLineText)
+      replacement.filter(_ => smartPunctuationApplies(buffer, cursor, precedingLineText, currentState))
 
-  /** Replaces `[startOffset, endOffset)` with `insertedText` and moves the cursor to just past it -- the smart-
-    * punctuation sibling of `insertAtCursor`, which only ever inserts at a single point.
+  /** Prose only (#1954): a literal `--` or `"` matters in code, whether that's a code buffer or Markdown's code spans
+    * and fenced blocks. The fence index is built on demand, so it is consulted only once a rule has already matched.
     */
-  private def replaceRangeAtCursor(
+  private def smartPunctuationApplies(
     buffer: Buffer,
-    startOffset: Int,
-    endOffset: Int,
-    insertedText: String,
+    cursor: CursorPosition,
+    precedingLineText: String,
+    currentState: AppState
+  ): Boolean =
+    EditingContext.bufferKind(buffer) match
+      case BufferKind.Code(_)                         => false
+      case BufferKind.PlainText | BufferKind.RichText => true
+      case BufferKind.Markdown =>
+        !SmartPunctuation.withinInlineCode(precedingLineText) && !withinFencedCode(currentState, buffer.id, cursor.line)
+
+  private def withinFencedCode(currentState: AppState, bufferId: BufferId, line: Int): Boolean =
+    currentState.markdownFenceIndex(bufferId).exists(_.rangeAt(line).isDefined)
+
+  /** Types `char` literally as one more step of the typing run, then substitutes it as an undo step of its own, so the
+    * first undo after a substitution restores the literal characters and keeps the rest of the run (#1954).
+    */
+  private def insertWithSmartPunctuation(
+    buffer: Buffer,
+    cursor: CursorPosition,
+    char: Char,
+    substitution: (Int, String),
     currentState: AppState,
-    paneId: PaneId,
-    groupable: Boolean
+    paneId: PaneId
   ): ReducerResult =
+    val (charsToReplace, substitutedText) = substitution
     ReducerResult.fromTransition(
       currentState,
       Focused.modifyBufferWithIdAndEmit(buffer.id) { current =>
-        val newContent =
-          insertOrUnchanged(
-            deleteOrUnchanged(current.document.content, startOffset, endOffset),
-            startOffset,
-            insertedText
-          )
-        val newCursor = newContent.offsetToCursorPosition(startOffset + insertedText.length)
-        val edit      = MultiCursorEdit(0, startOffset, endOffset, insertedText)
-        val replaced = current.copy(
-          document = current.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-          editing = current.editing.withPrimary(Cursor(newCursor)),
-          annotations = adjustAnnotations(
-            current.annotations,
-            current.document.content,
-            newContent,
-            List(edit)
-          ),
-          richText = current.richText.copy(richTextDocument =
-            richTextDocumentAfterEdit(current, startOffset, endOffset, insertedText)
-          )
-        )
-        (replaced, undoBoundaryEffects(buffer.id, paneId, buffer, List(edit), groupable))
+        val (literal, literalEdit)        = replaceSelectionOrInsert(current, cursor, char.toString)
+        val substitutionStart             = literalEdit.start - charsToReplace
+        val literalEnd                    = literalEdit.start + literalEdit.insertedText.length
+        val (substituted, substituteEdit) = replaceRange(literal, substitutionStart, literalEnd, substitutedText)
+        val literalStep    = undoBoundaryEffects(buffer.id, paneId, buffer, List(literalEdit), groupable = true)
+        val substituteStep = undoBoundaryEffects(buffer.id, paneId, literal, List(substituteEdit), groupable = false)
+        (substituted, literalStep ++ substituteStep)
       }
     )
+
+  /** Replaces `[startOffset, endOffset)` with `insertedText` and moves the cursor to just past it. */
+  private def replaceRange(
+    buffer: Buffer,
+    startOffset: Int,
+    endOffset: Int,
+    insertedText: String
+  ): (Buffer, MultiCursorEdit) =
+    val newContent =
+      insertOrUnchanged(
+        deleteOrUnchanged(buffer.document.content, startOffset, endOffset),
+        startOffset,
+        insertedText
+      )
+    val newCursor = newContent.offsetToCursorPosition(startOffset + insertedText.length)
+    val edit      = MultiCursorEdit(0, startOffset, endOffset, insertedText)
+    val replaced = buffer.copy(
+      document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
+      editing = buffer.editing.withPrimary(Cursor(newCursor)),
+      annotations = adjustAnnotations(
+        buffer.annotations,
+        buffer.document.content,
+        newContent,
+        List(edit)
+      ),
+      richText =
+        buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText))
+    )
+    (replaced, edit)
 
   /** `NewLine`/`Enter`'s single-cursor, no-selection path: inserts the newline, then -- Markdown buffers only, and only
     * when a "Chapter <number>" heading is now out of sequence -- resequences every chapter heading's number in one more

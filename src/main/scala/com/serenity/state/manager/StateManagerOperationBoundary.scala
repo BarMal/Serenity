@@ -45,7 +45,8 @@ final private[manager] class StateManagerOperationBoundary private (
     commitObserver: Ref[IO, (AppState, AppState) => IO[Unit]],
     wrapCache: WrappedLineCache,
     commitsUnobserved: Ref[IO, Boolean],
-    editIdleSessionSave: Option[EditIdleSessionSave]
+    editIdleSessionSave: Option[EditIdleSessionSave],
+    announceClosedDocuments: (AppState, AppState) => IO[Unit]
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
@@ -105,6 +106,7 @@ final private[manager] class StateManagerOperationBoundary private (
       PanelContentSync.outlineRefreshDue(committedState, fallbackState).traverse_(scheduleOutlineRefresh) >>
       PanelContentSync.explorerListingsDue(committedState, fallbackState).traverse_(listExplorerDirectory) >>
       scheduleSessionSaveIfDue(fallbackState, committedState) >>
+      announceClosedDocuments(fallbackState, committedState) >>
       commitsUnobserved.get.ifM(IO.unit, commitObserver.get.flatMap(_(fallbackState, committedState)))
 
   /** Replaces the observer told of every commit `afterCommit` follows up, with the states before and after. */
@@ -379,7 +381,10 @@ private[manager] object StateManagerOperationBoundary:
       IO.blocking(SpellCheckConfig.discoverDictionaryFingerprints(config)),
     listDirectory: Path => IO[List[DirEntry]] = explorerListing(FileBrowser.listDirectory),
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
-    editIdleSessionSave: Option[EditIdleSessionSave] = None
+    editIdleSessionSave: Option[EditIdleSessionSave] = None,
+    // A commit is the one place every way a buffer leaves `persisted.buffers` passes through -- tab close, close
+    // workflows, session replacement -- so the LSP hears of each closed document here rather than per close path.
+    announceClosedDocuments: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit
   ): IO[StateManagerOperationBoundary] =
     for
       pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)
@@ -417,5 +422,6 @@ private[manager] object StateManagerOperationBoundary:
       commitObserver,
       wrapCache,
       commitsUnobserved,
-      editIdleSessionSave
+      editIdleSessionSave,
+      announceClosedDocuments
     )

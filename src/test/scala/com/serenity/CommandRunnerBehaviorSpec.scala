@@ -66,7 +66,7 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
           uiSurfaces = List(
             UiSurface(
               SurfaceId("find"),
-              SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
+              SurfaceContent.ModalWorkflow(Modal.Find("needle", Vector.empty, 0)),
               SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
             )
           ),

@@ -261,14 +261,16 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.Keybindings(intent)  => keybindingEffects.interpret(intent)
       case CommandIntent.UiPresets(intent)    => uiPresetEffects.interpret(intent)
       case CommandIntent.Settings(intent)     => configEffects.interpret(intent, state)
-    // issue #1048: MRU tracking -- every executed command counts toward its recency, regardless of what triggered
-    // it (palette, mouse click, contextual toolbar, ...), living on `persisted` since `CommandRunner` itself is
-    // reconstructed fresh each time the palette opens (`CommandRunner.recordCommandUsage`'s own doc). Only commands
-    // the user did not choose (`AppEffect.ExecuteCommandUnrecorded`: picker previews and restores) are left out.
+    // issue #1048: MRU tracking -- every executed registry command counts toward its recency, regardless of what
+    // triggered it (palette, hotkey, mouse click, ...), living on `persisted` since `CommandRunner` itself is
+    // reconstructed fresh each time the palette opens (`CommandRunner.recordCommandUsage`'s own doc). Left out:
+    // commands the user did not choose (`AppEffect.ExecuteCommandUnrecorded`: picker previews and restores), and
+    // anything the palette cannot offer -- settings rows, theme picks, toolbar buttons -- whose ids would only clutter
+    // the table (#1877).
     logger.info(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
       updateModelValidated(model =>
         Some(model.copy(app = StateManagerEffectHandlers.withCommandUsageRecorded(model.app, command.name)))
-      ).whenA(recordUsage) >> dispatch
+      ).whenA(recordUsage && StateManagerEffectHandlers.recordsUsage(command.name)) >> dispatch
 
   private def interpretLifecycleIntent(intent: LifecycleIntent, state: AppState): IO[Unit] =
     intent match
@@ -542,12 +544,13 @@ final private[manager] class StateManagerEffectHandlers(
       .flatMap { buffer =>
         buffer.findState match
           case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
-            val resultSet = FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult), currentIndex)
+            val resultSet =
+              FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult).toVector, currentIndex)
             Some(Modal.Find(resultSet.query, resultSet.results, resultSet.currentIndex))
           case _ =>
             None
       }
-      .getOrElse(Modal.Find("", Nil, 0))
+      .getOrElse(Modal.Find("", Vector.empty, 0))
 
   private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
     if query.isEmpty then Nil
@@ -567,8 +570,14 @@ final private[manager] class StateManagerEffectHandlers(
 
 private[manager] object StateManagerEffectHandlers:
 
+  def recordsUsage(commandName: String): Boolean =
+    CommandRegistry.withToggleUI.isRegistered(CommandId(commandName))
+
   def withCommandUsageRecorded(state: AppState, commandName: String): AppState =
-    val nextGeneration = state.persisted.commandUsage.values.maxOption.getOrElse(0) + 1
-    state.copy(persisted =
-      state.persisted.copy(commandUsage = state.persisted.commandUsage + (CommandId(commandName) -> nextGeneration))
-    )
+    if !recordsUsage(commandName) then state
+    else
+      state.copy(persisted =
+        state.persisted.copy(commandUsage =
+          CommandUsageHistory.recorded(state.persisted.commandUsage, CommandId(commandName))
+        )
+      )

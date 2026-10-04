@@ -82,11 +82,13 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
 
 private[manager] object PinnedPanelMouseHitTesting:
 
+  /** `scrollOffset` is the one the panel was painted with, so selecting `row` leaves the rows where they are. */
   final private case class PinnedDirectoryMouseHit(
       surface: UiSurface,
       position: PanelPosition,
       tree: DirectoryTreeData,
-      row: DirectoryTreeRow
+      row: DirectoryTreeRow,
+      scrollOffset: Int
   )
 
   enum TextAreaInsetDrag:
@@ -173,7 +175,12 @@ private[manager] object PinnedPanelMouseHitTesting:
     hit: PinnedDirectoryMouseHit,
     focusPanel: Boolean
   ): AppState =
-    val withRow = replaceContent(state, hit.surface.id, SurfaceContent.DirectoryTree(hit.tree, Some(hit.row.path)))
+    val withRow =
+      replaceContent(
+        state,
+        hit.surface.id,
+        SurfaceContent.DirectoryTree(hit.tree, Some(hit.row.path), hit.scrollOffset)
+      )
     if focusPanel then PanelFocusHistory.enter(withRow, hit.surface.id) else withRow
 
   /** Leaves `state` untouched (by reference) when the surface already shows `content`, so hovering along a row that is
@@ -207,18 +214,22 @@ private[manager] object PinnedPanelMouseHitTesting:
             for
               surface  <- state.surfaceById(surfaceId)
               position <- panelPosition(surface, state)
-              tree <- surface.content match
-                case SurfaceContent.DirectoryTree(tree, _) => Some(tree)
-                case _                                     => None
-              selectedPath = surface.content match
-                case SurfaceContent.DirectoryTree(_, selectedPath) => selectedPath
-                case _                                             => None
+              (tree, selectedPath, scrollOffset) <- surface.content match
+                case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) =>
+                  Some((tree, selectedPath, scrollOffset))
+                case _ => None
               hitRegion <- DirectoryTreeSurfaceComposition
-                .forTree(tree, selectedPath, frameRect)
+                .forTree(tree, selectedPath, scrollOffset, frameRect)
                 .hitAt(event.col.toDouble, event.row.toDouble)
               actionId <- hitRegion.actionId
               row      <- DirectoryTreeData.visibleRows(tree).find(_.path.toString == actionId.value)
-            yield PinnedDirectoryMouseHit(surface, position, tree, row)
+              shownOffset = DirectoryTreeSurfaceComposition.shownScrollOffset(
+                tree,
+                selectedPath,
+                scrollOffset,
+                frameRect
+              )
+            yield PinnedDirectoryMouseHit(surface, position, tree, row, shownOffset)
           case _ => None
         }
         .collectFirst { case hit => hit }

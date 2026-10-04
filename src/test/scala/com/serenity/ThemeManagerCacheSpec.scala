@@ -54,7 +54,7 @@ class ThemeManagerCacheSpec extends AnyFlatSpec with Matchers:
 
   it should "stay correct for entries pushed in after the cache exceeds its bound" in {
     // MaxHighlightCacheEntries is 4096 -- pushing well past that must not raise, and the most recently computed
-    // entries must still round-trip correctly (eviction is bounded-FIFO, not a correctness hazard).
+    // entries must still round-trip correctly (eviction is bounded-LRU, not a correctness hazard).
     (0 until 4200).foreach(i =>
       highlightCache.highlightLine(s"val evictionProbe$i = $i", theme, Some(LanguageId.Scala), Some(keywordToken(3)))
     )

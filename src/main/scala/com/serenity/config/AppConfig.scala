@@ -1,5 +1,7 @@
 package com.serenity.config
 
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
+
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.config.LspUserConfig
@@ -226,6 +228,13 @@ final case class AppConfig(
 
   def withCursorColors(colors: CursorColorConfig): AppConfig =
     withCursorConfig(cursorConfig.copy(colors = colors))
+
+  /** `None` when the caret blinks for as long as the window stays focused. */
+  def cursorBlinkTimeout: Option[FiniteDuration] =
+    Option.when(cursorConfig.blinkTimeoutMillis > 0L)(FiniteDuration(cursorConfig.blinkTimeoutMillis, MILLISECONDS))
+
+  def withCursorBlinkTimeoutMillis(millis: Long): AppConfig =
+    withCursorConfig(cursorConfig.copy(blinkTimeoutMillis = millis.max(0L)))
 
   def withStatusLine(config: StatusLineConfig): AppConfig =
     copy(statusLine =

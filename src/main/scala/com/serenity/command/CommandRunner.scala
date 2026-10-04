@@ -47,7 +47,8 @@ final case class CommandRunner(
     // ranking needs, and it keeps this pure and IO-free. In-session only (not persisted across restarts) -- issue
     // #1049's empty-query "recents" view is expected to read this same map, not a separate one. Keyed by `CommandId`
     // (issue #1693), the same `Command.name`-derived identifier `Persisted.commandUsage` uses.
-    commandUsage: Map[CommandId, Int] = Map.empty
+    commandUsage: Map[CommandId, Int] = Map.empty,
+    searchCache: CommandRunnerSearchCache = CommandRunnerSearchCache.empty
 ) extends CommandRunnerSubmenuEditing
     with CommandRunnerLifecycle
     with CommandRunnerSettingsSearch:
@@ -94,6 +95,28 @@ final case class CommandRunner(
   def bindingFor(command: Command): Option[String] =
     commandBindings.get(command.name)
 
+  /** The settings index and results that hold for this runner's fields. Normally the carried `searchCache` as-is; a
+    * transition that changes the query or the settings inputs stores the fresh one (`withSearchCacheRefreshed`) so
+    * later copies need not rebuild it.
+    */
+  private[command] lazy val searchResults: CommandRunnerQueryResults =
+    searchCache.resultsFor(settingsIndexInputs, searchTerm)
+
+  private[command] def withSearchCacheRefreshed: CommandRunner =
+    copy(searchCache = CommandRunnerSearchCache.holding(searchResults))
+
+  private def settingsIndexInputs: CommandRunnerSettingsIndex.Inputs =
+    CommandRunnerSettingsIndex.Inputs(
+      optionSelections = optionSelections,
+      inputItems = inputItems,
+      uiPresetPreviews = uiPresetPreviews,
+      editingPresetName = editingPresetName,
+      capabilities = capabilities,
+      fontFamilies = fontFamilies,
+      statusSegments = statusSegments,
+      context = context
+    )
+
   lazy val visibleItems: List[CommandSurfaceItem] =
     surface match
       case _: CommandRunnerSurface.Settings => settingsSurfaceItems
@@ -126,7 +149,7 @@ final case class CommandRunner(
             strongCommandMatches.partition(item =>
               CommandRunnerSearch.isExactCommandMatch(item.command, state.searchTerm)
             )
-          val settingsMatches = matchingSettingsResults(state.searchTerm)
+          val settingsMatches = searchResults.settingsResults
           val (exactSettingsMatches, remainingSettingsMatches) =
             settingsMatches.partition(item =>
               CommandRunnerSearch.isExactSettingsTarget(
@@ -148,16 +171,13 @@ final case class CommandRunner(
   def updateSearchTerm(term: String)(using registry: CommandRegistry): CommandRunner =
     val filtered =
       if term.isEmpty then registry.getAllCommands
-      // issue #1048: `searchCommands` already ranks by fuzzy relevance; re-sorting (stably) by recency on top of
-      // that lets a recently-used command float above an equally (or less) relevant one without ever displacing a
-      // clearly stronger match, since a `sortBy` is stable across ties in `-commandUsage`.
       else
         // Filtered before the cap, so commands this mode/frontend hides can't crowd available ones out of it.
-        registry
+        val matches = registry
           .searchCommands(term, maxResults = registry.getAllCommands.size)
           .filter(CommandRelevance.isAvailable(_, context.editingContext))
           .take(50)
-          .sortBy(command => -commandUsage.getOrElse(CommandId(command.name), 0))
+        CommandRanking.ranked(matches, term, commandUsage)
     val updatedState = CommandPaletteState(term, 0, filtered)
     val updatedSurface = surface match
       case CommandRunnerSurface.Palette(_)     => CommandRunnerSurface.Palette(updatedState)
@@ -166,7 +186,7 @@ final case class CommandRunner(
       // rather than excluded from this method, since `RunnerInsertChar` dispatches here unconditionally whenever
       // nothing is being edited (see `CommandRunnerReducer.insertCharIntoRoot`).
       case unchanged: CommandRunnerSurface.PresetDiffReview => unchanged
-    copy(surface = updatedSurface, recordingItemId = None, statusMessage = None)
+    copy(surface = updatedSurface, recordingItemId = None, statusMessage = None).withSearchCacheRefreshed
 
   /** Move selection up or down, with wrapping */
   def moveSelection(delta: Int): CommandRunner =
@@ -185,20 +205,10 @@ final case class CommandRunner(
     * run before it.
     */
   def recordCommandUsage(name: String): CommandRunner =
-    val nextGeneration = commandUsage.values.maxOption.getOrElse(0) + 1
-    copy(commandUsage = commandUsage + (CommandId(name) -> nextGeneration))
+    copy(commandUsage = CommandUsageHistory.recorded(commandUsage, CommandId(name)))
 
-  lazy val settingsGroups: List[CommandSurfaceItem.GroupItem] =
-    CommandRunnerSettingsGroups.build(
-      optionSelections = optionSelections,
-      inputItems = inputItems,
-      uiPresetPreviews = uiPresetPreviews,
-      editingPresetName = editingPresetName,
-      capabilities = capabilities,
-      fontFamilies = fontFamilies,
-      statusSegments = statusSegments,
-      context = context
-    )
+  def settingsGroups: List[CommandSurfaceItem.GroupItem] =
+    searchResults.index.settingsGroups
 
   def openSettings: CommandRunner =
     copy(surface = CommandRunnerSurface.Settings(), statusMessage = None)
@@ -249,7 +259,7 @@ final case class CommandRunner(
       case CommandRunnerSurface.Settings(_, Some(drilled)) =>
         filteredPageItems(drilled.current, submenuItems(drilled.current.groupId))
       case CommandRunnerSurface.Settings(root, None) if root.searchTerm.nonEmpty =>
-        matchingSettingsResults(root.searchTerm)
+        searchResults.settingsResults
       case CommandRunnerSurface.Settings(_, None)   => settingsGroups
       case CommandRunnerSurface.Palette(_)          => Nil
       case _: CommandRunnerSurface.PresetDiffReview => Nil
@@ -306,7 +316,7 @@ final case class CommandRunner(
             )
           ),
           editingPresetName = editContext
-        )
+        ).withSearchCacheRefreshed
       case _ => this
 
   /** `exitSubmenuToPreview`'s job is not a plain stack pop: it re-points the revealed parent page at the child we just

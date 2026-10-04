@@ -75,6 +75,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   private val enqueuesInFlight   = new AtomicInteger(0)
   private val shutdownFlag       = new AtomicBoolean(false)
   private val pendingModifierTap = new AtomicReference[ModifierTapState](ModifierTapState.empty)
+  private val wheelRemainder     = new AtomicReference[WheelScrollState](WheelScrollState.empty)
 
   private def enqueueInput(info: KeyStrokeInfo): Unit =
     enqueue(QueuedKey(info))
@@ -82,13 +83,16 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   private def enqueueMouse(event: Event): Unit =
     enqueue(QueuedMouse(event))
 
-  /** Cursor-peek prototype: raw bare-modifier press/release and non-modifier-key-pressed signals, always emitted
-    * regardless of `commandRunnerCursorPeekEnabled` -- like mouse-move events, the translator emits unconditionally and
-    * `AppEventReducer` (which has `AppState`/`AppConfig`) decides whether the flag makes them relevant. See
-    * `GlobalAppEvent.scala`'s `CursorPeekModifierPressed`/`CursorPeekModifierReleased`/`CursorPeekOtherKeyPressed`.
-    */
   private def enqueueRaw(event: Event): Unit =
     enqueue(QueuedRaw(event))
+
+  /** Cursor-peek prototype: raw bare-modifier press/release and non-modifier-key-pressed signals. Dropped here while
+    * the prototype is off, so a key press costs no dispatch of its own (#1845); `AppEventReducer` still decides what
+    * they do once it is on. See `GlobalAppEvent.scala`'s `CursorPeekModifierPressed`/`CursorPeekModifierReleased`/
+    * `CursorPeekOtherKeyPressed`.
+    */
+  private def enqueueCursorPeek(event: Event): Unit =
+    if inputRouter.cursorPeekEnabled then enqueueRaw(event)
 
   private def enqueue(input: QueuedInput): Unit =
     if !shutdownFlag.get() then
@@ -135,29 +139,40 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       translateTyped(e).foreach(enqueueInput)
     override def keyPressed(e: KeyEvent): Unit =
       translatePressed(e).foreach(enqueueInput)
-      modifierOf(e).foreach((_, modifier) => enqueueRaw(CursorPeekModifierPressed(modifier, e.getWhen)))
+      modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierPressed(modifier, e.getWhen)))
     override def keyReleased(e: KeyEvent): Unit =
       translateModifierReleased(e)
-      modifierOf(e).foreach((_, modifier) => enqueueRaw(CursorPeekModifierReleased(modifier, e.getWhen))))
+      modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierReleased(modifier, e.getWhen))))
 
   // AWT reports a wheel notch as one "unit scroll" of `getScrollAmount` units; the platform's own amount is a system
-  // preference this setting stands in for, so a notch is `wheelScrollLines` lines whatever the OS says. Block scrolls
-  // (a page notch, some trackpads) report their own count and are honoured as multiples of it.
+  // preference this setting stands in for, so a notch is `wheelScrollLines` lines whatever the OS says. A block scroll
+  // notch is a page, as Swing's own scroll panes treat it. Trackpads report fractions of a notch through the precise
+  // rotation alone, so those are summed across events until they make a whole notch (issue #1796).
   //
   // Horizontal scroll gestures (issue #1568): AWT's `MouseWheelEvent` has no separate horizontal-delta channel of its
   // own, so shift-held is the convention this handler uses to tell a horizontal gesture (shift+wheel, or however a
   // given trackpad driver surfaces two-finger horizontal scrolling through the same event) apart from an ordinary
   // vertical one -- the same convention most editors already use for a plain scroll wheel.
-  component.addMouseWheelListener((e: java.awt.event.MouseWheelEvent) =>
-    val notches = if e.getWheelRotation != 0 then e.getWheelRotation else 0
-    if notches != 0 then
-      val amount = math.abs(notches) * wheelScrollLines
-      val event =
-        if e.isShiftDown then if notches > 0 then ScrollRight(amount) else ScrollLeft(amount)
-        else if notches > 0 then ScrollDown(amount)
-        else ScrollUp(amount)
+  component.addMouseWheelListener((e: MouseWheelEvent) =>
+    val axis = if e.isShiftDown then WheelAxis.Horizontal else WheelAxis.Vertical
+    val step = WheelScrollAccumulator.accumulate(wheelRemainder.get, axis, e.getPreciseWheelRotation)
+    wheelRemainder.set(step.state)
+    if step.notches != 0 then
+      val amount = math.abs(step.notches) * linesPerNotch(e, axis)
+      val event = axis match
+        case WheelAxis.Horizontal => if step.notches > 0 then ScrollRight(amount) else ScrollLeft(amount)
+        case WheelAxis.Vertical   => if step.notches > 0 then ScrollDown(amount) else ScrollUp(amount)
       enqueueRaw(event)
   )
+
+  private def linesPerNotch(e: MouseWheelEvent, axis: WheelAxis): Int =
+    if e.getScrollType == MouseWheelEvent.WHEEL_BLOCK_SCROLL then
+      val currentMetrics = metrics()
+      val page = axis match
+        case WheelAxis.Vertical   => currentMetrics.toRow(component.getHeight)
+        case WheelAxis.Horizontal => currentMetrics.toCol(component.getWidth)
+      math.max(1, page)
+    else wheelScrollLines
 
   component.addMouseListener(
     new MouseAdapter:
@@ -344,7 +359,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       case None if isModifierKey(e) => None
       case None =>
         pendingModifierTap.set(ModifierTapDetector.otherKeyPressed(pendingModifierTap.get))
-        enqueueRaw(CursorPeekOtherKeyPressed)
+        enqueueCursorPeek(CursorPeekOtherKeyPressed)
         val m = mods(e)
         e.getKeyCode match
           case VK_UP         => Some(KeyStrokeInfo(InputKey.ArrowUp, None, m))

@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.serenity.command.CommandId
+import com.serenity.command.{CommandId, CommandRegistry, CommandUsageHistory}
 import com.serenity.config.*
 import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
@@ -132,7 +132,10 @@ object SessionState:
         recentFilesByMode = sessionState.recentFilesByMode.flatMap {
           case (key, paths) => AppMode.fromConfigKey(key).map(mode => mode -> paths.map(Path.of(_)))
         },
-        commandUsage = sessionState.commandUsage.map { case (name, generation) => CommandId(name) -> generation }
+        commandUsage = CommandUsageHistory.restored(
+          sessionState.commandUsage.map { case (name, generation) => CommandId(name) -> generation },
+          CommandRegistry.withToggleUI.isRegistered
+        )
       ),
       runtime = Runtime(
         uiSurfaces = restoredLayout.surfaces,

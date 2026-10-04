@@ -48,7 +48,7 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
     val state   = sm.getCurrentState.unsafeRunSync()
     val content = state.pinnedSurfaces.head.content
     content match
-      case SurfaceContent.DirectoryTree(tree, _) =>
+      case SurfaceContent.DirectoryTree(tree, _, _) =>
         tree.rootPath shouldBe Paths.get("/repo")
         tree.entries(Paths.get("/repo")).map(_.name) shouldBe List("src", "test", "build.sbt")
       case other => fail(s"Expected DirectoryTree, got $other")
@@ -58,8 +58,8 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
     val entries = state.pinnedSurfaces.head.content match
-      case SurfaceContent.DirectoryTree(tree, _) => tree.entries(Paths.get("/repo"))
-      case other                                 => fail(s"Expected DirectoryTree, got $other")
+      case SurfaceContent.DirectoryTree(tree, _, _) => tree.entries(Paths.get("/repo"))
+      case other                                    => fail(s"Expected DirectoryTree, got $other")
 
     entries.find(_.name == "src/").map(_.isDirectory) shouldBe Some(true)
     entries.find(_.name == "build.sbt").map(_.isDirectory) shouldBe Some(false)
@@ -71,7 +71,7 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
     state.pinnedSurfaces should have size 1
     state.pinnedSurfaces.head.content match
-      case SurfaceContent.DirectoryTree(tree, _) =>
+      case SurfaceContent.DirectoryTree(tree, _, _) =>
         tree.rootPath shouldBe Paths.get("/new")
         tree.entries(Paths.get("/new")).map(_.name) shouldBe List("b.txt", "c.txt")
       case other => fail(s"Expected DirectoryTree, got $other")
@@ -87,8 +87,8 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
       case _                            => false
     } shouldBe true
     state.pinnedSurfaces.map(_.content).exists {
-      case SurfaceContent.DirectoryTree(tree, _) if tree.rootPath == Paths.get("/repo") => true
-      case _                                                                            => false
+      case SurfaceContent.DirectoryTree(tree, _, _) if tree.rootPath == Paths.get("/repo") => true
+      case _                                                                               => false
     } shouldBe true
 
   // ── selectFileInExplorer ──────────────────────────────────────────────────
@@ -99,7 +99,7 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
     state.pinnedSurfaces.head.content match
-      case SurfaceContent.DirectoryTree(_, selectedPath) =>
+      case SurfaceContent.DirectoryTree(_, selectedPath, _) =>
         selectedPath shouldBe Some(Paths.get("/repo/build.sbt"))
       case other => fail(s"Expected DirectoryTree, got $other")
 
@@ -127,11 +127,11 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
 
       val state = awaitValue(sm.getCurrentState)(
         _.pinnedSurfaces.exists(_.content match
-          case SurfaceContent.DirectoryTree(tree, _) => tree.entries.contains(childDir)
-          case _                                     => false)
+          case SurfaceContent.DirectoryTree(tree, _, _) => tree.entries.contains(childDir)
+          case _                                        => false)
       ).unsafeRunSync()
       state.pinnedSurfaces.head.content match
-        case SurfaceContent.DirectoryTree(tree, selectedPath) =>
+        case SurfaceContent.DirectoryTree(tree, selectedPath, _) =>
           tree.rootPath shouldBe rootDir
           tree.expandedPaths should contain(childDir)
           tree.entries.getOrElse(childDir, Nil).map(_.name) should contain("nested.txt")
@@ -172,12 +172,12 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
 
       val state = awaitValue(sm.getCurrentState)(
         _.pinnedSurfaces.exists(_.content match
-          case SurfaceContent.DirectoryTree(tree, _) =>
+          case SurfaceContent.DirectoryTree(tree, _, _) =>
             !tree.entries.get(srcDir).exists(_.exists(_.name == "mover.txt"))
           case _ => false)
       ).unsafeRunSync()
       state.pinnedSurfaces.head.content match
-        case SurfaceContent.DirectoryTree(tree, _) =>
+        case SurfaceContent.DirectoryTree(tree, _, _) =>
           tree.entries(srcDir).map(_.name) should not contain "mover.txt"
           tree.entries(srcDir).map(_.name) should contain("keeper.txt")
         case other => fail(s"Expected DirectoryTree, got $other")

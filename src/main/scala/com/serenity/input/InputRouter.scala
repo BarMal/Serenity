@@ -1,5 +1,7 @@
 package com.serenity.input
 
+import java.util.concurrent.atomic.AtomicBoolean
+
 import cats.FlatMap
 import cats.effect.{Ref, Sync}
 import cats.syntax.functor.*
@@ -12,6 +14,16 @@ trait InputRouter[F[_], E <: Event]:
   def eventStream(infoStream: Stream[F, KeyStrokeInfo]): Stream[F, Event]
   def setActiveTranslator(translator: Translator[E]): F[Unit]
   def getActiveTranslator: F[Translator[E]]
+
+  // Not a `Ref`: the AWT listeners that ask run on the event dispatch thread, outside any effect.
+  private val cursorPeekSignals = new AtomicBoolean(false)
+
+  /** Whether the config input is translated against has the cursor-peek prototype on, so its raw gesture signals are
+    * worth dispatching (#1845).
+    */
+  def cursorPeekEnabled: Boolean = cursorPeekSignals.get()
+
+  def setCursorPeekEnabled(enabled: Boolean)(using Sync[F]): F[Unit] = Sync[F].delay(cursorPeekSignals.set(enabled))
 
 class InputRouterImpl[F[_] : FlatMap, E <: Event](
     activeTranslatorRef: Ref[F, Translator[E]]

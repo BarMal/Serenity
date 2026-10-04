@@ -9,6 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, PinnedPanelComponent}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.renderer.{PinnedPanelViewModel, TextPanelRow}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -145,6 +146,57 @@ class PanelKeyboardNavigationSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.DirectoryTree(tree, Some(root.resolve("c")))
     )
     content(after(PanelInputEvent.First, state)) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(root)))
+  }
+
+  private val explorerRoot  = Paths.get("/repo")
+  private val explorerFiles = (0 until 60).toList.map(index => explorerRoot.resolve(f"file-$index%02d"))
+
+  private val tallTree = DirectoryTreeData(
+    explorerRoot,
+    entries = Map(
+      explorerRoot -> explorerFiles.map(path => DirEntry(path, path.getFileName.toString, isDirectory = false))
+    )
+  )
+
+  private def explorerRows(state: AppState): List[TextPanelRow] =
+    val viewport = state.runtime.viewportSize.getOrElse(fail("expected a viewport"))
+    PinnedPanelViewModel
+      .fromState(state, LayoutEngine.calculateLayoutWithUI(state, viewport))
+      .find(_.surfaceId.contains(surfaceId))
+      .map(_.rows)
+      .getOrElse(fail("expected the explorer to be painted"))
+
+  private def selectedRowText(state: AppState): List[String] =
+    explorerRows(state).filter(_.selected).map(_.plainText.trim)
+
+  it should "scroll to keep the selection in view when it moves past the last visible row" in {
+    val shown = explorerRows(docked(SurfaceContent.DirectoryTree(tallTree, Some(explorerRoot)))).size
+    shown should be < explorerFiles.size
+    // Row 0 is the root, so the last row that fits shows explorerFiles(shown - 2).
+    val atFold = docked(SurfaceContent.DirectoryTree(tallTree, Some(explorerFiles(shown - 2))))
+
+    val scrolled = after(PanelInputEvent.Navigate(Direction.Down), atFold)
+
+    selectedRowText(scrolled) shouldBe List(f"file-${shown - 1}%02d")
+    explorerRows(scrolled).size shouldBe shown
+  }
+
+  it should "keep the scroll position while the selection moves within the rows already shown" in {
+    val shown    = explorerRows(docked(SurfaceContent.DirectoryTree(tallTree, Some(explorerRoot)))).size
+    val atFold   = docked(SurfaceContent.DirectoryTree(tallTree, Some(explorerFiles(shown - 2))))
+    val scrolled = after(PanelInputEvent.Navigate(Direction.Down), atFold)
+
+    val backUp = after(PanelInputEvent.Navigate(Direction.Up), scrolled)
+
+    explorerRows(backUp).map(_.plainText) shouldBe explorerRows(scrolled).map(_.plainText)
+    selectedRowText(backUp) shouldBe List(f"file-${shown - 2}%02d")
+  }
+
+  it should "show the last row once End selects it" in {
+    val atEnd = after(PanelInputEvent.Last, docked(SurfaceContent.DirectoryTree(tallTree, Some(explorerRoot))))
+
+    selectedRowText(atEnd) shouldBe List("file-59")
+    explorerRows(atEnd).lastOption.map(_.plainText.trim) shouldBe Some("file-59")
   }
 
   "Project output" should "scroll back a line at a time, and return to following new output with End" in {

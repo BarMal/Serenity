@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.state.models.*
+import com.serenity.ui.widget.SelectableList
 
 /** Resolves the fixed-shape informational panels -- directory listings/trees, the terminal, outline/comments/
   * diagnostics lists, the shortcuts reference, and the tab/recent-files corner widgets -- into overlay rows. Split out
@@ -45,14 +46,27 @@ private[layout] object PanelContentResolver:
     */
   final private[layout] case class DirectoryTreeRowView(row: OverlayRow, path: java.nio.file.Path)
 
+  /** The tree's rows and the window `rect` shows of them: `scrollOffset`, moved only as far as keeping the selection in
+    * view needs.
+    */
+  private[layout] def directoryTreeWindow(
+    rect: LayoutRect,
+    tree: com.serenity.ui.layout.DirectoryTreeData,
+    selectedPath: Option[java.nio.file.Path],
+    scrollOffset: Int
+  ): SelectableList[DirectoryTreeRow] =
+    DirectoryTreeData.rowList(tree, selectedPath, scrollOffset, directoryTreeViewportRows(rect))
+
+  private def directoryTreeViewportRows(rect: LayoutRect): Int = math.max(1, rect.height - 2)
+
   private[layout] def directoryTreeRowViews(
     rect: LayoutRect,
     tree: com.serenity.ui.layout.DirectoryTreeData,
-    selectedPath: Option[java.nio.file.Path]
+    selectedPath: Option[java.nio.file.Path],
+    scrollOffset: Int
   ): List[DirectoryTreeRowView] =
-    val visibleRows = com.serenity.ui.layout.DirectoryTreeData.visibleRows(tree)
-    val maxRows     = math.max(1, rect.height - 2)
-    visibleRows.take(maxRows).map { row =>
+    val window = directoryTreeWindow(rect, tree, selectedPath, scrollOffset)
+    window.visible(directoryTreeViewportRows(rect)).map(_._1).toList.map { row =>
       val marker =
         if row.isDirectory then
           if row.isExpanded then "▾ "
@@ -79,11 +93,12 @@ private[layout] object PanelContentResolver:
     rect: LayoutRect,
     mode: SurfaceRenderMode,
     tree: com.serenity.ui.layout.DirectoryTreeData,
-    selectedPath: Option[java.nio.file.Path]
+    selectedPath: Option[java.nio.file.Path],
+    scrollOffset: Int
   ): ResolvedSurfaceContent =
     ResolvedSurfaceContent(
       title = SurfaceContentResolver.titleFor(mode, tree.rootPath.getFileName.toString),
-      rows = directoryTreeRowViews(rect, tree, selectedPath).map(_.row)
+      rows = directoryTreeRowViews(rect, tree, selectedPath, scrollOffset).map(_.row)
     )
 
   def resolveTerminal(

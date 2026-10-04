@@ -215,14 +215,14 @@ object SessionFindState:
   def fromFindState(findState: FindState): SessionFindState =
     SessionFindState(
       query = findState.query,
-      results = findState.results.map(SessionFindResult.fromFindResult),
+      results = findState.results.map(SessionFindResult.fromFindResult).toList,
       currentIndex = findState.currentIndex
     )
 
   def toFindState(sessionFindState: SessionFindState): FindState =
     FindState(
       query = sessionFindState.query,
-      results = sessionFindState.results.map(SessionFindResult.toFindResult),
+      results = sessionFindState.results.map(SessionFindResult.toFindResult).toVector,
       currentIndex = sessionFindState.currentIndex
     )
 

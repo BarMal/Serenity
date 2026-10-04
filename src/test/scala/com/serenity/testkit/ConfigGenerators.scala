@@ -100,7 +100,8 @@ object ConfigGenerators:
       mode     <- oneOfEnum(CursorMode.values)
       active   <- Gen.option(genColor)
       inactive <- Gen.option(genColor)
-    yield CursorConfig(mode, CursorColorConfig(active, inactive))
+      timeout  <- Gen.chooseNum(0L, 60000L)
+    yield CursorConfig(mode, CursorColorConfig(active, inactive), timeout)
 
   val genStatusLineConfig: Gen[StatusLineConfig] =
     for

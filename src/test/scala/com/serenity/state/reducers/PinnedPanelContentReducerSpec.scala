@@ -16,7 +16,7 @@ class PinnedPanelContentReducerSpec extends AnyFlatSpec with Matchers:
 
   private def directoryTrees(state: AppState): List[(DirectoryTreeData, Option[Path])] =
     state.pinnedSurfaces.map(_.content).collect {
-      case SurfaceContent.DirectoryTree(tree, selected) =>
+      case SurfaceContent.DirectoryTree(tree, selected, _) =>
         tree -> selected
     }
 

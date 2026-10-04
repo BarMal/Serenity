@@ -31,6 +31,10 @@ private[config] object ConfigFieldsCursorAndWindow:
       _.cursorColors.inactive,
       (config, value) => config.withCursorColors(config.cursorColors.copy(inactive = value))
     ),
+    field("editor.cursor.blink_timeout_ms")(long.filtered(_ >= 0L))(
+      _.cursorConfig.blinkTimeoutMillis,
+      (config, value) => config.withCursorBlinkTimeoutMillis(value)
+    ),
     // -- Interface -------------------------------------------------------------------------------------------------------
     named("ui.density", "interfaceDensity", "interface.density", "interface_density")(
       enumerated(InterfaceDensity.fromConfigKey, _.configKey, text => InterfaceDensity.values.find(_.toString == text))

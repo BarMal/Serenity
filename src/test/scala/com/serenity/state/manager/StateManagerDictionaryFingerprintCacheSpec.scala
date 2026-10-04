@@ -17,7 +17,8 @@ import org.scalatest.matchers.should.Matchers
   * `SpellCheckConfig.discoverDictionaryFingerprints`/`Files.*` calls. `refreshDictionaryFingerprints` itself is
   * invalidation-signal-agnostic -- `AppRuntimeExternalChangeWatchSpec` covers the primary, real-time
   * `FileChangeWatcher`-driven trigger; this spec calls the same method directly to cover the cache mechanics and the
-  * window focus-gain backstop that also calls it.
+  * window focus-gain backstop that also calls it. Each repeated commit hands over an equal copy, since re-committing
+  * the very instance already committed skips the follow-up work altogether (#1845).
   */
 class StateManagerDictionaryFingerprintCacheSpec extends AnyFlatSpec with Matchers:
 
@@ -66,10 +67,10 @@ class StateManagerDictionaryFingerprintCacheSpec extends AnyFlatSpec with Matche
           discoverDictionaryFingerprints = countingDiscovery(calls, IO.pure(fixedFingerprint(1L)))
         )
         // Warms the cache -- this first commit is expected to pay for exactly one discovery.
-        _                <- operations.modelCommit.commitState(state, state)
+        _                <- operations.modelCommit.commitState(state.copy(), state)
         callsAfterWarmup <- calls.get
         // 100 further validated commits against the same (unchanged) spell-check config.
-        _               <- (1 to 100).toList.traverse_(_ => operations.modelCommit.commitState(state, state))
+        _               <- (1 to 100).toList.traverse_(_ => operations.modelCommit.commitState(state.copy(), state))
         callsAfterEdits <- calls.get
         _               <- operations.shutdownEffects()
       yield
@@ -96,7 +97,7 @@ class StateManagerDictionaryFingerprintCacheSpec extends AnyFlatSpec with Matche
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
         discoverDictionaryFingerprints = countingDiscovery(calls, IO.pure(fixedFingerprint(1L)))
       )
-      _                <- operations.modelCommit.commitState(initialState, initialState)
+      _                <- operations.modelCommit.commitState(initialState.copy(), initialState)
       callsAfterFirst  <- calls.get
       _                <- operations.modelCommit.commitState(reconfiguredState, initialState)
       callsAfterConfig <- calls.get
@@ -123,23 +124,23 @@ class StateManagerDictionaryFingerprintCacheSpec extends AnyFlatSpec with Matche
           discoverDictionaryFingerprints = countingDiscovery(calls, currentFingerprint.get)
         )
         // Warms the cache and starts the first analysis pass for the buffer's initial content.
-        _                 <- operations.modelCommit.commitState(state, state)
+        _                 <- operations.modelCommit.commitState(state.copy(), state)
         startsAfterWarmup <- analysisStarts.get
         callsAfterWarmup  <- calls.get
         // A repeated commit against the same content and the same on-disk dictionary triggers nothing further.
-        _                 <- operations.modelCommit.commitState(state, state)
+        _                 <- operations.modelCommit.commitState(state.copy(), state)
         startsAfterRepeat <- analysisStarts.get
         callsAfterRepeat  <- calls.get
         // The dictionary file changes on disk -- nothing in the (unchanged) spell-check config reflects that.
         _ <- currentFingerprint.set(fixedFingerprint(2L))
         // Without an explicit refresh, the stale cached fingerprint is still served and nothing re-triggers.
-        _                 <- operations.modelCommit.commitState(state, state)
+        _                 <- operations.modelCommit.commitState(state.copy(), state)
         startsBeforeFocus <- analysisStarts.get
         // Window focus-gain busts the cache (#1691's chosen invalidation signal) with exactly one fresh discovery.
         _               <- operations.refreshDictionaryFingerprints()
         callsAfterFocus <- calls.get
         // The next commit now sees a different dictionary fingerprint for the same buffer content, and re-analyzes.
-        _                <- operations.modelCommit.commitState(state, state)
+        _                <- operations.modelCommit.commitState(state.copy(), state)
         startsAfterFocus <- analysisStarts.get
         _                <- operations.shutdownEffects()
       yield

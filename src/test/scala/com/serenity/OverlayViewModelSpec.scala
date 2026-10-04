@@ -177,7 +177,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         uiSurfaces = List(
           UiSurface(
             SurfaceId("find"),
-            SurfaceContent.ModalWorkflow(Modal.Find("two", List(FindResult(1, 0)), 0)),
+            SurfaceContent.ModalWorkflow(Modal.Find("two", Vector(FindResult(1, 0)), 0)),
             SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
           )
         )

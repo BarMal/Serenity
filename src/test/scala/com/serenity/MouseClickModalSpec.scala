@@ -149,7 +149,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
     findManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val findSurface = UiSurface(
       SurfaceId("find-click"),
-      SurfaceContent.ModalWorkflow(Modal.Find("needle", List(FindResult(0, 0), FindResult(1, 0)), 0)),
+      SurfaceContent.ModalWorkflow(Modal.Find("needle", Vector(FindResult(0, 0), FindResult(1, 0)), 0)),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     findManager

@@ -32,7 +32,7 @@ private[command] trait CommandRunnerLifecycle:
       capabilities = capabilities,
       statusSegments = config.statusLine.segments,
       context = context
-    ).syncEditMode
+    ).withSearchCacheRefreshed.syncEditMode
 
   /** Rebuild input items from a new config (called after a setting is applied) */
   def updateInputItems(config: AppConfig): CommandRunner =
@@ -41,7 +41,7 @@ private[command] trait CommandRunnerLifecycle:
       optionSelections = CommandRunnerOptionSelections.default(config),
       commandBindings = CommandRunner.commandBindings(config),
       statusSegments = config.statusLine.segments
-    ).syncEditMode.normalizeSubmenuEditMode
+    ).withSearchCacheRefreshed.syncEditMode.normalizeSubmenuEditMode
 
   def withUiPresetNames(names: List[String]): CommandRunner =
     withUiPresetPreviews(CommandRunnerSettingsItems.normalizedUiPresetNames(names).map(UiPreset.Preview.fromName))
@@ -49,7 +49,7 @@ private[command] trait CommandRunnerLifecycle:
   def withUiPresetPreviews(previews: List[UiPreset.Preview]): CommandRunner =
     copy(uiPresetPreviews =
       CommandRunnerSettingsItems.normalizedUiPresetPreviews(previews)
-    ).syncEditMode.normalizeSubmenuEditMode
+    ).withSearchCacheRefreshed.syncEditMode.normalizeSubmenuEditMode
 
   def deactivate: CommandRunner =
     copy(
@@ -74,6 +74,8 @@ private[command] trait CommandRunnerLifecycle:
         this
       case Some(item: CommandSurfaceItem.InputItem) =>
         copy(editingItemId = Some(item.id), editingText = item.currentValue)
+      case _ if editingItemId.isEmpty && editingText.isEmpty =>
+        this
       case _ =>
         copy(editingItemId = None, editingText = "")
 

@@ -540,7 +540,7 @@ object AccessibilitySnapshot:
       case SurfaceContent.FilePreview(path, _)         => s"Preview: ${path.getFileName}"
       case SurfaceContent.SymbolDefinition(symbol, _)  => s"Symbol: $symbol"
       case SurfaceContent.DirectoryListing(path, _, _) => s"Directory: ${path.getFileName}"
-      case SurfaceContent.DirectoryTree(_, _)          => "Directory tree"
+      case SurfaceContent.DirectoryTree(_, _, _)       => "Directory tree"
       case SurfaceContent.ThemeCreator(_)              => "Theme creator"
       case SurfaceContent.ContextualToolbar(_)         => "Contextual toolbar"
       case SurfaceContent.ContextMenu(menu)            => menu.title

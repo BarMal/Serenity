@@ -38,7 +38,7 @@ import com.serenity.ui.theme.Theme
   * job cancels an older one, but a result already posted before the cancel still reaches the dispatcher.
   */
 private[manager] enum EffectResult:
-  case FindSearchCompleted(request: FindSearchRequest, results: List[FindResult])
+  case FindSearchCompleted(request: FindSearchRequest, results: Vector[FindResult])
   case MarkdownPreviewSettled(bufferId: BufferId, generation: Long)
 
   /** The outline of `bufferId` as of `contentVersion`, for docked outline panels. */

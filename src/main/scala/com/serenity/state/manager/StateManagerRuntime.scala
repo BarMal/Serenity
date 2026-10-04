@@ -53,25 +53,34 @@ final private[manager] class LspEffectQueue private (
     Stream.repeatEval(take)
 
   private def take: IO[LspEffect] =
-    queue.take.flatMap {
-      case Entry.Immediate(opened @ LspEffect.FileOpened(uri, _, _)) =>
-        documentVersions.update(_ + (uri -> 1)).as(opened)
-      case Entry.Immediate(closed @ LspEffect.FileClosed(uri, _)) =>
-        documentVersions.update(_ - uri).as(closed)
-      case Entry.Immediate(effect) =>
-        IO.pure(effect)
-      case Entry.Change(uri, token) =>
-        pendingChanges
-          .modify(pending => (pending.taken(uri, token), pending.texts.get(token)))
-          .flatMap {
-            case Some(PendingChange(languageId, text)) =>
-              documentVersions.modify { versions =>
-                val version = versions.getOrElse(uri, 1) + 1
-                (versions.updated(uri, version), LspEffect.FileChanged(uri, languageId, text, version))
-              }
-            case None =>
-              take
-          }
+    takeLive.flatMap(_.fold(take)(IO.pure))
+
+  /** Dequeues one entry and settles its bookkeeping as one step: a cancel landing between the two would leave `open`
+    * naming a change no longer queued, so every later edit to that document would join it and never be sent. `None` is
+    * a change already superseded; the retry happens outside the mask so the next wait stays cancelable.
+    */
+  private def takeLive: IO[Option[LspEffect]] =
+    IO.uncancelable { poll =>
+      poll(queue.take).flatMap[Option[LspEffect]] {
+        case Entry.Immediate(opened @ LspEffect.FileOpened(uri, _, _)) =>
+          documentVersions.update(_ + (uri -> 1)).as(Some(opened))
+        case Entry.Immediate(closed @ LspEffect.FileClosed(uri, _)) =>
+          documentVersions.update(_ - uri).as(Some(closed))
+        case Entry.Immediate(effect) =>
+          IO.pure(Some(effect))
+        case Entry.Change(uri, token) =>
+          pendingChanges
+            .modify(pending => (pending.taken(uri, token), pending.texts.get(token)))
+            .flatMap {
+              case Some(PendingChange(languageId, text)) =>
+                documentVersions.modify { versions =>
+                  val version = versions.getOrElse(uri, 1) + 1
+                  (versions.updated(uri, version), Some(LspEffect.FileChanged(uri, languageId, text, version)))
+                }
+              case None =>
+                IO.none
+            }
+      }
     }
 
 private[manager] object LspEffectQueue:
