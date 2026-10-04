@@ -245,8 +245,8 @@ enum CommentLensMode:
   case Editable
 
 /** The authored comment a lens writes back to. `index` (its position in the buffer's `documentComments`) is what
-  * identifies it: two comments can be structurally equal, and an edit elsewhere shifts a comment's range without
-  * moving its position in the list. `comment` is the snapshot the draft was opened from.
+  * identifies it: two comments can be structurally equal, and an edit elsewhere shifts a comment's range without moving
+  * its position in the list. `comment` is the snapshot the draft was opened from.
   */
 final case class CommentLensTarget(index: Int, comment: DocumentComment)
 

@@ -60,8 +60,8 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
   private def saveAndDismiss(state: AppState, surface: UiSurface, target: CommentLensTarget, draft: String): AppState =
     dismiss(savedDraft(state, target, draft.trim), surface)
 
-  /** An emptied draft deletes the comment. A target whose slot no longer holds the comment the lens opened on (the
-    * list was restructured underneath it) is left alone rather than overwriting whichever comment now sits there.
+  /** An emptied draft deletes the comment. A target whose slot no longer holds the comment the lens opened on (the list
+    * was restructured underneath it) is left alone rather than overwriting whichever comment now sits there.
     */
   private def savedDraft(state: AppState, target: CommentLensTarget, text: String): AppState =
     state.persisted.layout.activeEditorPaneId

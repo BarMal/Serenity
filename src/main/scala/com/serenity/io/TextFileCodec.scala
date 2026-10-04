@@ -14,16 +14,16 @@ final case class DecodedText(content: String, encoding: TextEncoding, hasBom: Bo
 final case class EncodedText(bytes: Array[Byte], encoding: TextEncoding, hasBom: Boolean)
 
 /** Lossless decoding and encoding of text files (#1627). Every decode is strict: a byte sequence the encoding cannot
-  * represent moves on to the next candidate instead of becoming U+FFFD, since a replacement character saved back is
-  * the original byte destroyed.
+  * represent moves on to the next candidate instead of becoming U+FFFD, since a replacement character saved back is the
+  * original byte destroyed.
   */
 object TextFileCodec:
 
   /** A NUL this early is taken as binary content. Only applied without a UTF-16 BOM, where NULs are ordinary. */
   val BinarySniffLength: Int = 8192
 
-  /** Tried in order on a file with no BOM. Windows-1252 follows UTF-8 because it is what most "Latin-1" text really
-    * is; it leaves five bytes unmapped, so [[LastResortEncoding]] catches what it rejects.
+  /** Tried in order on a file with no BOM. Windows-1252 follows UTF-8 because it is what most "Latin-1" text really is;
+    * it leaves five bytes unmapped, so [[LastResortEncoding]] catches what it rejects.
     */
   val FallbackOrder: List[TextEncoding] = List(TextEncoding.Utf8, TextEncoding.Windows1252)
 
