@@ -13,7 +13,7 @@ Results land in `bench/bench-results/<label>-*.txt`. Keep the CPU governor and p
 
 ## Profiling the per-keystroke state path with JFR
 
-`com.serenity.perf.TypingProfile` (test scope, not run by CI) replays one keystroke scenario against a live `StateManager` so a Java Flight Recorder recording has enough samples to show where the time goes. Scenarios: `typing_random`, `typing_long_paragraph`, `cold_typing`, `move_down_up`, `page_down_up`; the second argument is seconds (keys for `cold_typing`). Flags: `--warmup-s=10` (warm-up before timing), `--pace-ms=100` and `--warm-ms=0` (`cold_typing` only: pause between keys, and a startup warm-up burst on a separate `StateManager` first).
+`com.serenity.perf.TypingProfile` (test scope, not run by CI) replays one keystroke scenario against a live `StateManager` so a Java Flight Recorder recording has enough samples to show where the time goes. Scenarios: `typing_random`, `typing_long_paragraph`, `typing_in_long_document` (5,000 paragraphs), `cold_typing`, `move_down_up`, `page_down_up`; the second argument is seconds (keys for `cold_typing`). Flags: `--warmup-s=10` (warm-up before timing), `--pace-ms=100` and `--warm-ms=0` (`cold_typing` only: pause between keys, and a startup warm-up burst on a separate `StateManager` first).
 
 ```bash
 # 1. Export the test classpath (one line, no sbt banner)

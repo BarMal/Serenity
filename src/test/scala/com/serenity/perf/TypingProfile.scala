@@ -19,16 +19,17 @@ import com.serenity.state.manager.StateManager
   * TypingProfile <scenario> <seconds | keys> [--warmup-s=10] [--pace-ms=100] [--warm-ms=0]
   * }}}
   *
-  * `typing_random`, `typing_long_paragraph`, `move_down_up` and `page_down_up` warm up for `--warmup-s`, then run for
-  * the given seconds. `cold_typing` types the given number of random letters in a fresh JVM with no warm-up, pausing
-  * `--pace-ms` between keys outside the timed region; `--warm-ms` first replays the startup warm-up on a separate
-  * `StateManager` for that long.
+  * `typing_random`, `typing_long_paragraph`, `typing_in_long_document`, `move_down_up` and `page_down_up` warm up for
+  * `--warmup-s`, then run for the given seconds. `cold_typing` types the given number of random letters in a fresh JVM
+  * with no warm-up, pausing `--pace-ms` between keys outside the timed region; `--warm-ms` first replays the startup
+  * warm-up on a separate `StateManager` for that long.
   */
 object TypingProfile:
   given Balance = Balance.default
 
-  private val LongParagraphChars = 4_000
-  private val DriftWindow        = 400
+  private val LongParagraphChars     = 4_000
+  private val LongDocumentParagraphs = 5_000
+  private val DriftWindow            = 400
 
   final private case class Options(warmupSeconds: Int, paceMs: Long, warmMs: Long)
 
@@ -53,7 +54,7 @@ object TypingProfile:
   final private case class Step(eventsPerStep: Int, run: () => Unit)
 
   private val Usage =
-    "usage: TypingProfile <typing_random|typing_long_paragraph|cold_typing|move_down_up|page_down_up> " +
+    "usage: TypingProfile <typing_random|typing_long_paragraph|typing_in_long_document|cold_typing|move_down_up|page_down_up> " +
       "<seconds|keys> [--warmup-s=10] [--pace-ms=100] [--warm-ms=0]"
 
   def main(args: Array[String]): Unit =
@@ -72,7 +73,8 @@ object TypingProfile:
       case "cold_typing" => coldTyping(count, options)
       case "typing_random" =>
         timed(scenario, randomTyping(LaptopFrameBenchmarks.proseStateManager()._1), count, options)
-      case "typing_long_paragraph" => timed(scenario, randomTyping(longParagraphManager()), count, options)
+      case "typing_long_paragraph"   => timed(scenario, randomTyping(longParagraphManager()), count, options)
+      case "typing_in_long_document" => timed(scenario, randomTyping(longDocumentManager()), count, options)
       case "move_down_up" =>
         timed(scenario, roundTrip(LaptopFrameBenchmarks.proseStateManager()._1, MoveDown, MoveUp), count, options)
       case "page_down_up" =>
@@ -82,6 +84,11 @@ object TypingProfile:
   private def longParagraphManager(): StateManager =
     LaptopFrameBenchmarks
       .stateManagerHolding(BenchmarkFixtures.longParagraph(LongParagraphChars), cursorColumn = LongParagraphChars / 2)
+      ._1
+
+  private def longDocumentManager(): StateManager =
+    LaptopFrameBenchmarks
+      .proseStateManager(paragraphs = LongDocumentParagraphs, cursorLine = LongDocumentParagraphs)
       ._1
 
   private def apply(stateManager: StateManager, event: Event): Unit = stateManager.applyEvent(event).unsafeRunSync()
