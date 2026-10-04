@@ -25,6 +25,10 @@ enum LaneKey:
 
   /** The "Go to File" finder's walk of the project: reopening the finder supersedes a walk still running. */
   case ProjectFiles
+
+  /** The pause after an edit before the session is saved for crash recovery: a newer edit restarts it. */
+  case EditIdleSessionSave
+
   case Search, Analysis, Theme, Config, Presets, Keybindings, Session, Project, Dialog, Timer
 
 enum LanePolicy:

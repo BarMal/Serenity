@@ -11,7 +11,7 @@ import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
-import com.serenity.session.SessionManager
+import com.serenity.session.{SessionManager, SessionSaveTrigger}
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -248,7 +248,10 @@ object StateManager:
         runtime.modelRef,
         runtime.logger,
         listDirectory = StateManagerOperationBoundary.explorerListing(runtime.fileManager.listDirectory),
-        wrapCache = runtime.renderCaches.wrappedLines
+        wrapCache = runtime.renderCaches.wrappedLines,
+        editIdleSessionSave = runtime.policy.saveOnEditIdle.map(idle =>
+          EditIdleSessionSave(idle, runtime.sessionPersistence.maybeSaveSession(_, SessionSaveTrigger.EditIdle))
+        )
       )
       .map(operations => new StateManagerImpl(runtime, operations))
 
