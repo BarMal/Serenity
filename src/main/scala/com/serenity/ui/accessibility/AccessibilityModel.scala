@@ -546,9 +546,9 @@ object AccessibilitySnapshot:
       case SurfaceContent.ContextMenu(menu)            => menu.title
       case SurfaceContent.CommentLens(_)               => "Comment"
       case SurfaceContent.Terminal(_, _)               => "Terminal"
-      case SurfaceContent.Outline(_, _)                => "Outline"
-      case SurfaceContent.Comments(_, _)               => "Comments"
-      case SurfaceContent.Diagnostics(_, _)            => "Diagnostics"
+      case SurfaceContent.Outline(_, _, _)             => "Outline"
+      case SurfaceContent.Comments(_, _, _)            => "Comments"
+      case SurfaceContent.Diagnostics(_, _, _)         => "Diagnostics"
       case SurfaceContent.ShortcutsHelp(_)             => "Keyboard shortcuts"
       case SurfaceContent.TabList(_, _)                => "Open tabs"
       case SurfaceContent.TabBar(_, _)                 => "Tab bar"

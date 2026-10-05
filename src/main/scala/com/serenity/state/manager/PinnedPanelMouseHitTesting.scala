@@ -3,11 +3,13 @@ package com.serenity.state.manager
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.config.AppConfig
+import com.serenity.document.DocumentNavigation
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{PanelFocusHistory, ReducerResult, Transition}
 import com.serenity.ui.layout.*
+import com.serenity.ui.widget.ListScroll
 
 /** State the event pipeline exposes for selecting, activating, navigating, and resizing pinned/expanded panels, as a
   * capability record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is
@@ -65,6 +67,9 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
   def handlePinnedPanelMouseHover(event: MouseInputEvent, state: AppState): IO[Boolean] =
     commit(PinnedPanelMouseHitTesting.hover(event, state, authoritativeScene))
 
+  def handlePinnedPanelWheel(wheel: MouseWheel, state: AppState): IO[Boolean] =
+    commit(PinnedPanelMouseHitTesting.wheel(wheel, state, authoritativeScene))
+
   def handlePinnedPanelLocationClick(click: MouseClick, state: AppState): IO[Boolean] =
     commit(PinnedPanelMouseHitTesting.locationClick(click, state, authoritativeScene))
 
@@ -82,14 +87,18 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
 
 private[manager] object PinnedPanelMouseHitTesting:
 
-  /** `scrollOffset` is the one the panel was painted with, so selecting `row` leaves the rows where they are. */
+  /** `scroll` is pinned to the rows the panel was painted with, so selecting `row` leaves them where they are. */
   final private case class PinnedDirectoryMouseHit(
       surface: UiSurface,
       position: PanelPosition,
       tree: DirectoryTreeData,
       row: DirectoryTreeRow,
-      scrollOffset: Int
+      scroll: ListScroll
   )
+
+  /** A list panel row under the pointer: the location it stands for, and the panel's scroll pinned to the rows painted.
+    */
+  final private case class ListRowHit[A](surface: UiSurface, items: List[A], location: Location, scroll: ListScroll)
 
   enum TextAreaInsetDrag:
     case Left(value: Double)
@@ -118,16 +127,43 @@ private[manager] object PinnedPanelMouseHitTesting:
   def hover(event: MouseInputEvent, state: AppState, authoritativeScene: AuthoritativeUiScene): Transition[Boolean] =
     pinnedDirectoryMouseHitAt(event, state, authoritativeScene)
       .map(hit => selectPinnedDirectoryRow(_, hit, focusPanel = false))
-      .orElse(pinnedOutlineMouseHitAt(event, state, authoritativeScene).map { (surface, symbols, location) =>
-        replaceContent(_, surface.id, SurfaceContent.Outline(symbols, Some(location)))
+      .orElse(pinnedOutlineMouseHitAt(event, state, authoritativeScene).map { hit =>
+        replaceContent(_, hit.surface.id, SurfaceContent.Outline(hit.items, Some(hit.location), hit.scroll))
       })
-      .orElse(pinnedCommentsMouseHitAt(event, state, authoritativeScene).map { (surface, symbols, location) =>
-        replaceContent(_, surface.id, SurfaceContent.Comments(symbols, Some(location)))
+      .orElse(pinnedCommentsMouseHitAt(event, state, authoritativeScene).map { hit =>
+        replaceContent(_, hit.surface.id, SurfaceContent.Comments(hit.items, Some(hit.location), hit.scroll))
       })
-      .orElse(pinnedDiagnosticsMouseHitAt(event, state, authoritativeScene).map { (surface, issues, location) =>
-        replaceContent(_, surface.id, SurfaceContent.Diagnostics(issues, Some(location)))
+      .orElse(pinnedDiagnosticsMouseHitAt(event, state, authoritativeScene).map { hit =>
+        replaceContent(_, hit.surface.id, SurfaceContent.Diagnostics(hit.items, Some(hit.location), hit.scroll))
       })
       .fold(Transition.pure(false))(highlight => Transition.modify(highlight).as(true))
+
+  /** The wheel over a docked list panel scrolls that panel, whichever pane or panel has focus, and leaves its highlight
+    * where it is. `false` when the pointer is over no such panel, so the wheel goes on to the focused component.
+    */
+  def wheel(event: MouseWheel, state: AppState, authoritativeScene: AuthoritativeUiScene): Transition[Boolean] =
+    state.runtime.viewportSize
+      .flatMap { viewportSize =>
+        authoritativeScene
+          .forState(state, viewportSize)
+          .workspace
+          .reverseIterator
+          .collectFirst {
+            case SceneNode(SceneNodeId.Surface(surfaceId), _, frameRect, _, _, _)
+                if frameRect.contains(event.col, event.row) =>
+              surfaceId -> frameRect
+          }
+      }
+      .flatMap { (surfaceId, frameRect) =>
+        state
+          .surfaceById(surfaceId)
+          .filter(panelPosition(_, state).nonEmpty)
+          .flatMap(surface =>
+            ListPanelScrolling.wheeled(surface.content, frameRect, event.lines, state.activeCursorPosition)
+          )
+          .map(scrolled => Transition.modify(replaceContent(_, surfaceId, scrolled)).as(true))
+      }
+      .getOrElse(Transition.pure(false))
 
   /** What a double-click on a directory row does once the click itself has selected that row, resolved against the
     * state carrying that selection. `None` for a single click or a click that no longer lands on a row.
@@ -153,7 +189,7 @@ private[manager] object PinnedPanelMouseHitTesting:
     if click.button != MouseButton.Primary then Transition.pure(false)
     else
       pinnedCommentsMouseHitAt(click, state, authoritativeScene) match
-        case Some((_, _, location)) =>
+        case Some(ListRowHit(_, _, location, _)) =>
           Transition
             .modify(PanelLocationNavigation.commentAt(_, location, wrapCache = authoritativeScene.wrappedLines))
             .as(true)
@@ -179,7 +215,7 @@ private[manager] object PinnedPanelMouseHitTesting:
       replaceContent(
         state,
         hit.surface.id,
-        SurfaceContent.DirectoryTree(hit.tree, Some(hit.row.path), hit.scrollOffset)
+        SurfaceContent.DirectoryTree(hit.tree, Some(hit.row.path), hit.scroll)
       )
     if focusPanel then PanelFocusHistory.enter(withRow, hit.surface.id) else withRow
 
@@ -214,132 +250,140 @@ private[manager] object PinnedPanelMouseHitTesting:
             for
               surface  <- state.surfaceById(surfaceId)
               position <- panelPosition(surface, state)
-              (tree, selectedPath, scrollOffset) <- surface.content match
-                case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) =>
-                  Some((tree, selectedPath, scrollOffset))
+              (tree, selectedPath, scroll) <- surface.content match
+                case SurfaceContent.DirectoryTree(tree, selectedPath, scroll) =>
+                  Some((tree, selectedPath, scroll))
                 case _ => None
               hitRegion <- DirectoryTreeSurfaceComposition
-                .forTree(tree, selectedPath, scrollOffset, frameRect)
+                .forTree(tree, selectedPath, scroll, frameRect)
                 .hitAt(event.col.toDouble, event.row.toDouble)
               actionId <- hitRegion.actionId
               row      <- DirectoryTreeData.visibleRows(tree).find(_.path.toString == actionId.value)
-              shownOffset = DirectoryTreeSurfaceComposition.shownScrollOffset(
-                tree,
-                selectedPath,
-                scrollOffset,
-                frameRect
-              )
-            yield PinnedDirectoryMouseHit(surface, position, tree, row, shownOffset)
+              shownOffset = DirectoryTreeSurfaceComposition.shownScrollOffset(tree, selectedPath, scroll, frameRect)
+            yield PinnedDirectoryMouseHit(surface, position, tree, row, scroll.copy(offset = shownOffset))
           case _ => None
         }
         .collectFirst { case hit => hit }
     }
 
   /** Resolves hover/click against the outline's own `ResolvedSurfaceComposition` (issue #819, slice 4) -- the same
-    * composition `PinnedPanelViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than a generic row-index
-    * walk. Mirrors `EditorContextMenuHitTesting.contextMenuSelectionAt`'s `focusId` parsing for addressing which symbol
-    * was hit; `OutlineSurfaceComposition` only emits a hit region for a row `PanelContentResolver.outlineRowViews`
-    * marked addressable, so `Horizontal`/`Compact` summary rows are unreachable here exactly as they were
-    * pre-migration.
+    * composition `PinnedPanelViewModel` paints from, highlighting and scrolled as it is painted, via
+    * `SurfaceHitRegion.hitAt`. `OutlineSurfaceComposition` only emits a hit region for a row
+    * `PanelContentResolver.outlineRowViews` marked addressable, so `Horizontal`/`Compact` summary rows are unreachable.
     */
   private def pinnedOutlineMouseHitAt(
     event: MouseInputEvent,
     state: AppState,
     authoritativeScene: AuthoritativeUiScene
-  ): Option[(UiSurface, List[Symbol], Location)] =
-    state.runtime.viewportSize.flatMap { viewportSize =>
-      val scene = authoritativeScene.forState(state, viewportSize)
-      scene.workspace.reverseIterator
-        .flatMap {
-          case SceneNode(SceneNodeId.Surface(surfaceId), _, frameRect, _, _, _) =>
+  ): Option[ListRowHit[Symbol]] =
+    workspaceSurfaces(state, authoritativeScene)
+      .flatMap { (surface, frameRect) =>
+        surface.content match
+          case SurfaceContent.Outline(symbols, active, scroll) =>
+            val highlighted = active.orElse(cursorEntry(symbols, state))
             for
-              surface <- state.surfaceById(surfaceId)
-              symbols <- surface.content match
-                case SurfaceContent.Outline(symbols, _) => Some(symbols)
-                case _                                  => None
-              activeLocation = surface.content match
-                case SurfaceContent.Outline(_, activeLocation) => activeLocation
-                case _                                         => None
               hitRegion <- OutlineSurfaceComposition
-                .forOutline(symbols, activeLocation, frameRect)
+                .forOutline(symbols, highlighted, frameRect, scroll)
                 .hitAt(event.col.toDouble, event.row.toDouble)
               index  <- hitRegion.focusId.value.stripPrefix("outline-symbol-").toIntOption
               symbol <- symbols.lift(index)
-            yield (surface, symbols, symbol.location)
+            yield ListRowHit(
+              surface,
+              symbols,
+              symbol.location,
+              pinned(surface, frameRect, symbols.map(_.location), highlighted, scroll)
+            )
           case _ => None
-        }
-        .collectFirst { case hit => hit }
-    }
+      }
+      .nextOption()
 
-  /** Resolves hover/click against the comments panel's own `ResolvedSurfaceComposition` (issue #819, slice 5) -- the
-    * same composition `PinnedPanelViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than a generic row-index
-    * walk. Mirrors `pinnedOutlineMouseHitAt`'s `focusId` parsing for addressing which symbol was hit;
-    * `CommentsSurfaceComposition` only emits a hit region for a row `PanelContentResolver.commentsRowViews` marked
-    * addressable, so `Horizontal`/`Compact` summary rows are unreachable here exactly as they were pre-migration.
+  /** Resolves hover/click against the comments panel's own `ResolvedSurfaceComposition` (issue #819, slice 5), as
+    * [[pinnedOutlineMouseHitAt]] does for the outline.
     */
   private def pinnedCommentsMouseHitAt(
     event: MouseInputEvent,
     state: AppState,
     authoritativeScene: AuthoritativeUiScene
-  ): Option[(UiSurface, List[Symbol], Location)] =
-    state.runtime.viewportSize.flatMap { viewportSize =>
-      val scene = authoritativeScene.forState(state, viewportSize)
-      scene.workspace.reverseIterator
-        .flatMap {
-          case SceneNode(SceneNodeId.Surface(surfaceId), _, frameRect, _, _, _) =>
+  ): Option[ListRowHit[Symbol]] =
+    workspaceSurfaces(state, authoritativeScene)
+      .flatMap { (surface, frameRect) =>
+        surface.content match
+          case SurfaceContent.Comments(symbols, active, scroll) =>
+            val highlighted = active.orElse(cursorEntry(symbols, state))
             for
-              surface <- state.surfaceById(surfaceId)
-              symbols <- surface.content match
-                case SurfaceContent.Comments(symbols, _) => Some(symbols)
-                case _                                   => None
-              activeLocation = surface.content match
-                case SurfaceContent.Comments(_, activeLocation) => activeLocation
-                case _                                          => None
               hitRegion <- CommentsSurfaceComposition
-                .forComments(symbols, activeLocation, frameRect)
+                .forComments(symbols, highlighted, frameRect, scroll)
                 .hitAt(event.col.toDouble, event.row.toDouble)
               index  <- hitRegion.focusId.value.stripPrefix("comments-symbol-").toIntOption
               symbol <- symbols.lift(index)
-            yield (surface, symbols, symbol.location)
+            yield ListRowHit(
+              surface,
+              symbols,
+              symbol.location,
+              pinned(surface, frameRect, symbols.map(_.location), highlighted, scroll)
+            )
           case _ => None
-        }
-        .collectFirst { case hit => hit }
-    }
+      }
+      .nextOption()
 
-  /** Resolves hover/click against the diagnostics panel's own `ResolvedSurfaceComposition` (issue #819, slice 4) -- the
-    * same composition `PinnedPanelViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than a generic row-index
-    * walk. `DiagnosticsSurfaceComposition` only emits a hit region for a row `PanelContentResolver.diagnosticsRowViews`
-    * marked addressable, so `Horizontal`/`Compact`'s summary rows and `Square`'s leading summary row are unreachable
-    * here exactly as they were pre-migration.
+  /** Resolves hover/click against the diagnostics panel's own `ResolvedSurfaceComposition` (issue #819, slice 4).
+    * `DiagnosticsSurfaceComposition` only emits a hit region for a row `PanelContentResolver.diagnosticsRowViews`
+    * marked addressable, so `Horizontal`/`Compact`'s summary rows and `Square`'s leading summary row are unreachable.
     */
   private def pinnedDiagnosticsMouseHitAt(
     event: MouseInputEvent,
     state: AppState,
     authoritativeScene: AuthoritativeUiScene
-  ): Option[(UiSurface, List[Diagnostic], Location)] =
-    state.runtime.viewportSize.flatMap { viewportSize =>
-      val scene = authoritativeScene.forState(state, viewportSize)
-      scene.workspace.reverseIterator
-        .flatMap {
-          case SceneNode(SceneNodeId.Surface(surfaceId), _, frameRect, _, _, _) =>
+  ): Option[ListRowHit[Diagnostic]] =
+    workspaceSurfaces(state, authoritativeScene)
+      .flatMap { (surface, frameRect) =>
+        surface.content match
+          case SurfaceContent.Diagnostics(issues, active, scroll) =>
             for
-              surface <- state.surfaceById(surfaceId)
-              issues <- surface.content match
-                case SurfaceContent.Diagnostics(issues, _) => Some(issues)
-                case _                                     => None
-              activeLocation = surface.content match
-                case SurfaceContent.Diagnostics(_, activeLocation) => activeLocation
-                case _                                             => None
               hitRegion <- DiagnosticsSurfaceComposition
-                .forDiagnostics(issues, activeLocation, frameRect)
+                .forDiagnostics(issues, active, frameRect, scroll)
                 .hitAt(event.col.toDouble, event.row.toDouble)
               index <- hitRegion.focusId.value.stripPrefix("diagnostics-issue-").toIntOption
               issue <- issues.lift(index)
-            yield (surface, issues, issue.location)
+            yield ListRowHit(
+              surface,
+              issues,
+              issue.location,
+              pinned(surface, frameRect, issues.map(_.location), active, scroll)
+            )
           case _ => None
-        }
-        .collectFirst { case hit => hit }
+      }
+      .nextOption()
+
+  /** Every surface laid out in the workspace with the frame it is painted in, topmost first. */
+  private def workspaceSurfaces(
+    state: AppState,
+    authoritativeScene: AuthoritativeUiScene
+  ): Iterator[(UiSurface, LayoutRect)] =
+    state.runtime.viewportSize.iterator.flatMap { viewportSize =>
+      authoritativeScene.forState(state, viewportSize).workspace.reverseIterator.flatMap {
+        case SceneNode(SceneNodeId.Surface(surfaceId), _, frameRect, _, _, _) =>
+          state.surfaceById(surfaceId).map(_ -> frameRect)
+        case _ => None
+      }
     }
+
+  private def pinned(
+    surface: UiSurface,
+    frameRect: LayoutRect,
+    locations: List[Location],
+    highlighted: Option[Location],
+    scroll: ListScroll
+  ): ListScroll =
+    ListPanelScrolling.pinned(
+      scroll,
+      locations,
+      highlighted,
+      ListPanelScrolling.viewportRows(surface.content, frameRect)
+    )
+
+  private def cursorEntry(symbols: List[Symbol], state: AppState): Option[Location] =
+    state.activeCursorPosition.flatMap(DocumentNavigation.currentSymbol(symbols, _)).map(_.location)
 
   /** Both outline's and diagnostics' location-click reuse their own composition-based hit test directly (issue #819,
     * slice 4) rather than a second, parallel row lookup -- they need the exact same location their hover/click handlers
@@ -351,8 +395,8 @@ private[manager] object PinnedPanelMouseHitTesting:
     authoritativeScene: AuthoritativeUiScene
   ): Option[Location] =
     pinnedOutlineMouseHitAt(event, state, authoritativeScene)
-      .map(_._3)
-      .orElse(pinnedDiagnosticsMouseHitAt(event, state, authoritativeScene).map(_._3))
+      .map(_.location)
+      .orElse(pinnedDiagnosticsMouseHitAt(event, state, authoritativeScene).map(_.location))
 
   private def panelPosition(surface: UiSurface, state: AppState): Option[PanelPosition] =
     surface.presentation match

@@ -124,7 +124,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.pinnedSurfaces.exists(isPinnedAt(updatedState, _, PanelPosition.Right)) shouldBe true
     val commentSymbols = updatedState.pinnedSurfaces.collectFirst {
-      case surface @ UiSurface(_, SurfaceContent.Comments(symbols, _), _, _)
+      case surface @ UiSurface(_, SurfaceContent.Comments(symbols, _, _), _, _)
           if isPinnedAt(updatedState, surface, PanelPosition.Right) =>
         symbols
     }
@@ -158,7 +158,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     val outlineSymbols = updatedState.pinnedSurfaces.collectFirst {
-      case surface @ UiSurface(_, SurfaceContent.Outline(symbols, activeLocation), _, _)
+      case surface @ UiSurface(_, SurfaceContent.Outline(symbols, activeLocation, _), _, _)
           if isPinnedAt(updatedState, surface, PanelPosition.Right) =>
         symbols -> activeLocation
     }
@@ -204,7 +204,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
 
     val currentState = stateManager.getCurrentState.unsafeRunSync()
     val outlineSymbols = currentState.pinnedSurfaces.collectFirst {
-      case surface @ UiSurface(_, SurfaceContent.Outline(symbols, _), _, _)
+      case surface @ UiSurface(_, SurfaceContent.Outline(symbols, _, _), _, _)
           if isPinnedAt(currentState, surface, PanelPosition.Right) =>
         symbols
     }
@@ -310,11 +310,11 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     val tree         = updatedState.persisted.layout.workspaceTree
     updatedState.pinnedSurfaces.collect {
-      case surface @ UiSurface(_, SurfaceContent.Outline(_, _), _, _) =>
+      case surface @ UiSurface(_, SurfaceContent.Outline(_, _, _), _, _) =>
         tree.flatMap(_.positionForSurface(surface.id))
     }.flatten shouldBe List(PanelPosition.Left)
     updatedState.pinnedSurfaces.collect {
-      case surface @ UiSurface(_, SurfaceContent.Diagnostics(_, _), _, _) =>
+      case surface @ UiSurface(_, SurfaceContent.Diagnostics(_, _, _), _, _) =>
         tree.flatMap(_.positionForSurface(surface.id))
     }.flatten shouldBe List(PanelPosition.Bottom)
   }
@@ -447,7 +447,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
 
     val highlighted = sm.getCurrentState.unsafeRunSync()
     highlighted.surfaceById(PanelId.Outline.surfaceId).map(_.content).collect {
-      case SurfaceContent.Outline(_, location) => location
+      case SurfaceContent.Outline(_, location, _) => location
     } shouldBe Some(Some(Location(8, 0)))
 
     sm.applyEvent(PanelInputEvent.Activate).unsafeRunSync()

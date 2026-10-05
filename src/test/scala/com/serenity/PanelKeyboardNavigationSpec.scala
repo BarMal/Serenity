@@ -56,10 +56,10 @@ class PanelKeyboardNavigationSpec extends AnyFlatSpec with Matchers:
 
   private def highlighted(state: AppState): Option[Location] =
     content(state).flatMap {
-      case SurfaceContent.Outline(_, location)     => location
-      case SurfaceContent.Comments(_, location)    => location
-      case SurfaceContent.Diagnostics(_, location) => location
-      case _                                       => None
+      case SurfaceContent.Outline(_, location, _)     => location
+      case SurfaceContent.Comments(_, location, _)    => location
+      case SurfaceContent.Diagnostics(_, location, _) => location
+      case _                                          => None
     }
 
   private val issues =

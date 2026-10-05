@@ -100,8 +100,8 @@ private[layout] object FloatingSurfaceSizing:
           modal,
           SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
         )
-      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) |
-          SurfaceContent.Diagnostics(_, _) | SurfaceContent.MarkdownPreview(_, _) =>
+      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _, _) | SurfaceContent.Comments(_, _, _) |
+          SurfaceContent.Diagnostics(_, _, _) | SurfaceContent.MarkdownPreview(_, _) =>
         math.min(8, math.max(4, maxHeight - 1))
       case SurfaceContent.ShortcutsHelp(groups) =>
         // Wants enough rows for every group heading plus its entries, but never more than the viewport allows --

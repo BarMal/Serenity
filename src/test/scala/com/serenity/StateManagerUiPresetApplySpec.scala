@@ -366,7 +366,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     state.persisted.config.defaultDocumentMode shouldBe com.serenity.config.DefaultDocumentMode.Markdown
-    state.pinnedSurfaces.collect { case UiSurface(_, SurfaceContent.Outline(_, _), _, _) => () } shouldBe Nil
+    state.pinnedSurfaces.collect { case UiSurface(_, SurfaceContent.Outline(_, _, _), _, _) => () } shouldBe Nil
     state.pinnedSurfaces.collectFirst {
       case surface @ UiSurface(_, SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"), _, _)
           if state.persisted.layout.workspaceTree
@@ -415,7 +415,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     ).unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().pinnedSurfaces.collect {
-      case UiSurface(_, SurfaceContent.Outline(_, _), _, _) => ()
+      case UiSurface(_, SurfaceContent.Outline(_, _, _), _, _) => ()
     } shouldBe Nil
   }
 
@@ -457,7 +457,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
     val outlineSymbols = state.pinnedSurfaces.collectFirst {
-      case surface @ UiSurface(_, SurfaceContent.Outline(symbols, _), _, _)
+      case surface @ UiSurface(_, SurfaceContent.Outline(symbols, _, _), _, _)
           if state.persisted.layout.workspaceTree
             .flatMap(_.positionForSurface(surface.id))
             .contains(

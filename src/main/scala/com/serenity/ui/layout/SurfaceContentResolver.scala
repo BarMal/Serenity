@@ -111,8 +111,8 @@ object SurfaceContentResolver:
           entries.map(_.name),
           selectedPath.flatMap(p => Option(p.getFileName).map(_.toString))
         )
-      case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) =>
-        PanelContentResolver.resolveDirectoryTree(rect, mode, tree, selectedPath, scrollOffset)
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scroll) =>
+        PanelContentResolver.resolveDirectoryTree(rect, mode, tree, selectedPath, scroll)
       case SurfaceContent.CommandPalette(runner) =>
         // `OverlayViewModel.contentView` bypasses this call entirely for `CommandPalette` (issue #819, slice 2):
         // painting is done via `CommandRunnerSurfaceComposition`, and `TextOverlayRenderer` ignores `rows` whenever
@@ -144,12 +144,12 @@ object SurfaceContentResolver:
         ResolvedSurfaceContent()
       case SurfaceContent.Terminal(buffer, cursor) =>
         PanelContentResolver.resolveTerminal(rect, mode, buffer, cursor)
-      case SurfaceContent.Outline(symbols, activeLocation) =>
-        PanelContentResolver.resolveOutline(rect, mode, symbols, activeLocation)
-      case SurfaceContent.Comments(symbols, activeLocation) =>
-        PanelContentResolver.resolveComments(rect, mode, symbols, activeLocation)
-      case SurfaceContent.Diagnostics(issues, activeLocation) =>
-        PanelContentResolver.resolveDiagnostics(rect, mode, issues, activeLocation)
+      case SurfaceContent.Outline(symbols, activeLocation, scroll) =>
+        PanelContentResolver.resolveOutline(rect, mode, symbols, activeLocation, scroll)
+      case SurfaceContent.Comments(symbols, activeLocation, scroll) =>
+        PanelContentResolver.resolveComments(rect, mode, symbols, activeLocation, scroll)
+      case SurfaceContent.Diagnostics(issues, activeLocation, scroll) =>
+        PanelContentResolver.resolveDiagnostics(rect, mode, issues, activeLocation, scroll)
       case SurfaceContent.ShortcutsHelp(groups) =>
         PanelContentResolver.resolveShortcutsHelp(rect, mode, groups)
       case SurfaceContent.TabList(entries, activeBufferId) =>
