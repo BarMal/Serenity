@@ -328,8 +328,10 @@ object RendererPaneSetup:
       case (visualLine, row) if visualLine.xOffsetPx + visualLine.widthPx > contentWidthPx.toFloat => row
     }.toSet
 
-  /** The pixel band each visible row owns, clamped to the pane's content rect. */
-  private def paneRowRects(
+  /** The pixel band each of `snapshot`'s visible rows owns within `contentRect`, clamped to it -- the pane's own text,
+    * or a line-number column painted row for row against the same snapshot.
+    */
+  private[renderer] def paneRowRects(
     contentRect: LayoutRect,
     context: RenderContext,
     snapshot: TextLayoutSnapshot
