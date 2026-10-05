@@ -151,33 +151,46 @@ object AtomicFileWriter:
   def writeString(path: Path, content: String): IO[Unit] =
     writeBytes(path, content.getBytes(StandardCharsets.UTF_8))
 
-  /** Atomically replace `path` with bytes, falling back when atomic moves are unsupported. */
+  /** Atomically replace `path` with bytes, falling back when atomic moves are unsupported, and trying again when the OS
+    * briefly refuses the replace (see [[RenameRetryPolicy]]). A write that still fails fails with its last error.
+    */
   def writeBytes(path: Path, bytes: Array[Byte]): IO[Unit] =
-    IO.blocking(writeBytesBlocking(path, bytes))
+    writeBytes(path, bytes, JdkFileSystem, RenameRetryPolicy.default)
 
   /** Atomically replace `path` with bytes from an existing blocking boundary. */
   def writeBytesBlocking(path: Path, bytes: Array[Byte]): Unit =
     writeBytesBlocking(path, bytes, JdkFileSystem)
 
   /** Renames the already-durable `source` over `target`, then syncs their directory so the rename survives a crash.
-    * Unlike the writes above, `target` is not resolved through symlinks or kept on its hardlinks: for files the
-    * caller owns outright, such as staged session files.
+    * Unlike the writes above, `target` is not resolved through symlinks or kept on its hardlinks: for files the caller
+    * owns outright, such as staged session files.
     */
   private[serenity] def replaceWith(source: Path, target: Path): IO[Unit] =
-    IO.blocking {
+    RenameRetryPolicy.default.run(IO.blocking {
       try
         val _ = JdkFileSystem.moveAtomically(source, target)
       catch
         case _: AtomicMoveNotSupportedException =>
           val _ = JdkFileSystem.moveReplacing(source, target)
       Option(target.toAbsolutePath.getParent).foreach(JdkFileSystem.syncDirectory)
-    }
+    })
 
   private[serenity] def writeString(path: Path, content: String, fileSystem: AtomicFileSystem): IO[Unit] =
     writeBytes(path, content.getBytes(StandardCharsets.UTF_8), fileSystem)
 
-  private[serenity] def writeBytes(path: Path, bytes: Array[Byte], fileSystem: AtomicFileSystem): IO[Unit] =
-    IO.blocking(writeBytesBlocking(path, bytes, fileSystem))
+  private[serenity] def writeBytes(
+    path: Path,
+    bytes: Array[Byte],
+    fileSystem: AtomicFileSystem,
+    retry: RenameRetryPolicy = RenameRetryPolicy.none
+  ): IO[Unit] =
+    retry.run(
+      IO.blocking(writeBytesBlocking(path, bytes, fileSystem)),
+      causeOf = {
+        case failed: AtomicFileWriteException => Option(failed.getCause).getOrElse(failed)
+        case other                            => other
+      }
+    )
 
   private def writeBytesBlocking(path: Path, bytes: Array[Byte], fileSystem: AtomicFileSystem): Unit =
     // This is the synchronous boundary both writeBytes (via IO.blocking, which converts a thrown

@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{AccessDeniedException, Files, Path}
 
 import scala.concurrent.duration.*
 
@@ -8,7 +8,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.command.{Command, CommandCategory, CommandIntent, FileIntent, SessionIntent}
 import com.serenity.config.PreferredWindowSize
-import com.serenity.io.{FileDialog, FileManager}
+import com.serenity.io.{AtomicFileWriteException, FileDialog, FileManager}
 import com.serenity.keystroke.events.{InsertChar, SaveFile}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
@@ -24,7 +24,7 @@ import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.time.{Millis, Seconds, Span}
-import org.typelevel.log4cats.noop.NoOpLogger
+import org.typelevel.log4cats.Logger
 
 /** File saves and loads run on `EffectLanes` and come back as versioned results (#1697 Wave 3: #1671, #1672): the
   * dispatcher never waits on the disk, and a result merges into whatever the state is when it arrives.
@@ -36,16 +36,45 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
   override given patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(20, Seconds), interval = Span(20, Millis))
 
+  /** Keeps every log line, with its error, so a save that never lands is explained by what the runtime reported rather
+    * than by a timeout (#2016).
+    */
+  final private class CapturingLogger(lines: Ref[IO, Vector[String]]) extends Logger[IO]:
+    private def record(level: String, error: Option[Throwable], message: String): IO[Unit] =
+      lines.update(_ :+ s"$level $message${error.fold("")(e => causes(e).map(describe).mkString(" <- ", " <- ", ""))}")
+
+    private def causes(error: Throwable): List[Throwable] =
+      List.unfold(Option(error))(_.map(e => e -> Option(e.getCause)))
+
+    private def describe(error: Throwable): String = s"${error.getClass.getSimpleName}: ${error.getMessage}"
+
+    def error(message: => String): IO[Unit]               = record("ERROR", None, message)
+    def error(t: Throwable)(message: => String): IO[Unit] = record("ERROR", Some(t), message)
+    def warn(message: => String): IO[Unit]                = record("WARN", None, message)
+    def warn(t: Throwable)(message: => String): IO[Unit]  = record("WARN", Some(t), message)
+    def info(message: => String): IO[Unit]                = record("INFO", None, message)
+    def info(t: Throwable)(message: => String): IO[Unit]  = record("INFO", Some(t), message)
+    def debug(message: => String): IO[Unit]               = record("DEBUG", None, message)
+    def debug(t: Throwable)(message: => String): IO[Unit] = record("DEBUG", Some(t), message)
+    def trace(message: => String): IO[Unit]               = record("TRACE", None, message)
+    def trace(t: Throwable)(message: => String): IO[Unit] = record("TRACE", Some(t), message)
+
   /** Holds each save of `gatedPath` open, before its disk write, until the spec releases it. Every save start and end
     * is recorded, tagged with the content being written.
     */
   final private class GatedFileManager(
       gatedPath: Path,
       gates: Ref[IO, List[Deferred[IO, Unit]]],
-      log: Ref[IO, Vector[String]]
+      log: Ref[IO, Vector[String]],
+      refusedPath: Path
   ) extends FileManager:
 
     override def saveBuffer(buffer: Buffer): IO[Buffer] =
+      if buffer.document.filePath.contains(refusedPath) then
+        IO.raiseError(AtomicFileWriteException(refusedPath, new AccessDeniedException(refusedPath.toString)))
+      else gatedSave(buffer)
+
+    private def gatedSave(buffer: Buffer): IO[Buffer] =
       val content = buffer.document.content.collect()
       val gate =
         if buffer.document.filePath.contains(gatedPath) then
@@ -57,9 +86,19 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
       stateManager: StateManager,
       gates: Ref[IO, List[Deferred[IO, Unit]]],
       log: Ref[IO, Vector[String]],
-      directory: Path
+      directory: Path,
+      logged: Ref[IO, Vector[String]]
   ):
     def state: AppState = stateManager.getCurrentState.unsafeRunSync()
+
+    def errorsLogged: Vector[String] = logged.get.unsafeRunSync().filter(_.startsWith("ERROR"))
+
+    /** Runs `check` until it holds, and says what the runtime logged if it never does. */
+    def landing[A](check: => A): A =
+      try eventually(check)
+      catch
+        case failure: org.scalatest.exceptions.TestFailedException =>
+          fail(s"${failure.getMessage}\nlogged: ${logged.get.unsafeRunSync().mkString("\n  ", "\n  ", "")}", failure)
 
     def buffer(id: BufferId): Option[Buffer] = state.persisted.buffers.get(id)
 
@@ -67,10 +106,10 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
 
     /** Waits until `count` gated saves are held open, then releases the oldest. */
     def releaseNext(count: Int = 1): Unit =
-      eventually(gates.get.unsafeRunSync().size should be >= count)
+      landing(gates.get.unsafeRunSync().size should be >= count)
       gates.modify(held => (held.drop(1), held.headOption)).unsafeRunSync().foreach(_.complete(()).unsafeRunSync())
 
-    def awaitHeld(count: Int): Unit = eventually(gates.get.unsafeRunSync().size shouldBe count)
+    def awaitHeld(count: Int): Unit = landing(gates.get.unsafeRunSync().size shouldBe count)
 
     def open(path: Path): BufferId =
       stateManager.fileOpener.openFile(path).unsafeRunSync()
@@ -93,6 +132,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
       for
         gates               <- Ref.of[IO, List[Deferred[IO, Unit]]](Nil)
         log                 <- Ref.of[IO, Vector[String]](Vector.empty)
+        logged              <- Ref.of[IO, Vector[String]](Vector.empty)
         modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))
         themeNamesRef       <- Ref.of[IO, List[String]](Nil)
         quitSignal          <- Deferred[IO, Unit]
@@ -103,7 +143,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
             modelRef = modelRef,
             themeNamesRef = themeNamesRef,
             quitSignal = quitSignal,
-            logger = NoOpLogger.impl[IO],
+            logger = new CapturingLogger(logged),
             policy = SessionManager.SessionPolicy(),
             sessionRootOverride = Some(directory.resolve("session")),
             themeManager = AppThemeManager.create,
@@ -117,9 +157,11 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
             onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
             fileDialog = fileDialog
           )
-          .copy(fileManager = new GatedFileManager(directory.resolve(gatedName), gates, log))
+          .copy(fileManager =
+            new GatedFileManager(directory.resolve(gatedName), gates, log, directory.resolve("refused.txt"))
+          )
         stateManager <- StateManager.fromRuntime(runtime)
-      yield Fixture(stateManager, gates, log, directory)
+      yield Fixture(stateManager, gates, log, directory, logged)
     program.unsafeRunSync()
 
   private def file(directory: Path, name: String, content: String): Path =
@@ -139,8 +181,8 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
     f.releaseNext()
 
     val path = f.directory.resolve("gated.txt")
-    eventually(f.log.get.unsafeRunSync() should contain(s"end:$saved"))
-    eventually(f.buffer(id).flatMap(_.document.revision) shouldBe diskRevision(path))
+    f.landing(f.log.get.unsafeRunSync() should contain(s"end:$saved"))
+    f.landing(f.buffer(id).flatMap(_.document.revision) shouldBe diskRevision(path))
     Files.readString(path) shouldBe saved
     f.buffer(id).map(_.document.content.collect()) shouldBe Some(saved.patch(1, "b", 0))
     f.buffer(id).map(_.document.isDirty) shouldBe Some(true)
@@ -406,4 +448,18 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
     restored.document.revision shouldBe diskRevision(path)
     restored.document.isDirty shouldBe false
     AppStateValidation.validationErrors(f.state) shouldBe Nil
+  }
+
+  "A save the disk refuses" should "report its error, leave the buffer dirty and be explained by the log (#2016)" in {
+    val f    = fixture()
+    val path = file(f.directory, "refused.txt", "draft")
+    val id   = f.open(path)
+    f.type_('a')
+
+    f.fireSave()
+
+    f.landing(f.errorsLogged.exists(_.contains("AccessDeniedException")) shouldBe true)
+    f.errorsLogged.exists(_.contains(s"Failed to save buffer $id")) shouldBe true
+    f.buffer(id).map(_.document.isDirty) shouldBe Some(true)
+    Files.readString(path) shouldBe "draft"
   }
