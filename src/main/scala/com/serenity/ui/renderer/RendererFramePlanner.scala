@@ -1,6 +1,5 @@
 package com.serenity.ui.renderer
 
-import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.state.models.*
@@ -230,7 +229,7 @@ object RendererFramePlanner:
             }
             if reusable then cached.foreach(c => context.surface.pixels.compositeFullSurfaceLayer(c.image))
             else
-              val capturedRef  = new AtomicReference[Option[BufferedImage]](None)
+              val capturedRef  = new AtomicReference[Option[RenderImage]](None)
               val layerSurface = support.newLayerSurface(image => capturedRef.set(Some(image)), cached.map(_.image))
               RendererFloatingPanels.renderModalLayer(state, context.copy(surface = layerSurface), scene)
               layerSurface.flush()
@@ -285,7 +284,7 @@ object RendererFramePlanner:
         }
         if reusable then cached.foreach(c => context.surface.pixels.compositeFullSurfaceLayer(c.image))
         else
-          val capturedRef  = new AtomicReference[Option[BufferedImage]](None)
+          val capturedRef  = new AtomicReference[Option[RenderImage]](None)
           val layerSurface = support.newLayerSurface(image => capturedRef.set(Some(image)), cached.map(_.image))
           paintPanel(context.copy(surface = layerSurface))
           layerSurface.flush()

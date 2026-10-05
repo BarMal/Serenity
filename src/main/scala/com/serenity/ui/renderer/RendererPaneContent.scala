@@ -568,4 +568,4 @@ object RendererPaneContent:
       cache = context.caches.markdownPreviewCache,
       reuseLastRenderWhileEditing = buffer.markdownPreviewEditGeneration != buffer.markdownPreviewCommittedGeneration
     )
-    context.surface.pixels.drawImage(image, rect.x, rect.y, rect.width, rect.height)
+    context.surface.pixels.drawImage(RenderImage.fromAwt(image), rect.x, rect.y, rect.width, rect.height)

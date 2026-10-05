@@ -1,6 +1,5 @@
 package com.serenity.ui.renderer
 
-import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import com.serenity.config.AppConfig
@@ -54,7 +53,7 @@ final case class DrawState(paneIds: Set[PaneId], inputs: RenderInputs)
   * for `drawImage`, independent of which of the (possibly pooled) frame buffers it gets composited onto.
   */
 final case class CachedModalLayer(
-    image: BufferedImage,
+    image: RenderImage,
     viewportWidth: Int,
     viewportHeight: Int,
     cursorVisible: Boolean
@@ -68,7 +67,7 @@ final case class CachedModalLayer(
   * fields changing, which [[Damage.Surface]] narrowing alone would not catch.
   */
 final case class CachedPanelLayer(
-    image: BufferedImage,
+    image: RenderImage,
     viewportWidth: Int,
     viewportHeight: Int,
     cursorVisible: Boolean,

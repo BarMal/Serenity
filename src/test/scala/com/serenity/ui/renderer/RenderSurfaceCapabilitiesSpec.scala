@@ -17,16 +17,16 @@ import org.scalatest.matchers.should.Matchers
 class RenderSurfaceCapabilitiesSpec extends AnyFlatSpec with Matchers:
 
   private class RecordingPixelDrawing extends PixelDrawing:
-    private val calls = scala.collection.mutable.ListBuffer.empty[(BufferedImage, Int, Int, Int, Int)]
-    def drawImageCalls: List[(BufferedImage, Int, Int, Int, Int)]                                = calls.toList
+    private val calls = scala.collection.mutable.ListBuffer.empty[(RenderImage, Int, Int, Int, Int)]
+    def drawImageCalls: List[(RenderImage, Int, Int, Int, Int)]                                  = calls.toList
     def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit = ()
-    def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
+    def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
       calls += ((image, x, y, width, height))
     def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit = render
 
   "compositeFullSurfaceLayer" should "default to a full-surface drawImage at the origin, sized to the image itself" in {
     val pixels = new RecordingPixelDrawing
-    val layer  = new BufferedImage(37, 21, BufferedImage.TYPE_INT_ARGB)
+    val layer  = RenderImage.fromAwt(new BufferedImage(37, 21, BufferedImage.TYPE_INT_ARGB))
 
     pixels.compositeFullSurfaceLayer(layer)
 
@@ -35,8 +35,8 @@ class RenderSurfaceCapabilitiesSpec extends AnyFlatSpec with Matchers:
 
   it should "read the image's own width/height rather than a fixed size, for every image it is given" in {
     val pixels     = new RecordingPixelDrawing
-    val smallLayer = new BufferedImage(4, 4, BufferedImage.TYPE_INT_ARGB)
-    val bigLayer   = new BufferedImage(200, 5, BufferedImage.TYPE_INT_ARGB)
+    val smallLayer = RenderImage.fromAwt(new BufferedImage(4, 4, BufferedImage.TYPE_INT_ARGB))
+    val bigLayer   = RenderImage.fromAwt(new BufferedImage(200, 5, BufferedImage.TYPE_INT_ARGB))
 
     pixels.compositeFullSurfaceLayer(smallLayer)
     pixels.compositeFullSurfaceLayer(bigLayer)

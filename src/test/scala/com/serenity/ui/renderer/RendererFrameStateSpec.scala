@@ -28,7 +28,7 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
   private def frameOutput(screen: AnyRef): FrameOutput =
     FrameOutput(ScreenIdentity(screen), new AtomicReference[Option[com.serenity.ui.layout.PixelRect]](None))
 
-  private def image(): BufferedImage = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
+  private def image(): RenderImage = RenderImage.fromAwt(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB))
 
   private val someInputs = RenderInputs(
     ViewportSize(80, 24),

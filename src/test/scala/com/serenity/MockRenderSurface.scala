@@ -12,6 +12,7 @@ import com.serenity.ui.renderer.{
   PanelOutlineDrawing,
   PixelDrawing,
   RenderColor,
+  RenderImage,
   RenderSurface,
   SurfaceContentIdentity,
   TextDrawing
@@ -243,8 +244,8 @@ class MockRenderSurface(
   override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
     fillPixelRectCallsBuffer += FillPixelRectCall(xPx, yPx, widthPx, heightPx, color.toAwt)
 
-  override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
-    drawImageCallsBuffer += DrawImageCall(image, x, y, width, height)
+  override def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
+    drawImageCallsBuffer += DrawImageCall(image.toAwt, x, y, width, height)
 
   def currentAlphaValue: Float                          = currentAlpha.get()
   def fillPixelRectCalls: List[FillPixelRectCall]       = fillPixelRectCallsBuffer.toList

@@ -23,6 +23,7 @@ import com.serenity.ui.renderer.{
   PanelOutlineDrawing,
   PixelDrawing,
   RenderColor,
+  RenderImage,
   RenderSurface,
   RendererEntryPoints,
   SurfaceContentIdentity,
@@ -412,8 +413,8 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
     def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
       delegate.pixels.fillPixelRect(xPx, yPx, widthPx, heightPx, color)
 
-    def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
-      drawnImageBuffer += ScenarioDrawnImage(image, LayoutRect(x, y, width, height))
+    def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
+      drawnImageBuffer += ScenarioDrawnImage(image.toAwt, LayoutRect(x, y, width, height))
       delegate.pixels.drawImage(image, x, y, width, height)
 
     def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =

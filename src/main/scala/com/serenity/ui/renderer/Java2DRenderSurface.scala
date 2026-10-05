@@ -46,7 +46,7 @@ class Java2DRenderSurface(
     * entirely from values this surface already computed, not from a `JPanel` (see [[Java2DRenderSurface.forLayer]] for
     * why that matters).
     */
-  override def newLayerSurface(onFlush: BufferedImage => Unit, recycled: Option[BufferedImage]): RenderSurface =
+  override def newLayerSurface(onFlush: RenderImage => Unit, recycled: Option[RenderImage]): RenderSurface =
     Java2DRenderSurface.forLayer(
       metrics,
       baseFontRef.get(),
@@ -54,8 +54,8 @@ class Java2DRenderSurface(
       effectiveLogicalHeightPx,
       deviceScaleX,
       deviceScaleY,
-      onFlush,
-      recycled = recycled
+      image => onFlush(RenderImage.fromAwt(image)),
+      recycled = recycled.map(_.toAwt)
     )
 
   private val g: Graphics2D = image.createGraphics()
@@ -250,14 +250,14 @@ class Java2DRenderSurface(
     g.setColor(paintColor(color))
     g.fillRect(xPx, yPx, widthPx.max(1), heightPx.max(1))
 
-  override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
+  override def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val px        = metrics.toPixelX(x)
     val py        = metrics.toPixelY(y)
     val pw        = width * metrics.charWidth
     val ph        = height * metrics.lineHeight
     val savedClip = g.getClip
     g.clipRect(px, py, pw, ph)
-    g.drawImage(image, px, py, pw, ph, Java2DRenderSurface.NoOpImageObserver)
+    g.drawImage(image.toAwt, px, py, pw, ph, Java2DRenderSurface.NoOpImageObserver)
     g.setClip(savedClip)
 
   /** Blit a whole-surface layer buffer straight onto this surface's backing image at device resolution, 1:1, bypassing
@@ -266,10 +266,10 @@ class Java2DRenderSurface(
     * device-pixel copy reproduces it exactly -- see [[PixelDrawing.compositeFullSurfaceLayer]] for why routing it
     * through [[drawImage]] instead would shrink it a little per composite.
     */
-  override def compositeFullSurfaceLayer(layerImage: BufferedImage): Unit =
+  override def compositeFullSurfaceLayer(layerImage: RenderImage): Unit =
     val rawGraphics = image.createGraphics()
     try
-      val _ = rawGraphics.drawImage(layerImage, 0, 0, Java2DRenderSurface.NoOpImageObserver)
+      val _ = rawGraphics.drawImage(layerImage.toAwt, 0, 0, Java2DRenderSurface.NoOpImageObserver)
     finally rawGraphics.dispose()
 
   def hideCursor(): Unit = ()

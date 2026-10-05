@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JPanel
 
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.{Java2DRenderSurface, RenderColor}
+import com.serenity.ui.renderer.{Java2DRenderSurface, RenderColor, RenderImage}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -100,13 +100,13 @@ class Java2DLayerSurfaceSpec extends AnyFlatSpec with Matchers:
     val frame   = stripedImage(40, 40)
     val surface = new Java2DRenderSurface(frame, metrics, font, _ => ())
 
-    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
+    val flushedRef = new AtomicReference[Option[RenderImage]](None)
     val layer = surface.layerBuffers
       .getOrElse(fail("expected layer buffer support"))
       .newLayerSurface(image => flushedRef.set(Some(image)))
     layer.pixels.fillPixelRect(0, 0, 20, 20, RenderColor.fromAwt(Color.RED))
     layer.flush()
-    val layerPixels = flushedRef.get().getOrElse(fail("layer was not flushed"))
+    val layerPixels = flushedRef.get().map(_.toAwt).getOrElse(fail("layer was not flushed"))
     new Color(layerPixels.getRGB(30, 30), true).getAlpha shouldBe 0
     frame.getRGB(10, 10) shouldBe stripedImage(40, 40).getRGB(10, 10)
 
@@ -143,7 +143,7 @@ class Java2DLayerSurfaceSpec extends AnyFlatSpec with Matchers:
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
 
-    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
+    val flushedRef = new AtomicReference[Option[RenderImage]](None)
     val layer = surface.layerBuffers.getOrElse(fail("expected layer buffer support")).newLayerSurface { image =>
       flushedRef.set(Some(image))
     }

@@ -183,7 +183,13 @@ object RendererFloatingPanels:
       reuseLastRenderWhileEditing =
         buffer.exists(b => b.markdownPreviewEditGeneration != b.markdownPreviewCommittedGeneration)
     )
-    context.surface.pixels.drawImage(image, imageRect.x, imageRect.y, contentWidthCells, contentHeightCells)
+    context.surface.pixels.drawImage(
+      RenderImage.fromAwt(image),
+      imageRect.x,
+      imageRect.y,
+      contentWidthCells,
+      contentHeightCells
+    )
 
   private def markdownPreviewImageRect(
     rect: LayoutRect,

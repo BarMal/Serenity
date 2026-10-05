@@ -11,6 +11,7 @@ import com.serenity.ui.renderer.{
   HardwareCursorShape,
   HardwareCursorStyle,
   RenderColor,
+  RenderImage,
   RendererCursorOverlay,
   RendererEntryPoints
 }
@@ -166,7 +167,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     // 1 column x 2 rows of source pixels maps to exactly one cell: red on top, blue on the bottom.
     val image = solidImage(1, 2) { case (_, y) => if y == 0 then Color.RED else Color.BLUE }
 
-    rs.pixels.drawImage(image, 0, 0, 1, 1)
+    rs.pixels.drawImage(RenderImage.fromAwt(image), 0, 0, 1, 1)
     rs.flush()
 
     val screen = TerminalEmulator.blank(3, 3).consume(writer.toString)
@@ -184,7 +185,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     writer.getBuffer.setLength(0)
 
     val transparent = solidImage(1, 2)((_, _) => new Color(0, 0, 0, 0))
-    rs.pixels.drawImage(transparent, 0, 0, 1, 1)
+    rs.pixels.drawImage(RenderImage.fromAwt(transparent), 0, 0, 1, 1)
     rs.flush()
 
     // No cell content changed, so the diff against the previous (green-filled) frame is empty.
@@ -198,7 +199,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val (rs, writer) = surface(width = 4, height = 4)
     val image        = solidImage(2, 2)((_, _) => Color.WHITE)
 
-    rs.pixels.drawImage(image, 0, 0, 2, 1)
+    rs.pixels.drawImage(RenderImage.fromAwt(image), 0, 0, 2, 1)
     rs.flush()
 
     writer.toString should not be empty
