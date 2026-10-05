@@ -28,9 +28,9 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** #1891: a bounded repaint publishes each separate change as its own rect rather than one rect spanning everything
-  * between them. Every case presents frames the way the window does -- pooled base images, only the published rects
-  * copied onto the screen -- and checks the screen against a cold render of the same state, so a rect left out shows
-  * up as stale pixels.
+  * between them, and pane-header chrome joins it instead of forcing the whole canvas. Every case presents frames the
+  * way the window does -- pooled base images, only the published rects copied onto the screen -- and checks the screen
+  * against a cold render of the same state, so a rect left out shows up as stale pixels.
   */
 class RendererRepaintRectsSpec extends AnyFlatSpec with Matchers:
 
@@ -223,6 +223,40 @@ class RendererRepaintRectsSpec extends AnyFlatSpec with Matchers:
     val rects = region.getOrElse(fail("expected a bounded repaint"))
     // One caret row, dilated by one row either side for glyph overflow, across at most the whole width.
     withClue(s"rects $rects: ")(areaPx(rects) should be <= 3L * metrics.lineHeight * widthPx)
+    withClue("pixels left stale on screen: ")(stalePixels(screen.shown, cold(after)) shouldBe 0)
+  }
+
+  it should "repaint the edited row and the pane header, not the whole canvas, on the first keystroke" in {
+    val screen = PresentedScreen()
+    val before = stateWith(CursorPosition(10, 0), StatusLinePlacement.Off)
+    val after  = firstKeystroke(before, line = 10)
+
+    screen.settle(before)
+    val (region, plan) = screen.present(after, DamageProducer.forTransition(before, after))
+
+    val rects  = region.getOrElse(fail("expected a bounded repaint"))
+    val header = plan.layoutContract.paneHeaderRect(paneId).map(pixelRectOf).getOrElse(fail("expected a pane header"))
+    withClue(s"rects $rects miss the header $header: ")(covers(rects, header) shouldBe true)
+    // The typed row dilated by one row either side, plus the header.
+    withClue(s"rects $rects: ")(areaPx(rects) should be <= 3L * metrics.lineHeight * widthPx + areaPx(List(header)))
+    withClue("pixels left stale on screen: ")(stalePixels(screen.shown, cold(after)) shouldBe 0)
+  }
+
+  it should "leave no stale tab-bar pixels when the first keystroke marks its tab dirty" in {
+    val screen = PresentedScreen()
+    val single = stateWith(CursorPosition(10, 0), StatusLinePlacement.Off)
+    val other  = Buffer.fromString(BufferId(2), "other")
+    val before = single.copy(persisted =
+      single.persisted.copy(
+        buffers = single.persisted.buffers.updated(other.id, other),
+        bufferOrder = single.persisted.bufferOrder :+ other.id
+      )
+    )
+    val after = firstKeystroke(before, line = 10)
+
+    screen.settle(before)
+    val _ = screen.present(after, DamageProducer.forTransition(before, after))
+
     withClue("pixels left stale on screen: ")(stalePixels(screen.shown, cold(after)) shouldBe 0)
   }
 

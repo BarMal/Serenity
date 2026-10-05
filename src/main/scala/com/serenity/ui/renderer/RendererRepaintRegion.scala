@@ -4,15 +4,15 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
 /** Which pixels a bounded repaint has to publish, once [[RendererFramePlanner]] has decided a frame may be bounded at
-  * all. The frame itself is painted in full either way -- the chrome layer repaints every pixel these rects name each
-  * frame -- so these rects only decide which of its pixels reach the screen.
+  * all. Every frame paints the status row, line numbers and pane headers whole, and redraws the dirty rows, so these
+  * rects only decide which of its pixels reach the screen.
   */
 private[renderer] object RendererRepaintRegion:
 
   /** Each dirty row's band, the line-number cells beside the active pane's dirty rows (a number changes only with its
-    * row, so it repaints with it), and the pinned status row when `damage` names [[Damage.Chrome]] -- coalesced into a
-    * few disjoint rects, so a caret row and the status row far below it stay two narrow rects rather than one spanning
-    * every row between them.
+    * row, so it repaints with it), the pinned status row when `damage` names [[Damage.Chrome]], and the header of each
+    * pane a [[Damage.PaneChrome]] names -- coalesced into a few disjoint rects, so a caret row and the status row far
+    * below it stay two narrow rects rather than one spanning every row between them.
     */
   def rects(
     state: AppState,
@@ -34,8 +34,12 @@ private[renderer] object RendererRepaintRegion:
           record.rowRects.lift(row).toList ++ lineNumberRows.flatMap(_.lift(row))
         }
     }
-    val statusRow = contract.gutterRect.filter(_ => Damage.touchesChrome(damage)).map(pixelRectOf(context.cellMetrics))
-    PixelRect.coalesced(rowRects ++ statusRow.toList, PixelRect.RepaintRectLimit)
+    val statusRow = contract.gutterRect.filter(_ => Damage.touchesChrome(damage))
+    val headers   = Damage.paneChromeIds(damage).toList.flatMap(contract.paneHeaderRect)
+    PixelRect.coalesced(
+      rowRects ++ (statusRow.toList ++ headers).map(pixelRectOf(context.cellMetrics)),
+      PixelRect.RepaintRectLimit
+    )
 
   private def pixelRectOf(cellMetrics: CellMetrics)(rect: LayoutRect): PixelRect =
     val leftPx = cellMetrics.toPixelX(rect.x)

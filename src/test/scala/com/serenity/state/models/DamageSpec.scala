@@ -107,8 +107,14 @@ class DamageSpec extends AnyFlatSpec with Matchers:
     Damage.isBufferRowsOrChromeOnly((Damage.BufferRows(bufferId, Set(0)): Damage) |+| Damage.Chrome) shouldBe true
   }
 
-  it should "not hold for PaneChrome, Surface or Everything" in {
-    Damage.isBufferRowsOrChromeOnly(Damage.PaneChrome(paneId)) shouldBe false
+  it should "hold for PaneChrome, since a pane header has a rect of its own" in {
+    Damage.isBufferRowsOrChromeOnly(
+      (Damage.BufferRows(bufferId, Set(0)): Damage) |+| Damage.PaneChrome(paneId)
+    ) shouldBe
+      true
+  }
+
+  it should "not hold for Surface or Everything" in {
     Damage.isBufferRowsOrChromeOnly(Damage.Surface(SurfaceId("overlay"))) shouldBe false
     Damage.isBufferRowsOrChromeOnly(Damage.Everything) shouldBe false
   }

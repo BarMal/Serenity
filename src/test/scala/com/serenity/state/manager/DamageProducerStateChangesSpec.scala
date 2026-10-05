@@ -348,6 +348,27 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, after) shouldBe Damage.PaneChrome(activePaneId)
   }
 
+  it should "report the tab strip's Surface damage when a dirty flag toggles with two buffers open" in {
+    val single = stateWithContent("alpha")
+    val other  = Buffer.fromString(BufferId(7), "other")
+    val before = single.copy(persisted =
+      single.persisted.copy(
+        buffers = single.persisted.buffers.updated(other.id, other),
+        bufferOrder = single.persisted.bufferOrder :+ other.id
+      )
+    )
+    val after = before.copy(persisted =
+      before.persisted.copy(buffers =
+        before.persisted.buffers.updated(
+          other.id,
+          other.copy(document = other.document.copy(isDirty = true))
+        )
+      )
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Surface(UiSurface.TabBarSurfaceId)
+  }
+
   it should "report PaneChrome and Chrome damage when a buffer's file path changes, since both header and gutter show it" in {
     val before = stateWithContent("alpha")
     val after = before.copy(persisted =
