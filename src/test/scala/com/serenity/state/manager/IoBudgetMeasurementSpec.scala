@@ -35,7 +35,7 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
     (1 to runs).foreach(_ => op)
     val t1       = System.nanoTime()
     val (r1, w1) = procIo
-    println(
+    info(
       f"[IO-BUDGET] $label%-40s read/op=${(r1 - r0) / runs}%,12d B  written/op=${(w1 - w0) / runs}%,12d B  time/op=${(t1 - t0) / runs / 1e6}%8.2f ms"
     )
     IoCost((r1 - r0) / runs, (w1 - w0) / runs)
@@ -114,8 +114,8 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
     val watched = count(Map(file -> BufferId(1))).unsafeRunSync()
     // The first derivation is the loop's start; every later one is a wakeup.
     val perMinute = (derivations: Int) => (derivations - 1).max(0) * (60.seconds / window).toInt
-    println(s"[IO-BUDGET] watcher wakeups/min, nothing open: ${perMinute(idle)}")
-    println(s"[IO-BUDGET] watcher wakeups/min, one file open, idle: ${perMinute(watched)}")
+    info(s"[IO-BUDGET] watcher wakeups/min, nothing open: ${perMinute(idle)}")
+    info(s"[IO-BUDGET] watcher wakeups/min, one file open, idle: ${perMinute(watched)}")
     perMinute(idle) shouldBe 0
     perMinute(watched) shouldBe 0
   }
