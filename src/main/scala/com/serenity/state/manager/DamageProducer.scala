@@ -68,8 +68,9 @@ object DamageProducer:
     afterBuffer: Buffer,
     granularity: RenderDamageGranularity
   )(using Balance): Damage =
-    contentDamage(bufferId, beforeBuffer, afterBuffer, granularity) |+|
-      cursorDamage(bufferId, beforeBuffer, afterBuffer) |+|
+    val content = contentDamage(bufferId, beforeBuffer, afterBuffer, granularity)
+    content |+|
+      cursorDamage(bufferId, beforeBuffer, afterBuffer, Damage.damagedLines(bufferId, content)) |+|
       selectionDamage(bufferId, beforeBuffer, afterBuffer) |+|
       commentDamage(bufferId, beforeBuffer, afterBuffer) |+|
       diagnosticDamage(bufferId, before, after, beforeBuffer, afterBuffer) |+|
@@ -128,13 +129,16 @@ object DamageProducer:
     (startLine to endLine).toSet
 
   /** The cell under each old and new caret, not its whole line: a caret is painted on one visual row, so a move inside
-    * a paragraph that wraps into many rows dirties only the rows the carets sit on.
+    * a paragraph that wraps into many rows dirties only the rows the carets sit on. Carets on `editedLines` are left
+    * out: the edit already dirties those whole lines, and a cell per caret there would only be normalised away again --
+    * a cost every keystroke of a 50-cursor edit paid.
     */
-  private def cursorDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
+  private def cursorDamage(bufferId: BufferId, before: Buffer, after: Buffer, editedLines: Set[Int]): Damage =
     if before.editing.cursorPositions == after.editing.cursorPositions then Damage.Nothing
     else
-      val caretCells = (before.editing.cursorPositions ++ after.editing.cursorPositions).map { cursor =>
-        Damage.BufferCells(bufferId, cursor.line, cursor.column, Some(cursor.column + 1)): Damage
+      val caretCells = (before.editing.cursorPositions ++ after.editing.cursorPositions).collect {
+        case cursor if !editedLines.contains(cursor.line) =>
+          Damage.BufferCells(bufferId, cursor.line, cursor.column, Some(cursor.column + 1)): Damage
       }
       Damage.Nothing |+| Damage.Combined(caretCells.toSet)
 

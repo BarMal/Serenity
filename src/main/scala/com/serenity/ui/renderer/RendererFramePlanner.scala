@@ -505,14 +505,13 @@ object RendererFramePlanner:
     caches: com.serenity.state.manager.RenderCaches
   ): Set[Int] =
     val damageDirty =
-      if Damage.isEverything(damage) || Damage.damagesEveryRow(record.bufferId, damage) then
-        record.rowBufferLines.indices.toSet
+      val facts = Damage.rowFactsFor(record.bufferId, damage)
+      if facts.everyRow || Damage.isEverything(damage) then record.rowBufferLines.indices.toSet
       else
-        val bufferLines = Damage.damagedLines(record.bufferId, damage)
         val lineRows = record.rowBufferLines.zipWithIndex.collect {
-          case (bufferLine, row) if bufferLines.contains(bufferLine) => row
+          case (bufferLine, row) if facts.lines.contains(bufferLine) => row
         }.toSet
-        val dirty = lineRows ++ rowsUnderSpans(record, Damage.damagedSpans(record.bufferId, damage))
+        val dirty = lineRows ++ rowsUnderSpans(record, facts.spans)
         DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
           record.overflowingRows ++
           vacatedFloatingSurfaceRows(damage, record, persistenceKey, caches)
@@ -523,8 +522,8 @@ object RendererFramePlanner:
     * caret lookup does. A span that matches no row of its line (whitespace dropped at a wrap, say) dirties the whole
     * line rather than nothing.
     */
-  private def rowsUnderSpans(record: PaneFrameRecord, spans: Set[Damage.BufferCells]): Set[Int] =
-    spans.flatMap { span =>
+  private def rowsUnderSpans(record: PaneFrameRecord, spans: List[Damage.BufferCells]): Set[Int] =
+    spans.toSet.flatMap { span =>
       val lineRows =
         record.snapshot.visualLines.zipWithIndex.filter((visualLine, _) => visualLine.bufferLine == span.row)
       val touched = lineRows.collect {
