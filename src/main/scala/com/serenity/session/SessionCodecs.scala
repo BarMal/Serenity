@@ -190,15 +190,41 @@ given Decoder[ParagraphAlignment] = Decoder.decodeString.emap {
   case other     => Left(s"Unknown ParagraphAlignment: $other")
 }
 
-given Encoder[InlineAtom] = Encoder.encodeString.contramap(_.toString)
-
-given Decoder[InlineAtom] = Decoder.decodeString.emap {
-  case "SoftBreak" => Right(InlineAtom.SoftBreak)
-  case other       => Left(s"Unknown InlineAtom: $other")
+given Encoder[InlineAtom] = Encoder.instance {
+  case InlineAtom.SoftBreak => Json.fromString("SoftBreak")
+  case InlineAtom.Opaque(raw, visible) =>
+    Json.obj("opaque" -> Json.fromString(raw), "visible" -> Json.fromBoolean(visible))
 }
 
-given Encoder[RichTextStyle] = deriveEncoder
-given Decoder[RichTextStyle] = deriveDecoder
+given Decoder[InlineAtom] = Decoder.instance { cursor =>
+  cursor.as[String] match
+    case Right("SoftBreak") => Right(InlineAtom.SoftBreak)
+    case Right(other)       => Left(DecodingFailure(s"Unknown InlineAtom: $other", cursor.history))
+    case Left(_) =>
+      for
+        raw     <- cursor.get[String]("opaque")
+        visible <- cursor.getOrElse[Boolean]("visible")(true)
+      yield InlineAtom.Opaque(raw, visible)
+}
+
+given Encoder[RawProperty] = deriveEncoder
+given Decoder[RawProperty] = deriveDecoder
+
+given Encoder[RichTextStyle] =
+  deriveEncoder[RichTextStyle].mapJsonObject(fields =>
+    if fields("extras").exists(_.asArray.exists(_.isEmpty)) then fields.remove("extras") else fields
+  )
+
+given Decoder[RichTextStyle] = Decoder.instance { cursor =>
+  for
+    marks      <- cursor.get[Set[InlineMark]]("marks")
+    fontFamily <- cursor.get[Option[String]]("fontFamily")
+    fontSize   <- cursor.get[Option[Float]]("fontSize")
+    color      <- cursor.get[Option[String]]("color")
+    link       <- cursor.get[Option[String]]("link")
+    extras     <- cursor.getOrElse[List[RawProperty]]("extras")(Nil)
+  yield RichTextStyle(marks, fontFamily, fontSize, color, link, extras)
+}
 
 given Encoder[RichTextRun] = deriveEncoder
 given Decoder[RichTextRun] = deriveDecoder
@@ -234,8 +260,15 @@ given Decoder[ParagraphRole] = Decoder.instance { cursor =>
   }
 }
 
-given Encoder[RichTextParagraph] = deriveEncoder
-given Decoder[RichTextParagraph] = deriveDecoder
+// Manual so that where a paragraph was imported from (RichTextParagraph.source) stays out of session files.
+given Encoder[RichTextParagraph] =
+  Encoder.forProduct3("runs", "alignment", "role")(paragraph => (paragraph.runs, paragraph.alignment, paragraph.role))
+
+given Decoder[RichTextParagraph] =
+  Decoder.forProduct3("runs", "alignment", "role")(
+    (runs: List[RichTextRun], alignment: ParagraphAlignment, role: ParagraphRole) =>
+      RichTextParagraph(runs, alignment, role)
+  )
 
 // Manual, not derived: RichTextDocument is backed by a ParagraphTree (#1663), not a case class, so
 // deriveEncoder/deriveDecoder no longer apply -- and even if they did, deriving over the tree would leak its

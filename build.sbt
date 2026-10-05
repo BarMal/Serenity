@@ -271,6 +271,9 @@ libraryDependencies ++= Seq(
   "org.scalatestplus"     %% "scalacheck-1-18" % "3.2.19.0" % "test",
   "org.typelevel"         %% "cats-laws"       % "2.13.0"   % "test",
   "org.typelevel"         %% "discipline-scalatest" % "2.3.0" % "test",
+  // Independent oracle for the golden rich-document specs (Apache-2.0): every DOCX Serenity writes must open in XWPF.
+  // Test scope only, so the assembled JAR and startup are unchanged.
+  "org.apache.poi"         % "poi-ooxml"       % "5.4.1" % "test",
   "com.github.pureconfig" %% "pureconfig-core" % "0.17.10",
   // Launch-argument parsing. decline-effect is only for its cats-effect glue; the command itself is plain decline,
   // so `LaunchOptions.parse` stays a pure function over args that specs can call directly.

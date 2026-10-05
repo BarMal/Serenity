@@ -9,15 +9,16 @@ import scala.util.control.NonFatal
 
 import cats.effect.IO
 import com.serenity.io.AtomicFileWriter
-import org.w3c.dom.{Document as XmlDocument, Element, Node}
+import com.serenity.richtext.OdtStyles.{OfficeNs, TextNs}
+import com.serenity.richtext.XmlDom.{childElements, elements, isElement}
+import org.w3c.dom.Element
 
-/** Reads and writes OpenDocument Text files through Serenity's native rich text model. */
+/** Reads and writes OpenDocument Text files through Serenity's native rich text model.
+  *
+  * A document read from a package remembers it (`RichTextDocument.source`): saving copies every part the model does not
+  * own and every body paragraph that was not edited byte for byte, and writes again only the paragraphs that changed.
+  */
 object OdtDocumentCodec:
-  private val OfficeNs                = "urn:oasis:names:tc:opendocument:xmlns:office:1.0"
-  private val StyleNs                 = "urn:oasis:names:tc:opendocument:xmlns:style:1.0"
-  private val TextNs                  = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
-  private val FoNs                    = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
-  private val XlinkNs                 = "http://www.w3.org/1999/xlink"
   private val ContentEntry            = "content.xml"
   private val SupportedArchiveEntries = Set("mimetype", "META-INF/manifest.xml", ContentEntry)
 
@@ -37,18 +38,6 @@ object OdtDocumentCodec:
     "a",
     "tab",
     "line-break"
-  )
-
-  /** A paragraph style's alignment and, when the style carries a `<style:drop-cap>` child, the drop cap's line span.
-    * Keeping both on the same style keyed by name (rather than a separate lookup) is what lets the write side dedupe
-    * paragraphs sharing both properties into one style, and keeps a drop-cap paragraph and a plain one with the same
-    * alignment from colliding onto the same style.
-    */
-  final private case class OdtParagraphStyle(alignment: ParagraphAlignment, dropCapLines: Option[Int])
-
-  final private case class OdtStyles(
-      textStyles: Map[String, RichTextStyle],
-      paragraphStyles: Map[String, OdtParagraphStyle]
   )
 
   def read(path: Path): IO[RichTextDocument] =
@@ -79,19 +68,29 @@ object OdtDocumentCodec:
         ContentEntry,
         throw RichTextCodecException("ODT archive is missing content.xml")
       )
-      val xml    = steps.parseBody(content)
-      val styles = stylesFromDocument(xml)
-      val paragraphs = firstElement(xml.getElementsByTagNameNS(OfficeNs, "text"))
-        .map(textElement =>
-          childElements(textElement)
-            .filter(element => element.getNamespaceURI == TextNs && Set("p", "h").contains(element.getLocalName))
-            .map(paragraphFromElement(_, styles))
-        )
-        .getOrElse(Nil)
+      val xml  = steps.parseBody(content)
+      val main = MainPart.decode(content)
+      val sources = main
+        .filter(_.text.contains(s"""xmlns:text="$TextNs""""))
+        .flatMap(part => SourceMap.of(xml.getDocumentElement, part.text))
+      val context     = OdtReadContext(OdtStyles.fromDocument(xml), sources)
+      val textElement = elements(xml.getElementsByTagNameNS(OfficeNs, "text")).headOption
+      val paragraphs = textElement.toList
+        .flatMap(childElements)
+        .zipWithIndex
+        .collect { case (element, index) if isParagraph(element) => OdtParagraphReader.read(element, index, context) }
+      val source = DocumentSource(
+        PackageFormat.Odt,
+        bytes,
+        ContentEntry,
+        main,
+        textElement.flatMap(element => sources.flatMap(_.bodySource(element, isParagraph))),
+        None
+      )
       val document = RichTextDocument(
         if paragraphs.nonEmpty then paragraphs
         else List(RichTextParagraph.plain(""))
-      ).normalized
+      ).normalized.withSource(Some(source))
       val unsupportedElements = RichTextXmlParser.elementNames(xml.getDocumentElement, None) -- SupportedElements
       val unsupportedEntries  = archive.entryNames -- SupportedArchiveEntries
       Right(RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries)))
@@ -99,248 +98,26 @@ object OdtDocumentCodec:
       case error: RichTextCodecException => Left(error)
       case NonFatal(error)               => Left(RichTextCodecException("ODT document could not be decoded", error))
 
+  private def isParagraph(element: Element): Boolean =
+    isElement(element, TextNs, "p") || isElement(element, TextNs, "h")
+
+  /** The package bytes for `document`: its source package with the edits applied when it has one, else a new package.
+    */
   def writeBytes(document: RichTextDocument): Array[Byte] =
+    val normalized = document.normalized
+    normalized.source
+      .filter(_.format == PackageFormat.Odt)
+      .fold(newPackage(normalized))(OdtPackageWriter.rewrite(normalized, _))
+
+  private def newPackage(document: RichTextDocument): Array[Byte] =
     val output = ByteArrayOutputStream()
     val zip    = ZipOutputStream(output, StandardCharsets.UTF_8)
     try
       writeZipEntry(zip, "mimetype", "application/vnd.oasis.opendocument.text")
       writeZipEntry(zip, "META-INF/manifest.xml", manifestXml)
-      writeZipEntry(zip, "content.xml", contentXml(document.normalized))
+      writeZipEntry(zip, ContentEntry, OdtPackageWriter.newContentXml(document))
     finally zip.close()
     output.toByteArray
-
-  private def stylesFromDocument(document: XmlDocument): OdtStyles =
-    val styleElements = elements(document.getElementsByTagNameNS(StyleNs, "style"))
-    OdtStyles(
-      textStyles = styleElements.flatMap(textStyleFromElement).toMap,
-      paragraphStyles = styleElements.flatMap(paragraphStyleFromElement).toMap
-    )
-
-  private def textStyleFromElement(element: Element): Option[(String, RichTextStyle)] =
-    Option
-      .when(attribute(element, StyleNs, "family").contains("text")) {
-        val style = childElement(element, StyleNs, "text-properties")
-          .map(textStyleFromProperties)
-          .getOrElse(RichTextStyle.empty)
-        attribute(element, StyleNs, "name").map(_ -> style)
-      }
-      .flatten
-
-  private def paragraphStyleFromElement(element: Element): Option[(String, OdtParagraphStyle)] =
-    Option
-      .when(attribute(element, StyleNs, "family").contains("paragraph")) {
-        val properties   = childElement(element, StyleNs, "paragraph-properties")
-        val alignment    = properties.flatMap(paragraphAlignmentFromProperties).getOrElse(ParagraphAlignment.Left)
-        val dropCapLines = properties.flatMap(dropCapLinesFromProperties)
-        attribute(element, StyleNs, "name").map(_ -> OdtParagraphStyle(alignment, dropCapLines))
-      }
-      .flatten
-
-  private def textStyleFromProperties(element: Element): RichTextStyle =
-    RichTextStyle(
-      marks = List(
-        Option.when(isBold(element))(InlineMark.Bold),
-        Option.when(attribute(element, FoNs, "font-style").contains("italic"))(InlineMark.Italic),
-        Option.when(isUnderlined(element))(InlineMark.Underline)
-      ).flatten.toSet,
-      fontFamily = attribute(element, StyleNs, "font-name").orElse(attribute(element, FoNs, "font-family")),
-      fontSize = attribute(element, FoNs, "font-size").flatMap(parsePointSize),
-      color = attribute(element, FoNs, "color").filterNot(_ == "#000000")
-    )
-
-  private def isBold(element: Element): Boolean =
-    attribute(element, FoNs, "font-weight").exists(weight => weight == "bold" || weight.toIntOption.exists(_ >= 600))
-
-  private def isUnderlined(element: Element): Boolean =
-    attribute(element, StyleNs, "text-underline-style").exists(_ != "none")
-
-  private def parsePointSize(value: String): Option[Float] =
-    value.stripSuffix("pt").toFloatOption
-
-  private def paragraphAlignmentFromProperties(element: Element): Option[ParagraphAlignment] =
-    attribute(element, FoNs, "text-align").map {
-      case "center"                => ParagraphAlignment.Center
-      case "end" | "right"         => ParagraphAlignment.Right
-      case "justify" | "justified" => ParagraphAlignment.Justify
-      case _                       => ParagraphAlignment.Left
-    }
-
-  /** ODF's native drop cap representation: a `<style:drop-cap style:lines="N" style:length="M"/>` child of the
-    * paragraph style's `<style:paragraph-properties>`, per ODF 1.2 section 17.17.
-    */
-  private def dropCapLinesFromProperties(element: Element): Option[Int] =
-    childElement(element, StyleNs, "drop-cap").flatMap(attribute(_, StyleNs, "lines")).flatMap(_.toIntOption)
-
-  private def paragraphFromElement(element: Element, styles: OdtStyles): RichTextParagraph =
-    val paragraphStyle = attribute(element, TextNs, "style-name").flatMap(styles.paragraphStyles.get)
-    val alignment      = paragraphStyle.map(_.alignment).getOrElse(ParagraphAlignment.Left)
-    val role =
-      if element.getNamespaceURI == TextNs && element.getLocalName == "h" then
-        ParagraphRole.Heading(attribute(element, TextNs, "outline-level").flatMap(_.toIntOption).getOrElse(1).max(1))
-      else paragraphStyle.flatMap(_.dropCapLines).map(ParagraphRole.dropCap).getOrElse(ParagraphRole.Body)
-    RichTextParagraph(runsFromChildren(element, RichTextStyle.empty, styles), alignment, role).normalized
-
-  private def runsFromChildren(element: Element, currentStyle: RichTextStyle, styles: OdtStyles): List[RichTextRun] =
-    childNodes(element).flatMap(runsFromNode(_, currentStyle, styles))
-
-  private def runsFromNode(node: Node, currentStyle: RichTextStyle, styles: OdtStyles): List[RichTextRun] =
-    node.getNodeType match
-      case Node.TEXT_NODE =>
-        Option(node.getNodeValue).filter(_.nonEmpty).map(text => RichTextRun(text, currentStyle)).toList
-      case Node.ELEMENT_NODE =>
-        val element = node.asInstanceOf[Element]
-        if element.getNamespaceURI == TextNs && element.getLocalName == "span" then
-          val spanStyle = attribute(element, TextNs, "style-name")
-            .flatMap(styles.textStyles.get)
-            .map(mergeStyles(currentStyle, _))
-            .getOrElse(currentStyle)
-          runsFromChildren(element, spanStyle, styles)
-        else if element.getNamespaceURI == TextNs && element.getLocalName == "a" then
-          val linkedStyle = attribute(element, XlinkNs, "href").fold(currentStyle)(currentStyle.withLink)
-          runsFromChildren(element, linkedStyle, styles)
-        else if element.getNamespaceURI == TextNs && element.getLocalName == "s" then
-          val count = attribute(element, TextNs, "c").flatMap(_.toIntOption).getOrElse(1)
-          List(RichTextRun(" " * count.max(1), currentStyle))
-        else if element.getNamespaceURI == TextNs && element.getLocalName == "tab" then
-          List(RichTextRun("\t", currentStyle))
-        else if element.getNamespaceURI == TextNs && element.getLocalName == "line-break" then
-          List(RichTextRun.softBreak(currentStyle))
-        else runsFromChildren(element, currentStyle, styles)
-      case _ =>
-        Nil
-
-  private def mergeStyles(base: RichTextStyle, overlay: RichTextStyle): RichTextStyle =
-    RichTextStyle(
-      marks = base.marks ++ overlay.marks,
-      fontFamily = overlay.fontFamily.orElse(base.fontFamily),
-      fontSize = overlay.fontSize.orElse(base.fontSize),
-      color = overlay.color.orElse(base.color),
-      link = base.link
-    )
-
-  private def contentXml(document: RichTextDocument): String =
-    val textStyleNames = distinctRunStyles(document).zipWithIndex.map((style, index) => style -> s"T$index").toMap
-    val paragraphStyleNames = document.paragraphs
-      .map(paragraph => OdtParagraphStyle(paragraph.alignment, dropCapLinesOf(paragraph.role)))
-      .distinct
-      .zipWithIndex
-      .map((style, index) => style -> s"P$index")
-      .toMap
-
-    s"""<?xml version="1.0" encoding="UTF-8"?>
-       |<office:document-content
-       |    xmlns:office="$OfficeNs"
-       |    xmlns:style="$StyleNs"
-       |    xmlns:text="$TextNs"
-       |    xmlns:xlink="$XlinkNs"
-       |    xmlns:fo="$FoNs">
-       |  <office:automatic-styles>
-       |${automaticStylesXml(textStyleNames, paragraphStyleNames)}
-       |  </office:automatic-styles>
-       |  <office:body>
-       |    <office:text>
-       |${paragraphsXml(document, textStyleNames, paragraphStyleNames)}
-       |    </office:text>
-       |  </office:body>
-       |</office:document-content>""".stripMargin
-
-  private def distinctRunStyles(document: RichTextDocument): List[RichTextStyle] =
-    document.paragraphs.flatMap(_.runs.map(_.style.withoutLink)).filterNot(_ == RichTextStyle.empty).distinct
-
-  private def automaticStylesXml(
-    textStyleNames: Map[RichTextStyle, String],
-    paragraphStyleNames: Map[OdtParagraphStyle, String]
-  ): String =
-    val textStyles = textStyleNames.toList
-      .sortBy(_._2)
-      .map((style, name) => s"""    <style:style style:name="$name" style:family="text">
-           |      <style:text-properties${textPropertiesAttributes(style)}/>
-           |    </style:style>""".stripMargin)
-    val paragraphStyles = paragraphStyleNames.toList
-      .sortBy(_._2)
-      .map((style, name) =>
-        s"""    <style:style style:name="$name" style:family="paragraph">
-           |      <style:paragraph-properties fo:text-align="${alignmentAttribute(style.alignment)}">${dropCapXml(style.dropCapLines)}</style:paragraph-properties>
-           |    </style:style>""".stripMargin
-      )
-    (textStyles ++ paragraphStyles).mkString("\n")
-
-  private def dropCapXml(dropCapLines: Option[Int]): String =
-    dropCapLines.map(lines => s"""<style:drop-cap style:lines="${lines.max(1)}" style:length="1"/>""").getOrElse("")
-
-  private def dropCapLinesOf(role: ParagraphRole): Option[Int] =
-    role match
-      case ParagraphRole.DropCap(lines) => Some(lines.max(1))
-      case _                            => None
-
-  private def textPropertiesAttributes(style: RichTextStyle): String =
-    List(
-      Option.when(style.marks.contains(InlineMark.Bold))("""fo:font-weight="bold""""),
-      Option.when(style.marks.contains(InlineMark.Italic))("""fo:font-style="italic""""),
-      Option.when(style.marks.contains(InlineMark.Underline))("""style:text-underline-style="solid""""),
-      style.fontFamily.map(value =>
-        s"""style:font-name="${escapeAttribute(value)}" fo:font-family="${escapeAttribute(value)}""""
-      ),
-      style.fontSize.map(value => s"""fo:font-size="${value.round}pt""""),
-      style.color.map(value => s"""fo:color="${escapeAttribute(value)}"""")
-    ).flatten match
-      case Nil        => ""
-      case attributes => " " + attributes.mkString(" ")
-
-  private def alignmentAttribute(alignment: ParagraphAlignment): String =
-    alignment match
-      case ParagraphAlignment.Left    => "start"
-      case ParagraphAlignment.Center  => "center"
-      case ParagraphAlignment.Right   => "end"
-      case ParagraphAlignment.Justify => "justify"
-
-  private def paragraphsXml(
-    document: RichTextDocument,
-    textStyleNames: Map[RichTextStyle, String],
-    paragraphStyleNames: Map[OdtParagraphStyle, String]
-  ): String =
-    document.paragraphs
-      .map(paragraph =>
-        val styleName =
-          paragraphStyleNames(OdtParagraphStyle(paragraph.alignment, dropCapLinesOf(paragraph.role)))
-        paragraph.role match
-          case ParagraphRole.Body | ParagraphRole.DropCap(_) =>
-            s"""      <text:p text:style-name="$styleName">${runsXml(paragraph, textStyleNames)}</text:p>"""
-          case ParagraphRole.Heading(level) =>
-            s"""      <text:h text:outline-level="${level.max(1)}" text:style-name="$styleName">${runsXml(paragraph, textStyleNames)}</text:h>"""
-      )
-      .mkString("\n")
-
-  private def runsXml(paragraph: RichTextParagraph, textStyleNames: Map[RichTextStyle, String]): String =
-    paragraph.linkSpans.map { (target, runs) =>
-      val spanXml = runs.map(runXml(_, textStyleNames)).mkString
-      target.fold(spanXml)(link =>
-        s"""<text:a xlink:type="simple" xlink:href="${escapeAttribute(link)}">$spanXml</text:a>"""
-      )
-    }.mkString
-
-  private def runXml(run: RichTextRun, textStyleNames: Map[RichTextStyle, String]): String =
-    val content = run.atom.fold(runTextXml(run.text)) { case InlineAtom.SoftBreak => "<text:line-break/>" }
-    val style   = run.style.withoutLink
-    if style == RichTextStyle.empty then content
-    else s"""<text:span text:style-name="${textStyleNames(style)}">$content</text:span>"""
-
-  private def runTextXml(text: String): String =
-    text
-      .foldLeft((StringBuilder(), List.empty[String])) {
-        case ((chunk, acc), '\t') =>
-          (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<text:tab/>")
-        case ((chunk, acc), ' ') =>
-          (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<text:s/>")
-        case ((chunk, acc), char) =>
-          chunk.append(char)
-          (chunk, acc)
-      } match
-      case (chunk, acc) =>
-        (acc ++ textChunkXml(chunk)).mkString
-
-  private def textChunkXml(chunk: StringBuilder): Option[String] =
-    Option.when(chunk.nonEmpty)(escapeText(chunk.toString))
 
   private def manifestXml: String =
     """<?xml version="1.0" encoding="UTF-8"?>
@@ -355,33 +132,3 @@ object OdtDocumentCodec:
     zip.putNextEntry(ZipEntry(name))
     zip.write(content.getBytes(StandardCharsets.UTF_8))
     zip.closeEntry()
-
-  private def attribute(element: Element, namespace: String, localName: String): Option[String] =
-    Option(element.getAttributeNS(namespace, localName)).filter(_.nonEmpty)
-
-  private def childElement(element: Element, namespace: String, localName: String): Option[Element] =
-    childElements(element).find(child => child.getNamespaceURI == namespace && child.getLocalName == localName)
-
-  private def childElements(element: Element): List[Element] =
-    childNodes(element).collect { case child: Element => child }
-
-  private def childNodes(element: Element): List[Node] =
-    nodes(element.getChildNodes)
-
-  private def firstElement(nodes: org.w3c.dom.NodeList): Option[Element] =
-    elements(nodes).headOption
-
-  private def elements(nodeList: org.w3c.dom.NodeList): List[Element] =
-    nodes(nodeList).collect { case element: Element => element }
-
-  private def nodes(nodeList: org.w3c.dom.NodeList): List[Node] =
-    (0 until nodeList.getLength).toList.map(nodeList.item)
-
-  private def escapeText(value: String): String =
-    value
-      .replace("&", "&amp;")
-      .replace("<", "&lt;")
-      .replace(">", "&gt;")
-
-  private def escapeAttribute(value: String): String =
-    escapeText(value).replace("\"", "&quot;")

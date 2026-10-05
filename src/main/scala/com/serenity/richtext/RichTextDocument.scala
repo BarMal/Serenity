@@ -15,6 +15,26 @@ enum InlineAtom:
     */
   case SoftBreak
 
+  /** Source XML the model cannot edit but must put back where it was: an image, a bookmark, a comment anchor, a field
+    * code. `visible` objects are drawn as a placeholder glyph; markers are invisible.
+    */
+  case Opaque(raw: String, visible: Boolean)
+
+  /** The one rope character standing for this atom. Opaque atoms use a different one from soft breaks so that plain
+    * text exports can turn a soft break into a newline and drop an opaque atom.
+    */
+  def character: Char =
+    this match
+      case SoftBreak    => InlineAtom.SoftBreakCharacter
+      case Opaque(_, _) => InlineAtom.OpaqueCharacter
+
+object InlineAtom:
+  /** U+FFFC OBJECT REPLACEMENT CHARACTER. */
+  val SoftBreakCharacter: Char = '\uFFFC'
+
+  /** U+2060 WORD JOINER: zero width, so an invisible marker takes no room even where it is drawn as-is. */
+  val OpaqueCharacter: Char = '\u2060'
+
 enum ParagraphAlignment:
   case Left
   case Center
@@ -49,7 +69,8 @@ final case class RichTextStyle(
     fontFamily: Option[String] = None,
     fontSize: Option[Float] = None,
     color: Option[String] = None,
-    link: Option[String] = None
+    link: Option[String] = None,
+    extras: List[RawProperty] = Nil
 ):
   def withMark(mark: InlineMark): RichTextStyle =
     copy(marks = marks + mark)
@@ -93,14 +114,23 @@ final case class RichTextRun(
 
   /** The text a plain-text or Markdown export shows for this run. */
   def exportText: String =
-    atom.fold(text) { case InlineAtom.SoftBreak => "\n" }
+    atom.fold(text) {
+      case InlineAtom.SoftBreak    => "\n"
+      case InlineAtom.Opaque(_, _) => ""
+    }
 
 object RichTextRun:
-  /** U+FFFC OBJECT REPLACEMENT CHARACTER: the single rope character standing for an [[InlineAtom]]. */
-  val AtomCharacter: Char = '\uFFFC'
+  /** U+FFFC OBJECT REPLACEMENT CHARACTER: the rope character standing for a soft break. */
+  val AtomCharacter: Char = InlineAtom.SoftBreakCharacter
 
   def softBreak(style: RichTextStyle = RichTextStyle.empty): RichTextRun =
-    RichTextRun(AtomCharacter.toString, style, Some(InlineAtom.SoftBreak))
+    atom(InlineAtom.SoftBreak, style)
+
+  def opaque(raw: String, visible: Boolean, style: RichTextStyle = RichTextStyle.empty): RichTextRun =
+    atom(InlineAtom.Opaque(raw, visible), style)
+
+  private def atom(atom: InlineAtom, style: RichTextStyle): RichTextRun =
+    RichTextRun(atom.character.toString, style, Some(atom))
 
 /** Position inside a rich text document, measured as a UTF-16 offset within one paragraph. */
 final case class RichTextPosition(paragraphIndex: Int, offset: Int)
@@ -118,8 +148,25 @@ final case class RichTextRange(start: RichTextPosition, end: RichTextPosition):
 final case class RichTextParagraph(
     runs: List[RichTextRun],
     alignment: ParagraphAlignment = ParagraphAlignment.Left,
-    role: ParagraphRole = ParagraphRole.Body
+    role: ParagraphRole = ParagraphRole.Body,
+    source: Option[ParagraphSource] = None
 ):
+
+  /** Content equality: where a paragraph was imported from is provenance, not text, so it does not take part. */
+  override def equals(other: Any): Boolean =
+    other match
+      case that: RichTextParagraph => runs == that.runs && alignment == that.alignment && role == that.role
+      case _                       => false
+
+  override def hashCode(): Int =
+    (runs, alignment, role).hashCode()
+
+  /** A paragraph with `runs` that keeps this one's formatting and unmodelled properties but is not the imported
+    * paragraph itself, e.g. the second half of a split.
+    */
+  def derivedWith(newRuns: List[RichTextRun]): RichTextParagraph =
+    copy(runs = newRuns, source = source.map(_.asDerived))
+
   lazy val plainText: String =
     runs.map(_.text).mkString
 
@@ -304,7 +351,11 @@ object RichTextParagraph:
   * and [[normalized]] -- which the edit path calls after every keystroke -- returns `this` instead of rebuilding every
   * paragraph and tree node.
   */
-final class RichTextDocument private (private val tree: ParagraphTree, everyParagraphNormalized: Boolean):
+final class RichTextDocument private (
+    private val tree: ParagraphTree,
+    everyParagraphNormalized: Boolean,
+    val source: Option[DocumentSource]
+):
   lazy val paragraphs: List[RichTextParagraph] = tree.toParagraphs
 
   /** Whether this document carries any formatting a plain-text or Markdown save would discard: a non-body paragraph
@@ -335,9 +386,13 @@ final class RichTextDocument private (private val tree: ParagraphTree, everyPara
     if tree.paragraphCount == 0 then 0
     else tree.charCount + tree.paragraphCount - 1
 
+  /** This document attributed to `origin`, the package a save should write the unmodelled parts back from. */
+  def withSource(origin: Option[DocumentSource]): RichTextDocument =
+    new RichTextDocument(tree, everyParagraphNormalized, origin)
+
   def normalized: RichTextDocument =
     if everyParagraphNormalized then this
-    else new RichTextDocument(tree.mapAll(_.normalized), everyParagraphNormalized = true)
+    else new RichTextDocument(tree.mapAll(_.normalized), everyParagraphNormalized = true, source)
 
   def applyMark(range: RichTextRange, mark: InlineMark): RichTextDocument =
     updateRange(range)((paragraph, start, end) => paragraph.applyMark(start, end, mark))
@@ -425,7 +480,8 @@ final class RichTextDocument private (private val tree: ParagraphTree, everyPara
     val newTree = tree.updatedRange(startIndex, endIndex)(update)
     new RichTextDocument(
       newTree,
-      everyParagraphNormalized && newTree.forallInRange(startIndex, endIndex)((paragraph, _) => paragraph.isNormalized)
+      everyParagraphNormalized && newTree.forallInRange(startIndex, endIndex)((paragraph, _) => paragraph.isNormalized),
+      source
     )
 
   private def updateParagraphs(range: RichTextRange)(update: RichTextParagraph => RichTextParagraph): RichTextDocument =
@@ -458,21 +514,19 @@ final class RichTextDocument private (private val tree: ParagraphTree, everyPara
           val suffix      = end.runsInRange(endOffset, end.plainTextLength)
           val replacement = parts match
             case text :: Nil =>
-              List(
-                RichTextParagraph(prefix ++ styledRun(text, style) ++ suffix, start.alignment, start.role).normalized
-              )
+              List(start.copy(runs = prefix ++ styledRun(text, style) ++ suffix).normalized)
             case first :: rest =>
-              val middle =
-                rest.dropRight(1).map(text => RichTextParagraph(styledRun(text, style), start.alignment, start.role))
-              val last = rest.lastOption.toList.map(text =>
-                RichTextParagraph(styledRun(text, style) ++ suffix, end.alignment, end.role).normalized
-              )
-              RichTextParagraph(prefix ++ styledRun(first, style), start.alignment, start.role).normalized ::
-                middle ++ last
+              val middle = rest.dropRight(1).map(text => start.derivedWith(styledRun(text, style)))
+              val last = rest.lastOption.toList.map { text =>
+                val tail = if endIndex == startIndex then end.derivedWith(Nil) else end
+                tail.copy(runs = styledRun(text, style) ++ suffix).normalized
+              }
+              start.copy(runs = prefix ++ styledRun(first, style)).normalized :: middle ++ last
             case Nil => Nil
           new RichTextDocument(
             tree.replaceSlice(startIndex, endIndex, replacement),
-            everyParagraphNormalized && replacement.forall(_.isNormalized)
+            everyParagraphNormalized && replacement.forall(_.isNormalized),
+            source
           )
         case _ => this
 
@@ -492,7 +546,7 @@ final class RichTextDocument private (private val tree: ParagraphTree, everyPara
 
 object RichTextDocument:
   def apply(paragraphs: List[RichTextParagraph]): RichTextDocument =
-    new RichTextDocument(ParagraphTree.fromParagraphs(paragraphs), paragraphs.forall(_.isNormalized))
+    new RichTextDocument(ParagraphTree.fromParagraphs(paragraphs), paragraphs.forall(_.isNormalized), None)
 
   def unapply(document: RichTextDocument): Some[List[RichTextParagraph]] =
     Some(document.paragraphs)

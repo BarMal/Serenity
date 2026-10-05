@@ -6,7 +6,7 @@ import cats.Order
 import cats.data.NonEmptyList
 import com.serenity.io.{DocumentFormat, DocumentRevision, FileType}
 import com.serenity.lsp.config.LanguageId
-import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextRun, RichTextStyle}
+import com.serenity.richtext.{InlineAtom, RichTextDocument, RichTextFidelity, RichTextRun, RichTextStyle}
 import com.serenity.rope.Rope
 import com.serenity.text.{LineEnding, TextEncoding}
 
@@ -294,7 +294,9 @@ final case class Buffer(
     * rope placeholder) become the text they stand for, so a soft break is a newline.
     */
   def plainTextExport(text: String): String =
-    if richText.richTextDocument.isDefined then text.replace(RichTextRun.AtomCharacter, '\n') else text
+    if richText.richTextDocument.isDefined then
+      text.replace(RichTextRun.AtomCharacter, '\n').filterNot(_ == InlineAtom.OpaqueCharacter)
+    else text
 
 object Buffer:
   def empty(id: BufferId)(using com.serenity.rope.Balance): Buffer =

@@ -13,6 +13,9 @@ object RichTextStyling:
 
   val SoftBreakGlyph: String = "\u21b5"
 
+  /** Stands in for a visible opaque object (an image, a footnote reference) that cannot be drawn in text yet. */
+  val OpaqueObjectGlyph: String = "\u25a3"
+
   /** The zoom factor a base prose font size implies, anchored so the default (12pt) is 1x. */
   def proseZoom(baseProseFontSizePx: Float): Float =
     if baseProseFontSizePx > 0.0f then baseProseFontSizePx / ProseZoomBaselinePx else 1.0f
@@ -89,7 +92,10 @@ object RichTextStyling:
     * slot, so the break can be seen and selected. Paint and measurement both read these spans, so they agree.
     */
   private def visibleText(run: com.serenity.richtext.RichTextRun, content: String): String =
-    if run.atom.contains(InlineAtom.SoftBreak) then SoftBreakGlyph else content
+    run.atom match
+      case Some(InlineAtom.SoftBreak)       => SoftBreakGlyph
+      case Some(InlineAtom.Opaque(_, true)) => OpaqueObjectGlyph
+      case _                                => content
 
   private def scaledTextStyle(
     style: com.serenity.richtext.RichTextStyle,
