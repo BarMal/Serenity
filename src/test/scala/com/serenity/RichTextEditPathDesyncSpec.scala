@@ -101,6 +101,25 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
     buffer.richText.richTextDocument.map(_.plainText) shouldBe Some(plainContent)
   }
 
+  "a single-cursor paste of CRLF text" should "keep richTextDocument in sync with the normalised content" in {
+    val stateManager = createStateManager()
+    val bufferId     = stateManager.createBuffer("alpha beta", None).unsafeRunSync()
+    stateManager.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+
+    boldSelection(stateManager, bufferId, Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
+    setCursorAndSelection(stateManager, bufferId, CursorPosition(0, 10), None)
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(clipboard = Some("\r\ngamma\rdelta"))))
+      .unsafeRunSync()
+
+    stateManager.applyEvent(Paste).unsafeRunSync()
+
+    val buffer       = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
+    val plainContent = buffer.document.content.collect()
+    plainContent shouldBe "alpha beta\ngamma\ndelta"
+    buffer.richText.richTextDocument.map(_.plainText) shouldBe Some(plainContent)
+  }
+
   "Tab-to-indent" should "keep richTextDocument in sync with the indented content" in {
     val stateManager = createStateManager()
     val bufferId     = stateManager.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
