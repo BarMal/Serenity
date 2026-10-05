@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
-import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun, RichTextStyle}
 import com.serenity.config.AppConfig
+import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun, RichTextStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
@@ -93,8 +93,8 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
     sizedState.copy(persisted = sizedState.persisted.copy(buffers = Map(bufferId -> sized.copy(viewport = viewport))))
 
   /** Rows of the pane's own (document) font that fit the pane height, as `RendererPaneSetup` counts them: the
-    * viewport's `visibleLines` are code-grid rows, and a text font with a different line height fits a different
-    * number of rows into the same pixels, so the centre row depends on the fonts in use.
+    * viewport's `visibleLines` are code-grid rows, and a text font with a different line height fits a different number
+    * of rows into the same pixels, so the centre row depends on the fonts in use.
     */
   private def paintedRowsInPane(state: AppState): Int =
     val config       = state.persisted.config.editorConfig.fontConfig
