@@ -1,10 +1,14 @@
 package com.serenity.state.manager
 
 import java.nio.file.{Files, Path}
+import java.util.concurrent.Executors
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
+import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.implicits.global
+import cats.effect.unsafe.{IORuntime, IORuntimeConfig}
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
 import com.serenity.app.AppRuntime
@@ -23,22 +27,54 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
 
   final private case class IoCost(read: Long, written: Long)
 
-  private def procIo: (Long, Long) =
-    val lines               = Files.readAllLines(Path.of("/proc/self/io")).toArray.map(_.toString)
+  // `/proc/self/io` counts the whole JVM, and sbt runs suites in parallel in one JVM, so another suite's file I/O would
+  // land in these budgets. The counters of a single thread are private to it: every operation is measured on a runtime
+  // whose compute and blocking pools are one thread each, and only those two threads' counters are read.
+  private def singleThread(name: String): ExecutionContext =
+    ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor { task =>
+      val thread = new Thread(task, name)
+      thread.setDaemon(true)
+      thread
+    })
+
+  private val isolated: IORuntime =
+    val (scheduler, _) = IORuntime.createDefaultScheduler("io-budget-scheduler")
+    IORuntime(
+      singleThread("io-budget-compute"),
+      singleThread("io-budget-blocking"),
+      scheduler,
+      () => (),
+      IORuntimeConfig()
+    )
+
+  private def currentThreadIo(): (Long, Long) =
+    val lines               = Files.readAllLines(Path.of("/proc/thread-self/io")).asScala
     def field(name: String) = lines.find(_.startsWith(name + ":")).map(_.split(":")(1).trim.toLong).getOrElse(0L)
     (field("rchar"), field("wchar"))
 
-  private def measure[A](label: String, runs: Int)(op: => A): IoCost =
-    val _        = op
-    val (r0, w0) = procIo
-    val t0       = System.nanoTime()
-    (1 to runs).foreach(_ => op)
-    val t1       = System.nanoTime()
-    val (r1, w1) = procIo
-    info(
-      f"[IO-BUDGET] $label%-40s read/op=${(r1 - r0) / runs}%,12d B  written/op=${(w1 - w0) / runs}%,12d B  time/op=${(t1 - t0) / runs / 1e6}%8.2f ms"
-    )
-    IoCost((r1 - r0) / runs, (w1 - w0) / runs)
+  private val ioOfMeasuredThreads: IO[(Long, Long)] =
+    for
+      (computeRead, computeWritten)   <- IO(currentThreadIo())
+      (blockingRead, blockingWritten) <- IO.blocking(currentThreadIo())
+    yield (computeRead + blockingRead, computeWritten + blockingWritten)
+
+  private def measure[A](label: String, runs: Int)(op: IO[A]): IoCost =
+    val program =
+      for
+        _        <- op
+        (r0, w0) <- ioOfMeasuredThreads
+        started  <- IO.monotonic
+        _        <- op.replicateA_(runs)
+        elapsed  <- IO.monotonic.map(_ - started)
+        (r1, w1) <- ioOfMeasuredThreads
+        cost = IoCost((r1 - r0) / runs, (w1 - w0) / runs)
+        _ <- IO(
+          info(
+            f"[IO-BUDGET] $label%-40s read/op=${cost.read}%,12d B  written/op=${cost.written}%,12d B  time/op=${elapsed.toNanos / runs / 1e6}%8.2f ms"
+          )
+        )
+      yield cost
+    program.unsafeRunSync()(using isolated)
 
   private def focused(buffer: Buffer): AppState =
     AppState.initial.copy(persisted =
@@ -63,13 +99,9 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
       val manager = new FileManager()
       val opened  = manager.loadFile(path, bufferId).unsafeRunSync()
       val saved   = Ref.of[IO, Buffer](opened).unsafeRunSync()
-      val save = measure(s"file save ${megabytes}MB", 5) {
-        saved.set(manager.saveBuffer(saved.get.unsafeRunSync()).unsafeRunSync()).unsafeRunSync()
-      }
+      val save    = measure(s"file save ${megabytes}MB", 5)(saved.get.flatMap(manager.saveBuffer).flatMap(saved.set))
       val fixture = harness(focused(saved.get.unsafeRunSync()))
-      val focusIn = measure(s"focus-in check ${megabytes}MB", 5) {
-        fixture.handlers.observeFocusedExternalRevisionEffect.unsafeRunSync()
-      }
+      val focusIn = measure(s"focus-in check ${megabytes}MB", 5)(fixture.handlers.observeFocusedExternalRevisionEffect)
       if megabytes == 10 then
         withClue("a save re-reads the file it replaces: ")(save.read should be < Megabyte)
         withClue("an unchanged file is stat-ed, not read, on focus-in: ")(focusIn.read should be < Megabyte)
@@ -88,7 +120,7 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
       val state = initial.copy(persisted =
         initial.persisted.copy(buffers = Map(id -> buffer.copy(document = buffer.document.copy(isDirty = true))))
       )
-      val cost = measure(s"session save ${megabytes}MB unsaved text", 5)(session.saveSession(state).unsafeRunSync())
+      val cost = measure(s"session save ${megabytes}MB unsaved text", 5)(session.saveSession(state))
       if megabytes == 10 then
         withClue("the payload is written once, not twice: ")(cost.written should be < (megabytes * Megabyte * 3 / 2))
     }
