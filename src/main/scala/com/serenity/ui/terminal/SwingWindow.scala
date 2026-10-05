@@ -59,6 +59,7 @@ class SwingWindow(
   private val baseImageRef             = new AtomicReference[Option[BufferedImage]](None)
   private val publishedCaretsRef       = new AtomicReference[scala.List[SwingWindow.CaretPaint]](Nil)
   private val previousCursorRectsRef   = new AtomicReference[scala.List[Rectangle]](Nil)
+  private val pendingRepaintRef        = new AtomicReference[Option[SwingWindow.CanvasRepaint]](None)
   private val baseImagePool            = new SwingWindow.ReusableImagePool
   private val savedBoundsRef           = new AtomicReference[Option[Rectangle]](None)
   private val maximizedRef             = new AtomicBoolean(false)
@@ -111,21 +112,31 @@ class SwingWindow(
   def onImageReady(image: BufferedImage): Unit =
     onImageReady(image, None)
 
-  /** Publish a finished base frame, repainting only `dirtyRegion` when the rest of the frame is known to be identical
-    * to what is already on screen -- widened by any carets this frame drops, whose pixels would otherwise survive.
+  /** Publish a finished base frame, repainting only `dirtyRects` when the rest of the frame is known to be identical to
+    * what is already on screen -- plus any carets this frame drops, whose pixels would otherwise survive.
     */
-  def onImageReady(image: BufferedImage, dirtyRegion: Option[Rectangle]): Unit =
+  def onImageReady(image: BufferedImage, dirtyRects: Option[scala.List[Rectangle]]): Unit =
     val displayedCarets = publishedCaretsRef.getAndSet(Nil)
     baseImagePool.publish(image)
     baseImageRef.set(Some(image))
-    SwingWindow.combinedCursorRepaintRegion(dirtyRegion, displayedCarets.map(_.rect), Nil) match
-      case Some(region) if region.width > 0 && region.height > 0 =>
-        frameTimings.framePublished()
-        SwingUtilities.invokeLater(() => canvas.repaint(region.x, region.y, region.width, region.height))
-      case Some(_) => ()
-      case None =>
-        frameTimings.framePublished()
-        SwingUtilities.invokeLater(() => canvas.repaint())
+    requestRepaint(SwingWindow.cursorRepaint(dirtyRects, displayedCarets.map(_.rect), Nil))
+
+  private def requestRepaint(repaint: SwingWindow.CanvasRepaint): Unit =
+    if repaint != SwingWindow.CanvasRepaint.Rects(Nil) then
+      frameTimings.framePublished()
+      val earlier =
+        pendingRepaintRef.getAndUpdate(pending => Some(pending.fold(repaint)(SwingWindow.mergedRepaint(_, repaint))))
+      if earlier.isEmpty then SwingUtilities.invokeLater(() => paintPendingRepaint())
+
+  /** Each rect is painted on its own and at once: `canvas.repaint(rect)` would let Swing's `RepaintManager` fold them
+    * into one dirty rect spanning all of them, the very copy splitting them avoids. Frames published before this runs
+    * have already merged into the pending repaint, so a burst of frames is still painted once.
+    */
+  private def paintPendingRepaint(): Unit =
+    pendingRepaintRef.getAndSet(None).foreach {
+      case SwingWindow.CanvasRepaint.Whole        => canvas.repaint()
+      case SwingWindow.CanvasRepaint.Rects(rects) => rects.foreach(rect => canvas.paintImmediately(rect))
+    }
 
   def onBaseImageReady(image: BufferedImage): Unit =
     publishedCaretsRef.set(Nil)
@@ -135,11 +146,11 @@ class SwingWindow(
   /** Publish the carets to fill over the current base frame and repaint just the pixels they changed.
     *
     * A caret that moved needs both its old and new position repainted -- not just whatever the base frame changed.
-    * `baseDirtyRegion` is the caller's own bounded-repaint region for the base frame (`None` for "the whole canvas
-    * changed"); `paintCarets` reports the carets to fill. The final repaint is bounded to the union of all three, or
-    * unbounded whenever `baseDirtyRegion` itself is `None`.
+    * `baseDirtyRects` are the caller's own bounded-repaint rects for the base frame (`None` for "the whole canvas
+    * changed"); `paintCarets` reports the carets to fill. The repaint covers all three ([[SwingWindow.cursorRepaint]]),
+    * or the whole canvas whenever `baseDirtyRects` itself is `None`.
     */
-  def onCursorOverlayReady(baseDirtyRegion: Option[Rectangle])(
+  def onCursorOverlayReady(baseDirtyRects: Option[scala.List[Rectangle]])(
     paintCarets: => scala.List[SwingWindow.CaretPaint]
   ): Boolean =
     baseImageRef.get() match
@@ -148,14 +159,7 @@ class SwingWindow(
         publishedCaretsRef.set(carets)
         val currentCursorRects  = carets.map(_.rect)
         val previousCursorRects = previousCursorRectsRef.getAndSet(currentCursorRects)
-        SwingWindow.combinedCursorRepaintRegion(baseDirtyRegion, previousCursorRects, currentCursorRects) match
-          case Some(region) if region.width > 0 && region.height > 0 =>
-            frameTimings.framePublished()
-            SwingUtilities.invokeLater(() => canvas.repaint(region.x, region.y, region.width, region.height))
-          case Some(_) => ()
-          case None =>
-            frameTimings.framePublished()
-            SwingUtilities.invokeLater(() => canvas.repaint())
+        requestRepaint(SwingWindow.cursorRepaint(baseDirtyRects, previousCursorRects, currentCursorRects))
         true
       case None =>
         false

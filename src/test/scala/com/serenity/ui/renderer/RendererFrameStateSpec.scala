@@ -26,7 +26,7 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
   private def surface(persistent: Boolean = true): MockRenderSurface = new MockRenderSurface(10, 5, persistent)
 
   private def frameOutput(screen: AnyRef): FrameOutput =
-    FrameOutput(ScreenIdentity(screen), new AtomicReference[Option[com.serenity.ui.layout.PixelRect]](None))
+    FrameOutput(ScreenIdentity(screen), new AtomicReference[Option[List[com.serenity.ui.layout.PixelRect]]](None))
 
   private def image(): RenderImage = RenderImage.fromAwt(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB))
 

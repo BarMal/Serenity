@@ -190,7 +190,7 @@ object RendererCursorOverlay:
     )(_ => false) { authoritativeScene =>
       // No base content is redrawn by this call, so the base frame contributes nothing to the repaint bound --
       // only the cursor's own old and new pixel rects can have changed on screen.
-      swingWin.onCursorOverlayReady(Some(new java.awt.Rectangle(0, 0, 0, 0))) {
+      swingWin.onCursorOverlayReady(Some(Nil)) {
         val surface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont.toAwt, swingWin.canvas)
         val (layout, renderPlan) = resolveCursorRenderPlan(
           state,
@@ -269,7 +269,7 @@ object RendererCursorOverlay:
     damage: Damage,
     caches: RenderCaches
   ): Boolean =
-    val repaintRegion = new AtomicReference[Option[PixelRect]](None)
+    val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
     val output        = Some(FrameOutput(ScreenIdentity(surface), repaintRegion))
     // #1105/#1215: see the surface-generic renderCursorOnly above for why this is scoped to a surface with no real
     // FontRenderContext.
@@ -343,7 +343,7 @@ object RendererCursorOverlay:
     val viewportSize = swingWin.viewportSize
     // The window fills the carets over the presented frame, so this base frame is repainted whole every time; the
     // record is still kept up to date so the next frame knows what the screen is showing.
-    val repaintRegion = new AtomicReference[Option[PixelRect]](None)
+    val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
     val output        = Some(FrameOutput(ScreenIdentity(swingWin.canvas), repaintRegion))
     // The pooled acquirer is what lets this frame reuse the pixels of the last frame drawn into the same image; the
     // carets are filled over it separately, so the base frame here is pure pane content and chrome.
@@ -395,8 +395,8 @@ object RendererCursorOverlay:
           caches
         )
         .fold(false) { renderPlan =>
-          val baseDirtyRegion = repaintRegion.get().map(RendererFrameState.toAwtRectangle)
-          swingWin.onCursorOverlayReady(baseDirtyRegion) {
+          val baseDirtyRects = repaintRegion.get().map(_.map(RendererFrameState.toAwtRectangle))
+          swingWin.onCursorOverlayReady(baseDirtyRects) {
             val cursorSurface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont.toAwt, swingWin.canvas)
             val _ = paintCursorsOnly(
               state,

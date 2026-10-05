@@ -4,6 +4,8 @@ import java.awt.*
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.ui.layout.PixelRect
+
 /** Frame-buffer pooling and cursor-overlay repaint math for [[SwingWindow]]. Mixed into that class's companion object
   * so callers keep seeing `SwingWindow.ReusableImagePool` etc.; split into its own file to keep `SwingWindow.scala`
   * within the architecture ratchet's line target.
@@ -51,26 +53,50 @@ private[terminal] trait SwingWindowImageSupport:
   def shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible: Boolean): Boolean =
     !cursorVisible
 
-  /** The bound `onCursorOverlayReady` should pass to `canvas.repaint(...)`.
+  /** What the canvas still has to repaint for the frames published since it last painted. */
+  private[serenity] enum CanvasRepaint:
+    case Whole
+    case Rects(rects: scala.List[Rectangle])
+
+  /** The repaint for a base frame plus the carets drawn over it.
     *
-    * `None` (an unbounded base frame) always wins, since a structural change may have moved pixels the cursor rects
-    * alone wouldn't cover. Otherwise the result covers the base region plus every cursor rect from both the previous
-    * and current frame -- a rect that isn't part of the union is either off-screen or zero-sized, since a cursor that
-    * stopped being drawn still needs its last position repainted. Zero-sized rects (including the `(0, 0, 0, 0)`
-    * sentinel callers use for "nothing" and "no cursor") are dropped before unioning: `Rectangle` still treats a
-    * zero-sized rect as covering its `(x, y)` corner, which would otherwise drag every union back to the origin.
+    * An unbounded base frame (`None`) is always [[CanvasRepaint.Whole]], since a structural change may have moved
+    * pixels the caret rects alone wouldn't cover. Otherwise it is the base frame's own rects plus every caret rect from
+    * both the previous and current frame -- a caret that stopped being drawn still needs its last position repainted --
+    * each kept apart unless it touches another, so a caret far from the rest of the change is not joined to it by one
+    * rect spanning the space between. Zero-sized rects (the `(0, 0, 0, 0)` "no cursor" sentinel among them) are
+    * dropped.
     */
+  private[serenity] def cursorRepaint(
+    baseDirtyRects: Option[scala.List[Rectangle]],
+    previousCursorRects: scala.List[Rectangle],
+    currentCursorRects: scala.List[Rectangle]
+  ): CanvasRepaint =
+    baseDirtyRects.fold(CanvasRepaint.Whole) { base =>
+      CanvasRepaint.Rects(coalescedRectangles(base ::: previousCursorRects ::: currentCursorRects))
+    }
+
+  /** The bounds of [[cursorRepaint]]'s rects: `None` for the whole canvas, an empty rect when nothing changed. */
   private[serenity] def combinedCursorRepaintRegion(
     baseDirtyRegion: Option[Rectangle],
     previousCursorRects: scala.List[Rectangle],
     currentCursorRects: scala.List[Rectangle]
   ): Option[Rectangle] =
-    baseDirtyRegion.map { base =>
-      (base :: previousCursorRects ::: currentCursorRects)
-        .filter(rect => rect.width > 0 && rect.height > 0)
-        .reduceOption(_.union(_))
-        .getOrElse(new Rectangle(0, 0, 0, 0))
-    }
+    cursorRepaint(baseDirtyRegion.map(scala.List(_)), previousCursorRects, currentCursorRects) match
+      case CanvasRepaint.Whole        => None
+      case CanvasRepaint.Rects(rects) => Some(rects.reduceOption(_.union(_)).getOrElse(new Rectangle(0, 0, 0, 0)))
+
+  /** A repaint still pending when another frame is published covers both frames' changes. */
+  private[serenity] def mergedRepaint(pending: CanvasRepaint, next: CanvasRepaint): CanvasRepaint =
+    (pending, next) match
+      case (CanvasRepaint.Rects(earlier), CanvasRepaint.Rects(later)) =>
+        CanvasRepaint.Rects(coalescedRectangles(earlier ::: later))
+      case _ => CanvasRepaint.Whole
+
+  private def coalescedRectangles(rects: scala.List[Rectangle]): scala.List[Rectangle] =
+    PixelRect
+      .coalesced(rects.map(rect => PixelRect(rect.x, rect.y, rect.width, rect.height)), PixelRect.RepaintRectLimit)
+      .map(rect => new Rectangle(rect.xPx, rect.yPx, rect.widthPx, rect.heightPx))
 
   private[serenity] def publishRenderedBaseFrame(
     image: BufferedImage,

@@ -520,7 +520,7 @@ private[perf] object LaptopFrameBenchmarks:
     val canvas = presentWindow.canvas
     val frame  = new BufferedImage(canvas.getWidth.max(1), canvas.getHeight.max(1), BufferedImage.TYPE_INT_ARGB)
     val caret  = SwingWindow.CaretPaint(new Rectangle(700, 500, 2, 18), Color.WHITE)
-    def publishCaret(): Boolean = presentWindow.onCursorOverlayReady(Some(new Rectangle(0, 0, 0, 0)))(List(caret))
+    def publishCaret(): Boolean = presentWindow.onCursorOverlayReady(Some(Nil))(List(caret))
     BenchmarkRunner.Benchmark(
       "laptop.present.swing_paint_caret_1500x1000",
       2,

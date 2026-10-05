@@ -95,17 +95,21 @@ object Damage:
       case _                                                         => false
     }
 
-  /** As [[isBufferRowsOnly]], also allowing [[Chrome]]: the status row has a known rect of its own, so it can join a
-    * bounded repaint rather than force the whole canvas.
+  /** As [[isBufferRowsOnly]], also allowing [[Chrome]] and [[PaneChrome]]: the status row and each pane's header have a
+    * known rect of their own, so they can join a bounded repaint rather than force the whole canvas.
     */
   def isBufferRowsOrChromeOnly(damage: Damage): Boolean =
     flatten(damage).forall {
-      case BufferRows(_, _) | BufferCells(_, _, _, _) | BufferAll(_) | Chrome => true
-      case _                                                                  => false
+      case BufferRows(_, _) | BufferCells(_, _, _, _) | BufferAll(_) | Chrome | PaneChrome(_) => true
+      case _                                                                                  => false
     }
 
   def touchesChrome(damage: Damage): Boolean =
     flatten(damage).contains(Chrome)
+
+  /** The panes whose header a [[PaneChrome]] fact anywhere in `damage` names. */
+  def paneChromeIds(damage: Damage): Set[PaneId] =
+    flatten(damage).collect { case PaneChrome(id) => id }
 
   /** The surfaces named by a `Surface(id)` fact anywhere in `damage`, flattening `Combined`. `Everything` reports none
     * here -- its lack of per-target detail is what `isEverything` is for, and a caller that needs to treat it as

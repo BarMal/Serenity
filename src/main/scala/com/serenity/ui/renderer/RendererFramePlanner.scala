@@ -6,12 +6,11 @@ import com.serenity.state.models.*
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
-/** What a frame decided to reuse: the rows it still has to draw per pane and the pixel bands it kept. */
+/** What a frame redraws per pane, the pixel bands it keeps, and the screen rects it changed (`None`: all of it). */
 final case class FramePlan(
     dirtyRowsByPane: Map[PaneId, Set[Int]],
     preserved: List[PixelRect],
-    repaintRegion: Option[PixelRect],
-    boundedRepaint: Boolean
+    repaintRegion: Option[List[PixelRect]]
 )
 
 /** Decides what a frame actually has to (re)draw and paints the resulting layer stack: the row-level reuse plan
@@ -350,10 +349,7 @@ object RendererFramePlanner:
     }
 
   private def commitFramePlan(framePlan: Option[FramePlan], output: Option[FrameOutput]): Unit =
-    output.foreach { value =>
-      val bounded = framePlan.filter(_.boundedRepaint).map(_.repaintRegion.getOrElse(PixelRect(0, 0, 0, 0)))
-      value.repaintRegion.set(bounded)
-    }
+    output.foreach(_.repaintRegion.set(framePlan.flatMap(_.repaintRegion)))
 
   /** Decide which pane rows this frame still has to draw, and which pixel bands it may keep from an earlier frame.
     *
@@ -417,54 +413,23 @@ object RendererFramePlanner:
             ghostPaneIds.isEmpty &&
             !context.caches.frameState.screenPaneIdsChanged(output, paneIds) &&
             Damage.isBufferRowsOrChromeOnly(screenDamageSincePublish)
-        val repaintRows =
+        val repaintRegion =
           Option.when(boundedRepaintEligible) {
-            repaintRects(state, context, renderPlan, panes, screenDamageSincePublish, persistenceKey)
+            RendererRepaintRegion.rects(
+              state,
+              context,
+              renderPlan,
+              panes,
+              screenDamageSincePublish,
+              dirtyRowsFor(screenDamageSincePublish, _, _, persistenceKey, context.caches)
+            )
           }
 
-        FramePlan(
-          dirtyRowsByPane = dirtyRowsByPane,
-          preserved = preserved,
-          repaintRegion = repaintRows.flatMap(PixelRect.unionOf),
-          boundedRepaint = repaintRows.isDefined
-        )
+        FramePlan(dirtyRowsByPane = dirtyRowsByPane, preserved = preserved, repaintRegion = repaintRegion)
       }
 
     if plan.isEmpty then forgetPreservedContent(context.surface, output, context.caches)
     plan
-
-  /** What a bounded repaint has to cover: each dirty row's band, the line-number cells beside the active pane's dirty
-    * rows (a number changes only with its row, so it repaints with it), and the pinned status row when `damage` names
-    * [[Damage.Chrome]]. The chrome layer repaints all of these into the frame every time, so these rects only decide
-    * which of those pixels reach the screen.
-    */
-  private def repaintRects(
-    state: AppState,
-    context: RenderContext,
-    renderPlan: EditorPaneRenderPlan,
-    panes: Map[PaneId, PaneFrameRecord],
-    damage: Damage,
-    persistenceKey: SurfaceContentIdentity
-  ): List[PixelRect] =
-    val contract = renderPlan.layoutContract
-    val rowRects = panes.toList.flatMap {
-      case (paneId, record) =>
-        val lineNumberRows =
-          if state.persisted.layout.activeEditorPaneId.contains(paneId) then
-            (contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList)
-              .map(RendererPaneSetup.paneRowRects(_, context, record.snapshot))
-          else Nil
-        dirtyRowsFor(damage, paneId, record, persistenceKey, context.caches).toList.flatMap { row =>
-          record.rowRects.lift(row).toList ++ lineNumberRows.flatMap(_.lift(row))
-        }
-    }
-    val statusRow = contract.gutterRect.filter(_ => Damage.touchesChrome(damage)).map(pixelRectOf(context.cellMetrics))
-    rowRects ++ statusRow.toList
-
-  private def pixelRectOf(cellMetrics: CellMetrics)(rect: LayoutRect): PixelRect =
-    val leftPx = cellMetrics.toPixelX(rect.x)
-    val topPx  = cellMetrics.toPixelY(rect.y)
-    PixelRect(leftPx, topPx, cellMetrics.toPixelX(rect.right) - leftPx, cellMetrics.toPixelY(rect.bottom) - topPx)
 
   private def showsChapterGhosts(state: AppState, bufferId: BufferId): Boolean =
     state.runtime.chapterGhostsVisible &&
