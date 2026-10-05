@@ -244,6 +244,16 @@ class SwingWindow(
 
   def awaitClose: IO[Unit] = SwingWindow.awaitCloseLatch(closeLatch)
 
+  /** Raises the window for a later launch that handed its files over to this one (#2023). */
+  def bringToFront(): Unit =
+    SwingUtilities.invokeLater { () =>
+      if (frame.getExtendedState & Frame.ICONIFIED) != 0 then
+        frame.setExtendedState(frame.getExtendedState & ~Frame.ICONIFIED)
+      frame.toFront()
+      frame.requestFocus()
+      val _ = canvas.requestFocusInWindow()
+    }
+
   def start(): Unit =
     val showWindow: Runnable = () =>
       frame.setVisible(true)

@@ -359,7 +359,8 @@ private[manager] class StateManagerComposition(
 
   val sessionStartupInfo: SessionStartupInfo = SessionStartupInfo(
     currentSessionThemeName = sessionManager.currentSessionThemeName,
-    sessionExists = sessionManager.sessionExists
+    sessionExists = sessionManager.sessionExists,
+    setAsideUnreadableSession = sessionManager.setAsideUnreadableCurrentSession()
   )
 
   val runtimeLifecycle: RuntimeLifecycle = RuntimeLifecycle(
