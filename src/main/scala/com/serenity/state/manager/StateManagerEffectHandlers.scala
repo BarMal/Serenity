@@ -381,6 +381,10 @@ final private[manager] class StateManagerEffectHandlers(
         enqueueEvent(com.serenity.keystroke.events.Cut)
       case EditIntent.Paste =>
         enqueueEvent(com.serenity.keystroke.events.Paste)
+      case EditIntent.ChoosePasteFromHistory =>
+        showModalValidated(ClipboardHistoryPicker.modalFor)
+      case EditIntent.PasteFromHistory(entry) =>
+        enqueueEvent(com.serenity.keystroke.events.PasteFromHistory(entry))
       case EditIntent.SelectAll =>
         enqueueEvent(com.serenity.keystroke.events.SelectAll)
       case EditIntent.Undo =>
