@@ -1,7 +1,9 @@
 package com.serenity.config
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
+import java.time.format.DateTimeFormatter
+import java.time.{Instant, ZoneOffset}
 import java.util.Locale
 
 import scala.jdk.CollectionConverters.*
@@ -12,7 +14,15 @@ import cats.effect.IO
 import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
-import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigParseOptions, ConfigValue, ConfigValueType}
+import com.typesafe.config.{
+  Config,
+  ConfigException,
+  ConfigFactory,
+  ConfigParseOptions,
+  ConfigRenderOptions,
+  ConfigValue,
+  ConfigValueType
+}
 import org.slf4j.LoggerFactory
 
 /** Manages loading and saving application configuration */
@@ -40,23 +50,17 @@ object ConfigManager:
       else AppConfig.default
     }
 
-  /** Load configuration with migration/deprecation report on the Cats Effect blocking pool. */
+  /** Load configuration with a migration/diagnostic report on the Cats Effect blocking pool.
+    *
+    * An invalid value costs that one setting, which falls back to its default and is listed in the report; every other
+    * setting is kept. Only a file that cannot be parsed at all is a `Left`, because then there is nothing to keep.
+    */
   def loadConfigResultIO(configPath: Option[String] = None): IO[Either[ConfigError, ConfigLoadResult]] =
     IO.blocking {
       val path = configPath.map(Paths.get(_)).getOrElse(defaultConfigPath)
       if !Files.exists(path) then Right(ConfigLoadResult(AppConfig.default, ConfigMigrationReport.empty))
       else
-        try
-          val result = parseConfigResult(path)
-          if result.report.invalidEntries.nonEmpty then
-            Left(
-              ConfigError(
-                "load",
-                path,
-                s"Invalid configuration entries: ${result.report.invalidEntries.map(_.key).mkString(", ")}"
-              )
-            )
-          else Right(result)
+        try Right(parseConfigResult(path))
         catch
           case error: Exception =>
             Left(ConfigError("load", path, s"Failed to load configuration: ${error.getMessage}", Some(error)))
@@ -65,10 +69,21 @@ object ConfigManager:
   private[config] def parseConfigResult(path: Path): ConfigLoadResult =
     parseConfigResult(parseHoconFile(path))
 
-  private def parseConfigResult(source: Config): ConfigLoadResult =
-    ConfigLoadResult(parseConfig(source), inspectConfig(source))
+  private def parseConfigResult(raw: Config): ConfigLoadResult =
+    val migration           = ConfigMigrations.migrate(raw)
+    val source              = migration.config
+    val (config, conflicts) = parseConfig(source)
+    val report              = inspectConfig(source)
+    ConfigLoadResult(
+      config,
+      report.copy(
+        version = migration.found,
+        hotkeyConflicts = conflicts,
+        migratedFrom = migration.applied.headOption.map(_ => migration.found)
+      )
+    )
 
-  private def parseConfig(source: Config): AppConfig =
+  private def parseConfig(source: Config): (AppConfig, List[HotkeyConflict]) =
     val entries = hoconEntries(source)
 
     val parsed = entries.foldLeft(AppConfig.default) { (config, entry) =>
@@ -93,15 +108,14 @@ object ConfigManager:
             config)
     }
 
-    val scaled             = inferTextScaleMode(parsed, entries)
-    val withStatus         = LegacyStatusLineKeys.applied(scaled, entries.map(entry => entry.key -> entry.value))
-    val withLists          = applyHoconLists(withStatus, source)
-    val withLspLists       = PreferredWindowSizeParsing.applied(applyHoconLspLists(withLists, source), source)
-    val explicitCommandIds = entries.flatMap(entry => ConfigGroups.commandIdOf(entry.key)).toSet
-    val hotkeys            = withLspLists.inputConfig.hotkeyConfig.yieldingDefaultCommandBindings(explicitCommandIds)
-    HotkeyConfig
-      .validate(hotkeys)
-      .fold(_ => withLspLists.withHotkeyConfig(HotkeyConfig()), _ => withLspLists.withHotkeyConfig(hotkeys))
+    val scaled               = inferTextScaleMode(parsed, entries)
+    val withStatus           = LegacyStatusLineKeys.applied(scaled, entries.map(entry => entry.key -> entry.value))
+    val withLists            = applyHoconLists(withStatus, source)
+    val withLspLists         = PreferredWindowSizeParsing.applied(applyHoconLspLists(withLists, source), source)
+    val explicitCommandIds   = entries.flatMap(entry => ConfigGroups.commandIdOf(entry.key)).toSet
+    val hotkeys              = withLspLists.inputConfig.hotkeyConfig.yieldingDefaultCommandBindings(explicitCommandIds)
+    val (settled, conflicts) = HotkeyConflict.settle(hotkeys)
+    (withLspLists.withHotkeyConfig(settled), conflicts)
 
   /** Generate configuration file content from AppConfig */
   def configToString(config: AppConfig): String = ConfigFileFormat.render(config)
@@ -129,33 +143,98 @@ object ConfigManager:
             "value and the parent of other keys."
         )
 
-  /** Copy a config file that could not be read to a sibling `.unreadable` path, returning where it went.
-    *
-    * A file that fails to parse costs the user every setting in it for the session, and the next settings change writes
-    * defaults over it -- so the only copy of what they had configured is gone, without them ever being told. Keeping it
-    * aside makes that recoverable. Best-effort: if the copy itself fails there is nothing further to do about it, and
-    * the load carries on with defaults either way.
-    */
-  def preserveUnreadableConfig(path: Path): Option[Path] =
-    try
-      val target = path.resolveSibling(s"${path.getFileName}.unreadable")
-      Files.copy(path, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-      Some(target)
-    catch case NonFatal(_) => None
+  private val backupStamp = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmssSSS'Z'").withZone(ZoneOffset.UTC)
 
-  /** Save configuration on the Cats Effect blocking pool with a structured failure result. */
+  /** Copy the config file to a timestamped sibling (`config.conf.bak-<UTC time>`), returning where it went.
+    *
+    * Never replaces an earlier backup: a second bad launch or save must not destroy the only copy of what the user
+    * wrote. `None` when the copy could not be made, in which case the caller must not go on to overwrite the file.
+    */
+  def backUpConfig(path: Path, at: Instant): Option[Path] =
+    try
+      val target = path.resolveSibling(s"${path.getFileName}.bak-${backupStamp.format(at)}")
+      Files.copy(path, target)
+      Some(target)
+    catch
+      case _: FileAlreadyExistsException => None
+      case NonFatal(_)                   => None
+
+  /** Save configuration on the Cats Effect blocking pool with a structured failure result.
+    *
+    * What is already on disk is respected. A file that does not parse is left alone and the save refused, because
+    * writing over it would replace the user's settings with whatever this session holds. A readable file keeps the
+    * settings this version does not recognise, and is copied to a timestamped backup first when the rewrite would drop
+    * something the user wrote (an invalid value, a clashing hotkey, a newer format version).
+    */
   def saveConfigIO(config: AppConfig, configPath: Path): IO[Either[ConfigError, Unit]] =
-    IO.blocking {
-      renderedConfig(config) match
-        case Left(problem) => Left(ConfigError("save", configPath, s"Failed to save configuration: $problem", None))
-        case Right(text) =>
-          try
-            AtomicFileWriter.writeBytesBlocking(configPath, text.getBytes(StandardCharsets.UTF_8))
-            Right(())
-          catch
-            case error: Exception =>
-              Left(ConfigError("save", configPath, s"Failed to save configuration: ${error.getMessage}", Some(error)))
-    }
+    IO.realTimeInstant.flatMap(now => IO.blocking(saveBlocking(config, configPath, now)))
+
+  private def saveBlocking(config: AppConfig, path: Path, now: Instant): Either[ConfigError, Unit] =
+    def failure(problem: String, cause: Option[Throwable] = None): Either[ConfigError, Unit] =
+      Left(ConfigError("save", path, s"Failed to save configuration: $problem", cause))
+
+    def write(text: String): Either[ConfigError, Unit] =
+      try Right(AtomicFileWriter.writeBytesBlocking(path, text.getBytes(StandardCharsets.UTF_8)))
+      catch case error: Exception => failure(error.getMessage, Some(error))
+
+    renderedConfig(config) match
+      case Left(problem) => failure(problem)
+      case Right(text) =>
+        existingConfig(path) match
+          case ExistingConfig.Absent => write(text)
+          case ExistingConfig.Unparseable(problem) =>
+            failure(
+              s"$path cannot be parsed ($problem). It was left untouched so none of your settings are lost; " +
+                "fix or remove it to save settings again."
+            )
+          case ExistingConfig.Readable(source, report) =>
+            withPreservedSettings(text, source) match
+              case Left(problem)                                     => failure(problem)
+              case Right(merged) if !report.needsBackupBeforeRewrite => write(merged)
+              case Right(merged) =>
+                backUpConfig(path, now) match
+                  case None => failure(s"could not back up $path first, so it was left untouched")
+                  case Some(backup) =>
+                    logger.info(s"[CONFIG] Backed up $path to $backup before rewriting it")
+                    write(merged)
+
+  private enum ExistingConfig:
+    case Absent
+    case Unparseable(problem: String)
+    case Readable(source: Config, report: ConfigMigrationReport)
+
+  private def existingConfig(path: Path): ExistingConfig =
+    if !Files.exists(path) then ExistingConfig.Absent
+    else
+      try
+        val migration = ConfigMigrations.migrate(parseHoconFile(path))
+        ExistingConfig.Readable(migration.config, inspectConfig(migration.config).copy(version = migration.found))
+      catch case NonFatal(error) => ExistingConfig.Unparseable(error.getMessage)
+
+  /** The rendered settings followed by every setting in the file this version does not recognise, as found.
+    *
+    * Without this a key from a newer build, a typo the user means to fix, or a setting for a plugin is silently dropped
+    * by the first save. Comments the user wrote are not kept; the backup is where they survive.
+    */
+  private def withPreservedSettings(rendered: String, existing: Config): Either[String, String] =
+    val kept = existing
+      .entrySet()
+      .asScala
+      .toList
+      .filter { entry =>
+        val key = entry.getKey.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
+        !isKnownConfigKey(key) && !RemovedConfigKeys.isRemoved(key)
+      }
+      .sortBy(_.getKey)
+      .map(entry => s"${entry.getKey} = ${entry.getValue.render(ConfigRenderOptions.concise())}")
+    if kept.isEmpty then Right(rendered)
+    else
+      val text =
+        (rendered :: "# Settings this version of Serenity does not recognise, kept exactly as found." :: kept)
+          .mkString("\n") + "\n"
+      Try(ConfigFactory.parseString(text)).toEither.map(_ => text).left.map { error =>
+        s"The settings in the existing file that Serenity does not recognise would not survive the save: ${error.getMessage}"
+      }
 
   def saveConfigIO(config: AppConfig, configPath: String): IO[Either[ConfigError, Unit]] =
     saveConfigIO(config, Paths.get(configPath))
@@ -320,25 +399,43 @@ object ConfigManager:
     value: String,
     valueType: ConfigValueType
   ): Option[InvalidConfigEntry] =
-    val invalid =
+    val reason: Option[String] =
       ConfigRegistry.find(key) match
-        case Some(field) => field.codec.parse(value).isEmpty
+        case Some(field) =>
+          Option.when(field.codec.parse(value).isEmpty)(
+            s"not a value this setting accepts, using its default (${field.setting(AppConfig.default)._2.rendered})"
+          )
         case None =>
           key match
+            case "config.version" =>
+              Option.when(value.trim.toIntOption.forall(_ <= 0))(
+                "not a whole number above zero, read as the current version"
+              )
             case key if LegacyStatusLineKeys.handles(key) =>
-              LegacyStatusLineKeys.rejects(key, value)
+              Option.when(LegacyStatusLineKeys.rejects(key, value))("not a recognised value, using the default")
             case key if key.startsWith("hotkey.") || key.startsWith("keymap.") =>
-              value.split(",").toList.map(_.trim).filter(_.nonEmpty).exists(HotkeyTrigger.parse(_).isEmpty)
+              value
+                .split(",")
+                .toList
+                .map(_.trim)
+                .filter(_.nonEmpty)
+                .find(HotkeyTrigger.parse(_).isEmpty)
+                .map(bad => s"'$bad' is not a key binding, using the default binding")
             case key if key.startsWith("lsp.") =>
               key.split("\\.", 3).toList match
-                case "lsp" :: _ :: "enabled" :: Nil => parseBoolean(value).isEmpty
-                case "lsp" :: _ :: "command" :: Nil => value.trim.isEmpty
-                case "lsp" :: _ :: "args" :: Nil    => valueType != ConfigValueType.LIST && value.trim.isEmpty
-                case _                              => false
+                case "lsp" :: _ :: "enabled" :: Nil =>
+                  Option.when(parseBoolean(value).isEmpty)("expected true or false, using the server's default")
+                case "lsp" :: _ :: "command" :: Nil =>
+                  Option.when(value.trim.isEmpty)("the command is empty, using the default command")
+                case "lsp" :: _ :: "args" :: Nil =>
+                  Option.when(valueType != ConfigValueType.LIST && value.trim.isEmpty)(
+                    "expected a list of arguments, using the default arguments"
+                  )
+                case _ => None
             case _ =>
-              false
+              None
 
-    Option.when(invalid)(InvalidConfigEntry(key, value, "Invalid value for supported config key"))
+    reason.map(InvalidConfigEntry(key, value, _))
 
   /** One `hotkey.<action>` or `hotkey.command.<command id>` entry. An action needs at least one key; a command's empty
     * list is kept, because it is how a shipped default is unbound.
