@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.*
+import com.serenity.keystroke.events.{CutToDarlings, RestoreDarling}
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.*
@@ -258,7 +259,8 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.RichText(intent)     => richTextEffects.interpret(intent)
       case CommandIntent.Comments(intent)     => navigationEffects.interpretComments(intent)
       case CommandIntent.Placeholders(intent) => navigationEffects.interpretPlaceholders(intent)
-      case CommandIntent.Darlings(intent)     => interpretDarlingIntent(intent)
+      case CommandIntent.Darlings(DarlingIntent.CutToDarlings)  => enqueueEvent(CutToDarlings)
+      case CommandIntent.Darlings(DarlingIntent.RestoreDarling) => enqueueEvent(RestoreDarling)
       case CommandIntent.Spelling(intent)     => spellingEffects.interpret(intent)
       case CommandIntent.Navigation(intent)   => navigationEffects.interpretNavigation(intent)
       case CommandIntent.Lsp(intent)          => projectLspEffects.interpretLsp(intent, state)
@@ -318,8 +320,7 @@ final private[manager] class StateManagerEffectHandlers(
           )
         )
       case FileIntent.ShowLicenceAndNotices => com.serenity.io.LicenceNotices.open(loadFile)
-      case FileIntent.SetBufferLanguage(language) =>
-        setBufferLanguage(state, language)
+      case FileIntent.SetBufferLanguage(language) => setBufferLanguage(state, language)
       case FileIntent.ReloadFromDisk(bufferId) =>
         reloadBuffer(bufferId)
       case FileIntent.OverwriteOnDisk(bufferId) =>
@@ -398,11 +399,6 @@ final private[manager] class StateManagerEffectHandlers(
         enqueueEvent(com.serenity.keystroke.events.Redo)
       case EditIntent.FormatCurrentFile =>
         logger.debug("[CMD] Format command requested")
-
-  private def interpretDarlingIntent(intent: DarlingIntent): IO[Unit] =
-    intent match
-      case DarlingIntent.CutToDarlings  => enqueueEvent(com.serenity.keystroke.events.CutToDarlings)
-      case DarlingIntent.RestoreDarling => enqueueEvent(com.serenity.keystroke.events.RestoreDarling)
 
   // Read inside the validated model write rather than from a snapshot: a command can run off the dispatcher.
   private def showModalValidated(modalFor: AppState => Modal): IO[Unit] =
