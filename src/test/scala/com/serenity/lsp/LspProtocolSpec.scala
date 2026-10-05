@@ -11,6 +11,7 @@ import com.serenity.lsp.client.{
   LspMethod,
   LspProtocol,
   RequestId,
+  ServerRequestId,
   WorkspaceRootUri
 }
 import com.serenity.lsp.model.{
@@ -150,7 +151,7 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     incompleteBody.getMessage should include("truncated body")
   }
 
-  "LspProtocol.classify" should "classify responses, error responses, notifications, and unrecognized messages" in {
+  "LspProtocol.classify" should "classify responses, errors, notifications, server requests, and anything else" in {
     val response = Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 1.asJson, "result" -> Json.obj("ok" -> true.asJson))
     val errorResponse = Json.obj(
       "jsonrpc" -> "2.0".asJson,
@@ -164,7 +165,12 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     LspProtocol.classify(response) shouldBe JsonRpcMessage.Response(RequestId(1), Json.obj("ok" -> true.asJson))
     LspProtocol.classify(errorResponse) shouldBe JsonRpcMessage.ResponseError(RequestId(9), -32601, "Method not found")
     LspProtocol.classify(notification) shouldBe JsonRpcMessage.Notification(LspMethod("initialized"), Json.obj())
-    LspProtocol.classify(request) shouldBe a[JsonRpcMessage.Malformed]
+    LspProtocol.classify(request) shouldBe JsonRpcMessage.ServerRequest(
+      ServerRequestId.Numeric(2),
+      LspMethod("test"),
+      Json.obj()
+    )
+    LspProtocol.classify(Json.obj("jsonrpc" -> "2.0".asJson)) shouldBe a[JsonRpcMessage.Malformed]
   }
 
   it should "surface a JSON-RPC error response instead of silently treating it as an absent result" in {
