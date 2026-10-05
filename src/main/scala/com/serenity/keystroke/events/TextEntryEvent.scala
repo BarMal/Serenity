@@ -1,5 +1,7 @@
 package com.serenity.keystroke.events
 
+import com.serenity.state.models.ClipboardEntry
+
 sealed trait TextEntryEvent
 
 sealed trait TextInputEvent extends TextEntryEvent
@@ -65,3 +67,6 @@ case object Redo                           extends TextEntryEvent
 case object ToggleSyntaxHighlighting       extends TextEntryEvent
 case object CutToDarlings                  extends TextEntryEvent
 case object RestoreDarling                 extends TextEntryEvent
+
+/** Pastes a clipboard-history entry picked from "Paste from History", leaving the clipboard itself as it was. */
+final case class PasteFromHistory(entry: ClipboardEntry) extends TextEntryEvent
