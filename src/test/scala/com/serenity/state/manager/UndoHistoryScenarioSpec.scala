@@ -6,7 +6,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent
 import com.serenity.keystroke.events.{CloseTabById, Event, InsertChar, Redo, Undo}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
-import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, createPane, executeCommand}
+import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, createPane, markBufferSaved, switchToPane}
 import com.serenity.state.models.*
 import com.serenity.{setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -48,8 +48,16 @@ class UndoHistoryScenarioSpec extends AnyFlatSpec with Matchers:
 
     def focus: Focus = stateManager.getCurrentState.unsafeRunSync().persisted.focus
 
+    def dirty(bufferId: BufferId): Option[Boolean] =
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(bufferId).map(_.document.isDirty)
+
   private def togglePanel(panel: PanelId): Command =
-    Command.typed("toggle-panel", "Toggles a panel.", CommandIntent.View(ViewIntent.TogglePanelShown(panel)), CommandCategory.View)
+    Command.typed(
+      "toggle-panel",
+      "Toggles a panel.",
+      CommandIntent.View(ViewIntent.TogglePanelShown(panel)),
+      CommandCategory.View
+    )
 
   behavior of "Undo across two buffers"
 
@@ -94,3 +102,33 @@ class UndoHistoryScenarioSpec extends AnyFlatSpec with Matchers:
     in(paneA)(Seq.fill(4)(Undo)*)
 
     text(bufferA) shouldBe Some("alpha")
+
+  behavior of "Undo back to the saved text"
+
+  it should "clear dirty on reaching the text the buffer opened with, and set it again on redo" in new TwoBuffers:
+    in(paneA)(typed("!")*)
+    dirty(bufferA) shouldBe Some(true)
+
+    in(paneA)(Undo)
+    dirty(bufferA) shouldBe Some(false)
+
+    in(paneA)(Redo)
+    dirty(bufferA) shouldBe Some(true)
+
+  it should "stop at the saved revision inside a typing run, and treat the text before it as unsaved" in new TwoBuffers:
+    in(paneA)(typed("!")*)
+    stateManager.markBufferSaved(bufferA).unsafeRunSync()
+    in(paneA)(typed("?")*)
+
+    in(paneA)(Undo)
+    (text(bufferA), dirty(bufferA)) shouldBe (Some("alpha!"), Some(false))
+
+    in(paneA)(Undo)
+    (text(bufferA), dirty(bufferA)) shouldBe (Some("alpha"), Some(true))
+
+    in(paneA)(Redo)
+    (text(bufferA), dirty(bufferA)) shouldBe (Some("alpha!"), Some(false))
+
+    in(paneA)(Redo)
+    (text(bufferA), dirty(bufferA)) shouldBe (Some("alpha!?"), Some(true))
+

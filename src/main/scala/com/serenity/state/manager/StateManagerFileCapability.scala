@@ -44,7 +44,7 @@ final private[manager] class StateManagerFileFacade(
         case Some(buffer) =>
           state.copy(persisted =
             state.persisted.copy(buffers =
-              state.persisted.buffers + (bufferId -> buffer.copy(document = buffer.document.copy(isDirty = false)))
+              state.persisted.buffers + (bufferId -> buffer.copy(document = buffer.document.markedSaved))
             )
           )
         case None =>

@@ -85,3 +85,47 @@ class UndoRecordingSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     undo.forOpenBuffers(state.persisted.buffers - hidden).buffers.keySet shouldBe Set(shown)
   }
+
+  private def isDirty(model: Model): Boolean = model.app.persisted.buffers(shown).document.isDirty
+
+  private def withShown(model: Model)(update: Document => Document): Model =
+    val buffer = model.app.persisted.buffers(shown)
+    model.copy(app =
+      model.app.copy(persisted =
+        model.app.persisted.copy(buffers =
+          model.app.persisted.buffers.updated(shown, buffer.copy(document = update(buffer.document)))
+        )
+      )
+    )
+
+  /** `shown` edited from clean, its pre-edit text recorded as the undo step. */
+  private val editedFromClean: Model =
+    val clean = state.persisted.buffers(shown)
+    val entry = HistoryEntry.BufferEdit(shown, paneId, BufferSnapshot.fromBuffer(clean))
+    withShown(Model(state, UndoState().recorded(entry, groupable = true)))(_.withContent(com.serenity.rope.Rope("x")))
+
+  "Undo to the saved text" should "leave the buffer clean, and redo past it dirty again" in {
+    val undone = UndoRecording.undone(editedFromClean).value
+
+    isDirty(undone) shouldBe false
+    isDirty(UndoRecording.redone(undone).value) shouldBe true
+  }
+
+  it should "leave the buffer dirty once it has been saved since the step was recorded" in {
+    val savedSince = withShown(editedFromClean)(_.markedSaved.withContent(com.serenity.rope.Rope("y")))
+
+    isDirty(UndoRecording.undone(savedSince).value) shouldBe true
+  }
+
+  it should "leave the buffer dirty after a change undo does not record, such as a comment edit" in {
+    val commented = withShown(editedFromClean)(_.withUnrecordedChange)
+
+    isDirty(UndoRecording.undone(commented).value) shouldBe true
+  }
+
+  "Recording" should "start a new step at a clean buffer even inside a typing run" in {
+    val run   = UndoState().recorded(edited(shown, "a"), groupable = true)
+    val clean = HistoryEntry.BufferEdit(shown, paneId, BufferSnapshot.fromBuffer(Buffer.fromString(shown, "ab")))
+
+    run.recorded(clean, groupable = true).buffers.get(shown).map(_.stacks.undo.size) shouldBe Some(2)
+  }

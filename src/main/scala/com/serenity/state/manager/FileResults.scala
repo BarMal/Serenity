@@ -45,7 +45,8 @@ private[manager] object FileResults:
             revision = saved.document.revision,
             encoding = saved.document.encoding,
             hasBom = saved.document.hasBom,
-            isDirty = current.document.isDirty && !unchanged
+            isDirty = current.document.isDirty && !unchanged,
+            savedGeneration = current.document.savedGeneration + 1
           )
           val richText =
             if unchanged then
@@ -81,7 +82,13 @@ private[manager] object FileResults:
           )
         withBuffer(
           state,
-          current.copy(document = disk.document, richText = disk.richText, annotations = annotations).clampedToContent
+          current
+            .copy(
+              document = disk.document.copy(savedGeneration = current.document.savedGeneration + 1),
+              richText = disk.richText,
+              annotations = annotations
+            )
+            .clampedToContent
         )
       )
 

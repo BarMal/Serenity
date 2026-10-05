@@ -15,13 +15,18 @@ final case class BufferSnapshot(
     editing: EditingState,
     viewport: Viewport,
     findState: Option[FindState],
-    isNewEmpty: Boolean
+    isNewEmpty: Boolean,
+    // The `Document.savedGeneration` the buffer was clean in, if it was: restoring this snapshot within that same
+    // generation brings back the saved text, so the buffer is clean again (#1930).
+    cleanIn: Option[Long]
 ):
 
   def restoreInto(buffer: Buffer): Buffer =
     // Bumped even when `content` is the current text: whatever was stamped against the current version (the rich
     // text, an outline) was stamped against the state being undone, not this one.
-    val restoredDocument = buffer.document.withContent(content).copy(isNewEmpty = isNewEmpty)
+    val restoredDocument = buffer.document
+      .withContent(content)
+      .copy(isNewEmpty = isNewEmpty, isDirty = !cleanIn.contains(buffer.document.savedGeneration))
     buffer.copy(
       document = restoredDocument,
       editing = editing,
@@ -47,7 +52,8 @@ object BufferSnapshot:
       editing = buffer.editing,
       viewport = buffer.viewport,
       findState = buffer.findState,
-      isNewEmpty = buffer.document.isNewEmpty
+      isNewEmpty = buffer.document.isNewEmpty,
+      cleanIn = Option.when(!buffer.document.isDirty)(buffer.document.savedGeneration)
     )
 
 /** One undoable/redoable change (#1016), self-contained: restoring it needs nothing but the entry and the current
@@ -202,7 +208,8 @@ final case class UndoState(
     withStacksFor(entry)(_.pushedRedo(step, maxUndoDepth)).copy(recordedSteps = recordedSteps + 1)
 
   /** Records `entry` as a new undo step, or -- for a `groupable` edit continuing its buffer's open run -- folds it into
-    * that run's step. A run stays open only while nothing else has been recorded since it, in any history.
+    * that run's step. A run stays open only while nothing else has been recorded since it, in any history, and never
+    * past a clean buffer, so undo can stop at the saved text.
     */
   def recorded(entry: HistoryEntry, groupable: Boolean): UndoState =
     entry match
@@ -246,7 +253,7 @@ final case class UndoState(
     buffers
       .get(edit.bufferId)
       .flatMap(_.openRun)
-      .exists(run => run.paneId == edit.paneId && run.step == recordedSteps - 1)
+      .exists(run => run.paneId == edit.paneId && run.step == recordedSteps - 1 && edit.snapshot.cleanIn.isEmpty)
 
   private def newest(
     state: AppState,

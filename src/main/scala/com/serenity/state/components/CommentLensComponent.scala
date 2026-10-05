@@ -81,7 +81,7 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
               state.persisted.copy(buffers =
                 state.persisted.buffers + (buffer.id -> buffer.copy(
                   annotations = buffer.annotations.copy(documentComments = updatedComments),
-                  document = buffer.document.copy(isDirty = true)
+                  document = buffer.document.withUnrecordedChange
                 ))
               )
             )

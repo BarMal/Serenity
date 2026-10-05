@@ -89,7 +89,10 @@ final case class Document(
     // Bumped on every `content` change (`withContent`, #1663). Paired with `RichTextState.richTextSyncedVersion`
     // so `Buffer.richTextInSync` can tell in O(1) whether a stored `richTextDocument` still describes this
     // `content`, instead of re-deriving and comparing the whole plain text on every check.
-    contentVersion: Long = 0L
+    contentVersion: Long = 0L,
+    // Advanced whenever the buffer stops matching what an undo snapshot taken while it was clean would restore: a save
+    // or reload, which moves what "clean" means, or a change undo does not record (#1930).
+    savedGeneration: Long = 0L
 ):
   /** The only sanctioned way to change `content`: keeps `contentVersion` monotonically increasing so a
     * `richTextDocument` stamped against the old version is correctly seen as stale by `Buffer.richTextInSync`, without
@@ -97,6 +100,15 @@ final case class Document(
     */
   def withContent(newContent: Rope): Document =
     copy(content = newContent, contentVersion = contentVersion + 1, isDirty = true, isNewEmpty = false)
+
+  /** This document as just written to (or read from) its file. */
+  def markedSaved: Document =
+    copy(isDirty = false, savedGeneration = savedGeneration + 1)
+
+  /** This document after a change undo cannot reverse, such as a comment edit: undo can no longer return it to clean.
+    */
+  def withUnrecordedChange: Document =
+    copy(isDirty = true, savedGeneration = savedGeneration + 1)
 
 /** A buffer's cursor/selection state: one entry per live cursor, each carrying its own position, in-flight selection
   * anchor and preferred vertical-navigation column/pixel-x (`#1577`). Before `#1577` this was five separate parallel

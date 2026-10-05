@@ -285,7 +285,7 @@ private[manager] object NavigationTransitions:
             state,
             buffer.copy(
               annotations = buffer.annotations.copy(documentComments = comments),
-              document = buffer.document.copy(isDirty = true)
+              document = buffer.document.withUnrecordedChange
             )
           )
         )
@@ -322,9 +322,9 @@ private[manager] object NavigationTransitions:
             state,
             buffer.copy(
               annotations = buffer.annotations.copy(documentComments = comments),
-              document = buffer.document.copy(
-                isDirty = buffer.document.isDirty || comments != buffer.annotations.documentComments
-              )
+              document =
+                if comments != buffer.annotations.documentComments then buffer.document.withUnrecordedChange
+                else buffer.document
             )
           )
         )
@@ -345,7 +345,7 @@ private[manager] object NavigationTransitions:
             state,
             buffer.copy(
               annotations = buffer.annotations.copy(placeholders = updated),
-              document = buffer.document.copy(isDirty = true)
+              document = buffer.document.withUnrecordedChange
             )
           )
         )
@@ -362,9 +362,9 @@ private[manager] object NavigationTransitions:
             state,
             buffer.copy(
               annotations = buffer.annotations.copy(placeholders = placeholders),
-              document = buffer.document.copy(
-                isDirty = buffer.document.isDirty || placeholders != buffer.annotations.placeholders
-              )
+              document =
+                if placeholders != buffer.annotations.placeholders then buffer.document.withUnrecordedChange
+                else buffer.document
             )
           )
         )
