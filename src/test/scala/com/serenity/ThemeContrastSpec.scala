@@ -1,7 +1,6 @@
 package com.serenity
 
-import java.awt.Color
-
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.{TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -33,12 +32,12 @@ class ThemeContrastSpec extends AnyFlatSpec with Matchers:
     // is never actually what ends up on screen, so computing WCAG contrast against it would be a meaningless number
     // compared to an unknown real backdrop. Short-circuit instead of quietly reporting a number that only pretends
     // to mean something.
-    val transparentBlack = new Color(0, 0, 0, 0)
-    Theme.contrastRatio(Color.WHITE, transparentBlack) shouldBe Double.PositiveInfinity
-    Theme.contrastRatio(transparentBlack, Color.WHITE) shouldBe Double.PositiveInfinity
+    val transparentBlack = RenderColor.fromRgba(0, 0, 0, 0)
+    Theme.contrastRatio(RenderColor.White, transparentBlack) shouldBe Double.PositiveInfinity
+    Theme.contrastRatio(transparentBlack, RenderColor.White) shouldBe Double.PositiveInfinity
   }
 
   it should "compute the normal WCAG ratio when both colors are opaque" in {
-    Theme.contrastRatio(Color.WHITE, Color.BLACK) shouldBe 21.0 +- 1e-9
+    Theme.contrastRatio(RenderColor.White, RenderColor.Black) shouldBe 21.0 +- 1e-9
   }
 end ThemeContrastSpec

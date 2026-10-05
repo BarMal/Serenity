@@ -10,6 +10,7 @@ import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -171,11 +172,11 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
   private def assertVisualReference(
     frame: ScenarioFrame,
     environment: UiScenarioEnvironment,
-    expectedForegrounds: Set[java.awt.Color],
-    expectedBackgrounds: Set[java.awt.Color],
+    expectedForegrounds: Set[RenderColor],
+    expectedBackgrounds: Set[RenderColor],
     expectedFocusStyle: Boolean = false,
     expectedSurfaceCount: Int = 0,
-    expectedBorderColor: Option[java.awt.Color] = None
+    expectedBorderColor: Option[RenderColor] = None
   ): Unit =
     frame.image.getWidth shouldBe environment.viewport.width * environment.cellMetrics.charWidth
     frame.image.getHeight shouldBe environment.viewport.height * environment.cellMetrics.lineHeight

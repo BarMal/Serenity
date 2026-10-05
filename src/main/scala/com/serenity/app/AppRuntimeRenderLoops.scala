@@ -1,7 +1,5 @@
 package com.serenity.app
 
-import java.awt.Color
-
 import scala.concurrent.duration.*
 
 import cats.effect.*
@@ -12,6 +10,7 @@ import com.serenity.input.*
 import com.serenity.keystroke.events.Event
 import com.serenity.state.manager.*
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.ui.color.RenderColor
 import fs2.concurrent.SignallingRef
 import fs2.{Chunk, Stream}
 import org.typelevel.log4cats.Logger
@@ -401,7 +400,7 @@ private[serenity] object AppRuntimeRenderLoops:
         forceQuit.attempt.void
     }
 
-  private[serenity] def computeIdleCursorFrame(cursorVisible: Ref[IO, Boolean]): IO[(Boolean, Option[Color])] =
+  private[serenity] def computeIdleCursorFrame(cursorVisible: Ref[IO, Boolean]): IO[(Boolean, Option[RenderColor])] =
     cursorVisible.updateAndGet(!_).map(visible => (visible, None))
 
   private[serenity] def recoverIdleCursorRenderFailure(

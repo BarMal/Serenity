@@ -1,9 +1,8 @@
 package com.serenity.ui.theme
 
-import java.awt.Color
-
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.SemanticToken
+import com.serenity.ui.color.RenderColor
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -48,7 +47,7 @@ class ThemeHighlightCacheSpec extends AnyFlatSpec with Matchers:
 
   it should "miss for a theme that shares another theme's name but differs in colours" in {
     val cache      = ThemeHighlightCache()
-    val lensTheme  = theme.copy(background = new Color(1, 2, 3))
+    val lensTheme  = theme.copy(background = RenderColor.fromRgba(1, 2, 3))
     val darkResult = cache.highlightLine("plain prose", theme)
     val lensResult = cache.highlightLine("plain prose", lensTheme)
     val lensExpect = ThemeManager.computeHighlightLine("plain prose", lensTheme, None, None)

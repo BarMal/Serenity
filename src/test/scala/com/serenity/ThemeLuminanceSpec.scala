@@ -1,7 +1,6 @@
 package com.serenity
 
-import java.awt.Color
-
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -12,18 +11,18 @@ import org.scalatest.matchers.should.Matchers
 class ThemeLuminanceSpec extends AnyFlatSpec with Matchers:
 
   "luminance" should "be 0 for black and 1 for white" in {
-    Theme.luminance(Color.BLACK) shouldBe 0.0 +- 1e-9
-    Theme.luminance(Color.WHITE) shouldBe 1.0 +- 1e-9
+    Theme.luminance(RenderColor.Black) shouldBe 0.0 +- 1e-9
+    Theme.luminance(RenderColor.White) shouldBe 1.0 +- 1e-9
   }
 
   it should "equal each Rec.709 coefficient for the pure primary of that channel" in {
-    Theme.luminance(new Color(255, 0, 0)) shouldBe 0.2126 +- 1e-4
-    Theme.luminance(new Color(0, 255, 0)) shouldBe 0.7152 +- 1e-4
-    Theme.luminance(new Color(0, 0, 255)) shouldBe 0.0722 +- 1e-4
+    Theme.luminance(RenderColor.fromRgba(255, 0, 0)) shouldBe 0.2126 +- 1e-4
+    Theme.luminance(RenderColor.fromRgba(0, 255, 0)) shouldBe 0.7152 +- 1e-4
+    Theme.luminance(RenderColor.fromRgba(0, 0, 255)) shouldBe 0.0722 +- 1e-4
   }
 
   it should "gamma-linearize mid-gray to roughly 0.216, not the naive 0.5 average" in {
-    Theme.luminance(new Color(128, 128, 128)) shouldBe 0.2159 +- 1e-3
+    Theme.luminance(RenderColor.fromRgba(128, 128, 128)) shouldBe 0.2159 +- 1e-3
   }
 
   "EqualContrastLuminanceThreshold" should "be the luminance whose WCAG contrast ratio to black equals its ratio to white" in {

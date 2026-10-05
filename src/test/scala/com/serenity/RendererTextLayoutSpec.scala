@@ -483,8 +483,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    surface.fillPixelRectCalls.count(_.color == activeColor) shouldBe 1
-    surface.fillPixelRectCalls.count(_.color == inactiveColor) shouldBe 2
+    surface.fillPixelRectCalls.count(_.color.toAwt == activeColor) shouldBe 1
+    surface.fillPixelRectCalls.count(_.color.toAwt == inactiveColor) shouldBe 2
   }
 
   it should "hide the only cursor during the hidden blink phase" in {

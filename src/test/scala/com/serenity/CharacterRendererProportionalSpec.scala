@@ -1,8 +1,9 @@
 package com.serenity
 
-import java.awt.{Color, Font}
+import java.awt.Font
 
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.TextLayoutSnapshot
 import com.serenity.ui.renderer.CharacterRenderer
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
@@ -192,8 +193,8 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
         TextCaretStop(5, 30.0f)
       )
     )
-    val emojiColor  = Color(200, 80, 40)
-    val accentColor = Color(40, 120, 210)
+    val emojiColor  = RenderColor.fromRgba(200, 80, 40)
+    val accentColor = RenderColor.fromRgba(40, 120, 210)
     val styled = List(
       StyledText("😀", TextStyle.normal, emojiColor, Theme.light.background),
       StyledText("e\u0301", TextStyle.normal, accentColor, Theme.light.background),

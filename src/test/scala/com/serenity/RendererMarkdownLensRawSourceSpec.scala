@@ -134,7 +134,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
     val image = surface.drawImageCalls.head.image
     val firstContentRow = (0 until image.getHeight)
       .find(row =>
-        (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.persisted.theme.background.getRGB)
+        (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.persisted.theme.background.argb)
       )
 
     firstContentRow should not be empty
@@ -150,7 +150,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
 
     val image = surface.drawImageCalls.head.image
     val contentRows = (0 until image.getHeight).filter(row =>
-      (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.persisted.theme.background.getRGB)
+      (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.persisted.theme.background.argb)
     )
     val contentBands = contentRows.foldLeft(Vector.empty[Vector[Int]]) { (bands, row) =>
       bands.lastOption match

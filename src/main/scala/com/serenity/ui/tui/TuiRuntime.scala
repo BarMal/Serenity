@@ -314,7 +314,7 @@ object TuiRuntime:
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
-        _ <- IO(paintFrame(state, surface, size, cursorVisible, cursorColor.map(RenderColor.fromAwt), damage, caches))
+        _ <- IO(paintFrame(state, surface, size, cursorVisible, cursorColor, damage, caches))
         _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability, caches)
       yield ()
@@ -330,7 +330,7 @@ object TuiRuntime:
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
-        _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor.map(RenderColor.fromAwt), caches))
+        _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor, caches))
         _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability, caches)
       yield ()

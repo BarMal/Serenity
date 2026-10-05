@@ -1,7 +1,6 @@
 package com.serenity.ui.renderer
 
 import com.serenity.state.models.*
-import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** Paints a chapter note's overview, faded, on the blank rows under an empty chapter. A separate pass drawn after each
@@ -58,8 +57,8 @@ object RendererChapterGhosts:
     val text = ghost.take(math.max(0, rect.right - screenX))
     if text.nonEmpty then
       val surface = context.surface
-      surface.setForegroundColor(RenderColor.fromAwt(theme.placeholder))
-      surface.setBackgroundColor(RenderColor.fromAwt(theme.background))
+      surface.setForegroundColor(theme.placeholder)
+      surface.setBackgroundColor(theme.background)
       if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
         val xOriginPx       = context.cellMetrics.toPixelX(rect.x).toFloat
         val contentRightXPx = context.cellMetrics.toPixelX(rect.right).toFloat
@@ -72,4 +71,4 @@ object RendererChapterGhosts:
           text
         )
       else CharacterRenderer.renderString(surface, screenX, rect.y + index, text)
-      surface.setForegroundColor(RenderColor.fromAwt(theme.foreground))
+      surface.setForegroundColor(theme.foreground)

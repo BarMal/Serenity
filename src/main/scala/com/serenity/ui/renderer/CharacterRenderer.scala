@@ -6,7 +6,6 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.SemanticToken
 import com.serenity.state.models.TextVisualLine
 import com.serenity.text.TextEditing
-import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CharWidth
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 
@@ -143,8 +142,8 @@ object CharacterRenderer:
         val clippedEndXPx = clipRightXPx.fold(endXPx)(_.min(endXPx))
         val widthPx       = clippedEndXPx - startXPx
         if widthPx > 0.0f then
-          surface.setForegroundColor(RenderColor.fromAwt(run.foreground))
-          surface.setBackgroundColor(RenderColor.fromAwt(run.background))
+          surface.setForegroundColor(run.foreground)
+          surface.setBackgroundColor(run.background)
           withStyle(surface, run.style) {
             surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text)
           }
@@ -248,8 +247,8 @@ object CharacterRenderer:
     theme: Theme,
     maxColumn: Option[Int]
   ): Unit =
-    surface.setForegroundColor(RenderColor.fromAwt(theme.foreground))
-    surface.setBackgroundColor(RenderColor.fromAwt(theme.background))
+    surface.setForegroundColor(theme.foreground)
+    surface.setBackgroundColor(theme.background)
     runs.flatMap(clipRunToColumn(_, maxColumn)).foreach(flushRun(surface, y, _))
 
   /** Cell-grid runs need no sub-character precision (unlike the measured pixel path's `clipRightXPx`), but a column is

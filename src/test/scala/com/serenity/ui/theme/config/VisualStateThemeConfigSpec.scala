@@ -1,8 +1,7 @@
 package com.serenity.ui.theme.config
 
-import java.awt.Color
-
 import cats.effect.unsafe.implicits.global
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -67,8 +66,8 @@ class VisualStateThemeConfigSpec extends AnyFlatSpec with Matchers:
     val theme                    = ConfigurableThemeManager.configToTheme(config).toOption.get
     val derivedInteractionStates = InteractionStates.derive(theme.menuItem)
 
-    theme.interactionStates.hover.foreground shouldBe Color.WHITE
-    theme.interactionStates.hover.background shouldBe new Color(0x33, 0x44, 0x55)
+    theme.interactionStates.hover.foreground shouldBe RenderColor.White
+    theme.interactionStates.hover.background shouldBe RenderColor.fromRgba(0x33, 0x44, 0x55)
     // Not overridden -- still the derived default.
     theme.interactionStates.pressed shouldBe derivedInteractionStates.pressed
     theme.interactionStates.disabled shouldBe derivedInteractionStates.disabled

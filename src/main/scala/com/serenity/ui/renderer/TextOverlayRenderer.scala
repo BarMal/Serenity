@@ -1,6 +1,6 @@
 package com.serenity.ui.renderer
 
-import java.awt.{Color, Font}
+import java.awt.Font
 
 import scala.util.chaining.*
 
@@ -8,7 +8,6 @@ import com.serenity.config.AppConfig
 import com.serenity.state.models.UiSurface
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
-import com.serenity.ui.theme.ColorFormat.withAlpha
 import com.serenity.ui.theme.Theme
 
 object TextOverlayRenderer:
@@ -49,8 +48,10 @@ object TextOverlayRenderer:
         .when(isStatusLine)(statusColors.backgroundAlpha)
         .flatten
         .map(alpha => math.round(alpha * 255.0).toInt.max(0).min(255))
-    val statusForegroundOverride: Option[Color] = Option.when(isStatusLine)(statusColors.foreground).flatten
-    val statusBackgroundOverride: Option[Color] = Option.when(isStatusLine)(statusColors.background).flatten
+    val statusForegroundOverride: Option[RenderColor] =
+      Option.when(isStatusLine)(statusColors.foreground).flatten.map(RenderColor.fromAwt)
+    val statusBackgroundOverride: Option[RenderColor] =
+      Option.when(isStatusLine)(statusColors.background).flatten.map(RenderColor.fromAwt)
 
     val fg = statusForegroundOverride.getOrElse(theme.panel.foreground)
     val bg = statusBackgroundOverride
@@ -61,8 +62,8 @@ object TextOverlayRenderer:
 
     withOptionalRectClip(surface, rect.x, rect.y, rect.width, rect.height) {
       for y <- rect.y until rect.bottom do
-        surface.setForegroundColor(RenderColor.fromAwt(fg))
-        surface.setBackgroundColor(RenderColor.fromAwt(bg))
+        surface.setForegroundColor(fg)
+        surface.setBackgroundColor(bg)
         surface.putString(rect.x, y, " " * rect.width)
 
       val textInsetPx = SurfaceTextInset.px(config)
@@ -77,8 +78,8 @@ object TextOverlayRenderer:
     if !isQuietLine then drawBorder(surface, overlay, theme, config)
 
     surface.effects.foreach(_.setAlpha(1.0f))
-    surface.setForegroundColor(RenderColor.fromAwt(theme.foreground))
-    surface.setBackgroundColor(RenderColor.fromAwt(theme.background))
+    surface.setForegroundColor(theme.foreground)
+    surface.setBackgroundColor(theme.background)
 
   private def drawBorder(
     surface: RenderSurface,
@@ -97,7 +98,7 @@ object TextOverlayRenderer:
           rect.y,
           rect.width,
           rect.height,
-          RenderColor.fromAwt(theme.border),
+          theme.border,
           config.scaledUiOutlineThicknessPx
         )
       )
@@ -115,8 +116,8 @@ object TextOverlayRenderer:
     composition: ResolvedSurfaceComposition,
     theme: Theme,
     cursorVisible: Boolean,
-    fg: Color,
-    bg: Color,
+    fg: RenderColor,
+    bg: RenderColor,
     font: Font,
     cellMetrics: CellMetrics,
     textInsetPx: Double

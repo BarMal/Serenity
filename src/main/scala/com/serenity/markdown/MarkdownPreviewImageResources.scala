@@ -144,12 +144,12 @@ private[markdown] object MarkdownPreviewImageResources:
     val g     = image.createGraphics()
     try
       g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-      g.setColor(theme.panel.background)
+      g.setColor(theme.panel.background.toAwt)
       g.fillRect(0, 0, width, height)
-      g.setColor(theme.error.foreground)
+      g.setColor(theme.error.foreground.toAwt)
       g.setFont(font)
       g.drawString("Markdown preview failed", 16, 28)
-      g.setColor(theme.panel.foreground)
+      g.setColor(theme.panel.foreground.toAwt)
       Option(message).foreach(text => g.drawString(text.take(120), 16, 50))
     finally g.dispose()
     image

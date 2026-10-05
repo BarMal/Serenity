@@ -555,8 +555,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val call = surface.drawRunPxCalls
       .find(_.s.contains("Line 2, Col 3"))
       .getOrElse(fail("Expected a gutter draw call showing the cursor info bar text"))
-    call.foreground shouldBe foreground
-    call.background shouldBe background
+    call.foreground.toAwt shouldBe foreground
+    call.background.toAwt shouldBe background
   }
 
   it should "keep the theme's own panel colours in the gutter when no cursor info bar colour override is configured" in {

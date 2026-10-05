@@ -1,9 +1,11 @@
 package com.serenity.ui.theme
 
+import java.awt.Font
 import java.awt.font.TextAttribute
-import java.awt.{Color, Font}
 
 import scala.jdk.CollectionConverters.*
+
+import com.serenity.ui.color.RenderColor
 
 final case class TextStyle(
     isBold: Boolean = false,
@@ -49,6 +51,6 @@ object TextStyle:
 final case class StyledText(
     content: String,
     style: TextStyle = TextStyle.normal,
-    foregroundColor: Color = Color.WHITE,
-    backgroundColor: Color = Color.BLACK
+    foregroundColor: RenderColor = RenderColor.White,
+    backgroundColor: RenderColor = RenderColor.Black
 )

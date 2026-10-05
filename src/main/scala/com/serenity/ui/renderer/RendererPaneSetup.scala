@@ -3,7 +3,6 @@ package com.serenity.ui.renderer
 import java.awt.Font
 
 import com.serenity.state.models.*
-import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** Geometry for one editor pane's rendered content: which buffer line each visual row shows, plus per-buffer
@@ -55,7 +54,7 @@ object RendererPaneSetup:
 
   def renderSpacerColumns(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     val surface = context.surface
-    surface.setBackgroundColor(RenderColor.fromAwt(state.persisted.theme.margin))
+    surface.setBackgroundColor(state.persisted.theme.margin)
     List(contract.leftSpacerRect, contract.rightSpacerRect)
       .filter(rect => rect.width > 0 && rect.height > 0)
       .foreach(rect => surface.fillRect(rect.x, rect.y, rect.width, rect.height, ' '))

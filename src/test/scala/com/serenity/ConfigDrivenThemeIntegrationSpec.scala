@@ -33,8 +33,7 @@ class ConfigDrivenThemeIntegrationSpec extends AnyFlatSpec with Matchers:
     initialState.persisted.theme.name shouldBe "dark"
 
     // Verify theme properties
-    darkTheme.foregroundColor shouldBe a[java.awt.Color]
-    darkTheme.backgroundColor shouldBe a[java.awt.Color]
+    darkTheme.foregroundColor should not be darkTheme.backgroundColor
   }
 
   it should "handle missing theme gracefully" in {

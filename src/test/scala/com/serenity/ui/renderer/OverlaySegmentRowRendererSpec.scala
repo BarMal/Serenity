@@ -1,8 +1,9 @@
 package com.serenity.ui.renderer
 
-import java.awt.{Color, Font}
+import java.awt.Font
 
 import com.serenity.MockRenderSurface
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{OverlayRow, OverlaySegment, OverlayTone}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -16,8 +17,8 @@ class OverlaySegmentRowRendererSpec extends AnyFlatSpec with Matchers:
 
   private val theme = Theme.dark
   private val font  = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val fg    = Color.WHITE
-  private val bg    = Color.BLACK
+  private val fg    = RenderColor.White
+  private val bg    = RenderColor.Black
 
   private def surface(width: Int = 80): MockRenderSurface = new MockRenderSurface(width, 3)
 
@@ -173,8 +174,8 @@ class OverlaySegmentRowRendererSpec extends AnyFlatSpec with Matchers:
 
   it should "prefer an explicit per-segment foreground/background colour over every tone rule" in {
     val s        = surface()
-    val customFg = new Color(10, 20, 30)
-    val customBg = new Color(40, 50, 60)
+    val customFg = RenderColor.fromRgba(10, 20, 30)
+    val customBg = RenderColor.fromRgba(40, 50, 60)
     val segment = OverlaySegment(
       "custom",
       selected = true,
@@ -198,8 +199,8 @@ class OverlaySegmentRowRendererSpec extends AnyFlatSpec with Matchers:
     s.getRow(0).trim shouldBe ""
   }
 
-  /** Mirrors `ColorFormat.withAlpha`: `color`'s RGB channels with `alphaFrom`'s alpha channel -- the renderer's own
+  /** Mirrors `RenderColor.withAlpha`: `color`'s RGB channels with `alphaFrom`'s alpha channel -- the renderer's own
     * rule for keeping the surface's overall translucency consistent across styled segments.
     */
-  private def withAlphaOf(color: Color, alphaFrom: Color): Color =
-    new Color(color.getRed, color.getGreen, color.getBlue, alphaFrom.getAlpha)
+  private def withAlphaOf(color: RenderColor, alphaFrom: RenderColor): RenderColor =
+    RenderColor.fromRgba(color.red, color.green, color.blue, alphaFrom.alpha)

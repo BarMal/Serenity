@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.Theme
 
 /** Resolves the windowed single-selection pickers -- the theme creator and the generic context menu -- into overlay
@@ -47,12 +48,12 @@ private[layout] object PickerContentResolver:
       title = SurfaceContentResolver.titleFor(mode, "Theme Creator"),
       header = Some(OverlayRow("theme creator")),
       rows = itemWindow.slice(allRows),
-      footer = state.statusMessage.map(OverlayRow(_, foregroundColor = Some(java.awt.Color.RED)))
+      footer = state.statusMessage.map(OverlayRow(_, foregroundColor = Some(RenderColor.fromRgba(255, 0, 0))))
     )
 
-  private def contrastColor(color: java.awt.Color): java.awt.Color =
-    if Theme.luminance(color) > Theme.EqualContrastLuminanceThreshold then java.awt.Color.BLACK
-    else java.awt.Color.WHITE
+  private def contrastColor(color: RenderColor): RenderColor =
+    if Theme.luminance(color) > Theme.EqualContrastLuminanceThreshold then RenderColor.Black
+    else RenderColor.White
 
   def resolveContextMenu(
     menu: ContextMenu,

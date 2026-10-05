@@ -2,7 +2,6 @@ package com.serenity.ui.renderer
 
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.models.*
-import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** Paints every surface that floats above or is pinned within the editor workspace: cursor-anchored overlays
@@ -74,7 +73,7 @@ object RendererFloatingPanels:
   def renderModalLayer(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
     scene.modalBackdrop.foreach { backdrop =>
       LayerCompositor.withEffect(context.surface)(ModalBackdropEffect) {
-        context.surface.setBackgroundColor(RenderColor.fromAwt(state.persisted.theme.margin))
+        context.surface.setBackgroundColor(state.persisted.theme.margin)
         context.surface.fillRect(
           backdrop.frameRect.x,
           backdrop.frameRect.y,

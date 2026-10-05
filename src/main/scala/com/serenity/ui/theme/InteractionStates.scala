@@ -1,6 +1,6 @@
 package com.serenity.ui.theme
 
-import java.awt.Color
+import com.serenity.ui.color.RenderColor
 
 /** Hover/pressed/disabled treatments for an interactive surface row or control (a list row, a menu item, a button).
   * Each state is a full [[ThemeColor]] so a renderer can later swap in the whole foreground/background/style/alpha pair
@@ -36,8 +36,8 @@ object InteractionStates:
     */
   def derive(base: ThemeColor): InteractionStates =
     InteractionStates(
-      hover = base.copy(background = Theme.blend(base.background, base.foreground, HoverBlend)),
-      pressed = base.copy(background = Theme.blend(base.background, base.foreground, PressedBlend)),
+      hover = base.copy(background = base.background.blendToward(base.foreground, HoverBlend)),
+      pressed = base.copy(background = base.background.blendToward(base.foreground, PressedBlend)),
       disabled = base.copy(foreground = mutedForeground(base))
     )
 
@@ -45,8 +45,8 @@ object InteractionStates:
     * Falls back to the base foreground unchanged if even that doesn't clear the floor, so a disabled treatment is never
     * less legible than the surface it is disabling.
     */
-  private def mutedForeground(base: ThemeColor): Color =
+  private def mutedForeground(base: ThemeColor): RenderColor =
     DisabledBlendCandidates
-      .map(factor => Theme.blend(base.foreground, base.background, factor))
+      .map(factor => base.foreground.blendToward(base.background, factor))
       .find(candidate => Theme.contrastRatio(candidate, base.background) >= DisabledContrastFloor)
       .getOrElse(base.foreground)

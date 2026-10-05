@@ -1,7 +1,8 @@
 package com.serenity.ui.renderer
 
-import java.awt.{Color, Font}
+import java.awt.Font
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
 
@@ -22,8 +23,8 @@ object OverlayColumnRowRenderer:
     width: Int,
     row: OverlayRow,
     theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
+    defaultForeground: RenderColor,
+    defaultBackground: RenderColor,
     font: Font
   ): Unit =
     row.segments match
@@ -144,8 +145,8 @@ object OverlayColumnRowRenderer:
     width: Int,
     row: OverlayRow,
     theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
+    defaultForeground: RenderColor,
+    defaultBackground: RenderColor,
     font: Font
   ): Unit =
     row.segments match
@@ -217,8 +218,8 @@ object OverlayColumnRowRenderer:
     width: Int,
     segment: OverlaySegment,
     theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
+    defaultForeground: RenderColor,
+    defaultBackground: RenderColor,
     font: Font,
     alignRight: Boolean = false
   ): Unit =

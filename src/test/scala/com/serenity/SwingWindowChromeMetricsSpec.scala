@@ -7,6 +7,7 @@ import javax.accessibility.AccessibleContext
 import javax.swing.JComponent
 
 import com.serenity.config.WindowChromeMode
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.terminal.{SwingWindow, WindowsNativeChrome}
 import com.serenity.ui.theme.Theme
@@ -206,16 +207,16 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
 
   "SwingWindow.ChromePalette" should "derive custom chrome colours from the active theme" in {
     val theme = Theme.light.copy(
-      border = new Color(0x111111),
-      panelBorder = new Color(0x222222)
+      border = RenderColor.fromArgb(0xff111111),
+      panelBorder = RenderColor.fromArgb(0xff222222)
     )
     val palette = SwingWindow.ChromePalette.fromTheme(theme)
 
-    palette.titleBackground shouldBe theme.panel.background
-    palette.titleForeground shouldBe theme.panel.foreground
-    palette.border shouldBe theme.panelBorder
-    palette.border should not be theme.border
-    palette.closeHoverBackground shouldBe theme.error.foreground
+    palette.titleBackground shouldBe theme.panel.background.toAwt
+    palette.titleForeground shouldBe theme.panel.foreground.toAwt
+    palette.border shouldBe theme.panelBorder.toAwt
+    palette.border should not be theme.border.toAwt
+    palette.closeHoverBackground shouldBe theme.error.foreground.toAwt
   }
 
   it should "derive distinct custom chrome colours for dark and light themes" in {
@@ -238,7 +239,7 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
   it should "derive focused button affordance colours from the active theme" in {
     val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
 
-    palette.focusBorder shouldBe Theme.light.highlighted.foreground
+    palette.focusBorder shouldBe Theme.light.highlighted.foreground.toAwt
     palette.focusBorder should not be palette.border
   }
 

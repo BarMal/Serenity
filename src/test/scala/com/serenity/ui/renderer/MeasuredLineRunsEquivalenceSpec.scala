@@ -1,7 +1,5 @@
 package com.serenity.ui.renderer
 
-import java.awt.Color
-
 import com.serenity.MockRenderSurface
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
 import com.serenity.ui.color.RenderColor
@@ -16,9 +14,10 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
   */
 class MeasuredLineRunsEquivalenceSpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matchers:
 
-  private val theme   = Theme.light
-  private val palette = Vector(Color.RED, Color.BLUE, theme.foreground, theme.background)
-  private val styles  = Vector(TextStyle.normal, TextStyle(isBold = true), TextStyle(isItalic = true))
+  private val theme = Theme.light
+  private val palette =
+    Vector(RenderColor.fromRgba(255, 0, 0), RenderColor.fromRgba(0, 0, 255), theme.foreground, theme.background)
+  private val styles = Vector(TextStyle.normal, TextStyle(isBold = true), TextStyle(isItalic = true))
 
   private val genCluster: Gen[String] =
     Gen.frequency(
@@ -102,8 +101,8 @@ private object OriginalMeasuredLine:
 
   final private case class MeasuredGrapheme(
       text: String,
-      foreground: Color,
-      background: Color,
+      foreground: RenderColor,
+      background: RenderColor,
       style: TextStyle,
       startLocalIndex: Int,
       endLocalIndex: Int
@@ -128,8 +127,8 @@ private object OriginalMeasuredLine:
 
       final case class MeasuredRun(
           startLocalIndex: Int,
-          foreground: Color,
-          background: Color,
+          foreground: RenderColor,
+          background: RenderColor,
           style: TextStyle,
           text: StringBuilder,
           endLocalIndex: Int
@@ -175,8 +174,8 @@ private object OriginalMeasuredLine:
         val clippedEndXPx    = clipRightXPx.fold(endXPx)(_.min(endXPx))
         val widthPx          = clippedEndXPx - startXPx
         if widthPx > 0.0f then
-          surface.setForegroundColor(RenderColor.fromAwt(run.foreground))
-          surface.setBackgroundColor(RenderColor.fromAwt(run.background))
+          surface.setForegroundColor(run.foreground)
+          surface.setBackgroundColor(run.background)
           surface.enableStyle(run.style)
           try surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text.toString)
           finally surface.disableStyle(run.style)

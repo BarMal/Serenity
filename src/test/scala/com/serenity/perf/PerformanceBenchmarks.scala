@@ -34,7 +34,6 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{EditorEventReducer, ModalEventReducer}
-import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, Layout, TextLayoutSnapshot}
 import com.serenity.ui.renderer.{
   CharacterRenderer,
@@ -678,7 +677,7 @@ object PerformanceBenchmarks:
       logicalHeightPx = frameHeightPx
     )
     surface.setFont(FontSpec.fromAwt(textFont))
-    surface.clearViewport(RenderColor.fromAwt(Theme.light.background))
+    surface.clearViewport(Theme.light.background)
     CharacterRenderer.renderMeasuredLine(
       surface,
       xOriginPx = 0.0f,

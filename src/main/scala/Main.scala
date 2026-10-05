@@ -186,7 +186,7 @@ object Main extends IOApp:
                     paintFullFrame(
                       state,
                       vis,
-                      cc.map(RenderColor.fromAwt),
+                      cc,
                       swingWin,
                       displayState.snapshot,
                       damage,
@@ -201,7 +201,7 @@ object Main extends IOApp:
                     paintCursorFrame(
                       state,
                       vis,
-                      cc.map(RenderColor.fromAwt),
+                      cc,
                       swingWin,
                       displayState.snapshot,
                       damage,

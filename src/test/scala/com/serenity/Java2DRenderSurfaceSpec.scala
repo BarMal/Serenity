@@ -217,7 +217,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    new Color(image.getRGB(82, 56), true) shouldBe Theme.light.background
+    RenderColor.fromArgb(image.getRGB(82, 56)) shouldBe Theme.light.background
   }
 
   // A background Color with alpha 0 is the transparency sentinel (#1240): `clearViewport`/`fillRect`/`putString` must

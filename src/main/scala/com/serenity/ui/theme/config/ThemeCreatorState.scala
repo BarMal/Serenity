@@ -1,7 +1,6 @@
 package com.serenity.ui.theme.config
 
-import java.awt.Color
-
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.Theme
 
 final case class ThemeCreatorRow(
@@ -9,7 +8,7 @@ final case class ThemeCreatorRow(
     label: String,
     value: String,
     valid: Boolean,
-    previewColor: Option[Color]
+    previewColor: Option[RenderColor]
 )
 
 final case class ThemeCreatorState(

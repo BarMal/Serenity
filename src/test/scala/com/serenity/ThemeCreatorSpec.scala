@@ -55,7 +55,7 @@ class ThemeCreatorSpec extends AnyFlatSpec with Matchers:
       .selectPath("ui.background")
       .replaceSelectedValue("#123456")
 
-    state.previewTheme.map(_.background.getRGB & 0x00ffffff) shouldBe Right(0x123456)
+    state.previewTheme.map(_.background.argb & 0x00ffffff) shouldBe Right(0x123456)
   }
 
   it should "keep invalid colour edits in the draft without producing a preview theme" in {
@@ -136,7 +136,7 @@ class ThemeCreatorSpec extends AnyFlatSpec with Matchers:
         case other                                                        => fail(s"Expected StateChange, got $other")
     }
 
-    result.persisted.theme.background.getRGB & 0x00ffffff shouldBe 0x123456
+    result.persisted.theme.background.argb & 0x00ffffff shouldBe 0x123456
     result.themeCreatorSurface
       .flatMap(_.content match
         case SurfaceContent.ThemeCreator(draft) => draft.selectedRow.map(_.value)

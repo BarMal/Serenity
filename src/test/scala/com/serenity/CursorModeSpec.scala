@@ -197,13 +197,13 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   it should "render the cursor using cursorColor override instead of theme.cursor" in {
     val state         = AppState.initial
     val surface       = new MockRenderSurface(80, 24)
-    val overrideColor = new Color(255, 128, 0, 128)
+    val overrideColor = RenderColor.fromRgba(255, 128, 0, 128)
     RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      cursorColor = Some(RenderColor.fromAwt(overrideColor)),
+      cursorColor = Some(overrideColor),
       com.serenity.state.manager.RenderCaches.create()
     )
 
@@ -214,13 +214,13 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   it should "hide cursor when cursorVisible is false regardless of override" in {
     val state         = AppState.initial
     val surface       = new MockRenderSurface(80, 24)
-    val overrideColor = new Color(255, 128, 0, 128)
+    val overrideColor = RenderColor.fromRgba(255, 128, 0, 128)
     RendererEntryPoints.render(
       state,
       cursorVisible = false,
       surface,
       ViewportSize(80, 24),
-      cursorColor = Some(RenderColor.fromAwt(overrideColor)),
+      cursorColor = Some(overrideColor),
       com.serenity.state.manager.RenderCaches.create()
     )
 

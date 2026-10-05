@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.{ConfirmPrompt, Modal}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{
   CellMetrics,
   LayoutRect,
@@ -84,9 +85,9 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       hitRegions = Nil,
       focusOrder = Nil
     )
-    val theme                           = Theme.light
-    val overlay                         = TextOverlayView(rect = frame, composition = Some(composition))
-    def rgb(color: java.awt.Color): Int = color.getRGB & 0xffffff
+    val theme                        = Theme.light
+    val overlay                      = TextOverlayView(rect = frame, composition = Some(composition))
+    def rgb(color: RenderColor): Int = color.argb & 0xffffff
 
     TextOverlayRenderer.render(surface, overlay, theme, AppConfig.default, cursorVisible = false, font, metrics)
 

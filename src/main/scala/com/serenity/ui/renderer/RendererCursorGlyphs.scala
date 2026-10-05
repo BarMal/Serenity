@@ -117,6 +117,6 @@ object RendererCursorGlyphs:
     isPrimaryCursor: Boolean
   ): RenderColor =
     val activeColor =
-      context.cursorColorOverride.getOrElse(RenderColor.fromAwt(config.cursorColors.activeOr(theme.cursor)))
+      context.cursorColorOverride.getOrElse(config.cursorColors.active.fold(theme.cursor)(RenderColor.fromAwt))
     if isPrimaryCursor then activeColor
     else config.cursorColors.inactive.fold(activeColor)(RenderColor.fromAwt)

@@ -3,6 +3,7 @@ package com.serenity
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.config.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -247,9 +248,9 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
     val theme = themeEither.toOption.get
 
     theme.name shouldBe "test"
-    theme.foreground shouldBe a[java.awt.Color]
+    theme.foreground shouldBe RenderColor.fromArgb(0xfff5f7fa)
     theme.syntaxColors should contain key com.serenity.ui.theme.SyntaxElement.Keyword
-    theme.highlighted.background shouldBe a[java.awt.Color]
+    theme.highlighted.background shouldBe RenderColor.fromArgb(0xff5dade2)
 
     val keywordColor = theme.colorFor(com.serenity.ui.theme.SyntaxElement.Keyword)
     keywordColor.style.isBold shouldBe true

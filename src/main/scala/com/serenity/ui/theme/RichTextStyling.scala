@@ -1,8 +1,7 @@
 package com.serenity.ui.theme
 
-import java.awt.Color
-
 import com.serenity.richtext.{InlineMark, ParagraphRole, RichTextDocument}
+import com.serenity.ui.color.RenderColor
 
 object RichTextStyling:
 
@@ -203,17 +202,17 @@ object RichTextStyling:
         (Some(RichSpan(glyphText, glyphStyle)), remainderSpan.toList ++ restOfFirstSpan)
       case _ => (None, spans)
 
-  private def foregroundColor(style: com.serenity.richtext.RichTextStyle, theme: Theme): Color =
+  private def foregroundColor(style: com.serenity.richtext.RichTextStyle, theme: Theme): RenderColor =
     style.color.flatMap(hexColor).getOrElse(theme.foreground)
 
-  private def hexColor(value: String): Option[Color] =
+  private def hexColor(value: String): Option[RenderColor] =
     val normalized = value.stripPrefix("#")
     Option
       .when(normalized.length == 6 && normalized.forall(isHexDigit)) {
         val red   = hexByte(normalized.substring(0, 2))
         val green = hexByte(normalized.substring(2, 4))
         val blue  = hexByte(normalized.substring(4, 6))
-        Color(red, green, blue)
+        RenderColor.fromRgba(red, green, blue)
       }
 
   private def isHexDigit(char: Char): Boolean =

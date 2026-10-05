@@ -1,10 +1,10 @@
 package com.serenity.ui.theme.config
 
-import java.awt.Color
 import java.nio.file.Path
 
 import cats.effect.IO
 import com.serenity.io.AtomicFileWriter
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.{ColorFormat, SyntaxElement, Theme, ThemeColor}
 
 object ThemeConfigWriter:
@@ -134,7 +134,7 @@ $mandatorySyntaxLines
        |$pad  underline = ${style.underline}
        |$pad}""".stripMargin
 
-  private def hex(color: Color): String =
+  private def hex(color: RenderColor): String =
     ColorFormat.toHex(color, withAlpha = false)
 
   private def escape(value: String): String =

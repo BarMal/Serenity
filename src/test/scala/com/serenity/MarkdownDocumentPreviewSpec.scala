@@ -12,6 +12,7 @@ import javax.imageio.ImageIO
 import scala.util.Try
 
 import com.serenity.markdown.{MarkdownDocumentPreview, MarkdownPreviewCache}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.Theme
 import com.sun.net.httpserver.HttpServer
 import org.scalatest.flatspec.AnyFlatSpec
@@ -448,8 +449,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
 
   it should "render inline preview images with editor theme colours instead of panel colours" in {
     val theme = Theme.default.copy(
-      background = Color(10, 20, 30),
-      panel = Theme.default.panel.copy(background = Color(40, 50, 60))
+      background = RenderColor.fromRgba(10, 20, 30),
+      panel = Theme.default.panel.copy(background = RenderColor.fromRgba(40, 50, 60))
     )
 
     val image = MarkdownDocumentPreview.renderImage(
@@ -463,7 +464,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       cache = cache
     )
 
-    Color(image.getRGB(1, 1), true) shouldBe theme.background
+    RenderColor.fromArgb(image.getRGB(1, 1)) shouldBe theme.background
   }
 
   it should "scale inline preview typography to the rendered device size" in {
@@ -554,7 +555,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       (for
         row    <- 0 until image.getHeight
         column <- 0 until image.getWidth
-        if image.getRGB(column, row) != theme.background.getRGB
+        if image.getRGB(column, row) != theme.background.argb
       yield column).max
 
     rightmostContentPixel should be < image.getWidth / 2
@@ -572,8 +573,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
 
   it should "fill the full split preview image with the panel background" in {
     val theme = Theme.default.copy(
-      background = Color(10, 20, 30),
-      panel = Theme.default.panel.copy(background = Color(40, 50, 60))
+      background = RenderColor.fromRgba(10, 20, 30),
+      panel = Theme.default.panel.copy(background = RenderColor.fromRgba(40, 50, 60))
     )
 
     val image = MarkdownDocumentPreview.renderImage(
@@ -586,7 +587,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       cache = cache
     )
 
-    Color(image.getRGB(image.getWidth - 2, image.getHeight - 2), true) shouldBe theme.panel.background
+    RenderColor.fromArgb(image.getRGB(image.getWidth - 2, image.getHeight - 2)) shouldBe theme.panel.background
   }
 
   it should "reuse rendered images for identical preview inputs" in {

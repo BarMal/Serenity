@@ -1,7 +1,5 @@
 package com.serenity.ui.renderer
 
-import java.awt.Color
-
 import com.serenity.state.models.*
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
@@ -78,8 +76,8 @@ object RendererHighlights:
       }
     }
 
-  def commentHighlightBackground(theme: Theme): Color =
-    blend(theme.warning.background, theme.background, warningWeight = 0.45)
+  def commentHighlightBackground(theme: Theme): RenderColor =
+    theme.warning.background.mixOver(theme.background, 0.45)
 
   /** Word-level counterpart to the gutter "!" marker `renderDiagnosticIndicator` paints: each diagnostic's own `range`
     * (an unknown word for spell-check, or an LSP diagnostic sharing the same `DiagnosticsState` pipeline) gets a
@@ -151,27 +149,19 @@ object RendererHighlights:
     severityCode: Option[Int],
     dimmed: Boolean = false,
     blendWeight: Double = DefaultDiagnosticHighlightBlendWeight
-  ): Color =
+  ): RenderColor =
     val severityForeground = severityThemeColor(theme, severityCode).foreground
-    if dimmed then blend(severityForeground, theme.muted, blendWeight) else severityForeground
+    if dimmed then severityForeground.mixOver(theme.muted, blendWeight) else severityForeground
 
   def diagnosticHighlightBackground(
     theme: Theme,
     severityCode: Option[Int],
     dimmed: Boolean = false,
     blendWeight: Double = DefaultDiagnosticHighlightBlendWeight
-  ): Color =
+  ): RenderColor =
     val accent  = severityThemeColor(theme, severityCode).background
-    val blended = blend(accent, theme.background, blendWeight)
-    if dimmed then blend(blended, theme.background, blendWeight) else blended
-
-  private def blend(foreground: Color, background: Color, warningWeight: Double): Color =
-    val clampedWeight    = math.max(0.0, math.min(1.0, warningWeight))
-    val backgroundWeight = 1.0 - clampedWeight
-    def blendChannel(channel: Color => Int): Int =
-      math.round(channel(foreground) * clampedWeight + channel(background) * backgroundWeight).toInt
-
-    Color(blendChannel(_.getRed), blendChannel(_.getGreen), blendChannel(_.getBlue))
+    val blended = accent.mixOver(theme.background, blendWeight)
+    if dimmed then blended.mixOver(theme.background, blendWeight) else blended
 
   /** `rangeStart`/`rangeEnd` (buffer columns) split into the contiguous sub-ranges that share one [[TextStyle]]
     * according to `styledSegments` -- the same per-run style [[com.serenity.ui.renderer.CharacterRenderer]] painted the
@@ -207,8 +197,8 @@ object RendererHighlights:
     rect: LayoutRect,
     screenY: Int,
     lineTopPx: Int,
-    foreground: java.awt.Color,
-    background: java.awt.Color,
+    foreground: RenderColor,
+    background: RenderColor,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
     rangeStart: Int,
@@ -238,8 +228,8 @@ object RendererHighlights:
             RendererCursorGlyphs.measuredRunWidthWithin(rect, context, startXPx, startXPx + desiredWidthPx).foreach {
               widthPx =>
                 val combinedStyle = style.combine(extraStyle)
-                surface.setForegroundColor(RenderColor.fromAwt(foreground))
-                surface.setBackgroundColor(RenderColor.fromAwt(background))
+                surface.setForegroundColor(foreground)
+                surface.setBackgroundColor(background)
                 surface.enableStyle(combinedStyle)
                 try
                   surface.text.drawRunPx(
@@ -265,8 +255,8 @@ object RendererHighlights:
             val charToRender =
               if charIndex >= 0 && charIndex < visualLine.text.length then visualLine.text.charAt(charIndex)
               else ' '
-            surface.setForegroundColor(RenderColor.fromAwt(foreground))
-            surface.setBackgroundColor(RenderColor.fromAwt(background))
+            surface.setForegroundColor(foreground)
+            surface.setBackgroundColor(background)
             CharacterRenderer.renderChar(surface, screenX, screenY, charToRender)
         }
       finally surface.disableStyle(extraStyle)

@@ -1,7 +1,6 @@
 package com.serenity.ui.theme
 
-import java.awt.Color
-
+import com.serenity.ui.color.RenderColor
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -60,7 +59,7 @@ class InteractionStatesSpec extends AnyFlatSpec with Matchers:
     }
 
   "InteractionStates.derive" should "work directly from any ThemeColor, not just Theme.menuItem" in {
-    val base   = ThemeColor(foreground = Color.WHITE, background = Color.BLACK)
+    val base   = ThemeColor(foreground = RenderColor.White, background = RenderColor.Black)
     val states = InteractionStates.derive(base)
 
     states.hover should not be base

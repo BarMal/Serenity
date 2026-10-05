@@ -1,11 +1,10 @@
 package com.serenity.ui.layout
 
-import java.awt.Color
-
 import scala.annotation.unused
 
 import com.serenity.markdown.{MarkdownDocumentPreview, MarkdownPreviewCache}
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 enum SurfaceRenderMode:
@@ -29,8 +28,8 @@ final case class OverlaySegment(
     text: String,
     selected: Boolean = false,
     tone: OverlayTone = OverlayTone.Normal,
-    foregroundColor: Option[Color] = None,
-    backgroundColor: Option[Color] = None,
+    foregroundColor: Option[RenderColor] = None,
+    backgroundColor: Option[RenderColor] = None,
     fontFamily: Option[String] = None,
     inlineIcon: Option[String] = None,
     inlineIconFontFamily: Option[String] = None,
@@ -42,8 +41,8 @@ final case class OverlayRow(
     plainText: String,
     selected: Boolean = false,
     cursorColumn: Option[Int] = None,
-    foregroundColor: Option[Color] = None,
-    backgroundColor: Option[Color] = None,
+    foregroundColor: Option[RenderColor] = None,
+    backgroundColor: Option[RenderColor] = None,
     segments: List[OverlaySegment] = Nil,
     layout: OverlayRowLayout = OverlayRowLayout.Plain,
     leadingPadding: Int = 0

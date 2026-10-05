@@ -1,9 +1,9 @@
 package com.serenity.ui.theme.config
 
-import java.awt.Color
 import java.nio.file.Path
 
 import cats.effect.IO
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.*
 
 object ConfigurableThemeManager:
@@ -45,7 +45,7 @@ object ConfigurableThemeManager:
       interactionStates = interactionStates
     )
 
-  private def parseOptionalColor(value: Option[String], default: Color): Either[String, Color] =
+  private def parseOptionalColor(value: Option[String], default: RenderColor): Either[String, RenderColor] =
     value match
       case Some(colorStr) => ColorParser.parseColor(colorStr)
       case None           => Right(default)
@@ -66,7 +66,7 @@ object ConfigurableThemeManager:
 
   private def convertSyntaxColors(
     syntax: SyntaxColors,
-    defaultBackground: Color
+    defaultBackground: RenderColor
   ): Either[String, Map[SyntaxElement, ThemeColor]] =
     val mandatory = ThemeFieldSchema.mandatorySyntaxFields.map(field => (field.element, field.select(syntax)))
     val optional =
@@ -103,7 +103,7 @@ object ConfigurableThemeManager:
 
   private def convertSyntaxElementConfig(
     config: SyntaxElementConfig,
-    defaultBackground: Color
+    defaultBackground: RenderColor
   ): Either[String, ThemeColor] =
     for
       foreground <- ColorParser.parseColor(config.foreground)

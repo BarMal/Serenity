@@ -1,10 +1,9 @@
 package com.serenity.ui.renderer
 
-import java.awt.Color
-
 import scala.annotation.tailrec
 
 import com.serenity.state.models.TextVisualLine
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.renderer.CharacterRenderer.GraphemeSpan
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 
@@ -13,8 +12,8 @@ import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
   */
 final private[renderer] case class MeasuredRun(
     text: String,
-    foreground: Color,
-    background: Color,
+    foreground: RenderColor,
+    background: RenderColor,
     style: TextStyle,
     minXPx: Float,
     maxXPx: Float
@@ -26,7 +25,7 @@ final private[renderer] case class MeasuredRun(
   */
 private[renderer] object MeasuredLineRuns:
 
-  final private case class Attributes(foreground: Color, background: Color, style: TextStyle)
+  final private case class Attributes(foreground: RenderColor, background: RenderColor, style: TextStyle)
 
   def of(
     visualLine: TextVisualLine,

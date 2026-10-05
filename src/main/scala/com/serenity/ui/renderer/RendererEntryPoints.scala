@@ -37,7 +37,7 @@ object RendererEntryPoints:
     caches: RenderCaches = RenderCaches.create()
   ): Unit =
     surface.hideCursor()
-    surface.clearViewport(RenderColor.fromAwt(state.persisted.theme.background))
+    surface.clearViewport(state.persisted.theme.background)
     RendererFramePlanner.forgetPreservedContent(surface, output, caches)
     RendererStartPage.renderStartPage(
       page,

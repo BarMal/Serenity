@@ -4,6 +4,7 @@ import java.awt.{Color, Font}
 
 import com.serenity.config.{AppConfig, StatusLineColors}
 import com.serenity.rope.Balance
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
   CellMetrics,
@@ -366,8 +367,8 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     val metrics = CellMetrics.fromFont(font)
     val theme = Theme.light.copy(
       panel = Theme.light.panel.copy(
-        foreground = new Color(0x12, 0x34, 0x56),
-        background = new Color(0xab, 0xcd, 0xef)
+        foreground = RenderColor.fromRgba(0x12, 0x34, 0x56),
+        background = RenderColor.fromRgba(0xab, 0xcd, 0xef)
       )
     )
     val overlay = TextOverlayView(
@@ -395,10 +396,10 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics)
 
     val bg = surface.getBg(1, 1)
-    bg.getRed shouldBe Theme.light.panel.background.getRed
-    bg.getGreen shouldBe Theme.light.panel.background.getGreen
-    bg.getBlue shouldBe Theme.light.panel.background.getBlue
-    bg.getAlpha shouldBe 128
+    bg.red shouldBe Theme.light.panel.background.red
+    bg.green shouldBe Theme.light.panel.background.green
+    bg.blue shouldBe Theme.light.panel.background.blue
+    bg.alpha shouldBe 128
   }
 
   it should "keep the theme's own panel background alpha for the cursor info bar when no override is configured" in {
@@ -450,8 +451,8 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
 
     TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics)
 
-    surface.getFg(1, 1) shouldBe foreground
-    surface.getBg(1, 1) shouldBe background
+    surface.getFg(1, 1) shouldBe RenderColor.fromAwt(foreground)
+    surface.getBg(1, 1) shouldBe RenderColor.fromAwt(background)
   }
 
   it should "keep the theme's own panel colours for the cursor info bar when no colour override is configured" in {
