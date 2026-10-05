@@ -4,7 +4,9 @@ import java.nio.file.Files
 
 import scala.concurrent.duration.*
 
+import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import cats.syntax.all.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -80,6 +82,53 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
         yield changed shouldBe Set(fileB)
       }
       .unsafeRunSync()
+  }
+
+  "awaitChangedFiles" should "report a burst of writes within the settle window as one change (#1885)" in {
+    val directory = Files.createTempDirectory("file-change-watcher-burst")
+    val file      = directory.resolve("watched.txt")
+    Files.writeString(file, "initial")
+
+    val writeBurst =
+      (1 to 5).toList.traverse_(n => IO.blocking(Files.writeString(file, s"write $n")) >> IO.sleep(20.millis))
+
+    FileChangeWatcher.create
+      .use { watcher =>
+        for
+          _       <- watcher.sync(Set(directory))
+          _       <- writeBurst.start
+          changed <- watcher.awaitChangedFiles(300.millis)
+          after   <- watcher.pollChangedFiles(500.millis)
+        yield (changed, after)
+      }
+      .unsafeRunTimed(10.seconds) shouldBe Some((Set(file), Set.empty))
+  }
+
+  "The polling fallback" should "report a file written into a synced directory" in {
+    val directory = Files.createTempDirectory("file-change-watcher-polling")
+    val file      = directory.resolve("watched.txt")
+    Files.writeString(file, "initial")
+
+    FileChangeWatcher
+      .polling(100.millis)
+      .use { watcher =>
+        for
+          _       <- watcher.sync(Set(directory))
+          _       <- IO.blocking(Files.writeString(file, "changed, and longer"))
+          changed <- watcher.awaitChangedFiles(50.millis)
+        yield changed shouldBe Set(file)
+      }
+      .unsafeRunSync()
+  }
+
+  it should "report nothing when no synced directory changes" in {
+    val directory = Files.createTempDirectory("file-change-watcher-polling-quiet")
+    Files.writeString(directory.resolve("watched.txt"), "initial")
+
+    FileChangeWatcher
+      .polling(100.millis)
+      .use(watcher => watcher.sync(Set(directory)) >> watcher.pollChangedFiles(500.millis))
+      .unsafeRunSync() shouldBe Set.empty
   }
 
   "sync" should "be idempotent when called repeatedly with the same directory" in {

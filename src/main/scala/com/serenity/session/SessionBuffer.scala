@@ -33,7 +33,10 @@ final case class SessionBuffer(
     // still detects a file changed since.
     revision: Option[String] = None,
     hidden: Boolean = false,
-    notes: List[SessionNote] = Nil
+    notes: List[SessionNote] = Nil,
+    // Names the file holding this buffer's unsaved text, in place of `unsavedContent`, once the session is on disk
+    // (#1912); SessionContentStore moves the text between the two.
+    contentRef: Option[String] = None
 )
 
 /** One note, flattened for JSON: `kind` says whether `title` is a chapter heading (with its `occurrence`) or a keyword.
@@ -134,7 +137,7 @@ object SessionBuffer:
         // Likewise for a session written before encodings were recorded (#1627): every file was read as UTF-8.
         encoding = sessionBuffer.encoding.flatMap(TextEncoding.fromConfigKey).getOrElse(TextEncoding.default),
         hasBom = sessionBuffer.hasBom,
-        revision = sessionBuffer.revision.map(DocumentRevision.apply)
+        revision = sessionBuffer.revision.map(DocumentRevision(_))
       ),
       editing = EditingState(sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition)),
       viewport = SessionViewport.toViewport(sessionBuffer.viewport),
