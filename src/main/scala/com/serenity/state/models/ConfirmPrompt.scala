@@ -72,6 +72,28 @@ object ConfirmPrompt:
       blocking = true
     )
 
+  /** A session brought back unsaved text that differs from its file (#1904). Keeping it is the safe answer, so it is
+    * both the first choice and what Escape does.
+    */
+  def recoverUnsaved(bufferId: BufferId, bufferLabel: String, fileChangedSince: Boolean): ConfirmPrompt =
+    of(
+      title = "Recover unsaved changes",
+      message = List(
+        bufferLabel,
+        if fileChangedSince then "The file has also changed on disk since these changes were made."
+        else "Unsaved changes from your last session are newer than the file on disk."
+      ),
+      choices = List(
+        ConfirmChoice("Keep recovered changes", ConfirmAction.Dismiss, ButtonEmphasis.Primary),
+        ConfirmChoice(
+          "Open the file from disk",
+          ConfirmAction.Run(ExternalChangeCommands.reloadFromDisk(bufferId)),
+          ButtonEmphasis.Danger
+        )
+      ),
+      blocking = true
+    )
+
   /** A formatting command on a file whose format can't store formatting. Not blocking: nothing is lost by ignoring it.
     */
   def convertToRichText(bufferLabel: String, requested: RichTextIntent): ConfirmPrompt =
