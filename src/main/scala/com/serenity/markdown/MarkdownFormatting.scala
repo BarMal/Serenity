@@ -137,11 +137,11 @@ object MarkdownFormatting:
   private def selectedSegment(source: Rope, range: SourceRange, run: (Int, Int)): Option[Segment] =
     val (firstLine, lastLine) = run
     val textStart             = source.lineColumnToOffset(firstLine, 0)
-    val textEnd = source.lineColumnToOffset(lastLine, 0) + source.getLine(lastLine).fold(0)(_.length)
-    val text    = source.sliceString(textStart, textEnd)
-    val from    = (range.start - textStart).max(0)
-    val to      = (range.end - textStart).min(text.length)
-    val trimmedFrom = Iterator.iterate(from)(_ + 1).find(i => i >= to || !text(i).isWhitespace).getOrElse(to)
+    val textEnd               = source.lineColumnToOffset(lastLine, 0) + source.getLine(lastLine).fold(0)(_.length)
+    val text                  = source.sliceString(textStart, textEnd)
+    val from                  = (range.start - textStart).max(0)
+    val to                    = (range.end - textStart).min(text.length)
+    val trimmedFrom           = Iterator.iterate(from)(_ + 1).find(i => i >= to || !text(i).isWhitespace).getOrElse(to)
     val trimmedTo =
       Iterator.iterate(to)(_ - 1).find(i => i <= trimmedFrom || !text(i - 1).isWhitespace).getOrElse(trimmedFrom)
     Option.when(trimmedFrom < trimmedTo)(Segment(text, textStart, trimmedFrom, trimmedTo))

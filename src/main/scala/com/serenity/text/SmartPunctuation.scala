@@ -31,7 +31,7 @@ object SmartPunctuation:
       case '"'  => Some((0, if opensQuote(precedingLineText) then LeftDoubleQuote else RightDoubleQuote))
       case '\'' => Some((0, if opensQuote(precedingLineText) then LeftSingleQuote else RightSingleQuote))
       case digit if digit.isDigit && opensElision(precedingLineText) => Some((1, RightSingleQuote + digit))
-      case _    => None
+      case _                                                         => None
 
   /** Whether the caret sits inside a Markdown code span, judged by an odd number of backticks before it on its line. */
   def withinInlineCode(precedingLineText: String): Boolean =
