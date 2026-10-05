@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.BufferId
+import com.serenity.text.TextEncoding
 
 enum FileIntent:
   case SaveCurrentFile
@@ -21,3 +22,6 @@ enum FileIntent:
   case ReloadFromDisk(bufferId: BufferId)
   case OverwriteOnDisk(bufferId: BufferId)
   case SaveWithoutFormatting(bufferId: BufferId)
+  // #1627: read the file again in an encoding the user picks -- see ReopenWithEncodingCommands.
+  case ChooseReopenEncoding
+  case ReopenWithEncoding(bufferId: BufferId, encoding: TextEncoding, discardEdits: Boolean)

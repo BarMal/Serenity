@@ -34,6 +34,14 @@ object TextFileCodec:
   def decode(bytes: Array[Byte]): Option[DecodedText] =
     decodeWithByteOrderMark(bytes).orElse(Option.unless(looksBinary(bytes))(decodeWithoutByteOrderMark(bytes)))
 
+  /** `bytes` read as `encoding` because the user chose it, not detected -- `None` when they are not valid in it. A
+    * leading byte order mark of that encoding is stripped and remembered.
+    */
+  def decodeAs(bytes: Array[Byte], encoding: TextEncoding): Option[DecodedText] =
+    val hasBom = encoding.byteOrderMark.nonEmpty && bytes.startsWith(encoding.byteOrderMark.toArray)
+    strictDecode(if hasBom then bytes.drop(encoding.byteOrderMark.length) else bytes, encoding)
+      .map(DecodedText(_, encoding, hasBom))
+
   /** The policy for content its file's encoding cannot represent (#1627): write it as UTF-8 without a BOM rather than
     * lose the characters, and report the switch in the result. Refusing the save instead would look like a save that
     * happened, because failed saves are not shown to the user yet (#1717); once they are, a prompt can replace this.

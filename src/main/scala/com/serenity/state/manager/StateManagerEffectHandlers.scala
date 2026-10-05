@@ -71,6 +71,8 @@ final private[manager] class StateManagerEffectHandlers(
       def completeQuit: IO[Unit] = quitSignal.complete(()).attempt.void
   )
 
+  private val reopenEffects = new ReopenWithEncodingEffects(currentState, commitState, editor, fileManager)
+
   private val configEffects = new StateManagerConfigEffects(
     currentState,
     logger,
@@ -317,6 +319,12 @@ final private[manager] class StateManagerEffectHandlers(
       case FileIntent.SaveWithoutFormatting(bufferId) =>
         currentState.flatMap(current => commitState(RichTextReducer.withoutFormatting(bufferId, current), current)) >>
           saveBufferEffect(bufferId)
+      case FileIntent.ChooseReopenEncoding =>
+        currentState.flatMap(current =>
+          ReopenWithEncoding.withPickerOpened(current).fold(IO.unit)(commitState(_, current))
+        )
+      case FileIntent.ReopenWithEncoding(bufferId, encoding, discardEdits) =>
+        reopenEffects.reopen(bufferId, encoding, discardEdits)
 
   private def setBufferLanguage(state: AppState, language: Option[LanguageId]): IO[Unit] =
     (state.focusedBufferId, state.focusedBufferId.flatMap(state.persisted.buffers.get)) match
