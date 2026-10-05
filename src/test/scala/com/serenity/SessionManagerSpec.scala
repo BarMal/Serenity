@@ -41,7 +41,15 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     val sessionsDirectory = sessionRoot.resolve("sessions")
     if Files.exists(sessionsDirectory) then
       val stream = Files.list(sessionsDirectory)
-      try stream.filter(_.getFileName.toString.startsWith("session.json.corrupt-")).iterator.asScala.toList
+      try
+        stream
+          .filter(path => Files.isRegularFile(path))
+          .filter(path =>
+            List("session.json.corrupt-", "session.json.newer-").exists(path.getFileName.toString.startsWith)
+          )
+          .iterator
+          .asScala
+          .toList
       finally stream.close()
     else Nil
 
@@ -220,7 +228,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
-  it should "return None and keep a quarantined copy when the saved session file is malformed" in {
+  it should "return None and move the malformed session file aside rather than leave it to be overwritten" in {
     val sessionRoot    = Files.createTempDirectory("session-manager-corrupt")
     val sessionManager = createManagerAt(sessionRoot)
     val sessionFile    = currentSessionFile(sessionRoot)
@@ -231,9 +239,8 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       loaded <- sessionManager.loadSession()
     yield
       loaded shouldBe None
-      Files.exists(sessionFile) shouldBe true
-      Files.readString(sessionFile) should include("not valid json")
-      quarantinedSessionFiles(sessionRoot) should not be empty
+      Files.exists(sessionFile) shouldBe false
+      quarantinedSessionFiles(sessionRoot).map(Files.readString) should contain("{ this is not valid json")
 
     program.unsafeRunSync()
   }

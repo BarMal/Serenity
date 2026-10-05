@@ -41,6 +41,12 @@ Run formatting and Scalafix before committing when changing Scala code:
 sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 ```
 
+### Licence notices
+
+`sbt generateThirdPartyNotices` rewrites `THIRD-PARTY-NOTICES.md` from the resolved runtime classpath and the registry in
+`third-party/`; `sbt checkThirdPartyNotices` (run in CI) fails if it is stale or a dependency has no registry row. See
+[CONTRIBUTING.md](CONTRIBUTING.md#licensing).
+
 ## Automated standards
 
 Three layers enforce `docs/coding-standards.md` rather than leaving it to review.

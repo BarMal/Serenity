@@ -9,7 +9,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.AppMode
-import com.serenity.io.FileDialog
+import com.serenity.io.{FileDialog, LicenceNotices}
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.LossyRichTextOverwriteException
@@ -163,6 +163,17 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
     fixture.handlers.interpretCommand(command(CommandIntent.File(FileIntent.NewFile)), AppState.initial).unsafeRunSync()
 
     fixture.currentState.persisted.bufferOrder.size shouldBe AppState.initial.persisted.bufferOrder.size + 1
+  }
+
+  it should "open the bundled licence and notices for ShowLicenceAndNotices" in {
+    val fixture = harness()
+
+    fixture.handlers
+      .interpretCommand(command(CommandIntent.File(FileIntent.ShowLicenceAndNotices)), AppState.initial)
+      .unsafeRunSync()
+
+    val opened = fixture.currentState.persisted.buffers.values.flatMap(_.document.filePath).toList
+    opened.map(_.getFileName.toString) should contain(LicenceNotices.documentName)
   }
 
   it should "update the buffer language and open the LSP document when app mode is Code" in {

@@ -5,8 +5,10 @@ import java.nio.file.{Files, Path}
 import cats.effect.IO
 import com.serenity.config.AppConfig
 import com.serenity.frontend.FrontendCapabilities
+import com.serenity.session.UnreadableSession
 import com.serenity.state.manager.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
@@ -75,6 +77,10 @@ object AppStartup:
       theme          <- themeManager.initializeWithTheme(savedThemeName.getOrElse(fallbackThemeName))
     yield theme
 
+  /** Sets an unreadable session aside before anything can save over it, whether or not a file was asked for, then tells
+    * the user about it in a prompt. A notice also goes on the start page when there is one, and into a prompt when a
+    * launch straight into a file means there is none.
+    */
   def initializeState(
     stateManager: StateManager,
     sessionStartupInfo: SessionStartupInfo,
@@ -85,33 +91,46 @@ object AppStartup:
     capabilities: FrontendCapabilities = FrontendCapabilities.gui,
     configNotice: Option[String] = None
   ): IO[AppState] =
-    openPath match
-      case Some(path) =>
-        for
-          _ <- stateManager.updateStateValidated { _ =>
-            val base = AppState.empty(appConfig)
-            base.copy(
-              persisted = base.persisted.copy(theme = theme),
-              runtime = base.runtime.copy(
-                viewportSize = Some(initialViewportSize),
-                capabilities = capabilities
-              )
-            )
-          }
-          _     <- stateManager.fileOpener.openFile(path)
-          state <- stateManager.getCurrentState
-        yield state
-      case None =>
-        for
-          startState <- startPageState(
-            stateManager.sessionService,
-            sessionStartupInfo,
-            theme,
-            initialViewportSize,
-            appConfig,
-            capabilities,
-            configNotice
-          )
-          _     <- stateManager.updateStateValidated(_ => startState)
-          state <- stateManager.getCurrentState
-        yield state
+    for
+      unreadable <- sessionStartupInfo.setAsideUnreadableSession
+      startPageNotice = Option((configNotice.toList ++ unreadable.map(_.summary)).mkString(" ")).filter(_.nonEmpty)
+      _ <- openPath.fold(
+        startPageState(
+          stateManager.sessionService,
+          sessionStartupInfo,
+          theme,
+          initialViewportSize,
+          appConfig,
+          capabilities,
+          startPageNotice
+        ).flatMap(startState => stateManager.updateStateValidated(_ => startState))
+      )(openStraightInto(stateManager, _, theme, initialViewportSize, appConfig, capabilities))
+      unseenNotice = configNotice.filter(_ => openPath.isDefined)
+      _     <- stateManager.updateStateValidated(withStartupPrompts(_, unreadable, unseenNotice))
+      state <- stateManager.getCurrentState
+    yield state
+
+  private def openStraightInto(
+    stateManager: StateManager,
+    path: Path,
+    theme: Theme,
+    initialViewportSize: ViewportSize,
+    appConfig: AppConfig,
+    capabilities: FrontendCapabilities
+  ): IO[Unit] =
+    stateManager.updateStateValidated { _ =>
+      val base = AppState.empty(appConfig)
+      base.copy(
+        persisted = base.persisted.copy(theme = theme),
+        runtime = base.runtime.copy(
+          viewportSize = Some(initialViewportSize),
+          capabilities = capabilities
+        )
+      )
+    } >> stateManager.fileOpener.openFile(path)
+
+  def withStartupPrompts(state: AppState, unreadable: Option[UnreadableSession], notice: Option[String]): AppState =
+    val prompts =
+      notice.map(ConfirmPrompt.startupNotice).toList ++
+        unreadable.map(session => ConfirmPrompt.sessionNotRestored(session.describe, session.recoveredTexts))
+    prompts.foldLeft(state)((current, prompt) => ModalStateReducer.show(Modal.Confirm(prompt), current).state)

@@ -1,3 +1,5 @@
+import java.nio.file.Path
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.Duration
 
@@ -6,18 +8,21 @@ import cats.effect.unsafe.IORuntimeConfig
 import cats.syntax.all.*
 import com.serenity.BuildInfo
 import com.serenity.app.*
+import com.serenity.app.instance.{LaunchRole, SingleInstance}
 import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning}
 import com.serenity.diagnostics.{FrameKind, FramePhase, FrameTimings, Trace, TuiConsoleLogFilter}
 import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
+import com.serenity.session.SessionManager
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.renderer.{FontSpec, PaintExecutionContext, RendererCursorOverlay, RendererEntryPoints}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
+import fs2.Stream
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
@@ -60,10 +65,26 @@ object Main extends IOApp:
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
 
     for
-      _ <- logger.info(s"[TOOLKIT] ${toolkit.choice} (${toolkit.reason})")
-      _ <- Java2DPipeline.installSafeDefaults()
-      _ <- IO(CrashReporter.install())
-      launchOptions = launchOptionsForLogging
+      _         <- logger.info(s"[TOOLKIT] ${toolkit.choice} (${toolkit.reason})")
+      _         <- Java2DPipeline.installSafeDefaults()
+      _         <- IO(CrashReporter.install())
+      requested <- IO(launchOptionsForLogging.openPath.map(_.toAbsolutePath.normalize).toList)
+      // #2023: settled before anything reads or writes the session, which only one process may own.
+      instances = SingleInstance.forConfigDirectory(SessionManager.defaultSessionRoot(), logger)
+      _ <- SingleInstance.claim(instances, requested, logger).use {
+        case LaunchRole.Forwarded => reportForwarded(requested)
+        case role                 => runAs(role, launchOptionsForLogging)
+      }
+    yield ExitCode.Success
+
+  private def reportForwarded(paths: List[Path])(using logger: Logger[IO]): IO[Unit] =
+    val message =
+      if paths.isEmpty then "Serenity is already running; its window was brought forward."
+      else s"Serenity is already running; opened ${paths.mkString(", ")} there."
+    logger.info(s"[INSTANCE] $message") >> IO.println(message)
+
+  private def runAs(role: LaunchRole, launchOptions: LaunchOptions)(using logger: Logger[IO]): IO[Unit] =
+    for
       configResult <- ConfigManager.loadConfigResultIO()
       // A config that cannot be read means this session runs on defaults -- every setting the user had, gone until
       // they restart with a readable file. Keep their file aside before anything can overwrite it, and carry a notice
@@ -83,17 +104,32 @@ object Main extends IOApp:
       _ <- ConfigMigrationWarning
         .message(ConfigManager.defaultConfigPath, configLoad.report)
         .fold(IO.unit)(message => logger.warn(message))
-      appConfig = resolveAppConfig(configLoad.config, launchOptions)
+      appConfig     = resolveAppConfig(configLoad.config, launchOptions)
+      startupNotice = Option((configNotice.toList ++ role.notice).mkString(" ")).filter(_.nonEmpty)
+      session       = SessionChoice(role.sessionRootOverride, forwardedOpensOf(role))
       _ <-
-        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, launchOptions, configNotice)
-        else runGui(appConfig, launchOptions, configNotice)
-    yield ExitCode.Success
+        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, launchOptions, startupNotice, session)
+        else runGui(appConfig, launchOptions, startupNotice, session)
+    yield ()
+
+  /** Which session this process may write, and the files later launches hand it. */
+  final private case class SessionChoice(rootOverride: Option[Path], forwardedOpens: Stream[IO, List[Path]])
+
+  private def forwardedOpensOf(role: LaunchRole): Stream[IO, List[Path]] =
+    role match
+      case LaunchRole.Primary(forwardedOpens) => forwardedOpens
+      case _                                  => Stream.empty
 
   /** The TUI launch path (issue #1112): a real system terminal via [[TerminalShell.resource]], restored on every exit
     * path by that `Resource`'s release. This branch never references `SwingWindow` -- the terminal capability bundle
     * lives entirely in [[TuiRuntime]], which owns no such reference either.
     */
-  private def runTui(appConfig: AppConfig, launchOptions: LaunchOptions, configNotice: Option[String])(using
+  private def runTui(
+    appConfig: AppConfig,
+    launchOptions: LaunchOptions,
+    configNotice: Option[String],
+    session: SessionChoice
+  )(using
     logger: Logger[IO],
     loggerFactory: LoggerFactory[IO]
   ): IO[Unit] =
@@ -107,13 +143,20 @@ object Main extends IOApp:
         openPath = launchOptions.openPath,
         configPersistencePath = Some(ConfigManager.defaultConfigPath),
         hasDisplay = LaunchOptions.isDisplayReachable(sys.env),
-        configNotice = configNotice
+        sessionRootOverride = session.rootOverride,
+        configNotice = configNotice,
+        forwardedOpens = session.forwardedOpens
       )
 
   /** The GUI launch path: unchanged from before #1112 beyond being extracted into its own method. Constructs a
     * [[SwingWindow]] and closes `AppRuntime.run`'s capabilities over it; never touches [[TerminalShell]].
     */
-  private def runGui(appConfig: AppConfig, launchOptions: LaunchOptions, configNotice: Option[String])(using
+  private def runGui(
+    appConfig: AppConfig,
+    launchOptions: LaunchOptions,
+    configNotice: Option[String],
+    session: SessionChoice
+  )(using
     logger: Logger[IO],
     loggerFactory: LoggerFactory[IO]
   ): IO[Unit] =
@@ -228,7 +271,8 @@ object Main extends IOApp:
               makeStateManager = Some(logger =>
                 com.serenity.state.manager.StateManager.apply(
                   logger,
-                  policy = com.serenity.session.SessionManager.SessionPolicy.interactive,
+                  policy = SessionManager.SessionPolicy.interactive,
+                  sessionRootOverride = session.rootOverride,
                   onFontConfigChanged = config =>
                     displayState.update(config) >>
                       IO.blocking {
@@ -246,7 +290,8 @@ object Main extends IOApp:
               registerResizeCallback = cb => swingWin.setOnResize(cb),
               registerFocusCallback = cb => swingWin.setOnFocusChange(cb),
               openPath = launchOptions.openPath,
-              frontend = GuiFrontend
+              frontend = GuiFrontend,
+              forwardedOpens = session.forwardedOpens.evalTap(_ => IO(swingWin.bringToFront()))
             )
           }
         }
