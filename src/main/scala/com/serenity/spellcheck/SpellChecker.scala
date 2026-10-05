@@ -7,6 +7,9 @@ import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.model.*
 import com.serenity.state.models.*
 
+/** A flagged word and where it stands: `start` and `end` are columns on `line`. */
+final case class Misspelling(line: Int, start: Int, end: Int, word: String)
+
 object SpellChecker:
 
   val Source: String = "spell-check"
@@ -83,6 +86,7 @@ object SpellChecker:
       .filter(_._2.nonEmpty)
       .toMap
 
+    val ignores = state.runtime.languageService.diagnosticsState.spellIgnores
     val (refreshed, cache) =
       state.persisted.buffers.values.foldLeft((preserved, Map.empty[DocumentUri, SpellCheckCacheEntry])) {
         case ((diagnostics, cache), buffer) =>
@@ -104,9 +108,10 @@ object SpellChecker:
                 )
                 SpellCheckCacheEntry(fingerprint, spellDiagnostics)
               }
+            val visible = withoutIgnored(buffer, uri, entry.diagnostics, ignores)
             val nextDiagnostics =
-              if entry.diagnostics.isEmpty then diagnostics
-              else diagnostics + (uri -> entry.diagnostics)
+              if visible.isEmpty then diagnostics
+              else diagnostics + (uri -> visible)
             nextDiagnostics -> (cache + (uri -> entry))
           else diagnostics -> cache
       }
@@ -151,7 +156,7 @@ object SpellChecker:
         current.runtime.copy(languageService =
           current.runtime.languageService.copy(diagnosticsState =
             current.runtime.languageService.diagnosticsState.copy(
-              diagnostics = analyzed.runtime.languageService.diagnosticsState.diagnostics,
+              diagnostics = withoutIgnoredWords(current, analyzed.runtime.languageService.diagnosticsState.diagnostics),
               spellCheckCache = analyzed.runtime.languageService.diagnosticsState.spellCheckCache
             )
           )
@@ -165,14 +170,75 @@ object SpellChecker:
     */
   def flaggedWordAtCursor(state: AppState): Option[String] =
     for
-      buffer <- state.activeBuffer
-      cursor <- state.activeCursorPosition
-      diagnostic <- state.runtime.languageService.diagnosticsState.diagnostics
-        .getOrElse(diagnosticsUri(buffer), Nil)
-        .find(diagnostic => diagnostic.source.contains(Source) && containsCursor(diagnostic.range, cursor))
+      buffer     <- state.activeBuffer
+      cursor     <- state.activeCursorPosition
+      misspelled <- misspellingAt(state, buffer, cursor)
+    yield misspelled.word
+
+  /** The misspelling `position` sits on or just after in `buffer`, which need not be the active one: a right-click
+    * lands in whichever pane was clicked.
+    */
+  def misspellingAt(state: AppState, buffer: Buffer, position: CursorPosition): Option[Misspelling] =
+    state.runtime.languageService.diagnosticsState.diagnostics
+      .getOrElse(diagnosticsUri(buffer), Nil)
+      .filter(isUnknownWord)
+      .find(diagnostic => containsCursor(diagnostic.range, position))
+      .flatMap(misspellingOf(buffer, _))
+
+  private def isUnknownWord(diagnostic: Diagnostic): Boolean =
+    diagnostic.source.contains(Source) && diagnostic.code.contains(UnknownWordCode)
+
+  private def misspellingOf(buffer: Buffer, diagnostic: Diagnostic): Option[Misspelling] =
+    for
       line <- buffer.document.content.getLine(diagnostic.range.start.line)
       word <- wordInRange(line, diagnostic.range)
-    yield word
+    yield Misspelling(
+      diagnostic.range.start.line,
+      diagnostic.range.start.character,
+      diagnostic.range.end.character,
+      word
+    )
+
+  private def withoutIgnored(
+    buffer: Buffer,
+    uri: DocumentUri,
+    diagnostics: List[Diagnostic],
+    ignores: SpellIgnores
+  ): List[Diagnostic] =
+    if ignores == SpellIgnores.empty then diagnostics
+    else
+      diagnostics.filterNot { diagnostic =>
+        isUnknownWord(diagnostic) &&
+        misspellingOf(buffer, diagnostic).exists(found =>
+          ignores.hides(uri, IgnoredOccurrence(found.line, found.start, found.word))
+        )
+      }
+
+  /** `state` with the writer's dismissals applied to the diagnostics already published, so a dismissal shows at once
+    * instead of waiting for the next analysis.
+    */
+  def withIgnoresApplied(state: AppState): AppState =
+    val diagnosticsState = state.runtime.languageService.diagnosticsState
+    state.copy(runtime =
+      state.runtime.copy(languageService =
+        state.runtime.languageService.copy(diagnosticsState =
+          diagnosticsState.copy(diagnostics = withoutIgnoredWords(state, diagnosticsState.diagnostics))
+        )
+      )
+    )
+
+  /** `diagnostics` less what the writer has dismissed since the analysis they came from started. */
+  private def withoutIgnoredWords(
+    current: AppState,
+    diagnostics: Map[DocumentUri, List[Diagnostic]]
+  ): Map[DocumentUri, List[Diagnostic]] =
+    val ignores = current.runtime.languageService.diagnosticsState.spellIgnores
+    if ignores == SpellIgnores.empty then diagnostics
+    else
+      val buffers = current.persisted.buffers.values.map(buffer => diagnosticsUri(buffer) -> buffer).toMap
+      diagnostics
+        .map((uri, found) => uri -> buffers.get(uri).fold(found)(withoutIgnored(_, uri, found, ignores)))
+        .filter((_, found) => found.nonEmpty)
 
   private def containsCursor(range: LspRange, cursor: CursorPosition): Boolean =
     cursor.line == range.start.line && cursor.column >= range.start.character &&

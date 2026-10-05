@@ -57,6 +57,9 @@ private[manager] trait EffectEditorPort extends EffectLanePort:
   def scheduleDocumentAnalysis(): IO[Unit]
   def scheduleFindSearch(request: FindSearchRequest): IO[Unit]
 
+  /** Corrections for a misspelled word, searched for when asked (#1939). */
+  def spellingSuggestions: String => IO[List[String]] = _ => IO.pure(Nil)
+
 private[manager] trait EffectSurfacePort:
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
   def showModal(modal: Modal): IO[Unit]

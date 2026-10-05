@@ -41,6 +41,7 @@ import com.serenity.config.SpellCheckDictionaryFingerprint
   * `words` holds only the words with no dictionary file behind them (the configured extra words and the built-in
   * fallback lists); a dictionary's own words stay as stems in `stems` and are recognised by stripping affixes at lookup
   * time (#1939), so memory follows the number of `.dic` entries rather than the number of forms they generate.
+  * `tryCharacters` is the `.aff` `TRY` string, the letters suggestion search draws insertions and substitutions from.
   * `breaksAtHyphens` is false only for a dictionary that says `BREAK 0`: otherwise a hyphenated word is right when each
   * of its parts is.
   *
@@ -67,6 +68,7 @@ final case class DictionaryContext(
     compoundCheckRules: CompoundCheckRules = CompoundCheckRules.empty,
     missingDictionary: Option[String] = None,
     stems: List[AffixedWordList] = Nil,
+    tryCharacters: String = "",
     breaksAtHyphens: Boolean = true
 ):
 

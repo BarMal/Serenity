@@ -12,7 +12,7 @@ import com.serenity.diagnostics.Trace
 import com.serenity.document.CommentRendering
 import com.serenity.io.{FileBrowser, FileEntry}
 import com.serenity.lsp.client.DocumentUri
-import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker}
+import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker, SpellSuggester}
 import com.serenity.state.core.NotesPaneSync
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
@@ -207,6 +207,15 @@ final private[manager] class StateManagerOperationBoundary private (
       else watched.intersect(StateManagerOperationBoundary.discoveredDictionaryDirectories(discovered))
     }
 
+  /** Corrections for `word` under the current spell-check configuration, searched for now: the background analysis
+    * deliberately never does this (#1939). The dictionary comes from the cache the analysis keeps warm.
+    */
+  def spellingSuggestions(word: String): IO[List[String]] =
+    modelCommit.currentState.flatMap { state =>
+      val config = state.persisted.config.languageToolsConfig.spellCheck
+      IO.blocking(SpellSuggester.suggest(word, DictionaryLoader.loadSnapshot(config, dictionaryCache).context))
+    }
+
   def explorerWatchDirectories: IO[Set[Path]] =
     modelCommit.currentState.map(PanelContentSync.explorerWatchDirectories)
 
@@ -361,7 +370,9 @@ final private[manager] class StateManagerOperationBoundary private (
                 .when(spellCheckConfig.enabled && hasProseToCheck(snapshot))(dictionary.context.missingDictionary)
                 .flatten
             ) >>
-              postResult(EffectResult.DocumentAnalysisCompleted(analyzed, expected, dictionary.fingerprints))
+              postResult(EffectResult.DocumentAnalysisCompleted(analyzed, expected, dictionary.fingerprints)) >>
+              // Idle time after the result is published, so the first request for corrections does not pay for it.
+              IO.blocking(dictionary.context.stems.foreach(_.prepareSuggestions()))
           }
         }
       }).handleErrorWith(error =>

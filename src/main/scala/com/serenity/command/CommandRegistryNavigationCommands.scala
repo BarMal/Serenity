@@ -164,5 +164,26 @@ private[command] object CommandRegistryNavigationCommands:
       CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.AddWordAtCursorToDictionary)),
       CommandCategory.Edit,
       label = "Add Word to Dictionary"
+    ),
+    Command.typed(
+      "show-spelling-suggestions",
+      "Suggest corrections for the misspelled word at the cursor.",
+      CommandIntent.Spelling(SpellingIntent.ShowSuggestions),
+      CommandCategory.Edit,
+      label = "Show Spelling Suggestions"
+    ),
+    Command.typed(
+      "ignore-misspelled-word-once",
+      "Leave the misspelled word at the cursor alone here, for this session.",
+      CommandIntent.Spelling(SpellingIntent.IgnoreOnceAtCursor),
+      CommandCategory.Edit,
+      label = "Ignore Misspelling Once"
+    ),
+    Command.typed(
+      "ignore-misspelled-word",
+      "Leave the misspelled word at the cursor alone everywhere, for this session.",
+      CommandIntent.Spelling(SpellingIntent.IgnoreEverywhereAtCursor),
+      CommandCategory.Edit,
+      label = "Ignore Misspelling Everywhere"
     )
   )

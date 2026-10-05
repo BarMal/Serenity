@@ -70,7 +70,8 @@ object CommandScope:
       case CommandIntent.View(view) => viewScope(view).family
       case CommandIntent.Lifecycle(_) | CommandIntent.File(_) | CommandIntent.Comments(_) |
           CommandIntent.Navigation(_) | CommandIntent.Theme(_) | CommandIntent.Session(_) |
-          CommandIntent.Keybindings(_) | CommandIntent.UiPresets(_) | CommandIntent.Settings(_) =>
+          CommandIntent.Keybindings(_) | CommandIntent.UiPresets(_) | CommandIntent.Settings(_) |
+          CommandIntent.Spelling(_) =>
         CommandFamily.Core
 
   private def editFamily(intent: EditIntent): CommandFamily =

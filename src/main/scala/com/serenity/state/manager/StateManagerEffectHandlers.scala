@@ -105,6 +105,9 @@ final private[manager] class StateManagerEffectHandlers(
     showModal
   )
 
+  private val spellingEffects =
+    new StateManagerSpellingEffects(editor, currentState, interpretEffect, configEffects.addWordToDictionary)
+
   private val navigationEffects =
     new StateManagerNavigationEffects(
       currentState,
@@ -256,6 +259,7 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.Comments(intent)     => navigationEffects.interpretComments(intent)
       case CommandIntent.Placeholders(intent) => navigationEffects.interpretPlaceholders(intent)
       case CommandIntent.Darlings(intent)     => interpretDarlingIntent(intent)
+      case CommandIntent.Spelling(intent)     => spellingEffects.interpret(intent)
       case CommandIntent.Navigation(intent)   => navigationEffects.interpretNavigation(intent)
       case CommandIntent.Lsp(intent)          => projectLspEffects.interpretLsp(intent, state)
       case CommandIntent.Theme(intent)        => surfacePopupEffects.interpretThemeIntent(intent, state)

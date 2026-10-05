@@ -28,6 +28,7 @@ final private[spellcheck] case class DictionaryLoadResult(
     compoundEndFlag: Option[String],
     compoundWordMax: Option[Int],
     compoundCheckRules: CompoundCheckRules,
+    tryCharacters: String,
     breaksAtHyphens: Boolean = true
 )
 
@@ -253,6 +254,7 @@ object DictionaryLoader:
     val context = DictionaryContext(
       words = (fallbackWords ++ normalized.additionalWords).map(DictionaryWord.normalize),
       stems = stems,
+      tryCharacters = externalResults.map(_.tryCharacters).mkString,
       breaksAtHyphens = externalResults.forall(_.breaksAtHyphens),
       replacements = externalReplacements,
       failures = failures.distinct,
@@ -359,6 +361,7 @@ object DictionaryLoader:
       affixRules.compoundEndFlag,
       affixRules.compoundWordMax,
       affixRules.compoundCheckRules,
+      affixRules.tryCharacters,
       affixRules.breaksAtHyphens
     )
 
@@ -377,7 +380,8 @@ object DictionaryLoader:
       None,
       None,
       None,
-      CompoundCheckRules.empty
+      CompoundCheckRules.empty,
+      ""
     )
 
   private def affixPathFor(dictionaryPath: Path): Option[Path] =

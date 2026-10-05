@@ -42,9 +42,8 @@ with nothing configured. Each language loads from the first directory that has i
 several of these directories is loaded once. This lookup is only consulted when `spellcheck.dictionary_paths` is
 empty: a path you have configured yourself is always used as configured and never silently second-guessed.
 
-When no installed or bundled dictionary resolves for a configured language, spell check says so once per session, in a
-notice naming the directories searched, as soon as there is prose to check, and flags no words -- checking against an
-empty word list would flag every word. British English never reaches this: it has a bundled dictionary (below).
+When no dictionary resolves for the configured languages, every prose buffer shows one notice on its first line naming
+the directories searched, and no words are flagged -- checking against an empty word list would flag every word. British English never reaches this: it has a bundled dictionary (below).
 
 A config file saved by an earlier version keeps the values it was saved with (`spellcheck.enabled = false`,
 `spellcheck.languages = ["en"]`); change them to pick up the new defaults. `en` looks for `en.dic`, which Debian and
@@ -59,6 +58,24 @@ accepted, or if every part either side of an apostrophe is (`o'clock`, `author's
 letter as a straight one. Words with a digit in them (`1990s`, `19th-century`, `COVID-19`), all-capitals acronyms and
 capitalised words that do not start a sentence (probably names) are not checked. Only the wrong part of a hyphenated
 word is marked.
+
+## Corrections
+
+Right-click a misspelled word for a menu that leads with up to five corrections, then **Add to Dictionary**, **Ignore
+Once** and **Ignore All**. From the keyboard, the command palette offers **Show Spelling Suggestions** (the same menu,
+below the word at the cursor), **Ignore Misspelling Once** and **Ignore Misspelling Everywhere**. Choosing a correction
+replaces the word as one undoable edit.
+
+Corrections are searched for when asked for, never during the background check, so typing is not slowed by them. They
+come from the dictionary's `REP` table anywhere in the word, every single edit (a swapped, missing, extra or wrong
+letter) that is a word, dictionary stems within two edits, a stem within two edits of the word less a suffix with the
+suffix put back (`jugdment` to `judgement`), and a split into two words (`alot` to `a lot`). They are ranked by edit
+distance, with `REP` matches first, match the typo's capitalisation, and leave out words the dictionary marks
+`NOSUGGEST`.
+
+**Add to Dictionary** appends the word to `spellcheck.words` and saves the configuration, so it is accepted in every
+later session. **Ignore Once** hides that occurrence, and **Ignore All** hides the word wherever it appears (in any
+case), for the rest of the session only. An ignored occurrence shows again if the text at that place changes.
 
 ## How a dictionary is held
 

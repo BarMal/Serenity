@@ -72,6 +72,8 @@ final private[spellcheck] case class HunspellAffixRules(
     compoundWordMax: Option[Int],
     compoundCheckRules: CompoundCheckRules,
     onlyInCompoundFlag: Option[String],
+    noSuggestFlag: Option[String] = None,
+    tryCharacters: String = "",
     breaksAtHyphens: Boolean = true
 ):
 
@@ -178,6 +180,8 @@ private[spellcheck] object HunspellFormat:
     val compoundWordMax    = parseCompoundWordMax(lines)
     val compoundCheckRules = parseCompoundCheckRules(lines)
     val onlyInCompoundFlag = parseSingleValueDirective(lines, "ONLYINCOMPOUND")
+    val noSuggestFlag      = parseSingleValueDirective(lines, "NOSUGGEST")
+    val tryCharacters      = parseSingleValueDirective(lines, "TRY").getOrElse("")
     val breaksAtHyphens    = !lines.exists(_.trim == "BREAK 0")
     HunspellAffixRules(
       flagMode,
@@ -198,6 +202,8 @@ private[spellcheck] object HunspellFormat:
       compoundWordMax,
       compoundCheckRules,
       onlyInCompoundFlag,
+      noSuggestFlag,
+      tryCharacters,
       breaksAtHyphens
     )
 

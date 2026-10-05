@@ -286,12 +286,12 @@ final private[manager] class StateManagerConfigEffects(
   // is a no-op with no comment at the cursor, rather than surfacing an error for a command reachable from a
   // static context-menu/command-palette entry that doesn't know in advance whether it applies.
   private def addFlaggedWordAtCursorToDictionary(state: AppState): IO[Unit] =
-    SpellChecker.flaggedWordAtCursor(state) match
-      case Some(word) =>
-        val normalized = DictionaryWord.normalize(word)
-        updateSpellCheckConfig(config => config.copy(additionalWords = (config.additionalWords :+ normalized).distinct))
-      case None =>
-        IO.unit
+    SpellChecker.flaggedWordAtCursor(state).traverse_(addWordToDictionary)
+
+  /** Persists `word` in the configured custom words, which every later session loads. */
+  private[manager] def addWordToDictionary(word: String): IO[Unit] =
+    val normalized = DictionaryWord.normalize(word)
+    updateSpellCheckConfig(config => config.copy(additionalWords = (config.additionalWords :+ normalized).distinct))
 
   /** Moves the config file aside first and goes no further if that fails, so a reset never overwrites the only copy. A
     * session with no config file (safe mode, whose settings are not the user's) has nothing to reset.

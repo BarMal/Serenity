@@ -32,7 +32,8 @@ final private[spellcheck] class AffixedWordList(
     prefixesByAppend: Map[String, List[PreparedAffix]],
     needAffixFlag: Option[String],
     circumfixFlag: Option[String],
-    onlyInCompoundFlag: Option[String]
+    onlyInCompoundFlag: Option[String],
+    noSuggestFlag: Option[String]
 ):
 
   private val longestSuffix = suffixesByAppend.keysIterator.map(_.length).maxOption.getOrElse(0)
@@ -45,6 +46,55 @@ final private[spellcheck] class AffixedWordList(
   def isEmpty: Boolean = stems.isEmpty
 
   def size: Int = stems.size
+
+  /** Suggestible stems bucketed by length, each with the set of letters it uses as a bit mask, built on first use: only
+    * suggestion search needs it, so a session that never asks for one never pays for it.
+    */
+  private lazy val suggestibleStemsByLength: Map[Int, (Vector[String], Array[Int])] =
+    stems.iterator
+      .collect { case (stem, entries) if entries.exists(flags => !noSuggestFlag.exists(flags.contains)) => stem }
+      .toVector
+      .groupBy(_.length)
+      .view
+      .mapValues(bucket => (bucket, bucket.map(AffixedWordList.letterMask).toArray))
+      .toMap
+
+  /** Builds the suggestion index now rather than on the first request, for callers with idle time to spend. */
+  def prepareSuggestions(): Unit =
+    val _ = suggestibleStemsByLength
+
+  /** False only for a word the dictionary marks NOSUGGEST (offensive or obsolete), which is still accepted when typed.
+    */
+  def isSuggestible(word: String): Boolean =
+    stems.get(word).forall(_.exists(flags => !noSuggestFlag.exists(flags.contains)))
+
+  /** Stems within `maxDistance` Damerau-Levenshtein edits of `word`, nearest first, ties broken alphabetically. An edit
+    * changes at most two of the letters a word uses, which rules most stems out with a single integer comparison before
+    * any distance is computed.
+    */
+  def nearStems(word: String, maxDistance: Int): List[(String, Int)] =
+    val wordMask = AffixedWordList.letterMask(word)
+    ((word.length - maxDistance) to (word.length + maxDistance)).iterator
+      .flatMap(length => suggestibleStemsByLength.get(length))
+      .flatMap { (bucket, masks) =>
+        bucket.indices.iterator
+          .filter(index => Integer.bitCount(masks(index) ^ wordMask) <= 2 * maxDistance)
+          .flatMap(index => EditDistance.within(word, bucket(index), maxDistance).map(bucket(index) -> _))
+      }
+      .toList
+      .sortBy((stem, distance) => (distance, stem))
+
+  /** Each way `word` could be a stem plus one suffix, ignoring whether the stem exists: the bases a misspelling's
+    * correction should be searched among, to be re-suffixed once corrected.
+    */
+  def suffixSplits(word: String): List[(PreparedAffix, String)] =
+    suffixStrips(word).filter((affix, _) => standalone(affix)).toList
+
+  /** `stem` with `affix` applied if `stem` can take it, which is what `contains` would accept. */
+  def withSuffix(stem: String, affix: PreparedAffix): Option[String] =
+    Option.when(stem.endsWith(affix.strip) && affix.conditionHolds(stem) && stemCarries(stem, affix.flag)) {
+      stem.dropRight(affix.strip.length) + affix.append
+    }
 
   private def entries(stem: String): List[Set[String]] =
     stems.getOrElse(stem, Nil).filterNot(flags => onlyInCompoundFlag.exists(flags.contains))
@@ -124,6 +174,14 @@ private[spellcheck] object AffixedWordList:
 
   val empty: AffixedWordList = build(Iterator.empty, HunspellAffixRules.empty)
 
+  /** The letters of `word` as bits: a to z one each, every other character folded onto six more. Folding only ever
+    * merges bits, so two words an edit apart never differ in more than the two bits an edit can change.
+    */
+  def letterMask(word: String): Int =
+    word.foldLeft(0) { (mask, char) =>
+      mask | (1 << (if char >= 'a' && char <= 'z' then char - 'a' else 26 + char.toInt % 6))
+    }
+
   def build(entries: Iterator[HunspellEntry], rules: HunspellAffixRules): AffixedWordList =
     val all = entries.toVector
     // A dictionary has a few hundred distinct flag sets across ~100k entries; sharing them is most of the saving.
@@ -139,7 +197,8 @@ private[spellcheck] object AffixedWordList:
       prepare(rules.prefixes, suffix = false).groupBy(_.append),
       rules.needAffixFlag,
       rules.circumfixFlag,
-      rules.onlyInCompoundFlag
+      rules.onlyInCompoundFlag,
+      rules.noSuggestFlag
     )
 
   private def prepare(rules: Map[String, List[HunspellAffixRule]], suffix: Boolean): List[PreparedAffix] =
