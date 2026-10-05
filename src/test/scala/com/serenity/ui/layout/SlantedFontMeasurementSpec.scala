@@ -1,9 +1,9 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 import java.awt.geom.AffineTransform
 
+import com.serenity.state.models.TextVisualLine
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
