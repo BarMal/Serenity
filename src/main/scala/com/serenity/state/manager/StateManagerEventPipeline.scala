@@ -223,7 +223,7 @@ final private[manager] class StateManagerEventPipeline(
     typedKeyModel(event, model, nowNanos).filterNot(typed => joining && keepsUndoSnapshot(model, typed))
 
   private def keepsUndoSnapshot(before: Model, after: Model): Boolean =
-    (after.undo.undoStack ne before.undo.undoStack) || (after.undo.pendingGroup ne before.undo.pendingGroup)
+    after.undo.recordedSteps != before.undo.recordedSteps
 
   private def typedKeyModel(event: Event, model: Model, nowNanos: Long): Option[Model] =
     event match

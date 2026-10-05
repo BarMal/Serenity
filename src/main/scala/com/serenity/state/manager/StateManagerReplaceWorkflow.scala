@@ -273,7 +273,7 @@ private[manager] object ReplaceWorkflowTransitions:
   private def withWorkflowUndo(undo: UndoState, bufferState: AppState, bufferId: BufferId, buffer: Buffer): UndoState =
     bufferState.persisted.layout.activeEditorPaneId match
       case Some(paneId) =>
-        undo.flushPendingGroup.pushUndo(HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(buffer)))
+        undo.pushUndo(HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(buffer)))
       case None =>
         undo
 

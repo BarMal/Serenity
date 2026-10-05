@@ -63,7 +63,7 @@ final private[manager] class ModelCommit(
         StateManagerOperationBoundary.prepareCommit(next.app, current.app) match
           case Right(committed) =>
             (
-              next.copy(app = committed),
+              ModelCommit.settled(next, committed),
               operations.afterCommit(current.app, committed) >> onApplied(committed) >>
                 reduced.effects.filterNot(ModelCommit.isModelEffect).traverse_(interpretEffect)
             )
@@ -83,12 +83,16 @@ final private[manager] class ModelCommit(
           val next = ClosedBufferRetention.forgetting(current.app, transitioned)
           StateManagerOperationBoundary.prepareCommit(next.app, fallbackState) match
             case Right(committedState) =>
-              (next.copy(app = committedState), operations.afterCommit(fallbackState, committedState))
+              (ModelCommit.settled(next, committedState), operations.afterCommit(fallbackState, committedState))
             case Left(errors) =>
               (current.copy(app = fallbackState), operations.logRejectedCommit(errors))
     }
 
 private[manager] object ModelCommit:
+
+  /** `next` with `committed` as its app state, keeping undo history only for the buffers still open in it. */
+  private def settled(next: Model, committed: AppState): Model =
+    Model(committed, next.undo.forOpenBuffers(committed.persisted.buffers))
 
   /** Folds the reducer effects that only change the model itself -- undo bookkeeping -- into `model`, so they commit in
     * the same write as the state they came with. Every other effect is left to the effect interpreter, in order.

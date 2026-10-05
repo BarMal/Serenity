@@ -297,21 +297,22 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
   behavior of "Cross-pane undo"
 
-  it should "snap focus to the pane where the edit happened when undoing" in new UndoFixture:
+  // Undo used to pop one app-wide stack, jumping back to pane one and undoing its edit from pane two; each buffer now
+  // keeps its own history (#1930).
+  it should "leave another pane's buffer and the focus alone when undoing" in new UndoFixture:
     val bufferId1 = setupBuffer("pane one")
-    val pane1     = getPaneId
 
     applyEvent(InsertChar('!'))
 
-    setupAnotherBuffer("pane two")
-    getPaneId
+    val bufferId2 = setupAnotherBuffer("pane two")
+    val pane2     = getPaneId
 
-    // Focus is on pane2; undo should snap back to pane1
     applyEvent(Undo)
 
     val state = getState
-    state.persisted.focus shouldBe Focus.EditorPane(pane1)
-    getContent(bufferId1) shouldBe "pane one"
+    state.persisted.focus shouldBe Focus.EditorPane(pane2)
+    getContent(bufferId1) shouldBe "pane one!"
+    getContent(bufferId2) shouldBe "pane two"
 
   trait UndoFixture:
 

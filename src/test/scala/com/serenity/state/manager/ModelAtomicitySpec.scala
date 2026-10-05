@@ -117,7 +117,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     model.app.persisted.buffers.get(bufferId).map(_.document.content.toString)
 
   private def hasUndoHistory(model: Model): Boolean =
-    model.undo.pendingGroup.nonEmpty || model.undo.undoStack.nonEmpty
+    model.undo.undoStack.nonEmpty
 
   "An edit" should "commit its text and its undo entry in one write" in {
     val program =
