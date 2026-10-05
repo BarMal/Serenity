@@ -17,6 +17,7 @@ object OdtDocumentCodec:
   private val StyleNs                 = "urn:oasis:names:tc:opendocument:xmlns:style:1.0"
   private val TextNs                  = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
   private val FoNs                    = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+  private val XlinkNs                 = "http://www.w3.org/1999/xlink"
   private val SupportedArchiveEntries = Set("mimetype", "META-INF/manifest.xml", "content.xml")
 
   private val SupportedElements = Set(
@@ -32,6 +33,7 @@ object OdtDocumentCodec:
     "h",
     "span",
     "s",
+    "a",
     "tab",
     "line-break"
   )
@@ -201,6 +203,9 @@ object OdtDocumentCodec:
             .map(mergeStyles(currentStyle, _))
             .getOrElse(currentStyle)
           runsFromChildren(element, spanStyle, styles)
+        else if element.getNamespaceURI == TextNs && element.getLocalName == "a" then
+          val linkedStyle = attribute(element, XlinkNs, "href").fold(currentStyle)(currentStyle.withLink)
+          runsFromChildren(element, linkedStyle, styles)
         else if element.getNamespaceURI == TextNs && element.getLocalName == "s" then
           val count = attribute(element, TextNs, "c").flatMap(_.toIntOption).getOrElse(1)
           List(RichTextRun(" " * count.max(1), currentStyle))
@@ -217,7 +222,8 @@ object OdtDocumentCodec:
       marks = base.marks ++ overlay.marks,
       fontFamily = overlay.fontFamily.orElse(base.fontFamily),
       fontSize = overlay.fontSize.orElse(base.fontSize),
-      color = overlay.color.orElse(base.color)
+      color = overlay.color.orElse(base.color),
+      link = base.link
     )
 
   private def contentXml(document: RichTextDocument): String =
@@ -234,6 +240,7 @@ object OdtDocumentCodec:
        |    xmlns:office="$OfficeNs"
        |    xmlns:style="$StyleNs"
        |    xmlns:text="$TextNs"
+       |    xmlns:xlink="$XlinkNs"
        |    xmlns:fo="$FoNs">
        |  <office:automatic-styles>
        |${automaticStylesXml(textStyleNames, paragraphStyleNames)}
@@ -246,7 +253,7 @@ object OdtDocumentCodec:
        |</office:document-content>""".stripMargin
 
   private def distinctRunStyles(document: RichTextDocument): List[RichTextStyle] =
-    document.paragraphs.flatMap(_.runs.map(_.style)).filterNot(_ == RichTextStyle.empty).distinct
+    document.paragraphs.flatMap(_.runs.map(_.style.withoutLink)).filterNot(_ == RichTextStyle.empty).distinct
 
   private def automaticStylesXml(
     textStyleNames: Map[RichTextStyle, String],
@@ -306,18 +313,25 @@ object OdtDocumentCodec:
           paragraphStyleNames(OdtParagraphStyle(paragraph.alignment, dropCapLinesOf(paragraph.role)))
         paragraph.role match
           case ParagraphRole.Body | ParagraphRole.DropCap(_) =>
-            s"""      <text:p text:style-name="$styleName">${runsXml(paragraph.runs, textStyleNames)}</text:p>"""
+            s"""      <text:p text:style-name="$styleName">${runsXml(paragraph, textStyleNames)}</text:p>"""
           case ParagraphRole.Heading(level) =>
-            s"""      <text:h text:outline-level="${level.max(1)}" text:style-name="$styleName">${runsXml(paragraph.runs, textStyleNames)}</text:h>"""
+            s"""      <text:h text:outline-level="${level.max(1)}" text:style-name="$styleName">${runsXml(paragraph, textStyleNames)}</text:h>"""
       )
       .mkString("\n")
 
-  private def runsXml(runs: List[RichTextRun], textStyleNames: Map[RichTextStyle, String]): String =
-    runs.map { run =>
-      val content = run.atom.fold(runTextXml(run.text)) { case InlineAtom.SoftBreak => "<text:line-break/>" }
-      if run.style == RichTextStyle.empty then content
-      else s"""<text:span text:style-name="${textStyleNames(run.style)}">$content</text:span>"""
+  private def runsXml(paragraph: RichTextParagraph, textStyleNames: Map[RichTextStyle, String]): String =
+    paragraph.linkSpans.map { (target, runs) =>
+      val spanXml = runs.map(runXml(_, textStyleNames)).mkString
+      target.fold(spanXml)(link =>
+        s"""<text:a xlink:type="simple" xlink:href="${escapeAttribute(link)}">$spanXml</text:a>"""
+      )
     }.mkString
+
+  private def runXml(run: RichTextRun, textStyleNames: Map[RichTextStyle, String]): String =
+    val content = run.atom.fold(runTextXml(run.text)) { case InlineAtom.SoftBreak => "<text:line-break/>" }
+    val style   = run.style.withoutLink
+    if style == RichTextStyle.empty then content
+    else s"""<text:span text:style-name="${textStyleNames(style)}">$content</text:span>"""
 
   private def runTextXml(text: String): String =
     text

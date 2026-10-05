@@ -363,6 +363,24 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
     try test(s"http://127.0.0.1:${server.getAddress.getPort}/resource", requests)
     finally server.stop(0)
 
+  it should "round-trip hyperlink targets as text:a elements" in {
+    val link   = RichTextStyle.empty.withLink("https://example.com/a?x=1&y=2")
+    val anchor = RichTextStyle.empty.withLink("#chapter-1")
+    val source = RichTextDocument(
+      List(
+        RichTextParagraph(List(RichTextRun("see "), RichTextRun("the guide", link), RichTextRun(" and "))),
+        RichTextParagraph(List(RichTextRun("again", link), RichTextRun("up", anchor)))
+      )
+    )
+
+    val bytes   = OdtDocumentCodec.writeBytes(source)
+    val decoded = OdtDocumentCodec.readBytesWithFidelity(bytes).value
+
+    decoded.document shouldBe source
+    decoded.fidelity.isLossless shouldBe true
+    zipEntryText(bytes, "content.xml") should include("""xlink:href="https://example.com/a?x=1&amp;y=2"""")
+  }
+
   private def zipEntryText(bytes: Array[Byte], name: String): String =
     val input = ZipInputStream(java.io.ByteArrayInputStream(bytes))
     try

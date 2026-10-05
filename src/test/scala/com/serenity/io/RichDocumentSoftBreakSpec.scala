@@ -52,9 +52,8 @@ class RichDocumentSoftBreakSpec extends AnyFlatSpec with Matchers with OptionVal
 
   private val rtfWithSoftBreak = """{\rtf1\ansi\pard first\line line\par second\par}"""
 
-  "Opening a DOCX with a soft line break" should "keep one rope line per paragraph" in {
+  "Opening a DOCX with a soft line break" should "keep one rope line per paragraph" in
     expectOneLinePerParagraph(open(packageFile("draft.docx", "word/document.xml", docxWithSoftBreak)))
-  }
 
   it should "edit the paragraph under the caret and keep every paragraph's formatting on save" in {
     val path    = packageFile("draft.docx", "word/document.xml", docxWithSoftBreak)
@@ -77,8 +76,9 @@ class RichDocumentSoftBreakSpec extends AnyFlatSpec with Matchers with OptionVal
 
   it should "export the soft break as a line break when saved as plain text or Markdown" in {
     val manager = FileManager()
-    val opened  = manager.loadFile(packageFile("draft.docx", "word/document.xml", docxWithSoftBreak), bufferId).unsafeRunSync()
-    val folder  = Files.createTempDirectory("serenity-soft-break-export")
+    val opened =
+      manager.loadFile(packageFile("draft.docx", "word/document.xml", docxWithSoftBreak), bufferId).unsafeRunSync()
+    val folder = Files.createTempDirectory("serenity-soft-break-export")
 
     val _ = manager.saveBuffer(opened, folder.resolve("export.txt")).unsafeRunSync()
     val _ = manager.saveBuffer(opened, folder.resolve("export.md")).unsafeRunSync()
@@ -87,9 +87,8 @@ class RichDocumentSoftBreakSpec extends AnyFlatSpec with Matchers with OptionVal
     Files.readString(folder.resolve("export.md")) shouldBe "**first**\\\n**line**\n*second*"
   }
 
-  "Opening an ODT with a soft line break" should "keep one rope line per paragraph" in {
+  "Opening an ODT with a soft line break" should "keep one rope line per paragraph" in
     expectOneLinePerParagraph(open(packageFile("draft.odt", "content.xml", odtWithSoftBreak)))
-  }
 
   "Opening an RTF with a soft line break" should "keep one rope line per paragraph" in {
     val path = Files.createTempDirectory("serenity-soft-break").resolve("draft.rtf")

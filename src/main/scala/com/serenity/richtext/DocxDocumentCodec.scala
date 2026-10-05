@@ -13,13 +13,18 @@ import org.w3c.dom.{Document as XmlDocument, Element, Node}
 
 /** Reads and writes Word Open XML documents through Serenity's native rich text model. */
 object DocxDocumentCodec:
-  private val WNs = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  private val WNs    = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  private val RelNs  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+  private val PkgRel = "http://schemas.openxmlformats.org/package/2006/relationships"
+
+  private val DocumentRelationshipsEntry = "word/_rels/document.xml.rels"
+  private val HyperlinkRelationshipType  = s"$RelNs/hyperlink"
 
   private val SupportedArchiveEntries = Set(
     "[Content_Types].xml",
     "_rels/.rels",
     "word/document.xml",
-    "word/_rels/document.xml.rels"
+    DocumentRelationshipsEntry
   )
 
   private val SupportedElements = Set(
@@ -61,11 +66,15 @@ object DocxDocumentCodec:
         throw RichTextCodecException("DOCX archive is missing word/document.xml")
       }
       val xml = parseXml(content)
+      val links = RichTextArchive
+        .zipEntry(bytes, DocumentRelationshipsEntry, "DOCX")
+        .map(hyperlinkTargets)
+        .getOrElse(Map.empty)
       val paragraphs = firstElement(xml.getElementsByTagNameNS(WNs, "body"))
         .map(body =>
           childElements(body)
             .filter(element => element.getNamespaceURI == WNs && element.getLocalName == "p")
-            .map(paragraphFromElement)
+            .map(paragraphFromElement(_, links))
         )
         .getOrElse(Nil)
 
@@ -99,20 +108,33 @@ object DocxDocumentCodec:
     }
 
   def writeBytes(document: RichTextDocument): Array[Byte] =
-    val output = ByteArrayOutputStream()
-    val zip    = ZipOutputStream(output, StandardCharsets.UTF_8)
+    val normalized = document.normalized
+    val linkIds    = externalLinkIds(normalized)
+    val output     = ByteArrayOutputStream()
+    val zip        = ZipOutputStream(output, StandardCharsets.UTF_8)
     try
       writeZipEntry(zip, "[Content_Types].xml", contentTypesXml)
       writeZipEntry(zip, "_rels/.rels", packageRelationshipsXml)
-      writeZipEntry(zip, "word/document.xml", documentXml(document.normalized))
-      writeZipEntry(zip, "word/_rels/document.xml.rels", documentRelationshipsXml)
+      writeZipEntry(zip, "word/document.xml", documentXml(normalized, linkIds))
+      writeZipEntry(zip, DocumentRelationshipsEntry, documentRelationshipsXml(linkIds))
     finally zip.close()
     output.toByteArray
 
   private def parseXml(bytes: Array[Byte]): XmlDocument =
     RichTextXmlParser.parse(bytes)
 
-  private def paragraphFromElement(element: Element): RichTextParagraph =
+  /** Relationship id to external target, for the relationships that are hyperlinks. */
+  private def hyperlinkTargets(relationshipsXml: Array[Byte]): Map[String, String] =
+    elements(parseXml(relationshipsXml).getElementsByTagNameNS(PkgRel, "Relationship"))
+      .filter(_.getAttribute("Type") == HyperlinkRelationshipType)
+      .flatMap(relationship =>
+        Option(relationship.getAttribute("Id"))
+          .filter(_.nonEmpty)
+          .zip(Option(relationship.getAttribute("Target")).filter(_.nonEmpty))
+      )
+      .toMap
+
+  private def paragraphFromElement(element: Element, links: Map[String, String]): RichTextParagraph =
     val paragraphProperties = childElement(element, WNs, "pPr")
     val alignment = paragraphProperties
       .flatMap(childElement(_, WNs, "jc"))
@@ -129,7 +151,7 @@ object DocxDocumentCodec:
       )
       .getOrElse(ParagraphRole.Body)
     RichTextParagraph(
-      childElements(element).flatMap(runsFromNode),
+      childElements(element).flatMap(runsFromNode(_, links, None)),
       alignment,
       role
     ).normalized
@@ -160,8 +182,11 @@ object DocxDocumentCodec:
       ParagraphRole.Heading(level.max(1))
     }
 
-  private def runsFromRunElement(element: Element): List[RichTextRun] =
-    val style = childElement(element, WNs, "rPr").map(styleFromRunProperties).getOrElse(RichTextStyle.empty)
+  private def runsFromRunElement(element: Element, link: Option[String]): List[RichTextRun] =
+    val style = childElement(element, WNs, "rPr")
+      .map(styleFromRunProperties)
+      .getOrElse(RichTextStyle.empty)
+      .copy(link = link)
     childElements(element).flatMap {
       case child if child.getNamespaceURI == WNs && child.getLocalName == "t" =>
         Option(child.getTextContent).map(RichTextRun(_, style)).toList
@@ -173,9 +198,18 @@ object DocxDocumentCodec:
         Nil
     }
 
-  private def runsFromNode(element: Element): List[RichTextRun] =
-    if element.getNamespaceURI == WNs && element.getLocalName == "r" then runsFromRunElement(element)
-    else childElements(element).flatMap(runsFromNode)
+  private def runsFromNode(element: Element, links: Map[String, String], link: Option[String]): List[RichTextRun] =
+    if element.getNamespaceURI == WNs && element.getLocalName == "r" then runsFromRunElement(element, link)
+    else
+      val childLink =
+        if element.getNamespaceURI == WNs && element.getLocalName == "hyperlink" then hyperlinkTarget(element, links)
+        else link
+      childElements(element).flatMap(runsFromNode(_, links, childLink))
+
+  private def hyperlinkTarget(element: Element, links: Map[String, String]): Option[String] =
+    attribute(element, RelNs, "id")
+      .flatMap(links.get)
+      .orElse(attribute(element, WNs, "anchor").map("#" + _))
 
   private def styleFromRunProperties(element: Element): RichTextStyle =
     RichTextStyle(
@@ -207,22 +241,32 @@ object DocxDocumentCodec:
       .filter(hex => hex.matches("[0-9a-fA-F]{6}") && hex != "000000")
       .map(hex => s"#${hex.toLowerCase}")
 
-  private def documentXml(document: RichTextDocument): String =
+  /** Relationship ids for the document's external link targets, in order of first use. Anchors need none. */
+  private def externalLinkIds(document: RichTextDocument): Map[String, String] =
+    document.paragraphs
+      .flatMap(_.runs.flatMap(_.style.link))
+      .filterNot(_.startsWith("#"))
+      .distinct
+      .zipWithIndex
+      .map((target, index) => target -> s"rId${index + 1}")
+      .toMap
+
+  private def documentXml(document: RichTextDocument, linkIds: Map[String, String]): String =
     s"""<?xml version="1.0" encoding="UTF-8"?>
-       |<w:document xmlns:w="$WNs">
+       |<w:document xmlns:w="$WNs" xmlns:r="$RelNs">
        |  <w:body>
-       |${paragraphsXml(document)}
+       |${paragraphsXml(document, linkIds)}
        |    <w:sectPr/>
        |  </w:body>
        |</w:document>""".stripMargin
 
-  private def paragraphsXml(document: RichTextDocument): String =
-    document.paragraphs.map(paragraphXml).mkString("\n")
+  private def paragraphsXml(document: RichTextDocument, linkIds: Map[String, String]): String =
+    document.paragraphs.map(paragraphXml(_, linkIds)).mkString("\n")
 
-  private def paragraphXml(paragraph: RichTextParagraph): String =
+  private def paragraphXml(paragraph: RichTextParagraph, linkIds: Map[String, String]): String =
     s"""    <w:p>
        |${paragraphPropertiesXml(paragraph)}
-       |${runsXml(paragraph.runs)}
+       |${paragraph.linkSpans.map(linkSpanXml(_, linkIds)).mkString("\n")}
        |    </w:p>""".stripMargin
 
   private def paragraphPropertiesXml(paragraph: RichTextParagraph): String =
@@ -250,10 +294,20 @@ object DocxDocumentCodec:
       case ParagraphAlignment.Right   => "right"
       case ParagraphAlignment.Justify => "both"
 
-  private def runsXml(runs: List[RichTextRun]): String =
-    runs
+  private def linkSpanXml(span: (Option[String], List[RichTextRun]), linkIds: Map[String, String]): String =
+    val (target, runs) = span
+    val runsXml = runs
       .map(run => s"""      <w:r>${runPropertiesXml(run.style)}${runContentXml(run)}</w:r>""")
       .mkString("\n")
+    target.fold(runsXml) { link =>
+      val reference = linkIds
+        .get(link)
+        .map(id => s"""r:id="$id"""")
+        .getOrElse(s"""w:anchor="${escapeAttribute(link.stripPrefix("#"))}"""")
+      s"""      <w:hyperlink $reference>
+         |$runsXml
+         |      </w:hyperlink>""".stripMargin
+    }
 
   private def runContentXml(run: RichTextRun): String =
     run.atom.fold(runTextXml(run.text)) { case InlineAtom.SoftBreak => "<w:br/>" }
@@ -300,9 +354,18 @@ object DocxDocumentCodec:
       |  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
       |</Relationships>""".stripMargin
 
-  private def documentRelationshipsXml: String =
-    """<?xml version="1.0" encoding="UTF-8"?>
-      |<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>""".stripMargin
+  private def documentRelationshipsXml(linkIds: Map[String, String]): String =
+    val relationships = linkIds.toList
+      .sortBy(_._2.stripPrefix("rId").toInt)
+      .map((target, id) =>
+        s"""  <Relationship Id="$id" Type="$HyperlinkRelationshipType" Target="${escapeAttribute(
+            target
+          )}" TargetMode="External"/>"""
+      )
+    s"""<?xml version="1.0" encoding="UTF-8"?>
+       |<Relationships xmlns="$PkgRel">
+       |${relationships.mkString("\n")}
+       |</Relationships>""".stripMargin
 
   private def writeZipEntry(zip: ZipOutputStream, name: String, content: String): Unit =
     zip.putNextEntry(ZipEntry(name))

@@ -48,7 +48,8 @@ final case class RichTextStyle(
     marks: Set[InlineMark] = Set.empty,
     fontFamily: Option[String] = None,
     fontSize: Option[Float] = None,
-    color: Option[String] = None
+    color: Option[String] = None,
+    link: Option[String] = None
 ):
   def withMark(mark: InlineMark): RichTextStyle =
     copy(marks = marks + mark)
@@ -64,6 +65,14 @@ final case class RichTextStyle(
 
   def withColor(color: String): RichTextStyle =
     copy(color = Some(color.trim).filter(_.nonEmpty))
+
+  /** `target` is an external URL, or `#name` for an anchor inside the document. */
+  def withLink(target: String): RichTextStyle =
+    copy(link = Some(target.trim).filter(_.nonEmpty))
+
+  /** The style with its link removed: what a format that stores links outside character formatting styles by. */
+  def withoutLink: RichTextStyle =
+    copy(link = None)
 
 object RichTextStyle:
   val empty: RichTextStyle = RichTextStyle()
@@ -119,6 +128,13 @@ final case class RichTextParagraph(
 
   def exportText: String =
     runs.map(_.exportText).mkString
+
+  /** Consecutive runs grouped by link target, in order, for formats that wrap linked text in a container element. */
+  def linkSpans: List[(Option[String], List[RichTextRun])] =
+    runs.foldRight(List.empty[(Option[String], List[RichTextRun])]) {
+      case (run, (target, spanRuns) :: tail) if target == run.style.link => (target, run :: spanRuns) :: tail
+      case (run, acc)                                                    => (run.style.link, List(run)) :: acc
+    }
 
   /** True when no run is empty and no two adjacent runs share a style -- the fixed point of [[normalized]]. */
   def isNormalized: Boolean =
@@ -224,20 +240,35 @@ final case class RichTextParagraph(
   private[richtext] def styleAtInsertion(startOffset: Int, endOffset: Int): RichTextStyle =
     if startOffset < endOffset then
       stylesInRange(startOffset, endOffset).reverse.headOption.getOrElse(RichTextStyle.empty)
-    else
-      runs
-        .foldLeft((0, Option.empty[RichTextStyle])) {
-          case ((currentOffset, found), run) =>
-            val runStart   = currentOffset
-            val runEnd     = currentOffset + run.text.length
-            val nextOffset = runEnd
-            val containsOffset =
-              (runStart < startOffset && startOffset <= runEnd) ||
-                (startOffset == 0 && runStart == 0)
-            (nextOffset, found.orElse(Option.when(containsOffset)(run.style)))
-        }
-        ._2
-        .getOrElse(RichTextStyle.empty)
+    else withLinkOnlyBetweenLinkedText(startOffset, styleBeforeCaret(startOffset))
+
+  /** Typing continues a link only from inside it, not from its edges, matching word processors. */
+  private def withLinkOnlyBetweenLinkedText(offset: Int, style: RichTextStyle): RichTextStyle =
+    val linkContinues =
+      offset > 0 &&
+        styleOfCharacter(offset - 1).exists(_.link == style.link) &&
+        styleOfCharacter(offset).exists(_.link == style.link)
+    if style.link.isEmpty || linkContinues then style else style.withoutLink
+
+  private def styleOfCharacter(index: Int): Option[RichTextStyle] =
+    runsWithStartOffsets.collectFirst {
+      case (run, runStart) if runStart <= index && index < runStart + run.text.length => run.style
+    }
+
+  private def styleBeforeCaret(startOffset: Int): RichTextStyle =
+    runs
+      .foldLeft((0, Option.empty[RichTextStyle])) {
+        case ((currentOffset, found), run) =>
+          val runStart   = currentOffset
+          val runEnd     = currentOffset + run.text.length
+          val nextOffset = runEnd
+          val containsOffset =
+            (runStart < startOffset && startOffset <= runEnd) ||
+              (startOffset == 0 && runStart == 0)
+          (nextOffset, found.orElse(Option.when(containsOffset)(run.style)))
+      }
+      ._2
+      .getOrElse(RichTextStyle.empty)
 
   private def mergeRuns(input: List[RichTextRun]): List[RichTextRun] =
     input.foldRight(List.empty[RichTextRun]) {
@@ -294,7 +325,8 @@ final class RichTextDocument private (private val tree: ParagraphTree, everyPara
   def plainText: String =
     paragraphs.map(_.plainText).mkString("\n")
 
-  /** Plain text for formats with no inline atoms: each atom becomes the text it stands for, so a soft break is `'\n'`. */
+  /** Plain text for formats with no inline atoms: each atom becomes the text it stands for, so a soft break is `'\n'`.
+    */
   def exportText: String =
     paragraphs.map(_.exportText).mkString("\n")
 
