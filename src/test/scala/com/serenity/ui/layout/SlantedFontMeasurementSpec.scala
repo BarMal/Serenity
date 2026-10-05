@@ -52,20 +52,23 @@ class SlantedFontMeasurementSpec extends AnyFlatSpec with Matchers:
       val legacy = legacyRows(prose, widthPx, slanted)
       withClue(s"at $widthPx px: ") {
         rows.map(_.text) shouldBe legacy.map(_.text)
-        rows.zip(legacy).foreach { case (row, oracle) =>
-          withClue(s"row '${row.text}': ") {
-            row.widthPx shouldBe oracle.widthPx +- tolerance
-            row.caretStops.map(_.xPx).zip(oracle.caretStops.map(_.xPx)).foreach { case (x, oracleX) =>
-              x shouldBe oracleX +- tolerance
+        rows.zip(legacy).foreach {
+          case (row, oracle) =>
+            withClue(s"row '${row.text}': ") {
+              row.widthPx shouldBe oracle.widthPx +- tolerance
+              row.caretStops.map(_.xPx).zip(oracle.caretStops.map(_.xPx)).foreach {
+                case (x, oracleX) =>
+                  x shouldBe oracleX +- tolerance
+              }
             }
-          }
         }
       }
     }
 
   it should "measure caret positions as per-row measurement did" in {
-    val xs     = TextLayoutSnapshot.caretXsForText(prose, slanted, frc)
-    val legacy = LegacyLineMeasurement.caretXs(prose, 0, singleFontResolver(slanted), frc, true, CellMetrics.fromFont(slanted))
+    val xs = TextLayoutSnapshot.caretXsForText(prose, slanted, frc)
+    val legacy =
+      LegacyLineMeasurement.caretXs(prose, 0, singleFontResolver(slanted), frc, true, CellMetrics.fromFont(slanted))
     xs.length shouldBe legacy.length
     xs.zip(legacy).foreach((x, expected) => x shouldBe expected +- tolerance)
   }
