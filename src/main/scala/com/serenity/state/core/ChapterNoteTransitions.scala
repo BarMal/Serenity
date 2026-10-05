@@ -3,7 +3,7 @@ package com.serenity.state.core
 import com.serenity.document.{DocumentNavigation, DocumentOutline}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.SplitAxis
+import com.serenity.ui.layout.{SplitAxis, Symbol}
 
 /** Opening the note for the chapter the cursor is in. A note's text lives in a hidden buffer, so it edits and scrolls
   * like any other pane; the manuscript's [[Annotations.notes]] records which buffer belongs to which chapter.
@@ -36,9 +36,19 @@ object ChapterNoteTransitions:
       state.runtime.copy(notesPane = state.runtime.notesPane.map(pane => pane.copy(pinned = !pane.pinned)))
     )
 
+  /** A buffer's chapter headings in document order, parsed again only when its text changes (#1848). */
+  val chapterHeadings: DerivedValue[Buffer, Buffer, List[(HeadingIdentity, Symbol)]] =
+    DerivedValue(
+      inputs = identity,
+      references = buffer => List(buffer.document.content, buffer.document.language, buffer.richText.richTextDocument),
+      compute = buffer => HeadingIdentity.forHeadings(DocumentOutline.forBuffer(buffer))
+    )
+
   /** The note a position in `buffer` belongs to: the chapter whose heading is the last at or before it. */
   def chapterKeyAt(buffer: Buffer, cursor: CursorPosition): Option[NoteKey] =
-    val headings = HeadingIdentity.forHeadings(DocumentOutline.forBuffer(buffer))
+    chapterKeyIn(chapterHeadings.compute(buffer), cursor)
+
+  def chapterKeyIn(headings: List[(HeadingIdentity, Symbol)], cursor: CursorPosition): Option[NoteKey] =
     DocumentNavigation
       .currentSymbol(headings.map(_._2), cursor)
       .flatMap(current =>

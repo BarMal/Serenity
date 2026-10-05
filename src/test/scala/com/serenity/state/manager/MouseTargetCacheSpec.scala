@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.awt.Font
 
 import com.serenity.command.{Command, CommandPaletteState, CommandRegistry, CommandRunner, CommandRunnerSurface}
-import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
+import com.serenity.config.{AppConfig, InterfaceDensity, StatusLinePlacement, TextAreaInsets}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -78,6 +78,18 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val second = authoritativeScene.layoutKeyFor(unrelatedChange, ViewportSize(80, 24))
 
     second should be theSameInstanceAs first
+  }
+
+  it should "bring the floating status line back into the key once a typing burst goes quiet" in {
+    val floating = AppConfig.default.withStatusLinePlacement(StatusLinePlacement.Floating)
+    val state    = stateWith(Buffer.fromString(bufferId, "alpha"), floating)
+    val typing   = state.copy(runtime = state.runtime.observeTyping(1L))
+    val quiet    = typing.copy(runtime = typing.runtime.copy(typingActivity = TypingActivity.idle))
+    val scene    = AuthoritativeUiScene()
+
+    quiet.floatingStatusLineSurface should not be empty
+    scene.layoutKeyFor(typing, ViewportSize(80, 24)).derivedStatusLineSurface shouldBe empty
+    scene.layoutKeyFor(quiet, ViewportSize(80, 24)).derivedStatusLineSurface shouldBe quiet.floatingStatusLineSurface
   }
 
   it should "cache full editor pane layouts for mouse hit testing" in {

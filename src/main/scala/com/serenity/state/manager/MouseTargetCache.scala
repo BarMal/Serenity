@@ -4,7 +4,7 @@ import java.awt.Font
 import java.util.LinkedHashMap
 
 import com.serenity.config.AppConfigOps.*
-import com.serenity.config.{AppConfig, InterfaceDensity, StatusLineConfig, TextAreaInsets}
+import com.serenity.config.{InterfaceDensity, StatusLineConfig, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.Rope
@@ -105,41 +105,37 @@ final private[manager] case class MouseTargetLayoutKey(
 
 private[manager] object MouseTargetLayoutKey:
 
-  /** The state fields [[compute]] actually reads. Everything else it derives (focusPaneId, orderedPaneIds, paneBuffers,
-    * paneSnapshotInputs, pinnedPanels, lineNumberContent, derivedStatusLineSurface) is a pure function of these plus
-    * viewportSize, so if none of these references changed since the last call, the previously computed key is still
-    * correct and the full pane/buffer/surface walk can be skipped -- see [[MouseTargetLayoutKeyCache]], the memo that
-    * uses this fast-path check.
-    */
-  final private[manager] case class FastPathInputs(
-      viewportSize: ViewportSize,
-      config: AppConfig,
-      layout: Layout,
-      focus: Focus,
-      buffers: Map[BufferId, Buffer],
-      uiSurfaces: List[UiSurface],
-      modalStack: List[ModalDialog]
-  )
+  final private[manager] case class Sized(state: AppState, viewportSize: ViewportSize)
 
-  private[manager] def fastPathInputs(state: AppState, viewportSize: ViewportSize): FastPathInputs =
-    FastPathInputs(
-      viewportSize,
-      state.persisted.config,
-      state.persisted.layout,
-      state.persisted.focus,
-      state.persisted.buffers,
-      state.runtime.uiSurfaces,
-      state.runtime.modalStack
+  /** The key as a derived value (#1852), recomputed only when a state field [[compute]] reads is a different reference.
+    * Every field it reads belongs in `references`: one left out serves a stale key, and a stale key serves a stale
+    * scene (#932, #814). The viewport is compared by value in [[MouseTargetLayoutKeyCache]] instead, because callers
+    * build a fresh `ViewportSize` per call.
+    */
+  private[manager] val derived: DerivedValue[Sized, Sized, MouseTargetLayoutKey] =
+    DerivedValue(
+      inputs = identity,
+      references = readFields,
+      compute = sized => compute(sized.state, sized.viewportSize)
     )
 
-  private[manager] def unchangedSince(previous: FastPathInputs, current: FastPathInputs): Boolean =
-    (previous.viewportSize == current.viewportSize) &&
-      previous.config.eq(current.config) &&
-      previous.layout.eq(current.layout) &&
-      (previous.focus == current.focus) &&
-      previous.buffers.eq(current.buffers) &&
-      previous.uiSurfaces.eq(current.uiSurfaces) &&
-      previous.modalStack.eq(current.modalStack)
+  private def readFields(sized: Sized): List[AnyRef] =
+    val persisted = sized.state.persisted
+    val runtime   = sized.state.runtime
+    List(
+      persisted.config,
+      persisted.layout,
+      persisted.focus,
+      persisted.buffers,
+      runtime.uiSurfaces,
+      runtime.modalStack,
+      // Read by `effectiveUiElementGap`, and by the status line text through `editingContext`.
+      runtime.capabilities,
+      // `pinnedPanels` sizes docked panels from the state's own viewport, not the one passed in.
+      runtime.viewportSize,
+      // `floatingStatusLineSurface` is hidden while typing.
+      runtime.typingActivity
+    )
 
   private[manager] def compute(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
     MouseTargetLayoutKey(
@@ -203,11 +199,11 @@ private[manager] object MouseTargetLayoutKey:
         else Nil
     )
 
-/** Instance-scoped (issue #1677) single-slot memo of the last [[MouseTargetLayoutKey]] computed, keyed on the
-  * [[MouseTargetLayoutKey.FastPathInputs]] it was computed from. One instance lives on each [[AuthoritativeUiScene]] --
-  * itself one per render-owning entity -- rather than the JVM-wide singleton this used to be a field of
-  * `object MouseTargetLayoutKey` itself, so two independently constructed scenes never share or contend on this memo
-  * slot. `from` is called synchronously from mouse-hit-testing (`ContextualToolbarHitTesting`,
+/** Instance-scoped (issue #1677) single-slot memo of the last [[MouseTargetLayoutKey]] computed, held as a
+  * [[MouseTargetLayoutKey.derived]] memo for the viewport it was computed at. One instance lives on each
+  * [[AuthoritativeUiScene]] -- itself one per render-owning entity -- rather than the JVM-wide singleton this used to
+  * be a field of `object MouseTargetLayoutKey` itself, so two independently constructed scenes never share or contend
+  * on this memo slot. `from` is called synchronously from mouse-hit-testing (`ContextualToolbarHitTesting`,
   * `CommandRunnerMouseHitTesting`, `MouseHitTestGeometry`, `PinnedPanelMouseHitTesting`, `EditorContextMenuHitTesting`,
   * via `AuthoritativeUiScene.layoutKeyFor`) and from the renderer's own scene preparation
   * (`AuthoritativeUiScene.forState` below) -- none of these run inside an IO fiber, so a `Ref[IO, ...]` here would need
@@ -220,19 +216,13 @@ private[manager] object MouseTargetLayoutKey:
 final private[manager] class MouseTargetLayoutKeyCache:
 
   private val lastComputation =
-    new java.util.concurrent.atomic.AtomicReference[
-      Option[(MouseTargetLayoutKey.FastPathInputs, MouseTargetLayoutKey)]
-    ](None)
+    new java.util.concurrent.atomic.AtomicReference[Option[(ViewportSize, Memo[MouseTargetLayoutKey])]](None)
 
   def from(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
-    val inputs = MouseTargetLayoutKey.fastPathInputs(state, viewportSize)
-    lastComputation.get() match
-      case Some((previousInputs, previousResult)) if MouseTargetLayoutKey.unchangedSince(previousInputs, inputs) =>
-        previousResult
-      case _ =>
-        val computed = MouseTargetLayoutKey.compute(state, viewportSize)
-        lastComputation.set(Some(inputs -> computed))
-        computed
+    val previous = lastComputation.get().collect { case (size, memo) if size == viewportSize => memo }
+    val memo     = MouseTargetLayoutKey.derived.refreshed(previous, MouseTargetLayoutKey.Sized(state, viewportSize))
+    if !previous.exists(_ eq memo) then lastComputation.set(Some(viewportSize -> memo))
+    memo.value
 
 /** The single owner of the prepared scene shared by rendering and mouse targeting.
   *

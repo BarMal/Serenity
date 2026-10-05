@@ -1,6 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.config.*
+import com.serenity.lsp.client.DocumentUri
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.text.TextStatistics
 import com.serenity.ui.layout.{Layout, SpacingScale, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
@@ -18,12 +19,16 @@ final case class AppState(
     persisted.layout.editorPanes.values.flatMap(_.bufferId).toSet
 
   private def indexSource(buffer: Buffer): BufferIndexes.Source =
-    BufferIndexes.Source(buffer, runtime.languageService)
+    BufferIndexes.Source(buffer, runtime.bufferIndexMemos.uriFor(buffer), runtime.languageService)
 
   def withBufferIndexesRefreshed: AppState =
-    val sources = panedBufferIds.flatMap(id => persisted.buffers.get(id).map(buffer => id -> indexSource(buffer))).toMap
-    val memos   = runtime.bufferIndexMemos.refreshed(sources)
+    val paned = panedBufferIds.flatMap(id => persisted.buffers.get(id).map(id -> _)).toMap
+    val memos = runtime.bufferIndexMemos.refreshed(paned, runtime.languageService)
     if memos eq runtime.bufferIndexMemos then this else copy(runtime = runtime.copy(bufferIndexMemos = memos))
+
+  /** The URI a buffer's diagnostics and semantic tokens are keyed by, derived once per file path while it is paned. */
+  def documentUri(bufferId: BufferId): Option[DocumentUri] =
+    persisted.buffers.get(bufferId).map(runtime.bufferIndexMemos.uriFor)
 
   def annotationIndex(bufferId: BufferId): Option[AnnotationLineIndex] =
     persisted.buffers.get(bufferId).map { buffer =>
