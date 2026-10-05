@@ -2,8 +2,9 @@ package com.serenity.state.models
 
 import java.nio.file.Paths
 
+import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange, SemanticToken}
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.spellcheck.SpellChecker
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -42,6 +43,14 @@ class AppStateBufferIndexesSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
+
+  private val otherUri = DocumentUri("file:///tmp/serenity-index-spec-other.scala")
+
+  private def withLanguageService(state: AppState, update: LanguageServiceState => LanguageServiceState): AppState =
+    state.copy(runtime = state.runtime.copy(languageService = update(state.runtime.languageService)))
+
+  private def withSemanticTokens(state: AppState, semanticTokens: SemanticTokensState): AppState =
+    withLanguageService(state, _.copy(semanticTokensState = semanticTokens))
 
   private def annotations(state: AppState): AnnotationLineIndex =
     state.annotationIndex(bufferId).getOrElse(fail("expected an annotation index for a paned buffer"))
@@ -83,4 +92,53 @@ class AppStateBufferIndexesSpec extends AnyFlatSpec with Matchers:
 
     state.withBufferIndexesRefreshed shouldBe state
     state.withBufferIndexesRefreshed.hashCode shouldBe state.hashCode
+  }
+
+  it should "keep a buffer's indexes when language data arrives only for another document" in {
+    val committed = stateWithLanguageData.withBufferIndexesRefreshed
+    val elsewhere = withLanguageService(
+      committed,
+      language =>
+        language.copy(
+          diagnosticsState = language.diagnosticsState.copy(diagnostics =
+            language.diagnosticsState.diagnostics.updated(otherUri, List(diagnostic(1)))
+          ),
+          semanticTokensState = language.semanticTokensState.copy(byUri =
+            language.semanticTokensState.byUri.updated(otherUri, List(SemanticToken(1, 0, 2, "type", Set.empty)))
+          )
+        )
+    ).withBufferIndexesRefreshed
+
+    annotations(elsewhere) should be theSameInstanceAs annotations(committed)
+    tokens(elsewhere) should be theSameInstanceAs tokens(committed)
+  }
+
+  it should "derive a file-backed buffer's document URI once, not again after every edit" in {
+    val committed = stateWithLanguageData.withBufferIndexesRefreshed
+    val buffer    = committed.persisted.buffers(bufferId)
+    val edited = committed
+      .copy(persisted =
+        committed.persisted
+          .copy(buffers = Map(bufferId -> buffer.copy(document = buffer.document.withContent(Rope("edited")))))
+      )
+      .withBufferIndexesRefreshed
+
+    def uriText(state: AppState): String = state.documentUri(bufferId).getOrElse(fail("no document URI")).value
+
+    uriText(edited) shouldBe SpellChecker.diagnosticsUri(buffer).value
+    uriText(edited) should be theSameInstanceAs uriText(committed)
+  }
+
+  it should "tell a pending, an empty and a confirmed-absent token response apart across refreshes" in {
+    val uri     = SpellChecker.diagnosticsUri(stateWithLanguageData.persisted.buffers(bufferId))
+    val pending = withSemanticTokens(stateWithLanguageData, SemanticTokensState()).withBufferIndexesRefreshed
+    val empty   = withSemanticTokens(pending, SemanticTokensState(byUri = Map(uri -> Nil))).withBufferIndexesRefreshed
+    val absent =
+      withSemanticTokens(empty, SemanticTokensState(unavailableUris = Set(uri))).withBufferIndexesRefreshed
+
+    tokens(pending) shouldBe SemanticTokensAvailability.Pending
+    tokens(empty) shouldBe SemanticTokensAvailability.Available(Map.empty)
+    tokens(absent) shouldBe SemanticTokensAvailability.Unavailable
+    tokens(withSemanticTokens(absent, SemanticTokensState()).withBufferIndexesRefreshed) shouldBe
+      SemanticTokensAvailability.Pending
   }

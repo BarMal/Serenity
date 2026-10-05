@@ -4,7 +4,6 @@ import java.nio.file.Path
 
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic as LspDiagnostic, DiagnosticSeverity as LspSeverity}
-import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Diagnostic, DiagnosticSeverity, DirectoryTreeData, Location, Symbol}
 
@@ -170,7 +169,7 @@ private[manager] object PanelContentSync:
   private def sourceDiagnostics(state: AppState, source: Option[Buffer]): List[LspDiagnostic] =
     source
       .flatMap(buffer =>
-        state.runtime.languageService.diagnosticsState.diagnostics.get(SpellChecker.diagnosticsUri(buffer))
+        state.runtime.languageService.diagnosticsState.diagnostics.get(state.runtime.bufferIndexMemos.uriFor(buffer))
       )
       .getOrElse(Nil)
 
