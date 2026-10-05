@@ -11,7 +11,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{PinnedPanelViewModel, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, PinnedPanelViewModel, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -254,8 +254,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(120, 32),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -279,8 +279,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewport,
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -308,8 +308,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(120, 32),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = metrics,
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -389,8 +389,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(100, 20),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -410,8 +410,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(100, 20),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -434,8 +434,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(100, 20),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = metrics,
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -491,8 +491,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(100, 20),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -559,8 +559,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(120, 32),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       caches

@@ -1,6 +1,5 @@
 package com.serenity.ui.renderer
 
-import java.awt.Font
 import java.awt.font.FontRenderContext
 
 /** Character- and pixel-run text drawing. Every real [[RenderSurface]] implements this -- a surface that cannot draw
@@ -8,7 +7,7 @@ import java.awt.font.FontRenderContext
   * type itself guarantees the capability instead of pushing a check onto every call site that draws a line of text.
   */
 trait TextDrawing:
-  def setFont(font: Font): Unit
+  def setFont(font: FontSpec): Unit
   def fontRenderContext: Option[FontRenderContext]
 
   /** Draw a proportional text run at exact pixel coordinates.

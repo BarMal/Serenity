@@ -6,7 +6,13 @@ import javax.swing.JPanel
 import cats.effect.{IO, Resource}
 import com.serenity.frontend.FrontendRuntime
 import com.serenity.ui.layout.ViewportSize
-import com.serenity.ui.renderer.{Java2DRenderSurface, RendererCursorOverlay, RendererEntryPoints, ScreenIdentity}
+import com.serenity.ui.renderer.{
+  FontSpec,
+  Java2DRenderSurface,
+  RendererCursorOverlay,
+  RendererEntryPoints,
+  ScreenIdentity
+}
 
 /** Window-sized Java2D frames for the startup warm-up, drawn into an image of their own that is never presented. */
 object OffscreenWarmUpFrames:
@@ -52,9 +58,9 @@ object OffscreenWarmUpFrames:
               cursorVisible = false,
               surface(snapshot),
               viewportSize(),
-              snapshot.codeFont,
-              snapshot.textFont,
-              snapshot.uiFont,
+              FontSpec.fromAwt(snapshot.codeFont),
+              FontSpec.fromAwt(snapshot.textFont),
+              FontSpec.fromAwt(snapshot.uiFont),
               snapshot.codeMetrics,
               snapshot.uiMetrics,
               None,
@@ -70,9 +76,9 @@ object OffscreenWarmUpFrames:
               cursorVisible = true,
               surface(snapshot),
               viewportSize(),
-              snapshot.codeFont,
-              snapshot.textFont,
-              snapshot.uiFont,
+              FontSpec.fromAwt(snapshot.codeFont),
+              FontSpec.fromAwt(snapshot.textFont),
+              FontSpec.fromAwt(snapshot.uiFont),
               snapshot.codeMetrics,
               snapshot.uiMetrics,
               None,

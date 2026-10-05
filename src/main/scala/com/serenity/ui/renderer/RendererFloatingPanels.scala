@@ -22,7 +22,7 @@ object RendererFloatingPanels:
     scene: UiSceneSnapshot,
     damage: Damage
   ): Unit =
-    context.surface.text.setFont(context.uiFont)
+    context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
     val overlays     = OverlayViewModel.fromState(state, scene)
     val panelIsDirty = RendererFramePlanner.panelDirtyCheck(damage)
 
@@ -101,7 +101,7 @@ object RendererFloatingPanels:
     scene: UiSceneSnapshot,
     damage: Damage
   ): Unit =
-    context.surface.text.setFont(context.uiFont)
+    context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
     val surfaceNodes = scene.workspace.collect {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) => surfaceId -> node
     }.toMap

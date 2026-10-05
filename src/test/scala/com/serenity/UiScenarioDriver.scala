@@ -19,6 +19,7 @@ import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.renderer.{
   Effects,
+  FontSpec,
   Java2DRenderSurface,
   PanelOutlineDrawing,
   PixelDrawing,
@@ -126,9 +127,9 @@ final class UiScenarioDriver private (
         cursorVisible = true,
         recordingSurface,
         environment.viewport,
-        codeFont,
-        codeFont,
-        uiFont,
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(uiFont),
         environment.cellMetrics,
         environment.cellMetrics,
         cursorColor = None,
@@ -381,7 +382,7 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
     * `render` un-adjusted instead of forwarding to the real surface.
     */
   private val textDrawing: TextDrawing = new TextDrawing:
-    def setFont(font: Font): Unit                    = delegate.text.setFont(font)
+    def setFont(font: FontSpec): Unit                = delegate.text.setFont(font)
     def fontRenderContext: Option[FontRenderContext] = delegate.text.fontRenderContext
 
     def drawRunPx(

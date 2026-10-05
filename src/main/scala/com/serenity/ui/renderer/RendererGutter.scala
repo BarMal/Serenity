@@ -20,7 +20,7 @@ object RendererGutter:
         state.persisted.config.surfaceConfig.columnModeEnabled && state.persisted.config.surfaceConfig.wordWrapEnabled
       if columnModeActive then renderPerColumnRails(state, context, renderPlan)
       else
-        context.surface.text.setFont(context.uiFont)
+        context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
         renderPlan.layoutContract.lineNumberRect.foreach(rect =>
           renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = false)
         )
@@ -38,7 +38,7 @@ object RendererGutter:
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan
   ): Unit =
-    context.surface.text.setFont(context.uiFont)
+    context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
     state.persisted.layout.editorPanes.foreach {
       case (paneId, _) =>
         renderPlan.paneLayouts.get(paneId).foreach { paneLayout =>
@@ -202,7 +202,7 @@ object RendererGutter:
       else continuationIndicatorText(lineRect.width)
     measuredFont match
       case Some(measured) =>
-        surface.text.setFont(measured.font)
+        surface.text.setFont(FontSpec.fromAwt(measured.font))
         // Issue #1542 (pixel-precision follow-up): nudge the digits a sub-cell amount away from the pane's outer edge
         // -- right for a left counter, left for a right one -- the same `SurfaceTextInset` value every other piece of
         // framed chrome already insets by. Purely a paint-time refinement: `LayoutEngine`'s cell grid (hit-testing,
@@ -225,7 +225,7 @@ object RendererGutter:
         surface.pixels.withPixelTranslation(marginInsetPx, 0.0) {
           surface.text.drawRunPx(run.xPx, lineTopPx, run.widthPx, snapshot.lineHeightPx, snapshot.ascentPx, run.text)
         }
-        surface.text.setFont(context.uiFont)
+        surface.text.setFont(FontSpec.fromAwt(context.uiFont))
       case None => surface.putString(lineRect.x, rowY, lineNumberText)
     if rendersLineNumber then
       for
@@ -316,7 +316,7 @@ object RendererGutter:
 
   def renderGutter(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     contract.gutterRect.foreach { gutterRect =>
-      context.surface.text.setFont(context.uiFont)
+      context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
       val surface = context.surface
       val colors  = state.persisted.config.statusLine.colors
 

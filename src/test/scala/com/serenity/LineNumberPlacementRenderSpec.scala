@@ -5,7 +5,7 @@ import java.awt.Font
 import com.serenity.config.{LineNumberLayout, LineNumberSide}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -121,8 +121,8 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewport,
-      codeFont,
-      proseFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(proseFont),
       CellMetrics.fromFont(codeFont),
       None,
       com.serenity.state.manager.RenderCaches.create()

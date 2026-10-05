@@ -82,9 +82,9 @@ class Java2DRenderSurface(
   private val baseFontRef             = AtomicReference(font)
   private val logicalPixelRowOverride = AtomicReference[Option[(Int, Int)]](None)
 
-  override def setFont(newFont: Font): Unit =
-    baseFontRef.set(newFont)
-    g.setFont(newFont)
+  override def setFont(newFont: FontSpec): Unit =
+    baseFontRef.set(newFont.toAwt)
+    g.setFont(newFont.toAwt)
 
   override def fontRenderContext: Option[FontRenderContext] = Some(renderContext)
 

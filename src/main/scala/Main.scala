@@ -14,7 +14,13 @@ import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.display.DisplayScale
-import com.serenity.ui.renderer.{PaintExecutionContext, RenderColor, RendererCursorOverlay, RendererEntryPoints}
+import com.serenity.ui.renderer.{
+  FontSpec,
+  PaintExecutionContext,
+  RenderColor,
+  RendererCursorOverlay,
+  RendererEntryPoints
+}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -293,9 +299,9 @@ object Main extends IOApp:
       val _ = RendererCursorOverlay.renderWithCursorOverlay(
         state,
         window,
-        display.codeFont,
-        display.textFont,
-        display.uiFont,
+        FontSpec.fromAwt(display.codeFont),
+        FontSpec.fromAwt(display.textFont),
+        FontSpec.fromAwt(display.uiFont),
         display.uiMetrics,
         cursorColor,
         damage,
@@ -307,9 +313,9 @@ object Main extends IOApp:
         state,
         cursorVisible = false,
         window,
-        display.codeFont,
-        display.textFont,
-        display.uiFont,
+        FontSpec.fromAwt(display.codeFont),
+        FontSpec.fromAwt(display.textFont),
+        FontSpec.fromAwt(display.uiFont),
         display.uiMetrics,
         None,
         repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible),
@@ -331,9 +337,9 @@ object Main extends IOApp:
       state,
       cursorVisible,
       window,
-      display.codeFont,
-      display.textFont,
-      display.uiFont,
+      FontSpec.fromAwt(display.codeFont),
+      FontSpec.fromAwt(display.textFont),
+      FontSpec.fromAwt(display.uiFont),
       display.uiMetrics,
       cursorColor,
       caches
@@ -343,9 +349,9 @@ object Main extends IOApp:
         state,
         cursorVisible,
         window,
-        display.codeFont,
-        display.textFont,
-        display.uiFont,
+        FontSpec.fromAwt(display.codeFont),
+        FontSpec.fromAwt(display.textFont),
+        FontSpec.fromAwt(display.uiFont),
         display.uiMetrics,
         cursorColor,
         repaintOnFlush = true,

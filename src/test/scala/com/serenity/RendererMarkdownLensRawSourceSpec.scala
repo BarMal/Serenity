@@ -8,7 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -50,8 +50,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -113,8 +113,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -196,8 +196,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -246,8 +246,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -292,8 +292,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -397,8 +397,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, viewportHeight),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = metrics,
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()

@@ -13,7 +13,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -157,9 +157,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
         cursorVisible = true,
         surface,
         ViewportSize(100, 30),
-        codeFont,
-        codeFont,
-        uiFont,
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(uiFont),
         codeMetrics,
         uiMetrics,
         None,
@@ -201,9 +201,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
         cursorVisible = true,
         surface,
         ViewportSize(100, 30),
-        codeFont,
-        codeFont,
-        uiFont,
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(uiFont),
         codeMetrics,
         uiMetrics,
         None,
@@ -243,9 +243,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
         cursorVisible = true,
         surface,
         ViewportSize(100, 30),
-        codeFont,
-        codeFont,
-        uiFont,
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(uiFont),
         codeMetrics,
         uiMetrics,
         None,
@@ -300,8 +300,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = codeFont,
-      textFont = textFont,
+      codeFont = FontSpec.fromAwt(codeFont),
+      textFont = FontSpec.fromAwt(textFont),
       cellMetrics = codeMetrics,
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -367,8 +367,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = codeFont,
-      textFont = textFont,
+      codeFont = FontSpec.fromAwt(codeFont),
+      textFont = FontSpec.fromAwt(textFont),
       cellMetrics = codeMetrics,
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -413,8 +413,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = codeFont,
-      textFont = textFont,
+      codeFont = FontSpec.fromAwt(codeFont),
+      textFont = FontSpec.fromAwt(textFont),
       cellMetrics = codeMetrics,
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -448,8 +448,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = codeFont,
-      textFont = textFont,
+      codeFont = FontSpec.fromAwt(codeFont),
+      textFont = FontSpec.fromAwt(textFont),
       cellMetrics = codeMetrics,
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()

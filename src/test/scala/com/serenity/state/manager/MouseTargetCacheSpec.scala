@@ -18,7 +18,7 @@ import com.serenity.ui.layout.{
   WorkspaceNodeId,
   WorkspaceTree
 }
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -139,8 +139,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       size,
-      mono,
-      text,
+      FontSpec.fromAwt(mono),
+      FontSpec.fromAwt(text),
       CellMetrics.fromFont(mono),
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -213,8 +213,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       size,
-      codeFont,
-      textFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
       CellMetrics.fromFont(codeFont),
       None,
       caches
@@ -244,8 +244,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       size,
-      codeFont,
-      textFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
       CellMetrics.fromFont(codeFont),
       None,
       caches

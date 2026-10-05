@@ -142,7 +142,7 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   // -- TextDrawing --------------------------------------------------------------------------------------------------
 
   // No AWT font backs a terminal cell; typography controls are inert in cell space (accepted degradation, epic #1103).
-  override def setFont(font: java.awt.Font): Unit = ()
+  override def setFont(font: FontSpec): Unit = ()
 
   // `None` unconditionally: this is what drives #1105's cell-fallback path for callers that would otherwise measure
   // text with a FontRenderContext this surface does not have.

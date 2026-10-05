@@ -405,7 +405,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    surface.setFont(font)
+    surface.setFont(FontSpec.fromAwt(font))
     TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     val contentWidth = overlay.rect.width - 2

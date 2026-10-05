@@ -11,7 +11,7 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -198,8 +198,8 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
       cursorVisible = false,
       surface,
       viewport,
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       CellMetrics.fromFont(font),
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -264,8 +264,8 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
       cursorVisible = false,
       surface,
       viewport,
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       CellMetrics.fromFont(font),
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -326,8 +326,8 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
       cursorVisible = false,
       surface,
       viewport,
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       CellMetrics.fromFont(font),
       None,
       com.serenity.state.manager.RenderCaches.create()

@@ -12,7 +12,7 @@ import com.serenity.state.models.{Focus, SurfaceContent}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -208,8 +208,8 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         cursorVisible = true,
         surface,
         initialViewportSize,
-        font,
-        font,
+        FontSpec.fromAwt(font),
+        FontSpec.fromAwt(font),
         cellMetrics,
         None,
         com.serenity.state.manager.RenderCaches.create()

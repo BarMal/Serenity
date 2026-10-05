@@ -231,7 +231,7 @@ object RendererPaneContent:
     val surface    = context.surface
     val headerRect = contract.paneHeaderRect(pane.id).getOrElse(paneLayout.headerRect)
     if headerRect.height > 0 then
-      context.surface.text.setFont(context.uiFont)
+      context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
       val isActive  = state.persisted.layout.activeEditorPaneId.contains(pane.id)
       val titleRect = contract.paneTitleRect(pane.id).getOrElse(paneLayout.titleRect)
 
@@ -315,7 +315,7 @@ object RendererPaneContent:
     annotations: BufferRenderAnnotations,
     dirtyRows: Option[Set[Int]]
   ): Unit =
-    context.surface.text.setFont(context.fontForBuffer(buffer))
+    context.surface.text.setFont(FontSpec.fromAwt(context.fontForBuffer(buffer)))
     if RendererMarkdownLens.isInlineMarkdownLens(buffer, state) then
       val frame = markdownLensFrame.getOrElse(
         RendererMarkdownLens.markdownLensFrameFor(buffer, snapshot, context.caches.markdownPreviewCache)

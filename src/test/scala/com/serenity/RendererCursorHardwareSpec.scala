@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.config.CursorMode
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
-import com.serenity.ui.renderer.{HardwareCursor, HardwareCursorStyle}
+import com.serenity.ui.renderer.{FontSpec, HardwareCursor, HardwareCursorStyle}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -59,9 +59,9 @@ class RendererCursorHardwareSpec extends AnyFlatSpec with Matchers:
       cursorVisible = cursorVisible,
       surface,
       viewport,
-      codeFont,
-      codeFont,
-      codeFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(codeFont),
       cellMetrics,
       cellMetrics,
       None,

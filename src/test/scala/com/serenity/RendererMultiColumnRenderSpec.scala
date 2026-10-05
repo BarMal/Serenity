@@ -6,7 +6,7 @@ import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -70,8 +70,8 @@ class RendererMultiColumnRenderSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      monoFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
       caches
@@ -116,8 +116,8 @@ class RendererMultiColumnRenderSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      monoFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
       caches

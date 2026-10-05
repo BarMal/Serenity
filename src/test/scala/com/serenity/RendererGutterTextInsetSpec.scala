@@ -5,7 +5,7 @@ import java.awt.Font
 import com.serenity.config.{LineNumberLayout, LineNumberSide}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{RendererEntryPoints, SurfaceTextInset}
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, SurfaceTextInset}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -61,8 +61,8 @@ class RendererGutterTextInsetSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewport,
-      codeFont,
-      textFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()

@@ -29,6 +29,7 @@ import com.serenity.state.manager.{CursorViewport, DamageProducer, RenderCaches,
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PanelPosition, ViewportSize}
 import com.serenity.ui.renderer.{
+  FontSpec,
   FrameOutput,
   Java2DRenderSurface,
   RendererEntryPoints,
@@ -119,8 +120,8 @@ private[perf] object LaptopFrameBenchmarks:
       cursorVisible,
       surface,
       viewport,
-      codeFont,
-      textFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
       cellMetrics,
       None,
       caches

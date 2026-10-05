@@ -13,7 +13,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -629,9 +629,9 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewport,
-      codeFont,
-      textFont,
-      uiFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
+      FontSpec.fromAwt(uiFont),
       cellMetrics,
       uiMetrics,
       None,

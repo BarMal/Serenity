@@ -8,7 +8,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{RenderColor, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, RenderColor, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -76,8 +76,8 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      codeFont,
-      textFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
       cellMetrics,
       Some(RenderColor.fromAwt(cursorColor)),
       com.serenity.state.manager.RenderCaches.create()
@@ -119,8 +119,8 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      codeFont,
-      textFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -139,9 +139,9 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      codeFont,
-      textFont,
-      uiFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
+      FontSpec.fromAwt(uiFont),
       cellMetrics,
       CellMetrics.fromFont(uiFont),
       None,
@@ -162,8 +162,8 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      codeFont,
-      textFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -184,8 +184,8 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      codeFont,
-      textFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
       cellMetrics,
       Some(RenderColor.fromAwt(cursorColor)),
       com.serenity.state.manager.RenderCaches.create()

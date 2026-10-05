@@ -9,7 +9,7 @@ import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{Java2DRenderSurface, RenderColor, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderColor, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -209,8 +209,8 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(8, 5),
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       metrics,
       None,
       com.serenity.state.manager.RenderCaches.create()

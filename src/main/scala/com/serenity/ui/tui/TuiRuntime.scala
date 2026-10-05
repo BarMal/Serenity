@@ -23,7 +23,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Buffer, BufferId, Damage}
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync, TuiAccessibilityBridge}
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{RenderColor, RendererCursorOverlay, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, RenderColor, RendererCursorOverlay, RendererEntryPoints}
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 /** The TUI capability bundle for `AppRuntime.run` (issue #1112): the terminal-mode counterpart to `Main`'s Swing
@@ -42,7 +42,7 @@ object TuiRuntime:
     * entry points' signatures, which is also why code/text/UI all share the one instance rather than resolving the
     * user's configured (and, in TUI mode, inert) font family/size.
     */
-  private val CellFont: Font = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+  private val CellFont: FontSpec = FontSpec.fromAwt(new Font(Font.MONOSPACED, Font.PLAIN, 12))
 
   private val CellMetricsOne: CellMetrics = CellMetrics.cellUnit
 
