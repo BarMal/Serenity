@@ -53,7 +53,7 @@ private[spellcheck] object HunspellFreeCompoundMatcher:
   /** True iff `word` can be fully segmented into two or more members of `trie`, each at least `compoundMin` characters
     * and eligible (per `compoundFlags`) for the position it would occupy, using no more than `compoundWordMax` members
     * when that bound is set, with every adjacent pair satisfying `checkRules`. `wordFlagsByText` (typically
-    * `DictionaryContext.compoundWordFlags`), `standaloneWords` (`DictionaryContext.words`) and `replacements`
+    * `DictionaryContext.compoundWordFlags`), `standaloneWords` (`DictionaryContext.knows`) and `replacements`
     * (`DictionaryContext.replacements`) back `CHECKCOMPOUNDPATTERN`/`SIMPLIFIEDTRIPLE` reconstruction and
     * `CHECKCOMPOUNDREP` respectively, and are unused (so safe to omit) when `checkRules` declares none of those.
     * `originalWord` -- same length as `word`, differing only in letter case -- backs `CHECKCOMPOUNDCASE`: dictionary
@@ -70,7 +70,7 @@ private[spellcheck] object HunspellFreeCompoundMatcher:
     compoundWordMax: Option[Int],
     checkRules: CompoundCheckRules = CompoundCheckRules.empty,
     wordFlagsByText: Map[String, Set[String]] = Map.empty,
-    standaloneWords: Set[String] = Set.empty,
+    standaloneWords: String => Boolean = Set.empty[String],
     replacements: Map[String, List[String]] = Map.empty,
     originalWord: String = ""
   ): Boolean =
@@ -97,7 +97,7 @@ private[spellcheck] object HunspellFreeCompoundMatcher:
     compoundWordMax: Option[Int],
     checkRules: CompoundCheckRules,
     wordFlagsByText: Map[String, Set[String]],
-    standaloneWords: Set[String],
+    standaloneWords: String => Boolean,
     replacements: Map[String, List[String]],
     originalWord: String
   ): Boolean =
@@ -211,7 +211,7 @@ private[spellcheck] object HunspellFreeCompoundMatcher:
           allIndicesOf(pairText, source, 0).exists { sourcePos =>
             targets.exists { target =>
               val candidate = pairText.substring(0, sourcePos) + target + pairText.substring(sourcePos + source.length)
-              standaloneWords.contains(DictionaryWord.normalize(candidate))
+              standaloneWords(DictionaryWord.normalize(candidate))
             }
           }
       }

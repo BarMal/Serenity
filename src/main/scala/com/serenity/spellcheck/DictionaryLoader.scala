@@ -14,7 +14,7 @@ import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
   * dictionaries into a `DictionaryContext`.
   */
 final private[spellcheck] case class DictionaryLoadResult(
-    words: Set[String],
+    wordList: AffixedWordList,
     replacements: Map[String, List[String]],
     failures: List[String],
     iconv: List[(String, String)],
@@ -27,7 +27,8 @@ final private[spellcheck] case class DictionaryLoadResult(
     compoundMiddleFlag: Option[String],
     compoundEndFlag: Option[String],
     compoundWordMax: Option[Int],
-    compoundCheckRules: CompoundCheckRules
+    compoundCheckRules: CompoundCheckRules,
+    breaksAtHyphens: Boolean = true
 )
 
 /** One entry per normalized dictionary path (or bundled dictionary), holding only the most recently loaded version of
@@ -216,12 +217,12 @@ object DictionaryLoader:
     fingerprints: List[SpellCheckDictionaryFingerprint],
     osDictionaryDirectories: List[String]
   ): DictionarySnapshot =
-    val externalWords = externalResults.flatMap(_.words).toSet
+    val stems = externalResults.map(_.wordList).filterNot(_.isEmpty)
     val externalReplacements =
       mergeReplacementMaps(externalResults.map(_.replacements))
     val failures = externalResults.flatMap(_.failures)
     val fallbackWords =
-      if normalized.dictionaryPaths.nonEmpty && externalWords.nonEmpty then Set.empty[String]
+      if normalized.dictionaryPaths.nonEmpty && stems.nonEmpty then Set.empty[String]
       else normalized.languages.flatMap(language => BuiltInDictionaries.getOrElse(language, Set.empty)).toSet
 
     val compoundWordFlags = mergeCompoundWordFlags(externalResults.map(_.compoundWordFlags))
@@ -250,7 +251,9 @@ object DictionaryLoader:
     val compoundCheckRules = mergeCompoundCheckRules(externalResults.map(_.compoundCheckRules))
 
     val context = DictionaryContext(
-      words = (externalWords ++ fallbackWords ++ normalized.additionalWords).map(DictionaryWord.normalize),
+      words = (fallbackWords ++ normalized.additionalWords).map(DictionaryWord.normalize),
+      stems = stems,
+      breaksAtHyphens = externalResults.forall(_.breaksAtHyphens),
       replacements = externalReplacements,
       failures = failures.distinct,
       iconv = externalResults.flatMap(_.iconv).distinct,
@@ -266,7 +269,7 @@ object DictionaryLoader:
       compoundWordMax = compoundWordMax,
       compoundFlagTrie = compoundFlagTrie,
       compoundCheckRules = compoundCheckRules,
-      missingDictionary = Option.when(externalWords.isEmpty && fallbackWords.isEmpty)(
+      missingDictionary = Option.when(stems.isEmpty && fallbackWords.isEmpty)(
         missingDictionaryNotice(normalized, osDictionaryDirectories)
       )
     )
@@ -332,23 +335,17 @@ object DictionaryLoader:
       .filter(line => line.nonEmpty && !line.startsWith("#"))
       .flatMap(line => HunspellFormat.parseEntry(line, affixRules))
 
-    val words = entries
-      .flatMap(entry => HunspellFormat.expand(entry, affixRules))
-      .map(DictionaryWord.normalize)
-      .toSet
+    val wordList = AffixedWordList.build(entries.iterator, affixRules)
 
     // COMPOUNDRULE (#1187) and free-form COMPOUNDFLAG (#1198) both match compound candidates against dictionary
-    // entries' own flags, keyed by their normalized text -- computed only when the affix file actually declares
-    // one of these compounding mechanisms, since it is otherwise unused.
-    val declaresFreeFormCompounding =
-      affixRules.compoundFlag.isDefined || affixRules.compoundBeginFlag.isDefined ||
-        affixRules.compoundMiddleFlag.isDefined || affixRules.compoundEndFlag.isDefined
-    val compoundWordFlags =
-      if affixRules.compoundRules.isEmpty && !declaresFreeFormCompounding then Map.empty[String, Set[String]]
-      else entries.groupMapReduce(entry => DictionaryWord.normalize(entry.word))(_.flags)(_ ++ _)
+    // entries' own flags, keyed by their normalized text. Only entries carrying a flag one of those mechanisms
+    // consults can ever be a compound member, so only those are kept: on an ordinary dictionary that is none.
+    val compoundWordFlags = entries
+      .filter(entry => entry.flags.exists(affixRules.compoundRelevantFlags.contains))
+      .groupMapReduce(entry => DictionaryWord.normalize(entry.word))(_.flags)(_ ++ _)
 
     DictionaryLoadResult(
-      words,
+      wordList,
       affixRules.replacements,
       unsupportedAff,
       affixRules.iconv,
@@ -361,12 +358,13 @@ object DictionaryLoader:
       affixRules.compoundMiddleFlag,
       affixRules.compoundEndFlag,
       affixRules.compoundWordMax,
-      affixRules.compoundCheckRules
+      affixRules.compoundCheckRules,
+      affixRules.breaksAtHyphens
     )
 
   private def failedLoad(failure: String): DictionaryLoadResult =
     DictionaryLoadResult(
-      Set.empty,
+      AffixedWordList.empty,
       Map.empty,
       List(failure),
       Nil,

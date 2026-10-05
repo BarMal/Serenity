@@ -2,9 +2,6 @@ package com.serenity.spellcheck
 
 import java.util.Locale
 
-import scala.util.control.NonFatal
-import scala.util.matching.Regex
-
 private[spellcheck] enum HunspellFlagMode:
   case Simple
   case Long
@@ -45,9 +42,8 @@ private[spellcheck] object CompoundCheckRules:
   val empty: CompoundCheckRules = CompoundCheckRules(false, false, false, false, false, Nil)
 
 /** `continuationFlags` (issue #1187) are the flags attached after '/' in a PFX/SFX rule's append field -- hunspell(5)'s
-  * continuation classes, granted to the derived word for further affixation. Only CIRCUMFIX consumes them here (see
-  * `HunspellFormat.expand`); every other rule ignores them, so a dictionary using continuation classes for anything
-  * else sees no behavior change.
+  * continuation classes, granted to the derived word for further affixation. `AffixedWordList` reads them for twofold
+  * suffixes, CIRCUMFIX and ONLYINCOMPOUND.
   */
 final private[spellcheck] case class HunspellAffixRule(
     strip: String,
@@ -75,8 +71,17 @@ final private[spellcheck] case class HunspellAffixRules(
     compoundEndFlag: Option[String],
     compoundWordMax: Option[Int],
     compoundCheckRules: CompoundCheckRules,
-    onlyInCompoundFlag: Option[String]
-)
+    onlyInCompoundFlag: Option[String],
+    breaksAtHyphens: Boolean = true
+):
+
+  /** Every flag a compound mechanism of this dictionary consults on a word, so only words carrying one need their flags
+    * kept for compound matching.
+    */
+  def compoundRelevantFlags: Set[String] =
+    HunspellCompoundMatcher.ruleFlags(compoundRules) ++
+      List(compoundFlag, compoundBeginFlag, compoundMiddleFlag, compoundEndFlag).flatten ++
+      compoundCheckRules.patterns.flatMap(pattern => pattern.endFlag.toList ++ pattern.beginFlag.toList)
 
 private[spellcheck] object HunspellAffixRules:
 
@@ -105,14 +110,10 @@ private[spellcheck] object HunspellAffixRules:
 /** One `.dic` entry: a dictionary root and the affix flags it carries. */
 final private[spellcheck] case class HunspellEntry(word: String, flags: Set[String])
 
-/** Reading of the Hunspell `.aff`/`.dic` file pair: parsing an affix file into `HunspellAffixRules`, parsing a
-  * dictionary entry line, and expanding a root into every surface form its affix rules produce.
-  *
-  * These are deliberately one unit rather than a parser and a separate expander. The `.aff` file's FLAG mode and AF
-  * alias table decide how a `.dic` entry's flag field is read at all (`parseEntry` and the PFX/SFX continuation fields
-  * share `parseFlagList`), and the three directives with cross-file semantics -- NEEDAFFIX, CIRCUMFIX and the
-  * continuation classes CIRCUMFIX chains through -- are parsed in one half and applied in the other. Splitting them
-  * leaves neither half explicable on its own.
+/** Reading of the Hunspell `.aff`/`.dic` file pair: parsing an affix file into `HunspellAffixRules` and a dictionary
+  * entry line into a `HunspellEntry`. The `.aff` file's FLAG mode and AF alias table decide how a `.dic` entry's flag
+  * field is read at all (`parseEntry` and the PFX/SFX continuation fields share `parseFlagList`). Applying the rules to
+  * recognise a word is `AffixedWordList`'s job.
   *
   * `applyConversionTable` is the exception that is genuinely used elsewhere: ICONV/OCONV are Hunspell-format operations
   * applied at check time, not load time, so `SpellChecker` calls it directly.
@@ -137,6 +138,11 @@ private[spellcheck] object HunspellFormat:
     * COMPOUNDSYLLABLE and SYLLABLENUM remain unsupported: both are Hungarian-specific syllable-counting compounding
     * limits requiring a per-language vowel-counting heuristic that no real fixture surveyed for #1198 exercises in a
     * way this project can verify with confidence -- see the PR description for the full reasoning.
+    *
+    * MAP and PHONE only guide suggestions, which `SpellSuggester` generates without them, so they affect no word's
+    * validity and are not reported. BREAK is honoured as far as prose needs: a word is checked part by part at hyphens
+    * unless the dictionary says `BREAK 0` (hunspell's own default breaks at hyphens, and so do the dictionaries that
+    * list hyphens and dashes explicitly).
     */
   private val UnsupportedAffixDirectives = Set(
     "COMPOUNDSYLLABLE",
@@ -149,9 +155,6 @@ private[spellcheck] object HunspellFormat:
     "COMPLEXPREFIXES",
     "KEEPCASE",
     "FULLSTRIP",
-    "BREAK",
-    "MAP",
-    "PHONE",
     "IGNORE"
   )
 
@@ -175,6 +178,7 @@ private[spellcheck] object HunspellFormat:
     val compoundWordMax    = parseCompoundWordMax(lines)
     val compoundCheckRules = parseCompoundCheckRules(lines)
     val onlyInCompoundFlag = parseSingleValueDirective(lines, "ONLYINCOMPOUND")
+    val breaksAtHyphens    = !lines.exists(_.trim == "BREAK 0")
     HunspellAffixRules(
       flagMode,
       flagAliases,
@@ -193,7 +197,8 @@ private[spellcheck] object HunspellFormat:
       compoundEndFlag,
       compoundWordMax,
       compoundCheckRules,
-      onlyInCompoundFlag
+      onlyInCompoundFlag,
+      breaksAtHyphens
     )
 
   def unsupportedAffixDirectives(
@@ -228,72 +233,6 @@ private[spellcheck] object HunspellFormat:
       .filter(_.exists(_.isLetter))
       .map(word => HunspellEntry(word, parseEntryFlags(withoutMorphology, affixRules)))
 
-  /** Standalone accepted surface forms of `entry`: every affix-expanded spelling, minus NEEDAFFIX's bare-root exclusion
-    * and ONLYINCOMPOUND's exclusions (issue #1198). ONLYINCOMPOUND applies two ways, both per hunspell(5) ("the
-    * ONLYINCOMPOUND flag also works on words"), verified against hunspell's own `tests/onlyincompound.{aff,dic,
-    * good,wrong}`: a *root* flagged with `affixRules.onlyInCompoundFlag` makes its whole entry -- bare word and every
-    * affixed form alike -- compound-member-only, so nothing from that entry is added here; a *PFX/SFX rule* carrying
-    * the flag in its own continuation class (the same mechanism CIRCUMFIX uses) makes only the forms produced by that
-    * specific rule compound-only, leaving the root's other forms standalone-valid. Compound-member eligibility itself
-    * is unaffected -- `DictionaryLoader` builds `compoundWordFlags` from raw `.dic` entries, not from this method's
-    * output.
-    */
-  def expand(entry: HunspellEntry, affixRules: HunspellAffixRules): Set[String] =
-    if affixRules.onlyInCompoundFlag.exists(entry.flags.contains) then Set.empty
-    else
-      val prefixRules = entry.flags.flatMap(flag => affixRules.prefixes.getOrElse(flag, Nil))
-      val suffixRules = entry.flags.flatMap(flag => affixRules.suffixes.getOrElse(flag, Nil))
-
-      def isCircumfix(rule: HunspellAffixRule): Boolean =
-        affixRules.circumfixFlag.exists(rule.continuationFlags.contains)
-      def isOnlyInCompound(rule: HunspellAffixRule): Boolean =
-        affixRules.onlyInCompoundFlag.exists(rule.continuationFlags.contains)
-      def circumfixPairValid(prefixRule: HunspellAffixRule, suffixRule: HunspellAffixRule): Boolean =
-        isCircumfix(prefixRule) == isCircumfix(suffixRule)
-
-      // CIRCUMFIX (#1187, hunspell(5)): an affix whose continuation class carries the CIRCUMFIX flag may never
-      // surface on its own -- only paired with a counterpart that is itself CIRCUMFIX-flagged.
-      val prefixes = prefixRules.filterNot(isCircumfix).filterNot(isOnlyInCompound).flatMap(applyPrefix(entry.word, _))
-      val suffixes = suffixRules.filterNot(isCircumfix).filterNot(isOnlyInCompound).flatMap(applySuffix(entry.word, _))
-
-      val combined =
-        for
-          prefixRule <- prefixRules if prefixRule.combineable && !isOnlyInCompound(prefixRule)
-          suffixRule <- suffixRules
-          if suffixRule.combineable && circumfixPairValid(prefixRule, suffixRule) && !isOnlyInCompound(suffixRule)
-          suffixed <- applySuffix(entry.word, suffixRule)
-          combined <- applyPrefix(suffixed, prefixRule)
-        yield combined
-
-      // CIRCUMFIX continuation chaining: the canonical Hungarian superlative ("legnagyobb") only reaches its prefix
-      // via the suffix's continuation class -- the bare root never carries the prefix's own flag directly (see the
-      // circumfix.aff fixture in hunspell's own test suite) -- so a CIRCUMFIX-flagged affix also looks for its
-      // counterpart among the flags the *other* affix's continuation class grants, applying only when that
-      // counterpart is itself CIRCUMFIX-flagged.
-      val suffixThenPrefix: Set[String] =
-        suffixRules.filter(isCircumfix).flatMap { suffixRule =>
-          applySuffix(entry.word, suffixRule).toList.flatMap { suffixed =>
-            suffixRule.continuationFlags
-              .flatMap(flag => affixRules.prefixes.getOrElse(flag, Nil))
-              .filter(rule => isCircumfix(rule) && !isOnlyInCompound(rule))
-              .flatMap(prefixRule => applyPrefix(suffixed, prefixRule))
-          }
-        }
-      val prefixThenSuffix: Set[String] =
-        prefixRules.filter(isCircumfix).flatMap { prefixRule =>
-          applyPrefix(entry.word, prefixRule).toList.flatMap { prefixed =>
-            prefixRule.continuationFlags
-              .flatMap(flag => affixRules.suffixes.getOrElse(flag, Nil))
-              .filter(rule => isCircumfix(rule) && !isOnlyInCompound(rule))
-              .flatMap(suffixRule => applySuffix(prefixed, suffixRule))
-          }
-        }
-
-      // NEEDAFFIX (#1182): a root flagged with the configured NEEDAFFIX flag is a "virtual stem" -- valid only
-      // affixed, per hunspell(5) -- so the bare word is dropped here while its affixed forms above are kept.
-      val standalone = if affixRules.needAffixFlag.exists(entry.flags.contains) then Set.empty else Set(entry.word)
-      standalone ++ prefixes ++ suffixes ++ combined ++ suffixThenPrefix ++ prefixThenSuffix
-
   /** The `.aff` file's FLAG mode decides how every flag field in both files is tokenized -- a `.dic` entry's flags, a
     * PFX/SFX rule's continuation class, and an AF alias line all go through here.
     */
@@ -312,26 +251,6 @@ private[spellcheck] object HunspellFormat:
       case flagsWithSlash =>
         val flags = flagsWithSlash.drop(1)
         affixRules.flagAliases.getOrElse(flags, parseFlagList(flags, affixRules.flagMode))
-
-  private def applyPrefix(word: String, rule: HunspellAffixRule): Option[String] =
-    Option.when(word.startsWith(rule.strip) && prefixConditionMatches(word, rule.condition)) {
-      rule.append + word.drop(rule.strip.length)
-    }
-
-  private def applySuffix(word: String, rule: HunspellAffixRule): Option[String] =
-    Option.when(word.endsWith(rule.strip) && suffixConditionMatches(word, rule.condition)) {
-      word.dropRight(rule.strip.length) + rule.append
-    }
-
-  private def prefixConditionMatches(word: String, condition: String): Boolean =
-    condition == "." || regexMatches(s"^(?:$condition).*", word)
-
-  private def suffixConditionMatches(word: String, condition: String): Boolean =
-    condition == "." || regexMatches(s".*(?:$condition)$$", word)
-
-  private def regexMatches(pattern: String, word: String): Boolean =
-    try Regex(pattern).pattern.matcher(word).matches
-    catch case NonFatal(_) => false
 
   private def parseFlagMode(lines: List[String]): HunspellFlagMode =
     lines
@@ -424,7 +343,7 @@ private[spellcheck] object HunspellFormat:
     }
 
   /** `CIRCUMFIX <flag>` (hunspell(5)): the flag that, when carried in a PFX/SFX rule's continuation class, marks that
-    * rule as usable only paired with its circumfix counterpart -- see `expand`.
+    * rule as usable only paired with its circumfix counterpart -- see `AffixedWordList`.
     */
   private def parseCircumfixFlag(lines: List[String]): Option[String] =
     lines

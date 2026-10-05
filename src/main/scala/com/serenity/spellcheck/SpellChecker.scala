@@ -11,11 +11,7 @@ object SpellChecker:
 
   val Source: String = "spell-check"
 
-  // A hyphen/apostrophe-joined segment after the first may also carry digits (#1528): a numeric compound like
-  // "COVID-19" would otherwise only match its "COVID" prefix -- the "-19" suffix cannot extend a purely-letter
-  // token -- leaving the orphaned "COVID" fragment to fail the dictionary lookup on its own. The leading segment stays
-  // letters-only so a bare number is never tokenized as a word by itself.
-  private val WordPattern = """[\p{L}\p{M}]+(?:['’-][\p{L}\p{M}\p{N}]+)*""".r
+  val UnknownWordCode: String = "unknown-word"
 
   /** Convenience entry point that discovers and loads dictionaries itself -- handy for tests and one-off checks, but it
     * performs filesystem IO synchronously and so must never be called from a pure state method or from inside
@@ -41,41 +37,41 @@ object SpellChecker:
         Option.when(dictionary.missingDictionary.isEmpty)(unknownWordDiagnostics(text, dictionary)).toList.flatten
 
   private def unknownWordDiagnostics(text: String, dictionary: DictionaryContext): List[Diagnostic] =
-    text
-      .split("\n", -1)
-      .zipWithIndex
-      .flatMap { (line, lineIndex) =>
-        WordPattern
-          .findAllMatchIn(line)
-          // ICONV (#1182): normalize input character variants (ligatures, alternate quote glyphs, ...) to the
-          // form the dictionary was built from before checking membership -- exactly what hunspell itself does
-          // before matching checked text against the dictionary.
-          .filterNot(match_ =>
-            isAccepted(HunspellFormat.applyConversionTable(match_.matched, dictionary.iconv), dictionary) ||
-              isExemptFromCasing(match_.matched, isSentenceInitial(line, match_.start))
-          )
-          .map { match_ =>
-            val word          = match_.matched
-            val convertedWord = HunspellFormat.applyConversionTable(word, dictionary.iconv)
-            // OCONV (#1182): applied only to generated suggestions, matching hunspell's output-conversion
-            // semantics -- the word as typed (`word`, above) is shown unconverted in the diagnostic message.
-            val suggestions = dictionary.replacements
-              .getOrElse(DictionaryWord.normalize(convertedWord), Nil)
-              .map(HunspellFormat.applyConversionTable(_, dictionary.oconv))
-            Diagnostic(
-              range = LspRange(
-                LspPosition(lineIndex, match_.start),
-                LspPosition(lineIndex, match_.end)
-              ),
-              severity = Some(DiagnosticSeverity.Warning),
-              message = diagnosticMessage(word, suggestions),
-              source = Some(Source),
-              code = Some("unknown-word")
-            )
-          }
-          .toList
-      }
-      .toList
+    ProseTokenizer.lines(text).flatMap { line =>
+      line.words
+        .flatMap(word => misspelledParts(line.text, word, dictionary))
+        .map(misspelled => unknownWordDiagnostic(line.index, misspelled, dictionary))
+    }
+
+  /** The parts of `word` to flag: all of it, or, for a hyphenated word that is not itself a dictionary word, only the
+    * hyphen-separated parts that are wrong, as hunspell's default `BREAK` does.
+    */
+  private def misspelledParts(line: String, word: ProseWord, dictionary: DictionaryContext): List[ProseWord] =
+    val sentenceInitial = isSentenceInitial(line, word.start)
+    def flagged(part: ProseWord, partSentenceInitial: Boolean): Boolean =
+      !isAccepted(part.text, dictionary) && !isExemptFromCasing(part.text, partSentenceInitial)
+    if !flagged(word, sentenceInitial) then Nil
+    else
+      ProseTokenizer.hyphenParts(word) match
+        case single @ List(_)                 => single
+        case _ if !dictionary.breaksAtHyphens => List(word)
+        case parts =>
+          parts.zipWithIndex.collect { case (part, index) if flagged(part, sentenceInitial && index == 0) => part }
+
+  private def unknownWordDiagnostic(lineIndex: Int, word: ProseWord, dictionary: DictionaryContext): Diagnostic =
+    // OCONV (#1182): applied only to generated suggestions, matching hunspell's output-conversion semantics -- the
+    // word as typed is shown unconverted in the diagnostic message. Only the REP table's exact entry is looked up here;
+    // searching for near spellings (SpellSuggester) waits until a suggestion is asked for.
+    val suggestions = dictionary.replacements
+      .getOrElse(DictionaryWord.normalize(HunspellFormat.applyConversionTable(word.text, dictionary.iconv)), Nil)
+      .map(HunspellFormat.applyConversionTable(_, dictionary.oconv))
+    Diagnostic(
+      range = LspRange(LspPosition(lineIndex, word.start), LspPosition(lineIndex, word.end)),
+      severity = Some(DiagnosticSeverity.Warning),
+      message = diagnosticMessage(word.text, suggestions),
+      source = Some(Source),
+      code = Some(UnknownWordCode)
+    )
 
   /** Pure: recomputes cached diagnostics against an already-loaded `dictionary` snapshot. Callers obtain that snapshot
     * once via `DictionaryLoader.loadSnapshot` inside `IO.blocking`, then pass the same immutable value here -- this
@@ -221,39 +217,16 @@ object SpellChecker:
       case values =>
         s"$base (suggestions: ${values.mkString(", ")})"
 
-  private def isAccepted(word: String, dictionary: DictionaryContext): Boolean =
-    val normalized = DictionaryWord.normalize(word)
-    normalized.length < 3 || dictionary.words.contains(normalized) ||
-    HunspellCompoundMatcher.matches(
-      normalized,
-      dictionary.compoundRules,
-      dictionary.compoundCandidateIndex,
-      dictionary.compoundMin
-    ) ||
-    // Free-form COMPOUNDFLAG compounding (#1198) is a second, independent mechanism a dictionary may declare
-    // alongside COMPOUNDRULE (real Croatian/Persian .aff files do this) -- tried as a sibling ('||'-shaped) so either
-    // mechanism accepting the word is sufficient, and neither masks the other's rejection.
-    HunspellFreeCompoundMatcher.matches(
-      normalized,
-      dictionary.compoundFlagTrie,
-      HunspellFreeCompoundMatcher.CompoundFlags(
-        dictionary.compoundFlag,
-        dictionary.compoundBeginFlag,
-        dictionary.compoundMiddleFlag,
-        dictionary.compoundEndFlag
-      ),
-      dictionary.compoundMin,
-      dictionary.compoundWordMax,
-      // CHECKCOMPOUND*/SIMPLIFIEDTRIPLE/CHECKCOMPOUNDPATTERN (#1198, PR 2 of 2): a post-hoc filter over the
-      // segmentation(s) the DP above finds, backed by the same word/flag/REP data `dictionary.words`,
-      // `dictionary.compoundWordFlags` and `dictionary.replacements` already carry for standalone lookup.
-      dictionary.compoundCheckRules,
-      dictionary.compoundWordFlags,
-      dictionary.words,
-      dictionary.replacements,
-      // CHECKCOMPOUNDCASE needs the word as typed, not `normalized`'s case-folded form used for the trie walk.
-      originalWord = word
-    )
+  /** Whether the dictionary accepts `token`, after ICONV (#1182) normalises input character variants (ligatures,
+    * alternate quote glyphs, ...) exactly as hunspell does before matching. A typographic apostrophe is the same letter
+    * as a straight one whether or not the dictionary declares it, and a word joined by apostrophes is right when each
+    * of its parts is ("o'clock", "colour's").
+    */
+  private def isAccepted(token: String, dictionary: DictionaryContext): Boolean =
+    val converted = HunspellFormat.applyConversionTable(token, dictionary.iconv)
+    val straight  = converted.replace('’', '\'').replace('ʼ', '\'')
+    WordAcceptance.accepts(converted, dictionary) || WordAcceptance.accepts(straight, dictionary) ||
+    (straight.contains('\'') && straight.split('\'').forall(part => WordAcceptance.accepts(part, dictionary)))
 
   /** Whether `word` should be skipped regardless of dictionary membership (#1528):
     *   - it carries a digit at all (a numeric compound like "COVID-19" or an alphanumeric identifier like "MP3" --

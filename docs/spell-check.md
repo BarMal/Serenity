@@ -50,6 +50,23 @@ A config file saved by an earlier version keeps the values it was saved with (`s
 `spellcheck.languages = ["en"]`); change them to pick up the new defaults. `en` looks for `en.dic`, which Debian and
 Ubuntu do not install.
 
+## What is checked
+
+Spell check applies to prose buffers. Within them it checks the prose and leaves alone what only sits next to it:
+fenced code blocks, inline code, HTML tags, URLs, email addresses, link targets and front matter. A word is accepted if
+the dictionary has it or an affixed form of it, if every part of a hyphenated word (`well-known`, `mother-in-law`) is
+accepted, or if every part either side of an apostrophe is (`o'clock`, `author's`). A typographic apostrophe is the same
+letter as a straight one. Words with a digit in them (`1990s`, `19th-century`, `COVID-19`), all-capitals acronyms and
+capitalised words that do not start a sentence (probably names) are not checked. Only the wrong part of a hyphenated
+word is marked.
+
+## How a dictionary is held
+
+A dictionary stays as the stems in its `.dic` file. Affixes are stripped when a word is looked up, so memory follows the
+number of entries rather than the number of forms they generate, and a suffix that grants a second suffix (a
+continuation class) is understood without enumerating the combinations. Flag sets are shared between entries, and the
+index suggestions use is built the first time one is requested.
+
 ## Bundled British English dictionary
 
 British English needs nothing configured: `spellcheck.enabled` and `spellcheck.languages = ["en-GB"]` are the defaults.
