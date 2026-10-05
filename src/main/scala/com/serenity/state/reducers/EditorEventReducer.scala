@@ -183,7 +183,8 @@ object EditorEventReducer:
   private def isExtendSelectionEvent(event: TextEntryEvent): Boolean =
     event match
       case ExtendSelectionLeft | ExtendSelectionRight | ExtendSelectionWordLeft | ExtendSelectionWordRight |
-          ExtendSelectionSubWordLeft | ExtendSelectionSubWordRight | ExtendSelectionToLineStart | ExtendSelectionToLineEnd | ExtendSelectionPageUp | ExtendSelectionPageDown =>
+          ExtendSelectionSubWordLeft | ExtendSelectionSubWordRight | ExtendSelectionToLineStart |
+          ExtendSelectionToLineEnd | ExtendSelectionPageUp | ExtendSelectionPageDown =>
         true
       case _ => false
 
@@ -267,8 +268,9 @@ object EditorEventReducer:
             DeleteWordBackward | DeleteWordForward =>
           EditorTextEditReducer.reduce(event, ctx)
 
-        case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveSubWordLeft | MoveSubWordRight | MoveToStart | MoveToEnd | MoveToStartOfFile |
-            PageUp | PageDown | ColumnLeft | ColumnRight | MoveToEndOfFile | SelectAll =>
+        case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveSubWordLeft | MoveSubWordRight | MoveToStart |
+            MoveToEnd | MoveToStartOfFile | PageUp | PageDown | ColumnLeft | ColumnRight | MoveToEndOfFile |
+            SelectAll =>
           EditorNavigationEventReducer.reduce(event, ctx)
 
         case OpenGotoLine | OpenFind | OpenReplace | FindNext =>
