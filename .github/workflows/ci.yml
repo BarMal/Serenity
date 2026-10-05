@@ -128,8 +128,24 @@ jobs:
         run: sbt -v clean test
 
   perf:
-    name: Performance benchmarks
+    # The 1x entry keeps the original check name and baseline. The 2x entry runs the suite on a HiDPI virtual display
+    # with Java2D at 2x, matching the target laptop, so Swing's present path paints at the scale users actually see.
+    name: ${{ matrix.scale == 1 && 'Performance benchmarks' || 'Performance benchmarks (2x HiDPI)' }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scale: 1
+            screen: 1920x1200x24
+            dpi: 96
+            baseline: perf-baseline
+            results: perf-benchmark-results
+          - scale: 2
+            screen: 3840x2400x24
+            dpi: 192
+            baseline: perf-baseline-2x
+            results: perf-benchmark-results-2x
 
     steps:
       - name: Check out repository
@@ -162,7 +178,11 @@ jobs:
       # subset into CI with a regression threshold" half.
       - name: Run performance benchmarks
         # A screen large enough for `LaptopFrameBenchmarks`' 1500x1000 window; xvfb-run's default is 1280x1024.
-        run: xvfb-run -a -s "-screen 0 1920x1200x24" sbt -v "Test/runMain com.serenity.perf.PerformanceBenchmarks" | tee perf-results-raw.txt
+        run: >-
+          xvfb-run -a -s "-screen 0 ${{ matrix.screen }} -dpi ${{ matrix.dpi }}"
+          sbt -v 'set Test / run / javaOptions += "-Dsun.java2d.uiScale=${{ matrix.scale }}"'
+          "Test/runMain com.serenity.perf.PerformanceBenchmarks"
+          | tee perf-results-raw.txt
 
       - name: Extract benchmark CSV from sbt output
         shell: bash
@@ -190,9 +210,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: perf-baseline.csv
-          key: perf-baseline-${{ runner.os }}-${{ github.run_id }}
+          key: ${{ matrix.baseline }}-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
-            perf-baseline-${{ runner.os }}-
+            ${{ matrix.baseline }}-${{ runner.os }}-
 
       # A cache-cold run (first run on a branch, or the cache evicted) has no baseline to restore. Only the run that
       # is about to establish a fresh baseline itself -- a push to master, per the steps below -- is allowed to treat
@@ -204,6 +224,10 @@ jobs:
           ARGS=(--threshold 2.0)
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/master" ]; then
             ARGS+=(--allow-missing-baseline)
+          elif [ "${{ matrix.scale }}" != "1" ] && [ "${{ steps.restore-baseline.outputs.cache-matched-key }}" = "" ]; then
+            # The 2x baseline only exists once master has run this entry; until then a PR has nothing to compare.
+            echo "::warning::No 2x HiDPI baseline yet; it is recorded by the next push to master."
+            ARGS+=(--allow-missing-baseline)
           fi
           python3 scripts/check_perf_regression.py perf-baseline.csv perf-results.csv "${ARGS[@]}"
 
@@ -211,7 +235,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: perf-benchmark-results
+          name: ${{ matrix.results }}
           path: perf-results.csv
           retention-days: 90
 
@@ -224,4 +248,4 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: perf-baseline.csv
-          key: perf-baseline-${{ runner.os }}-${{ github.run_id }}
+          key: ${{ matrix.baseline }}-${{ runner.os }}-${{ github.run_id }}
