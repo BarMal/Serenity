@@ -81,6 +81,16 @@ private[config] object ConfigFieldSyntax:
       percent >= ViewportAxisSizing.MinPercent * 100.0 && percent <= ViewportAxisSizing.MaxPercent * 100.0
     )
 
+  /** Characters per line, `off` for none. */
+  private[config] val proseMeasure: FieldCodec[Option[Int]] =
+    given io.circe.Encoder[Option[Int]] = io.circe.Encoder.encodeOption(using io.circe.Encoder.encodeInt)
+    given io.circe.Decoder[Option[Int]] =
+      io.circe.Decoder.decodeOption(using io.circe.Decoder.decodeInt.map(ProseMeasure.clamp))
+    FieldCodec.of(
+      text => if parseBoolean(text).contains(false) then Some(None) else ProseMeasure.parse(text).map(Some.apply),
+      measure => HoconValue.string(measure.fold("off")(ProseMeasure.render))
+    )
+
   private[config] def lowercased[A](values: Array[A]): FieldCodec[A] =
     enumerated(
       text => values.find(_.toString.equalsIgnoreCase(text.replace("-", ""))),

@@ -224,7 +224,7 @@ object MarkdownBlockLens:
       .takeWhile(index => index < lines.lineCount && index <= lastProbeLine && belongs(lines.at(index)))
       .foldLeft(activeLine)((_, index) => index)
 
-  private def isParagraphLine(line: String): Boolean =
+  private[markdown] def isParagraphLine(line: String): Boolean =
     val trimmed = line.trim
     trimmed.nonEmpty &&
     !isFenceLine(line) &&

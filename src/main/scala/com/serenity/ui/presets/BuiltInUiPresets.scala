@@ -25,11 +25,17 @@ private[presets] object BuiltInUiPresets:
       config = AppConfig.default
         .withAppMode(AppMode.Prose)
         .withLineNumbers(false)
-        .withStatusLine(StatusLineConfig(List(StatusSegment.Position), StatusLinePlacement.Floating))
+        .withStatusLine(
+          StatusLineConfig(List(StatusSegment.WordCount, StatusSegment.WordGoal), StatusLinePlacement.Floating)
+        )
         .withPaneHeaders(false)
         .withDefaultDocumentMode(DefaultDocumentMode.RichText)
         .withInterfaceDensity(InterfaceDensity.Spacious)
-        .withTextAreaInsets(TextAreaInsets.fromPercent(22.0, 22.0))
+        .withProseMeasure(Some(ProseMeasure.Default))
+        .withSmartPunctuation(true)
+        .withSpellCheck(AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = true))
+        .withTypewriterScrolling(true)
+        .withFocusedTextBody(true)
         .withFontConfig(
           AppConfig.default.editorConfig.fontConfig.copy(
             textFontFamily = Font.SERIF,

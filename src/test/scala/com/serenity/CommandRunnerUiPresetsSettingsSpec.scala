@@ -61,7 +61,7 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Research Notes"))
     )
     presetPicker.options.headOption.flatMap(_.hint) shouldBe Some(
-      "rich text default; dark; spacious density; Serif 18pt prose; 1 editor pane"
+      "rich text default; spacious density; Serif 18pt prose; 1 editor pane"
     )
     presetPicker.options.takeRight(2).map(_.hint) shouldBe List(
       Some("Saved workspace setup"),

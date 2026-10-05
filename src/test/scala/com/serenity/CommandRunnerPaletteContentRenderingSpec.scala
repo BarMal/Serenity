@@ -157,8 +157,10 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    overlay.x shouldBe paneLayout.contentRect.x
-    overlay.width shouldBe paneLayout.contentRect.width
+    paneLayout.contentRect.x shouldBe layout.editorPanelRect.x
+    paneLayout.contentRect.width shouldBe layout.editorPanelRect.width
+    overlay.width should be <= paneLayout.contentRect.width
+    overlay.x shouldBe paneLayout.contentRect.x + (paneLayout.contentRect.width - overlay.width) / 2
     surface.drawRunPxCalls.map(_.s) should contain("beta")
     surface.drawRunPxCalls.map(_.s) should contain("search: op")
   }

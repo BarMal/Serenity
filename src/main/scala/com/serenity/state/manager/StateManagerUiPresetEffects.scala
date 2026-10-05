@@ -142,7 +142,7 @@ final private[manager] class StateManagerUiPresetEffects(
   private def applyUiPresetEffect(name: String): IO[Unit] =
     requestApply(name)((preset, isBuiltInWorkflow, theme) =>
       base =>
-        if isBuiltInWorkflow then UiPreset.applyBuiltInWorkflowToState(preset, base, theme)
+        if isBuiltInWorkflow then UiPreset.applyBuiltInWorkflowToState(preset, base)
         else UiPreset.applyToState(preset, base, theme)
     )
 

@@ -155,6 +155,8 @@ object ConfigFileFormat:
     field("typography.prose.ligatures"),
     field("typography.code.ligatures"),
     field("typography.ui.ligatures"),
+    comment("Prose line length in characters (e.g. 66ch) while the workspace is in prose mode, or off"),
+    field("typography.prose.measure"),
     comment("How all text adapts to the display: auto, manual (uses the factor below), off"),
     field("typography.scale.mode"),
     field("typography.scale.factor"),
