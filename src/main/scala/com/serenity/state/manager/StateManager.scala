@@ -123,13 +123,13 @@ final case class FileService(
     // #1623: re-checks the focused buffer's on-disk revision on window focus-gain, called from AppRuntime's focus
     // callback -- see StateManagerEffectHandlers.resolveExternalRevisionEffect for the reload-or-prompt logic.
     checkExternalChangesOnFocus: IO[Unit],
-    // #1623: the background counterpart -- AppRuntime's FileChangeWatcher poll loop calls openBufferPaths each cycle
-    // to keep its watched directory set current, then checkBufferForExternalChanges for whichever buffers' files a
-    // poll window actually saw change.
+    // #1623: the background counterpart -- AppRuntime's FileChangeWatcher loop calls openBufferPaths whenever a commit
+    // may have changed its watched directory set, then checkBufferForExternalChanges for whichever buffers' files the
+    // watcher saw change.
     openBufferPaths: IO[Map[Path, BufferId]],
     checkBufferForExternalChanges: BufferId => IO[Unit],
-    // #1691: the same FileChangeWatcher poll loop also watches these directories (re-derived from the current
-    // spell-check config on every cycle) and calls refreshDictionaryFingerprints when a poll window sees a change
+    // #1691: the same FileChangeWatcher loop also watches these directories (re-derived from the current
+    // spell-check config with the rest of the set) and calls refreshDictionaryFingerprints when it sees a change
     // under one of them, so an on-disk dictionary edit invalidates StateManagerOperationBoundary's fingerprint cache
     // in real time rather than only on window focus-gain.
     dictionaryWatchDirectories: IO[Set[Path]],

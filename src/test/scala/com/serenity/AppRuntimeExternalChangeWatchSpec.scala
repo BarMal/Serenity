@@ -6,10 +6,13 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import cats.syntax.all.*
 import com.serenity.app.AppRuntime
 import com.serenity.io.FileChangeWatcher
+import com.serenity.rope.Balance
 import com.serenity.state.models.BufferId
 import com.serenity.testkit.VirtualTime.runVirtual
+import fs2.concurrent.SignallingRef
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -19,6 +22,8 @@ import org.scalatest.matchers.should.Matchers
   * the loop wiring that turns "a watched file changed" into "check this specific buffer."
   */
 class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
 
   "externalChangeWatchLoop" should "check the buffer whose watched file a poll cycle saw change" in {
     val file     = Files.createTempFile("external-change-watch", ".md")
@@ -37,8 +42,7 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
             .externalChangeWatchLoop(
               watcher,
               openBufferPaths = IO.pure(Map(file -> bufferId)),
-              checkBufferForExternalChanges = id => checkedBuffers.update(_ :+ id),
-              pollInterval = 5.seconds
+              checkBufferForExternalChanges = id => checkedBuffers.update(_ :+ id)
             )
             .take(1)
             .compile
@@ -62,10 +66,9 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
           .externalChangeWatchLoop(
             watcher,
             openBufferPaths = IO.pure(Map(file -> bufferId)),
-            checkBufferForExternalChanges = id => checkedBuffers.update(_ :+ id),
-            pollInterval = 1.second
+            checkBufferForExternalChanges = id => checkedBuffers.update(_ :+ id)
           )
-          .take(1)
+          .interruptAfter(1.second)
           .compile
           .drain
       }
@@ -93,8 +96,7 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
               openBufferPaths = IO.pure(Map.empty),
               checkBufferForExternalChanges = _ => IO.unit,
               dictionaryWatchDirectories = IO.pure(Set(dictionaryDirectory)),
-              refreshDictionaryFingerprints = refreshCount.update(_ + 1),
-              pollInterval = 5.seconds
+              refreshDictionaryFingerprints = refreshCount.update(_ + 1)
             )
             .take(1)
             .compile
@@ -119,10 +121,9 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
             openBufferPaths = IO.pure(Map.empty),
             checkBufferForExternalChanges = _ => IO.unit,
             dictionaryWatchDirectories = IO.pure(Set(dictionaryDirectory)),
-            refreshDictionaryFingerprints = refreshCount.update(_ + 1),
-            pollInterval = 1.second
+            refreshDictionaryFingerprints = refreshCount.update(_ + 1)
           )
-          .take(1)
+          .interruptAfter(1.second)
           .compile
           .drain
       }
@@ -134,7 +135,7 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
 
   it should "stay virtual-time-compatible when spell-check is disabled and dictionaryWatchDirectories is empty" in {
     // Mirrors the buffer-less case below: SpellCheckConfig.dictionaryWatchDirectories returns Set.empty when
-    // disabled (the default), so a real IO.blocking WatchService.poll must still never run here either.
+    // disabled (the default), so a real blocking WatchService call must still never run here either.
     val checked = FileChangeWatcher.create.use { watcher =>
       for
         refreshCount <- Ref.of[IO, Int](0)
@@ -144,10 +145,9 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
             openBufferPaths = IO.pure(Map.empty),
             checkBufferForExternalChanges = _ => IO.unit,
             dictionaryWatchDirectories = IO.pure(Set.empty),
-            refreshDictionaryFingerprints = refreshCount.update(_ + 1),
-            pollInterval = 2.seconds
+            refreshDictionaryFingerprints = refreshCount.update(_ + 1)
           )
-          .take(3)
+          .interruptAfter(1.minute)
           .compile
           .drain
         count <- refreshCount.get
@@ -158,8 +158,8 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "stay virtual-time-compatible when there is nothing to watch, instead of blocking on WatchService.poll" in {
-    // Regression test: with no open buffers, the loop must sleep rather than call the real, genuinely-blocking
-    // WatchService.poll -- otherwise any virtual-time test harness driving AppRuntime.run (VirtualTime.runVirtual's
+    // Regression test: with no open buffers, the loop must wait for the watched set to change rather than call the
+    // real, genuinely-blocking WatchService -- otherwise any virtual-time test harness driving AppRuntime.run (VirtualTime.runVirtual's
     // TestControl treats IO.blocking as non-terminating) hangs the instant this loop starts, even though the test
     // itself never opens a file.
     val checked = FileChangeWatcher.create.use { watcher =>
@@ -169,10 +169,9 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
           .externalChangeWatchLoop(
             watcher,
             openBufferPaths = IO.pure(Map.empty),
-            checkBufferForExternalChanges = id => checkedBuffers.update(_ :+ id),
-            pollInterval = 2.seconds
+            checkBufferForExternalChanges = id => checkedBuffers.update(_ :+ id)
           )
-          .take(3)
+          .interruptAfter(1.minute)
           .compile
           .drain
         checked <- checkedBuffers.get
@@ -198,8 +197,7 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
               openBufferPaths = IO.pure(Map.empty),
               checkBufferForExternalChanges = _ => IO.unit,
               explorerWatchDirectories = IO.pure(Set(directory)),
-              markExplorerDirectoriesStale = directories => staleBatches.update(_ :+ directories),
-              pollInterval = 5.seconds
+              markExplorerDirectoriesStale = directories => staleBatches.update(_ :+ directories)
             )
             .take(1)
             .compile
@@ -213,4 +211,97 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
     finally
       Files.deleteIfExists(added)
       Files.deleteIfExists(directory)
+  }
+
+  it should "check a file once for a burst of writes that land within the settle window (#1885)" in {
+    val file     = Files.createTempFile("external-change-watch-burst", ".md")
+    val bufferId = BufferId(1)
+
+    val program = for
+      checkedBuffers <- Ref.of[IO, List[BufferId]](Nil)
+      _ <- FileChangeWatcher.create.use { watcher =>
+        val loop = AppRuntime.externalChangeWatchLoop(
+          watcher,
+          openBufferPaths = IO.pure(Map(file -> bufferId)),
+          checkBufferForExternalChanges = id => checkedBuffers.update(_ :+ id)
+        )
+        val burst =
+          (1 to 5).toList.traverse_(n => IO.blocking(Files.writeString(file, s"write $n")) >> IO.sleep(20.millis))
+        loop.compile.drain.background.surround(IO.sleep(500.millis) >> burst >> IO.sleep(1.second))
+      }
+      checked <- checkedBuffers.get
+    yield checked
+
+    program.unsafeRunTimed(15.seconds) shouldBe Some(List(bufferId))
+  }
+
+  it should "not wake while there is nothing to watch (#1938)" in {
+    val wakeups = FileChangeWatcher.create.use { watcher =>
+      for
+        derivations <- Ref.of[IO, Int](0)
+        _ <- AppRuntime
+          .externalChangeWatchLoop(
+            watcher,
+            openBufferPaths = derivations.update(_ + 1).as(Map.empty),
+            checkBufferForExternalChanges = _ => IO.unit
+          )
+          .interruptAfter(1.minute)
+          .compile
+          .drain
+        count <- derivations.get
+      yield count
+    }
+
+    runVirtual(wakeups) should be <= 1
+  }
+
+  "watchInputsChanged" should "announce an opened file but not an edit to one already open (#1938)" in {
+    val file    = Files.createTempFile("external-change-watch-inputs", ".md")
+    val initial = com.serenity.state.models.AppState.initial
+    val opened = initial.copy(persisted =
+      initial.persisted.copy(buffers =
+        Map(BufferId(1) -> com.serenity.state.models.Buffer.fromFile(BufferId(1), file, "text"))
+      )
+    )
+    val edited = opened.copy(persisted =
+      opened.persisted.copy(buffers =
+        Map(BufferId(1) -> com.serenity.state.models.Buffer.fromFile(BufferId(1), file, "text, edited"))
+      )
+    )
+
+    AppRuntime.watchInputsChanged(initial, opened) shouldBe true
+    AppRuntime.watchInputsChanged(opened, edited) shouldBe false
+  }
+
+  "externalChangeWatchLoop" should "start watching a file once a change to the watched set announces it (#1938)" in {
+    // Its own directory: the shared temp directory sees every other process's files, and any of them would count as
+    // the first change.
+    val file     = Files.createFile(Files.createTempDirectory("external-change-watch-opened").resolve("notes.md"))
+    val bufferId = BufferId(1)
+
+    val program = for
+      open           <- Ref.of[IO, Map[java.nio.file.Path, BufferId]](Map.empty)
+      watchedSet     <- SignallingRef.of[IO, Long](0L)
+      checkedBuffers <- Ref.of[IO, List[BufferId]](Nil)
+      openThenEdit =
+        IO.sleep(300.millis) >> open.set(Map(file -> bufferId)) >> watchedSet.update(_ + 1) >>
+          IO.sleep(300.millis) >> IO.blocking(Files.writeString(file, "changed externally"))
+      _ <- FileChangeWatcher.create.use { watcher =>
+        openThenEdit.background.surround(
+          AppRuntime
+            .externalChangeWatchLoop(
+              watcher,
+              openBufferPaths = open.get,
+              checkBufferForExternalChanges = id => checkedBuffers.update(_ :+ id),
+              watchedSetChanges = watchedSet.discrete.void
+            )
+            .take(1)
+            .compile
+            .drain
+        )
+      }
+      checked <- checkedBuffers.get
+    yield checked
+
+    program.unsafeRunTimed(15.seconds) shouldBe Some(List(bufferId))
   }
