@@ -187,6 +187,17 @@ class SaveFailureNoticeRoutingSpec extends AnyFlatSpec with Matchers:
     f.awaitNotice(_.message.startsWith("Couldn't save the session:")).level shouldBe NoticeLevel.Error
   }
 
+  "Returning to the start page" should "show an error and stay in the editor when the session cannot be written" in {
+    val f = fixture(unwritableSession = true)
+    f.open(file(f.directory, "notes.txt", "draft"))
+
+    f.runWithoutWaiting("return-to-start-page")
+
+    f.awaitNotice(_.message.startsWith("Couldn't save the session:")).level shouldBe NoticeLevel.Error
+    f.state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.StartPage]) shouldBe false
+    f.state.persisted.buffers should not be empty
+  }
+
   "Backing up unsaved edits once typing pauses" should "warn when the backup cannot be written" in {
     val f = fixture(
       unwritableSession = true,

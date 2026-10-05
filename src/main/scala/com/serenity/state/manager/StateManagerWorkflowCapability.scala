@@ -95,17 +95,25 @@ final private[manager] class StateManagerWorkflowCapability(
     * carries over from the committed editor state so the splash matches the environment it came from.
     */
   private def snapshotAndShowStartPage(committed: AppState): IO[Unit] =
-    sessionManager.saveSession(committed, persistUnsavedBuffers = true) >>
-      IO.blocking(
-        committed.persisted.recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
-      ).flatMap { readableRecentFiles =>
-        val page = StartupPageContent.createStartPage(
-          sessionExists = true,
-          recentFiles = readableRecentFiles,
-          resumeIdentifier = Some(StartupPageContent.sessionResumeIdentifier(committed))
-        )
-        modelCommit.commitState(startPageStateFrom(committed, page), committed)
-      }
+    // On failure the editor stays: the start page would offer to resume a session that was never written.
+    sessionManager.saveSession(committed, persistUnsavedBuffers = true).attempt.flatMap {
+      case Right(_) => showStartPage(committed)
+      case Left(error) =>
+        logger.error(error)("[SESSION] Saving the session before the start page failed") >>
+          operations.showNotice(FileFailureNotice.sessionSaveFailed(error))
+    }
+
+  private def showStartPage(committed: AppState): IO[Unit] =
+    IO.blocking(
+      committed.persisted.recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
+    ).flatMap { readableRecentFiles =>
+      val page = StartupPageContent.createStartPage(
+        sessionExists = true,
+        recentFiles = readableRecentFiles,
+        resumeIdentifier = Some(StartupPageContent.sessionResumeIdentifier(committed))
+      )
+      modelCommit.commitState(startPageStateFrom(committed, page), committed)
+    }
 
   private def startPageStateFrom(committed: AppState, page: StartupPage): AppState =
     val startPageSurfaceId = SurfaceId("surface-0")
