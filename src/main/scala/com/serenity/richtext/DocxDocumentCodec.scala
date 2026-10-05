@@ -9,7 +9,7 @@ import scala.util.control.NonFatal
 
 import cats.effect.IO
 import com.serenity.io.AtomicFileWriter
-import org.w3c.dom.{Document as XmlDocument, Element, Node}
+import org.w3c.dom.{Element, Node}
 
 /** Reads and writes Word Open XML documents through Serenity's native rich text model. */
 object DocxDocumentCodec:
@@ -17,6 +17,7 @@ object DocxDocumentCodec:
   private val RelNs  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
   private val PkgRel = "http://schemas.openxmlformats.org/package/2006/relationships"
 
+  private val DocumentEntry              = "word/document.xml"
   private val DocumentRelationshipsEntry = "word/_rels/document.xml.rels"
   private val HyperlinkRelationshipType  = s"$RelNs/hyperlink"
 
@@ -61,15 +62,25 @@ object DocxDocumentCodec:
     AtomicFileWriter.writeBytes(path, writeBytes(document))
 
   def readBytes(bytes: Array[Byte]): Either[RichTextCodecException, RichTextDocument] =
+    readBytesWithFidelity(bytes).map(_.document)
+
+  /** Decode DOCX bytes and report structures that the native model cannot round-trip. */
+  def readBytesWithFidelity(bytes: Array[Byte]): Either[RichTextCodecException, RichTextImport] =
+    decode(bytes, RichTextDecodeSteps.live)
+
+  /** One archive pass and one `document.xml` parse yield the model and the fidelity report together (#1882). */
+  private[richtext] def decode(
+    bytes: Array[Byte],
+    steps: RichTextDecodeSteps
+  ): Either[RichTextCodecException, RichTextImport] =
     try
-      val content = RichTextArchive.zipEntry(bytes, "word/document.xml", "DOCX").getOrElse {
+      val archive = steps.readArchive(bytes, "DOCX", Set(DocumentEntry, DocumentRelationshipsEntry))
+      val content = archive.entries.getOrElse(
+        DocumentEntry,
         throw RichTextCodecException("DOCX archive is missing word/document.xml")
-      }
-      val xml = parseXml(content)
-      val links = RichTextArchive
-        .zipEntry(bytes, DocumentRelationshipsEntry, "DOCX")
-        .map(hyperlinkTargets)
-        .getOrElse(Map.empty)
+      )
+      val xml   = steps.parseBody(content)
+      val links = archive.entries.get(DocumentRelationshipsEntry).map(hyperlinkTargets).getOrElse(Map.empty)
       val paragraphs = firstElement(xml.getElementsByTagNameNS(WNs, "body"))
         .map(body =>
           childElements(body)
@@ -77,35 +88,17 @@ object DocxDocumentCodec:
             .map(paragraphFromElement(_, links))
         )
         .getOrElse(Nil)
-
-      Right(
-        RichTextDocument(
-          if paragraphs.nonEmpty then paragraphs
-          else List(RichTextParagraph.plain(""))
-        ).normalized
-      )
+      val document = RichTextDocument(
+        if paragraphs.nonEmpty then paragraphs
+        else List(RichTextParagraph.plain(""))
+      ).normalized
+      val unsupportedElements =
+        RichTextXmlParser.elementNames(xml.getDocumentElement, Some(WNs)) -- SupportedElements
+      val unsupportedEntries = archive.entryNames -- SupportedArchiveEntries
+      Right(RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries)))
     catch
       case error: RichTextCodecException => Left(error)
       case NonFatal(error)               => Left(RichTextCodecException("DOCX document could not be decoded", error))
-
-  /** Decode DOCX bytes and report structures that the native model cannot round-trip. */
-  def readBytesWithFidelity(bytes: Array[Byte]): Either[RichTextCodecException, RichTextImport] =
-    readBytes(bytes).flatMap { document =>
-      try
-        val content = RichTextArchive.zipEntry(bytes, "word/document.xml", "DOCX").getOrElse(Array.emptyByteArray)
-        val xml     = parseXml(content)
-        val unsupportedElements =
-          (0 until xml.getElementsByTagNameNS(WNs, "*").getLength)
-            .map(xml.getElementsByTagNameNS(WNs, "*").item)
-            .collect { case element: Element => element.getLocalName }
-            .filterNot(SupportedElements.contains)
-            .toSet
-        val unsupportedEntries = RichTextArchive.entryNames(bytes, "DOCX") -- SupportedArchiveEntries
-        Right(RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries)))
-      catch
-        case error: RichTextCodecException => Left(error)
-        case NonFatal(error)               => Left(RichTextCodecException("DOCX document could not be decoded", error))
-    }
 
   def writeBytes(document: RichTextDocument): Array[Byte] =
     val normalized = document.normalized
@@ -120,12 +113,9 @@ object DocxDocumentCodec:
     finally zip.close()
     output.toByteArray
 
-  private def parseXml(bytes: Array[Byte]): XmlDocument =
-    RichTextXmlParser.parse(bytes)
-
   /** Relationship id to external target, for the relationships that are hyperlinks. */
   private def hyperlinkTargets(relationshipsXml: Array[Byte]): Map[String, String] =
-    elements(parseXml(relationshipsXml).getElementsByTagNameNS(PkgRel, "Relationship"))
+    elements(RichTextXmlParser.parse(relationshipsXml).getElementsByTagNameNS(PkgRel, "Relationship"))
       .filter(_.getAttribute("Type") == HyperlinkRelationshipType)
       .flatMap(relationship =>
         Option(relationship.getAttribute("Id"))

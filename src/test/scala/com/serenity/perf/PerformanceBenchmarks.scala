@@ -75,7 +75,8 @@ object PerformanceBenchmarks:
       .use {
         case ((window, presentWindow), projectRoot) =>
           IO {
-            val all     = benchmarks(window, projectRoot) ++ LaptopFrameBenchmarks.benchmarks(presentWindow)
+            val all = benchmarks(window, projectRoot) ++ LaptopFrameBenchmarks.benchmarks(presentWindow) ++
+              RichDocumentOpenBenchmarks.benchmarks
             val results = BenchmarkRunner.runMatching(args.toList, all)
             BenchmarkRunner.printResults(results)
           }

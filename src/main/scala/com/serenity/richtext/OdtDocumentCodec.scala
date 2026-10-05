@@ -18,7 +18,8 @@ object OdtDocumentCodec:
   private val TextNs                  = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
   private val FoNs                    = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
   private val XlinkNs                 = "http://www.w3.org/1999/xlink"
-  private val SupportedArchiveEntries = Set("mimetype", "META-INF/manifest.xml", "content.xml")
+  private val ContentEntry            = "content.xml"
+  private val SupportedArchiveEntries = Set("mimetype", "META-INF/manifest.xml", ContentEntry)
 
   private val SupportedElements = Set(
     "document-content",
@@ -61,11 +62,24 @@ object OdtDocumentCodec:
     AtomicFileWriter.writeBytes(path, writeBytes(document))
 
   def readBytes(bytes: Array[Byte]): Either[RichTextCodecException, RichTextDocument] =
+    readBytesWithFidelity(bytes).map(_.document)
+
+  /** Decode ODT bytes and report structures that the native model cannot round-trip. */
+  def readBytesWithFidelity(bytes: Array[Byte]): Either[RichTextCodecException, RichTextImport] =
+    decode(bytes, RichTextDecodeSteps.live)
+
+  /** One archive pass and one `content.xml` parse yield the model and the fidelity report together (#1882). */
+  private[richtext] def decode(
+    bytes: Array[Byte],
+    steps: RichTextDecodeSteps
+  ): Either[RichTextCodecException, RichTextImport] =
     try
-      val content = RichTextArchive.zipEntry(bytes, "content.xml", "ODT").getOrElse {
+      val archive = steps.readArchive(bytes, "ODT", Set(ContentEntry))
+      val content = archive.entries.getOrElse(
+        ContentEntry,
         throw RichTextCodecException("ODT archive is missing content.xml")
-      }
-      val xml    = parseXml(content)
+      )
+      val xml    = steps.parseBody(content)
       val styles = stylesFromDocument(xml)
       val paragraphs = firstElement(xml.getElementsByTagNameNS(OfficeNs, "text"))
         .map(textElement =>
@@ -74,35 +88,16 @@ object OdtDocumentCodec:
             .map(paragraphFromElement(_, styles))
         )
         .getOrElse(Nil)
-
-      Right(
-        RichTextDocument(
-          if paragraphs.nonEmpty then paragraphs
-          else List(RichTextParagraph.plain(""))
-        ).normalized
-      )
+      val document = RichTextDocument(
+        if paragraphs.nonEmpty then paragraphs
+        else List(RichTextParagraph.plain(""))
+      ).normalized
+      val unsupportedElements = RichTextXmlParser.elementNames(xml.getDocumentElement, None) -- SupportedElements
+      val unsupportedEntries  = archive.entryNames -- SupportedArchiveEntries
+      Right(RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries)))
     catch
       case error: RichTextCodecException => Left(error)
       case NonFatal(error)               => Left(RichTextCodecException("ODT document could not be decoded", error))
-
-  /** Decode ODT bytes and report structures that the native model cannot round-trip. */
-  def readBytesWithFidelity(bytes: Array[Byte]): Either[RichTextCodecException, RichTextImport] =
-    readBytes(bytes).flatMap { document =>
-      try
-        val content = RichTextArchive.zipEntry(bytes, "content.xml", "ODT").getOrElse(Array.emptyByteArray)
-        val xml     = parseXml(content)
-        val unsupportedElements =
-          (0 until xml.getElementsByTagName("*").getLength)
-            .map(xml.getElementsByTagName("*").item)
-            .collect { case element: Element => element.getLocalName }
-            .filterNot(SupportedElements.contains)
-            .toSet
-        val unsupportedEntries = RichTextArchive.entryNames(bytes, "ODT") -- SupportedArchiveEntries
-        Right(RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries)))
-      catch
-        case error: RichTextCodecException => Left(error)
-        case NonFatal(error)               => Left(RichTextCodecException("ODT document could not be decoded", error))
-    }
 
   def writeBytes(document: RichTextDocument): Array[Byte] =
     val output = ByteArrayOutputStream()
@@ -113,9 +108,6 @@ object OdtDocumentCodec:
       writeZipEntry(zip, "content.xml", contentXml(document.normalized))
     finally zip.close()
     output.toByteArray
-
-  private def parseXml(bytes: Array[Byte]): XmlDocument =
-    RichTextXmlParser.parse(bytes)
 
   private def stylesFromDocument(document: XmlDocument): OdtStyles =
     val styleElements = elements(document.getElementsByTagNameNS(StyleNs, "style"))
