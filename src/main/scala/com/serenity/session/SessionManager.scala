@@ -36,7 +36,7 @@ class SessionManager(
   private val journal = new SessionWriteJournal(pendingFile, indexFile, safeSessionPath, logger)
 
   private val contentStore = new SessionContentStore(
-    sessionFileName => safeSessionPath(s"${sessionFileName.stripSuffix(".json")}.content"),
+    sessionFileName => safeSessionPath(SessionContentStore.directoryName(sessionFileName)),
     logger
   )
 

@@ -58,7 +58,7 @@ class InstanceLockSpec extends AnyFlatSpec with Matchers:
         |public class HoldLock {
         |  public static void main(String[] args) throws Exception {
         |    FileChannel channel = FileChannel.open(Path.of(args[0]), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        |    System.out.println(channel.tryLock() == null ? "busy" : "locked");
+        |    System.out.print((channel.tryLock() == null ? "busy" : "locked") + "\n");
         |    System.out.flush();
         |    Thread.sleep(Long.MAX_VALUE);
         |  }

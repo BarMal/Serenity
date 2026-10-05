@@ -6,6 +6,9 @@ import org.scalatest.matchers.should.Matchers
 
 class SessionSalvageSpec extends AnyFlatSpec with Matchers:
 
+  private val newer   = SessionState.CurrentSchemaVersion.value + 1
+  private val current = SessionState.CurrentSchemaVersion.value
+
   private def buffer(filePath: Option[String], isDirty: Boolean, unsavedContent: Option[String]): Json =
     Json.obj(
       "id"             -> Json.fromInt(1),
@@ -18,7 +21,7 @@ class SessionSalvageSpec extends AnyFlatSpec with Matchers:
     Json.obj("schemaVersion" -> Json.fromInt(schemaVersion), "buffers" -> Json.arr(buffers*)).spaces2
 
   "SessionSalvage.reason" should "call a session from a newer schema a newer version, not corruption" in {
-    SessionSalvage.reason(session(4)) shouldBe UnreadableReason.NewerVersion(4)
+    SessionSalvage.reason(session(newer)) shouldBe UnreadableReason.NewerVersion(newer)
   }
 
   it should "call unparseable JSON corrupt" in {
@@ -27,7 +30,7 @@ class SessionSalvageSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "call a current-schema file that failed to decode corrupt" in {
-    SessionSalvage.reason(session(3)) shouldBe UnreadableReason.Corrupt
+    SessionSalvage.reason(session(current)) shouldBe UnreadableReason.Corrupt
   }
 
   "SessionSalvage.salvage" should "keep unsaved and untitled text from a parseable session, labelled by file name" in {
@@ -56,9 +59,35 @@ class SessionSalvageSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "read a buffer's unsaved text from the content file its contentRef names" in {
+    val json = session(
+      current,
+      buffer(Some("/work/notes.md"), isDirty = true, None).deepMerge(Json.obj("contentRef" -> Json.fromString("abc"))),
+      buffer(Some("/work/gone.md"), isDirty = true, None).deepMerge(
+        Json.obj("contentRef" -> Json.fromString("missing"))
+      )
+    )
+
+    SessionSalvage.salvage(json, Map("abc" -> "edited in a content file").get) shouldBe List(
+      SalvagedText("notes.md", "edited in a content file")
+    )
+  }
+
+  it should "resolve contentRefs in a truncated session, in file order alongside inline text" in {
+    val truncated =
+      """{ "buffers": [ { "id": 1, "contentRef": "aa" }, { "id": 2, "unsavedContent": "inline" },""" +
+        """ { "id": 3, "contentRef": "bb" }, { "id": 4, "contentRef": "cut"""
+
+    SessionSalvage.salvage(truncated, Map("aa" -> "first", "bb" -> "third").get) shouldBe List(
+      SalvagedText("recovered-1", "first"),
+      SalvagedText("recovered-2", "inline"),
+      SalvagedText("recovered-3", "third")
+    )
+  }
+
   "SessionSalvage.backupFileName" should "stamp the reason and the time onto the original name" in {
     SessionSalvage.backupFileName("session.json", UnreadableReason.Corrupt, 42L) shouldBe "session.json.corrupt-42"
-    SessionSalvage.backupFileName("session.json", UnreadableReason.NewerVersion(4), 42L) shouldBe
+    SessionSalvage.backupFileName("session.json", UnreadableReason.NewerVersion(newer), 42L) shouldBe
       "session.json.newer-42"
   }
 

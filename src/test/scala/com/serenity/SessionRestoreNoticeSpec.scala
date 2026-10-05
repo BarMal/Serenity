@@ -8,7 +8,7 @@ import _root_.io.circe.Json
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
-import com.serenity.session.{SessionManager, UnreadableReason, UnreadableSession}
+import com.serenity.session.{SessionManager, SessionState, UnreadableReason, UnreadableSession}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
@@ -57,13 +57,18 @@ class SessionRestoreNoticeSpec extends AnyFlatSpec with Matchers with OptionValu
   private def fromSchema(version: Int)(json: String): String =
     _root_.io.circe.parser.parse(json).toOption.value.mapObject(_.add("schemaVersion", Json.fromInt(version))).spaces2
 
-  /** Cut off just after `text`'s closing quote, as a write interrupted mid-file would leave it. */
-  private def truncatedAfter(text: String)(json: String): String =
-    json.take(json.indexOf(s"\"$text\"") + text.length + 2)
+  private val newerSchema = SessionState.CurrentSchemaVersion.value + 1
+
+  /** Cut off just after the buffer's content reference, as a write interrupted mid-file would leave it. The text itself
+    * lives in a content file beside the session file (#1912), not in the session file.
+    */
+  private val truncatedAfterContentRef: String => String = json =>
+    val reference = "\"contentRef\"\\s*:\\s*\"[0-9a-f]+\"".r
+    reference.findFirstMatchIn(json).fold(json)(found => json.take(found.end))
 
   "SessionManager.setAsideUnreadableCurrentSession" should "move a corrupt session aside and export its unsaved text" in {
     val program = for
-      root     <- damagedSession("my unsaved draft")(truncatedAfter("my unsaved draft"))
+      root     <- damagedSession("my unsaved draft")(truncatedAfterContentRef)
       original <- IO.blocking(Files.readString(sessionFile(root)))
       setAside <- sessionManagerAt(root).setAsideUnreadableCurrentSession()
       unreadable = setAside.value
@@ -73,17 +78,19 @@ class SessionRestoreNoticeSpec extends AnyFlatSpec with Matchers with OptionValu
       unreadable.backup.getFileName.toString should startWith("session.json.corrupt-")
       Files.readString(unreadable.backup) shouldBe original
       unreadable.recoveredTexts.map(Files.readString) shouldBe List("my unsaved draft")
+      Files.isDirectory(unreadable.backup.resolveSibling(s"${unreadable.backup.getFileName}.content")) shouldBe true
+      Files.exists(sessionFile(root).resolveSibling("session.content")) shouldBe false
 
     program.unsafeRunSync()
   }
 
-  it should "keep a schema-4 session as a .newer backup and export its unsaved text" in {
+  it should "keep a newer-schema session as a .newer backup and export its unsaved text" in {
     val program = for
-      root     <- damagedSession("written by a newer build")(fromSchema(4))
+      root     <- damagedSession("written by a newer build")(fromSchema(newerSchema))
       setAside <- sessionManagerAt(root).setAsideUnreadableCurrentSession()
       unreadable = setAside.value
     yield
-      unreadable.reason shouldBe UnreadableReason.NewerVersion(4)
+      unreadable.reason shouldBe UnreadableReason.NewerVersion(newerSchema)
       unreadable.backup.getFileName.toString should startWith("session.json.newer-")
       Files.exists(sessionFile(root)) shouldBe false
       unreadable.recoveredTexts.map(Files.readString) shouldBe List("written by a newer build")
@@ -107,7 +114,7 @@ class SessionRestoreNoticeSpec extends AnyFlatSpec with Matchers with OptionValu
   "UnreadableSession.describe" should "say why the session was not restored and where each copy is" in {
     val backup    = Path.of("/home/me/.serenity/sessions/session.json.newer-7")
     val recovered = Path.of("/home/me/.serenity/sessions/session.json.newer-7.recovered/01-notes.md.txt")
-    val lines     = UnreadableSession(UnreadableReason.NewerVersion(4), backup, List(recovered)).describe
+    val lines     = UnreadableSession(UnreadableReason.NewerVersion(newerSchema), backup, List(recovered)).describe
 
     lines.mkString(" ") should include("newer version of Serenity")
     lines.mkString(" ") should include(backup.toString)
@@ -131,13 +138,13 @@ class SessionRestoreNoticeSpec extends AnyFlatSpec with Matchers with OptionValu
 
   "Startup" should "state on the start page and in a prompt that the session could not be restored" in {
     val program = for
-      root  <- damagedSession("draft to keep")(fromSchema(4))
+      root  <- damagedSession("draft to keep")(fromSchema(newerSchema))
       state <- launch(root, openPath = None)
       startPage = state.startPageSurface.map(_.content).collect { case SurfaceContent.StartPage(page) => page }
       prompt    = confirmPrompts(state).find(_.title == "Session not restored").value
       backups   = sessionsEntries(root).filter(_.startsWith("session.json.newer-"))
     yield
-      backups should have size 2 // the backup and its `.recovered` folder
+      backups should have size 3 // the backup, its `.content` folder and its `.recovered` folder
       startPage.value.statusMessage.value should include("newer version of Serenity")
       prompt.message.mkString(" ") should include(backups.min)
       prompt.choices.items.map(_.label) should contain("Open 01-untitled-1.txt")
@@ -147,7 +154,7 @@ class SessionRestoreNoticeSpec extends AnyFlatSpec with Matchers with OptionValu
 
   it should "still set the session aside and say so when launched with a file to open" in {
     val program = for
-      root     <- damagedSession("draft to keep")(truncatedAfter("draft to keep"))
+      root     <- damagedSession("draft to keep")(truncatedAfterContentRef)
       document <- IO.blocking(Files.writeString(Files.createTempFile("session-restore-open", ".txt"), "opened"))
       state    <- launch(root, openPath = Some(document))
     yield

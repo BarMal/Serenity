@@ -3,6 +3,8 @@ package com.serenity.session
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, StandardOpenOption}
 
+import scala.util.Try
+
 import cats.effect.IO
 import cats.syntax.all.*
 import org.typelevel.log4cats.Logger
@@ -23,12 +25,34 @@ object SessionSetAside:
           backup = sessionFile.resolveSibling(
             SessionSalvage.backupFileName(sessionFile.getFileName.toString, reason, epochMillis)
           )
-          _ <- IO.blocking(Files.move(sessionFile, backup))
-          recovered <- exportTexts(backup, SessionSalvage.salvage(json)).handleErrorWith(error =>
+          _       <- IO.blocking(Files.move(sessionFile, backup))
+          content <- keepContentWith(sessionFile, backup, logger)
+          recovered <- exportTexts(backup, SessionSalvage.salvage(json, contentIn(content))).handleErrorWith(error =>
             logger.error(error)(s"[SESSION] Could not export unsaved text from $backup").as(Nil)
           )
         yield Some(UnreadableSession(reason, backup, recovered))
     }
+
+  /** The session's content files (#1912) go with its backup: the next save would otherwise prune them from beside the
+    * new session file, leaving the backup naming text that no longer exists.
+    */
+  private def keepContentWith(sessionFile: Path, backup: Path, logger: Logger[IO]): IO[Option[Path]] =
+    val original = sessionFile.resolveSibling(SessionContentStore.directoryName(sessionFile.getFileName.toString))
+    val kept     = backup.resolveSibling(SessionContentStore.directoryName(backup.getFileName.toString))
+    IO.blocking(Files.isDirectory(original)).flatMap {
+      case false => IO.none
+      case true =>
+        IO.blocking(Files.move(original, kept))
+          .map(Option(_))
+          .handleErrorWith(error =>
+            logger.error(error)(s"[SESSION] Could not move content files $original beside $backup").as(None)
+          )
+    }
+
+  private def contentIn(directory: Option[Path])(ref: String): Option[String] =
+    directory.flatMap(dir =>
+      Try(Files.readString(dir.resolve(SessionContentStore.contentFileName(ref)), StandardCharsets.UTF_8)).toOption
+    )
 
   private def exportTexts(backup: Path, texts: List[SalvagedText]): IO[List[Path]] =
     if texts.isEmpty then IO.pure(Nil)

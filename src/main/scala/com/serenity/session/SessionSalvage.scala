@@ -35,9 +35,11 @@ final case class UnreadableSession(reason: UnreadableReason, backup: Path, recov
 
 object SessionSalvage:
 
-  // A truncated write leaves JSON no parser accepts, but every buffer text written before the cut is still a complete
-  // JSON string literal after its key.
-  private val UnsavedContentLiteral = "\"unsavedContent\"\\s*:\\s*(\"(?:[^\"\\\\]|\\\\.)*\")".r
+  // A truncated write leaves JSON no parser accepts, but every buffer text (or the reference to its content file)
+  // written before the cut is still a complete JSON string literal after its key.
+  private val UnsavedContentLiteral = "\"unsavedContent\"\\s*:\\s*(\"(?:[^\"\\\\]|\\\\.)*\")"
+  private val ContentRefLiteral     = "\"contentRef\"\\s*:\\s*\"([0-9A-Za-z]+)\""
+  private val TextLiteral           = s"$UnsavedContentLiteral|$ContentRefLiteral".r
 
   private val UnsafeFileNameCharacters = "[^A-Za-z0-9._-]+".r
 
@@ -51,8 +53,11 @@ object SessionSalvage:
       .filter(_ > SessionState.CurrentSchemaVersion.value)
       .fold(UnreadableReason.Corrupt)(UnreadableReason.NewerVersion(_))
 
-  def salvage(json: String): List[SalvagedText] =
-    _root_.io.circe.parser.parse(json).fold(_ => scanned(json), parsed)
+  /** `contentFor` resolves a `contentRef` to the text of the content file it names (#1912), `None` if that file is
+    * gone.
+    */
+  def salvage(json: String, contentFor: String => Option[String] = _ => None): List[SalvagedText] =
+    _root_.io.circe.parser.parse(json).fold(_ => scanned(json, contentFor), parsed(_, contentFor))
 
   def backupFileName(originalFileName: String, reason: UnreadableReason, epochMillis: Long): String =
     val kind = reason match
@@ -65,16 +70,21 @@ object SessionSalvage:
     f"${index + 1}%02d-$safeLabel.txt"
 
   /** A clean file-backed buffer's text is already on disk, so only edited or untitled text is worth keeping. */
-  private def parsed(session: Json): List[SalvagedText] =
+  private def parsed(session: Json, contentFor: String => Option[String]): List[SalvagedText] =
     session.hcursor.downField("buffers").values.toList.flatten.zipWithIndex.flatMap { (buffer, index) =>
       val cursor   = buffer.hcursor
       val filePath = cursor.get[Option[String]]("filePath").toOption.flatten
       val edited   = cursor.get[Boolean]("isDirty").getOrElse(true) || filePath.isEmpty
-      unsavedText(cursor).filter(_ => edited).map(SalvagedText(label(filePath, index), _))
+      unsavedText(cursor, contentFor).filter(_ => edited).map(SalvagedText(label(filePath, index), _))
     }
 
-  private def unsavedText(cursor: ACursor): Option[String] =
-    cursor.get[Option[String]]("unsavedContent").toOption.flatten.filter(_.nonEmpty)
+  private def unsavedText(cursor: ACursor, contentFor: String => Option[String]): Option[String] =
+    cursor
+      .get[Option[String]]("unsavedContent")
+      .toOption
+      .flatten
+      .orElse(cursor.get[Option[String]]("contentRef").toOption.flatten.flatMap(contentFor))
+      .filter(_.nonEmpty)
 
   private def label(filePath: Option[String], index: Int): String =
     filePath
@@ -82,10 +92,14 @@ object SessionSalvage:
       .map(_.toString)
       .getOrElse(s"untitled-${index + 1}")
 
-  private def scanned(json: String): List[SalvagedText] =
-    UnsavedContentLiteral
+  private def scanned(json: String, contentFor: String => Option[String]): List[SalvagedText] =
+    TextLiteral
       .findAllMatchIn(json)
-      .flatMap(found => _root_.io.circe.parser.decode[String](found.group(1)).toOption)
+      .flatMap(found =>
+        Option(found.group(1))
+          .flatMap(literal => _root_.io.circe.parser.decode[String](literal).toOption)
+          .orElse(Option(found.group(2)).flatMap(contentFor))
+      )
       .filter(_.nonEmpty)
       .zipWithIndex
       .map((text, index) => SalvagedText(s"recovered-${index + 1}", text))
