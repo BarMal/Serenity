@@ -10,6 +10,13 @@ object RequestId:
 
   extension (id: RequestId) def value: Long = id
 
+/** The `id` of a request the server sent the client. JSON-RPC allows a number or a string, and the reply has to echo
+  * whichever form arrived, so this is kept apart from [[RequestId]], which only ever names this client's own requests.
+  */
+enum ServerRequestId:
+  case Numeric(value: Long)
+  case Text(value: String)
+
 /** The `uri` of an open document, distinct from a [[WorkspaceRootUri]] -- both are `file://...` strings, but mixing
   * them up (e.g. keying a per-document map by workspace root) is exactly the class of bug an opaque type prevents.
   */
