@@ -112,7 +112,7 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
       case _ =>
         for
           _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
-          encoded = encodedForSave(buffer, buffer.document.content.collect())
+          encoded = encodedForSave(buffer, plainTextForSave(buffer))
           stored <- saveStored(path, encoded.bytes, expectedRevision)
         yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision)))
 
@@ -296,6 +296,11 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
       .filter(_.matchesPlainText(text))
       .getOrElse(RichTextDocument.fromPlainText(text))
 
+  /** The rope's text, except that a rich document's inline atoms (soft breaks) become the text they stand for. */
+  private def plainTextForSave(buffer: Buffer): String =
+    val text = buffer.document.content.collect()
+    buffer.richText.richTextDocument.filter(_.matchesPlainText(text)).fold(text)(_.exportText)
+
   private def markdownContentForSave(buffer: Buffer): String =
     richTextDocumentForSave(buffer).paragraphs
       .map { paragraph =>
@@ -307,6 +312,9 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
       .mkString("\n")
 
   private def markdownRun(run: com.serenity.richtext.RichTextRun): String =
+    if run.atom.nonEmpty then MarkdownHardBreak else markdownMarkedText(run)
+
+  private def markdownMarkedText(run: com.serenity.richtext.RichTextRun): String =
     val marks = run.style.marks
     val marked =
       if marks.contains(com.serenity.richtext.InlineMark.Bold) && marks.contains(
@@ -317,6 +325,8 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
       else if marks.contains(com.serenity.richtext.InlineMark.Italic) then s"*${run.text}*"
       else run.text
     if marks.contains(com.serenity.richtext.InlineMark.Underline) then s"<u>$marked</u>" else marked
+
+  private val MarkdownHardBreak = "\\\n"
 
   private def languageFromPath(path: Path): Option[LanguageId] =
     Option(path.getFileName)

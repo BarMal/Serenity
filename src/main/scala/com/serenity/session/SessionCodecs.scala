@@ -190,6 +190,13 @@ given Decoder[ParagraphAlignment] = Decoder.decodeString.emap {
   case other     => Left(s"Unknown ParagraphAlignment: $other")
 }
 
+given Encoder[InlineAtom] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[InlineAtom] = Decoder.decodeString.emap {
+  case "SoftBreak" => Right(InlineAtom.SoftBreak)
+  case other       => Left(s"Unknown InlineAtom: $other")
+}
+
 given Encoder[RichTextStyle] = deriveEncoder
 given Decoder[RichTextStyle] = deriveDecoder
 

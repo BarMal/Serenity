@@ -160,22 +160,21 @@ object DocxDocumentCodec:
       ParagraphRole.Heading(level.max(1))
     }
 
-  private def runFromElement(element: Element): Option[RichTextRun] =
+  private def runsFromRunElement(element: Element): List[RichTextRun] =
     val style = childElement(element, WNs, "rPr").map(styleFromRunProperties).getOrElse(RichTextStyle.empty)
-    val text = childElements(element).flatMap {
+    childElements(element).flatMap {
       case child if child.getNamespaceURI == WNs && child.getLocalName == "t" =>
-        Option(child.getTextContent).toList
+        Option(child.getTextContent).map(RichTextRun(_, style)).toList
       case child if child.getNamespaceURI == WNs && child.getLocalName == "tab" =>
-        List("\t")
+        List(RichTextRun("\t", style))
       case child if child.getNamespaceURI == WNs && child.getLocalName == "br" =>
-        List("\n")
+        List(RichTextRun.softBreak(style))
       case _ =>
         Nil
-    }.mkString
-    Option.when(text.nonEmpty)(RichTextRun(text, style))
+    }
 
   private def runsFromNode(element: Element): List[RichTextRun] =
-    if element.getNamespaceURI == WNs && element.getLocalName == "r" then runFromElement(element).toList
+    if element.getNamespaceURI == WNs && element.getLocalName == "r" then runsFromRunElement(element)
     else childElements(element).flatMap(runsFromNode)
 
   private def styleFromRunProperties(element: Element): RichTextStyle =
@@ -253,16 +252,17 @@ object DocxDocumentCodec:
 
   private def runsXml(runs: List[RichTextRun]): String =
     runs
-      .map(run => s"""      <w:r>${runPropertiesXml(run.style)}${runTextXml(run.text)}</w:r>""")
+      .map(run => s"""      <w:r>${runPropertiesXml(run.style)}${runContentXml(run)}</w:r>""")
       .mkString("\n")
+
+  private def runContentXml(run: RichTextRun): String =
+    run.atom.fold(runTextXml(run.text)) { case InlineAtom.SoftBreak => "<w:br/>" }
 
   private def runTextXml(text: String): String =
     text
       .foldLeft((StringBuilder(), List.empty[String])) {
         case ((chunk, acc), '\t') =>
           (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<w:tab/>")
-        case ((chunk, acc), '\n') =>
-          (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<w:br/>")
         case ((chunk, acc), char) =>
           chunk.append(char)
           (chunk, acc)

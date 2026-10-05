@@ -84,17 +84,24 @@ object RtfDocumentCodec:
       val end     = element.getEndOffset.min(paragraphElement.getEndOffset).min(document.getLength)
       val length  = (end - start).max(0)
 
-      Option
-        .when(length > 0) {
-          val text = document
-            .getText(start, length)
-            .replace("\r", "")
-            .stripSuffix("\n")
-            .replace(InlineLineBreakMarker.toString, "\n")
-          Option.when(text.nonEmpty)(RichTextRun(text, styleFromAttributes(element.getAttributes)))
-        }
-        .flatten
+      if length > 0 then
+        val text = document
+          .getText(start, length)
+          .replace("\r", "")
+          .stripSuffix("\n")
+        runsFromText(text, styleFromAttributes(element.getAttributes))
+      else Nil
     }
+
+  private def runsFromText(text: String, style: RichTextStyle): List[RichTextRun] =
+    text
+      .split(InlineLineBreakMarker.toString, -1)
+      .toList
+      .zipWithIndex
+      .flatMap { (part, index) =>
+        Option.when(index > 0)(RichTextRun.softBreak(style)).toList ++
+          Option.when(part.nonEmpty)(RichTextRun(part, style)).toList
+      }
 
   private def toStyledDocument(document: RichTextDocument): SwingText.StyledDocument =
     val styledDocument = SwingText.DefaultStyledDocument()
@@ -104,7 +111,7 @@ object RtfDocumentCodec:
       runsForWriting(paragraph).foreach { (text, style) =>
         styledDocument.insertString(
           styledDocument.getLength,
-          text.replace('\n', InlineLineBreakMarker),
+          text.replace(RichTextRun.AtomCharacter, InlineLineBreakMarker),
           attributesFromStyle(style)
         )
       }

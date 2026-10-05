@@ -72,11 +72,15 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
 
     val decoded = RtfDocumentCodec.readBytes(rtf.getBytes(StandardCharsets.UTF_8))
 
-    singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
+    singleParagraph(decoded).runs shouldBe
+      List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))
+    decoded.exportText shouldBe "alpha\tbeta\ngamma"
   }
 
   it should "write tabs and line breaks as native RTF controls" in {
-    val source = RichTextDocument.oneParagraph("alpha\tbeta\ngamma")
+    val source = RichTextDocument(
+      List(RichTextParagraph(List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))))
+    )
 
     val bytes   = RtfDocumentCodec.writeBytes(source)
     val rtfText = String(bytes, StandardCharsets.UTF_8)
@@ -84,7 +88,9 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
 
     rtfText should include("\\tab")
     rtfText should include("\\line")
-    singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
+    singleParagraph(decoded).runs shouldBe
+      List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))
+    decoded.exportText shouldBe "alpha\tbeta\ngamma"
   }
 
   it should "visually approximate heading paragraphs as bold, larger text" in {

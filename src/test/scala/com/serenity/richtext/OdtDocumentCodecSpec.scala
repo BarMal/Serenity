@@ -189,7 +189,9 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "write tabs and line breaks as native ODT text elements" in {
-    val source = RichTextDocument.oneParagraph("alpha\tbeta\ngamma")
+    val source = RichTextDocument(
+      List(RichTextParagraph(List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))))
+    )
 
     val bytes      = OdtDocumentCodec.writeBytes(source)
     val contentXml = zipEntryText(bytes, "content.xml")
@@ -197,7 +199,9 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
 
     contentXml should include("<text:tab/>")
     contentXml should include("<text:line-break/>")
-    singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
+    singleParagraph(decoded).runs shouldBe
+      List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))
+    decoded.exportText shouldBe "alpha\tbeta\ngamma"
   }
 
   it should "write repeated spaces as native ODT spacing elements" in {

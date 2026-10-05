@@ -207,7 +207,7 @@ object OdtDocumentCodec:
         else if element.getNamespaceURI == TextNs && element.getLocalName == "tab" then
           List(RichTextRun("\t", currentStyle))
         else if element.getNamespaceURI == TextNs && element.getLocalName == "line-break" then
-          List(RichTextRun("\n", currentStyle))
+          List(RichTextRun.softBreak(currentStyle))
         else runsFromChildren(element, currentStyle, styles)
       case _ =>
         Nil
@@ -314,8 +314,9 @@ object OdtDocumentCodec:
 
   private def runsXml(runs: List[RichTextRun], textStyleNames: Map[RichTextStyle, String]): String =
     runs.map { run =>
-      if run.style == RichTextStyle.empty then runTextXml(run.text)
-      else s"""<text:span text:style-name="${textStyleNames(run.style)}">${runTextXml(run.text)}</text:span>"""
+      val content = run.atom.fold(runTextXml(run.text)) { case InlineAtom.SoftBreak => "<text:line-break/>" }
+      if run.style == RichTextStyle.empty then content
+      else s"""<text:span text:style-name="${textStyleNames(run.style)}">$content</text:span>"""
     }.mkString
 
   private def runTextXml(text: String): String =
@@ -323,8 +324,6 @@ object OdtDocumentCodec:
       .foldLeft((StringBuilder(), List.empty[String])) {
         case ((chunk, acc), '\t') =>
           (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<text:tab/>")
-        case ((chunk, acc), '\n') =>
-          (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<text:line-break/>")
         case ((chunk, acc), ' ') =>
           (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<text:s/>")
         case ((chunk, acc), char) =>

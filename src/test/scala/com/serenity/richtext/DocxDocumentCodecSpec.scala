@@ -133,7 +133,9 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "write tabs and line breaks as native DOCX run elements" in {
-    val source = RichTextDocument.oneParagraph("alpha\tbeta\ngamma")
+    val source = RichTextDocument(
+      List(RichTextParagraph(List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))))
+    )
 
     val bytes       = DocxDocumentCodec.writeBytes(source)
     val documentXml = zipEntryText(bytes, "word/document.xml")
@@ -141,7 +143,9 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
 
     documentXml should include("<w:tab/>")
     documentXml should include("<w:br/>")
-    singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
+    singleParagraph(decoded).runs shouldBe
+      List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))
+    decoded.exportText shouldBe "alpha\tbeta\ngamma"
   }
 
   it should "report unsupported DOCX structures before a lossy save" in {
