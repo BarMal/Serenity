@@ -57,6 +57,7 @@ private[command] object CommandRegistryEditCommands:
       CommandCategory.Edit,
       label = "Paste"
     ),
+    ClipboardHistoryCommands.choose,
     Command.typed(
       "cut-to-darlings",
       "Cut the active selection to Darlings instead of deleting it outright.",

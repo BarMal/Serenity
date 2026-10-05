@@ -52,7 +52,7 @@ object DamageProducer:
             )
     }
     bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+|
-      paneChromeDamage(before, after) |+| statusLineDamage(before, after)
+      paneChromeDamage(before, after) |+| statusLineDamage(before, after) |+| tabBarDamage(before, after)
 
   /** Everything about one buffer's own state that can dirty its visible rows without necessarily touching its rope
     * content -- cursor and selection movement, comment/diagnostic annotation changes, and a language reclassification
@@ -319,6 +319,17 @@ object DamageProducer:
   private def statusLineDamage(before: AppState, after: AppState): Damage =
     if before.floatingStatusLineSurface == after.floatingStatusLineSurface then Damage.Nothing
     else Damage.Surface(UiSurface.StatusLineSurfaceId)
+
+  /** The tab strip is derived too (`AppState.tabBarSurface`), and shows each buffer's title and dirty glyph -- the same
+    * facts a pane header shows, so it changes on the keystroke that raises [[Damage.PaneChrome]], which no longer
+    * repaints the whole canvas by itself. Only a strip shown on both sides is compared: one appearing or going away is
+    * left to whatever reported it before.
+    */
+  private def tabBarDamage(before: AppState, after: AppState): Damage =
+    (before.tabBarSurface, after.tabBarSurface) match
+      case (Some(beforeStrip), Some(afterStrip)) if beforeStrip != afterStrip =>
+        Damage.Surface(UiSurface.TabBarSurfaceId)
+      case _ => Damage.Nothing
 
   /** Whether `before`/`after` present the same *kind* of [[SurfacePresentation]] (ignoring the fields a non-marker kind
     * carries, e.g. a `Floating` surface's anchor/placement) -- the presentation-stability half of

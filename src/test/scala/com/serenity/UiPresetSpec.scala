@@ -168,10 +168,10 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     // A prose workflow picked from a code workspace must switch the workspace to prose: otherwise the settings tree
     // keeps hiding the prose groups (Document Writing, Prose Font) the workflow just made relevant.
-    val fromCode = UiPreset.applyBuiltInWorkflowToState(writing, AppState.initial, Theme.dark)
+    val fromCode = UiPreset.applyBuiltInWorkflowToState(writing, AppState.initial)
     fromCode.persisted.config.appMode shouldBe AppMode.Prose
 
-    val backToCode = UiPreset.applyBuiltInWorkflowToState(code, fromCode, Theme.dark)
+    val backToCode = UiPreset.applyBuiltInWorkflowToState(code, fromCode)
     backToCode.persisted.config.appMode shouldBe AppMode.Code
   }
 
@@ -180,7 +180,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     UiPreset.Preview.fromPreset(writing) shouldBe UiPreset.Preview(
       "Writing",
-      "rich text default; dark; spacious density; Serif 18pt prose; 1 editor pane"
+      "rich text default; spacious density; Serif 18pt prose; 1 editor pane"
     )
   }
 
@@ -212,14 +212,14 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     // Code workflows shouldn't spell-check (identifiers aren't prose, and there's no bundled dictionary yet #1175).
     UiPreset
-      .applyBuiltInWorkflowToState(code, spellOn, Theme.dark)
+      .applyBuiltInWorkflowToState(code, spellOn)
       .persisted
       .config
       .languageToolsConfig
       .spellCheck
       .enabled shouldBe false
     UiPreset
-      .applyBuiltInWorkflowToState(compact, spellOn, Theme.dark)
+      .applyBuiltInWorkflowToState(compact, spellOn)
       .persisted
       .config
       .languageToolsConfig
@@ -227,7 +227,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       .enabled shouldBe false
     // Prose keeps whatever the user configured -- spell-check is appropriate there.
     UiPreset
-      .applyBuiltInWorkflowToState(writing, spellOn, Theme.dark)
+      .applyBuiltInWorkflowToState(writing, spellOn)
       .persisted
       .config
       .languageToolsConfig

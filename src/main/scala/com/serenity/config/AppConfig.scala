@@ -172,6 +172,9 @@ final case class AppConfig(
   def withFocusedTextBody(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(focusedTextBodyEnabled = enabled))
 
+  def withProseMeasure(measure: Option[Int]): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(proseMeasure = measure.map(ProseMeasure.clamp)))
+
   /** Show or hide the command runner's persistent key-hint footer row (issue #931, Stage 3). */
   def withCommandRunnerShowKeyHints(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(commandRunnerShowKeyHints = enabled))

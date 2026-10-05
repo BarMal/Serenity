@@ -96,6 +96,7 @@ object UiPreset:
           showLineNumbers = source.surfaceConfig.showLineNumbers,
           wordWrapEnabled = source.surfaceConfig.wordWrapEnabled,
           textAreaInsets = source.surfaceConfig.textAreaInsets,
+          proseMeasure = source.surfaceConfig.proseMeasure,
           viewportSizing = source.surfaceConfig.viewportSizing
         )
       )
@@ -122,9 +123,23 @@ object UiPreset:
             if includeContextualToolbar then source.surfaceConfig.contextualToolbarEnabled
             else base.surfaceConfig.contextualToolbarEnabled,
           textAreaInsets =
-            if includeTextAreaInsets then source.surfaceConfig.textAreaInsets else base.surfaceConfig.textAreaInsets
+            if includeTextAreaInsets then source.surfaceConfig.textAreaInsets else base.surfaceConfig.textAreaInsets,
+          proseMeasure =
+            if includeTextAreaInsets then source.surfaceConfig.proseMeasure else base.surfaceConfig.proseMeasure
         )
       )
+
+  /** The writing aids a prose workflow turns on, keeping the rest of the user's spell-check setup. */
+  private def patchProseWriting(base: AppConfig, source: AppConfig): AppConfig =
+    base
+      .withSmartPunctuation(source.languageToolsConfig.smartPunctuationEnabled)
+      .withSpellCheck(base.languageToolsConfig.spellCheck.copy(enabled = source.languageToolsConfig.spellCheck.enabled))
+      .withTypewriterScrolling(source.surfaceConfig.typewriterScrollingEnabled)
+      .withFocusedTextBody(source.surfaceConfig.focusedTextBodyEnabled)
+
+  /** A built-in workflow is one of [[builtInNames]], matched by name. */
+  private[presets] def isBuiltInWorkflow(preset: UiPreset): Boolean =
+    builtInNames.exists(name => nameKey(name) == nameKey(preset.name))
 
   /** Exposed at `presets` visibility so [[UiPresetDiff]] can reuse this exact resolution rather than reimplementing it
     * -- the "would apply" side of a built-in workflow's diff has to be the same merge `applyBuiltInWorkflowToState`
@@ -140,7 +155,7 @@ object UiPreset:
     nameKey(preset.name) match
       case "writing" =>
         val withChrome = patchWorkflowChrome(withTypography, source, includeTextAreaInsets = true)
-        withChrome
+        patchProseWriting(withChrome, source)
           .withDocumentConfig(source.documentConfig)
           .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
       case "documentation" =>
@@ -216,9 +231,16 @@ object UiPreset:
   def applyToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
     applyToState(preset.withPanelIds, state, theme, preset.config)
 
-  /** Apply a built-in workflow without replacing unrelated persisted configuration. */
-  def applyBuiltInWorkflowToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
-    applyToState(preset.withPanelIds, state, theme, mergeBuiltInWorkflowConfig(state.persisted.config, preset))
+  /** Apply a built-in workflow without replacing unrelated persisted configuration -- the theme included: a workflow is
+    * about how the workspace behaves, and the user's colours are theirs (#1880).
+    */
+  def applyBuiltInWorkflowToState(preset: UiPreset, state: AppState): AppState =
+    applyToState(
+      preset.withPanelIds,
+      state,
+      state.persisted.theme,
+      mergeBuiltInWorkflowConfig(state.persisted.config, preset)
+    )
 
   private def applyToState(preset: UiPreset, state: AppState, theme: Theme, config: AppConfig): AppState =
     val unpinnedSurfaces = state.runtime.uiSurfaces.filter {

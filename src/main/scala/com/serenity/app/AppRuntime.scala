@@ -184,10 +184,12 @@ object AppRuntime:
         latencyTraceEnabled <- SignallingRef.of[IO, Boolean](
           initialState.persisted.config.surfaceConfig.latencyTraceEnabled
         )
+        watchInputs <- SignallingRef.of[IO, Long](0L)
         wakeOnCommit = wakeRenderLoopOnCommit(emitDamage)
         observeTransition = (before: AppState, after: AppState) =>
           typingQuietTimer.onCommit(before, after) >> followFrameTimingSetting(frameTimingEnabled)(before, after) >>
-            followLatencyTraceSetting(latencyTraceEnabled)(before, after)
+            followLatencyTraceSetting(latencyTraceEnabled)(before, after) >>
+            IO.whenA(watchInputsChanged(before, after))(watchInputs.update(_ + 1))
         _ <- stateManager.runtimeLifecycle.observeCommits((before, after) =>
           wakeOnCommit(before, after) >> observeTransition(before, after)
         )
@@ -277,6 +279,7 @@ object AppRuntime:
                     runtime.frameTimings,
                     frameTimingEnabled,
                     latencyTraceEnabled,
+                    watchInputs.discrete.as(()),
                     forwardedOpens
                   )
                 )
@@ -297,6 +300,7 @@ object AppRuntime:
     frameTimings: FrameTimings,
     frameTimingEnabled: SignallingRef[IO, Boolean],
     latencyTraceEnabled: SignallingRef[IO, Boolean],
+    watchInputsChanges: Stream[IO, Unit],
     forwardedOpens: Stream[IO, List[Path]]
   )(using logger: Logger[IO]): IO[Unit] =
     val (lifecycle, quitSignal) = (stateManager.runtimeLifecycle, stateManager.runtimeLifecycle.awaitQuit.attempt)
@@ -331,7 +335,8 @@ object AppRuntime:
           stateManager.fileService.dictionaryWatchDirectories,
           stateManager.fileService.refreshDictionaryFingerprints,
           stateManager.fileService.explorerWatchDirectories,
-          stateManager.fileService.markExplorerDirectoriesStale
+          stateManager.fileService.markExplorerDirectoriesStale,
+          watchInputsChanges
         ).interruptWhen(quitSignal).compile.drain
       ),
       AppRuntimeRenderLoops.superviseLoop("frame timing report", lifecycle.forceQuit)(
@@ -377,22 +382,26 @@ object AppRuntime:
     val enabled = after.persisted.config.surfaceConfig.latencyTraceEnabled
     IO.whenA(enabled != before.persisted.config.surfaceConfig.latencyTraceEnabled)(latencyTraceEnabled.set(enabled))
 
-  /** Background half of external-change detection (#1623), complementing the focus-in re-check: each cycle, re-derives
-    * the watched directory set from the currently open local buffers (`FileChangeWatcher.sync` handles buffers
-    * opening/closing since the last cycle) plus `dictionaryWatchDirectories` (#1691's spell-check dictionary
-    * directories, re-derived the same way from the current config), polls for real filesystem events, and reacts to
-    * whichever kind of watched path a poll window actually saw change: a buffer's file gets the same reload-or-prompt
-    * check the focus-in path runs, and any change under a dictionary directory calls `refreshDictionaryFingerprints` to
-    * invalidate `StateManagerOperationBoundary`'s cached fingerprints -- neither is gated on the window regaining
-    * focus.
+  /** Whether a commit may have changed what [[externalChangeWatchLoop]] watches: the open files, the spell-check
+    * dictionaries, or the docked explorers. Errs towards yes; the loop re-derives the set and a no-op resync is free.
+    */
+  private[serenity] def watchInputsChanged(before: AppState, after: AppState): Boolean =
+    def openFiles(state: AppState) = state.persisted.buffers.valuesIterator.flatMap(_.document.filePath).toSet
+    (before.runtime.uiSurfaces ne after.runtime.uiSurfaces) ||
+    before.persisted.config.languageToolsConfig.spellCheck != after.persisted.config.languageToolsConfig.spellCheck ||
+    ((before.persisted.buffers ne after.persisted.buffers) && openFiles(before) != openFiles(after))
+
+  /** Background half of external-change detection (#1623), complementing the focus-in re-check. Watches the parent
+    * directories of open local buffers, `dictionaryWatchDirectories` (#1691) and `explorerWatchDirectories`, re-derived
+    * on each `watchedSetChanges` element. A changed buffer file gets the same reload-or-prompt check the focus-in path
+    * runs; a change under a dictionary directory refreshes the dictionary fingerprints; a changed explorer directory is
+    * marked stale.
     *
-    * `WatchService.poll` is a genuine blocking OS call, so it only runs when there is at least one directory to watch
-    * -- with nothing open, the cycle sleeps instead. This isn't just an efficiency nicety: a real blocking call left
-    * running unconditionally makes this loop, and therefore any `AppRuntime.run` caller, incompatible with a
-    * virtual-time test harness (`VirtualTime.runVirtual`'s own `TestControl` treats `IO.blocking` as non-terminating)
-    * -- a plain buffer-less startup (the common case every such test starts from) must stay virtual-time-compatible.
-    * Spell-check is disabled by default (`SpellCheckConfig.enabled = false`), so `dictionaryWatchDirectories` is
-    * `Set.empty` in that common case too, and the loop still sleeps rather than polls.
+    * Event-driven (#1938): with something watched the loop blocks in the watcher until a change arrives, and with
+    * nothing watched it never calls the watcher at all, waiting for the set to change. Either way it does not wake on a
+    * timer. Never calling the genuinely blocking watcher while nothing is watched also keeps a buffer-less startup
+    * compatible with virtual-time tests (`VirtualTime.runVirtual`'s `TestControl` treats `IO.blocking` as
+    * non-terminating). Changes are gathered for `settle` after the first, so a burst checks each file once (#1885).
     */
   private[serenity] def externalChangeWatchLoop(
     watcher: com.serenity.io.FileChangeWatcher,
@@ -402,28 +411,31 @@ object AppRuntime:
     refreshDictionaryFingerprints: IO[Unit] = IO.unit,
     explorerWatchDirectories: IO[Set[Path]] = IO.pure(Set.empty),
     markExplorerDirectoriesStale: Set[Path] => IO[Unit] = _ => IO.unit,
-    pollInterval: FiniteDuration = 2.seconds
+    watchedSetChanges: Stream[IO, Unit] = Stream.emit(()),
+    settle: FiniteDuration = 200.millis
   ): Stream[IO, Unit] =
-    Stream.repeatEval(
-      for
-        paths                 <- openBufferPaths
-        dictionaryDirectories <- dictionaryWatchDirectories
-        explorerDirectories   <- explorerWatchDirectories
-        bufferDirectories  = paths.keys.flatMap(path => Option(path.getParent)).toSet
-        watchedDirectories = bufferDirectories ++ dictionaryDirectories ++ explorerDirectories
-        _ <- watcher.sync(watchedDirectories)
-        _ <-
-          if watchedDirectories.isEmpty then IO.sleep(pollInterval)
-          else
-            watcher.pollChangedFiles(pollInterval).flatMap { changed =>
-              val changedDirectories = changed.flatMap(path => Option(path.getParent))
-              val staleExplorers     = changedDirectories.intersect(explorerDirectories)
-              changed.flatMap(paths.get).toList.traverse_(checkBufferForExternalChanges) >>
-                IO.whenA(changedDirectories.exists(dictionaryDirectories.contains))(refreshDictionaryFingerprints) >>
-                IO.whenA(staleExplorers.nonEmpty)(markExplorerDirectoriesStale(staleExplorers))
-            }
-      yield ()
-    )
+    val watched = (openBufferPaths, dictionaryWatchDirectories, explorerWatchDirectories).mapN {
+      (paths, dictionaryDirectories, explorerDirectories) =>
+        paths.keySet.flatMap(path => Option(path.getParent)) ++ dictionaryDirectories ++ explorerDirectories
+    }
+    val react = (changed: Set[Path]) =>
+      (openBufferPaths, dictionaryWatchDirectories, explorerWatchDirectories).mapN {
+        (paths, dictionaryDirectories, explorerDirectories) =>
+          val changedDirectories = changed.flatMap(path => Option(path.getParent))
+          val staleExplorers     = changedDirectories.intersect(explorerDirectories)
+          changed.flatMap(paths.get).toList.traverse_(checkBufferForExternalChanges) >>
+            IO.whenA(changedDirectories.exists(dictionaryDirectories.contains))(refreshDictionaryFingerprints) >>
+            IO.whenA(staleExplorers.nonEmpty)(markExplorerDirectoriesStale(staleExplorers))
+      }.flatten
+    Stream.eval(SignallingRef.of[IO, Boolean](false)).flatMap { watching =>
+      val resync = watchedSetChanges
+        .evalMap(_ => watched.flatMap(directories => watcher.sync(directories) >> watching.set(directories.nonEmpty)))
+      watching.discrete.changes
+        .switchMap(active =>
+          if active then Stream.repeatEval(watcher.awaitChangedFiles(settle)).evalMap(react) else Stream.empty
+        )
+        .concurrently(resync)
+    }
 
   /** Runs [[StartupWarmUp]] in the background for as long as the main loop does, if the frontend can draw off-screen
     * and `startup.warm_up` is on.

@@ -5,7 +5,7 @@ import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.session.SessionId
-import com.serenity.state.models.{BufferId, CloseWorkflowChoice, PanelId, SurfaceId}
+import com.serenity.state.models.{BufferId, ClipboardEntry, CloseWorkflowChoice, PanelId, SurfaceId}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.layout.PanelPosition
 
@@ -30,6 +30,8 @@ enum EditIntent:
   case Copy
   case Cut
   case Paste
+  case ChoosePasteFromHistory
+  case PasteFromHistory(entry: ClipboardEntry)
   case SelectAll
   case Undo
   case Redo

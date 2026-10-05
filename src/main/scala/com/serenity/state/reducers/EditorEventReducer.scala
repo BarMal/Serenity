@@ -175,7 +175,7 @@ object EditorEventReducer:
   private def refreshesFindResults(event: TextEntryEvent): Boolean =
     event match
       case InsertChar(_) | TabKey | ReverseTabKey | DeleteBackward | DeleteForward | DeleteWordBackward |
-          DeleteWordForward | NewLine | Enter | Paste | Cut | CutToDarlings | RestoreDarling =>
+          DeleteWordForward | NewLine | Enter | Paste | Cut | CutToDarlings | RestoreDarling | PasteFromHistory(_) =>
         true
       case _ =>
         false
@@ -270,7 +270,7 @@ object EditorEventReducer:
         case OpenGotoLine | OpenFind | OpenReplace | FindNext =>
           EditorFindEventReducer.reduce(event, ctx)
 
-        case Copy | Cut | Paste | CutToDarlings | RestoreDarling =>
+        case Copy | Cut | Paste | CutToDarlings | RestoreDarling | PasteFromHistory(_) =>
           EditorClipboardEventReducer.reduce(event, ctx)
 
         case _ =>

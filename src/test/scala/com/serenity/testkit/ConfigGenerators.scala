@@ -222,6 +222,7 @@ object ConfigGenerators:
       columnTargetWidth <- Gen.choose(1, 400)
       columnGap         <- Gen.choose(0, 40)
       columnCount       <- Gen.option(Gen.choose(1, 20))
+      proseMeasure      <- Gen.option(Gen.choose(ProseMeasure.Min, ProseMeasure.Max))
     yield SurfaceConfig(
       showLineNumbers = lineNumbers,
       showPaneHeaders = paneHeaders,
@@ -254,7 +255,8 @@ object ConfigGenerators:
       columnModeEnabled = columnMode,
       columnTargetWidthCells = columnTargetWidth,
       columnGap = columnGap,
-      columnCount = columnCount
+      columnCount = columnCount,
+      proseMeasure = proseMeasure
     )
 
   val genAppConfig: Gen[AppConfig] =

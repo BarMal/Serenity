@@ -148,6 +148,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
       )
     )
     .withViewportWidthSizing(ViewportAxisSizing(percent = 0.8, maxCells = Some(120)))
+    .withProseMeasure(Some(72))
     .withViewportHeightSizing(ViewportAxisSizing(percent = 0.9, maxCells = Some(60)))
     .withPreferredWindowSize(PreferredWindowSize(1280, 800))
     .withWheelScrollLines(5)

@@ -24,6 +24,39 @@ object PixelRect:
   def unionOf(rects: Iterable[PixelRect]): Option[PixelRect] =
     rects.reduceOption(_.union(_))
 
+  /** How many separate rects a repaint is split into before [[coalesced]] gives up and covers their union: each rect is
+    * its own blit, and past a handful the per-blit cost outweighs the pixels left out between them.
+    */
+  val RepaintRectLimit: Int = 8
+
+  /** `rects` with every pair that overlaps or shares an edge merged into their union, until no two touch; empty rects
+    * are dropped. More than `maxRects` pieces fall back to the union of them all.
+    */
+  def coalesced(rects: Iterable[PixelRect], maxRects: Int): List[PixelRect] =
+    val pieces = rects.iterator
+      .filter(rect => rect.widthPx > 0 && rect.heightPx > 0)
+      .toList
+      .sortBy(rect => (rect.yPx, rect.xPx))
+      .foldLeft(List.empty[PixelRect])(absorb)
+    if pieces.sizeIs > maxRects then unionOf(pieces).toList
+    else pieces.sortBy(rect => (rect.yPx, rect.xPx))
+
+  @annotation.tailrec
+  private def absorb(merged: List[PixelRect], rect: PixelRect): List[PixelRect] =
+    val (touching, apart) = merged.partition(touches(rect))
+    if touching.isEmpty then rect :: apart
+    else absorb(apart, touching.foldLeft(rect)(_.union(_)))
+
+  /** Overlapping, or abutting along a shared stretch of edge; rects meeting only at a corner stay apart, since their
+    * union would cover two empty quadrants.
+    */
+  private def touches(a: PixelRect)(b: PixelRect): Boolean =
+    val xOverlap = a.xPx < b.rightPx && b.xPx < a.rightPx
+    val yOverlap = a.yPx < b.bottomPx && b.yPx < a.bottomPx
+    val xMeet    = a.xPx <= b.rightPx && b.xPx <= a.rightPx
+    val yMeet    = a.yPx <= b.bottomPx && b.yPx <= a.bottomPx
+    (xOverlap && yMeet) || (yOverlap && xMeet)
+
   /** The pixels of `bounds` no rectangle in `holes` covers, as disjoint rectangles: horizontal bands split at every
     * hole edge, with vertically adjacent bands of the same shape merged into one.
     */
