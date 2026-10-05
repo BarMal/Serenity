@@ -13,7 +13,7 @@ import com.serenity.richtext.{
 }
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
-import com.serenity.text.LineEnding
+import com.serenity.text.{LineEnding, TextEncoding}
 
 /** Failures `FileManager` raises for its own file-open/save workflow, distinct from [[LossyRichTextOverwriteException]]
   * (a richtext-package concern about a specific re-import losing content, not about format support in general).
@@ -48,6 +48,12 @@ object FileManagerError:
     * back it would be destroyed.
     */
   final case class BinaryContent(path: Path) extends FileManagerError(s"Not a text file: $path")
+
+  /** Raised when a reopen in a chosen encoding (#1627) meets bytes that encoding cannot represent, or a format that
+    * stores formatting rather than text.
+    */
+  final case class NotReadableAs(path: Path, encoding: TextEncoding)
+      extends FileManagerError(s"Can't read $path as ${encoding.configKey}")
 
 class FileManager(using balance: Balance):
 
@@ -126,9 +132,32 @@ class FileManager(using balance: Balance):
     buffer.document.filePath match
       case None => IO.raiseError(FileManagerError.NoFilePath())
       case Some(path) =>
-        loadFile(path, buffer.id).map(reloaded =>
-          buffer.copy(document = reloaded.document, richText = reloaded.richText)
-        )
+        loadFile(path, buffer.id).map(reloadedInto(buffer, _))
+
+  /** [[reloadBuffer]], reading a plain-text file as `encoding` instead of detecting one (#1627). */
+  def reloadBufferAs(buffer: Buffer, encoding: TextEncoding): IO[Buffer] =
+    buffer.document.filePath match
+      case None                                 => IO.raiseError(FileManagerError.NoFilePath())
+      case Some(path) if storesFormatting(path) => IO.raiseError(FileManagerError.NotReadableAs(path, encoding))
+      case Some(path) =>
+        openStored(StorageLocation.Local(path)).flatMap { stored =>
+          IO.fromOption(TextFileCodec.decodeAs(stored.content, encoding))(
+            FileManagerError.NotReadableAs(path, encoding)
+          ).map(decoded => reloadedInto(buffer, bufferFromContent(buffer.id, path, decoded, stored.revision)))
+        }
+
+  private def storesFormatting(path: Path): Boolean =
+    FileUtils.detectFileType(path) match
+      case FileType.RichText | FileType.OpenDocumentText | FileType.WordOpenXmlDocument | FileType.WordDocument => true
+      case _                                                                                                    => false
+
+  /** A fresh read starts at content version 0; carrying that over would move `buffer`'s version backwards (#1935). */
+  private def reloadedInto(buffer: Buffer, reloaded: Buffer): Buffer =
+    val document = reloaded.document.copy(contentVersion = buffer.document.contentVersion + 1)
+    buffer.copy(
+      document = document,
+      richText = reloaded.richText.withSyncedDocument(reloaded.richText.richTextDocument, document.contentVersion)
+    )
 
   /** The on-disk revision of `path` right now, for a focus-in re-check against a buffer's captured `Document.revision`
     * (#1623) -- `None` for a file that no longer exists or otherwise can't be read, which a focus-in check treats as

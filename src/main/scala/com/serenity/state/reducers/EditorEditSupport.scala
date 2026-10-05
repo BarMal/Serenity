@@ -70,14 +70,12 @@ private[state] object EditorEditSupport:
     buffer: Buffer,
     edits: List[MultiCursorEdit]
   )(applyContentEdit: (Rope, MultiCursorEdit) => Rope): (Rope, Option[RichTextDocument]) =
-    edits.foldLeft((buffer.document.content, buffer.richText.richTextDocument)) {
+    // Seeded with the document only while it still describes the content, since each step re-stamps it as matching.
+    edits.foldLeft((buffer.document.content, buffer.richText.richTextDocument.filter(_ => buffer.richTextInSync))) {
       case ((content, document), edit) =>
         val nextContent = applyContentEdit(content, edit)
         val nextDocument = richTextDocumentAfterEdit(
-          buffer.copy(
-            document = buffer.document.copy(content = content),
-            richText = buffer.richText.copy(richTextDocument = document)
-          ),
+          buffer.withEditedDocument(content, document),
           edit.start,
           edit.end,
           edit.insertedText
@@ -359,24 +357,17 @@ private[state] object EditorEditSupport:
     val replacementEdit = MultiCursorEdit(0, startOffset, endOffset, insertedText)
 
     (
-      buffer.copy(
-        document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-        editing = buffer.editing.withPrimary(Cursor(newCursor)),
-        annotations = adjustAnnotations(
-          buffer.annotations,
-          buffer.document.content,
-          newContent,
-          List(replacementEdit)
+      buffer
+        .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText))
+        .copy(
+          editing = buffer.editing.withPrimary(Cursor(newCursor)),
+          annotations = adjustAnnotations(
+            buffer.annotations,
+            buffer.document.content,
+            newContent,
+            List(replacementEdit)
+          )
         ),
-        // `document` above and `richTextDocument` below both leave `contentVersion`/`richTextSyncedVersion` at
-        // whatever `buffer` already had, rather than updating either: as long as the two only ever move together
-        // (never one without the other), `Buffer.richTextInSync` stays correct without needing either to actually
-        // change on every edit (#1663) -- see `richTextDocumentAfterEdit`, which only ever returns `Some` when
-        // `buffer.richTextInSync` already held.
-        richText = buffer.richText.copy(
-          richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
-        )
-      ),
       replacementEdit
     )
 
@@ -404,17 +395,17 @@ private[state] object EditorEditSupport:
     val endOffset   = EditorCursorMovement.selectionEndOffset(selection, buffer.document.content)
     val newContent  = deleteOrUnchanged(buffer.document.content, startOffset, endOffset)
     val newCursor   = newContent.offsetToCursorPosition(startOffset)
-    val baseBuffer = buffer.copy(
-      document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-      editing = buffer.editing.withPrimary(Cursor(newCursor)),
-      annotations = adjustAnnotations(
-        buffer.annotations,
-        buffer.document.content,
-        newContent,
-        List(MultiCursorEdit(0, startOffset, endOffset, ""))
-      ),
-      richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
-    )
+    val baseBuffer = buffer
+      .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
+      .copy(
+        editing = buffer.editing.withPrimary(Cursor(newCursor)),
+        annotations = adjustAnnotations(
+          buffer.annotations,
+          buffer.document.content,
+          newContent,
+          List(MultiCursorEdit(0, startOffset, endOffset, ""))
+        )
+      )
     (baseBuffer, MultiCursorEdit(0, startOffset, endOffset, ""))
 
   def applyMultiSelectionReplacement(

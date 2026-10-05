@@ -266,11 +266,19 @@ final case class Buffer(
     adjustedAnnotations: Annotations = annotations,
     richTextDocument: Option[RichTextDocument] = richText.richTextDocument
   ): Buffer =
+    withEditedDocument(content, richTextDocument).copy(
+      editing = EditingState(cursors),
+      annotations = adjustedAnnotations
+    )
+
+  /** [[withEditedContent]] for an edit that places its own cursors: the new `content`, with `richTextDocument` -- the
+    * caller's remap of the old one onto it, or `None` -- stamped as matching it. The content version advances even for
+    * a keystroke, so a debounced outline parse of the previous text is recognised as stale (#1935).
+    */
+  def withEditedDocument(content: Rope, richTextDocument: Option[RichTextDocument]): Buffer =
     val updatedDocument = document.withContent(content)
     copy(
       document = updatedDocument,
-      editing = EditingState(cursors),
-      annotations = adjustedAnnotations,
       richText = richText.withSyncedDocument(richTextDocument, updatedDocument.contentVersion)
     )
 

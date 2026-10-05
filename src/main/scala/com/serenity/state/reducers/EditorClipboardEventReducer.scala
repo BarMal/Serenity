@@ -83,11 +83,7 @@ private[reducers] object EditorClipboardEventReducer:
         val replacedCursor                    = replacedBuffer.editing.cursors.head
         val newCursor                         = replacedCursor.position
         val updatedBuffer = buffer.copy(
-          document = buffer.document.copy(
-            content = replacedBuffer.document.content,
-            isDirty = replacedBuffer.document.isDirty,
-            isNewEmpty = replacedBuffer.document.isNewEmpty
-          ),
+          document = replacedBuffer.document,
           editing = buffer.editing.withPrimary(
             Cursor(newCursor, replacedCursor.selectionAnchor, Some(newCursor.column), None)
           ),
@@ -139,11 +135,7 @@ private[reducers] object EditorClipboardEventReducer:
         val replacedCursor                    = replacedBuffer.editing.cursors.head
         val newCursor                         = replacedCursor.position
         val updatedBuffer = bufferWithoutDarling.copy(
-          document = bufferWithoutDarling.document.copy(
-            content = replacedBuffer.document.content,
-            isDirty = replacedBuffer.document.isDirty,
-            isNewEmpty = replacedBuffer.document.isNewEmpty
-          ),
+          document = replacedBuffer.document,
           editing = bufferWithoutDarling.editing.withPrimary(
             Cursor(newCursor, replacedCursor.selectionAnchor, Some(newCursor.column), None)
           ),

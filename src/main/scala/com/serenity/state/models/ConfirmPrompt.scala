@@ -1,6 +1,14 @@
 package com.serenity.state.models
 
-import com.serenity.command.{CloseCommands, Command, ExternalChangeCommands, RichTextCommands, RichTextIntent}
+import com.serenity.command.{
+  CloseCommands,
+  Command,
+  ExternalChangeCommands,
+  ReopenWithEncodingCommands,
+  RichTextCommands,
+  RichTextIntent
+}
+import com.serenity.text.TextEncoding
 import com.serenity.ui.widget.{ButtonEmphasis, EndBehaviour, SelectableList}
 
 /** What choosing an option in a [[ConfirmPrompt]] does once the prompt closes. */
@@ -70,6 +78,60 @@ object ConfirmPrompt:
         ConfirmChoice("Cancel", ConfirmAction.Dismiss)
       ),
       blocking = true
+    )
+
+  /** A session brought back unsaved text that differs from its file (#1904). Keeping it is the safe answer, so it is
+    * both the first choice and what Escape does.
+    */
+  def recoverUnsaved(bufferId: BufferId, bufferLabel: String, fileChangedSince: Boolean): ConfirmPrompt =
+    of(
+      title = "Recover unsaved changes",
+      message = List(
+        bufferLabel,
+        if fileChangedSince then "The file has also changed on disk since these changes were made."
+        else "Unsaved changes from your last session are newer than the file on disk."
+      ),
+      choices = List(
+        ConfirmChoice("Keep recovered changes", ConfirmAction.Dismiss, ButtonEmphasis.Primary),
+        ConfirmChoice(
+          "Open the file from disk",
+          ConfirmAction.Run(ExternalChangeCommands.reloadFromDisk(bufferId)),
+          ButtonEmphasis.Danger
+        )
+      ),
+      blocking = true
+    )
+
+  /** Reopening in another encoding reads the file again, which loses unsaved edits (#1627). */
+  def reopenDiscardingEdits(bufferId: BufferId, bufferLabel: String, encoding: TextEncoding): ConfirmPrompt =
+    of(
+      title = "Discard unsaved changes?",
+      message = List(bufferLabel, s"Reopening as ${encoding.configKey} reads the file again from disk."),
+      choices = List(
+        ConfirmChoice(
+          s"Reopen as ${encoding.configKey}",
+          ConfirmAction.Run(ReopenWithEncodingCommands.reopen(bufferId, encoding, discardEdits = true)),
+          ButtonEmphasis.Danger
+        ),
+        ConfirmChoice("Cancel", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** The file's bytes don't fit the encoding picked to reopen it in (#1627). Nothing changed, so it doesn't block. */
+  def reopenFailed(bufferLabel: String, encoding: TextEncoding): ConfirmPrompt =
+    of(
+      title = "Can't reopen",
+      message = List(s"$bufferLabel isn't valid ${encoding.configKey}."),
+      choices = List(
+        ConfirmChoice(
+          "Choose another encoding",
+          ConfirmAction.Run(ReopenWithEncodingCommands.chooseEncoding),
+          ButtonEmphasis.Primary
+        ),
+        ConfirmChoice("Cancel", ConfirmAction.Dismiss)
+      ),
+      blocking = false
     )
 
   /** A formatting command on a file whose format can't store formatting. Not blocking: nothing is lost by ignoring it.

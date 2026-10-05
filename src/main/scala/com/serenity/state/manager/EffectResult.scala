@@ -29,6 +29,7 @@ import com.serenity.state.reducers.{
   ReducerResult,
   ThemeStateReducer
 }
+import com.serenity.text.TextEncoding
 import com.serenity.ui.layout.{DirEntry, Symbol, WrappedLineCache}
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.Theme
@@ -54,6 +55,9 @@ private[manager] enum EffectResult:
   case FileSaved(save: FileSave, saved: Buffer)
   case FileSaveFailed(save: FileSave, error: Throwable)
   case FileReloaded(bufferId: BufferId, path: Path, contentAtRequest: Rope, disk: Buffer)
+
+  /** A reopen as `encoding` found the file's bytes don't fit it (#1627). */
+  case FileReopenFailed(bufferId: BufferId, encoding: TextEncoding)
   case FileLoaded(path: Path, loaded: Buffer)
   case FileLoadFailed(path: Path, error: Throwable)
 
@@ -133,6 +137,7 @@ private[manager] object EffectResult:
       case FileSaved(save, saved) => FileResults.saved(state, save, saved)
       case FileReloaded(bufferId, path, contentAtRequest, disk) =>
         FileResults.reloaded(state, bufferId, path, contentAtRequest, disk)
+      case FileReopenFailed(bufferId, encoding)        => ReopenWithEncoding.withFailureShown(state, bufferId, encoding)
       case FileLoaded(path, loaded)                    => FileResults.loaded(state, path, loaded)
       case FileSaveFailed(_, _) | FileLoadFailed(_, _) => state
 

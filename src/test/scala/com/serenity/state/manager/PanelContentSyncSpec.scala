@@ -3,11 +3,13 @@ package com.serenity.state.manager
 import java.nio.file.Paths
 
 import com.serenity.DockedPanelFixtures
+import com.serenity.keystroke.events.InsertChar
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic as LspDiagnostic, DiagnosticSeverity as LspSeverity, LspPosition, LspRange}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
+import com.serenity.state.reducers.{AppEffect, EditorEventReducer, ReducerResult, UndoEffect}
 import com.serenity.ui.layout.{
   Diagnostic,
   DiagnosticSeverity,
@@ -57,6 +59,12 @@ class PanelContentSyncSpec extends AnyFlatSpec with Matchers:
       )
     )
 
+  private def typingResult(state: AppState, char: Char): ReducerResult =
+    val paneId = state.persisted.layout.activeEditorPaneId.getOrElse(fail("no active pane"))
+    EditorEventReducer.reduce(InsertChar(char), paneId, state)
+
+  private def typedInto(state: AppState, char: Char): AppState = typingResult(state, char).state
+
   private def panelContent(state: AppState): SurfaceContent =
     state.surfaceById(panelId).map(_.content).getOrElse(fail("panel gone"))
 
@@ -90,6 +98,30 @@ class PanelContentSyncSpec extends AnyFlatSpec with Matchers:
     val later               = edited(parsed, bufferId, "# One\n")
 
     PanelContentSync.withRefreshedOutline(later, bufferId, version, List(heading("stale", 0))) shouldBe later
+  }
+
+  it should "drop a re-parse overtaken by typing" in {
+    val (withDoc, bufferId) = shownInActivePane(AppState.initial, "# One\n", "a.md")
+    val before              = docked(withDoc, SurfaceContent.Outline(List(heading("One", 0))))
+    val parsed              = edited(before, bufferId, "# One\n\n# Two\n")
+    val version             = parsed.persisted.buffers(bufferId).document.contentVersion
+    val typed               = typedInto(parsed, 'x')
+
+    typed.persisted.buffers(bufferId).document.content.collect() shouldBe "x# One\n\n# Two\n"
+    PanelContentSync.withRefreshedOutline(typed, bufferId, version, List(heading("stale", 0))) shouldBe typed
+  }
+
+  it should "drop a re-parse overtaken by an undo" in {
+    val (withDoc, bufferId) = shownInActivePane(AppState.initial, "# One\n", "a.md")
+    val before              = docked(withDoc, SurfaceContent.Outline(List(heading("One", 0))))
+    val typing              = typingResult(before, '#')
+    val typed               = typing.state
+    val version             = typed.persisted.buffers(bufferId).document.contentVersion
+    val boundary = typing.effects.collectFirst { case AppEffect.Undo(recorded: UndoEffect.RecordBoundary) => recorded }
+    val undone   = boundary.flatMap(_.entry.restore(typed)).map(_._1).getOrElse(fail("typing recorded no undo step"))
+
+    undone.persisted.buffers(bufferId).document.content.collect() shouldBe "# One\n"
+    PanelContentSync.withRefreshedOutline(undone, bufferId, version, List(heading("stale", 0))) shouldBe undone
   }
 
   it should "need no re-parse when no outline is docked" in {

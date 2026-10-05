@@ -20,6 +20,8 @@ Scenarios cover:
 - large find/replace result-set presentation and complete find-query updates, including grapheme filtering, offset-to-position conversion, and selected-result application
 - LSP frame decoding and project-task detection/terminal preparation
 - Markdown preview and inline-lens rendering
+- `command_runner.*`: one keystroke and one arrow press in the command palette and the settings view, each measured as
+  the reducer step plus the renderer's read of the result, against a 720-family font catalogue
 - visible animation tick advancement
 - `laptop.*`: the editor at a real laptop's size (1500x1000 logical at 2x, word-wrapped lorem ipsum, default config):
   full frames with and without a Frosted pinned panel, keystrokes applied through a live `StateManager`, and Swing
@@ -260,3 +262,17 @@ Measured harness results (same WSL2 host, warmed run):
 | `reducer.deep_scroll.plain` | 0.006 | 0.048 |
 | `reducer.deep_scroll.rich_text` | 0.011 | 0.036 |
 | `render.diagnostics_and_comments.java2d` | 7.169 | 10.973 |
+
+## `command_runner.*` baseline (#1854): 2026-10-05
+
+Captured on a 4-core x86_64 Linux container under Xvfb, OpenJDK 21.0.11, with
+`sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks command_runner"`. "Before" is the same benchmark run on
+f79b6d17, the commit before #1970 moved the settings index and per-query results into a carried cache; "after" is
+master at dc5bfd01. Times are milliseconds.
+
+| Scenario | Before p50 | Before p95 | After p50 | After p95 |
+| --- | ---: | ---: | ---: | ---: |
+| `command_runner.palette.keystroke` | 14.349 | 15.497 | 1.420 | 1.546 |
+| `command_runner.palette.arrow_press` | 15.651 | 16.228 | 0.065 | 0.197 |
+| `command_runner.settings.keystroke` | 8.207 | 13.074 | 0.511 | 0.554 |
+| `command_runner.settings.arrow_press` | 15.375 | 21.216 | 0.0003 | 0.0003 |

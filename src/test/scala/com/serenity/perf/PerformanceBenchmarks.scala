@@ -420,7 +420,7 @@ object PerformanceBenchmarks:
         () => renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
       )
     ) ++ reducerBenchmarks(editingState, plainScrollState, richScrollState, deepViewport) ++
-      DamageBenchmarks.benchmarks() ++ equalsBenchmarks() ++ List(
+      DamageBenchmarks.benchmarks() ++ CommandRunnerBenchmarks.benchmarks() ++ equalsBenchmarks() ++ List(
         BenchmarkRunner.Benchmark(
           "find_replace.large_result_set",
           3,

@@ -30,6 +30,7 @@ private[command] object CommandRegistryFileCommands:
       label = "Save"
     ),
     saveAs,
+    ReopenWithEncodingCommands.chooseEncoding,
     Command.typed(
       "save-config",
       "Write the current settings using the latest config format.",

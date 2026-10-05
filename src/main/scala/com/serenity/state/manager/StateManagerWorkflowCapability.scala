@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.{Deferred, IO}
+import cats.syntax.all.*
 import com.serenity.command.SessionCommands
 import com.serenity.io.{FileManager, FileUtils, ProjectFileWalker}
 import com.serenity.session.{SessionId, SessionManager, SessionPersistence}
@@ -265,7 +266,8 @@ final private[manager] class StateManagerWorkflowCapability(
       sessionManager.loadSession().flatMap {
         case Some(restoredState) if restoredState.persisted.bufferOrder.nonEmpty =>
           logger.info("[CMD] Session loaded successfully") >>
-            commit(SessionWorkflowTransitions.restoredIntoViewport(restoredState, _))
+            commit(SessionWorkflowTransitions.restoredIntoViewport(restoredState, _)) >>
+            offerHotExitRecovery
         case Some(_) =>
           logger.info("[CMD] Session loaded with no buffers - creating default session") >>
             commit(SessionWorkflowTransitions.withDefaultStartupBuffer)
@@ -273,6 +275,24 @@ final private[manager] class StateManagerWorkflowCapability(
           logger.info("[CMD] No session found - creating default session") >>
             commit(SessionWorkflowTransitions.withDefaultStartupBuffer)
       }
+
+  /** Asks about each restored buffer whose unsaved text differs from its file (#1904). The files are read after the
+    * restore has committed, so the editor is up before the disk is touched.
+    */
+  private def offerHotExitRecovery: IO[Unit] =
+    modelCommit.currentState.flatMap { restored =>
+      restored.persisted.buffers.values.toList
+        .filter(HotExitRecovery.holdsBackup)
+        .sortBy(_.id.value)
+        .traverseFilter(recoveryOffer)
+        .flatMap(offers => if offers.isEmpty then IO.unit else commit(HotExitRecovery.withRecoveryOffered(_, offers)))
+    }
+
+  /** No offer for a file that can no longer be read: the recovered text is then all there is. */
+  private def recoveryOffer(backup: Buffer): IO[Option[RecoveryOffer]] =
+    backup.document.filePath.fold(IO.pure(Option.empty[RecoveryOffer])) { path =>
+      fileManager.loadFile(path, backup.id).attempt.map(_.toOption.flatMap(HotExitRecovery.offer(backup, _)))
+    }
 
   private[manager] def createStartupSession(): IO[Unit] =
     commit { before =>
