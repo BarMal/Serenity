@@ -4,8 +4,9 @@ import java.nio.file.Path
 
 import cats.effect.{Deferred, IO}
 import cats.syntax.all.*
-import com.serenity.io.{FileDialog, FileManager, FileUtils}
+import com.serenity.io.{FileDialog, FileManager, FileManagerError, FileUtils}
 import com.serenity.lsp.LspEffect
+import com.serenity.richtext.LossyRichTextOverwriteException
 import com.serenity.session.SessionPersistence
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
@@ -42,6 +43,7 @@ final private[manager] class StateManagerFilePersistence(
     logger: Logger[IO],
     lspQueue: LspEffectQueue,
     lanes: FileEffectLanes,
+    showNotice: Notice => IO[Unit],
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached
 ):
   import StateManagerFilePersistence.*
@@ -77,12 +79,23 @@ final private[manager] class StateManagerFilePersistence(
               applyOnce(
                 bufferId,
                 pending,
-                commitSave(result, error => logger.warn(error)(s"[FILE] Save of buffer $bufferId failed before close"))
+                commitSave(
+                  result,
+                  error =>
+                    logger.warn(error)(s"[FILE] Save of buffer $bufferId failed before close") >>
+                      noticeUnlessAskedOnClose(bufferId, error)
+                )
               )
             )
           )
         )
     )
+
+  /** A conflict, or a save that would lose formatting, is asked about when the close reaches this buffer. */
+  private def noticeUnlessAskedOnClose(bufferId: BufferId, error: Throwable): IO[Unit] =
+    error match
+      case _: FileManagerError.ExternalConflict | _: LossyRichTextOverwriteException => IO.unit
+      case _ => currentState.flatMap(state => showNotice(FileFailureNotice.forBuffer(state, bufferId, error)))
 
   private def applyOnce(bufferId: BufferId, pending: PendingSave, apply: IO[Unit]): IO[Unit] =
     pending.claim.flatMap(claimed => if claimed then writes.removePending(bufferId, pending) >> apply else IO.unit)
@@ -117,9 +130,13 @@ final private[manager] class StateManagerFilePersistence(
       state.persisted.buffers.get(bufferId).flatMap(buffer => buffer.document.filePath.map(buffer -> _)) match
         case None => IO.unit
         case Some((buffer, path)) =>
-          awaitLane(fileLane(path), fileManager.reloadBuffer(buffer)).flatMap(disk =>
-            commit(EffectResult.FileReloaded(bufferId, path, buffer.document.content, disk)) >> persistAfterSave
-          )
+          awaitLane(fileLane(path), fileManager.reloadBuffer(buffer)).attempt.flatMap {
+            case Right(disk) =>
+              commit(EffectResult.FileReloaded(bufferId, path, buffer.document.content, disk)) >> persistAfterSave
+            case Left(error) =>
+              logger.error(error)(s"[FILE] Failed to reload $path") >>
+                showNotice(FileFailureNotice.reloadFailed(path, error))
+          }
     }
 
   /** Opens `path` into a new focused buffer in the background. */
@@ -204,7 +221,8 @@ final private[manager] class StateManagerFilePersistence(
   /** `None` when `path` is not a readable file, which is logged and otherwise ignored, as it always has been. */
   private def loadJob(path: Path): IO[Option[EffectResult]] =
     IO.blocking(FileUtils.isReadableFile(path)).flatMap {
-      case false => logger.warn(s"[FILE] Not a readable file: $path").as(None)
+      case false =>
+        logger.warn(s"[FILE] Not a readable file: $path") >> showNotice(FileFailureNotice.notReadable(path)).as(None)
       case true =>
         fileManager
           .loadFile(path, PlaceholderBufferId)
@@ -217,7 +235,9 @@ final private[manager] class StateManagerFilePersistence(
       case loaded @ EffectResult.FileLoaded(path, buffer) =>
         commit(loaded) >> announceOpenedToLsp(path, buffer)
       case EffectResult.FileLoadFailed(path, error) =>
-        logger.error(error)(s"[FILE] Failed to load file at $path")
+        logger.error(error)(s"[FILE] Failed to load file at $path") >> showNotice(
+          FileFailureNotice.openFailed(path, error)
+        )
       case _ => IO.unit
 
   private def announceOpenedToLsp(path: Path, loaded: Buffer): IO[Unit] =
@@ -271,7 +291,10 @@ final private[manager] class StateManagerFilePersistence(
   private def persistAfterSave: IO[Unit] =
     currentState
       .flatMap(sessionPersistence.onBufferChange)
-      .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after file save failed"))
+      .handleErrorWith(error =>
+        logger.error(error)("[SESSION] Auto-save after file save failed") >>
+          showNotice(FileFailureNotice.sessionBackupFailed(error))
+      )
 
 private[manager] object StateManagerFilePersistence:
 

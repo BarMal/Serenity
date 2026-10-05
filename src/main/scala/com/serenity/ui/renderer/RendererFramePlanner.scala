@@ -313,7 +313,9 @@ object RendererFramePlanner:
     val pinnedAndExpandedIds = RendererFloatingPanels.pinnedAndExpandedSurfaces(state).map(_.id).toSet
     val overlays             = OverlayViewModel.fromState(state, scene)
     val floatingIds =
-      (overlays.aboveCursorStack ++ overlays.belowCursorStack ++ overlays.tabBar.toList).flatMap(_.surfaceId).toSet
+      (overlays.aboveCursorStack ++ overlays.belowCursorStack ++ overlays.cornerStack ++ overlays.tabBar.toList)
+        .flatMap(_.surfaceId)
+        .toSet
     val activeIds = pinnedAndExpandedIds ++ floatingIds
     if state.persisted.config.surfaceConfig.layerCachingEnabled then
       caches.frameState.pruneStalePanelLayers(surface, activeIds)

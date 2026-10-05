@@ -358,7 +358,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     val outlineSymbols = stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.collectFirst {
       case com.serenity.state.models.UiSurface(
             _,
-            com.serenity.state.models.SurfaceContent.Outline(symbols, _),
+            com.serenity.state.models.SurfaceContent.Outline(symbols, _, _),
             _,
             _
           ) =>

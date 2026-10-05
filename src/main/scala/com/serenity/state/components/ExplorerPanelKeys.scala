@@ -6,9 +6,11 @@ import com.serenity.keystroke.events.{Direction, PanelInputEvent}
 import com.serenity.state.models.{AppState, SurfaceContent, UiSurface}
 import com.serenity.state.reducers.{AppEffect, FileEffect, ReducerResult}
 import com.serenity.ui.layout.{DirectoryTreeData, DirectoryTreeRow}
+import com.serenity.ui.widget.ListScroll
 
 /** The explorer's keys: Up/Down/Home/End/PageUp/PageDown move the selection, Right or Enter opens a file or expands a
-  * folder, and Left collapses a folder or selects its parent. Whatever ends up selected is scrolled into view.
+  * folder, and Left collapses a folder or selects its parent. Whatever ends up selected is scrolled into view, even
+  * when the wheel had scrolled the selection away.
   */
 private[components] object ExplorerPanelKeys:
 
@@ -17,14 +19,15 @@ private[components] object ExplorerPanelKeys:
     surface: UiSurface,
     tree: DirectoryTreeData,
     selectedPath: Option[Path],
-    scrollOffset: Int,
+    scroll: ListScroll,
     currentState: AppState,
     visibleRows: Int
   ): Option[ComponentResult] =
     val rows = DirectoryTreeData.visibleRows(tree)
     def shown(nextTree: DirectoryTreeData, nextSelection: Option[Path]): ComponentResult =
-      val keptInView = DirectoryTreeData.rowList(nextTree, nextSelection, scrollOffset, visibleRows).offset
-      PanelSurfaces.replaced(surface, SurfaceContent.DirectoryTree(nextTree, nextSelection, keptInView))
+      val following  = scroll.copy(followsSelection = true)
+      val keptInView = DirectoryTreeData.rowList(nextTree, nextSelection, following, visibleRows).offset
+      PanelSurfaces.replaced(surface, SurfaceContent.DirectoryTree(nextTree, nextSelection, ListScroll(keptInView)))
     def moved(target: Int => Int) = moveSelection(rows, selectedPath, target).map(path => shown(tree, Some(path)))
     event match
       case PanelInputEvent.Navigate(Direction.Up)   => moved(_ - 1)

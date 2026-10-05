@@ -259,23 +259,23 @@ object PanelStateReducer:
             dismissOnMove = false
           )
         )
-      case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) =>
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scroll) =>
         Some(
           surface.copy(
-            content = SurfaceContent.DirectoryTree(tree, selectedPath.orElse(Some(tree.rootPath)), scrollOffset),
+            content = SurfaceContent.DirectoryTree(tree, selectedPath.orElse(Some(tree.rootPath)), scroll),
             presentation = SurfacePresentation.Docked,
             dismissOnMove = false
           )
         )
-      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) |
-          SurfaceContent.Diagnostics(_, _) | SurfaceContent.MarkdownPreview(_, _) =>
+      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _, _) | SurfaceContent.Comments(_, _, _) |
+          SurfaceContent.Diagnostics(_, _, _) | SurfaceContent.MarkdownPreview(_, _) =>
         Some(surface.copy(presentation = SurfacePresentation.Docked, dismissOnMove = false))
       case SurfaceContent.StartPage(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) |
           SurfaceContent.ThemeCreator(_) | SurfaceContent.ContextualToolbar(_) | SurfaceContent.ContextMenu(_) |
           SurfaceContent.CommentLens(_) | SurfaceContent.ModalWorkflow(_) | SurfaceContent.QuickInfo(_) |
           SurfaceContent.FilePreview(_, _) | SurfaceContent.SymbolDefinition(_, _) | SurfaceContent.StatusLine(_) |
           SurfaceContent.ShortcutsHelp(_) | SurfaceContent.TabList(_, _) | SurfaceContent.RecentFilesInMode(_, _) |
-          SurfaceContent.TabBar(_, _) =>
+          SurfaceContent.TabBar(_, _) | SurfaceContent.Notice(_, _) =>
         None
 
   private def replaceSurface(surfaces: List[UiSurface], updated: UiSurface): List[UiSurface] =

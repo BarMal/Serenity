@@ -19,10 +19,9 @@ import com.serenity.keystroke.events.{
   MouseMove,
   MousePress,
   MouseRenderMetrics,
-  ScrollDown,
+  MouseWheel,
   ScrollLeft,
-  ScrollRight,
-  ScrollUp
+  ScrollRight
 }
 import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
@@ -410,7 +409,7 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     )
 
     handler.eventStream.take(2).compile.toList.unsafeRunTimed(StreamObservationTimeout) shouldBe Some(
-      List(ScrollDown(3), ScrollUp(3))
+      List(MouseWheel(0, 0, 3, Some(0), Some(0)), MouseWheel(0, 0, -3, Some(0), Some(0)))
     )
   }
 

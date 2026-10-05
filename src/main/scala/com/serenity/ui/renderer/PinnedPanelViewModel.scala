@@ -124,15 +124,15 @@ object PinnedPanelViewModel:
             .map(_.document.content.collect())
             .getOrElse("")
           SurfaceContentResolver.resolveMarkdownPreview(title, content, rect, SurfaceRenderMode.Pinned, cache)
-        case SurfaceContent.Outline(symbols, activeLocation) =>
+        case SurfaceContent.Outline(symbols, activeLocation, scroll) =>
           SurfaceContentResolver.resolve(
-            SurfaceContent.Outline(symbols, activeSymbolLocation(symbols, activeLocation, state)),
+            SurfaceContent.Outline(symbols, activeSymbolLocation(symbols, activeLocation, state), scroll),
             rect,
             SurfaceRenderMode.Pinned
           )
-        case SurfaceContent.Comments(symbols, activeLocation) =>
+        case SurfaceContent.Comments(symbols, activeLocation, scroll) =>
           SurfaceContentResolver.resolve(
-            SurfaceContent.Comments(symbols, activeSymbolLocation(symbols, activeLocation, state)),
+            SurfaceContent.Comments(symbols, activeSymbolLocation(symbols, activeLocation, state), scroll),
             rect,
             SurfaceRenderMode.Pinned
           )
@@ -157,14 +157,24 @@ object PinnedPanelViewModel:
     state: Option[AppState]
   ): ResolvedSurfaceComposition =
     surface.content match
-      case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) =>
-        DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, scrollOffset, rect)
-      case SurfaceContent.Outline(symbols, activeLocation) =>
-        OutlineSurfaceComposition.forOutline(symbols, activeSymbolLocation(symbols, activeLocation, state), rect)
-      case SurfaceContent.Diagnostics(issues, activeLocation) =>
-        DiagnosticsSurfaceComposition.forDiagnostics(issues, activeLocation, rect)
-      case SurfaceContent.Comments(symbols, activeLocation) =>
-        CommentsSurfaceComposition.forComments(symbols, activeSymbolLocation(symbols, activeLocation, state), rect)
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scroll) =>
+        DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, scroll, rect)
+      case SurfaceContent.Outline(symbols, activeLocation, scroll) =>
+        OutlineSurfaceComposition.forOutline(
+          symbols,
+          activeSymbolLocation(symbols, activeLocation, state),
+          rect,
+          scroll
+        )
+      case SurfaceContent.Diagnostics(issues, activeLocation, scroll) =>
+        DiagnosticsSurfaceComposition.forDiagnostics(issues, activeLocation, rect, scroll)
+      case SurfaceContent.Comments(symbols, activeLocation, scroll) =>
+        CommentsSurfaceComposition.forComments(
+          symbols,
+          activeSymbolLocation(symbols, activeLocation, state),
+          rect,
+          scroll
+        )
       case content =>
         RowsSurfaceComposition.forResolved(resolved, rect, SurfaceFrameLayout.borderCellsFor(content))
 

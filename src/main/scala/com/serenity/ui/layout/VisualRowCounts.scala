@@ -26,14 +26,18 @@ sealed abstract class VisualRowCounts:
   /** The line and row within it `rows` visual rows below the top of `line`, or `None` once the document has ended. */
   def rowBelow(line: Int, rows: Int): Option[(Int, Int)]
 
-/** What a line's visual row count depends on besides its text. */
+/** What a line's visual row count depends on besides its text. The buffer's rich-text styling is the other input: it
+  * changes without the text changing, so it stamps the index instead (see [[VisualLineIndexStore]]) -- a new document
+  * would otherwise leave a new key behind per edit and crowd other buffers' indexes out.
+  */
 final private[layout] case class VisualRowKey(
     bufferId: BufferId,
     panelWidthPx: Int,
     font: Font,
     frc: FontRenderContext,
     cellMetricsOverride: Option[CellMetrics],
-    forceCellLayout: Boolean
+    forceCellLayout: Boolean,
+    dropCapsEnabled: Boolean
 )
 
 object VisualRowCounts:
@@ -47,10 +51,12 @@ object VisualRowCounts:
     font: Font,
     cellMetricsOverride: Option[CellMetrics],
     forceCellLayout: Boolean,
-    wrapCache: WrappedLineCache
+    wrapCache: WrappedLineCache,
+    dropCapsEnabled: Boolean = true
   ): VisualRowCounts =
-    val content = buffer.document.content
-    val frc     = TextLayoutSnapshot.defaultFontRenderContext()
+    val content  = buffer.document.content
+    val frc      = TextLayoutSnapshot.defaultFontRenderContext()
+    val richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled)
     def measure(line: Int): Int =
       TextLayoutSnapshot
         .boundedVisualLinesForText(
@@ -61,12 +67,13 @@ object VisualRowCounts:
           frc,
           cellMetricsOverride = cellMetricsOverride,
           forceCellLayout = forceCellLayout,
-          wrapCache = wrapCache
+          wrapCache = wrapCache,
+          richText = richText
         )
         .length
         .max(1)
-    val key = VisualRowKey(buffer.id, panelWidthPx, font, frc, cellMetricsOverride, forceCellLayout)
-    wrapCache.visualRowCounts(key, content, measure)
+    val key = VisualRowKey(buffer.id, panelWidthPx, font, frc, cellMetricsOverride, forceCellLayout, dropCapsEnabled)
+    wrapCache.visualRowCounts(key, content, measure, richText.document.getOrElse(VisualLineIndexStore.Unstamped))
 
   def oneRowPerLine(lineCount: Int): VisualRowCounts = walking(lineCount, _ => 1)
 
@@ -103,21 +110,23 @@ object VisualRowCounts:
     store: VisualLineIndexStore[K],
     key: K,
     content: com.serenity.rope.Rope,
-    measure: Int => Int
-  ): VisualRowCounts = new Indexed(store, key, content, measure)
+    measure: Int => Int,
+    stamp: AnyRef = VisualLineIndexStore.Unstamped
+  ): VisualRowCounts = new Indexed(store, key, content, measure, stamp)
 
   final private class Indexed[K](
       store: VisualLineIndexStore[K],
       key: K,
       content: com.serenity.rope.Rope,
-      measure: Int => Int
+      measure: Int => Int,
+      stamp: AnyRef
   ) extends VisualRowCounts:
 
     val lineCount: Int = content.lineCount
 
     private def withIndex[A](answer: VisualLineIndex => (A, VisualLineIndex)): A =
-      val (result, refined) = answer(store.indexFor(key, content))
-      store.update(key, content, refined)
+      val (result, refined) = answer(store.indexFor(key, content, stamp))
+      store.update(key, content, refined, stamp)
       result
 
     private def inDocument(line: Int): Boolean = line >= 0 && line < lineCount

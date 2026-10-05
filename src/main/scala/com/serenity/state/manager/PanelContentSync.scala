@@ -42,12 +42,12 @@ private[manager] object PanelContentSync:
     val updated = state.runtime.uiSurfaces.map {
       case surface @ UiSurface(
             _,
-            SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset),
+            SurfaceContent.DirectoryTree(tree, selectedPath, scroll),
             SurfacePresentation.Docked,
             _
           ) if directories.exists(tree.entries.contains) =>
         val stale = tree.stale ++ directories.filter(tree.entries.contains)
-        surface.copy(content = SurfaceContent.DirectoryTree(tree.copy(stale = stale), selectedPath, scrollOffset))
+        surface.copy(content = SurfaceContent.DirectoryTree(tree.copy(stale = stale), selectedPath, scroll))
       case surface => surface
     }
     state.copy(runtime = state.runtime.copy(uiSurfaces = updated))
@@ -74,7 +74,7 @@ private[manager] object PanelContentSync:
     if !current then state
     else
       val updated = state.runtime.uiSurfaces.map {
-        case surface @ UiSurface(_, outline @ SurfaceContent.Outline(existing, _), SurfacePresentation.Docked, _)
+        case surface @ UiSurface(_, outline @ SurfaceContent.Outline(existing, _, _), SurfacePresentation.Docked, _)
             if existing != symbols =>
           surface.copy(content = withHighlightKept(outline, SurfaceContent.Outline(symbols)))
         case surface => surface
@@ -103,16 +103,16 @@ private[manager] object PanelContentSync:
     previousSource: Option[Buffer]
   ): Option[SurfaceContent] =
     content match
-      case SurfaceContent.Outline(_, _) if sourceSwitched(source, previousSource) =>
+      case SurfaceContent.Outline(_, _, _) if sourceSwitched(source, previousSource) =>
         Some(outlineContent(source))
-      case SurfaceContent.Comments(_, _) if commentsChanged(source, previousSource) =>
+      case SurfaceContent.Comments(_, _, _) if commentsChanged(source, previousSource) =>
         Some(commentsContent(source))
-      case SurfaceContent.Diagnostics(_, _)
+      case SurfaceContent.Diagnostics(_, _, _)
           if sourceSwitched(source, previousSource) ||
             !(sourceDiagnostics(state, source) eq sourceDiagnostics(previous, source)) =>
         Some(diagnosticsContent(state, source))
-      case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) if tree.awaitingListing.nonEmpty =>
-        Some(SurfaceContent.DirectoryTree(tree.listingRequested(tree.awaitingListing), selectedPath, scrollOffset))
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scroll) if tree.awaitingListing.nonEmpty =>
+        Some(SurfaceContent.DirectoryTree(tree.listingRequested(tree.awaitingListing), selectedPath, scroll))
       case SurfaceContent.Terminal(shown, cursor)
           if state.runtime.projectTasks.terminalText != previous.runtime.projectTasks.terminalText =>
         // Scrolled back (the cursor short of the end), the panel stays where it is; otherwise it follows the output.
@@ -126,15 +126,17 @@ private[manager] object PanelContentSync:
           .map(markdownPreviewContent)
       case _ => None
 
-  /** `next` still highlighting the row `previous` had highlighted, when that row is still listed. */
+  /** `next` scrolled where `previous` was, and still highlighting the row `previous` had highlighted when that row is
+    * still listed.
+    */
   def withHighlightKept(previous: SurfaceContent, next: SurfaceContent): SurfaceContent =
     (previous, next) match
-      case (SurfaceContent.Outline(_, Some(at)), SurfaceContent.Outline(symbols, _)) =>
-        SurfaceContent.Outline(symbols, Option.when(symbols.exists(_.location == at))(at))
-      case (SurfaceContent.Comments(_, Some(at)), SurfaceContent.Comments(symbols, _)) =>
-        SurfaceContent.Comments(symbols, Option.when(symbols.exists(_.location == at))(at))
-      case (SurfaceContent.Diagnostics(_, Some(at)), SurfaceContent.Diagnostics(issues, _)) =>
-        SurfaceContent.Diagnostics(issues, Option.when(issues.exists(_.location == at))(at))
+      case (SurfaceContent.Outline(_, at, scroll), SurfaceContent.Outline(symbols, _, _)) =>
+        SurfaceContent.Outline(symbols, at.filter(location => symbols.exists(_.location == location)), scroll)
+      case (SurfaceContent.Comments(_, at, scroll), SurfaceContent.Comments(symbols, _, _)) =>
+        SurfaceContent.Comments(symbols, at.filter(location => symbols.exists(_.location == location)), scroll)
+      case (SurfaceContent.Diagnostics(_, at, scroll), SurfaceContent.Diagnostics(issues, _, _)) =>
+        SurfaceContent.Diagnostics(issues, at.filter(location => issues.exists(_.location == location)), scroll)
       case _ => next
 
   private def sourceSwitched(source: Option[Buffer], previousSource: Option[Buffer]): Boolean =
@@ -150,8 +152,8 @@ private[manager] object PanelContentSync:
 
   private def hasDockedOutline(state: AppState): Boolean =
     state.runtime.uiSurfaces.exists {
-      case UiSurface(_, SurfaceContent.Outline(_, _), SurfacePresentation.Docked, _) => true
-      case _                                                                         => false
+      case UiSurface(_, SurfaceContent.Outline(_, _, _), SurfacePresentation.Docked, _) => true
+      case _                                                                            => false
     }
 
   private def documentChanged(current: Buffer, prior: Buffer): Boolean =

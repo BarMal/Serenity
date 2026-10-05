@@ -30,7 +30,8 @@ final private[manager] class StateManagerFileWorkflow(
     openFile: Path => IO[Unit],
     missingDirectoriesBeforeSave: (Path, IO[List[String]]) => IO[List[String]],
     saveBufferAs: (BufferId, Path) => IO[Unit],
-    afterSaveAsCompleted: (SurfaceId, BufferId) => IO[Unit]
+    afterSaveAsCompleted: (SurfaceId, BufferId) => IO[Unit],
+    showNotice: Notice => IO[Unit]
 ):
   import FileWorkflowTransitions.{fileDialog, withFileDialog, withStatus}
 
@@ -311,7 +312,12 @@ final private[manager] class StateManagerFileWorkflow(
                   case _ =>
                     saveBufferAs(bufferId, targetPath)
                       .flatMap(_ => afterSaveAsCompleted(surfaceId, bufferId))
-                      .handleErrorWith(error => commit(withStatus(_, surfaceId, workflow, saveFailureMessage(error))))
+                      .handleErrorWith(error =>
+                        commit(withStatus(_, surfaceId, workflow, saveFailureMessage(error))) >>
+                          showNotice(
+                            FileFailureNotice.fileSaveFailed(bufferId, targetPath, error, state.persisted.config)
+                          )
+                      )
                 }
             }
       case None =>

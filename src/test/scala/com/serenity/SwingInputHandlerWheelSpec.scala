@@ -8,7 +8,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.input.{InputRouter, SwingInputHandler}
-import com.serenity.keystroke.events.{Event, InsertChar, ScrollDown, ScrollLeft, ScrollRight}
+import com.serenity.keystroke.events.{Event, InsertChar, MouseWheel, ScrollLeft, ScrollRight}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
@@ -65,7 +65,7 @@ class SwingInputHandlerWheelSpec extends AnyFlatSpec with Matchers:
     Seq.fill(4)(0.25).foreach(delta => scrollWheel(component, 0, MouseWheelEvent.WHEEL_UNIT_SCROLL, 0, delta))
     typeMarker(component)
 
-    firstEvents(handler, 2) shouldBe Some(List(ScrollDown(3), InsertChar('a')))
+    firstEvents(handler, 2) shouldBe Some(List(MouseWheel(0, 0, 3, Some(0), Some(0)), InsertChar('a')))
   }
 
   it should "add up shift-held fractional trackpad deltas into a horizontal notch" in {
@@ -85,7 +85,7 @@ class SwingInputHandlerWheelSpec extends AnyFlatSpec with Matchers:
 
     scrollWheel(component, 0, MouseWheelEvent.WHEEL_BLOCK_SCROLL, 1, 1.0)
 
-    firstEvents(handler, 1) shouldBe Some(List(ScrollDown(30)))
+    firstEvents(handler, 1) shouldBe Some(List(MouseWheel(0, 0, 30, Some(0), Some(0))))
   }
 
   it should "scroll a viewport's worth of columns per notch of a shift-held block scroll" in {

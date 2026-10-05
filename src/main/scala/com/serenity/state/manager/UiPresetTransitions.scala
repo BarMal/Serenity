@@ -170,11 +170,11 @@ private[manager] object UiPresetTransitions:
 
   private def hydratePresetSymbolPanels(state: AppState): AppState =
     val hydratedSurfaces = state.runtime.uiSurfaces.map {
-      case surface @ UiSurface(_, SurfaceContent.Outline(_, _), SurfacePresentation.Docked, _) =>
+      case surface @ UiSurface(_, SurfaceContent.Outline(_, _, _), SurfacePresentation.Docked, _) =>
         surface.copy(content = PanelContentSync.outlineContent(state.activeBuffer))
-      case surface @ UiSurface(_, SurfaceContent.Comments(_, _), SurfacePresentation.Docked, _) =>
+      case surface @ UiSurface(_, SurfaceContent.Comments(_, _, _), SurfacePresentation.Docked, _) =>
         surface.copy(content = PanelContentSync.commentsContent(state.activeBuffer))
-      case surface @ UiSurface(_, SurfaceContent.Diagnostics(_, _), SurfacePresentation.Docked, _) =>
+      case surface @ UiSurface(_, SurfaceContent.Diagnostics(_, _, _), SurfacePresentation.Docked, _) =>
         surface.copy(content = PanelContentSync.diagnosticsContent(state, state.activeBuffer))
       case surface =>
         surface

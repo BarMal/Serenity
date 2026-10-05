@@ -309,6 +309,25 @@ object OverlayStackLayout:
 
   final case class CornerOverlayLayout(stack: List[(SurfaceId, LayoutRect)], collapsedSurfaceIds: Set[SurfaceId])
 
+  /** Every surface placed in a screen corner -- notices (#1717) -- stacked inside `area` with a cell of margin, newest
+    * nearest the corner. A surface the corner has no room left for is not placed, so not painted.
+    */
+  private[layout] def calculateCornerOverlays(state: AppState, area: LayoutRect): List[(SurfaceId, LayoutRect)] =
+    val inset   = LayoutRect(area.x + 1, area.y + 1, math.max(0, area.width - 2), math.max(0, area.height - 2))
+    val gapRows = FloatingSurfaceLayout.wholeRowOrigin(FloatingSurfaceLayout.floatingStackGapRows(state))
+    val cornered = state.floatingSurfaces.reverse.collect {
+      case surface @ UiSurface(_, _, SurfacePresentation.Floating(_, SurfacePlacement.Corner(position)), _) =>
+        position -> surface
+    }
+    CornerPosition.values.toList.flatMap { position =>
+      val slots = cornered.collect {
+        case (`position`, surface) =>
+          val width = FloatingSurfaceSizing.width(surface.content, state, inset)
+          CornerPanelSlot(surface.id, width, FloatingSurfaceSizing.height(surface.content, width, inset.height, state))
+      }
+      calculateCornerOverlayStack(position, slots, inset, gapRows).stack
+    }
+
   /** Lays out every panel assigned to one screen corner as a vertical list (issue #1310, mode 3), stacking from the
     * corner outward -- the first slot sits closest to the corner itself. Unlike `stackBelowCursorSurfaces`, which
     * shrinks each surface to fit, panels here either fit at their preferred height or collapse: once a slot's
