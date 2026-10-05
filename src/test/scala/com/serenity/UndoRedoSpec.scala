@@ -157,19 +157,19 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = setupBuffer("abcd")
 
-    applyEvent(DeleteBackward)
-    applyEvent(DeleteBackward)
-    applyEvent(DeleteBackward)
-    getContent(bufferId) shouldBe "a"
+    applyEvent(NewLine)
+    applyEvent(NewLine)
+    applyEvent(NewLine)
+    getContent(bufferId) shouldBe "abcd\n\n\n"
 
     applyEvent(Undo)
-    getContent(bufferId) shouldBe "ab"
+    getContent(bufferId) shouldBe "abcd\n\n"
 
     applyEvent(Undo)
-    getContent(bufferId) shouldBe "abc"
+    getContent(bufferId) shouldBe "abcd\n"
 
     applyEvent(Undo)
-    getContent(bufferId) shouldBe "abc"
+    getContent(bufferId) shouldBe "abcd\n"
 
   behavior of "Multi-cursor undo/redo"
 

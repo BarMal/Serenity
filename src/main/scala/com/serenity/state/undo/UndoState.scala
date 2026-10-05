@@ -170,10 +170,20 @@ object HistoryStacks:
     val pushed = step +: stack
     if pushed.lengthIs <= math.max(1, maxDepth) then pushed else pushed.dropRight(1)
 
-/** Edits still coalescing into the undo step numbered `step`. */
-final case class TypingRun(paneId: PaneId, step: Long)
+/** Where a buffer's cursors and selections stood: what must be unchanged for the next edit to continue a run. */
+final case class CaretMarks(marks: List[(CursorPosition, Option[CursorPosition])])
 
-final case class BufferHistory(stacks: HistoryStacks = HistoryStacks(), openRun: Option[TypingRun] = None)
+object CaretMarks:
+
+  def of(editing: EditingState): CaretMarks =
+    CaretMarks(editing.cursors.toList.map(cursor => cursor.position -> cursor.selectionAnchor))
+
+/** Edits still coalescing into the undo step numbered `step`: all of `kind`, the latest leaving the cursors at
+  * `carets`.
+  */
+final case class EditRun(paneId: PaneId, step: Long, kind: EditKind, carets: CaretMarks)
+
+final case class BufferHistory(stacks: HistoryStacks = HistoryStacks(), openRun: Option[EditRun] = None)
 
 /** The history an undo or redo acts on: the working buffer's, shown in `paneId`, or the layout's. */
 enum HistoryOwner:
@@ -182,9 +192,9 @@ enum HistoryOwner:
 
 /** Undo/redo history, held separately from AppState in StateManager. Never persisted to disk — always starts fresh.
   *
-  * Each buffer keeps its own history (#1930), so undo only ever touches the buffer being worked in, and closing a buffer
-  * drops its history with it. Pane and panel changes share a separate layout history, so toggling panels never pushes
-  * text edits out of a buffer's bounded stack.
+  * Each buffer keeps its own history (#1930), so undo only ever touches the buffer being worked in, and closing a
+  * buffer drops its history with it. Pane and panel changes share a separate layout history, so toggling panels never
+  * pushes text edits out of a buffer's bounded stack.
   */
 final case class UndoState(
     buffers: Map[BufferId, BufferHistory] = Map.empty,
@@ -207,22 +217,23 @@ final case class UndoState(
     val step = HistoryStep(recordedSteps, entry)
     withStacksFor(entry)(_.pushedRedo(step, maxUndoDepth)).copy(recordedSteps = recordedSteps + 1)
 
-  /** Records `entry` as a new undo step, or -- for a `groupable` edit continuing its buffer's open run -- folds it into
-    * that run's step. A run stays open only while nothing else has been recorded since it, in any history, and never
-    * past a clean buffer, so undo can stop at the saved text.
+  /** Records `entry` as a new undo step, or -- for a [[EditGrouping.Coalescing]] edit that picks up exactly where its
+    * buffer's open run left off -- folds it into that run's step. `carets` is where the edit left the buffer's cursors
+    * and `paused` whether the key making the edit came over [[EditClock.Pause]] after the one before. A run stays open
+    * only while nothing else has been recorded since it, in any history; it closes at a cursor jump, a pause
+    * (`paused`), a change of edit kind, whitespace typed after a word, and any clean buffer, so undo can stop at the
+    * saved text.
     */
-  def recorded(entry: HistoryEntry, groupable: Boolean): UndoState =
-    entry match
-      case edit: HistoryEntry.BufferEdit if groupable =>
-        if continuesRun(edit) then
-          copy(buffers = buffers.updatedWith(edit.bufferId)(_.map(history => history.copy(stacks = history.stacks.withoutRedo))))
+  def recorded(entry: HistoryEntry, grouping: EditGrouping, carets: CaretMarks, paused: Boolean): UndoState =
+    (entry, grouping) match
+      case (edit: HistoryEntry.BufferEdit, EditGrouping.Coalescing(kind, afterWord)) =>
+        if continuesRun(edit, kind, afterWord, paused) then
+          withRun(edit.bufferId, EditRun(edit.paneId, recordedSteps - 1, kind, carets))(
+            _.withoutRedo
+          )
         else
           val pushed = pushUndo(edit)
-          pushed.copy(buffers =
-            pushed.buffers.updatedWith(edit.bufferId)(
-              _.map(_.copy(openRun = Some(TypingRun(edit.paneId, recordedSteps))))
-            )
-          )
+          pushed.withRun(edit.bufferId, EditRun(edit.paneId, recordedSteps, kind, carets))(identity)
       case _ => pushUndo(entry)
 
   /** What undo acts on in `state`: the newest step of the working buffer's history or of the layout history, whichever
@@ -249,11 +260,28 @@ final case class UndoState(
 
   def forOpenBuffers(open: Map[BufferId, Buffer]): UndoState = retainingBuffers(open.contains)
 
-  private def continuesRun(edit: HistoryEntry.BufferEdit): Boolean =
-    buffers
+  private def continuesRun(
+    edit: HistoryEntry.BufferEdit,
+    kind: EditKind,
+    afterWord: Boolean,
+    paused: Boolean
+  ): Boolean =
+    !afterWord && !paused && edit.snapshot.cleanIn.isEmpty && buffers
       .get(edit.bufferId)
       .flatMap(_.openRun)
-      .exists(run => run.paneId == edit.paneId && run.step == recordedSteps - 1 && edit.snapshot.cleanIn.isEmpty)
+      .exists(run =>
+        run.paneId == edit.paneId &&
+          run.step == recordedSteps - 1 &&
+          run.kind == kind &&
+          run.carets == CaretMarks.of(edit.snapshot.editing)
+      )
+
+  private def withRun(bufferId: BufferId, run: EditRun)(update: HistoryStacks => HistoryStacks): UndoState =
+    copy(buffers =
+      buffers.updatedWith(bufferId)(
+        _.map(history => history.copy(stacks = update(history.stacks), openRun = Some(run)))
+      )
+    )
 
   private def newest(
     state: AppState,
@@ -283,7 +311,10 @@ final case class UndoState(
 
   private def merged(stack: HistoryStacks => Vector[HistoryStep]): Vector[HistoryEntry] =
     if buffers.isEmpty then stack(layout).map(_.entry)
-    else (buffers.values.toVector.flatMap(history => stack(history.stacks)) ++ stack(layout)).sortBy(-_.number).map(_.entry)
+    else
+      (buffers.values.toVector.flatMap(history => stack(history.stacks)) ++ stack(layout))
+        .sortBy(-_.number)
+        .map(_.entry)
 
 object UndoState:
   val DefaultMaxUndoDepth: Int = 1000

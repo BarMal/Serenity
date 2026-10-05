@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import com.serenity.keystroke.events.{Event, InsertChar, ResizeEvent}
+import com.serenity.keystroke.events.{Event, InsertChar, ResizeEvent, TextEntryEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, Focus, SurfaceContent, replacedWhere}
 import com.serenity.state.reducers.{AppEventReducer, ReducerResult, SystemEventReducer}
@@ -40,13 +40,16 @@ private[manager] object EventPipelineTransitions:
       )
     else state
 
-  /** A typed character opens the typing quiet window. Folded into the state the event's own handler builds on, so it
-    * lands in that event's commit rather than costing a commit of its own per keystroke.
+  /** A typed character opens the typing quiet window, and any text-entry key stamps the edit clock undo grouping reads.
+    * Folded into the state the event's own handler builds on, so it lands in that event's commit rather than costing a
+    * commit of its own per keystroke.
     */
   def typingObserved(event: Event, nowNanos: Long)(state: AppState): AppState =
     event match
-      case _: InsertChar => state.copy(runtime = state.runtime.observeTyping(nowNanos))
-      case _             => state
+      case _: InsertChar =>
+        state.copy(runtime = state.runtime.observeTyping(nowNanos).observeEditKey(nowNanos))
+      case _: TextEntryEvent => state.copy(runtime = state.runtime.observeEditKey(nowNanos))
+      case _                 => state
 
   def withCommandRunnerUiPresetPreviews(model: Model, previews: List[UiPreset.Preview]): Model =
     val state = model.app

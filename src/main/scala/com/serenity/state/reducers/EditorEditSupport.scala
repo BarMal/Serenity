@@ -3,7 +3,7 @@ package com.serenity.state.reducers
 import com.serenity.richtext.{RichTextDocument, RichTextPosition, RichTextRange}
 import com.serenity.rope.*
 import com.serenity.state.models.*
-import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
+import com.serenity.state.undo.{BufferSnapshot, EditGrouping, EditKind, HistoryEntry}
 
 /** Low-level infrastructure shared by every family of [[EditorEventReducer]] event handling: applying one or many
   * [[MultiCursorEdit]]s to a buffer's content, rich text document and comments in lockstep. Extracted from
@@ -28,21 +28,30 @@ private[state] object EditorEditSupport:
   final case class MultiCursorEdit(ownerIndex: Int, start: Int, end: Int, insertedText: String)
 
   /** Declares the edit(s) just performed as undoable -- see #1016. `before` is the buffer as it stood immediately
-    * before this call's edits; every caller already has it in scope as the receiver it edited. `groupable` mirrors
-    * whether the triggering event was a character/tab insertion, the only two event kinds a consecutive run of which
-    * coalesces into one undo step.
+    * before this call's edits; every caller already has it in scope as the receiver it edited. `grouping` says whether
+    * this edit coalesces into the run before it: only typing at the cursor and one-grapheme deletions do.
     */
   def undoBoundaryEffects(
     bufferId: BufferId,
     paneId: PaneId,
     before: Buffer,
     edits: List[MultiCursorEdit],
-    groupable: Boolean
+    grouping: EditGrouping
   ): List[AppEffect] =
     if edits.isEmpty then Nil
     else
       val entry = HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(before))
-      List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable)))
+      List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, grouping)))
+
+  val standalone: List[MultiCursorEdit] => EditGrouping = _ => EditGrouping.Standalone
+
+  /** Typing `edits` into `before`: whitespace typed straight after a word opens a new undo step. */
+  def typingGrouping(before: Buffer)(edits: List[MultiCursorEdit]): EditGrouping =
+    edits.headOption.fold(EditGrouping.Standalone)(edit =>
+      EditGrouping.typing(edit.insertedText, before.document.content.index(edit.start - 1))
+    )
+
+  def deletingGrouping(kind: EditKind): List[MultiCursorEdit] => EditGrouping = _ => EditGrouping.deleting(kind)
 
   def backwardGraphemeDeletionRange(content: Rope, offset: Int): Option[(Int, Int)] =
     val beforeOrAt = content.graphemeBoundaryBeforeOrAt(offset)

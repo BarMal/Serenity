@@ -7,7 +7,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
+import com.serenity.state.undo.{BufferSnapshot, EditGrouping, HistoryEntry}
 import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{Layout, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -77,7 +77,7 @@ class RichTextReducerSpec extends AnyFlatSpec with Matchers:
     val result = RichTextReducer.reduce(RichTextIntent.ToggleRichTextMark(InlineMark.Bold), state)
 
     val entry = HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(state.persisted.buffers(bufferId)))
-    result.effects shouldBe List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable = false)))
+    result.effects shouldBe List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, EditGrouping.Standalone)))
   }
 
   it should "not record an undo step when only the pending insertion style changes" in {

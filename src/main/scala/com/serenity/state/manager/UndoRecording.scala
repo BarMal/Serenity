@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.IO
 import com.serenity.state.models.*
-import com.serenity.state.undo.{HistoryEntry, HistoryOwner, UndoState}
+import com.serenity.state.undo.{CaretMarks, EditGrouping, HistoryEntry, HistoryOwner, UndoState}
 
 /** State the event pipeline exposes for recording and replaying undo/redo history. */
 private[manager] trait UndoRecordingPort:
@@ -15,14 +15,14 @@ private[manager] trait UndoRecordingPort:
   * are undoable or diffs state to infer a change, since the code that made the change is the only code with that
   * knowledge. `applyUndo` and `applyRedo` replay history entries back into state via `HistoryEntry.restore`, agnostic
   * to which kind of entry (buffer edit, pane close, ...) they're replaying, committing the restored state and the new
-  * history in one model write. They act on the working buffer's history or the layout history, never another
-  * buffer's (#1930).
+  * history in one model write. They act on the working buffer's history or the layout history, never another buffer's
+  * (#1930).
   */
 final private[manager] class UndoRecording(port: UndoRecordingPort):
   import port.*
 
-  def recordUndoBoundary(entry: HistoryEntry, groupable: Boolean): IO[Unit] =
-    updateUndo(UndoRecording.recorded(_, entry, groupable))
+  def recordUndoBoundary(entry: HistoryEntry, grouping: EditGrouping): IO[Unit] =
+    updateModelValidated(model => Some(UndoRecording.recorded(model, entry, grouping)))
 
   def applyUndo(@annotation.unused prevState: AppState): IO[Unit] =
     updateModelValidated(UndoRecording.undone)
@@ -32,8 +32,15 @@ final private[manager] class UndoRecording(port: UndoRecordingPort):
 
 private[manager] object UndoRecording:
 
-  def recorded(undo: UndoState, entry: HistoryEntry, groupable: Boolean): UndoState =
-    undo.recorded(entry, groupable)
+  /** `model` with `entry` recorded, noting where the edit left the buffer's cursors so the next edit can tell whether
+    * it carries on from there.
+    */
+  def recorded(model: Model, entry: HistoryEntry, grouping: EditGrouping): Model =
+    val carets = entry match
+      case edit: HistoryEntry.BufferEdit =>
+        model.app.persisted.buffers.get(edit.bufferId).fold(CaretMarks(Nil))(buffer => CaretMarks.of(buffer.editing))
+      case _ => CaretMarks(Nil)
+    model.copy(undo = model.undo.recorded(entry, grouping, carets, model.app.runtime.editClock.pausedBeforeLatest))
 
   def undone(model: Model): Option[Model] =
     model.undo.nextUndo(model.app).flatMap((owner, entry) => restored(model, owner, entry, model.undo.undone(owner, _)))

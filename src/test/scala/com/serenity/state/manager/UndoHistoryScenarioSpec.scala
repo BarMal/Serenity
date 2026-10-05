@@ -1,9 +1,11 @@
 package com.serenity.state.manager
 
+import scala.concurrent.duration.DurationInt
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
-import com.serenity.keystroke.events.{CloseTabById, Event, InsertChar, Redo, Undo}
+import com.serenity.keystroke.events.{CloseTabById, DeleteBackward, Event, InsertChar, Redo, Undo}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, createPane, markBufferSaved, switchToPane}
@@ -132,3 +134,60 @@ class UndoHistoryScenarioSpec extends AnyFlatSpec with Matchers:
     in(paneA)(Redo)
     (text(bufferA), dirty(bufferA)) shouldBe (Some("alpha!?"), Some(true))
 
+  behavior of "Grouping a run of edits into undo steps"
+
+  it should "undo a typing run as one step" in new TwoBuffers:
+    in(paneA)(typed("abc")*)
+
+    in(paneA)(Undo)
+    text(bufferA) shouldBe Some("alpha")
+
+  it should "split the run when the cursor is moved between two stretches of typing" in new TwoBuffers:
+    in(paneA)(typed("ab")*)
+    stateManager.setCursorPosition(paneA, 0, 0).unsafeRunSync()
+    in(paneA)(typed("X")*)
+
+    in(paneA)(Undo)
+    text(bufferA) shouldBe Some("alphaab")
+
+    in(paneA)(Undo)
+    text(bufferA) shouldBe Some("alpha")
+
+  it should "start a new step at whitespace typed after a word" in new TwoBuffers:
+    in(paneA)(typed(" one two")*)
+
+    in(paneA)(Undo)
+    text(bufferA) shouldBe Some("alpha one")
+
+    in(paneA)(Undo)
+    text(bufferA) shouldBe Some("alpha")
+
+  it should "start a new step after a pause of over a second" in new TwoBuffers:
+    in(paneA)(typed("a")*)
+    IO.sleep(1100.millis).unsafeRunSync()
+    in(paneA)(typed("b")*)
+
+    in(paneA)(Undo)
+    text(bufferA) shouldBe Some("alphaa")
+
+  it should "undo a run of backspaces as one step, apart from the typing before it" in new TwoBuffers:
+    in(paneA)(typed("abc")*)
+    in(paneA)(Seq.fill(3)(DeleteBackward)*)
+    text(bufferA) shouldBe Some("alpha")
+
+    in(paneA)(Undo)
+    text(bufferA) shouldBe Some("alphaabc")
+
+    in(paneA)(Undo)
+    text(bufferA) shouldBe Some("alpha")
+
+  it should "redo a split run one step at a time" in new TwoBuffers:
+    in(paneA)(typed("ab cd")*)
+    in(paneA)(Undo, Undo)
+    text(bufferA) shouldBe Some("alpha")
+
+    in(paneA)(Redo)
+    text(bufferA) shouldBe Some("alphaab")
+
+    in(paneA)(Redo)
+    text(bufferA) shouldBe Some("alphaab cd")

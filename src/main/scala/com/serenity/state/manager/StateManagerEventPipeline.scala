@@ -74,8 +74,8 @@ final private[manager] class StateManagerEventPipeline(
 
   private def interpretEffect(effect: AppEffect): cats.effect.IO[Unit] =
     effect match
-      case AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable)) =>
-        undoRecording.recordUndoBoundary(entry, groupable)
+      case AppEffect.Undo(UndoEffect.RecordBoundary(entry, grouping)) =>
+        undoRecording.recordUndoBoundary(entry, grouping)
       case other =>
         effects.interpretEffect(other) >> drainPendingOperations
 
@@ -216,7 +216,7 @@ final private[manager] class StateManagerEventPipeline(
     * bookkeeping; `None` for any other event, which takes the general dispatch. Every typed key goes through here,
     * whether dispatched alone or folded into a batch's run, and [[commitTypedRun]] centres and commits it (#1985).
     *
-    * A key `joining` a run is refused if it keeps an undo snapshot -- a new group or a non-groupable step -- since that
+    * A key `joining` a run is refused if it keeps an undo snapshot -- a new group or a standalone step -- since that
     * snapshot would hold the run's uncentred viewport; the run settles first and the key starts the next one.
     */
   private[manager] def typedRunStep(event: Event, model: Model, nowNanos: Long, joining: Boolean): Option[Model] =
