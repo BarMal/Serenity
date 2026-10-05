@@ -29,8 +29,8 @@ class PanelContentRefreshSpec extends AnyFlatSpec with Matchers with StateManage
   private def outlineNames(state: AppState): List[String] =
     state.surfaceById(outlineId).toList.flatMap {
       _.content match
-        case SurfaceContent.Outline(symbols, _) => symbols.map(_.name)
-        case _                                  => Nil
+        case SurfaceContent.Outline(symbols, _, _) => symbols.map(_.name)
+        case _                                     => Nil
     }
 
   "A docked outline" should "pick up headings added by an edit" in {

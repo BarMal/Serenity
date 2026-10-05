@@ -7,6 +7,7 @@ import com.serenity.config.{AppMode, CornerPosition}
 import com.serenity.document.RenderedComment
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.ThemeCreatorState
+import com.serenity.ui.widget.ListScroll
 
 opaque type SurfaceId = String
 
@@ -276,10 +277,8 @@ enum SurfaceContent:
   case StatusLine(text: String)
   case DirectoryListing(path: Path, entries: List[DirEntry], selectedPath: Option[Path] = None)
 
-  /** `scrollOffset` is the first row shown, stored rather than derived from the selection (as in
-    * `ui.widget.SelectableList`), so moving the selection within the rows already shown leaves the view where it is.
-    */
-  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None, scrollOffset: Int = 0)
+  /** `scroll` is where the list is scrolled to, kept apart from the selection -- see [[ListScroll]]. */
+  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None, scroll: ListScroll = ListScroll())
   case CommandPalette(runner: CommandRunner)
 
   /** The experimental command-runner cursor-peek prototype's single peek panel (`SurfaceId.CursorPeek`,
@@ -299,9 +298,9 @@ enum SurfaceContent:
   case MarkdownPreview(bufferId: BufferId, title: String)
   case ModalWorkflow(modal: Modal)
   case Terminal(buffer: String, cursor: Int)
-  case Outline(symbols: List[Symbol], activeLocation: Option[Location] = None)
-  case Comments(symbols: List[Symbol], activeLocation: Option[Location] = None)
-  case Diagnostics(issues: List[Diagnostic], activeLocation: Option[Location] = None)
+  case Outline(symbols: List[Symbol], activeLocation: Option[Location] = None, scroll: ListScroll = ListScroll())
+  case Comments(symbols: List[Symbol], activeLocation: Option[Location] = None, scroll: ListScroll = ListScroll())
+  case Diagnostics(issues: List[Diagnostic], activeLocation: Option[Location] = None, scroll: ListScroll = ListScroll())
 
   /** The toggleable keyboard-shortcuts reference (issue #1247) -- a snapshot of `ShortcutsHelpContent.build`, taken
     * when `AppEventReducer.toggleShortcutsHelp` opens the surface, not re-derived on every render.

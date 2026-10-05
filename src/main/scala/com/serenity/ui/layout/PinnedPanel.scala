@@ -3,7 +3,7 @@ package com.serenity.ui.layout
 import java.nio.file.Path
 
 import com.serenity.state.models.{BufferId, SurfaceContent, SurfaceId}
-import com.serenity.ui.widget.{EndBehaviour, SelectableList}
+import com.serenity.ui.widget.{EndBehaviour, ListScroll, SelectableList}
 
 enum PanelPosition:
   case Left, Right, Bottom, Top
@@ -27,8 +27,8 @@ final case class PinnedPanel(
   * (issue #1009).
   */
 enum PanelContent(val asSurfaceContent: SurfaceContent):
-  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None, scrollOffset: Int = 0)
-      extends PanelContent(SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset))
+  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None, scroll: ListScroll = ListScroll())
+      extends PanelContent(SurfaceContent.DirectoryTree(tree, selectedPath, scroll))
   case Terminal(buffer: String, cursor: Int) extends PanelContent(SurfaceContent.Terminal(buffer, cursor))
   case Outline(symbols: List[Symbol], activeLocation: Option[Location] = None)
       extends PanelContent(SurfaceContent.Outline(symbols, activeLocation))
@@ -44,14 +44,14 @@ object PanelContent:
   /** The pinnable subset of `SurfaceContent` -- `None` for any case that is not a panel content kind. */
   def fromSurfaceContent(content: SurfaceContent): Option[PanelContent] =
     content match
-      case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) =>
-        Some(DirectoryTree(tree, selectedPath, scrollOffset))
-      case SurfaceContent.Terminal(buffer, cursor)            => Some(Terminal(buffer, cursor))
-      case SurfaceContent.Outline(symbols, activeLocation)    => Some(Outline(symbols, activeLocation))
-      case SurfaceContent.Comments(symbols, activeLocation)   => Some(Comments(symbols, activeLocation))
-      case SurfaceContent.Diagnostics(issues, activeLocation) => Some(Diagnostics(issues, activeLocation))
-      case SurfaceContent.MarkdownPreview(bufferId, title)    => Some(MarkdownPreview(bufferId, title))
-      case _                                                  => None
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scroll) =>
+        Some(DirectoryTree(tree, selectedPath, scroll))
+      case SurfaceContent.Terminal(buffer, cursor)               => Some(Terminal(buffer, cursor))
+      case SurfaceContent.Outline(symbols, activeLocation, _)    => Some(Outline(symbols, activeLocation))
+      case SurfaceContent.Comments(symbols, activeLocation, _)   => Some(Comments(symbols, activeLocation))
+      case SurfaceContent.Diagnostics(issues, activeLocation, _) => Some(Diagnostics(issues, activeLocation))
+      case SurfaceContent.MarkdownPreview(bufferId, title)       => Some(MarkdownPreview(bufferId, title))
+      case _                                                     => None
 
 /** `loading`, `stale` and `failed` track each shown directory's listing: a directory is listed when it is shown (the
   * root, or expanded) and has no listing yet or a stale one, unless a listing is already on its way or last failed.
@@ -109,21 +109,23 @@ object DirectoryTreeData:
 
   def visibleRows(tree: DirectoryTreeData): Vector[DirectoryTreeRow] = tree.flattenedRows
 
-  /** The visible rows as a list selecting `selectedPath`'s row, scrolled from `scrollOffset` just far enough to show
-    * that row in `viewportRows` -- the one place the explorer's keys, painting and hit-testing get their window from.
+  /** The visible rows as a list selecting `selectedPath`'s row, scrolled to where `scroll` shows them in `viewportRows`
+    * -- the one place the explorer's keys, wheel, painting and hit-testing get their window from.
     */
   def rowList(
     tree: DirectoryTreeData,
     selectedPath: Option[Path],
-    scrollOffset: Int,
+    scroll: ListScroll,
     viewportRows: Int
   ): SelectableList[DirectoryTreeRow] =
-    val rows   = visibleRows(tree)
-    val stored = SelectableList(rows, offset = scrollOffset, endBehaviour = EndBehaviour.Stop)
-    selectedPath
-      .map(path => rows.indexWhere(_.path == path))
-      .filter(_ >= 0)
-      .fold(stored.scrollBy(0, viewportRows))(stored.select(_, viewportRows))
+    val rows     = visibleRows(tree)
+    val selected = selectedPath.map(path => rows.indexWhere(_.path == path)).filter(_ >= 0)
+    SelectableList(
+      rows,
+      selected,
+      offset = scroll.shownOffset(rows.size, selected, viewportRows),
+      endBehaviour = EndBehaviour.Stop
+    )
 
   def visibleEntries(tree: DirectoryTreeData): List[(DirEntry, Int)] =
     visibleRows(tree)

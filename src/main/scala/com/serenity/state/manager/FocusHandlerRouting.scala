@@ -91,9 +91,9 @@ final private[manager] class FocusHandlerRouting(wrapCache: WrappedLineCache):
       case SurfaceContent.MarkdownPreview(_, _)     => peekOverlay
       case SurfaceContent.DirectoryTree(_, _, _)    => peekOverlay
       case SurfaceContent.Terminal(_, _)            => peekOverlay
-      case SurfaceContent.Outline(_, _)             => peekOverlay
-      case SurfaceContent.Comments(_, _)            => peekOverlay
-      case SurfaceContent.Diagnostics(_, _)         => peekOverlay
+      case SurfaceContent.Outline(_, _, _)          => peekOverlay
+      case SurfaceContent.Comments(_, _, _)         => peekOverlay
+      case SurfaceContent.Diagnostics(_, _, _)      => peekOverlay
       // Cursor-peek prototype: never focused in practice (look-but-don't-touch), but routed as a read-only peek
       // overlay rather than left unhandled, matching every other passive preview content case above.
       case SurfaceContent.CommandRunnerPeek(_) => peekOverlay

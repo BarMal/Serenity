@@ -432,24 +432,26 @@ object EditorLayoutContract:
       case SurfaceContent.MarkdownPreview(bufferId, title) =>
         val content = state.persisted.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
         SurfaceContentResolver.resolveMarkdownPreview(title, content, frameRect, SurfaceRenderMode.Pinned)
-      case SurfaceContent.Outline(symbols, activeLocation) =>
+      case SurfaceContent.Outline(symbols, activeLocation, scroll) =>
         val resolvedOutline = SurfaceContent.Outline(
           symbols,
           activeLocation.orElse(
             state.activeCursorPosition.flatMap(cursor =>
               com.serenity.document.DocumentNavigation.currentSymbol(symbols, cursor).map(_.location)
             )
-          )
+          ),
+          scroll
         )
         SurfaceContentResolver.resolve(resolvedOutline, frameRect, SurfaceRenderMode.Pinned)
-      case SurfaceContent.Comments(symbols, activeLocation) =>
+      case SurfaceContent.Comments(symbols, activeLocation, scroll) =>
         val resolvedComments = SurfaceContent.Comments(
           symbols,
           activeLocation.orElse(
             state.activeCursorPosition.flatMap(cursor =>
               com.serenity.document.DocumentNavigation.currentSymbol(symbols, cursor).map(_.location)
             )
-          )
+          ),
+          scroll
         )
         SurfaceContentResolver.resolve(resolvedComments, frameRect, SurfaceRenderMode.Pinned)
       case content =>

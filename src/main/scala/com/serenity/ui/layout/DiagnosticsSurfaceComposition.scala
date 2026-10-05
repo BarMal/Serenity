@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.state.models.SurfaceContent
+import com.serenity.ui.widget.ListScroll
 
 /** Declarative composition plan for the pinned/expanded diagnostics panel (issue #819, slice 4). Mirrors
   * `OutlineSurfaceComposition`'s pattern: one resolved plan produces both the paint boxes and the hit regions, from the
@@ -19,12 +20,13 @@ object DiagnosticsSurfaceComposition extends RowCompositionSupport:
   def forDiagnostics(
     issues: List[Diagnostic],
     activeLocation: Option[Location],
-    frameRect: LayoutRect
+    frameRect: LayoutRect,
+    scroll: ListScroll = ListScroll()
   ): ResolvedSurfaceComposition =
-    val content     = SurfaceContent.Diagnostics(issues, activeLocation)
+    val content     = SurfaceContent.Diagnostics(issues, activeLocation, scroll)
     val contentRect = SurfaceFrameLayout.forContent(frameRect, content).contentRect
     val bounds      = logicalRect(contentRect.x, contentRect.y, contentRect.width, contentRect.height)
-    val rowViews    = PanelContentResolver.diagnosticsRowViews(frameRect, issues, activeLocation)
+    val rowViews    = PanelContentResolver.diagnosticsRowViews(frameRect, issues, activeLocation, scroll)
 
     val slots = SurfaceFrameLayout.contentRowSlotsFor(
       contentRect,

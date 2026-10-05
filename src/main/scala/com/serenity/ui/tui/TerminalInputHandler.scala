@@ -336,8 +336,8 @@ object TerminalInputHandler:
         modifierTapState.update(ModifierTapDetector.otherKeyPressed) >>
           latestMovement.set(None) >> queue.offer(Some(QueuedInput.Key(info))) >> metrics.recordKeysQueued(1)
       case DecodedToken.Mouse(event) => enqueueMouse(event)
-      case DecodedToken.WheelNotch(down) =>
-        val scroll = if down then ScrollDown(wheelScrollLines) else ScrollUp(wheelScrollLines)
+      case DecodedToken.WheelNotch(col, row, down) =>
+        val scroll = MouseWheel(col, row, if down then wheelScrollLines else -wheelScrollLines)
         latestMovement.set(None) >> queue.offer(Some(QueuedInput.Direct(scroll)))
       case DecodedToken.Pasted(text) =>
         // The "paste event path": write the pasted text where a Ctrl+V paste would have left it, then emit the

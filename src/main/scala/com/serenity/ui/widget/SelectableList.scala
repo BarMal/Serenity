@@ -90,17 +90,10 @@ final case class SelectableList[+A](
     yield ListOutcome.Activated(index, item)
 
   private def scrolledToSelection(visibleRows: Int): SelectableList[A] =
-    val rows = math.max(1, visibleRows)
-    selected.fold(copy(offset = clampOffset(offset, rows))) { index =>
-      val intoView =
-        if index < offset then index
-        else if index >= offset + rows then index - rows + 1
-        else offset
-      copy(offset = clampOffset(intoView, rows))
-    }
+    copy(offset = ListScroll(offset).shownOffset(items.size, selected, visibleRows))
 
   private def clampOffset(candidate: Int, visibleRows: Int): Int =
-    candidate.min(items.size - math.max(1, visibleRows)).max(0)
+    ListScroll.clamped(candidate, items.size, visibleRows)
 
 object SelectableList:
 
