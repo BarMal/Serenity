@@ -8,6 +8,8 @@ object StatusLineText:
 
   val Separator: String = " | "
 
+  val SafeModeLabel: String = "Safe mode"
+
   def render(state: AppState, segments: List[StatusSegment]): Option[String] =
     Option
       .when(segments.nonEmpty)(state.activeBuffer.map(buffer => segments.map(segment(state, buffer, _))))

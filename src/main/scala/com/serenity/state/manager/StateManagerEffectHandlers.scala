@@ -278,6 +278,7 @@ final private[manager] class StateManagerEffectHandlers(
   private def interpretLifecycleIntent(intent: LifecycleIntent, state: AppState): IO[Unit] =
     intent match
       case LifecycleIntent.QuitApp              => beginCloseAction(CloseScope.Quit, state)
+      case LifecycleIntent.RestartInSafeMode    => beginCloseAction(CloseScope.RestartInSafeMode, state)
       case LifecycleIntent.ResolveClose(choice) => resolveClose(choice)
 
   private def interpretFileIntent(intent: FileIntent, state: AppState): IO[Unit] =

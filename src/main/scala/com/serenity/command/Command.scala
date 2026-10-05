@@ -19,6 +19,8 @@ enum CommandCategory:
 
 enum LifecycleIntent:
   case QuitApp
+  // Quits like QuitApp (unsaved work is still asked about), then starts again in safe mode; see SafeModeCommands.
+  case RestartInSafeMode
   // What the "save changes before closing?" prompt's answers run; see CloseCommands.
   case ResolveClose(choice: CloseWorkflowChoice)
 
@@ -283,6 +285,8 @@ enum SpellCheckIntent:
 enum GeneralSettingsIntent:
   case OpenSettings
   case SaveConfig
+  // Moves config.conf aside to a timestamped backup, then restores every setting to its default.
+  case ResetSettings
   case SetRenderFpsTarget(target: RenderFpsTarget)
   case SetRenderDamageGranularity(granularity: RenderDamageGranularity)
   case SetCommandRunnerVisibleRows(rows: Option[Int])

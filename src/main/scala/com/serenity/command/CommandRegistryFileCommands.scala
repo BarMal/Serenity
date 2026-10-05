@@ -39,6 +39,13 @@ private[command] object CommandRegistryFileCommands:
       label = "Save Config"
     ),
     Command.typed(
+      "reset-settings",
+      "Back up config.conf, then restore every setting to its default.",
+      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.ResetSettings)),
+      CommandCategory.Settings,
+      label = "Reset Settings"
+    ),
+    Command.typed(
       "save-session",
       "Save the current editor session.",
       CommandIntent.Session(SessionIntent.SaveSession),
@@ -112,6 +119,7 @@ private[command] object CommandRegistryFileCommands:
       CommandCategory.File,
       label = "Quit"
     ),
+    SafeModeCommands.restart,
     Command.typed(
       "new",
       "Create a new file.",

@@ -195,7 +195,9 @@ object StateManager:
     onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit] = _ => IO.unit,
     fileDialog: Option[FileDialog] = None,
     markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability =
-      com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable
+      com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable,
+    projectTasksEnabled: Boolean = true,
+    restartInSafeMode: Option[IO[Unit]] = None
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     val renderCaches = RenderCaches.create(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity)
@@ -234,7 +236,9 @@ object StateManager:
         onPreferredWindowSizeChanged = onPreferredWindowSizeChanged,
         fileDialog = fileDialog,
         markdownPreviewWindow = markdownPreviewWindow,
-        renderCaches = renderCaches
+        renderCaches = renderCaches,
+        projectTasksEnabled = projectTasksEnabled,
+        restartInSafeMode = restartInSafeMode
       )
       stateManager <- fromRuntime(runtime)
     yield stateManager
@@ -315,7 +319,8 @@ object StateManager:
       runtime.sessionManager,
       runtime.sessionPersistence,
       runtime.renderCaches,
-      operations
+      operations,
+      runtime.restartInSafeMode
     )
 
     export composition.*

@@ -129,10 +129,13 @@ final private[manager] case class StateManagerRuntime(
     fileManager: FileManager,
     sessionManager: SessionManager,
     sessionPersistence: SessionPersistence,
-    renderCaches: RenderCaches
+    renderCaches: RenderCaches,
+    restartInSafeMode: Option[IO[Unit]] = None
 )
 
 private[manager] object StateManagerRuntime:
+
+  val ProjectTasksDisabledMessage: String = "Project tasks are turned off in safe mode."
 
   def create(
     modelRef: Ref[IO, Model],
@@ -153,7 +156,9 @@ private[manager] object StateManagerRuntime:
     fileDialog: Option[FileDialog],
     markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability =
       com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable,
-    renderCaches: RenderCaches = RenderCaches.create()
+    renderCaches: RenderCaches = RenderCaches.create(),
+    projectTasksEnabled: Boolean = true,
+    restartInSafeMode: Option[IO[Unit]] = None
   )(using Balance): StateManagerRuntime =
     val sessionManager = sessionRootOverride
       .map(root => SessionManager.create(root, themeManager, logger, policy))
@@ -175,9 +180,12 @@ private[manager] object StateManagerRuntime:
       onPreferredWindowSizeChanged = onPreferredWindowSizeChanged,
       fileDialog = fileDialog,
       markdownPreviewWindow = markdownPreviewWindow,
-      runProjectTask = (command, onOutput) => ProjectTaskRunner.runStreaming(command)(onOutput),
+      runProjectTask =
+        if projectTasksEnabled then (command, onOutput) => ProjectTaskRunner.runStreaming(command)(onOutput)
+        else (_, _) => IO.raiseError(new IllegalStateException(ProjectTasksDisabledMessage)),
       fileManager = new FileManager(),
       sessionManager = sessionManager,
       sessionPersistence = new SessionPersistence(sessionManager, policy),
-      renderCaches = renderCaches
+      renderCaches = renderCaches,
+      restartInSafeMode = restartInSafeMode
     )
