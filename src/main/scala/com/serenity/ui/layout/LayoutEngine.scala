@@ -204,11 +204,15 @@ object LayoutEngine:
       math.max(1, contentHeight - topPinnedHeight - bottomPinnedHeight - topGap - bottomGap)
 
     val editorPaneHeaderHeight = paneHeaderHeight(state)
-    val leftSpacerWidth        = (workspaceWidth * textAreaInsets.left).toInt
-    val rightSpacerWidth       = (workspaceWidth * textAreaInsets.right).toInt
-    val contentAreaHeight      = math.max(1, workspaceHeight - editorPaneHeaderHeight)
-    val topSpacerHeight        = (contentAreaHeight * textAreaInsets.top).toInt
-    val bottomSpacerHeight     = (contentAreaHeight * textAreaInsets.bottom).toInt
+    val (leftSpacerWidth, rightSpacerWidth) = ProseColumn.spacers(
+      workspaceWidth - leftBlock - rightBlock,
+      (workspaceWidth * textAreaInsets.left).toInt,
+      (workspaceWidth * textAreaInsets.right).toInt,
+      ProseColumn.widthCells(state)
+    )
+    val contentAreaHeight  = math.max(1, workspaceHeight - editorPaneHeaderHeight)
+    val topSpacerHeight    = (contentAreaHeight * textAreaInsets.top).toInt
+    val bottomSpacerHeight = (contentAreaHeight * textAreaInsets.bottom).toInt
 
     // Adjust editor area to accommodate UI elements
     val availableWidth  = math.max(1, workspaceWidth - leftSpacerWidth - rightSpacerWidth - leftBlock - rightBlock)

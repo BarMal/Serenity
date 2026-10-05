@@ -63,6 +63,10 @@ private[config] object ConfigFieldsLanguageAndTypography:
       _.editorConfig.fontConfig.textFontSize,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(textFontSize = value))
     ),
+    field("typography.prose.measure", "prose.measure")(proseMeasure)(
+      _.surfaceConfig.proseMeasure,
+      (config, value) => config.withProseMeasure(value)
+    ),
     field("typography.ui.size", "font.ui.size", "font_ui_size")(fontSize)(
       _.editorConfig.fontConfig.uiFontSize,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(uiFontSize = value))

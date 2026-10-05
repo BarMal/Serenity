@@ -96,6 +96,40 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
     keys(changes) should contain theSameElementsAs List("theme", "editor.syntax_highlighting")
   }
 
+  it should "not offer to change the theme for a built-in workflow" in {
+    val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
+
+    val changes = UiPresetDiff.changes(
+      currentConfig = AppConfig.default,
+      currentThemeName = Theme.light.name,
+      currentHasDockedPanels = false,
+      currentHasWorkspaceTree = false,
+      preset = writing
+    )
+
+    keys(changes) should not contain "theme"
+  }
+
+  it should "offer the Writing workflow's prose defaults" in {
+    val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
+
+    val changes = UiPresetDiff.changes(
+      currentConfig = AppConfig.default,
+      currentThemeName = Theme.light.name,
+      currentHasDockedPanels = false,
+      currentHasWorkspaceTree = false,
+      preset = writing
+    )
+
+    keys(changes) should contain allOf (
+      "editor.smart_punctuation",
+      "spellcheck.enabled",
+      "editor.typewriter_scrolling",
+      "editor.focused_text_body",
+      "typography.prose.measure"
+    )
+  }
+
   it should "report docked-panel and workspace-tree presence changes" in {
     val current = AppConfig.default
     val preset  = UiPreset.builtIn("Code").getOrElse(fail("missing Code preset"))

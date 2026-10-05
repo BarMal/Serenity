@@ -38,11 +38,11 @@ object UiPresetDiff:
       dockedPanelsChange(currentHasDockedPanels, preset).toList :::
       workspaceTreeChange(currentHasWorkspaceTree, preset).toList
 
-  private def isBuiltInWorkflow(preset: UiPreset): Boolean =
-    UiPreset.builtInNames.exists(name => UiPreset.nameKey(name) == UiPreset.nameKey(preset.name))
+  private def isBuiltInWorkflow(preset: UiPreset): Boolean = UiPreset.isBuiltInWorkflow(preset)
 
+  /** Built-in workflows keep the user's theme, so they never offer to change it. */
   private def themeChange(currentThemeName: String, preset: UiPreset): Option[PresetChange] =
-    Option.when(currentThemeName != preset.themeName)(
+    Option.when(!isBuiltInWorkflow(preset) && currentThemeName != preset.themeName)(
       PresetChange("theme", "Theme", currentThemeName, preset.themeName)
     )
 
@@ -142,7 +142,7 @@ object UiPresetDiff:
 
     val base =
       if !appliesLayout then state
-      else if builtIn then UiPreset.applyBuiltInWorkflowToState(preset, state, selectedTheme)
+      else if builtIn then UiPreset.applyBuiltInWorkflowToState(preset, state)
       else UiPreset.applyToState(preset, state, selectedTheme)
 
     base.copy(persisted = base.persisted.copy(config = selectedConfig, theme = selectedTheme))
