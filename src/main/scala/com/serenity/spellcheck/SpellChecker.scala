@@ -36,42 +36,46 @@ object SpellChecker:
     val normalized = config.normalized
     if !normalized.enabled then Nil
     else
+      // With no word list every word would be flagged; `DictionaryContext.missingDictionary` is what tells the writer.
       dictionaryLoadDiagnostics(dictionary.failures) ++
-        text
-          .split("\n", -1)
-          .zipWithIndex
-          .flatMap { (line, lineIndex) =>
-            WordPattern
-              .findAllMatchIn(line)
-              // ICONV (#1182): normalize input character variants (ligatures, alternate quote glyphs, ...) to the
-              // form the dictionary was built from before checking membership -- exactly what hunspell itself does
-              // before matching checked text against the dictionary.
-              .filterNot(match_ =>
-                isAccepted(HunspellFormat.applyConversionTable(match_.matched, dictionary.iconv), dictionary) ||
-                  isExemptFromCasing(match_.matched, isSentenceInitial(line, match_.start))
-              )
-              .map { match_ =>
-                val word          = match_.matched
-                val convertedWord = HunspellFormat.applyConversionTable(word, dictionary.iconv)
-                // OCONV (#1182): applied only to generated suggestions, matching hunspell's output-conversion
-                // semantics -- the word as typed (`word`, above) is shown unconverted in the diagnostic message.
-                val suggestions = dictionary.replacements
-                  .getOrElse(DictionaryWord.normalize(convertedWord), Nil)
-                  .map(HunspellFormat.applyConversionTable(_, dictionary.oconv))
-                Diagnostic(
-                  range = LspRange(
-                    LspPosition(lineIndex, match_.start),
-                    LspPosition(lineIndex, match_.end)
-                  ),
-                  severity = Some(DiagnosticSeverity.Warning),
-                  message = diagnosticMessage(word, suggestions),
-                  source = Some(Source),
-                  code = Some("unknown-word")
-                )
-              }
-              .toList
+        Option.when(dictionary.missingDictionary.isEmpty)(unknownWordDiagnostics(text, dictionary)).toList.flatten
+
+  private def unknownWordDiagnostics(text: String, dictionary: DictionaryContext): List[Diagnostic] =
+    text
+      .split("\n", -1)
+      .zipWithIndex
+      .flatMap { (line, lineIndex) =>
+        WordPattern
+          .findAllMatchIn(line)
+          // ICONV (#1182): normalize input character variants (ligatures, alternate quote glyphs, ...) to the
+          // form the dictionary was built from before checking membership -- exactly what hunspell itself does
+          // before matching checked text against the dictionary.
+          .filterNot(match_ =>
+            isAccepted(HunspellFormat.applyConversionTable(match_.matched, dictionary.iconv), dictionary) ||
+              isExemptFromCasing(match_.matched, isSentenceInitial(line, match_.start))
+          )
+          .map { match_ =>
+            val word          = match_.matched
+            val convertedWord = HunspellFormat.applyConversionTable(word, dictionary.iconv)
+            // OCONV (#1182): applied only to generated suggestions, matching hunspell's output-conversion
+            // semantics -- the word as typed (`word`, above) is shown unconverted in the diagnostic message.
+            val suggestions = dictionary.replacements
+              .getOrElse(DictionaryWord.normalize(convertedWord), Nil)
+              .map(HunspellFormat.applyConversionTable(_, dictionary.oconv))
+            Diagnostic(
+              range = LspRange(
+                LspPosition(lineIndex, match_.start),
+                LspPosition(lineIndex, match_.end)
+              ),
+              severity = Some(DiagnosticSeverity.Warning),
+              message = diagnosticMessage(word, suggestions),
+              source = Some(Source),
+              code = Some("unknown-word")
+            )
           }
           .toList
+      }
+      .toList
 
   /** Pure: recomputes cached diagnostics against an already-loaded `dictionary` snapshot. Callers obtain that snapshot
     * once via `DictionaryLoader.loadSnapshot` inside `IO.blocking`, then pass the same immutable value here -- this

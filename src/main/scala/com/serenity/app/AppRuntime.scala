@@ -406,6 +406,8 @@ object AppRuntime:
     * timer. Never calling the genuinely blocking watcher while nothing is watched also keeps a buffer-less startup
     * compatible with virtual-time tests (`VirtualTime.runVirtual`'s `TestControl` treats `IO.blocking` as
     * non-terminating). Changes are gathered for `settle` after the first, so a burst checks each file once (#1885).
+    * Spell check is on by default, but `dictionaryWatchDirectories` names only the directories a discovered dictionary
+    * lives in, so a machine (or test) with none installed has nothing to watch for it.
     */
   private[serenity] def externalChangeWatchLoop(
     watcher: com.serenity.io.FileChangeWatcher,

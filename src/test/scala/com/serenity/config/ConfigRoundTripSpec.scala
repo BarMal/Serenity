@@ -141,7 +141,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     )
     .withSpellCheck(
       SpellCheckConfig(
-        enabled = true,
+        enabled = false,
         languages = List("en", "fr"),
         dictionaryPaths = List("/tmp/words.dic"),
         additionalWords = List("Serenity", "scalafix")

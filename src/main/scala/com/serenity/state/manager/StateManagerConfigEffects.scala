@@ -6,7 +6,15 @@ import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.*
 import com.serenity.config.AppConfigOps.*
-import com.serenity.config.{AppConfig, ConfigError, ConfigManager, LineNumberLayout, StatusLinePlacement, StatusSegment}
+import com.serenity.config.{
+  AppConfig,
+  ConfigError,
+  ConfigManager,
+  LineNumberLayout,
+  SpellCheckLanguage,
+  StatusLinePlacement,
+  StatusSegment
+}
 import com.serenity.io.TimestampedBackup
 import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
 import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
@@ -266,7 +274,7 @@ final private[manager] class StateManagerConfigEffects(
       case SpellCheckIntent.SetSpellCheckEnabled(enabled) =>
         updateSpellCheckConfig(_.copy(enabled = enabled))
       case SpellCheckIntent.SetSpellCheckLanguages(languages) =>
-        updateSpellCheckConfig(_.copy(languages = languages))
+        updateSpellCheckConfig(_.copy(languages = languages.map(SpellCheckLanguage.canonical)))
       case SpellCheckIntent.SetSpellCheckDictionaryPaths(paths) =>
         updateSpellCheckConfig(_.copy(dictionaryPaths = paths))
       case SpellCheckIntent.SetSpellCheckWords(words) =>

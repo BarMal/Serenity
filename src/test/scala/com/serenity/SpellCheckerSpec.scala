@@ -24,6 +24,9 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
+  // The built-in word list is keyed by `en`; the default `en-GB` needs an installed dictionary.
+  private val EnglishSpellCheck = SpellCheckConfig(enabled = true, languages = List("en"))
+
   // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Node` tree
   // while itself extending the still-open `Leaf` purely to satisfy the type system -- every method that matters for
   // this test forwards to `delegate` rather than using anything inherited from `Leaf`.
@@ -127,7 +130,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep words joined by a curly apostrophe in one diagnostic range" in {
-    val diagnostics = SpellChecker.check("l\u2019amour", SpellCheckConfig(enabled = true))
+    val diagnostics = SpellChecker.check("l\u2019amour", EnglishSpellCheck)
 
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: l\u2019amour")
     diagnostics.head.range.start.character shouldBe 0
@@ -135,7 +138,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "ignore code-like tokens and short words" in {
-    val config = SpellCheckConfig(enabled = true)
+    val config = EnglishSpellCheck
 
     SpellChecker.check("id parse_json v2 ok", config) shouldBe Nil
   }
@@ -148,13 +151,13 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     * token like this is never going to be "in the dictionary" no matter how it is spelled).
     */
   it should "not flag a numeric compound word as a broken-token typo" in {
-    val config = SpellCheckConfig(enabled = true)
+    val config = EnglishSpellCheck
 
     SpellChecker.check("The COVID-19 world is ok.", config) shouldBe Nil
   }
 
   it should "still flag a genuine typo alongside an accepted numeric compound" in {
-    val config = SpellCheckConfig(enabled = true)
+    val config = EnglishSpellCheck
 
     val diagnostics = SpellChecker.check("The COVID-19 wrld is ok.", config)
 
@@ -167,13 +170,13 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     * word. The fix exempts a capitalized, non-sentence-initial word from spell-check entirely.
     */
   it should "not flag a capitalized word that is not the first word of its sentence" in {
-    val config = SpellCheckConfig(enabled = true)
+    val config = EnglishSpellCheck
 
     SpellChecker.check("Serenity is a document with Zabrinsky in code.", config) shouldBe Nil
   }
 
   it should "still flag a lowercase misspelling in the same sentence as an exempted proper noun" in {
-    val config = SpellCheckConfig(enabled = true)
+    val config = EnglishSpellCheck
 
     val diagnostics = SpellChecker.check("Serenity is a wurld with Zabrinsky in code.", config)
 
@@ -181,7 +184,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "still flag a misspelled word at the start of a sentence" in {
-    val config = SpellCheckConfig(enabled = true)
+    val config = EnglishSpellCheck
 
     val diagnostics = SpellChecker.check("Wurld is a document with serenity.", config)
 
@@ -189,7 +192,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not flag an all-caps acronym" in {
-    val config = SpellCheckConfig(enabled = true)
+    val config = EnglishSpellCheck
 
     SpellChecker.check("The NASA document is in code.", config) shouldBe Nil
   }
@@ -200,7 +203,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     * proper noun in that position is therefore a false negative (silently accepted) rather than flagged.
     */
   it should "silently accept a misspelled proper noun when it is capitalized and not sentence-initial (known limitation)" in {
-    val config = SpellCheckConfig(enabled = true)
+    val config = EnglishSpellCheck
 
     SpellChecker.check("Serenity is a document with Zabrinksy in code.", config) shouldBe Nil
   }
@@ -386,7 +389,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
       List("hello"),
       List("SET NOT_A_CHARSET")
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = EnglishSpellCheck.copy(dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("hello wurld", config)
 
@@ -410,10 +413,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
 
   it should "report dictionary load failures without preventing fallback spell checks" in {
     val missing = Files.createTempDirectory("serenity-missing-dictionaries").resolve("missing.dic")
-    val config = SpellCheckConfig(
-      enabled = true,
-      dictionaryPaths = List(missing.toString)
-    )
+    val config  = EnglishSpellCheck.copy(dictionaryPaths = List(missing.toString))
 
     val diagnostics = SpellChecker.check("hello wurld", config)
 
@@ -422,7 +422,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reuse cached diagnostics for unchanged buffers without materialising content" in {
-    val config      = SpellCheckConfig(enabled = true)
+    val config      = EnglishSpellCheck
     val bufferId    = BufferId(0)
     val diagnostics = SpellChecker.check("wurld", config)
     val content     = NonCollectingRope(Rope("wurld"))
@@ -454,7 +454,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "invalidate cached spell-check diagnostics when buffer content changes" in {
-    val config           = SpellCheckConfig(enabled = true)
+    val config           = EnglishSpellCheck
     val bufferId         = BufferId(0)
     val staleContent     = Rope("wurld")
     val updatedContent   = Rope("hello")
@@ -552,7 +552,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "drop stale spell-check analysis results when the buffer changes before publication" in {
-    val config        = SpellCheckConfig(enabled = true)
+    val config        = EnglishSpellCheck
     val bufferId      = BufferId(0)
     val baseBuffer    = AppState.initial.persisted.buffers(bufferId)
     val staleBuffer   = baseBuffer.copy(document = baseBuffer.document.copy(content = Rope("wurld")))
@@ -580,7 +580,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   "StateManager" should "refresh spell-check diagnostics after prose edits" in {
     val logger = LoggerFactory[IO].getLogger(using LoggerName("SpellCheckerSpec"))
     val stateManager = StateManager
-      .apply(logger, initialConfig = AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = true)))
+      .apply(logger, initialConfig = AppConfig.default.withSpellCheck(EnglishSpellCheck))
       .unsafeRunSync()
 
     "wurld".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())

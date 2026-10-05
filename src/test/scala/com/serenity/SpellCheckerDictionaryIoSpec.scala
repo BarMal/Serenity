@@ -47,7 +47,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     // `analyzeText` takes a `DictionaryContext` rather than a `SpellCheckConfig` path list, so there is nothing in
     // its signature capable of reaching the filesystem: discovery/loading is a separate, explicit step
     // (`DictionaryLoader.loadSnapshot`) that pure analysis never performs itself.
-    val config = SpellCheckConfig(enabled = true)
+    val config = SpellCheckConfig(enabled = true, languages = List("en"))
     val dictionary =
       DictionaryContext(words = Set("hand", "built"), replacements = Map.empty, failures = Nil)
 
@@ -57,7 +57,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "surface dictionary load failures from a precomputed context without re-reading the filesystem" in {
-    val config = SpellCheckConfig(enabled = true)
+    val config = SpellCheckConfig(enabled = true, languages = List("en"))
     val dictionary =
       DictionaryContext(words = Set.empty, replacements = Map.empty, failures = List("boom"))
 
@@ -69,7 +69,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   "SpellChecker.analysisFingerprints and applyIfCurrent" should "accept precomputed dictionary fingerprints instead of reading the filesystem themselves" in {
     // Neither method takes a `SpellCheckConfig`'s raw dictionary paths without also being handed the fingerprints
     // for them, so a caller cannot invoke either from inside `Ref.update` and have it silently touch disk.
-    val config     = SpellCheckConfig(enabled = true)
+    val config     = SpellCheckConfig(enabled = true, languages = List("en"))
     val bufferId   = BufferId(0)
     val baseBuffer = AppState.initial.persisted.buffers(bufferId)
     val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(content = Rope("hello")))
@@ -321,7 +321,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave compoundCandidateIndex empty when no dictionary declares COMPOUNDRULE" in {
-    val config = SpellCheckConfig(enabled = true)
+    val config = SpellCheckConfig(enabled = true, languages = List("en"))
 
     val context = DictionaryLoader.loadSnapshot(config, DictionaryCache()).context
 

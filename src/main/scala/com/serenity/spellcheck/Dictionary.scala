@@ -37,6 +37,10 @@ import com.serenity.config.SpellCheckDictionaryFingerprint
   * `HunspellFreeCompoundMatcher.matches` applies them to each adjacent pair of members in a segmentation it finds,
   * using `words`/`replacements`/`compoundWordFlags` above for the standalone-word and pattern-reconstruction lookups
   * `CHECKCOMPOUNDREP`/`CHECKCOMPOUNDPATTERN` need.
+  *
+  * `missingDictionary` (#1680) is the notice to show, once, when no word list at all resolved for the configured
+  * languages: checking prose against an empty list would flag every word, so analysis flags none and this is shown
+  * instead.
   */
 final case class DictionaryContext(
     words: Set[String],
@@ -54,7 +58,8 @@ final case class DictionaryContext(
     compoundEndFlag: Option[String] = None,
     compoundWordMax: Option[Int] = None,
     compoundFlagTrie: CompoundTrie = CompoundTrie.empty,
-    compoundCheckRules: CompoundCheckRules = CompoundCheckRules.empty
+    compoundCheckRules: CompoundCheckRules = CompoundCheckRules.empty,
+    missingDictionary: Option[String] = None
 )
 
 /** The result of one explicit dictionary-discovery pass: the loaded words/replacements/failures plus the on-disk

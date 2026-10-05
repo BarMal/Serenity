@@ -11,14 +11,18 @@ All spell-check settings live under `spellcheck.*` (`SpellCheckConfig`, `com.ser
 
 | Key                          | Default | Meaning                                                                 |
 | ----------------------------- | ------- | ------------------------------------------------------------------------ |
-| `spellcheck.enabled`          | `false` | Turns spell-check diagnostics on.                                       |
-| `spellcheck.languages`        | `["en"]`| Language codes to check against; also used to pick dictionary filenames (`en.dic`, `en_GB.dic`, `fr.dic`, ...; case is ignored). |
+| `spellcheck.enabled`          | `true`  | Spell-check diagnostics in prose buffers.                               |
+| `spellcheck.languages`        | `["en-GB"]` | Language codes to check against; also used to pick dictionary filenames (`en_GB.dic`, `en_US.dic`, `fr.dic`, ...). |
 | `spellcheck.dictionary_paths` | `[]`    | Explicit `.dic`/`.aff` file or directory paths to load dictionaries from. |
 | `spellcheck.words`            | `[]`    | Extra accepted words, on top of whatever dictionary is loaded.          |
 
+Language codes are read in any casing and with `-` or `_` (`en-gb`, `en_GB`, `EN-gb`) and kept as `en-GB`. Select
+American English with `spellcheck.languages = ["en-US"]`.
+
 `spellcheck.dictionary_paths` accepts either a direct path to a `.dic` (or `.aff`) file, or a directory; a directory
-is searched for a file named after each configured language (`<language>.dic`, with `-`/`_` both tried, e.g.
-`en-gb.dic` and `en_gb.dic`, in any letter case), falling back to the directory itself if no match is found there.
+is searched for a file named after each configured language, trying the conventional Hunspell spelling first
+(`en_GB.dic`) and then `en-GB.dic`, `en_gb.dic`, `en-gb.dic` and the upper-case forms, in any letter case, falling
+back to the directory itself if no match is found there.
 
 ## Zero-config discovery of an installed OS dictionary
 
@@ -33,22 +37,27 @@ the standard Hunspell/MySpell install locations for the running OS (`SpellCheckC
   set
 
 If one of these directories already has a dictionary for a configured language -- for example `hunspell-en-gb`
-installed via the system package manager on Linux -- spell-check works with `spellcheck.enabled = true` and nothing
-else configured. This lookup is only consulted when `spellcheck.dictionary_paths` is empty: a path you have
-configured yourself is always used as configured and never silently second-guessed.
+installed via the system package manager on Linux, which installs `/usr/share/hunspell/en_GB.dic` -- spell-check works
+with nothing configured. Each language loads from the first directory that has it, so a dictionary linked into
+several of these directories is loaded once. This lookup is only consulted when `spellcheck.dictionary_paths` is
+empty: a path you have configured yourself is always used as configured and never silently second-guessed.
 
-Note the default `spellcheck.languages` is `["en"]`, not `["en-gb"]`. A generic `en` dictionary (e.g. from
-`hunspell-en-us`) satisfies it; British English specifically requires either an OS dictionary literally named `en.dic`
-(some distributions symlink their configured default there) or adding `"en-gb"` to `spellcheck.languages`, which uses
-the bundled dictionary (below) when no installed one is found.
+When no installed or bundled dictionary resolves for a configured language, spell check says so once per session, in a
+notice naming the directories searched, as soon as there is prose to check, and flags no words -- checking against an
+empty word list would flag every word. British English never reaches this: it has a bundled dictionary (below).
+
+A config file saved by an earlier version keeps the values it was saved with (`spellcheck.enabled = false`,
+`spellcheck.languages = ["en"]`); change them to pick up the new defaults. `en` looks for `en.dic`, which Debian and
+Ubuntu do not install.
 
 ## Bundled British English dictionary
 
-Adding `"en-gb"` to `spellcheck.languages` and turning `spellcheck.enabled` on is all British English needs:
+British English needs nothing configured: `spellcheck.enabled` and `spellcheck.languages = ["en-GB"]` are the defaults.
+A config file that predates them needs:
 
 ```
 spellcheck.enabled = true
-spellcheck.languages = ["en-gb"]
+spellcheck.languages = ["en-GB"]
 ```
 
 Serenity ships LibreOffice's `en_GB` Hunspell dictionary (Marco A.G.Pinto's British English, version 4.0.1, from
@@ -61,8 +70,8 @@ unmodified copies of upstream.
   the bundled one back.
 - **It is loaded on demand.** Nothing is parsed at startup, and nothing at all while `spellcheck.enabled` is `false` or
   no `en-gb` language is configured; the first analysis after both hold parses it once and keeps it for the session.
-- **`en` is not `en-gb`.** The default `["en"]` keeps its small built-in word list, so an American-English
-  dictionary installed for `en` is never second-guessed.
+- **`en` is not `en-GB`.** `["en"]` keeps its small built-in word list, so an American-English dictionary installed
+  for `en` is never second-guessed.
 
 ## Setting up another language (or British English by hand)
 
@@ -79,7 +88,7 @@ Prepare this *before* going offline, since it requires downloading a dictionary:
 3. Configure Serenity (`~/.serenity/config.conf`, or the in-app settings command runner):
    ```
    spellcheck.enabled = true
-   spellcheck.languages = ["en-gb"]
+   spellcheck.languages = ["en-GB"]
    spellcheck.dictionary_paths = ["/home/you/.serenity/dictionaries"]
    ```
    (A path to the `.dic` file directly also works; the `.aff` beside it is picked up automatically.)

@@ -205,14 +205,16 @@ object DictionaryLoader:
         mergeSnapshot(
           normalized,
           sourcePaths.map(loadDictionary(_, cache)) ++ bundled.map(loadBundled(_, cache)),
-          fingerprints
+          fingerprints,
+          osDictionaryDirectories
         )
     )
 
   private def mergeSnapshot(
     normalized: SpellCheckConfig,
     externalResults: List[DictionaryLoadResult],
-    fingerprints: List[SpellCheckDictionaryFingerprint]
+    fingerprints: List[SpellCheckDictionaryFingerprint],
+    osDictionaryDirectories: List[String]
   ): DictionarySnapshot =
     val externalWords = externalResults.flatMap(_.words).toSet
     val externalReplacements =
@@ -263,9 +265,20 @@ object DictionaryLoader:
       compoundEndFlag = compoundEndFlag,
       compoundWordMax = compoundWordMax,
       compoundFlagTrie = compoundFlagTrie,
-      compoundCheckRules = compoundCheckRules
+      compoundCheckRules = compoundCheckRules,
+      missingDictionary = Option.when(externalWords.isEmpty && fallbackWords.isEmpty)(
+        missingDictionaryNotice(normalized, osDictionaryDirectories)
+      )
     )
     DictionarySnapshot(context, fingerprints)
+
+  private def missingDictionaryNotice(config: SpellCheckConfig, osDictionaryDirectories: List[String]): String =
+    val searched = if config.dictionaryPaths.nonEmpty then config.dictionaryPaths else osDictionaryDirectories
+    List(
+      s"Spell check found no dictionary for ${config.languages.mkString(", ")}.",
+      s"Searched: ${if searched.isEmpty then "nowhere" else searched.mkString(", ")}",
+      "Install a Hunspell dictionary (for example hunspell-en-gb) or set spellcheck.dictionary_paths."
+    ).mkString("\n")
 
   private def loadDictionary(path: Path, cache: DictionaryCache): DictionaryLoadResult =
     val dependencyPaths = SpellCheckConfig.dictionaryDependencyPaths(List(path))
