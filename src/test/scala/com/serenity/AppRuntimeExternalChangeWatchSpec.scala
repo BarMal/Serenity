@@ -5,7 +5,7 @@ import java.nio.file.Files
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
-import cats.effect.{IO, Ref}
+import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
 import com.serenity.app.AppRuntime
 import com.serenity.io.FileChangeWatcher
@@ -213,13 +213,14 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
       Files.deleteIfExists(directory)
   }
 
-  it should "check a file once for a burst of writes that land within the settle window (#1885)" in {
+  // Backend-independent: a native watcher reports within milliseconds, a polling one within an interval, so wait for
+  // the first check, then outlast poll interval plus settle rounds before asserting no second check arrived.
+  private def burstChecks(watcher: Resource[IO, FileChangeWatcher]): IO[List[BufferId]] =
     val file     = Files.createTempFile("external-change-watch-burst", ".md")
     val bufferId = BufferId(1)
-
-    val program = for
+    for
       checkedBuffers <- Ref.of[IO, List[BufferId]](Nil)
-      _ <- FileChangeWatcher.create.use { watcher =>
+      _ <- watcher.use { watcher =>
         val loop = AppRuntime.externalChangeWatchLoop(
           watcher,
           openBufferPaths = IO.pure(Map(file -> bufferId)),
@@ -227,12 +228,20 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
         )
         val burst =
           (1 to 5).toList.traverse_(n => IO.blocking(Files.writeString(file, s"write $n")) >> IO.sleep(20.millis))
-        loop.compile.drain.background.surround(IO.sleep(500.millis) >> burst >> IO.sleep(1.second))
+        val firstCheck = (IO.sleep(50.millis) >> checkedBuffers.get).iterateUntil(_.nonEmpty).timeout(10.seconds)
+        loop.compile.drain.background.surround(
+          IO.sleep(500.millis) >> burst >> firstCheck >> IO.sleep(3.seconds)
+        )
       }
       checked <- checkedBuffers.get
     yield checked
 
-    program.unsafeRunTimed(15.seconds) shouldBe Some(List(bufferId))
+  it should "check a file once for a burst of writes that land within the settle window (#1885)" in {
+    burstChecks(FileChangeWatcher.create).unsafeRunTimed(30.seconds) shouldBe Some(List(BufferId(1)))
+  }
+
+  it should "check a file once for a burst of writes when the watcher polls listings (#1885)" in {
+    burstChecks(FileChangeWatcher.polling(100.millis)).unsafeRunTimed(30.seconds) shouldBe Some(List(BufferId(1)))
   }
 
   it should "not wake while there is nothing to watch (#1938)" in {
