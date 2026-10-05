@@ -23,6 +23,7 @@ import com.serenity.state.models.{
 }
 import com.serenity.ui.layout.{CellMetrics, Layout, LayoutRect, OverlayRow, OverlaySegment, OverlayTone, ViewportSize}
 import com.serenity.ui.renderer.{
+  FontSpec,
   PinnedPanelRenderer,
   RendererEntryPoints,
   TextOverlayRenderer,
@@ -174,8 +175,8 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
         cursorVisible = false,
         rs,
         viewport,
-        font,
-        font,
+        FontSpec.fromAwt(font),
+        FontSpec.fromAwt(font),
         cellMetrics,
         None,
         RenderCaches.create()

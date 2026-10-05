@@ -23,7 +23,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Buffer, BufferId, Damage}
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync, TuiAccessibilityBridge}
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{RendererCursorOverlay, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, RenderColor, RendererCursorOverlay, RendererEntryPoints}
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 /** The TUI capability bundle for `AppRuntime.run` (issue #1112): the terminal-mode counterpart to `Main`'s Swing
@@ -42,7 +42,7 @@ object TuiRuntime:
     * entry points' signatures, which is also why code/text/UI all share the one instance rather than resolving the
     * user's configured (and, in TUI mode, inert) font family/size.
     */
-  private val CellFont: Font = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+  private val CellFont: FontSpec = FontSpec.fromAwt(new Font(Font.MONOSPACED, Font.PLAIN, 12))
 
   private val CellMetricsOne: CellMetrics = CellMetrics.cellUnit
 
@@ -222,7 +222,7 @@ object TuiRuntime:
     surface: TerminalRenderSurface,
     size: ViewportSize,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     damage: Damage,
     caches: com.serenity.state.manager.RenderCaches
   ): Unit =
@@ -263,7 +263,7 @@ object TuiRuntime:
     surface: TerminalRenderSurface,
     size: ViewportSize,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     caches: com.serenity.state.manager.RenderCaches
   ): Unit =
     val _ = RendererCursorOverlay.renderCursorOnly(
@@ -313,7 +313,7 @@ object TuiRuntime:
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
-        _ <- IO(paintFrame(state, surface, size, cursorVisible, cursorColor, damage, caches))
+        _ <- IO(paintFrame(state, surface, size, cursorVisible, cursorColor.map(RenderColor.fromAwt), damage, caches))
         _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability, caches)
       yield ()
@@ -329,7 +329,7 @@ object TuiRuntime:
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
-        _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor, caches))
+        _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor.map(RenderColor.fromAwt), caches))
         _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability, caches)
       yield ()

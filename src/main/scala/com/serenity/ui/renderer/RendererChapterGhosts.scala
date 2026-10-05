@@ -32,7 +32,7 @@ object RendererChapterGhosts:
     state: AppState,
     context: RenderContext
   ): Unit =
-    context.surface.text.setFont(context.fontForBuffer(buffer))
+    context.surface.text.setFont(FontSpec.fromAwt(context.fontForBuffer(buffer)))
     snapshot.visualLines.zipWithIndex.foreach { (visualLine, index) =>
       val ghost = ghosts.get(visualLine.bufferLine).filter(_ => visualLine.startColumn == 0 && visualLine.text.isBlank)
       val screenX = rect.x + RendererPaneContent.visualLineCellOffset(visualLine, context)

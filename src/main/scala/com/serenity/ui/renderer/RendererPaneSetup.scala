@@ -201,7 +201,7 @@ object RendererPaneSetup:
     val renderBuffer = buffer.copy(
       viewport = renderedViewport
     )
-    context.surface.text.setFont(bufferFont)
+    context.surface.text.setFont(FontSpec.fromAwt(bufferFont))
     val cellMetricsForSnapshot = if hasFontRenderContext then Some(bufferMetrics) else Some(context.cellMetrics)
     val proseScale             = com.serenity.ui.theme.RichTextStyling.proseZoom(bufferFont.getSize2D)
     // A surface with a real FontRenderContext keeps deriving cell-based advances from the buffer's own font, same as

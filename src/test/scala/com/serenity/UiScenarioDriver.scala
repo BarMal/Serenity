@@ -19,10 +19,12 @@ import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.renderer.{
   Effects,
+  FontSpec,
   Java2DRenderSurface,
   PanelOutlineDrawing,
   PixelDrawing,
   RenderColor,
+  RenderImage,
   RenderSurface,
   RendererEntryPoints,
   SurfaceContentIdentity,
@@ -125,9 +127,9 @@ final class UiScenarioDriver private (
         cursorVisible = true,
         recordingSurface,
         environment.viewport,
-        codeFont,
-        codeFont,
-        uiFont,
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(uiFont),
         environment.cellMetrics,
         environment.cellMetrics,
         cursorColor = None,
@@ -380,7 +382,7 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
     * `render` un-adjusted instead of forwarding to the real surface.
     */
   private val textDrawing: TextDrawing = new TextDrawing:
-    def setFont(font: Font): Unit                    = delegate.text.setFont(font)
+    def setFont(font: FontSpec): Unit                = delegate.text.setFont(font)
     def fontRenderContext: Option[FontRenderContext] = delegate.text.fontRenderContext
 
     def drawRunPx(
@@ -412,8 +414,8 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
     def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
       delegate.pixels.fillPixelRect(xPx, yPx, widthPx, heightPx, color)
 
-    def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
-      drawnImageBuffer += ScenarioDrawnImage(image, LayoutRect(x, y, width, height))
+    def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
+      drawnImageBuffer += ScenarioDrawnImage(image.toAwt, LayoutRect(x, y, width, height))
       delegate.pixels.drawImage(image, x, y, width, height)
 
     def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =

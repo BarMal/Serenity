@@ -1,7 +1,6 @@
 package com.serenity.ui.tui
 
 import java.awt.font.FontRenderContext
-import java.awt.image.BufferedImage
 import java.io.Writer
 import java.util.concurrent.atomic.AtomicReference
 
@@ -143,7 +142,7 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   // -- TextDrawing --------------------------------------------------------------------------------------------------
 
   // No AWT font backs a terminal cell; typography controls are inert in cell space (accepted degradation, epic #1103).
-  override def setFont(font: java.awt.Font): Unit = ()
+  override def setFont(font: FontSpec): Unit = ()
 
   // `None` unconditionally: this is what drives #1105's cell-fallback path for callers that would otherwise measure
   // text with a FontRenderContext this surface does not have.
@@ -187,10 +186,10 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   // so it must stay inert the way #1012 originally left it.
   override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit = ()
 
-  override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
+  override def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val previousForeground = screenBuffer.getForegroundColor
     val previousBackground = screenBuffer.getBackgroundColor
-    val grid               = HalfBlockImageRenderer.render(image, width, height, fallback = previousBackground)
+    val grid               = HalfBlockImageRenderer.render(image.toAwt, width, height, fallback = previousBackground)
     grid.zipWithIndex.foreach {
       case (row, rowOffset) =>
         row.zipWithIndex.foreach {

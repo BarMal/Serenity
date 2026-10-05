@@ -13,7 +13,7 @@ object RendererStartPage:
     val textMetrics  = CellMetrics.fromFont(context.textFont)
     val lineHeightPx = math.max(context.cellMetrics.lineHeight, textMetrics.lineHeight)
     val yPx          = centeredBlockTopPx(rect, context.cellMetrics, 1, lineHeightPx)
-    context.surface.text.setFont(context.textFont)
+    context.surface.text.setFont(FontSpec.fromAwt(context.textFont))
     context.surface.setForegroundColor(RenderColor.fromAwt(theme.foreground))
     context.surface.setBackgroundColor(RenderColor.fromAwt(theme.background))
     renderAlignedTextLine(
@@ -39,7 +39,7 @@ object RendererStartPage:
     val lineHeightPx = math.max(context.cellMetrics.lineHeight, textMetrics.lineHeight)
     val startYPx     = centeredBlockTopPx(rect, context.cellMetrics, lines.length, lineHeightPx)
 
-    context.surface.text.setFont(context.textFont)
+    context.surface.text.setFont(FontSpec.fromAwt(context.textFont))
     context.surface.setForegroundColor(RenderColor.fromAwt(theme.muted))
     context.surface.setBackgroundColor(RenderColor.fromAwt(theme.background))
 
@@ -107,7 +107,7 @@ object RendererStartPage:
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics
   ): Unit =
-    surface.text.setFont(uiFont)
+    surface.text.setFont(FontSpec.fromAwt(uiFont))
     val lines         = page.renderLines
     val lineHeightPx  = math.max(cellMetrics.lineHeight, uiMetrics.lineHeight)
     val totalHeightPx = lines.size * lineHeightPx

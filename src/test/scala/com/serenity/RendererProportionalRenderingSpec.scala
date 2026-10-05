@@ -9,7 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -55,8 +55,8 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      monoFont,
-      propFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -74,8 +74,8 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      monoFont,
-      propFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -97,8 +97,8 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      ligatureFont,
-      propFont,
+      FontSpec.fromAwt(ligatureFont),
+      FontSpec.fromAwt(propFont),
       ligatureMetric,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -115,8 +115,8 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      monoFont,
-      propFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -166,8 +166,8 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      monoFont,
-      propFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()

@@ -6,7 +6,7 @@ import java.nio.file.Paths
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{LayerBufferSupport, RenderSurface, RendererEntryPoints, ScreenIdentity}
+import com.serenity.ui.renderer.{LayerBufferSupport, RenderImage, RenderSurface, RendererEntryPoints, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -432,13 +432,13 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
   private class CountingLayerBufferSurface(width: Int, height: Int, window: Option[AnyRef] = None)
       extends MockRenderSurface(width, height):
     val newLayerSurfaceCalls = new java.util.concurrent.atomic.AtomicInteger(0)
-    val recycledImages       = scala.collection.mutable.ListBuffer.empty[Option[BufferedImage]]
+    val recycledImages       = scala.collection.mutable.ListBuffer.empty[Option[RenderImage]]
 
     override def layerCacheOwner: ScreenIdentity = window.fold(super.layerCacheOwner)(ScreenIdentity(_))
 
     override def layerBuffers: Option[LayerBufferSupport] = Some(
       new LayerBufferSupport:
-        def newLayerSurface(onFlush: BufferedImage => Unit, recycled: Option[BufferedImage]): RenderSurface =
+        def newLayerSurface(onFlush: RenderImage => Unit, recycled: Option[RenderImage]): RenderSurface =
           newLayerSurfaceCalls.incrementAndGet()
           recycledImages += recycled
           new FlushingLayerSurface(width, height, onFlush, recycled)
@@ -447,9 +447,12 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
   private class FlushingLayerSurface(
       width: Int,
       height: Int,
-      onFlush: BufferedImage => Unit,
-      recycled: Option[BufferedImage]
+      onFlush: RenderImage => Unit,
+      recycled: Option[RenderImage]
   ) extends MockRenderSurface(width, height):
-    override def flush(): Unit = onFlush(recycled.getOrElse(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)))
+
+    override def flush(): Unit = onFlush(
+      recycled.getOrElse(RenderImage.fromAwt(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)))
+    )
 
 end PanelLayerCompositingSpec

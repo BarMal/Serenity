@@ -14,7 +14,13 @@ import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.display.DisplayScale
-import com.serenity.ui.renderer.{PaintExecutionContext, RendererCursorOverlay, RendererEntryPoints}
+import com.serenity.ui.renderer.{
+  FontSpec,
+  PaintExecutionContext,
+  RenderColor,
+  RendererCursorOverlay,
+  RendererEntryPoints
+}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -181,13 +187,31 @@ object Main extends IOApp:
               renderFull = (state, vis, cc, damage, caches) =>
                 timedFrame(frameTimings, FrameKind.Full, paintEc)(
                   syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
-                  IO(paintFullFrame(state, vis, cc, swingWin, displayState.snapshot, damage, caches))
+                  IO(
+                    paintFullFrame(
+                      state,
+                      vis,
+                      cc.map(RenderColor.fromAwt),
+                      swingWin,
+                      displayState.snapshot,
+                      damage,
+                      caches
+                    )
+                  )
                 ),
               renderCursorOnly = (state, vis, cc, damage, caches) =>
                 timedFrame(frameTimings, FrameKind.CursorOnly, paintEc)(
                   syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                   IO(
-                    paintCursorFrame(state, vis, cc, swingWin, displayState.snapshot, damage, caches)
+                    paintCursorFrame(
+                      state,
+                      vis,
+                      cc.map(RenderColor.fromAwt),
+                      swingWin,
+                      displayState.snapshot,
+                      damage,
+                      caches
+                    )
                   )
                 ),
               frameTimings = frameTimings,
@@ -265,7 +289,7 @@ object Main extends IOApp:
   private def paintFullFrame(
     state: com.serenity.state.models.AppState,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     window: SwingWindow,
     display: RuntimeDisplayState.Snapshot,
     damage: com.serenity.state.models.Damage,
@@ -275,9 +299,9 @@ object Main extends IOApp:
       val _ = RendererCursorOverlay.renderWithCursorOverlay(
         state,
         window,
-        display.codeFont,
-        display.textFont,
-        display.uiFont,
+        FontSpec.fromAwt(display.codeFont),
+        FontSpec.fromAwt(display.textFont),
+        FontSpec.fromAwt(display.uiFont),
         display.uiMetrics,
         cursorColor,
         damage,
@@ -289,9 +313,9 @@ object Main extends IOApp:
         state,
         cursorVisible = false,
         window,
-        display.codeFont,
-        display.textFont,
-        display.uiFont,
+        FontSpec.fromAwt(display.codeFont),
+        FontSpec.fromAwt(display.textFont),
+        FontSpec.fromAwt(display.uiFont),
         display.uiMetrics,
         None,
         repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible),
@@ -303,7 +327,7 @@ object Main extends IOApp:
   private def paintCursorFrame(
     state: com.serenity.state.models.AppState,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     window: SwingWindow,
     display: RuntimeDisplayState.Snapshot,
     damage: com.serenity.state.models.Damage,
@@ -313,9 +337,9 @@ object Main extends IOApp:
       state,
       cursorVisible,
       window,
-      display.codeFont,
-      display.textFont,
-      display.uiFont,
+      FontSpec.fromAwt(display.codeFont),
+      FontSpec.fromAwt(display.textFont),
+      FontSpec.fromAwt(display.uiFont),
       display.uiMetrics,
       cursorColor,
       caches
@@ -325,9 +349,9 @@ object Main extends IOApp:
         state,
         cursorVisible,
         window,
-        display.codeFont,
-        display.textFont,
-        display.uiFont,
+        FontSpec.fromAwt(display.codeFont),
+        FontSpec.fromAwt(display.textFont),
+        FontSpec.fromAwt(display.uiFont),
         display.uiMetrics,
         cursorColor,
         repaintOnFlush = true,

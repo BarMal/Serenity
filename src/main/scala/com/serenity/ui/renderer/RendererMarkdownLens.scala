@@ -348,7 +348,7 @@ object RendererMarkdownLens:
                       screenYPx,
                       widthPx,
                       context.cellMetrics.lineHeight,
-                      RenderColor.fromAwt(effectiveCursorColor)
+                      effectiveCursorColor
                     )
                 }
             case _ => ()

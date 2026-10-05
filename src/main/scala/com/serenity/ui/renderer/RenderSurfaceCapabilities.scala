@@ -1,15 +1,13 @@
 package com.serenity.ui.renderer
 
-import java.awt.Font
 import java.awt.font.FontRenderContext
-import java.awt.image.BufferedImage
 
 /** Character- and pixel-run text drawing. Every real [[RenderSurface]] implements this -- a surface that cannot draw
   * text cannot render Serenity's UI -- so [[RenderSurface.text]] exposes it directly rather than as an `Option`: the
   * type itself guarantees the capability instead of pushing a check onto every call site that draws a line of text.
   */
 trait TextDrawing:
-  def setFont(font: Font): Unit
+  def setFont(font: FontSpec): Unit
   def fontRenderContext: Option[FontRenderContext]
 
   /** Draw a proportional text run at exact pixel coordinates.
@@ -37,7 +35,7 @@ trait TextDrawing:
   */
 trait PixelDrawing:
   def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit
-  def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit
+  def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit
 
   /** Composite a whole-surface layer image (a modal/panel layer buffer, produced by
     * [[LayerBufferSupport.newLayerSurface]]) back onto this surface, covering it exactly.
@@ -55,8 +53,8 @@ trait PixelDrawing:
     * double. The default records the composite as an ordinary full-surface `drawImage` so those doubles keep observing
     * one blit per layer paint, without needing this surface's backing resolution.
     */
-  def compositeFullSurfaceLayer(image: BufferedImage): Unit =
-    drawImage(image, 0, 0, image.getWidth, image.getHeight)
+  def compositeFullSurfaceLayer(image: RenderImage): Unit =
+    drawImage(image, 0, 0, image.widthPx, image.heightPx)
 
   /** Translate drawing in device-independent logical pixels for fractional-cell floating geometry. */
   def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit
@@ -90,7 +88,7 @@ trait LayerBufferSupport:
     * `recycled` is a previous layer image the caller is done with; it is cleared and painted into instead of
     * allocating, when its size still matches.
     */
-  def newLayerSurface(onFlush: BufferedImage => Unit, recycled: Option[BufferedImage] = None): RenderSurface
+  def newLayerSurface(onFlush: RenderImage => Unit, recycled: Option[RenderImage] = None): RenderSurface
 
 /** A caret shape a real terminal's own cursor can be styled as via DECSCUSR (`CSI Ps SP q`). */
 enum HardwareCursorShape:

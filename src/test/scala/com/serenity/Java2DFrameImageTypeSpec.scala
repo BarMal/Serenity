@@ -9,7 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
-import com.serenity.ui.renderer.{Java2DRenderSurface, RenderColor, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderColor, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -61,8 +61,8 @@ class Java2DFrameImageTypeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       new Java2DRenderSurface(image, metrics, font, _ => ()),
       viewport,
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       metrics,
       None,
       RenderCaches.create()

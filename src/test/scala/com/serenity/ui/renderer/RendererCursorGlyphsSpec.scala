@@ -110,9 +110,9 @@ class RendererCursorGlyphsSpec extends AnyFlatSpec with Matchers:
     RendererCursorGlyphs.cursorColorFor(
       config,
       theme,
-      contextWith(cellMetrics, cursorColorOverride = Some(overrideColor)),
+      contextWith(cellMetrics, cursorColorOverride = Some(RenderColor.fromAwt(overrideColor))),
       isPrimaryCursor = true
-    ) shouldBe overrideColor
+    ) shouldBe RenderColor.fromAwt(overrideColor)
   }
 
   it should "fall back to the theme's cursor colour when config has no active colour and no override applies" in {
@@ -120,7 +120,7 @@ class RendererCursorGlyphsSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
 
     RendererCursorGlyphs.cursorColorFor(config, theme, contextWith(cellMetrics), isPrimaryCursor = true) shouldBe
-      config.cursorColors.activeOr(theme.cursor)
+      RenderColor.fromAwt(config.cursorColors.activeOr(theme.cursor))
   }
 
   it should "colour a secondary cursor from config's inactive colour, falling back to the resolved active colour" in {
@@ -145,12 +145,12 @@ class RendererCursorGlyphsSpec extends AnyFlatSpec with Matchers:
     )
 
     RendererCursorGlyphs.cursorColorFor(config, theme, contextWith(cellMetrics), isPrimaryCursor = false) shouldBe
-      inactive
+      RenderColor.fromAwt(inactive)
   }
 
   private def contextWith(
     cellMetrics: CellMetrics,
-    cursorColorOverride: Option[Color] = None
+    cursorColorOverride: Option[RenderColor] = None
   ): RenderContext =
     RenderContext(
       surface = new NoopSurface,

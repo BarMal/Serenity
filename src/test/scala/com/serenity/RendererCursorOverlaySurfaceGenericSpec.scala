@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
-import com.serenity.ui.renderer.{RendererCursorOverlay, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, RendererCursorOverlay, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -68,8 +68,8 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewport,
-      codeFont,
-      codeFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(codeFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -81,9 +81,9 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewport,
-      codeFont,
-      codeFont,
-      codeFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(codeFont),
       cellMetrics,
       cellMetrics,
       None,
@@ -102,9 +102,9 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewport,
-      codeFont,
-      codeFont,
-      codeFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(codeFont),
       cellMetrics,
       cellMetrics,
       None,
@@ -122,9 +122,9 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       editorState,
       surface,
       viewport,
-      codeFont,
-      codeFont,
-      codeFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(codeFont),
       cellMetrics,
       cellMetrics,
       None,
@@ -143,9 +143,9 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       startPageState,
       surface,
       viewport,
-      codeFont,
-      codeFont,
-      codeFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(codeFont),
       cellMetrics,
       cellMetrics,
       None,

@@ -37,6 +37,7 @@ import com.serenity.state.reducers.{EditorEventReducer, ModalEventReducer}
 import com.serenity.ui.layout.{CellMetrics, Layout, TextLayoutSnapshot}
 import com.serenity.ui.renderer.{
   CharacterRenderer,
+  FontSpec,
   Java2DRenderSurface,
   RenderColor,
   RendererCursorOverlay,
@@ -654,8 +655,8 @@ object PerformanceBenchmarks:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      textFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(textFont),
       cellMetrics,
       None,
       caches
@@ -676,7 +677,7 @@ object PerformanceBenchmarks:
       logicalWidthPx = frameWidthPx,
       logicalHeightPx = frameHeightPx
     )
-    surface.setFont(textFont)
+    surface.setFont(FontSpec.fromAwt(textFont))
     surface.clearViewport(RenderColor.fromAwt(Theme.light.background))
     CharacterRenderer.renderMeasuredLine(
       surface,
@@ -695,9 +696,9 @@ object PerformanceBenchmarks:
       state,
       cursorVisible = false,
       window,
-      monoFont,
-      textFont,
-      uiFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(textFont),
+      FontSpec.fromAwt(uiFont),
       uiMetrics,
       cursorColor = None,
       repaintOnFlush = false,
@@ -709,9 +710,9 @@ object PerformanceBenchmarks:
       state,
       cursorVisible = true,
       window,
-      monoFont,
-      textFont,
-      uiFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(textFont),
+      FontSpec.fromAwt(uiFont),
       uiMetrics,
       None,
       caches = caches

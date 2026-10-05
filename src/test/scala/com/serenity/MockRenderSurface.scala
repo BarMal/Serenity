@@ -8,10 +8,12 @@ import java.util.concurrent.atomic.AtomicReference
 import com.serenity.ui.layout.{CellMetrics, PixelRect, TextLayoutSnapshot}
 import com.serenity.ui.renderer.{
   Effects,
+  FontSpec,
   HardwareCursor,
   PanelOutlineDrawing,
   PixelDrawing,
   RenderColor,
+  RenderImage,
   RenderSurface,
   SurfaceContentIdentity,
   TextDrawing
@@ -68,9 +70,9 @@ class MockRenderSurface(
   final case class StyleCall(action: String, style: TextStyle)
   private val styleCallsBuffer = scala.collection.mutable.ListBuffer.empty[StyleCall]
 
-  override def setFont(font: Font): Unit =
-    currentFont.set(Some(font))
-    setFontCallsBuffer += font
+  override def setFont(font: FontSpec): Unit =
+    currentFont.set(Some(font.toAwt))
+    setFontCallsBuffer += font.toAwt
 
   override def fontRenderContext: Option[FontRenderContext] = fontRenderContextOverride
 
@@ -243,8 +245,8 @@ class MockRenderSurface(
   override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
     fillPixelRectCallsBuffer += FillPixelRectCall(xPx, yPx, widthPx, heightPx, color.toAwt)
 
-  override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
-    drawImageCallsBuffer += DrawImageCall(image, x, y, width, height)
+  override def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
+    drawImageCallsBuffer += DrawImageCall(image.toAwt, x, y, width, height)
 
   def currentAlphaValue: Float                          = currentAlpha.get()
   def fillPixelRectCalls: List[FillPixelRectCall]       = fillPixelRectCallsBuffer.toList

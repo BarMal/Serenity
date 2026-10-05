@@ -22,7 +22,7 @@ object RendererCursorOverlay:
     surface: RenderSurface,
     viewportSize: ViewportSize,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
@@ -63,7 +63,7 @@ object RendererCursorOverlay:
     layout: CalculatedLayout,
     renderPlan: EditorPaneRenderPlan,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
@@ -119,12 +119,12 @@ object RendererCursorOverlay:
     cursorVisible: Boolean,
     surface: RenderSurface,
     viewportSize: ViewportSize,
-    codeFont: java.awt.Font,
-    textFont: java.awt.Font,
-    uiFont: java.awt.Font,
+    codeFont: FontSpec,
+    textFont: FontSpec,
+    uiFont: FontSpec,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     caches: RenderCaches
   ): Boolean =
     // #1105/#1215: a surface reporting no FontRenderContext (a terminal) has no real font rendering to measure
@@ -135,7 +135,8 @@ object RendererCursorOverlay:
     val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
     RendererEntryPoints.withSceneIfNeeded(
       state,
-      caches.authoritativeScene.forState(state, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+      caches.authoritativeScene
+        .forState(state, viewportSize, codeFont.toAwt, textFont.toAwt, cellMetrics = cellMetricsOverride)
     )(_ => false) { authoritativeScene =>
       val (layout, renderPlan) = resolveCursorRenderPlan(
         state,
@@ -144,9 +145,9 @@ object RendererCursorOverlay:
         viewportSize,
         cursorVisible,
         cursorColor,
-        codeFont,
-        textFont,
-        uiFont,
+        codeFont.toAwt,
+        textFont.toAwt,
+        uiFont.toAwt,
         cellMetrics,
         uiMetrics,
         caches
@@ -158,9 +159,9 @@ object RendererCursorOverlay:
         renderPlan,
         cursorVisible,
         cursorColor,
-        codeFont,
-        textFont,
-        uiFont,
+        codeFont.toAwt,
+        textFont.toAwt,
+        uiFont.toAwt,
         cellMetrics,
         uiMetrics,
         caches
@@ -172,11 +173,11 @@ object RendererCursorOverlay:
     state: AppState,
     cursorVisible: Boolean,
     swingWin: com.serenity.ui.terminal.SwingWindow,
-    codeFont: java.awt.Font,
-    textFont: java.awt.Font,
-    uiFont: java.awt.Font,
+    codeFont: FontSpec,
+    textFont: FontSpec,
+    uiFont: FontSpec,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     caches: RenderCaches = RenderCaches.create()
   ): Boolean =
     val viewportSize = swingWin.viewportSize
@@ -184,12 +185,12 @@ object RendererCursorOverlay:
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
       state,
-      caches.authoritativeScene.forState(state, viewportSize, codeFont, textFont)
+      caches.authoritativeScene.forState(state, viewportSize, codeFont.toAwt, textFont.toAwt)
     )(_ => false) { authoritativeScene =>
       // No base content is redrawn by this call, so the base frame contributes nothing to the repaint bound --
       // only the cursor's own old and new pixel rects can have changed on screen.
       swingWin.onCursorOverlayReady(Some(new java.awt.Rectangle(0, 0, 0, 0))) {
-        val surface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont, swingWin.canvas)
+        val surface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont.toAwt, swingWin.canvas)
         val (layout, renderPlan) = resolveCursorRenderPlan(
           state,
           authoritativeScene,
@@ -197,9 +198,9 @@ object RendererCursorOverlay:
           viewportSize,
           cursorVisible,
           cursorColor,
-          codeFont,
-          textFont,
-          uiFont,
+          codeFont.toAwt,
+          textFont.toAwt,
+          uiFont.toAwt,
           swingWin.metrics,
           uiMetrics,
           caches
@@ -211,9 +212,9 @@ object RendererCursorOverlay:
           renderPlan,
           cursorVisible,
           cursorColor,
-          codeFont,
-          textFont,
-          uiFont,
+          codeFont.toAwt,
+          textFont.toAwt,
+          uiFont.toAwt,
           swingWin.metrics,
           uiMetrics,
           caches
@@ -232,12 +233,12 @@ object RendererCursorOverlay:
     state: AppState,
     surface: RenderSurface,
     viewportSize: ViewportSize,
-    codeFont: java.awt.Font,
-    textFont: java.awt.Font,
-    uiFont: java.awt.Font,
+    codeFont: FontSpec,
+    textFont: FontSpec,
+    uiFont: FontSpec,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     caches: RenderCaches
   ): Boolean =
     renderWithCursorOverlay(
@@ -258,12 +259,12 @@ object RendererCursorOverlay:
     state: AppState,
     surface: RenderSurface,
     viewportSize: ViewportSize,
-    codeFont: java.awt.Font,
-    textFont: java.awt.Font,
-    uiFont: java.awt.Font,
+    codeFont: FontSpec,
+    textFont: FontSpec,
+    uiFont: FontSpec,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     damage: Damage,
     caches: RenderCaches
   ): Boolean =
@@ -274,7 +275,8 @@ object RendererCursorOverlay:
     val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
     RendererEntryPoints.withSceneIfNeeded(
       state,
-      caches.authoritativeScene.forState(state, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+      caches.authoritativeScene
+        .forState(state, viewportSize, codeFont.toAwt, textFont.toAwt, cellMetrics = cellMetricsOverride)
     ) { page =>
       RendererEntryPoints.renderStartPageFrame(
         state,
@@ -296,9 +298,9 @@ object RendererCursorOverlay:
           surface,
           viewportSize,
           scene,
-          codeFont,
-          textFont,
-          uiFont,
+          codeFont.toAwt,
+          textFont.toAwt,
+          uiFont.toAwt,
           cellMetrics,
           uiMetrics,
           cursorColor = None,
@@ -314,9 +316,9 @@ object RendererCursorOverlay:
             renderPlan,
             true,
             cursorColor,
-            codeFont,
-            textFont,
-            uiFont,
+            codeFont.toAwt,
+            textFont.toAwt,
+            uiFont.toAwt,
             cellMetrics,
             uiMetrics,
             caches = caches
@@ -329,11 +331,11 @@ object RendererCursorOverlay:
   def renderWithCursorOverlay(
     state: AppState,
     swingWin: com.serenity.ui.terminal.SwingWindow,
-    codeFont: java.awt.Font,
-    textFont: java.awt.Font,
-    uiFont: java.awt.Font,
+    codeFont: FontSpec,
+    textFont: FontSpec,
+    uiFont: FontSpec,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     damage: Damage = Damage.Everything,
     caches: RenderCaches = RenderCaches.create()
   ): Boolean =
@@ -346,7 +348,7 @@ object RendererCursorOverlay:
     // carets are filled over it separately, so the base frame here is pure pane content and chrome.
     val surface = Java2DRenderSurface.forFrame(
       swingWin.metrics,
-      codeFont,
+      codeFont.toAwt,
       swingWin.canvas,
       swingWin.onBaseImageReady,
       swingWin.acquireBaseImage
@@ -355,7 +357,7 @@ object RendererCursorOverlay:
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
       state,
-      caches.authoritativeScene.forState(state, viewportSize, codeFont, textFont)
+      caches.authoritativeScene.forState(state, viewportSize, codeFont.toAwt, textFont.toAwt)
     ) { page =>
       RendererEntryPoints.renderStartPageFrame(
         state,
@@ -381,9 +383,9 @@ object RendererCursorOverlay:
           surface,
           viewportSize,
           scene,
-          codeFont,
-          textFont,
-          uiFont,
+          codeFont.toAwt,
+          textFont.toAwt,
+          uiFont.toAwt,
           swingWin.metrics,
           uiMetrics,
           cursorColor = None,
@@ -394,7 +396,7 @@ object RendererCursorOverlay:
         .fold(false) { renderPlan =>
           val baseDirtyRegion = repaintRegion.get().map(RendererFrameState.toAwtRectangle)
           swingWin.onCursorOverlayReady(baseDirtyRegion) {
-            val cursorSurface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont, swingWin.canvas)
+            val cursorSurface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont.toAwt, swingWin.canvas)
             val _ = paintCursorsOnly(
               state,
               cursorSurface,
@@ -402,9 +404,9 @@ object RendererCursorOverlay:
               renderPlan,
               true,
               cursorColor,
-              codeFont,
-              textFont,
-              uiFont,
+              codeFont.toAwt,
+              textFont.toAwt,
+              uiFont.toAwt,
               swingWin.metrics,
               uiMetrics,
               caches

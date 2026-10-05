@@ -310,15 +310,15 @@ object OverlaySegmentRowRenderer:
       val inlineIcon = segment.inlineIcon.filter(_ => width > 0)
       inlineIcon.foreach { icon =>
         segment.inlineIconFontFamily.foreach(family =>
-          surface.text.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
+          surface.text.setFont(FontSpec.fromAwt(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D)))
         )
         CharacterRenderer.renderStringPlain(surface, x, y, icon.take(width))
-        if segment.inlineIconFontFamily.nonEmpty then surface.text.setFont(font)
+        if segment.inlineIconFontFamily.nonEmpty then surface.text.setFont(FontSpec.fromAwt(font))
       }
       val iconWidth = inlineIcon.map(_.length.min(width)).getOrElse(0)
       val iconGap   = if iconWidth > 0 && width > iconWidth && segmentText.nonEmpty then 1 else 0
       segment.fontFamily.foreach(family =>
-        surface.text.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
+        surface.text.setFont(FontSpec.fromAwt(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D)))
       )
       CharacterRenderer.renderStringPlain(
         surface,
@@ -326,4 +326,4 @@ object OverlaySegmentRowRenderer:
         y,
         segmentText.take(math.max(0, width - iconWidth - iconGap))
       )
-      if segment.fontFamily.nonEmpty then surface.text.setFont(font)
+      if segment.fontFamily.nonEmpty then surface.text.setFont(FontSpec.fromAwt(font))

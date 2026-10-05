@@ -13,7 +13,7 @@ import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{Java2DRenderSurface, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -129,9 +129,9 @@ class CommandRunnerEditorPaneAccumulationSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewport,
-      codeFont,
-      codeFont,
-      uiFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(uiFont),
       cellMetrics,
       uiMetrics,
       None,

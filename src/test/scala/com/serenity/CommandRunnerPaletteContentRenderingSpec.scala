@@ -11,7 +11,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -97,8 +97,8 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       cursorVisible = true,
       surface,
       ViewportSize(100, 30),
-      codeFont,
-      Font(Font.SANS_SERIF, Font.PLAIN, 12),
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(Font(Font.SANS_SERIF, Font.PLAIN, 12)),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
