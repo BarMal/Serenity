@@ -326,7 +326,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
       .unsafeRunSync()
 
     fixture.currentState.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.ModalWorkflow(Modal.Find(query, results, _))) =>
+      case List(SurfaceContent.ModalWorkflow(Modal.Find(query, results, _, _, _))) =>
         query.text shouldBe "cat"
         results.size shouldBe 2
       case other => fail(s"Expected a single Find modal surface, got $other")

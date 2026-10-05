@@ -204,11 +204,13 @@ object PerformanceBenchmarks:
     )
 
   private def benchmarks(cursorWindow: SwingWindow, projectRoot: Path): List[BenchmarkRunner.Benchmark] =
-    val jsonText       = largeSingleLineJson(entries = 20_000)
-    val multilineText  = largeMultilineDocument(lines = 15_000)
-    val findText       = largeFindDocument(matches = 12_000)
-    val markdownLines  = largeMarkdownDocument(sections = 800)
-    val markdownSource = markdownLines.mkString("\n")
+    val jsonText             = largeSingleLineJson(entries = 20_000)
+    val multilineText        = largeMultilineDocument(lines = 15_000)
+    val findText             = largeFindDocument(matches = 12_000)
+    val frequentTermDocument = Rope("the " * 500_000)
+    val frequentTermMatches  = FindSearch.search(frequentTermDocument, "the", FindOptions.default, anchor = 0)
+    val markdownLines        = largeMarkdownDocument(sections = 800)
+    val markdownSource       = markdownLines.mkString("\n")
     // Shared across every markdown benchmark below, matching a real render's cache reuse across calls (#1677).
     val markdownPreviewCache = MarkdownPreviewCache()
     val renderCaches         = RenderCaches.create() // reused below, mirroring StateManager (#1677)
@@ -302,11 +304,15 @@ object PerformanceBenchmarks:
       "needle",
       findQueryState.persisted.buffers(BufferId(1)).document.content
     )
-    val completeFindQuery = ModalEventReducer.applyFindSearchResults(
-      findQueryState,
-      findQueryRequest,
-      FindSearch.results(findQueryRequest.content, findQueryRequest.query)
-    )
+    def landFindQuery(): AppState =
+      val matches = FindSearch.search(
+        findQueryRequest.content,
+        findQueryRequest.query,
+        findQueryRequest.options,
+        findQueryRequest.anchor
+      )
+      ModalEventReducer.applyFindSearchResults(findQueryState, findQueryRequest, matches.results, matches.capped)
+    val completeFindQuery = landFindQuery()
     val findKeystrokeState = findQueryState.copy(runtime =
       findQueryState.runtime.copy(uiSurfaces =
         List(
@@ -431,13 +437,22 @@ object PerformanceBenchmarks:
           "find_replace.large_query_update",
           3,
           20,
-          () => assert(completeFindQuery.persisted.buffers(BufferId(1)).findState.exists(_.results.length == 12_000)),
           () =>
-            ModalEventReducer.applyFindSearchResults(
-              findQueryState,
-              findQueryRequest,
-              FindSearch.results(findQueryRequest.content, findQueryRequest.query)
-            )
+            assert(
+              completeFindQuery.persisted
+                .buffers(BufferId(1))
+                .findState
+                .exists(found => found.results.length == FindSearch.MatchLimit && found.capped)
+            ),
+          () => landFindQuery()
+        ),
+        // A term in every word of a 2 MB document: the search stops at the match cap instead of collecting them all.
+        BenchmarkRunner.Benchmark(
+          "find_replace.frequent_term_search",
+          3,
+          20,
+          () => assert(frequentTermMatches.capped && frequentTermMatches.results.length == FindSearch.MatchLimit),
+          () => FindSearch.search(frequentTermDocument, "the", FindOptions.default, anchor = 0)
         ),
         BenchmarkRunner.Benchmark(
           "find_replace.large_query_keystroke",

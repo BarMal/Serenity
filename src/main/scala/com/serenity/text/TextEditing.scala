@@ -121,6 +121,15 @@ object TextEditing:
     graphemeBoundaryAfterOrAt(source, normalizedStart) == normalizedStart &&
     graphemeBoundaryBeforeOrAt(source, normalizedEnd) == normalizedEnd
 
+  /** Whether the non-empty `[start, end)` starts and ends on UAX #29 word boundaries: a whole-word find for `cat`
+    * matches `the cat sat` but not `concatenate` or `cat's`, which UAX #29 keeps as one word.
+    */
+  def isWholeWordRange(source: CharacterSource, start: Int, end: Int): Boolean =
+    0 <= start && start < end && end <= source.length && {
+      val iterator = threadLocalWordBreakIterator.get().forSource(source)
+      iterator.isBoundary(start) && iterator.isBoundary(end)
+    }
+
   private def clamp(cursor: Int, length: Int): Int =
     math.max(0, math.min(cursor, length))
 
@@ -151,8 +160,9 @@ object TextEditing:
     */
   // `private[text]`, not fully `private`: `CharacterSourceIdentityAnchorSpec` (same package) instantiates this
   // directly to whitebox-test the setText-skip decision against the real ICU4J `BreakIterator`.
-  final private[text] class BreakIteratorCache:
-    val iterator: BreakIterator                             = BreakIterator.getCharacterInstance()
+  final private[text] class BreakIteratorCache(words: Boolean = false):
+    val iterator: BreakIterator =
+      if words then BreakIterator.getWordInstance() else BreakIterator.getCharacterInstance()
     private val lastAnchor: AtomicReference[Option[AnyRef]] = new AtomicReference(None)
 
     def forSource(source: CharacterSource): BreakIterator =
@@ -163,6 +173,9 @@ object TextEditing:
 
   private val threadLocalBreakIterator: ThreadLocal[BreakIteratorCache] =
     ThreadLocal.withInitial(() => BreakIteratorCache())
+
+  private val threadLocalWordBreakIterator: ThreadLocal[BreakIteratorCache] =
+    ThreadLocal.withInitial(() => BreakIteratorCache(words = true))
 
   /** `source` adapted through [[CharacterSourceIterator]] rather than a materialised `String` -- confirmed against
     * `RopeCharacterSource` (#1277 step 3 spike) to work directly against a rope-backed source, so a large line's
