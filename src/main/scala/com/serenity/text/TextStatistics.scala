@@ -45,5 +45,5 @@ object TextStatistics:
     TextStatistics(
       wordCount = Rope.countWordRuns(text),
       characterCount = text.length,
-      characterCountExcludingWhitespace = text.count(!_.isWhitespace)
+      characterCountExcludingWhitespace = text.count(!Rope.isSeparator(_))
     )

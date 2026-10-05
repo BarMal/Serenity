@@ -30,7 +30,9 @@ private[reducers] object EditorClipboardEventReducer:
     if hasSelection then ClipboardEntry(selectedTexts(buffer).mkString("\n"), wholeLine = false)
     else
       ClipboardEntry(
-        distinctCursorLines(buffer).map(line => buffer.document.content.getLine(line).getOrElse("")).mkString("\n"),
+        distinctCursorLines(buffer)
+          .map(line => buffer.plainTextExport(buffer.document.content.getLine(line).getOrElse("")))
+          .mkString("\n"),
         wholeLine = true
       )
 

@@ -399,10 +399,10 @@ case class Leaf(value: String)(using balance: Balance) extends Rope:
   override val newlineCount: Int           = value.count(_ == '\n')
   override val lastLineLength: Int         = value.length - value.lastIndexOf('\n') - 1
   override val endsWithNewline: Boolean    = value.endsWith("\n")
-  override val nonWhitespaceCount: Int     = value.count(!_.isWhitespace)
+  override val nonWhitespaceCount: Int     = value.count(!Rope.isSeparator(_))
   override val wordCount: Int              = Rope.countWordRuns(value)
-  override val startsWithWordChar: Boolean = value.headOption.exists(!_.isWhitespace)
-  override val endsWithWordChar: Boolean   = value.lastOption.exists(!_.isWhitespace)
+  override val startsWithWordChar: Boolean = value.headOption.exists(!Rope.isSeparator(_))
+  override val endsWithWordChar: Boolean   = value.lastOption.exists(!Rope.isSeparator(_))
   override def isWeightBalanced: Boolean   = true
   override def isHeightBalanced: Boolean   = true
   override def rebalance: Rope =
@@ -544,6 +544,12 @@ object Rope:
 
   def empty(using balance: Balance): Rope = Leaf("")
 
+  /** What word and character counts treat as space: whitespace, and U+FFFC, the placeholder for a rich document's
+    * inline atoms (a soft break), which separates words but is not a character of prose.
+    */
+  def isSeparator(char: Char): Boolean =
+    char.isWhitespace || char == '\uFFFC'
+
   /** Counts maximal runs of non-whitespace characters in a single string -- the same definition `wc -w` uses, and the
     * leaf-level building block `Node.wordCount` combines across the tree. Exposed so callers with a bounded,
     * already-materialised string (a selection's text, for instance) can count words without going through a `Rope`.
@@ -552,7 +558,7 @@ object Rope:
     @tailrec
     def loop(index: Int, inWord: Boolean, count: Int): Int =
       if index >= value.length then count
-      else if value.charAt(index).isWhitespace then loop(index + 1, inWord = false, count)
+      else if isSeparator(value.charAt(index)) then loop(index + 1, inWord = false, count)
       else loop(index + 1, inWord = true, if inWord then count else count + 1)
 
     loop(0, inWord = false, 0)

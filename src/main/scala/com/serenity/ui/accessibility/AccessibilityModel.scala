@@ -75,7 +75,7 @@ object AccessibilitySnapshot:
             s"pane:${paneId.value}",
             AccessibilityRole.Document,
             name,
-            buffer.map(_.document.content.toString),
+            buffer.map(open => open.plainTextExport(open.document.content.toString)),
             false,
             state.persisted.focus == Focus.EditorPane(paneId),
             node.contentRect
