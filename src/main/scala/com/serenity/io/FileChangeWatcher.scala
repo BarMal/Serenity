@@ -18,7 +18,8 @@ import cats.syntax.all.*
   * the watcher reports which specific files inside them changed.
   *
   * Backed by the platform `WatchService`, which blocks until the OS reports a change; where the default filesystem
-  * offers none, [[FileChangeWatcher.polling]] compares directory listings on an interval instead (#1885).
+  * offers none -- or only the JDK's own slow poller, as on macOS -- [[FileChangeWatcher.polling]] compares directory
+  * listings on an interval instead (#1885).
   */
 final class FileChangeWatcher private (backend: FileChangeWatcher.Backend):
 
@@ -54,7 +55,9 @@ object FileChangeWatcher:
       ready: IO[Set[Path]]
   )
 
-  /** The platform watcher, or [[polling]] where the default filesystem has no `WatchService`. */
+  /** The platform watcher, or [[polling]] where the default filesystem has no `WatchService` or only the JDK's built-in
+    * polling one.
+    */
   def create: Resource[IO, FileChangeWatcher] =
     Resource
       .make(IO.blocking(FileSystems.getDefault.newWatchService()).attempt) {
@@ -62,12 +65,24 @@ object FileChangeWatcher:
         case Left(_)        => IO.unit
       }
       .flatMap {
+        case Right(service) if isJdkPollingService(service.getClass.getName) =>
+          Resource.eval(IO.blocking(service.close()).attempt) >> polling(DefaultPollInterval)
         case Right(service)                                          => Resource.eval(native(service))
         case Left(_: UnsupportedOperationException | _: IOException) => polling(DefaultPollInterval)
         case Left(error) => Resource.raiseError[IO, FileChangeWatcher, Throwable](error)
       }
 
-  val DefaultPollInterval: FiniteDuration = 2.seconds
+  /** Short because this is the macOS path too: the JDK's own poller there checks every 10 seconds, far too slow for an
+    * external edit to show up promptly. One listing per watched directory per second is cheap, and nothing runs while
+    * nothing is watched.
+    */
+  val DefaultPollInterval: FiniteDuration = 1.second
+
+  /** The JDK falls back to `sun.nio.fs.PollingWatchService` where the OS offers no native watching (macOS); it re-scans
+    * only every ~10 seconds, so [[polling]] serves better. Matched by class name to avoid reaching into JDK internals.
+    */
+  private[io] def isJdkPollingService(serviceClassName: String): Boolean =
+    serviceClassName == "sun.nio.fs.PollingWatchService"
 
   /** Compares listings of the watched directories every `interval`. Only wakes while something is watched. */
   def polling(interval: FiniteDuration): Resource[IO, FileChangeWatcher] =

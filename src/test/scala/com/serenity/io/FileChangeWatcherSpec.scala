@@ -131,6 +131,40 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync() shouldBe Set.empty
   }
 
+  it should "report a burst of writes within the settle window as one change (#1885)" in {
+    val directory = Files.createTempDirectory("file-change-watcher-polling-burst")
+    val file      = directory.resolve("watched.txt")
+    Files.writeString(file, "initial")
+
+    val writeBurst =
+      (1 to 5).toList.traverse_(n => IO.blocking(Files.writeString(file, s"write $n")) >> IO.sleep(20.millis))
+
+    FileChangeWatcher
+      .polling(100.millis)
+      .use { watcher =>
+        for
+          _       <- watcher.sync(Set(directory))
+          _       <- writeBurst.start
+          changed <- watcher.awaitChangedFiles(300.millis)
+          after   <- watcher.pollChangedFiles(500.millis)
+        yield (changed, after)
+      }
+      .unsafeRunTimed(10.seconds) shouldBe Some((Set(file), Set.empty))
+  }
+
+  "isJdkPollingService" should "recognise the JDK's built-in poller, which macOS gets instead of a native watcher" in {
+    FileChangeWatcher.isJdkPollingService("sun.nio.fs.PollingWatchService") shouldBe true
+  }
+
+  it should "accept the native watchers" in {
+    List("sun.nio.fs.LinuxWatchService", "sun.nio.fs.WindowsWatchService", "sun.nio.fs.BsdWatchService")
+      .map(FileChangeWatcher.isJdkPollingService) shouldBe List(false, false, false)
+  }
+
+  "DefaultPollInterval" should "stay well under the JDK poller's 10 seconds it replaces" in {
+    FileChangeWatcher.DefaultPollInterval should be <= 2.seconds
+  }
+
   "sync" should "be idempotent when called repeatedly with the same directory" in {
     val directory = Files.createTempDirectory("file-change-watcher-idempotent")
     val file      = directory.resolve("watched.txt")
