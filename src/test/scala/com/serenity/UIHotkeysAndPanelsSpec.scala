@@ -122,9 +122,9 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val pinned = state.pinnedSurfaces
     pinned should have size 2
     pinned.map(_.content).map {
-      case SurfaceContent.Outline(_, _)     => "outline"
-      case SurfaceContent.Diagnostics(_, _) => "diagnostics"
-      case other                            => fail(s"Unexpected pinned content: $other")
+      case SurfaceContent.Outline(_, _, _)     => "outline"
+      case SurfaceContent.Diagnostics(_, _, _) => "diagnostics"
+      case other                               => fail(s"Unexpected pinned content: $other")
     } shouldBe List("outline", "diagnostics")
     state.persisted.layout.workspaceTree.map(_.dockedSurfaceIds) shouldBe Some(pinned.map(_.id))
 
@@ -164,8 +164,8 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val after = stateManager.getCurrentState.unsafeRunSync()
     after.pinnedSurfaces should have size 1
     after.pinnedSurfaces.map(_.content).foreach {
-      case SurfaceContent.Outline(_, _) => ()
-      case other                        => fail(s"Unexpected pinned content: $other")
+      case SurfaceContent.Outline(_, _, _) => ()
+      case other                           => fail(s"Unexpected pinned content: $other")
     }
 
   it should "do nothing when unpinning a surface ID that isn't a pinned panel" in new UIFixture:

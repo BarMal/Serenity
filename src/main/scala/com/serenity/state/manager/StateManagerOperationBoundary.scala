@@ -16,6 +16,7 @@ import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker}
 import com.serenity.state.core.NotesPaneSync
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
+import com.serenity.state.reducers.NoticeReducer
 import com.serenity.ui.layout.{DirEntry, WrappedLineCache}
 import org.typelevel.log4cats.Logger
 
@@ -294,7 +295,10 @@ final private[manager] class StateManagerOperationBoundary private (
   private def scheduleSessionSave(editIdle: EditIdleSessionSave): IO[Unit] =
     val save = modelCommit.currentState
       .flatMap(editIdle.save)
-      .handleErrorWith(error => logger.error(error)("[SESSION] Saving the session after edits paused failed"))
+      .handleErrorWith(error =>
+        logger.error(error)("[SESSION] Saving the session after edits paused failed") >>
+          showNotice(FileFailureNotice.sessionBackupFailed(error))
+      )
     submit(EditIdleSessionSaveLane, IO.sleep(editIdle.idle) >> submit(StateManagerWorkflowCapability.SessionLane, save))
 
   private def listExplorerDirectory(surfaceId: SurfaceId, path: Path): IO[Unit] =
@@ -311,6 +315,24 @@ final private[manager] class StateManagerOperationBoundary private (
     Lane.Keyed(LaneKey.MarkdownPreview(bufferId), LanePolicy.SwitchLatest)
 
   private[manager] def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit] = submit(lane, job)
+
+  /** Shows `notice` in the corner (#1717). Posted, so it is safe from the dispatcher and from lane jobs alike; a notice
+    * that dismisses itself is swept by a timer on its own lane, which quitting cancels rather than waits for.
+    */
+  def showNotice(notice: Notice): IO[Unit] =
+    IO.monotonic.flatMap { now =>
+      dispatcher.post(
+        modelCommit.updateValidated(model =>
+          Some(model.copy(app = NoticeReducer.shown(model.app, notice, now.toNanos)))
+        )
+      ) >> notice.level.autoDismissAfter.traverse_ { after =>
+        val deadline = now + after
+        submit(
+          Lane.Keyed(LaneKey.NoticeExpiry(deadline.toNanos), LanePolicy.SwitchLatest),
+          IO.sleep(after) >> IO.monotonic.flatMap(swept => postResult(EffectResult.NoticesExpired(swept.toNanos)))
+        )
+      }
+    }
 
   // A request arriving after shutdown has nothing left to run on, and quitting does not want it anyway.
   private def submit(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit] =

@@ -274,6 +274,8 @@ final private[manager] class StateManagerEventPipeline(
         applyReducerResult(ThemeEventReducer.reduce(themeEvent, prevState), prevState)
       case fileEvent: FileEvent =>
         applyReducerResult(FileEventReducer.reduce(fileEvent, prevState), prevState)
+      case wheel: MouseWheel =>
+        dispatchWheel(wheel, prevState)
       case mouse: MouseInputEvent if prevState.hasBlockingModal =>
         modalMouseHitTesting.handleModalMouseInput(mouse, prevState)
       case click: MouseClick
@@ -292,6 +294,24 @@ final private[manager] class StateManagerEventPipeline(
         FocusScopes.peekKeyOutcome(key, prevState) match
           case FocusScopes.PeekKeyOutcome.Consumed(closed)     => modelCommit.commitState(closed, prevState)
           case FocusScopes.PeekKeyOutcome.PassedOn(afterPeeks) => dispatchToFocusedHandler(key, afterPeeks, prevState)
+
+  /** The wheel over a docked list panel scrolls it; anywhere else -- or under a blocking modal, or over a floating
+    * surface -- it is the plain scroll the focused component has always had, gated exactly as before.
+    */
+  private def dispatchWheel(wheel: MouseWheel, prevState: AppState): cats.effect.IO[Unit] =
+    val overPanel =
+      if prevState.hasBlockingModal || MouseHitTestGeometry.isInsideFloatingSurface(
+            wheel,
+            prevState,
+            authoritativeScene
+          )
+      then cats.effect.IO.pure(false)
+      else pinnedPanelMouseHitTesting.handlePinnedPanelWheel(wheel, prevState)
+    overPanel.flatMap { scrolledPanel =>
+      if scrolledPanel || (prevState.hasBlockingModal && !allowedWhileBlockingModal(wheel.scroll)) then
+        cats.effect.IO.unit
+      else dispatchEvent(wheel.scroll, prevState)
+    }
 
   private def afterOutsideModalDismissed(event: MouseInputEvent, prevState: AppState)(
     handle: AppState => cats.effect.IO[Unit]

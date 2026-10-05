@@ -20,6 +20,7 @@ import com.serenity.ui.layout.{
   Symbol,
   SymbolKind
 }
+import com.serenity.ui.widget.ListScroll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -160,8 +161,8 @@ class PanelContentSyncSpec extends AnyFlatSpec with Matchers:
     )
 
     panelContent(PanelContentSync.synced(commented, before)) match
-      case SurfaceContent.Comments(symbols, None) => symbols.map(_.location) shouldBe List(Location(0, 0))
-      case other                                  => fail(s"unexpected content $other")
+      case SurfaceContent.Comments(symbols, None, _) => symbols.map(_.location) shouldBe List(Location(0, 0))
+      case other                                     => fail(s"unexpected content $other")
   }
 
   "A docked diagnostics panel" should "show the active document's diagnostics as they arrive" in {
@@ -181,6 +182,53 @@ class PanelContentSyncSpec extends AnyFlatSpec with Matchers:
 
     panelContent(PanelContentSync.synced(arrived, before)) shouldBe
       SurfaceContent.Diagnostics(List(Diagnostic("unused value", DiagnosticSeverity.Warning, Location(0, 4))), None)
+  }
+
+  it should "keep where it is scrolled to when the diagnostics are refreshed" in {
+    val (withDoc, bufferId) = shownInActivePane(AppState.initial, "val x = 1\n", "a.md")
+    val wheeled             = ListScroll(offset = 7, followsSelection = false)
+    val before              = docked(withDoc, SurfaceContent.Diagnostics(Nil, None, wheeled))
+    val uri                 = SpellChecker.diagnosticsUri(before.persisted.buffers(bufferId))
+    val lspDiagnostic =
+      LspDiagnostic(LspRange(LspPosition(0, 4), LspPosition(0, 5)), Some(LspSeverity.Warning), "unused value")
+    val languageService = before.runtime.languageService
+    val arrived = before.copy(runtime =
+      before.runtime.copy(languageService =
+        languageService.copy(diagnosticsState =
+          languageService.diagnosticsState.copy(diagnostics = Map(uri -> List(lspDiagnostic)))
+        )
+      )
+    )
+
+    panelContent(PanelContentSync.synced(arrived, before)) shouldBe
+      SurfaceContent.Diagnostics(
+        List(Diagnostic("unused value", DiagnosticSeverity.Warning, Location(0, 4))),
+        None,
+        wheeled
+      )
+  }
+
+  "A docked outline" should "keep where it is scrolled to across a debounced re-parse" in {
+    val (withDoc, bufferId) = shownInActivePane(AppState.initial, "# One\n\n# Two\n", "a.md")
+    val wheeled             = ListScroll(offset = 1, followsSelection = false)
+    val before  = docked(withDoc, SurfaceContent.Outline(List(heading("One", 0)), Some(Location(0, 0)), wheeled))
+    val version = before.persisted.buffers(bufferId).document.contentVersion
+
+    val reparsed =
+      PanelContentSync.withRefreshedOutline(before, bufferId, version, List(heading("One", 0), heading("Two", 2)))
+
+    panelContent(reparsed) shouldBe
+      SurfaceContent.Outline(List(heading("One", 0), heading("Two", 2)), Some(Location(0, 0)), wheeled)
+  }
+
+  it should "start again from the top when the active document switches" in {
+    val (first, _) = shownInActivePane(AppState.initial, "# First\n", "a.md")
+    val before     = docked(first, SurfaceContent.Outline(Nil, None, ListScroll(offset = 4, followsSelection = false)))
+    val (switched, _) = shownInActivePane(before, "# Second\n", "b.md")
+
+    panelContent(PanelContentSync.synced(switched, before)) match
+      case outline: SurfaceContent.Outline => outline.scroll shouldBe ListScroll()
+      case other                           => fail(s"unexpected content $other")
   }
 
   "A docked markdown preview" should "follow a switch to another markdown document" in {

@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.command.{Command, CommandCategory, CommandIntent, SessionIntent}
 import com.serenity.config.PreferredWindowSize
+import com.serenity.io.FileManager
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.core.EditorState
@@ -28,7 +29,13 @@ object StateManagerTestFacade:
   def seededStateManager(seed: AppState => AppState)(using Balance): IO[StateManager] =
     stateManagerOver(Model(seed(AppState.initial), UndoState()))
 
-  private def stateManagerOver(model: Model)(using Balance): IO[StateManager] =
+  /** A state manager whose reads and writes go through `fileManager` -- for scenarios that need a write to fail. */
+  def stateManagerWithFileManager(fileManager: FileManager)(using Balance): IO[StateManager] =
+    stateManagerOver(Model(AppState.initial, UndoState()), Some(fileManager))
+
+  private def stateManagerOver(model: Model, fileManager: Option[FileManager] = None)(using
+    Balance
+  ): IO[StateManager] =
     for
       directory           <- IO.blocking(Files.createTempDirectory("seeded-state-manager"))
       modelRef            <- Ref.of[IO, Model](model)
@@ -54,7 +61,9 @@ object StateManagerTestFacade:
         onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
         fileDialog = None
       )
-      stateManager <- StateManager.fromRuntime(runtime)
+      stateManager <- StateManager.fromRuntime(
+        fileManager.fold(runtime)(manager => runtime.copy(fileManager = manager))
+      )
     yield stateManager
 
   extension (stateManager: StateManager)

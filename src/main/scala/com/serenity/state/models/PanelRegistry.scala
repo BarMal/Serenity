@@ -33,9 +33,9 @@ object PanelId:
   def forContent(content: SurfaceContent): Option[PanelId] =
     content match
       case SurfaceContent.DirectoryTree(_, _, _)    => Some(Explorer)
-      case SurfaceContent.Outline(_, _)             => Some(Outline)
-      case SurfaceContent.Comments(_, _)            => Some(Comments)
-      case SurfaceContent.Diagnostics(_, _)         => Some(Diagnostics)
+      case SurfaceContent.Outline(_, _, _)          => Some(Outline)
+      case SurfaceContent.Comments(_, _, _)         => Some(Comments)
+      case SurfaceContent.Diagnostics(_, _, _)      => Some(Diagnostics)
       case SurfaceContent.MarkdownPreview(_, _)     => Some(MarkdownPreview)
       case SurfaceContent.StartPage(_)              => None
       case SurfaceContent.QuickInfo(_)              => None
@@ -55,6 +55,7 @@ object PanelId:
       case SurfaceContent.TabList(_, _)             => None
       case SurfaceContent.RecentFilesInMode(_, _)   => None
       case SurfaceContent.TabBar(_, _)              => None
+      case SurfaceContent.Notice(_, _)              => None
 
 /** A display mode a registered panel can be shown through (issue #1310). Shortcut-summoned (mode 2) is deliberately
   * absent until #1311's chord system exposes a `Command`-typed completion to register against -- adding a case nothing

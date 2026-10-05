@@ -73,6 +73,7 @@ private[manager] class StateManagerComposition(
       runtimeLogger,
       runtimeLspQueue,
       operations.fileLanes,
+      operations.showNotice,
       wrapCache = runtimeRenderCaches.wrappedLines
     )
 
@@ -145,6 +146,7 @@ private[manager] class StateManagerComposition(
   private val effectSurfacePort: EffectSurfacePort = new EffectSurfacePort:
     def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = surfaces.showPeek(content, at)
     def showModal(modal: Modal): IO[Unit]                            = surfaces.showModal(modal)
+    def showNotice(notice: Notice): IO[Unit]                         = operations.showNotice(notice)
     def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
       surfaces.pinPanel(content, position, size)
     def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit] =
@@ -171,10 +173,15 @@ private[manager] class StateManagerComposition(
   private val effectSessionPort: EffectSessionPort = new EffectSessionPort:
     val sessionPersistence = runtimeSessionPersistence
     def saveSession(): IO[Unit] =
-      modelCommit.currentState.flatMap { state =>
-        sessionManager.saveSession(state, persistUnsavedBuffers = true) >>
-          runtimeLogger.info("[SESSION] Session saved")
-      }.void
+      modelCommit.currentState
+        .flatMap { state =>
+          sessionManager.saveSession(state, persistUnsavedBuffers = true) >>
+            runtimeLogger.info("[SESSION] Session saved")
+        }
+        .handleErrorWith(error =>
+          runtimeLogger.error(error)("[SESSION] Saving the session failed") >>
+            operations.showNotice(FileFailureNotice.sessionSaveFailed(error))
+        )
     def loadSession(): IO[Option[AppState]] = sessionManager.loadSession()
     def clearSession(): IO[Unit]            = sessionManager.clearSession()
 

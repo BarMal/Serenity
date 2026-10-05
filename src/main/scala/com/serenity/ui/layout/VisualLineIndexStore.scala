@@ -17,23 +17,29 @@ import com.serenity.rope.{Leaf, Node, Rope}
   */
 final class VisualLineIndexStore[K](maxEntries: Int):
 
-  final private case class Entry(content: Rope, index: VisualLineIndex)
+  final private case class Entry(content: Rope, stamp: AnyRef, index: VisualLineIndex)
 
   private val entries = new LinkedHashMap[K, Entry](16, 0.75f, true)
 
   def size: Int = synchronized(entries.size())
 
-  def counts(key: K, content: Rope, measure: Int => Int): VisualRowCounts =
-    VisualRowCounts.indexed(this, key, content, measure)
+  def counts(
+    key: K,
+    content: Rope,
+    measure: Int => Int,
+    stamp: AnyRef = VisualLineIndexStore.Unstamped
+  ): VisualRowCounts =
+    VisualRowCounts.indexed(this, key, content, measure, stamp)
 
-  private[layout] def indexFor(key: K, content: Rope): VisualLineIndex =
+  private[layout] def indexFor(key: K, content: Rope, stamp: AnyRef = VisualLineIndexStore.Unstamped): VisualLineIndex =
     synchronized(Option(entries.get(key))) match
+      case Some(entry) if entry.stamp ne stamp                  => VisualLineIndex.unmeasured(content.lineCount)
       case Some(entry) if isSameContent(entry.content, content) => entry.index
       case Some(entry) => VisualLineIndexStore.followEdit(entry.index, entry.content, content)
       case None        => VisualLineIndex.unmeasured(content.lineCount)
 
-  private[layout] def update(key: K, content: Rope, index: VisualLineIndex): Unit = synchronized {
-    val _ = entries.put(key, Entry(content, index))
+  private[layout] def update(key: K, content: Rope, index: VisualLineIndex, stamp: AnyRef): Unit = synchronized {
+    val _ = entries.put(key, Entry(content, stamp, index))
     evictEldest(entries.values().iterator())
   }
 
@@ -47,6 +53,9 @@ final class VisualLineIndexStore[K](maxEntries: Int):
       evictEldest(eldestFirst)
 
 object VisualLineIndexStore:
+
+  /** The stamp of content whose row counts depend on nothing but its text. */
+  val Unstamped: AnyRef = new Object
 
   val DefaultMaxEntries = 32
 

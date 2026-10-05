@@ -161,9 +161,18 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     wheelRemainder.set(step.state)
     if step.notches != 0 then
       val amount = math.abs(step.notches) * linesPerNotch(e, axis)
-      val event = axis match
+      val event: Event = axis match
         case WheelAxis.Horizontal => if step.notches > 0 then ScrollRight(amount) else ScrollLeft(amount)
-        case WheelAxis.Vertical   => if step.notches > 0 then ScrollDown(amount) else ScrollUp(amount)
+        case WheelAxis.Vertical =>
+          val pointer = buildMouseEvent(e, metrics())
+          MouseWheel(
+            pointer.col,
+            pointer.row,
+            if step.notches > 0 then amount else -amount,
+            pixelX = pointer.pixelX,
+            pixelY = pointer.pixelY,
+            shiftDown = pointer.shiftDown
+          )
       enqueueRaw(event)
   )
 

@@ -85,6 +85,7 @@ final case class OverlayViews(
     aboveCursorStack: List[TextOverlayView] = Nil,
     belowCursor: Option[TextOverlayView] = None,
     belowCursorStack: List[TextOverlayView] = Nil,
+    cornerStack: List[TextOverlayView] = Nil,
     modal: List[TextOverlayView] = Nil,
     tabBar: Option[TextOverlayView] = None
 )
@@ -109,6 +110,7 @@ object OverlayViewModel:
 
     val belowCursorStack = stackViews(layout.belowCursorOverlayStack.map(_._1), state, layout, scene)
     val belowCursor      = belowCursorStack.headOption
+    val cornerStack      = stackViews(layout.cornerOverlayStack.map(_._1), state, layout, scene)
     val modal = scene.toList.flatMap(_.modal).flatMap {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) =>
         state.surfaceById(surfaceId) match
@@ -128,6 +130,7 @@ object OverlayViewModel:
       aboveCursorStack = aboveCursorStack,
       belowCursor = belowCursor,
       belowCursorStack = belowCursorStack,
+      cornerStack = cornerStack,
       modal = modal,
       tabBar = tabBar
     )
@@ -246,9 +249,9 @@ object OverlayViewModel:
           // `EditorLayoutContract` (`floatingGeometry`) calls that dispatcher independently and genuinely still needs
           // the real, item-count accurate rows/header/footer it produces -- see its own doc comment.
           case SurfaceContent.ContextMenu(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) |
-              SurfaceContent.ContextualToolbar(_) | SurfaceContent.CommentLens(_) | SurfaceContent.Outline(_, _) |
-              SurfaceContent.Diagnostics(_, _) | SurfaceContent.DirectoryTree(_, _, _) |
-              SurfaceContent.Comments(_, _) =>
+              SurfaceContent.ContextualToolbar(_) | SurfaceContent.CommentLens(_) | SurfaceContent.Outline(_, _, _) |
+              SurfaceContent.Diagnostics(_, _, _) | SurfaceContent.DirectoryTree(_, _, _) |
+              SurfaceContent.Comments(_, _, _) =>
             ResolvedSurfaceContent()
           case _ =>
             SurfaceContentResolver.resolve(
@@ -278,10 +281,10 @@ object OverlayViewModel:
       case SurfaceContent.TabBar(_, _)           => true
       case SurfaceContent.ContextualToolbar(_)   => true
       case SurfaceContent.CommentLens(_)         => true
-      case SurfaceContent.Outline(_, _)          => true
-      case SurfaceContent.Diagnostics(_, _)      => true
+      case SurfaceContent.Outline(_, _, _)       => true
+      case SurfaceContent.Diagnostics(_, _, _)   => true
       case SurfaceContent.DirectoryTree(_, _, _) => true
-      case SurfaceContent.Comments(_, _)         => true
+      case SurfaceContent.Comments(_, _, _)      => true
       case _                                     => false
 
   private def collapsedContentView(content: com.serenity.state.models.SurfaceContent): ResolvedSurfaceContent =
@@ -355,16 +358,24 @@ object OverlayViewModel:
         Some(ContextualToolbarSurfaceComposition.forToolbar(toolbarState, state, rect))
       case SurfaceContent.CommentLens(lens) =>
         Some(CommentLensSurfaceComposition.forLens(lens, rect))
-      case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) =>
-        Some(DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, scrollOffset, rect))
-      case SurfaceContent.Outline(symbols, activeLocation) =>
-        Some(OutlineSurfaceComposition.forOutline(symbols, activeSymbolLocation(symbols, activeLocation, state), rect))
-      case SurfaceContent.Comments(symbols, activeLocation) =>
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scroll) =>
+        Some(DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, scroll, rect))
+      case SurfaceContent.Outline(symbols, activeLocation, scroll) =>
         Some(
-          CommentsSurfaceComposition.forComments(symbols, activeSymbolLocation(symbols, activeLocation, state), rect)
+          OutlineSurfaceComposition.forOutline(
+            symbols,
+            activeSymbolLocation(symbols, activeLocation, state),
+            rect,
+            scroll
+          )
         )
-      case SurfaceContent.Diagnostics(issues, activeLocation) =>
-        Some(DiagnosticsSurfaceComposition.forDiagnostics(issues, activeLocation, rect))
+      case SurfaceContent.Comments(symbols, activeLocation, scroll) =>
+        Some(
+          CommentsSurfaceComposition
+            .forComments(symbols, activeSymbolLocation(symbols, activeLocation, state), rect, scroll)
+        )
+      case SurfaceContent.Diagnostics(issues, activeLocation, scroll) =>
+        Some(DiagnosticsSurfaceComposition.forDiagnostics(issues, activeLocation, rect, scroll))
       case _ => None
 
   /** Mirrors `PinnedPanelViewModel`'s own private helper of the same name: `Outline`/`Comments` content carries its own
