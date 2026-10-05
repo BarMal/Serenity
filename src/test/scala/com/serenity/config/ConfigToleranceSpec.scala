@@ -71,9 +71,11 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
 
   private val registered: List[ConfigField[?]] = ConfigRegistry.readOrder
 
-  /** The preferred window size is one setting spelled as two keys, and half of it is no size at all. */
-  private val partners: Map[String, String] =
-    Map("window.preferred.width" -> "window.preferred.height", "window.preferred.height" -> "window.preferred.width")
+  /** The preferred size is the one pair whose fallback is the default window's component, not "unset". */
+  private val fallbacks: Map[String, String] = Map(
+    "window.preferred.width"  -> PreferredWindowSize.Default.width.toString,
+    "window.preferred.height" -> PreferredWindowSize.Default.height.toString
+  )
 
   private val wrongValues: Gen[(String, Boolean)] =
     Gen.oneOf(
@@ -91,18 +93,20 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
       val file                = tempFile(corrupt(baselineText, field.key, wrong))
       val result              = load(file)
 
-      registered.filterNot(other => other.key == field.key || partners.get(field.key).contains(other.key)).foreach {
-        other =>
-          withClue(s"${other.key} after corrupting ${field.key} with $wrong: ") {
-            other.setting(result.config)._2.rendered shouldBe other.setting(baseline)._2.rendered
-          }
+      registered.filterNot(_.key == field.key).foreach { other =>
+        withClue(s"${other.key} after corrupting ${field.key} with $wrong: ") {
+          other.setting(result.config)._2.rendered shouldBe other.setting(baseline)._2.rendered
+        }
       }
       if staysAtKey && field.codec
             .parse(FieldCodec.flatten(ConfigFactory.parseString(s"v = $wrong").getValue("v")))
             .isEmpty
       then
         result.report.invalidEntries.map(_.key) should contain(field.key)
-        field.setting(result.config)._2.rendered shouldBe field.setting(AppConfig.default)._2.rendered
+        field.setting(result.config)._2.rendered shouldBe fallbacks.getOrElse(
+          field.key,
+          field.setting(AppConfig.default)._2.rendered
+        )
       Files.deleteIfExists(file): Unit
     }
 
@@ -137,6 +141,19 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
       HotkeyConflict("ctrl+alt+9", "save", List("command.toggle-line-numbers"))
     )
     HotkeyConfig.validate(hotkeys) shouldBe Right(())
+  }
+
+  "a preferred window size with one unusable component" should "keep the other, and report the bad one" in {
+    val wide = load(tempFile("window.preferred.width = very-wide\nwindow.preferred.height = 900\n"))
+    val tall = load(tempFile("window.preferred.width = 1400\nwindow.preferred.height = tall\n"))
+    val both = load(tempFile("window.preferred.width = very-wide\nwindow.preferred.height = tall\n"))
+
+    wide.config.preferredWindowSize shouldBe Some(PreferredWindowSize(PreferredWindowSize.Default.width, 900))
+    wide.report.invalidEntries.map(_.key) shouldBe List("window.preferred.width")
+    tall.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1400, PreferredWindowSize.Default.height))
+    tall.report.invalidEntries.map(_.key) shouldBe List("window.preferred.height")
+    both.config.preferredWindowSize shouldBe None
+    both.report.invalidEntries.map(_.key) shouldBe List("window.preferred.height", "window.preferred.width")
   }
 
   "an invalid value" should "name the key, the bad value and why, without failing the load" in {
@@ -191,18 +208,30 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
     Files.readString(file) shouldBe content
   }
 
-  "saving over a file with an invalid value" should "back it up with a timestamp first and keep the other settings" in {
+  "saving a change to a file with an invalid value" should "leave the invalid line exactly as the user wrote it" in {
     val original = corrupt(baselineText, "editor.word_wrap", "maybe")
     val file     = tempFile(original)
-    val loaded   = load(file)
 
-    save(loaded.config, file) shouldBe Right(())
+    save(load(file).config.withLineNumbers(true), file) shouldBe Right(())
+
+    Files.readString(file).linesIterator.toList should contain("editor.word_wrap = maybe")
+    load(file).report.invalidEntries.map(_.key) should contain("editor.word_wrap")
+    load(file).config.surfaceConfig.showLineNumbers shouldBe true
+    backups(file) shouldBe Nil
+  }
+
+  it should "back the file up with a timestamp before replacing the invalid value itself" in {
+    val original = corrupt(baselineText, "editor.word_wrap", "maybe")
+    val file     = tempFile(original)
+
+    val changed = !AppConfig.default.surfaceConfig.wordWrapEnabled
+
+    save(load(file).config.withWordWrap(changed), file) shouldBe Right(())
 
     backups(file).map(Files.readString) shouldBe List(original)
     val reloaded = load(file)
     reloaded.report.invalidEntries shouldBe Nil
-    reloaded.config.surfaceConfig.showPaneHeaders shouldBe false
-    reloaded.config.editorConfig.fontConfig shouldBe baseline.editorConfig.fontConfig
+    reloaded.config.surfaceConfig.wordWrapEnabled shouldBe changed
   }
 
   it should "not backup or touch anything extra when the file was clean" in {
@@ -260,7 +289,7 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
     } shouldBe true
     ConfigNotice.forLoad(file, result.report).value should include("newer")
 
-    save(result.config, file) shouldBe Right(())
+    save(result.config.withWordWrap(true), file) shouldBe Right(())
 
     backups(file).size shouldBe 1
     ConfigFactory.parseFile(file.toFile).getInt("future.key") shouldBe 1
@@ -306,4 +335,62 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
 
     outcome.applied shouldBe Nil
     outcome.config shouldBe source
+  }
+
+  "saving into a hand-written config" should "change only the line of the changed setting" in {
+    val original =
+      """# My Serenity setup -- keep this note
+        |
+        |editor.word_wrap = false   # I prefer long lines
+        |  display.line_numbers = true
+        |
+        |# fonts
+        |typography.code.size = 15.5
+        |custom.plugin.level = 3
+        |""".stripMargin
+    val file = tempFile(original)
+
+    save(load(file).config.withLineNumbers(false), file) shouldBe Right(())
+
+    Files.readString(file) shouldBe original.replace("  display.line_numbers = true", "  display.line_numbers = false")
+    backups(file) shouldBe Nil
+  }
+
+  it should "write nothing when nothing changed" in {
+    val original = "# comment\neditor.word_wrap = false\n"
+    val file     = tempFile(original)
+    val before   = Files.getLastModifiedTime(file)
+
+    save(load(file).config, file) shouldBe Right(())
+
+    Files.readString(file) shouldBe original
+    Files.getLastModifiedTime(file) shouldBe before
+  }
+
+  it should "add a setting the file did not state at the end, leaving the rest alone" in {
+    val original = "# comment\neditor.word_wrap = false\n"
+    val file     = tempFile(original)
+
+    save(load(file).config.withLineNumbers(false), file) shouldBe Right(())
+
+    Files.readString(file) shouldBe s"${original}editor.line_numbers = false\n"
+  }
+
+  it should "keep the user's spelling of a key and their line endings" in {
+    val original = "# note\r\ndisplay.word.wrap = false\r\n"
+    val file     = tempFile(original)
+
+    save(load(file).config.withWordWrap(true), file) shouldBe Right(())
+
+    Files.readString(file) shouldBe "# note\r\ndisplay.word.wrap = true\r\n"
+  }
+
+  it should "still take effect when the setting is also written as a block further down" in {
+    val original = "editor.word_wrap = true\neditor {\n  word_wrap = true\n}\n"
+    val file     = tempFile(original)
+
+    save(load(file).config.withWordWrap(false), file) shouldBe Right(())
+
+    load(file).config.surfaceConfig.wordWrapEnabled shouldBe false
+    Files.readString(file) should startWith("editor.word_wrap = ")
   }

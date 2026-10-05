@@ -162,9 +162,11 @@ object ConfigManager:
   /** Save configuration on the Cats Effect blocking pool with a structured failure result.
     *
     * What is already on disk is respected. A file that does not parse is left alone and the save refused, because
-    * writing over it would replace the user's settings with whatever this session holds. A readable file keeps the
-    * settings this version does not recognise, and is copied to a timestamped backup first when the rewrite would drop
-    * something the user wrote (an invalid value, a clashing hotkey, a newer format version).
+    * writing over it would replace the user's settings with whatever this session holds. A readable file is edited in
+    * place: only the lines of the settings that changed are touched, so the user's comments, ordering, spellings,
+    * unrecognised keys and even invalid values stay exactly as they wrote them. It is copied to a timestamped backup
+    * first when the edit replaces an invalid value or the file comes from a newer version, and rewritten whole -- also
+    * after a backup -- only when a line edit cannot express the change.
     */
   def saveConfigIO(config: AppConfig, configPath: Path): IO[Either[ConfigError, Unit]] =
     IO.realTimeInstant.flatMap(now => IO.blocking(saveBlocking(config, configPath, now)))
@@ -177,6 +179,13 @@ object ConfigManager:
       try Right(AtomicFileWriter.writeBytesBlocking(path, text.getBytes(StandardCharsets.UTF_8)))
       catch case error: Exception => failure(error.getMessage, Some(error))
 
+    def writeAfterBackup(text: String): Either[ConfigError, Unit] =
+      backUpConfig(path, now) match
+        case None => failure(s"could not back up $path first, so it was left untouched")
+        case Some(backup) =>
+          logger.info(s"[CONFIG] Backed up $path to $backup before changing it")
+          write(text)
+
     renderedConfig(config) match
       case Left(problem) => failure(problem)
       case Right(text) =>
@@ -187,28 +196,81 @@ object ConfigManager:
               s"$path cannot be parsed ($problem). It was left untouched so none of your settings are lost; " +
                 "fix or remove it to save settings again."
             )
-          case ExistingConfig.Readable(source, report) =>
-            withPreservedSettings(text, source) match
-              case Left(problem)                                     => failure(problem)
-              case Right(merged) if !report.needsBackupBeforeRewrite => write(merged)
-              case Right(merged) =>
-                backUpConfig(path, now) match
-                  case None => failure(s"could not back up $path first, so it was left untouched")
-                  case Some(backup) =>
-                    logger.info(s"[CONFIG] Backed up $path to $backup before rewriting it")
-                    write(merged)
+          case existing: ExistingConfig.Readable =>
+            editInPlace(path, existing, config) match
+              case Edit.Unchanged => Right(())
+              case Edit.Patched(patched, replacedKeys) =>
+                val invalidKeys = existing.loaded.report.invalidEntries.map(entry => canonicalKey(entry.key)).toSet
+                if existing.loaded.report.newerThanSupported || replacedKeys.exists(invalidKeys.contains) then
+                  writeAfterBackup(patched)
+                else write(patched)
+              case Edit.Whole =>
+                withPreservedSettings(text, existing.source).fold(failure(_), writeAfterBackup)
+
+  private enum Edit:
+    case Unchanged
+    case Patched(text: String, replacedKeys: Set[String])
+    case Whole
+
+  private def canonicalKey(key: String): String = ConfigRegistry.find(key).map(_.key).getOrElse(key)
+
+  private def editInPlace(path: Path, existing: ExistingConfig.Readable, config: AppConfig): Edit =
+    val before = ConfigFileFormat.settings(existing.loaded.config).map((key, value) => key -> value.rendered).toMap
+    val after  = ConfigFileFormat.settings(config)
+    val kept   = after.map(_._1).toSet
+    def spellingsOf(key: String): Set[String] = ConfigRegistry.find(key).fold(Set(key))(_.spellings)
+    val changes =
+      after.collect {
+        case (key, value) if !before.get(key).contains(value.rendered) =>
+          ConfigTextPatch.Change(key, spellingsOf(key), Some(value.rendered))
+      } ++ before.keys.toList.sorted
+        .filterNot(kept.contains)
+        .map(key => ConfigTextPatch.Change(key, spellingsOf(key), None))
+
+    def unmet(text: String, wanted: List[ConfigTextPatch.Change]): Option[List[ConfigTextPatch.Change]] =
+      settingsOfText(path, text).map(loaded => wanted.filterNot(change => loaded.get(change.key) == change.value))
+
+    if changes.isEmpty then Edit.Unchanged
+    else if existing.loaded.report.migratedFrom.nonEmpty then Edit.Whole
+    else
+      val patched = ConfigTextPatch(existing.text, changes)
+      unmet(patched.text, changes) match
+        case Some(Nil) => Edit.Patched(patched.text, patched.replacedKeys)
+        case Some(stuck) =>
+          val overridden = ConfigTextPatch.appendOverrides(patched.text, stuck)
+          if unmet(overridden, changes).contains(Nil) then Edit.Patched(overridden, patched.replacedKeys)
+          else Edit.Whole
+        case None => Edit.Whole
+
+  /** The settings a text would load as, read the way the file will be: from a sibling file, so relative includes work.
+    */
+  private def settingsOfText(path: Path, text: String): Option[Map[String, String]] =
+    val directory = Option(path.toAbsolutePath.getParent)
+    val probe     = directory.map(dir => Files.createTempFile(dir, ".config-check", ".conf"))
+    probe.flatMap { file =>
+      try
+        Files.writeString(file, text, StandardCharsets.UTF_8)
+        Try(parseConfigResult(file).config).toOption
+          .map(loaded => ConfigFileFormat.settings(loaded).map((key, value) => key -> value.rendered).toMap)
+      catch case NonFatal(_) => None
+      finally Files.deleteIfExists(file): Unit
+    }
 
   private enum ExistingConfig:
     case Absent
     case Unparseable(problem: String)
-    case Readable(source: Config, report: ConfigMigrationReport)
+    case Readable(text: String, source: Config, loaded: ConfigLoadResult)
 
   private def existingConfig(path: Path): ExistingConfig =
     if !Files.exists(path) then ExistingConfig.Absent
     else
       try
-        val migration = ConfigMigrations.migrate(parseHoconFile(path))
-        ExistingConfig.Readable(migration.config, inspectConfig(migration.config).copy(version = migration.found))
+        val raw = parseHoconFile(path)
+        ExistingConfig.Readable(
+          Files.readString(path, StandardCharsets.UTF_8),
+          ConfigMigrations.migrate(raw).config,
+          parseConfigResult(raw)
+        )
       catch case NonFatal(error) => ExistingConfig.Unparseable(error.getMessage)
 
   /** The rendered settings followed by every setting in the file this version does not recognise, as found.
@@ -401,6 +463,13 @@ object ConfigManager:
   ): Option[InvalidConfigEntry] =
     val reason: Option[String] =
       ConfigRegistry.find(key) match
+        case Some(field) if field.key == "window.preferred.width" || field.key == "window.preferred.height" =>
+          val (word, default) =
+            if field.key.endsWith("width") then ("width", PreferredWindowSize.Default.width)
+            else ("height", PreferredWindowSize.Default.height)
+          Option.when(field.codec.parse(value).isEmpty)(
+            s"not a whole number of pixels, so the window $word falls back to $default and the other size is kept"
+          )
         case Some(field) =>
           Option.when(field.codec.parse(value).isEmpty)(
             s"not a value this setting accepts, using its default (${field.setting(AppConfig.default)._2.rendered})"
