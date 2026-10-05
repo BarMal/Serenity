@@ -93,7 +93,8 @@ private[reducers] object EditorClipboardEventReducer:
         annotations = replacedBuffer.annotations,
         richText = replacedBuffer.richText
       )
-      val effects = undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), grouping = EditGrouping.Standalone)
+      val effects =
+        undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), grouping = EditGrouping.Standalone)
       ReducerResult(
         currentState.copy(persisted =
           currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))

@@ -37,6 +37,7 @@ object WorkspaceEditReducer:
       .collectFirst { case (paneId, pane) if pane.bufferId.contains(buffer.id) => paneId }
       .toList
       .flatMap(paneId =>
-        EditorEditSupport.undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, grouping = EditGrouping.Standalone)
+        EditorEditSupport
+          .undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, grouping = EditGrouping.Standalone)
       )
     (Focused.replaceBuffer(state, updatedBuffer), undoEffects)

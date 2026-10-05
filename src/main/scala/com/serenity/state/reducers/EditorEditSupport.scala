@@ -277,26 +277,21 @@ private[state] object EditorEditSupport:
 
   /** For a whole-content swap that carries no edit list -- undo and redo restore a snapshot's text outright. The
     * difference is treated as one replaced region (common prefix and suffix trimmed), so annotations keep their place
-    * relative to the text around the change. Inside a run of identical characters the region is ambiguous, and a marker
-    * there may land anywhere within the run.
+    * relative to the text around the change. Found by walking both ropes together and skipping every shared subtree, so
+    * the cost follows the change, not the document. Inside a run of identical characters the region is ambiguous, and a
+    * marker there may land anywhere within the run.
     */
   def adjustAnnotationsAcrossReplacement(annotations: Annotations, before: Rope, after: Rope): Annotations =
     if annotations.bookmarks.isEmpty && annotations.documentComments.isEmpty && annotations.placeholders.isEmpty then
       annotations
     else
-      val beforeText = before.collect()
-      val afterText  = after.collect()
-      val limit      = math.min(beforeText.length, afterText.length)
-      val prefix     = Iterator.range(0, limit).takeWhile(i => beforeText(i) == afterText(i)).size
-      val suffix = Iterator
-        .range(0, limit - prefix)
-        .takeWhile(i => beforeText(beforeText.length - 1 - i) == afterText(afterText.length - 1 - i))
-        .size
-      if prefix == beforeText.length && prefix == afterText.length then annotations
-      else
-        val replacement = afterText.substring(prefix, afterText.length - suffix)
-        val edit        = MultiCursorEdit(0, prefix, beforeText.length - suffix, replacement)
+      // `RopeDiff` wants a `Balance` only for an empty rope on a branch its bounds make unreachable; the ropes compared
+      // carry their own.
+      RopeDiff.changedOffsetRange(before, after)(using Balance.default).fold(annotations) { (start, end) =>
+        val replacedEnd = before.weight - (after.weight - end)
+        val edit        = MultiCursorEdit(0, start, replacedEnd, after.sliceString(start, end))
         adjustAnnotations(annotations, before, after, List(edit))
+      }
 
   private def remapCommentStart(offset: Int, edits: List[MultiCursorEdit]): Int =
     remapEditBoundary(offset, edits, insertionAtBoundaryMoves = true)
