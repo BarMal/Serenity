@@ -20,7 +20,7 @@ import com.serenity.input.{
 import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{AppState, Buffer, BufferId, Damage}
+import com.serenity.state.models.{AppState, Buffer, BufferId, Damage, RestartMode}
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync, TuiAccessibilityBridge}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
@@ -56,7 +56,7 @@ object TuiRuntime:
     sessionRootOverride: Option[Path] = None,
     configNotice: Option[String] = None,
     recovery: StartupRecovery.Plan = StartupRecovery.Plan.normal,
-    restartInSafeMode: Option[IO[Unit]] = None,
+    restarter: Option[RestartMode => IO[Unit]] = None,
     onFirstFrame: IO[Unit] = IO.unit
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     // #1213: a real terminal cannot deliver Cmd/Meta as an ordinary keystroke the way AWT does for a focused Swing
@@ -143,7 +143,8 @@ object TuiRuntime:
                 configPersistencePath,
                 frontend.markdownPreviewWindow,
                 projectTasksEnabled = !recovery.safeMode,
-                restartInSafeMode = restartInSafeMode
+                restarter = restarter,
+                uiPresetStore = recovery.uiPresetStore(sessionRootOverride)
               )
             ),
             awaitExternalQuit = terminalShell.awaitExternalQuit,
@@ -170,7 +171,8 @@ object TuiRuntime:
     configPersistencePath: Option[Path],
     previewWindowAvailability: MarkdownPreviewWindowAvailability,
     projectTasksEnabled: Boolean = true,
-    restartInSafeMode: Option[IO[Unit]] = None
+    restarter: Option[RestartMode => IO[Unit]] = None,
+    uiPresetStore: com.serenity.ui.presets.UiPresetStore = com.serenity.ui.presets.UiPresetStore.default
   )(using LoggerFactory[IO], com.serenity.rope.Balance): Logger[IO] => IO[StateManager] =
     logger =>
       StateManager.apply(
@@ -188,7 +190,8 @@ object TuiRuntime:
         fileDialog = None,
         markdownPreviewWindow = previewWindowAvailability,
         projectTasksEnabled = projectTasksEnabled,
-        restartInSafeMode = restartInSafeMode
+        restarter = restarter,
+        uiPresetStore = uiPresetStore
       )
 
   /** Maps #1109's negotiated wire-protocol tier onto the state layer's fidelity concept (issue #1194) --

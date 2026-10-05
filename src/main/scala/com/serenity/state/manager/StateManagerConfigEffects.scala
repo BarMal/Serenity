@@ -1,7 +1,6 @@
 package com.serenity.state.manager
 
 import java.nio.file.Files
-import java.time.{LocalDateTime, ZoneOffset}
 
 import cats.effect.IO
 import cats.syntax.all.*
@@ -295,7 +294,7 @@ final private[manager] class StateManagerConfigEffects(
         IO.realTimeInstant
           .flatMap(now =>
             IO.blocking {
-              val backup = TimestampedBackup.siblingOf(path, LocalDateTime.ofInstant(now, ZoneOffset.UTC))
+              val backup = TimestampedBackup.siblingOf(path, now)
               Option.when(Files.exists(path))(TimestampedBackup.moveAside(path, backup))
             }
           )

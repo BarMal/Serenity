@@ -1,5 +1,5 @@
 import java.nio.file.Path
-import java.time.{LocalDateTime, ZoneOffset}
+import java.time.Instant
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.Duration
@@ -17,6 +17,7 @@ import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
+import com.serenity.state.models.RestartMode
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.display.DisplayScale
@@ -51,22 +52,25 @@ object Main extends IOApp:
         case Right(options) => launchUntilSettled(options, toolkit)
     }
 
-  /** "Restart in Safe Mode" ends the running editor and starts the next one in this same JVM, so the terminal, the
-    * single-instance lock and the toolkit choice carry straight over. The restart drops the one-shot resets.
+  /** A restart ends the running editor and starts the next one in this same JVM, so the terminal, the single-instance
+    * lock and the toolkit choice carry straight over. It drops the one-shot resets.
     */
   private def launchUntilSettled(options: LaunchOptions, toolkit: ToolkitSelection.Decision): IO[ExitCode] =
-    Ref.of[IO, Boolean](false).flatMap { restartRequested =>
-      launch(options, toolkit, restartRequested.set(true)) >> restartRequested.get.flatMap {
-        case true =>
-          launchUntilSettled(options.copy(safeMode = true, resetConfig = false, resetSession = false), toolkit)
-        case false => IO.pure(ExitCode.Success)
+    Ref.of[IO, Option[RestartMode]](None).flatMap { restartRequested =>
+      launch(options, toolkit, mode => restartRequested.set(Some(mode))) >> restartRequested.get.flatMap {
+        case Some(mode) =>
+          launchUntilSettled(
+            options.copy(safeMode = mode == RestartMode.InSafeMode, resetConfig = false, resetSession = false),
+            toolkit
+          )
+        case None => IO.pure(ExitCode.Success)
       }
     }
 
   private def launch(
     launchOptionsForLogging: LaunchOptions,
     toolkit: ToolkitSelection.Decision,
-    requestRestart: IO[Unit]
+    requestRestart: RestartMode => IO[Unit]
   ): IO[ExitCode] =
     // #1215/#1669: must run before the `given logger` below, which triggers logback's one-time console-appender setup
     // on its first call -- `TuiConsoleLogFilter` checks this per log event, but it still has to be configured before
@@ -85,9 +89,9 @@ object Main extends IOApp:
       _ <- Java2DPipeline.installSafeDefaults()
       _ <- IO(CrashReporter.install())
       launchOptions = launchOptionsForLogging
-      startedAt                   <- IO.realTimeInstant.map(LocalDateTime.ofInstant(_, ZoneOffset.UTC))
+      startedAt                   <- IO.realTimeInstant
       (configMoved, sessionMoved) <- applyResets(launchOptions, startedAt)
-      unfinishedStarts            <- StartupCrashGuard.recordStartAttempt(StartupCrashGuard.defaultMarker)
+      unfinishedStarts            <- countUnfinishedStarts(launchOptions)
       plan = StartupRecovery.plan(
         launchOptions,
         StartupCrashGuard.decide(unfinishedStarts, launchOptions.safeMode),
@@ -129,13 +133,22 @@ object Main extends IOApp:
   /** What the recovery plan adds to a launch beyond the config: the plan itself, how to ask for a restart, and what to
     * do once the first frame is painted.
     */
-  final private case class Startup(plan: StartupRecovery.Plan, requestRestart: IO[Unit], markStarted: IO[Unit])
+  final private case class Startup(
+      plan: StartupRecovery.Plan,
+      requestRestart: RestartMode => IO[Unit],
+      markStarted: IO[Unit]
+  )
+
+  /** A launch already in safe mode only reads the marker: a safe start that dies must not push the next one further. */
+  private def countUnfinishedStarts(options: LaunchOptions): IO[Int] =
+    if options.safeMode then StartupCrashGuard.peekUnfinishedStarts(StartupCrashGuard.defaultMarker)
+    else StartupCrashGuard.recordStartAttempt(StartupCrashGuard.defaultMarker)
 
   /** Safe mode writes its session into a scratch folder, so the real one is neither read nor replaced. */
   private def sessionRoot(plan: StartupRecovery.Plan): Resource[IO, Option[Path]] =
     if plan.safeMode then SafeMode.scratchSessionRoot.map(Some(_)) else Resource.pure(None)
 
-  private def applyResets(options: LaunchOptions, at: LocalDateTime): IO[(List[Moved], List[Moved])] =
+  private def applyResets(options: LaunchOptions, at: Instant): IO[(List[Moved], List[Moved])] =
     for
       config <-
         if options.resetConfig then LaunchReset.backUpConfig(ConfigManager.defaultConfigPath, at) else IO.pure(Nil)
@@ -172,7 +185,7 @@ object Main extends IOApp:
         sessionRootOverride = sessionRoot,
         configNotice = configNotice,
         recovery = startup.plan,
-        restartInSafeMode = Some(startup.requestRestart),
+        restarter = Some(startup.requestRestart),
         onFirstFrame = startup.markStarted
       )
 
@@ -314,7 +327,8 @@ object Main extends IOApp:
                   deviceTextScaleProvider = IO.blocking(swingWin.detectedDeviceTextScale),
                   configPersistencePath = startup.plan.configPersistencePath(ConfigManager.defaultConfigPath),
                   projectTasksEnabled = !startup.plan.safeMode,
-                  restartInSafeMode = Some(startup.requestRestart),
+                  restarter = Some(startup.requestRestart),
+                  uiPresetStore = startup.plan.uiPresetStore(sessionRoot),
                   windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
                   onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
                   fileDialog = Some(SwingFileDialog(swingWin.canvas))

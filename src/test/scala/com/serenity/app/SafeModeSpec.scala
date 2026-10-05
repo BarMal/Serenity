@@ -8,6 +8,7 @@ import com.serenity.command.{CommandRegistry, SafeModeCommands}
 import com.serenity.config.AppConfig
 import com.serenity.lsp.config.{LanguageId, LspServerRegistry}
 import com.serenity.state.models.{AppState, ConfirmAction, ConfirmPrompt, Modal, StatusLineText}
+import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -53,7 +54,7 @@ class SafeModeSpec extends AnyFlatSpec with Matchers:
     StartupRecovery.Plan(safeMode = false, notices = Nil).configPersistencePath(path) shouldBe Some(path)
   }
 
-  "StartupRecovery.plan" should "put safe mode on only when it was asked for" in {
+  "StartupRecovery.plan" should "put safe mode on only when it was asked for or a crash loop took it over" in {
     val normal = StartupRecovery.plan(LaunchOptions(), StartupCrashGuard.Decision.Proceed, Nil, Nil)
     val safe   = StartupRecovery.plan(LaunchOptions(safeMode = true), StartupCrashGuard.Decision.Proceed, Nil, Nil)
 
@@ -61,11 +62,12 @@ class SafeModeSpec extends AnyFlatSpec with Matchers:
     safe shouldBe StartupRecovery.Plan(safeMode = true, notices = List(SafeMode.Notice))
   }
 
-  it should "carry an offer of safe mode when starts did not finish" in {
-    val plan = StartupRecovery.plan(LaunchOptions(), StartupCrashGuard.Decision.OfferSafeMode(3), Nil, Nil)
+  it should "start in safe mode by itself when starts did not finish, and say why" in {
+    val plan = StartupRecovery.plan(LaunchOptions(), StartupCrashGuard.Decision.StartSafeMode(3), Nil, Nil)
 
-    plan.offeredAfter shouldBe Some(3)
-    plan.safeMode shouldBe false
+    plan.safeMode shouldBe true
+    plan.crashLoopAfter shouldBe Some(3)
+    plan.notices.exists(_.contains("3 times")) shouldBe true
   }
 
   it should "say where the old settings and session were kept" in {
@@ -94,28 +96,40 @@ class SafeModeSpec extends AnyFlatSpec with Matchers:
     base.statusLineText.exists(_.contains(StatusLineText.SafeModeLabel)) shouldBe false
   }
 
-  "StartupRecovery.Plan.appliedTo" should "show the safe-mode offer as a blocking prompt only when one is due" in {
-    val base    = AppState.empty(AppConfig.default)
-    val offered = StartupRecovery.Plan(safeMode = false, notices = Nil, offeredAfter = Some(2)).appliedTo(base)
+  "StartupRecovery.Plan.appliedTo" should "show the crash-loop prompt as a blocking prompt only when one took over" in {
+    val base = AppState.empty(AppConfig.default)
+    val loop = StartupRecovery.Plan(safeMode = true, notices = Nil, crashLoopAfter = Some(2)).appliedTo(base)
 
-    offered.runtime.safeMode shouldBe false
-    offered.runtime.modalStack.map(_.modal) shouldBe List(Modal.Confirm(ConfirmPrompt.offerSafeMode(2)))
+    loop.runtime.safeMode shouldBe true
+    loop.runtime.modalStack.map(_.modal) shouldBe List(Modal.Confirm(ConfirmPrompt.startedInSafeMode(2)))
     StartupRecovery.Plan.normal.appliedTo(base) shouldBe base
   }
 
-  "ConfirmPrompt.offerSafeMode" should "run the restart command when accepted and carry on when declined" in {
-    val prompt = ConfirmPrompt.offerSafeMode(2)
+  "ConfirmPrompt.startedInSafeMode" should "restart normally when accepted and stay in safe mode when declined" in {
+    val prompt = ConfirmPrompt.startedInSafeMode(2)
 
     prompt.blocking shouldBe true
-    prompt.message.head should include("2")
-    prompt.choices.items.map(_.action).toList shouldBe List(
-      ConfirmAction.Run(SafeModeCommands.restart),
-      ConfirmAction.Dismiss
-    )
+    prompt.message.head should include("didn't finish starting 2 times in a row; started in safe mode")
+    prompt.message.last shouldBe "Restart normally?"
+    prompt.choices.items.map(_.action).toList shouldBe
+      List(ConfirmAction.Run(SafeModeCommands.restartNormally), ConfirmAction.Dismiss)
     prompt.onDismiss shouldBe ConfirmAction.Dismiss
   }
 
-  "The command palette" should "offer Restart in Safe Mode and Reset Settings" in {
+  "StartupRecovery.Plan.uiPresetStore" should "keep presets beside the scratch session so the user's file is never written" in {
+    val root   = Files.createTempDirectory("serenity-safe-presets")
+    val plan   = StartupRecovery.Plan(safeMode = true, notices = Nil)
+    val preset = UiPreset.builtIns.head.copy(name = "Mine")
+
+    plan.uiPresetStore(Some(root)).create(preset).unsafeRunSync()
+
+    Files.exists(root.resolve("ui-presets.json")) shouldBe true
+    plan.uiPresetStore(Some(root)).list().unsafeRunSync().map(_.name) should contain("Mine")
+    plan.uiPresetStore(Some(root)) should not be UiPresetStore.default
+  }
+
+  "The command palette" should "offer Restart in Safe Mode, Restart Normally and Reset Settings" in {
     CommandRegistry.default.findCommand("restart-safe-mode").map(_.label) shouldBe Some("Restart in Safe Mode")
+    CommandRegistry.default.findCommand("restart-normally").map(_.label) shouldBe Some("Restart Normally")
     CommandRegistry.default.findCommand("reset-settings").map(_.label) shouldBe Some("Reset Settings")
   }

@@ -31,22 +31,22 @@ class StartupCrashGuardSpec extends AnyFlatSpec with Matchers:
   }
 
   "StartupCrashGuard.decide" should "proceed while the unfinished starts are below the threshold" in
-    (0 until StartupCrashGuard.OfferThreshold).foreach { unfinished =>
+    (0 until StartupCrashGuard.StartThreshold).foreach { unfinished =>
       StartupCrashGuard.decide(unfinished, safeModeRequested = false) shouldBe Decision.Proceed
     }
 
-  it should "offer safe mode once the threshold of consecutive unfinished starts is reached" in {
-    val threshold = StartupCrashGuard.OfferThreshold
-    StartupCrashGuard.decide(threshold, safeModeRequested = false) shouldBe Decision.OfferSafeMode(threshold)
-    StartupCrashGuard.decide(threshold + 5, safeModeRequested = false) shouldBe Decision.OfferSafeMode(threshold + 5)
+  it should "start in safe mode once the threshold of consecutive unfinished starts is reached" in {
+    val threshold = StartupCrashGuard.StartThreshold
+    StartupCrashGuard.decide(threshold, safeModeRequested = false) shouldBe Decision.StartSafeMode(threshold)
+    StartupCrashGuard.decide(threshold + 5, safeModeRequested = false) shouldBe Decision.StartSafeMode(threshold + 5)
   }
 
-  it should "not offer safe mode to a launch that already asked for it" in {
-    StartupCrashGuard.decide(StartupCrashGuard.OfferThreshold + 1, safeModeRequested = true) shouldBe Decision.Proceed
+  it should "leave a launch that already asked for safe mode alone" in {
+    StartupCrashGuard.decide(StartupCrashGuard.StartThreshold + 1, safeModeRequested = true) shouldBe Decision.Proceed
   }
 
   it should "honour a custom threshold" in {
-    StartupCrashGuard.decide(1, safeModeRequested = false, threshold = 1) shouldBe Decision.OfferSafeMode(1)
+    StartupCrashGuard.decide(1, safeModeRequested = false, threshold = 1) shouldBe Decision.StartSafeMode(1)
   }
 
   "StartupCrashGuard.recordStartAttempt" should "return the previous count and leave a marker one higher" in {
@@ -75,12 +75,36 @@ class StartupCrashGuardSpec extends AnyFlatSpec with Matchers:
     noException should be thrownBy StartupCrashGuard.markStarted(tempMarker()).unsafeRunSync()
   }
 
-  "A crash loop" should "be offered safe mode once the threshold of starts in a row never showed a frame" in {
+  "A crash loop" should "start in safe mode once the threshold of starts in a row never showed a frame" in {
     val marker = tempMarker()
     val launch: IO[Decision] =
       StartupCrashGuard.recordStartAttempt(marker).map(StartupCrashGuard.decide(_, safeModeRequested = false))
-    val crashedLaunches = List.fill(StartupCrashGuard.OfferThreshold)(launch).sequence.unsafeRunSync()
+    val crashedLaunches = List.fill(StartupCrashGuard.StartThreshold)(launch).sequence.unsafeRunSync()
 
     crashedLaunches.distinct shouldBe List(Decision.Proceed)
-    launch.unsafeRunSync() shouldBe Decision.OfferSafeMode(StartupCrashGuard.OfferThreshold)
+    launch.unsafeRunSync() shouldBe Decision.StartSafeMode(StartupCrashGuard.StartThreshold)
+  }
+
+  "StartupCrashGuard.peekUnfinishedStarts" should "read the count without counting the launch that reads it" in {
+    val marker = tempMarker()
+    val peeks = (StartupCrashGuard.recordStartAttempt(marker) >>
+      StartupCrashGuard.recordStartAttempt(marker) >>
+      StartupCrashGuard.peekUnfinishedStarts(marker).product(StartupCrashGuard.peekUnfinishedStarts(marker)))
+      .unsafeRunSync()
+
+    peeks shouldBe (2, 2)
+  }
+
+  it should "find no unfinished starts when there is no marker" in {
+    StartupCrashGuard.peekUnfinishedStarts(tempMarker()).unsafeRunSync() shouldBe 0
+  }
+
+  "A safe-mode launch" should "not count itself, and a clean one clears the loop it was started for" in {
+    val marker  = tempMarker()
+    val crashed = List.fill(StartupCrashGuard.StartThreshold)(StartupCrashGuard.recordStartAttempt(marker)).sequence
+    val afterSafeStart = (crashed >> StartupCrashGuard.peekUnfinishedStarts(marker) <*
+      StartupCrashGuard.markStarted(marker)).unsafeRunSync()
+
+    afterSafeStart shouldBe StartupCrashGuard.StartThreshold
+    StartupCrashGuard.peekUnfinishedStarts(marker).unsafeRunSync() shouldBe 0
   }

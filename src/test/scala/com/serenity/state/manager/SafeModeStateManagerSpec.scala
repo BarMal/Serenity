@@ -9,6 +9,7 @@ import com.serenity.command.{CommandRegistry, SafeModeCommands}
 import com.serenity.config.AppConfig
 import com.serenity.project.{ProjectTaskCommand, ProjectTaskKind}
 import com.serenity.rope.Balance
+import com.serenity.state.models.RestartMode
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -25,13 +26,24 @@ class SafeModeStateManagerSpec extends AnyFlatSpec with Matchers:
     manager.executeCommand(CommandRegistry.default.findCommand(name).get).unsafeRunSync()
 
   "Restart in Safe Mode" should "ask the launcher to restart, then quit" in {
-    val restarts = Ref.unsafe[IO, Int](0)
+    val restarts = Ref.unsafe[IO, List[RestartMode]](Nil)
     val manager =
-      StateManager.apply(logger, restartInSafeMode = Some(restarts.update(_ + 1))).unsafeRunSync()
+      StateManager.apply(logger, restarter = Some(mode => restarts.update(_ :+ mode))).unsafeRunSync()
 
     manager.executeCommand(SafeModeCommands.restart).unsafeRunSync()
 
-    restarts.get.unsafeRunSync() shouldBe 1
+    restarts.get.unsafeRunSync() shouldBe List(RestartMode.InSafeMode)
+    manager.runtimeLifecycle.awaitQuit.unsafeRunSync()
+  }
+
+  "Restart Normally" should "ask the launcher for a normal restart, then quit" in {
+    val restarts = Ref.unsafe[IO, List[RestartMode]](Nil)
+    val manager =
+      StateManager.apply(logger, restarter = Some(mode => restarts.update(_ :+ mode))).unsafeRunSync()
+
+    manager.executeCommand(SafeModeCommands.restartNormally).unsafeRunSync()
+
+    restarts.get.unsafeRunSync() shouldBe List(RestartMode.Normally)
     manager.runtimeLifecycle.awaitQuit.unsafeRunSync()
   }
 
@@ -76,5 +88,5 @@ class SafeModeStateManagerSpec extends AnyFlatSpec with Matchers:
 
   private def backupsIn(folder: Path): List[Path] =
     val stream = Files.list(folder)
-    try stream.toArray.toList.collect { case path: Path if path.getFileName.toString.contains(".backup-") => path }
+    try stream.toArray.toList.collect { case path: Path if path.getFileName.toString.contains(".reset-") => path }
     finally stream.close()

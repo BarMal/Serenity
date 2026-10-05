@@ -197,7 +197,7 @@ object StateManager:
     markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability =
       com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable,
     projectTasksEnabled: Boolean = true,
-    restartInSafeMode: Option[IO[Unit]] = None
+    restarter: Option[RestartMode => IO[Unit]] = None
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     val renderCaches = RenderCaches.create(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity)
@@ -238,7 +238,7 @@ object StateManager:
         markdownPreviewWindow = markdownPreviewWindow,
         renderCaches = renderCaches,
         projectTasksEnabled = projectTasksEnabled,
-        restartInSafeMode = restartInSafeMode
+        restarter = restarter
       )
       stateManager <- fromRuntime(runtime)
     yield stateManager
@@ -320,7 +320,7 @@ object StateManager:
       runtime.sessionPersistence,
       runtime.renderCaches,
       operations,
-      runtime.restartInSafeMode
+      runtime.restarter
     )
 
     export composition.*

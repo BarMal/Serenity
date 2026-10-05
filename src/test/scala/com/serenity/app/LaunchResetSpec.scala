@@ -2,7 +2,7 @@ package com.serenity.app
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-import java.time.LocalDateTime
+import java.time.Instant
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.LaunchReset.Moved
@@ -11,7 +11,7 @@ import org.scalatest.matchers.should.Matchers
 
 class LaunchResetSpec extends AnyFlatSpec with Matchers:
 
-  private val at: LocalDateTime = LocalDateTime.of(2026, 10, 5, 9, 4, 7)
+  private val at: Instant = Instant.ofEpochMilli(1_790_000_000_123L)
 
   private def write(path: Path, text: String): Path =
     Files.createDirectories(path.getParent)
@@ -20,8 +20,8 @@ class LaunchResetSpec extends AnyFlatSpec with Matchers:
   private def read(path: Path): String =
     Files.readString(path, StandardCharsets.UTF_8)
 
-  "LaunchReset.backupSuffix" should "name a backup by the moment it was taken, sortable as text" in {
-    LaunchReset.backupSuffix(at) shouldBe "backup-20261005-090407"
+  "LaunchReset.backupSuffix" should "name a backup by the kind and epoch millisecond it was taken, as the session salvage does" in {
+    LaunchReset.backupSuffix(at) shouldBe "reset-1790000000123"
   }
 
   "LaunchReset.backUpConfig" should "move the config file aside to a timestamped sibling, keeping its content" in {
@@ -30,7 +30,7 @@ class LaunchResetSpec extends AnyFlatSpec with Matchers:
 
     val moved = LaunchReset.backUpConfig(config, at).unsafeRunSync()
 
-    val backup = root.resolve("config.conf.backup-20261005-090407")
+    val backup = root.resolve("config.conf.reset-1790000000123")
     moved shouldBe List(Moved(config, backup))
     Files.exists(config) shouldBe false
     read(backup) shouldBe "theme = \"light\"\n"
@@ -45,7 +45,7 @@ class LaunchResetSpec extends AnyFlatSpec with Matchers:
   it should "fail rather than overwrite an existing backup of the same name" in {
     val root     = Files.createTempDirectory("serenity-reset-config")
     val config   = write(root.resolve("config.conf"), "new")
-    val existing = write(root.resolve("config.conf.backup-20261005-090407"), "older backup")
+    val existing = write(root.resolve("config.conf.reset-1790000000123"), "older backup")
 
     LaunchReset.backUpConfig(config, at).attempt.unsafeRunSync().isLeft shouldBe true
     read(existing) shouldBe "older backup"
@@ -60,7 +60,7 @@ class LaunchResetSpec extends AnyFlatSpec with Matchers:
 
     val moved = LaunchReset.backUpSession(root, at).unsafeRunSync()
 
-    val backup = root.resolve("session-backup-20261005-090407")
+    val backup = root.resolve("session-reset-1790000000123")
     moved shouldBe List(
       Moved(index, backup.resolve("session-index.json")),
       Moved(pending, backup.resolve("session-write.pending.json")),
@@ -87,10 +87,10 @@ class LaunchResetSpec extends AnyFlatSpec with Matchers:
   it should "move only what exists, and create no backup folder when there is no session" in {
     val root = Files.createTempDirectory("serenity-reset-session")
     LaunchReset.backUpSession(root, at).unsafeRunSync() shouldBe Nil
-    Files.exists(root.resolve("session-backup-20261005-090407")) shouldBe false
+    Files.exists(root.resolve("session-reset-1790000000123")) shouldBe false
 
     val index = write(root.resolve("session-index.json"), "{}")
     LaunchReset.backUpSession(root, at).unsafeRunSync() shouldBe List(
-      Moved(index, root.resolve("session-backup-20261005-090407").resolve("session-index.json"))
+      Moved(index, root.resolve("session-reset-1790000000123").resolve("session-index.json"))
     )
   }

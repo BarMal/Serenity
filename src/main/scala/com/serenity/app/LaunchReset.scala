@@ -1,7 +1,7 @@
 package com.serenity.app
 
 import java.nio.file.{Files, LinkOption, Path}
-import java.time.LocalDateTime
+import java.time.Instant
 
 import cats.effect.IO
 import com.serenity.io.TimestampedBackup
@@ -20,10 +20,10 @@ object LaunchReset:
     */
   private val SessionEntries: List[String] = List("session-index.json", "session-write.pending.json", "sessions")
 
-  def backupSuffix(at: LocalDateTime): String =
+  def backupSuffix(at: Instant): String =
     TimestampedBackup.suffix(at)
 
-  def backUpConfig(config: Path, at: LocalDateTime): IO[List[Moved]] =
+  def backUpConfig(config: Path, at: Instant): IO[List[Moved]] =
     IO.blocking {
       if Files.exists(config, LinkOption.NOFOLLOW_LINKS) then
         val backup = TimestampedBackup.siblingOf(config, at)
@@ -31,7 +31,7 @@ object LaunchReset:
       else Nil
     }
 
-  def backUpSession(sessionRoot: Path, at: LocalDateTime): IO[List[Moved]] =
+  def backUpSession(sessionRoot: Path, at: Instant): IO[List[Moved]] =
     IO.blocking {
       val present = SessionEntries.map(sessionRoot.resolve).filter(Files.exists(_, LinkOption.NOFOLLOW_LINKS))
       if present.isEmpty then Nil

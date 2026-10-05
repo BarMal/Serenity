@@ -10,6 +10,7 @@ import com.serenity.lsp.LspEffect
 import com.serenity.project.{ProjectTaskCommand, ProjectTaskResult, ProjectTaskRunner}
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
+import com.serenity.state.models.RestartMode
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
@@ -130,7 +131,7 @@ final private[manager] case class StateManagerRuntime(
     sessionManager: SessionManager,
     sessionPersistence: SessionPersistence,
     renderCaches: RenderCaches,
-    restartInSafeMode: Option[IO[Unit]] = None
+    restarter: Option[RestartMode => IO[Unit]] = None
 )
 
 private[manager] object StateManagerRuntime:
@@ -158,7 +159,7 @@ private[manager] object StateManagerRuntime:
       com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable,
     renderCaches: RenderCaches = RenderCaches.create(),
     projectTasksEnabled: Boolean = true,
-    restartInSafeMode: Option[IO[Unit]] = None
+    restarter: Option[RestartMode => IO[Unit]] = None
   )(using Balance): StateManagerRuntime =
     val sessionManager = sessionRootOverride
       .map(root => SessionManager.create(root, themeManager, logger, policy))
@@ -187,5 +188,5 @@ private[manager] object StateManagerRuntime:
       sessionManager = sessionManager,
       sessionPersistence = new SessionPersistence(sessionManager, policy),
       renderCaches = renderCaches,
-      restartInSafeMode = restartInSafeMode
+      restarter = restarter
     )

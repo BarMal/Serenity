@@ -1,18 +1,17 @@
 package com.serenity.io
 
 import java.nio.file.{Files, Path}
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import java.time.Instant
 
-/** Keeping a file or folder aside under a name that says when, instead of deleting or overwriting it. */
+/** Keeping a file or folder aside under a name that says when, instead of deleting or overwriting it. The name follows
+  * the session salvage's `<file>.<kind>-<epochMillis>`, with the kind `reset`.
+  */
 object TimestampedBackup:
 
-  private val Stamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+  def suffix(at: Instant): String =
+    s"reset-${at.toEpochMilli}"
 
-  def suffix(at: LocalDateTime): String =
-    s"backup-${Stamp.format(at)}"
-
-  def siblingOf(path: Path, at: LocalDateTime): Path =
+  def siblingOf(path: Path, at: Instant): Path =
     path.resolveSibling(s"${path.getFileName}.${suffix(at)}")
 
   /** Moves `path` to `target`, failing with `FileAlreadyExistsException` rather than replacing what is there. */

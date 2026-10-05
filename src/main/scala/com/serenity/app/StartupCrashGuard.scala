@@ -7,15 +7,16 @@ import cats.effect.IO
 
 /** Notices a start that never reached its first frame. A launch leaves a marker holding how many starts in a row have
   * not finished; painting the first frame clears it. A crash before that leaves the marker behind, so the next launch
-  * can count and, from [[OfferThreshold]] on, offer safe mode.
+  * can count and, from [[StartThreshold]] on, start in safe mode before reading any config or session. Safe-mode
+  * launches do not count themselves, and one that reaches its first frame clears the marker, so safe mode cannot trap.
   */
 object StartupCrashGuard:
 
-  val OfferThreshold: Int = 2
+  val StartThreshold: Int = 2
 
   enum Decision:
     case Proceed
-    case OfferSafeMode(unfinishedStarts: Int)
+    case StartSafeMode(unfinishedStarts: Int)
 
   def defaultMarker: Path =
     Paths.get(System.getProperty("user.home"), ".serenity", "startup-in-progress")
@@ -24,9 +25,19 @@ object StartupCrashGuard:
   def unfinishedStarts(markerContents: Option[String]): Int =
     markerContents.fold(0)(text => text.trim.toIntOption.filter(_ > 0).getOrElse(1))
 
-  def decide(unfinishedStarts: Int, safeModeRequested: Boolean, threshold: Int = OfferThreshold): Decision =
+  def decide(unfinishedStarts: Int, safeModeRequested: Boolean, threshold: Int = StartThreshold): Decision =
     if safeModeRequested || unfinishedStarts < threshold then Decision.Proceed
-    else Decision.OfferSafeMode(unfinishedStarts)
+    else Decision.StartSafeMode(unfinishedStarts)
+
+  /** The unfinished starts so far, without counting this one: for a launch already in safe mode. */
+  def peekUnfinishedStarts(marker: Path): IO[Int] =
+    IO.blocking(
+      unfinishedStarts(
+        Option.when(Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS))(
+          new String(Files.readAllBytes(marker), StandardCharsets.UTF_8)
+        )
+      )
+    ).handleError(_ => 0)
 
   /** Returns the unfinished starts before this one and leaves the marker one higher. A marker that cannot be read or
     * written must never stop the editor starting, so failure counts as no history.

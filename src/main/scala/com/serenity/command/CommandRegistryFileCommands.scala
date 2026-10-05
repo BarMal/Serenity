@@ -120,6 +120,7 @@ private[command] object CommandRegistryFileCommands:
       label = "Quit"
     ),
     SafeModeCommands.restart,
+    SafeModeCommands.restartNormally,
     Command.typed(
       "new",
       "Create a new file.",
