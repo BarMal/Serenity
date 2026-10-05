@@ -16,6 +16,14 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   private val keptSetting = "editor.word_wrap = false"
 
+  /** Both compat fixtures were written on Linux, so they spell out the Ctrl-based action keys. Command keys they never
+    * mention still default by the running OS (Cmd on macOS), exactly as for any file that leaves them out.
+    */
+  private val linuxWrittenHotkeys =
+    AppConfig.default.inputConfig.hotkeyConfig.copy(bindings = HotkeyConfig.forOs("linux").bindings)
+
+  private val linuxWrittenDefault = AppConfig.default.withHotkeyConfig(linuxWrittenHotkeys)
+
   private def load(lines: Seq[String]): ConfigLoadResult =
     val file = Files.createTempFile("serenity-removed-keys", ".conf")
     Files.writeString(file, lines.mkString("", "\n", "\n"))
@@ -244,7 +252,7 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
     Files.writeString(file, oldDefault)
     val result = ConfigManagerTestSupport.loadConfigResult(Some(file.toString))
 
-    result.config shouldBe AppConfig.default
+    result.config shouldBe linuxWrittenDefault
     result.report.unknownKeys shouldBe Nil
     result.report.invalidEntries shouldBe Nil
     result.report.deprecatedEntries shouldBe Nil
@@ -266,5 +274,5 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val decoded = json.as[SessionState].getOrElse(fail("the stored session no longer decodes"))
 
-    decoded.config shouldBe AppConfig.default.withWordWrap(false).withLineNumbers(false)
+    decoded.config shouldBe linuxWrittenDefault.withWordWrap(false).withLineNumbers(false)
   }
