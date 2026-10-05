@@ -117,17 +117,17 @@ private[reducers] object EditorTextEditReducer:
       case (start, end) =>
         val newContent = deleteOrUnchanged(buffer.document.content, start, end)
         val newCursor  = newContent.offsetToCursorPosition(start)
-        val updated = buffer.copy(
-          document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-          editing = buffer.editing.withPrimary(Cursor(newCursor)),
-          annotations = adjustAnnotations(
-            buffer.annotations,
-            buffer.document.content,
-            newContent,
-            List(MultiCursorEdit(0, start, end, ""))
-          ),
-          richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, start, end, ""))
-        )
+        val updated = buffer
+          .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, start, end, ""))
+          .copy(
+            editing = buffer.editing.withPrimary(Cursor(newCursor)),
+            annotations = adjustAnnotations(
+              buffer.annotations,
+              buffer.document.content,
+              newContent,
+              List(MultiCursorEdit(0, start, end, ""))
+            )
+          )
         (updated, MultiCursorEdit(0, start, end, ""))
     }
 
@@ -138,17 +138,17 @@ private[reducers] object EditorTextEditReducer:
       case (start, end) =>
         val newContent = deleteOrUnchanged(buffer.document.content, start, end)
         val newCursor  = newContent.offsetToCursorPosition(start)
-        val updated = buffer.copy(
-          document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-          editing = buffer.editing.withPrimary(Cursor(newCursor)),
-          annotations = adjustAnnotations(
-            buffer.annotations,
-            buffer.document.content,
-            newContent,
-            List(MultiCursorEdit(0, start, end, ""))
-          ),
-          richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, start, end, ""))
-        )
+        val updated = buffer
+          .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, start, end, ""))
+          .copy(
+            editing = buffer.editing.withPrimary(Cursor(newCursor)),
+            annotations = adjustAnnotations(
+              buffer.annotations,
+              buffer.document.content,
+              newContent,
+              List(MultiCursorEdit(0, start, end, ""))
+            )
+          )
         (updated, MultiCursorEdit(0, start, end, ""))
     }
 
@@ -170,17 +170,17 @@ private[reducers] object EditorTextEditReducer:
   ): (Buffer, MultiCursorEdit) =
     val newContent = deleteOrUnchanged(buffer.document.content, startOffset, endOffset)
     val newCursor  = newContent.offsetToCursorPosition(cursorOffset)
-    val baseBuffer = buffer.copy(
-      document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-      editing = buffer.editing.withPrimary(Cursor(newCursor)),
-      annotations = adjustAnnotations(
-        buffer.annotations,
-        buffer.document.content,
-        newContent,
-        List(MultiCursorEdit(0, startOffset, endOffset, ""))
-      ),
-      richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
-    )
+    val baseBuffer = buffer
+      .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
+      .copy(
+        editing = buffer.editing.withPrimary(Cursor(newCursor)),
+        annotations = adjustAnnotations(
+          buffer.annotations,
+          buffer.document.content,
+          newContent,
+          List(MultiCursorEdit(0, startOffset, endOffset, ""))
+        )
+      )
     (baseBuffer, MultiCursorEdit(0, startOffset, endOffset, ""))
 
   /** The single-cursor, no-selection typing path only (#1442-adjacent QoL feature): the multi-cursor/selection cases
@@ -260,18 +260,17 @@ private[reducers] object EditorTextEditReducer:
       )
     val newCursor = newContent.offsetToCursorPosition(startOffset + insertedText.length)
     val edit      = MultiCursorEdit(0, startOffset, endOffset, insertedText)
-    val replaced = buffer.copy(
-      document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-      editing = buffer.editing.withPrimary(Cursor(newCursor)),
-      annotations = adjustAnnotations(
-        buffer.annotations,
-        buffer.document.content,
-        newContent,
-        List(edit)
-      ),
-      richText =
-        buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText))
-    )
+    val replaced = buffer
+      .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText))
+      .copy(
+        editing = buffer.editing.withPrimary(Cursor(newCursor)),
+        annotations = adjustAnnotations(
+          buffer.annotations,
+          buffer.document.content,
+          newContent,
+          List(edit)
+        )
+      )
     (replaced, edit)
 
   /** `NewLine`/`Enter`'s single-cursor, no-selection path: inserts the newline, then -- Markdown buffers only, and only

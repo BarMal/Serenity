@@ -126,6 +126,54 @@ object ArchitectureChecks {
     )
   )
 
+  /** #1935: a document's `content` changes only through `Document.withContent` (directly, or through `Buffer`'s
+    * edit helpers), which advances `contentVersion` -- the stamp `Buffer.richTextInSync` and the debounced outline
+    * re-parse trust instead of re-comparing text. A `document.copy(content = ...)` skips that bump, so it is refused in
+    * `src/main` outside the file that defines the sanctioned path. Matched over the whole file rather than per line,
+    * since a formatted `copy(` often puts `content =` on a later line.
+    */
+  val DocumentContentOwner: String = "main/scala/com/serenity/state/models/Buffer.scala"
+
+  private val DocumentCopy = """\bdocument\s*\.\s*copy\s*\(""".r
+  private val ContentArgument = """(^|[(,\s])content\s*=(?!=)""".r
+
+  /** The text between the `(` that ends at `start` and its matching `)`. */
+  private def balancedArguments(text: String, start: Int): String = {
+    var depth = 1
+    var i = start
+    while (i < text.length && depth > 0) {
+      text.charAt(i) match {
+        case '(' => depth += 1
+        case ')' => depth -= 1
+        case _   => ()
+      }
+      i += 1
+    }
+    text.substring(start, math.max(start, i - 1))
+  }
+
+  private def documentContentViolations(path: String, lines: Vector[String]): Seq[Violation] =
+    if (!path.startsWith("main/") || path == DocumentContentOwner) Nil
+    else {
+      val text = lines.map { line =>
+        val trimmed = line.trim
+        if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) "" else line
+      }.mkString("\n")
+      DocumentCopy.findAllMatchIn(text).toSeq.flatMap { found =>
+        if (ContentArgument.findFirstIn(balancedArguments(text, found.end)).isEmpty) Nil
+        else {
+          val line = text.substring(0, found.start).count(_ == '\n') + 1
+          Seq(
+            Violation(
+              path,
+              s"document content assigned at line $line: use Document.withContent so contentVersion advances (#1935)",
+              1
+            )
+          )
+        }
+      }
+    }
+
   /** #1677: no `AtomicReference`, `AtomicInteger`, `synchronized`, or `mutable.` may live inside a top-level
     * `object` declaration, or anywhere under `state/models`, in `src/main`. An `object` compiles to a single
     * JVM-wide instance, so any of these forms held directly in its body -- not inside a nested `class`/`trait`,
@@ -300,7 +348,8 @@ object ArchitectureChecks {
       val fileViolation =
         if (lines.length > MaxFileLines) Seq(Violation(path, "file length", lines.length)) else Nil
       fileViolation ++ methodViolations(path, lines) ++ importViolations(path, lines) ++ callViolations(path, lines) ++
-        stateOwnershipViolations(path, lines) ++ mutabilityViolations(path, lines)
+        stateOwnershipViolations(path, lines) ++ mutabilityViolations(path, lines) ++
+        documentContentViolations(path, lines)
     }
 
   def readBaseline(file: File): Map[String, Int] =
@@ -544,6 +593,58 @@ object ArchitectureChecks {
       ),
       expectCaught = false,
       path = "test/scala/com/serenity/ui/renderer/SampleSpec.scala"
+    )
+
+    def checkDocumentContent(
+        description: String,
+        lines: Vector[String],
+        expectCaught: Boolean,
+        path: String = "main/scala/com/serenity/state/reducers/Sample.scala"
+    ): Unit = {
+      val violations = documentContentViolations(path, lines)
+      require(
+        violations.nonEmpty == expectCaught,
+        s"ArchitectureChecks self-test failed ($description): expected a document content assignment to be " +
+          s"${if (expectCaught) "caught" else "ignored"}, got ${violations.size} violation(s)"
+      )
+    }
+
+    checkDocumentContent(
+      "a document copy that sets content on one line",
+      Vector("  val next = buffer.document.copy(content = edited, isDirty = true)"),
+      expectCaught = true
+    )
+
+    checkDocumentContent(
+      "a document copy that sets content on a later line",
+      Vector("  val next = buffer.document.copy(", "    isDirty = true,", "    content = edited", "  )"),
+      expectCaught = true
+    )
+
+    checkDocumentContent(
+      "a document copy that leaves content alone",
+      Vector("  val next = buffer.document.copy(language = language(content == other))"),
+      expectCaught = false
+    )
+
+    checkDocumentContent(
+      "a surface copy whose own field is called content",
+      Vector("  val next = surface.copy(content = kept)"),
+      expectCaught = false
+    )
+
+    checkDocumentContent(
+      "the file that defines the sanctioned path",
+      Vector("  def withContent(newContent: Rope): Document = document.copy(content = newContent)"),
+      expectCaught = false,
+      path = DocumentContentOwner
+    )
+
+    checkDocumentContent(
+      "a test fixture building a buffer with some text",
+      Vector("  val fixture = buffer.document.copy(content = Rope(text))"),
+      expectCaught = false,
+      path = "test/scala/com/serenity/state/reducers/SampleSpec.scala"
     )
   }
 }

@@ -119,7 +119,11 @@ object SessionBuffer:
     Buffer(
       id = BufferId(sessionBuffer.id),
       document = Document(
-        content = sessionBuffer.unsavedContent.map(Rope.apply).getOrElse(Rope.empty),
+        // A clean rich-text buffer's session entry holds the formatted document instead of the text it describes.
+        content = sessionBuffer.unsavedContent
+          .orElse(sessionBuffer.richTextDocument.map(_.plainText))
+          .map(Rope.apply)
+          .getOrElse(Rope.empty),
         filePath = sessionBuffer.filePath.map(path => Paths.get(path)),
         isDirty = sessionBuffer.isDirty,
         language = sessionBuffer.language.flatMap(LanguageId.fromString),
@@ -165,11 +169,8 @@ object SessionBuffer:
   private def recordedBuffer(sessionBuffer: SessionBuffer)(using com.serenity.rope.Balance): Buffer =
     val buffer = toBuffer(sessionBuffer)
     (sessionBuffer.unsavedContent, sessionBuffer.richTextDocument) match
-      case (None, Some(document)) =>
-        buffer.copy(document =
-          buffer.document.copy(content = com.serenity.rope.Rope(document.plainText), isDirty = false)
-        )
-      case _ => buffer
+      case (None, Some(_)) => buffer.copy(document = buffer.document.copy(isDirty = false))
+      case _               => buffer
 
   private def fromDisk(recorded: Buffer, disk: Buffer): Buffer =
     if disk.document.content.collect() == recorded.document.content.collect() then

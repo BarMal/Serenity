@@ -126,9 +126,15 @@ class FileManager(using balance: Balance):
     buffer.document.filePath match
       case None => IO.raiseError(FileManagerError.NoFilePath())
       case Some(path) =>
-        loadFile(path, buffer.id).map(reloaded =>
-          buffer.copy(document = reloaded.document, richText = reloaded.richText)
-        )
+        loadFile(path, buffer.id).map(reloadedInto(buffer, _))
+
+  /** A fresh read starts at content version 0; carrying that over would move `buffer`'s version backwards (#1935). */
+  private def reloadedInto(buffer: Buffer, reloaded: Buffer): Buffer =
+    val document = reloaded.document.copy(contentVersion = buffer.document.contentVersion + 1)
+    buffer.copy(
+      document = document,
+      richText = reloaded.richText.withSyncedDocument(reloaded.richText.richTextDocument, document.contentVersion)
+    )
 
   /** The on-disk revision of `path` right now, for a focus-in re-check against a buffer's captured `Document.revision`
     * (#1623) -- `None` for a file that no longer exists or otherwise can't be read, which a focus-in check treats as
