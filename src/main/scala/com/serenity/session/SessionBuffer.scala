@@ -134,7 +134,7 @@ object SessionBuffer:
         // Likewise for a session written before encodings were recorded (#1627): every file was read as UTF-8.
         encoding = sessionBuffer.encoding.flatMap(TextEncoding.fromConfigKey).getOrElse(TextEncoding.default),
         hasBom = sessionBuffer.hasBom,
-        revision = sessionBuffer.revision.map(DocumentRevision.apply)
+        revision = sessionBuffer.revision.map(DocumentRevision(_))
       ),
       editing = EditingState(sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition)),
       viewport = SessionViewport.toViewport(sessionBuffer.viewport),

@@ -447,8 +447,8 @@ final private[manager] class StateManagerEffectHandlers(
     currentState.flatMap { state =>
       state.persisted.buffers.get(bufferId).flatMap(buffer => buffer.document.filePath.map(buffer -> _)) match
         case Some((buffer, path)) =>
-          fileManager.currentRevision(path).map {
-            case Some(onDisk) if Some(onDisk) != buffer.document.revision =>
+          fileManager.revisionSince(path, buffer.document.revision).map {
+            case Some(onDisk) if !buffer.document.revision.exists(_.sameContent(onDisk)) =>
               Some(ExternalRevisionObservation(bufferId, path, buffer.document.revision, onDisk))
             case _ => None
           }
@@ -481,7 +481,7 @@ final private[manager] class StateManagerEffectHandlers(
     }
 
   /** The paths of every currently open local buffer, for `FileChangeWatcher.sync`'s directory set -- `AppRuntime`'s
-    * background watch loop re-derives this each poll cycle so it tracks buffers opening and closing over time.
+    * background watch loop re-derives this whenever a commit may have opened or closed one.
     */
   private[manager] def openBufferPathsEffect: IO[Map[Path, BufferId]] =
     currentState.map(state =>
