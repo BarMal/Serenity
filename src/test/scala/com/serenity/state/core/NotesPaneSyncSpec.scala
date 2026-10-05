@@ -3,6 +3,7 @@ package com.serenity.state.core
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
+import com.serenity.ui.layout.Symbol
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -68,6 +69,31 @@ class NotesPaneSyncSpec extends AnyFlatSpec with Matchers:
     val after  = NotesPaneSync.synced(withCursor(before, 2), before)
 
     shown(after) shouldBe Some(calmNoteId)
+  }
+
+  private def headings(state: AppState): Memo[List[(HeadingIdentity, Symbol)]] =
+    state.runtime.chapterHeadingMemo.forBuffer(manuscriptId).getOrElse(fail("expected the manuscript's headings"))
+
+  it should "find the cursor's chapter again without re-parsing when only the cursor line changed" in {
+    val first  = stateWith(cursorLine = 0)
+    val inCalm = NotesPaneSync.synced(withCursor(first, 2), first)
+    val later  = NotesPaneSync.synced(withCursor(inCalm, 3), inCalm)
+
+    shown(later) shouldBe Some(calmNoteId)
+    headings(later) should be theSameInstanceAs headings(inCalm)
+  }
+
+  it should "re-parse the headings once the text has changed" in {
+    val first    = stateWith(cursorLine = 0)
+    val inCalm   = NotesPaneSync.synced(withCursor(first, 2), first)
+    val buffer   = inCalm.persisted.buffers(manuscriptId)
+    val untitled = buffer.copy(document = buffer.document.withContent(Rope("# Chapter 1: Storm\nthe sea\nthe shore")))
+    val rewritten =
+      inCalm.copy(persisted = inCalm.persisted.copy(buffers = inCalm.persisted.buffers.updated(manuscriptId, untitled)))
+    val after = NotesPaneSync.synced(withCursor(rewritten, 1), rewritten)
+
+    shown(after) shouldBe Some(stormNoteId)
+    headings(after) should not be theSameInstanceAs(headings(inCalm))
   }
 
   it should "come back to an earlier chapter's note when the cursor returns" in {

@@ -56,7 +56,9 @@ final case class Runtime(
     notesPane: Option[NotesPane] = None,
     // Never persisted: the paned buffers' indexes as of the last commit (#1864), so the copies made in between reuse
     // them. See `AppState.withBufferIndexesRefreshed`.
-    bufferIndexMemos: BufferIndexMemos = BufferIndexMemos.empty
+    bufferIndexMemos: BufferIndexMemos = BufferIndexMemos.empty,
+    // Never persisted: the notes pane's source headings as of its last retarget (#1848). See `NotesPaneSync`.
+    chapterHeadingMemo: ChapterHeadingMemo = ChapterHeadingMemo.empty
 ):
 
   /** A typed character restarts the quiet window for cursor-adjacent surfaces. */
