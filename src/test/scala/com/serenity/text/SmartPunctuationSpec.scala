@@ -63,6 +63,16 @@ class SmartPunctuationSpec extends AnyFlatSpec with Matchers:
     SmartPunctuation.replacementFor('\'', "don") shouldBe Some((0, "’"))
   }
 
+  it should "turn an opening single quote into an apostrophe once a digit follows it, as in '90s" in {
+    SmartPunctuation.replacementFor('9', "the ‘") shouldBe Some((1, "’9"))
+    SmartPunctuation.replacementFor('0', "‘") shouldBe Some((1, "’0"))
+  }
+
+  it should "leave a digit after anything but an opening single quote unchanged" in {
+    SmartPunctuation.replacementFor('9', "the ") shouldBe None
+    SmartPunctuation.replacementFor('9', "rock’") shouldBe None
+  }
+
   it should "leave characters with no smart-punctuation rule unchanged" in {
     SmartPunctuation.replacementFor('x', "a") shouldBe None
   }

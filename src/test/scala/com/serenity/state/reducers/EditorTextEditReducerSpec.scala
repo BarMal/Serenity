@@ -201,6 +201,12 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
     bufferAfter(InsertChar('"'), before).document.content.collect() shouldBe "hello”"
   }
 
+  it should "give a decade abbreviation an apostrophe, never an opening quote" in {
+    val before = stateWithSmartPunctuation("the ", CursorPosition(0, 4))
+
+    textAfterTyping("'90s", before) shouldBe "the ’90s"
+  }
+
   "NewLine in a Markdown buffer" should "leave chapter headings alone when they're already in sequence" in {
     val before = stateWithMarkdown("# Chapter 1\n\n# Chapter 2\n", CursorPosition(2, 11))
 

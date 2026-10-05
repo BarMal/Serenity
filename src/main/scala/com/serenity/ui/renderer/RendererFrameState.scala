@@ -15,8 +15,10 @@ opaque type ScreenIdentity = AnyRef
 object ScreenIdentity:
   def apply(value: AnyRef): ScreenIdentity = value
 
-/** Where a frame goes: the screen it will be shown on, and the region sink that screen's repaint should honour. */
-final case class FrameOutput(screenToken: ScreenIdentity, repaintRegion: AtomicReference[Option[PixelRect]])
+/** Where a frame goes: the screen it will be shown on, and the region sink that screen's repaint should honour --
+  * `None` for the whole canvas, otherwise the disjoint rects outside which the frame matches what is on screen.
+  */
+final case class FrameOutput(screenToken: ScreenIdentity, repaintRegion: AtomicReference[Option[List[PixelRect]]])
 
 /** The render parameters that shape a frame but are not part of `AppState`, so `DamageProducer` -- which only diffs
   * `AppState` -- has no way to see them change: the window's pixel size, the three fonts, and the metrics/overrides a

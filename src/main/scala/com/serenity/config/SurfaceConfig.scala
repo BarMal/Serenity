@@ -63,6 +63,9 @@ final case class SurfaceConfig(
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     renderDamageGranularity: RenderDamageGranularity = RenderDamageGranularity.Rows,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
+    // Characters per line for the text column in a prose workspace (`ProseMeasure`); `None` leaves the width to the
+    // insets above.
+    proseMeasure: Option[Int] = None,
     viewportSizing: ViewportSizing = ViewportSizing(),
     // Per-cache capacity for RendererFrameState's bounded-LRU caches (issue #1433): a Ref-backed Map can't observe
     // GC reachability the way the WeakHashMap it replaced could, so growth is bounded by recency instead. 64 is a
@@ -94,6 +97,7 @@ final case class SurfaceConfig(
         AppConfig.clampCommandRunnerCursorPeekTapWindowMillis(commandRunnerCursorPeekTapWindowMillis),
       lineNumberLayout = lineNumberLayout.normalized,
       textAreaInsets = textAreaInsets.normalized,
+      proseMeasure = proseMeasure.map(ProseMeasure.clamp),
       viewportSizing = viewportSizing.normalized,
       diagnosticHighlightBlendWeight = AppConfig.clampDiagnosticHighlightBlendWeight(diagnosticHighlightBlendWeight)
     )

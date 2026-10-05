@@ -76,6 +76,47 @@ class MarkdownFormattingSpec extends AnyFlatSpec with Matchers:
     toggled("**[a]** **[b]**", Emphasis.Bold) shouldBe "[a] [b]"
   }
 
+  it should "leave a caret inside an inline code span alone rather than writing delimiters into the code" in {
+    toggled("call `fo|o` now", Emphasis.Bold) shouldBe "call `fo|o` now"
+    toggled("call ``a ` b|c`` now", Emphasis.Italic) shouldBe "call ``a ` b|c`` now"
+  }
+
+  it should "leave a selection that starts or ends inside a code span alone" in {
+    toggled("call `f[oo` no]w", Emphasis.Bold) shouldBe "call `f[oo` no]w"
+  }
+
+  it should "still wrap a selection that takes in a whole code span" in {
+    toggled("call [`foo`] now", Emphasis.Bold) shouldBe "call **[`foo`]** now"
+  }
+
+  it should "leave a fenced code block alone" in {
+    toggled("```\nco|de\n```", Emphasis.Bold) shouldBe "```\nco|de\n```"
+  }
+
+  it should "remove underscore emphasis when toggling it off" in {
+    toggled("say __str|ong__ now", Emphasis.Bold) shouldBe "say str|ong now"
+    toggled("say [__strong__] now", Emphasis.Bold) shouldBe "say [strong] now"
+    toggled("say _e|m_ now", Emphasis.Italic) shouldBe "say e|m now"
+  }
+
+  it should "find emphasis through nested delimiters of the other kind" in {
+    toggled("**_[word]_**", Emphasis.Bold) shouldBe "_[word]_"
+    toggled("**_[word]_**", Emphasis.Italic) shouldBe "**[word]**"
+  }
+
+  it should "not treat underscores inside a word as emphasis" in {
+    toggled("snake_[case]_name", Emphasis.Italic) shouldBe "snake_*[case]*_name"
+  }
+
+  it should "not treat an escaped star as a delimiter" in {
+    toggled("\\*wo|rd\\*", Emphasis.Italic) shouldBe "\\**wo|rd*\\*"
+  }
+
+  it should "wrap the lines of one paragraph as a single span, and remove it the same way" in {
+    toggled("[one\ntwo]", Emphasis.Bold) shouldBe "**[one\ntwo]**"
+    toggled("**[one\ntwo]**", Emphasis.Bold) shouldBe "[one\ntwo]"
+  }
+
   "The active emphasis" should "be what every selection carries" in {
     val (source, ranges) = parse("***[a]*** **[b]**")
     MarkdownFormatting.emphasisAt(source, ranges) shouldBe Set(Emphasis.Bold)

@@ -92,3 +92,41 @@ class SwingWindowCursorRepaintSpec extends AnyFlatSpec with Matchers:
 
     region shouldBe Some(current)
   }
+
+  "cursorRepaint" should "keep a caret far from the base frame's rects as a rect of its own" in {
+    val caretRow  = new Rectangle(0, 48, 400, 16)
+    val statusRow = new Rectangle(0, 624, 960, 16)
+    val caret     = new Rectangle(10, 48, 2, 16)
+
+    SwingWindow.cursorRepaint(Some(List(caretRow, statusRow)), List(caret), List(caret)) shouldBe
+      SwingWindow.CanvasRepaint.Rects(List(caretRow, statusRow))
+  }
+
+  it should "repaint a caret's old and new rows apart when it jumps far" in {
+    val previous = new Rectangle(10, 16, 2, 16)
+    val current  = new Rectangle(10, 400, 2, 16)
+
+    SwingWindow.cursorRepaint(Some(Nil), List(previous), List(current)) shouldBe
+      SwingWindow.CanvasRepaint.Rects(List(previous, current))
+  }
+
+  it should "repaint the whole canvas when the base frame is unbounded" in {
+    SwingWindow.cursorRepaint(None, Nil, List(new Rectangle(10, 10, 2, 16))) shouldBe SwingWindow.CanvasRepaint.Whole
+  }
+
+  "mergedRepaint" should "cover both frames' rects when a second frame lands before the canvas paints" in {
+    val first  = new Rectangle(0, 48, 400, 16)
+    val second = new Rectangle(0, 400, 400, 16)
+
+    SwingWindow.mergedRepaint(
+      SwingWindow.CanvasRepaint.Rects(List(first)),
+      SwingWindow.CanvasRepaint.Rects(List(second))
+    ) shouldBe SwingWindow.CanvasRepaint.Rects(List(first, second))
+  }
+
+  it should "repaint the whole canvas when either frame needs it" in {
+    val rects = SwingWindow.CanvasRepaint.Rects(List(new Rectangle(0, 48, 400, 16)))
+
+    SwingWindow.mergedRepaint(rects, SwingWindow.CanvasRepaint.Whole) shouldBe SwingWindow.CanvasRepaint.Whole
+    SwingWindow.mergedRepaint(SwingWindow.CanvasRepaint.Whole, rects) shouldBe SwingWindow.CanvasRepaint.Whole
+  }

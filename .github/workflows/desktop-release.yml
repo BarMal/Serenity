@@ -1,7 +1,17 @@
 name: Desktop Package Check
 
+# Packaging is built for every master push by Desktop Publish. On pull requests the three-OS jpackage build only runs
+# when something that shapes the package changes; ordinary code is covered by CI and Cross-OS Tests, and building
+# installers on every PR starved the shared runners (jobs cancelled after queueing).
 on:
   pull_request:
+    paths:
+      - build.sbt
+      - project/**
+      - .jvmopts
+      - scripts/**
+      - src/main/resources/icons/**
+      - .github/workflows/desktop-*.yml
   workflow_dispatch:
 
 permissions:

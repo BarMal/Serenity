@@ -30,7 +30,8 @@ object SmartPunctuation:
       case '.' if precedingLineText.endsWith("..")   => Some((2, Ellipsis))
       case '"'  => Some((0, if opensQuote(precedingLineText) then LeftDoubleQuote else RightDoubleQuote))
       case '\'' => Some((0, if opensQuote(precedingLineText) then LeftSingleQuote else RightSingleQuote))
-      case _    => None
+      case digit if digit.isDigit && opensElision(precedingLineText) => Some((1, RightSingleQuote + digit))
+      case _                                                         => None
 
   /** Whether the caret sits inside a Markdown code span, judged by an odd number of backticks before it on its line. */
   def withinInlineCode(precedingLineText: String): Boolean =
@@ -48,6 +49,10 @@ object SmartPunctuation:
     */
   private def opensQuote(precedingLineText: String): Boolean =
     precedingLineText.lastOption.forall(c => c.isWhitespace || isOpeningBracket(c))
+
+  /** An opening quote straight before a digit was an apostrophe eliding a number (`'90s`), not a quotation (#1954). */
+  private def opensElision(precedingLineText: String): Boolean =
+    precedingLineText.endsWith(LeftSingleQuote) && opensQuote(precedingLineText.dropRight(1))
 
   private def isOpeningBracket(c: Char): Boolean =
     c == '(' || c == '[' || c == '{' || c == '—' || c == '–'

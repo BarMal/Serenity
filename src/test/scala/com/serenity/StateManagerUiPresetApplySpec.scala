@@ -264,6 +264,47 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     config.surfaceConfig.showPaneHeaders shouldBe false
   }
 
+  it should "give Writing its prose defaults while keeping the user's own theme" in {
+    val path  = Files.createTempDirectory("state-manager-writing-prose-defaults").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.updateState(state =>
+      state.copy(persisted =
+        state.persisted.copy(
+          config = state.persisted.config
+            .withSmartPunctuation(false)
+            .withSpellCheck(state.persisted.config.languageToolsConfig.spellCheck.copy(enabled = false))
+            .withTypewriterScrolling(false)
+            .withFocusedTextBody(false),
+          theme = Theme.light
+        )
+      )
+    ).unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "apply-writing-preset",
+        "Apply writing preset",
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Writing")),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val state  = sm.getCurrentState.unsafeRunSync()
+    val config = state.persisted.config
+
+    state.persisted.theme.name shouldBe Theme.light.name
+    config.languageToolsConfig.smartPunctuationEnabled shouldBe true
+    config.languageToolsConfig.spellCheck.enabled shouldBe true
+    config.surfaceConfig.typewriterScrollingEnabled shouldBe true
+    config.surfaceConfig.focusedTextBodyEnabled shouldBe true
+    config.surfaceConfig.proseMeasure shouldBe Some(ProseMeasure.Default)
+    config.surfaceConfig.textAreaInsets shouldBe TextAreaInsets()
+    config.statusLine.segments should contain(StatusSegment.WordGoal)
+    config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF
+  }
+
   it should "apply the built-in documentation preset to the active empty buffer" in {
     val path  = Files.createTempDirectory("state-manager-documentation-empty-ui-preset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
