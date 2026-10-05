@@ -2,7 +2,14 @@ package com.serenity.state.manager
 
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, VisualRowCounts, WrappedLineCache}
+import com.serenity.ui.layout.{
+  CellMetrics,
+  LayoutEngine,
+  RichTextContext,
+  TextLayoutSnapshot,
+  VisualRowCounts,
+  WrappedLineCache
+}
 
 /** Java2D/font measurement for cursor-visibility scrolling belongs at the effect boundary, not in a reducer -- a
   * reducer runs mid-edit against content the effect boundary has not seen yet. `adjustForCursor` is the shared
@@ -84,6 +91,7 @@ object CursorViewport:
     val forceCellLayout     = isTui
     val wrapWidthPx         = if isTui then viewport.visibleColumns * CellMetrics.cellUnit.charWidth else gridWidthPx
     val lineText            = buffer.document.content.getLine(cursor.line).getOrElse("")
+    val dropCapsEnabled     = currentState.persisted.config.documentConfig.dropCapsEnabled
     val cursorVisualLine =
       if !wordWrapEnabled then 0
       else
@@ -96,13 +104,24 @@ object CursorViewport:
           cellMetricsOverride = cellMetricsOverride,
           forceCellLayout = forceCellLayout,
           rowAffinity = cursor.rowAffinity,
-          wrapCache = wrapCache
+          wrapCache = wrapCache,
+          bufferLine = cursor.line,
+          richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled)
         )
 
     // Counted the same way `cursorVisualLine` above was measured, or the two disagree.
     val visualRows =
       if !wordWrapEnabled then VisualRowCounts.oneRowPerLine(buffer.document.content.lineCount)
-      else VisualRowCounts.forBuffer(buffer, wrapWidthPx, font, cellMetricsOverride, forceCellLayout, wrapCache)
+      else
+        VisualRowCounts.forBuffer(
+          buffer,
+          wrapWidthPx,
+          font,
+          cellMetricsOverride,
+          forceCellLayout,
+          wrapCache,
+          dropCapsEnabled
+        )
 
     // Desired top: halfVisibleLines rows of context above the cursor's own visual row, counted in visual rows (not
     // logical lines) and carrying the partial offset into whatever line that lands on so the cursor stays centred.
@@ -193,8 +212,17 @@ object CursorViewport:
     val lineCount           = buffer.document.content.lineCount
     val visibleLines        = math.max(1, viewport.visibleLines)
 
+    val dropCapsEnabled = currentState.persisted.config.documentConfig.dropCapsEnabled
     val visualRows =
-      VisualRowCounts.forBuffer(buffer, wrapWidthPx, font, cellMetricsOverride, forceCellLayout, wrapCache)
+      VisualRowCounts.forBuffer(
+        buffer,
+        wrapWidthPx,
+        font,
+        cellMetricsOverride,
+        forceCellLayout,
+        wrapCache,
+        dropCapsEnabled
+      )
 
     val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
     val cursorVisualRowInLine =
@@ -207,7 +235,9 @@ object CursorViewport:
         cellMetricsOverride = cellMetricsOverride,
         forceCellLayout = forceCellLayout,
         rowAffinity = cursor.rowAffinity,
-        wrapCache = wrapCache
+        wrapCache = wrapCache,
+        bufferLine = cursor.line,
+        richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled)
       )
 
     // Multi-column page anchoring (issue #1338, Phase 2 / slice 1): a "page" shows `columnCount` columns side by side,

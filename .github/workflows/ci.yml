@@ -204,7 +204,8 @@ jobs:
       # A baseline from the *previous* run on this same runner type -- not a value committed to the repo, since an
       # absolute millisecond figure only means anything measured on comparable hardware. Restored (never saved) on a
       # pull request, so a PR is compared against master's last recorded numbers without a PR run ever overwriting
-      # them; saved only on a push to master, so the baseline only ever advances from a trusted, merged state.
+      # them; saved only by a master run, so the baseline only ever advances from a trusted, merged state. Auto Squash
+      # Merge merges with the workflow token, whose pushes start no workflows, so it dispatches that master run itself.
       - name: Restore previous benchmark baseline
         id: restore-baseline
         uses: actions/cache/restore@v4
@@ -222,7 +223,7 @@ jobs:
         run: |
           set -euo pipefail
           ARGS=(--threshold 2.0)
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/master" ]; then
+          if [ "${{ github.event_name }}" != "pull_request" ] && [ "${{ github.ref }}" = "refs/heads/master" ]; then
             ARGS+=(--allow-missing-baseline)
           elif [ "${{ matrix.scale }}" != "1" ] && [ "${{ steps.restore-baseline.outputs.cache-matched-key }}" = "" ]; then
             # The 2x baseline only exists once master has run this entry; until then a PR has nothing to compare.
@@ -240,11 +241,11 @@ jobs:
           retention-days: 90
 
       - name: Update benchmark baseline
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
         run: cp perf-results.csv perf-baseline.csv
 
       - name: Save benchmark baseline
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
         uses: actions/cache/save@v4
         with:
           path: perf-baseline.csv
