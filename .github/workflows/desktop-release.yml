@@ -63,6 +63,9 @@ jobs:
           set -euo pipefail
           mkdir -p package-input dist
           cp target/scala-*/Serenity.jar package-input/Serenity.jar
+          # GPL-3.0-or-later requires the licence to travel with every copy (#2019); jpackage copies the whole input
+          # directory into the app image, so these land beside the jar inside the signed bundle on macOS too.
+          cp LICENSE THIRD-PARTY-NOTICES.md package-input/
           APP_ARGS=(
             --type app-image
             --name Serenity
@@ -91,6 +94,12 @@ jobs:
           fi
           cp package-input/Serenity.jar dist/Serenity.jar
           jpackage "${APP_ARGS[@]}"
+          for notice in LICENSE THIRD-PARTY-NOTICES.md; do
+            if [ -z "$(find dist -type f -path "*/app/$notice" -print -quit)" ]; then
+              echo "App image is missing $notice" >&2
+              exit 1
+            fi
+          done
 
       - name: Verify Windows launcher process model
         if: runner.os == 'Windows'
