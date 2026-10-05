@@ -1,22 +1,28 @@
 package com.serenity.session
 
-import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import io.circe.generic.semiauto.deriveEncoder
 import io.circe.{Decoder, Encoder}
 
-/** A durably-recorded description of a session-file/index update still in flight.
+/** A durably-recorded description of a session-file/index update still in flight; see [[SessionWriteJournal]].
   *
-  * `SessionManager` writes one of these (as a single atomic file) before touching the session files or the index it is
-  * about to update. If the process crashes partway through applying the change, the next `SessionManager` operation
-  * finds this file still present and replays it -- reapplying the session-file writes/deletes and the index write it
-  * describes -- before doing anything else. Both the underlying file writes (`AtomicFileWriter`) and the replay itself
-  * are idempotent, so replaying an already-applied or partially-applied transaction is always safe.
+  * `staged` names session files whose new content waits beside them as `<name>.staged`. `writes` carries content
+  * inline, and only markers written before #1912 use it: a crash under an older Serenity must still replay.
   */
 final case class PendingSessionWrite(
-    writes: Map[String, String],
+    writes: Map[String, String] = Map.empty,
     deletes: List[String],
-    indexJson: String
+    indexJson: String,
+    staged: List[String] = Nil
 )
 
 object PendingSessionWrite:
   given Encoder[PendingSessionWrite] = deriveEncoder
-  given Decoder[PendingSessionWrite] = deriveDecoder
+
+  given Decoder[PendingSessionWrite] = Decoder.instance { cursor =>
+    for
+      writes    <- cursor.getOrElse[Map[String, String]]("writes")(Map.empty)
+      deletes   <- cursor.get[List[String]]("deletes")
+      indexJson <- cursor.get[String]("indexJson")
+      staged    <- cursor.getOrElse[List[String]]("staged")(Nil)
+    yield PendingSessionWrite(writes, deletes, indexJson, staged)
+  }

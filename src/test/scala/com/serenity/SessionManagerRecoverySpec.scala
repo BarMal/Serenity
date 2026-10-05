@@ -2,6 +2,7 @@ package com.serenity
 
 import java.nio.file.{Files, Path}
 
+import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
@@ -40,6 +41,25 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
     val bufferId = initial.persisted.bufferOrder.head
     val buffer   = Buffer.fromString(bufferId, text)
     initial.copy(persisted = initial.persisted.copy(buffers = Map(bufferId -> buffer)))
+
+  private def inlineBufferText(sessionJson: String, text: String): String =
+    _root_.io.circe.parser
+      .parse(sessionJson)
+      .map(
+        _.hcursor
+          .downField("buffers")
+          .withFocus(
+            _.mapArray(
+              _.map(
+                _.mapObject(_.remove("contentRef").add("unsavedContent", _root_.io.circe.Json.fromString(text)))
+              )
+            )
+          )
+          .top
+          .getOrElse(_root_.io.circe.Json.Null)
+          .noSpaces
+      )
+      .getOrElse(sessionJson)
 
   private def writeIndex(sessionRoot: Path, index: SessionIndex): Unit =
     Files.writeString(
@@ -119,9 +139,12 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
 
     val program = for
       // A real, well-formed session-file body to reuse as the pending write's content -- what matters
-      // here is that recovery writes it out verbatim, not how a SessionState serializes.
-      _              <- sessionManager.saveSession(stateWithText("first"))
-      recoveredBytes <- IO.blocking(Files.readString(currentSessionFile(sessionRoot)))
+      // here is that recovery writes it out verbatim, not how a SessionState serializes. It carries its text inline,
+      // as a session written before #1912 does, because a content file belongs to the session file it was saved for.
+      _ <- sessionManager.saveSession(stateWithText("first"))
+      recoveredBytes <- IO.blocking(
+        inlineBufferText(Files.readString(currentSessionFile(sessionRoot)), "first")
+      )
       _ <- IO.blocking {
         Files.createDirectories(sessionsDirectory)
         writePending(
@@ -337,4 +360,137 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
       .asScala
       .map(_.getFileName.toString)
       .exists(_.startsWith("session-index.json.corrupt-")) shouldBe true
+  }
+
+  // A non-empty directory where the session file belongs makes the final replace fail, leaving the commit exactly as a
+  // crash between recording the marker and applying it would.
+  private def blockSessionFile(sessionRoot: Path): Unit =
+    Files.createDirectories(currentSessionFile(sessionRoot).resolve("blocker")): Unit
+
+  private def unblockSessionFile(sessionRoot: Path): Unit =
+    Files.delete(currentSessionFile(sessionRoot).resolve("blocker"))
+    Files.delete(currentSessionFile(sessionRoot))
+
+  it should "record a pending marker that names the staged session file rather than embedding its text (#1912)" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-staged-marker")
+    val sessionManager = createManagerAt(sessionRoot)
+    blockSessionFile(sessionRoot)
+
+    val interrupted = sessionManager.saveSession(stateWithText("text only the session file holds")).attempt
+    interrupted.unsafeRunSync().isLeft shouldBe true
+
+    Files.readString(pendingFile(sessionRoot)) should not include "text only the session file holds"
+  }
+
+  it should "finish a staged commit that was interrupted before the session file was replaced (#1912)" in {
+    val sessionRoot = Files.createTempDirectory("session-manager-staged-replay")
+    blockSessionFile(sessionRoot)
+    createManagerAt(sessionRoot).saveSession(stateWithText("staged before the crash")).attempt.unsafeRunSync()
+    unblockSessionFile(sessionRoot)
+
+    val loaded = createManagerAt(sessionRoot).loadSession().unsafeRunSync()
+
+    loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("staged before the crash")
+    Files.exists(pendingFile(sessionRoot)) shouldBe false
+  }
+
+  it should "write session files as compact JSON (#1912)" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-compact")
+    val sessionManager = createManagerAt(sessionRoot)
+
+    sessionManager.saveSession(stateWithText("compact")).unsafeRunSync()
+
+    Files.readString(currentSessionFile(sessionRoot)) should not include "\n"
+    Files.readString(sessionRoot.resolve("session-index.json")) should not include "\n"
+  }
+
+  it should "keep the index in memory instead of re-reading it on every save (#1912)" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-index-cache")
+    val sessionManager = createManagerAt(sessionRoot)
+    val indexFile      = sessionRoot.resolve("session-index.json")
+    sessionManager.saveSessionAs("Named", stateWithText("named")).unsafeRunSync()
+    sessionManager.saveSession(stateWithText("current")).unsafeRunSync()
+
+    // Same length, same inode, modification time put back: only reading the index could notice.
+    val modified = Files.getLastModifiedTime(indexFile)
+    Files.writeString(indexFile, "x" * Files.size(indexFile).toInt)
+    Files.setLastModifiedTime(indexFile, modified)
+    sessionManager.saveSession(stateWithText("current again")).unsafeRunSync()
+
+    sessionManager.listSessions().unsafeRunSync().map(_.displayName) should contain("Named")
+    Files.list(sessionRoot).iterator().asScala.exists(_.getFileName.toString.contains(".corrupt-")) shouldBe false
+  }
+
+  private def stateWithTexts(first: String, second: String): AppState =
+    val initial = stateWithText(first)
+    val firstId = initial.persisted.bufferOrder.head
+    val otherId = BufferId(firstId.value + 1)
+    initial.copy(persisted =
+      initial.persisted.copy(
+        buffers = initial.persisted.buffers + (otherId -> Buffer.fromString(otherId, second)),
+        bufferOrder = initial.persisted.bufferOrder :+ otherId
+      )
+    )
+
+  private def contentFiles(sessionRoot: Path): Map[String, java.nio.file.attribute.FileTime] =
+    val directory = sessionRoot.resolve("sessions").resolve("session.content")
+    if !Files.isDirectory(directory) then Map.empty
+    else
+      val listing = Files.list(directory)
+      try
+        listing.iterator().asScala.map(path => path.getFileName.toString -> Files.getLastModifiedTime(path)).toMap
+      finally listing.close()
+
+  it should "keep buffer text out of the session file and restore it from per-buffer content files (#1912)" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-content-files")
+    val sessionManager = createManagerAt(sessionRoot)
+
+    sessionManager.saveSession(stateWithTexts("first buffer text", "second buffer text")).unsafeRunSync()
+
+    Files.readString(currentSessionFile(sessionRoot)) should not include "buffer text"
+    contentFiles(sessionRoot).size shouldBe 2
+    val loaded = createManagerAt(sessionRoot).loadSession().unsafeRunSync().value
+    loaded.persisted.buffers.values.map(_.document.content.toString).toSet shouldBe
+      Set("first buffer text", "second buffer text")
+  }
+
+  it should "rewrite only the content file of the buffer that changed (#1912)" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-one-changed")
+    val sessionManager = createManagerAt(sessionRoot)
+    sessionManager.saveSession(stateWithTexts("unchanged text", "text before the edit")).unsafeRunSync()
+    val before = contentFiles(sessionRoot)
+    IO.sleep(50.millis).unsafeRunSync()
+
+    sessionManager.saveSession(stateWithTexts("unchanged text", "text after the edit")).unsafeRunSync()
+
+    val after   = contentFiles(sessionRoot)
+    val kept    = before.keySet.intersect(after.keySet)
+    val written = after.keySet -- before.keySet
+    kept.size shouldBe 1
+    kept.foreach(name => after(name) shouldBe before(name))
+    written.size shouldBe 1
+    (before.keySet -- after.keySet).size shouldBe 1
+  }
+
+  it should "remove a deleted session's content files (#1912)" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-content-delete")
+    val sessionManager = createManagerAt(sessionRoot)
+    sessionManager.saveSession(stateWithTexts("one", "two")).unsafeRunSync()
+
+    sessionManager.clearSession().unsafeRunSync()
+
+    Files.exists(sessionRoot.resolve("sessions").resolve("session.content")) shouldBe false
+  }
+
+  it should "restore a buffer without its text when the content file is missing instead of failing the session (#1912)" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-content-missing")
+    val sessionManager = createManagerAt(sessionRoot)
+    sessionManager.saveSession(stateWithTexts("one", "two")).unsafeRunSync()
+    contentFiles(sessionRoot).keys.foreach(name =>
+      Files.delete(sessionRoot.resolve("sessions").resolve("session.content").resolve(name))
+    )
+
+    val loaded = createManagerAt(sessionRoot).loadSession().unsafeRunSync()
+
+    loaded.map(_.persisted.buffers.size) shouldBe Some(2)
   }

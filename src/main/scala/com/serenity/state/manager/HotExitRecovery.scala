@@ -22,7 +22,7 @@ object HotExitRecovery:
   def offer(restored: Buffer, disk: Buffer): Option[RecoveryOffer] =
     Option.when(holdsBackup(restored) && disk.document.content.collect() != restored.document.content.collect()) {
       val fileChangedSince =
-        restored.document.revision.exists(recorded => disk.document.revision.exists(_ != recorded))
+        restored.document.revision.exists(recorded => disk.document.revision.exists(!_.sameContent(recorded)))
       RecoveryOffer(restored.id, label(restored), fileChangedSince)
     }
 

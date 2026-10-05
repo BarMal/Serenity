@@ -137,9 +137,12 @@ private[manager] object EffectResult:
       case FileSaved(save, saved) => FileResults.saved(state, save, saved)
       case FileReloaded(bufferId, path, contentAtRequest, disk) =>
         FileResults.reloaded(state, bufferId, path, contentAtRequest, disk)
-      case FileReopenFailed(bufferId, encoding)        => ReopenWithEncoding.withFailureShown(state, bufferId, encoding)
-      case FileLoaded(path, loaded)                    => FileResults.loaded(state, path, loaded)
-      case FileSaveFailed(_, _) | FileLoadFailed(_, _) => state
+      case FileReopenFailed(bufferId, encoding) => ReopenWithEncoding.withFailureShown(state, bufferId, encoding)
+      case FileLoaded(path, loaded)             => FileResults.loaded(state, path, loaded)
+      // A failed save changes nothing: the buffer stays dirty. Its error is not lost here -- it travels in the result
+      // to `commitSave`, which hands it to the submitter's `onFailure` or raises it to the caller that awaited the save.
+      case FileSaveFailed(_, _) => state
+      case FileLoadFailed(_, _) => state
 
       case UiPresetFeedback(previews, context) =>
         UiPresetTransitions.withFeedback(state, previews, context)

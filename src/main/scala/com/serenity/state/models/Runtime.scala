@@ -16,6 +16,9 @@ final case class Runtime(
     nextPaneId: PaneId = PaneId(0),
     nextSurfaceId: SurfaceIdSupply = SurfaceIdSupply.initial,
     clipboard: Option[String] = None,
+    // Never persisted: recent copies for Paste from History. Its newest entry also says whether `clipboard` still holds
+    // a whole-line copy, which pastes above the caret line (#1962).
+    clipboardHistory: ClipboardHistory = ClipboardHistory.empty,
     focusHistory: List[Focus] = List.empty,
     navigation: NavigationHistory = NavigationHistory(),
     typingActivity: TypingActivity = TypingActivity.idle,

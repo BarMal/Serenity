@@ -55,9 +55,9 @@ object FileManagerError:
   final case class NotReadableAs(path: Path, encoding: TextEncoding)
       extends FileManagerError(s"Can't read $path as ${encoding.configKey}")
 
-class FileManager(using balance: Balance):
+class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
 
-  private val storage: DocumentStorageProvider = LocalDocumentStorageProvider()
+  def this()(using balance: Balance) = this(LocalDocumentStorageProvider())
 
   def loadFile(path: Path, bufferId: BufferId): IO[Buffer] =
     val location = StorageLocation.Local(path)
@@ -165,6 +165,16 @@ class FileManager(using balance: Balance):
     */
   def currentRevision(path: Path): IO[Option[DocumentRevision]] =
     storage.open(StorageLocation.Local(path)).map(_.toOption.flatMap(_.revision))
+
+  /** `known` itself while the file's stat still matches it, so an unchanged file costs a stat rather than a read;
+    * otherwise [[currentRevision]].
+    */
+  def revisionSince(path: Path, known: Option[DocumentRevision]): IO[Option[DocumentRevision]] =
+    storage.stat(StorageLocation.Local(path)).flatMap {
+      case Right(stamp) if known.exists(_.vouchesFor(stamp)) => IO.pure(known)
+      case Right(_)                                          => currentRevision(path)
+      case Left(_)                                           => IO.none
+    }
 
   /** Editor content is LF-only, because `Rope` normalised it on the way in. A file that arrived with CRLF is written
     * back with CRLF, and in the encoding and BOM it arrived with, so an ordinary save does not rewrite every line of

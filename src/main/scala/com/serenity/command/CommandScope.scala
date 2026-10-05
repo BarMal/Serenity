@@ -78,7 +78,8 @@ object CommandScope:
       case EditIntent.FormatCurrentFile => CommandFamily.Code
       case EditIntent.FindInCurrentFile | EditIntent.FindAllInCurrentFile | EditIntent.ReplaceInCurrentFile |
           EditIntent.ReplaceAllInCurrentFile | EditIntent.Copy | EditIntent.Cut | EditIntent.Paste |
-          EditIntent.SelectAll | EditIntent.Undo | EditIntent.Redo =>
+          EditIntent.ChoosePasteFromHistory | EditIntent.PasteFromHistory(_) | EditIntent.SelectAll | EditIntent.Undo |
+          EditIntent.Redo =>
         CommandFamily.Core
 
   /** A panel command is offered where its panel is (the panel's registration); hiding one never is refused, so a panel
