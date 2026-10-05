@@ -1,7 +1,7 @@
 package com.serenity.perf
 
 import com.serenity.config.AppConfigOps.*
-import com.serenity.config.RenderDamageGranularity
+import com.serenity.config.{RenderDamageGranularity, StatusLinePlacement}
 import com.serenity.keystroke.events.{InsertChar, MoveDown, MoveRight, ScrollDown}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.perf.BenchmarkFixtures.{
@@ -133,21 +133,26 @@ private[perf] object DamageBenchmarks:
       )
     )
 
-  /** #1891: the screen area a caret move publishes. `None` from the renderer means the whole canvas; anything else must
-    * be a strictly smaller rect.
+  /** #1891: the screen area a caret move publishes, with no status row and with the pinned one that shows the caret's
+    * position. `None` from the renderer means the whole canvas; anything else must be strictly smaller. The verify step
+    * prints the share of the canvas the published rects cover.
     */
-  private def caretMoveRepaint(): BenchmarkRunner.Benchmark =
+  private def caretMoveRepaint(name: String, placement: StatusLinePlacement): BenchmarkRunner.Benchmark =
     val font     = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
     val metrics  = CellMetrics.fromFont(font)
     val viewport = BenchmarkFixtures.viewportSize
-    val before   = editorState(largeMultilineDocument(lines = 200), Some(LanguageId.Scala))
-    val after    = EditorEventReducer.reduce(MoveRight, PaneId(0), before).state
-    val damage   = DamageProducer.forTransition(before, after)
-    def repaintAfterCaretMove(): Option[PixelRect] =
+    val fixture  = editorState(largeMultilineDocument(lines = 200), Some(LanguageId.Scala))
+    val before =
+      fixture.copy(persisted =
+        fixture.persisted.copy(config = fixture.persisted.config.withStatusLinePlacement(placement))
+      )
+    val after  = EditorEventReducer.reduce(MoveRight, PaneId(0), before).state
+    val damage = DamageProducer.forTransition(before, after)
+    def repaintAfterCaretMove(): Option[List[PixelRect]] =
       val surface = MockRenderSurface(viewport.width, viewport.height, persistentContent = true)
       val caches  = RenderCaches.create()
       def frame(state: AppState, frameDamage: Damage) =
-        RendererEntryPoints.renderWithRepaintRegion(
+        RendererEntryPoints.renderWithRepaintRects(
           state,
           cursorVisible = false,
           surface,
@@ -166,9 +171,13 @@ private[perf] object DamageBenchmarks:
     val canvasAreaPx = viewport.width * metrics.charWidth * viewport.height * metrics.lineHeight
     def verifySmallerThanCanvas(): Unit =
       val region = repaintAfterCaretMove()
-      assert(region.exists(rect => rect.widthPx * rect.heightPx < canvasAreaPx), s"repaint region $region")
+      val areaPx = region.map(_.map(rect => rect.widthPx * rect.heightPx).sum)
+      assert(areaPx.exists(_ < canvasAreaPx), s"repaint region $region")
+      areaPx.foreach { area =>
+        println(f"$name: ${100.0 * area / canvasAreaPx}%.1f%% of the canvas in ${region.fold(0)(_.size)} rects")
+      }
     BenchmarkRunner.Benchmark(
-      "damage.caret_move.repaint_region",
+      name,
       3,
       BenchmarkIterationCounts.Damage,
       () => verifySmallerThanCanvas(),
@@ -223,6 +232,7 @@ private[perf] object DamageBenchmarks:
       // Whatever the move does to the viewport, no fact may list the 100k lines one by one (#1891).
       verifyRows = damage => assert(Damage.coarsenToRows(BufferId(1), damage).size <= 2, damage.toString.take(200)),
       verifyCells = damage => assert(Damage.coarsenToRows(BufferId(1), damage).size <= 2, damage.toString.take(200))
-    ) :+ caretMoveRepaint()
+    ) :+ caretMoveRepaint("damage.caret_move.repaint_region", StatusLinePlacement.Off) :+
+      caretMoveRepaint("damage.caret_move.repaint_region.pinned_status", StatusLinePlacement.Pinned)
 
 end DamageBenchmarks

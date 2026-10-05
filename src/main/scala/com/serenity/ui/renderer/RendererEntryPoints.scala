@@ -69,13 +69,13 @@ object RendererEntryPoints:
     damage: Damage = Damage.Everything,
     caches: RenderCaches = RenderCaches.create()
   ): Unit =
-    // Set while the frame is drawn, read when it is flushed: None asks for a whole-canvas repaint, Some(rect) for a
-    // repaint bounded to the pane rows this frame actually changed.
-    val repaintRegion = new AtomicReference[Option[PixelRect]](None)
+    // Set while the frame is drawn, read when it is flushed: None asks for a whole-canvas repaint, Some(rects) for a
+    // repaint bounded to the rects this frame actually changed.
+    val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
     val output        = Some(FrameOutput(ScreenIdentity(swingWin.canvas), repaintRegion))
     val publishFrame: java.awt.image.BufferedImage => Unit =
       if repaintOnFlush then
-        image => swingWin.onImageReady(image, repaintRegion.get().map(RendererFrameState.toAwtRectangle))
+        image => swingWin.onImageReady(image, repaintRegion.get().map(_.map(RendererFrameState.toAwtRectangle)))
       else swingWin.onBaseImageReady
     val surface = Java2DRenderSurface.forFrame(
       swingWin.metrics,
@@ -210,7 +210,7 @@ object RendererEntryPoints:
     damage: Damage,
     caches: RenderCaches
   ): Unit =
-    val _ = renderWithRepaintRegion(
+    val _ = renderWithRepaintRects(
       state,
       cursorVisible,
       surface,
@@ -225,12 +225,12 @@ object RendererEntryPoints:
       caches
     )
 
-  /** Render one frame and report which part of the canvas it changed.
+  /** Render one frame and report which parts of the canvas it changed.
     *
-    * `None` means the whole canvas has to be repainted. `Some(rect)` means everything outside `rect` is already correct
-    * on screen; an empty rect means the frame is pixel-identical to the one on screen.
+    * `None` means the whole canvas has to be repainted. `Some(rects)` means everything outside those disjoint rects is
+    * already correct on screen; no rects means the frame is pixel-identical to the one on screen.
     */
-  private[serenity] def renderWithRepaintRegion(
+  private[serenity] def renderWithRepaintRects(
     state: AppState,
     cursorVisible: Boolean,
     surface: RenderSurface,
@@ -243,8 +243,8 @@ object RendererEntryPoints:
     cursorColor: Option[RenderColor],
     damage: Damage = Damage.Everything,
     caches: RenderCaches = RenderCaches.create()
-  ): Option[PixelRect] =
-    val repaintRegion = new AtomicReference[Option[PixelRect]](None)
+  ): Option[List[PixelRect]] =
+    val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
     val output        = Some(FrameOutput(ScreenIdentity(surface), repaintRegion))
     // #1105/#1215: see the surface-generic renderCursorOnly in RendererCursorOverlay for why this is scoped to a
     // surface with no real FontRenderContext.
@@ -273,6 +273,36 @@ object RendererEntryPoints:
         )
     }
     repaintRegion.get()
+
+  /** As [[renderWithRepaintRects]], reporting the bounds of the changed rects: an empty rect when nothing changed. */
+  private[serenity] def renderWithRepaintRegion(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    codeFont: FontSpec,
+    textFont: FontSpec,
+    uiFont: FontSpec,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics,
+    cursorColor: Option[RenderColor],
+    damage: Damage = Damage.Everything,
+    caches: RenderCaches = RenderCaches.create()
+  ): Option[PixelRect] =
+    renderWithRepaintRects(
+      state,
+      cursorVisible,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      uiFont,
+      cellMetrics,
+      uiMetrics,
+      cursorColor,
+      damage,
+      caches
+    ).map(rects => PixelRect.unionOf(rects).getOrElse(PixelRect(0, 0, 0, 0)))
 
   /** Report the pixel rects the visible cursors in `state` would be painted at, without needing a real `SwingWindow`.
     * Exposed for testing #963's bounded-repaint region: `onCursorOverlayReady` unions this same geometry (from both the
