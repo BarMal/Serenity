@@ -1,5 +1,7 @@
 package com.serenity.markdown
 
+import scala.annotation.tailrec
+
 import com.serenity.rope.Rope
 
 /** Inline formatting Markdown can spell. Underline has no Markdown syntax, so it uses the HTML tag a `.md` save already
@@ -25,24 +27,31 @@ final case class SourceEdit(start: Int, end: Int, text: String)
 final case class Reformatted(edits: List[SourceEdit], ranges: List[SourceRange])
 
 /** Formatting a Markdown file by editing its source: wrapping words in `**`, `*` or `<u>`, and setting a line's `#`
-  * prefix. Emphasis is line-local in Markdown, so a selection spanning lines is formatted a line at a time.
+  * prefix. A selection's lines that run on within one paragraph are wrapped as one span; lines in different paragraphs,
+  * list items or other blocks are wrapped one at a time, since emphasis cannot cross them. Code spans and fenced blocks
+  * are left alone (#1943): a delimiter there is literal text, not formatting.
   */
 object MarkdownFormatting:
 
   /** Adds `emphasis` to every selection, or removes it when every selection already has it -- the same toggle rule as
-    * rich text. A caret acts on the word it is in, or opens an empty pair when it is in no word.
+    * rich text. A caret acts on the word it is in, or opens an empty pair when it is in no word. Emphasis already
+    * spelled with `_` or `__` counts, and is what gets removed.
     */
   def toggle(source: Rope, ranges: List[SourceRange], emphasis: Emphasis): Reformatted =
-    val segments = ranges.flatMap(segmentsOf(source, _)).map(absorbInnerMarkers(_, emphasis))
+    val fences   = MarkdownBlockLens.fenceRangeIndex(source.lineCount, source.getLine)
+    val fenced   = (line: Int) => fences.rangeAt(line).isDefined
+    val segments = ranges.flatMap(segmentsOf(source, _, fenced)).map(absorbInnerMarkers(_, emphasis))
     val removing = segments.nonEmpty && segments.forall(isMarked(_, emphasis))
     val edits =
       if removing then segments.flatMap(unmarking(_, emphasis))
       else segments.filterNot(isMarked(_, emphasis)).flatMap(marking(_, emphasis))
     reformatted(edits, ranges)
 
-  /** The emphasis every selection carries. */
+  /** The emphasis every selection carries. Fenced blocks are not looked for here: finding them scans the whole
+    * document, and the toolbar asks on every frame.
+    */
   def emphasisAt(source: Rope, ranges: List[SourceRange]): Set[Emphasis] =
-    val segments = ranges.flatMap(segmentsOf(source, _))
+    val segments = ranges.flatMap(segmentsOf(source, _, _ => false))
     Emphasis.values.toSet.filter(emphasis =>
       segments.nonEmpty && segments.map(absorbInnerMarkers(_, emphasis)).forall(isMarked(_, emphasis))
     )
@@ -79,39 +88,148 @@ object MarkdownFormatting:
     */
   final private case class Edit(start: Int, end: Int, text: String, landing: Int)
 
-  /** One line's share of a range, already trimmed of surrounding whitespace, with the line it sits on. */
-  final private case class Segment(line: String, lineStart: Int, from: Int, to: Int):
-    def before(length: Int): String = line.substring((from - length).max(0), from)
-    def after(length: Int): String  = line.substring(to, (to + length).min(line.length))
-    def inner: String               = line.substring(from, to)
-    def starsBefore: Int            = line.substring(0, from).reverseIterator.takeWhile(_ == '*').size
-    def starsAfter: Int             = line.substring(to).iterator.takeWhile(_ == '*').size
+  /** One block's share of a range, trimmed of surrounding whitespace. `text` is the source of the lines it sits on,
+    * starting at `textStart`; `from` and `to` index into it.
+    */
+  final private case class Segment(text: String, textStart: Int, from: Int, to: Int):
+    def before(length: Int): String = text.substring((from - length).max(0), from)
+    def after(length: Int): String  = text.substring(to, (to + length).min(text.length))
+    def inner: String               = text.substring(from, to)
 
-  private def segmentsOf(source: Rope, range: SourceRange): List[Segment] =
+  /** A matched pair of emphasis delimiter runs around a segment, `depth` characters out from it -- `**` on each side is
+    * one ring of width two.
+    */
+  final private case class Ring(delimiter: Char, width: Int, depth: Int)
+
+  private def segmentsOf(source: Rope, range: SourceRange, fenced: Int => Boolean): List[Segment] =
     val (startLine, startColumn) = source.offsetToLineColumn(range.start)
-    val (endLine, endColumn)     = source.offsetToLineColumn(range.end)
-    if range.isEmpty then
-      source.getLine(startLine).toList.map { line =>
-        val lineStart = source.lineColumnToOffset(startLine, 0)
-        val from      = Iterator.iterate(startColumn)(_ - 1).find(i => i == 0 || !isWordChar(line(i - 1))).getOrElse(0)
-        val to = Iterator.iterate(startColumn)(_ + 1).find(i => i == line.length || !isWordChar(line(i))).getOrElse(0)
-        Segment(line, lineStart, from, to)
+    val (endLine, _)             = source.offsetToLineColumn(range.end)
+    val segments =
+      if range.isEmpty then
+        if fenced(startLine) then Nil
+        else
+          source.getLine(startLine).toList.map { line =>
+            val from = Iterator.iterate(startColumn)(_ - 1).find(i => i == 0 || !isWordChar(line(i - 1))).getOrElse(0)
+            val to =
+              Iterator.iterate(startColumn)(_ + 1).find(i => i == line.length || !isWordChar(line(i))).getOrElse(0)
+            Segment(line, source.lineColumnToOffset(startLine, 0), from, to)
+          }
+      else paragraphRuns(source, startLine, endLine, fenced).flatMap(selectedSegment(source, range, _))
+    segments.filterNot(insideCode)
+
+  /** The selected lines outside fences, grouped into runs one emphasis span can cover: consecutive paragraph lines. */
+  private def paragraphRuns(source: Rope, startLine: Int, endLine: Int, fenced: Int => Boolean): List[(Int, Int)] =
+    (startLine to endLine).toList
+      .filterNot(fenced)
+      .flatMap(index => source.getLine(index).map(index -> _))
+      .foldLeft(List.empty[(Int, Int, String)]) {
+        case ((first, last, lastText) :: done, (index, text))
+            if index == last + 1 && continuesParagraph(lastText, text) =>
+          (first, index, text) :: done
+        case (done, (index, text)) => (index, index, text) :: done
       }
-    else
-      (startLine to endLine).toList.flatMap { lineIndex =>
-        source.getLine(lineIndex).flatMap { line =>
-          val from        = if lineIndex == startLine then startColumn else 0
-          val to          = if lineIndex == endLine then endColumn.min(line.length) else line.length
-          val trimmedFrom = Iterator.iterate(from)(_ + 1).find(i => i >= to || !line(i).isWhitespace).getOrElse(to)
-          val trimmedTo =
-            Iterator.iterate(to)(_ - 1).find(i => i <= trimmedFrom || !line(i - 1).isWhitespace).getOrElse(trimmedFrom)
-          Option.when(trimmedFrom < trimmedTo)(
-            Segment(line, source.lineColumnToOffset(lineIndex, 0), trimmedFrom, trimmedTo)
-          )
-        }
-      }
+      .reverse
+      .map(run => (run._1, run._2))
+
+  private def continuesParagraph(previous: String, next: String): Boolean =
+    MarkdownBlockLens.isParagraphLine(previous) && MarkdownBlockLens.isParagraphLine(next)
+
+  private def selectedSegment(source: Rope, range: SourceRange, run: (Int, Int)): Option[Segment] =
+    val (firstLine, lastLine) = run
+    val textStart             = source.lineColumnToOffset(firstLine, 0)
+    val textEnd = source.lineColumnToOffset(lastLine, 0) + source.getLine(lastLine).fold(0)(_.length)
+    val text    = source.sliceString(textStart, textEnd)
+    val from    = (range.start - textStart).max(0)
+    val to      = (range.end - textStart).min(text.length)
+    val trimmedFrom = Iterator.iterate(from)(_ + 1).find(i => i >= to || !text(i).isWhitespace).getOrElse(to)
+    val trimmedTo =
+      Iterator.iterate(to)(_ - 1).find(i => i <= trimmedFrom || !text(i - 1).isWhitespace).getOrElse(trimmedFrom)
+    Option.when(trimmedFrom < trimmedTo)(Segment(text, textStart, trimmedFrom, trimmedTo))
 
   private def isWordChar(char: Char): Boolean = char.isLetterOrDigit || char == '_'
+
+  private def isDelimiter(char: Char): Boolean = char == '*' || char == '_'
+
+  /** A delimiter at either end of the segment would land inside a code span, where it is literal text. */
+  private def insideCode(segment: Segment): Boolean =
+    codeSpans(segment.text).exists((start, end) =>
+      (start < segment.from && segment.from < end) || (start < segment.to && segment.to < end)
+    )
+
+  /** `[start, end)` of each inline code span in `text`, backticks included: a run of backticks up to the next run of
+    * the same length. Outside a span, a backslash escapes the character after it.
+    */
+  private def codeSpans(text: String): List[(Int, Int)] =
+    @tailrec
+    def scan(index: Int, found: List[(Int, Int)]): List[(Int, Int)] =
+      if index >= text.length then found.reverse
+      else if text(index) == '\\' then scan(index + 2, found)
+      else if text(index) != '`' then scan(index + 1, found)
+      else
+        val run = runLength(text, index)
+        closingRun(text, index + run, run) match
+          case Some(close) => scan(close + run, (index, close + run) :: found)
+          case None        => scan(index + run, found)
+    scan(0, Nil)
+
+  @tailrec
+  private def closingRun(text: String, from: Int, length: Int): Option[Int] =
+    val next = text.indexOf('`', from)
+    if next < 0 then None
+    else
+      val run = runLength(text, next)
+      if run == length then Some(next) else closingRun(text, next + run, length)
+
+  private def runLength(text: String, from: Int): Int =
+    val stop = text.indexWhere(_ != text(from), from)
+    (if stop < 0 then text.length else stop) - from
+
+  private def charAt(text: String, index: Int): Option[Char] =
+    Option.when(index >= 0 && index < text.length)(text(index))
+
+  /** Preceded by an odd number of backslashes. */
+  private def escaped(text: String, index: Int): Boolean =
+    Iterator.iterate(index - 1)(_ - 1).takeWhile(i => i >= 0 && text(i) == '\\').size % 2 == 1
+
+  /** The unescaped delimiter run ending at `end`, as its character and length. */
+  private def runBefore(text: String, end: Int): Option[(Char, Int)] =
+    charAt(text, end - 1).filter(isDelimiter).flatMap { delimiter =>
+      val run       = Iterator.iterate(end - 1)(_ - 1).takeWhile(i => i >= 0 && text(i) == delimiter).size
+      val unescaped = if escaped(text, end - run) then run - 1 else run
+      Option.when(unescaped > 0)(delimiter -> unescaped)
+    }
+
+  /** The unescaped delimiter run starting at `start`, as its character and length. */
+  private def runAfter(text: String, start: Int): Option[(Char, Int)] =
+    charAt(text, start).filter(char => isDelimiter(char) && !escaped(text, start)).map { delimiter =>
+      delimiter -> runLength(text, start)
+    }
+
+  /** Every ring of delimiters around the segment, innermost first. An underscore run inside a word (`snake_case`) is
+    * not emphasis in Markdown, so it ends the search.
+    */
+  private def rings(segment: Segment): List[Ring] =
+    @tailrec
+    def outward(depth: Int, found: List[Ring]): List[Ring] =
+      (runBefore(segment.text, segment.from - depth), runAfter(segment.text, segment.to + depth)) match
+        case (Some((open, openWidth)), Some((close, closeWidth)))
+            if open == close && !(open == '_' && intraword(segment, depth, openWidth, closeWidth)) =>
+          val width = openWidth.min(closeWidth)
+          outward(depth + width, Ring(open, width, depth) :: found)
+        case _ => found.reverse
+    outward(0, Nil)
+
+  private def intraword(segment: Segment, depth: Int, openWidth: Int, closeWidth: Int): Boolean =
+    charAt(segment.text, segment.from - depth - openWidth - 1).exists(_.isLetterOrDigit) ||
+      charAt(segment.text, segment.to + depth + closeWidth).exists(_.isLetterOrDigit)
+
+  /** The innermost ring that gives the segment `emphasis`: a run of two is bold, one italic, three both. */
+  private def carrier(segment: Segment, emphasis: Emphasis): Option[Ring] =
+    rings(segment).find(ring =>
+      emphasis match
+        case Emphasis.Bold => ring.width >= 2
+        case _             => ring.width == 1 || ring.width >= 3
+    )
 
   /** A selection that takes in its own markers -- `[**word**]` -- is treated as the marked word inside them. */
   private def absorbInnerMarkers(segment: Segment, emphasis: Emphasis): Segment =
@@ -122,25 +240,25 @@ object MarkdownFormatting:
           segment.copy(from = segment.from + 3, to = segment.to - 4)
         else segment
       case Emphasis.Bold | Emphasis.Italic =>
-        if segment.starsBefore > 0 || segment.starsAfter > 0 then segment
+        if rings(segment).nonEmpty then segment
         else
-          val inner    = segment.inner
-          val leading  = inner.takeWhile(_ == '*').length
-          val trailing = inner.reverse.takeWhile(_ == '*').length
-          val stars    = leading.min(trailing).min((inner.length - 1) / 2)
-          segment.copy(from = segment.from + stars, to = segment.to - stars)
+          val inner = segment.inner
+          inner.headOption.filter(isDelimiter).fold(segment) { delimiter =>
+            val leading  = inner.takeWhile(_ == delimiter).length
+            val trailing = inner.reverse.takeWhile(_ == delimiter).length
+            val width    = leading.min(trailing).min((inner.length - 1) / 2)
+            val absorbed = segment.copy(from = segment.from + width, to = segment.to - width)
+            if width > 0 && rings(absorbed).nonEmpty then absorbed else segment
+          }
 
-  /** Stars are shared between bold and italic: a run of two is bold, one is italic, three is both. */
   private def isMarked(segment: Segment, emphasis: Emphasis): Boolean =
-    val stars = segment.starsBefore.min(segment.starsAfter)
     emphasis match
-      case Emphasis.Bold      => stars >= 2
-      case Emphasis.Italic    => stars == 1 || stars >= 3
-      case Emphasis.Underline => segment.before(3) == "<u>" && segment.after(4) == "</u>"
+      case Emphasis.Underline              => segment.before(3) == "<u>" && segment.after(4) == "</u>"
+      case Emphasis.Bold | Emphasis.Italic => carrier(segment, emphasis).isDefined
 
   private def marking(segment: Segment, emphasis: Emphasis): List[Edit] =
-    val start = segment.lineStart + segment.from
-    val end   = segment.lineStart + segment.to
+    val start = segment.textStart + segment.from
+    val end   = segment.textStart + segment.to
     if start == end then List(Edit(start, start, emphasis.open + emphasis.close, landing = emphasis.open.length))
     else
       List(
@@ -148,13 +266,19 @@ object MarkdownFormatting:
         Edit(end, end, emphasis.close, landing = 0)
       )
 
+  /** Removes the delimiters that carry `emphasis`, wherever they sit among the rings around the segment. */
   private def unmarking(segment: Segment, emphasis: Emphasis): List[Edit] =
-    val start = segment.lineStart + segment.from
-    val end   = segment.lineStart + segment.to
-    List(
-      Edit(start - emphasis.open.length, start, "", landing = 0),
-      Edit(end, end + emphasis.close.length, "", landing = 0)
-    )
+    val start = segment.textStart + segment.from
+    val end   = segment.textStart + segment.to
+    val depth = emphasis match
+      case Emphasis.Underline              => Some(0)
+      case Emphasis.Bold | Emphasis.Italic => carrier(segment, emphasis).map(_.depth)
+    depth.toList.flatMap { out =>
+      List(
+        Edit(start - out - emphasis.open.length, start - out, "", landing = 0),
+        Edit(end + out, end + out + emphasis.close.length, "", landing = 0)
+      )
+    }
 
   private def headingLines(source: Rope, range: SourceRange): List[Int] =
     val (startLine, _)       = source.offsetToLineColumn(range.start)
