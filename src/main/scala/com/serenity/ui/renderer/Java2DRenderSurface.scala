@@ -6,6 +6,7 @@ import java.awt.geom.Rectangle2D
 import java.awt.image.*
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.theme.TextStyle
 

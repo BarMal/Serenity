@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect, TextLayoutSnapshot}
 import com.serenity.ui.renderer.{
   Effects,
@@ -12,7 +13,6 @@ import com.serenity.ui.renderer.{
   HardwareCursor,
   PanelOutlineDrawing,
   PixelDrawing,
-  RenderColor,
   RenderImage,
   RenderSurface,
   SurfaceContentIdentity,

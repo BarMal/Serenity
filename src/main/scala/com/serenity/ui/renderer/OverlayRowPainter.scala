@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.Color
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.ColorFormat.withAlpha
 import com.serenity.ui.theme.Theme

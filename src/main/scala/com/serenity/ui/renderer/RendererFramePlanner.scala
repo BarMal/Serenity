@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** What a frame decided to reuse: the rows it still has to draw per pane and the pixel bands it kept. */

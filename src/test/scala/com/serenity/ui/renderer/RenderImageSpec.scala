@@ -4,6 +4,7 @@ import java.awt.Color
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

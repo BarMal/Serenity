@@ -5,8 +5,9 @@ import java.awt.{Color, Font}
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JPanel
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.{Java2DRenderSurface, RenderColor, RenderImage}
+import com.serenity.ui.renderer.{Java2DRenderSurface, RenderImage}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

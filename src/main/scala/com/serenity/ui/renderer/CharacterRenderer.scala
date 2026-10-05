@@ -6,6 +6,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.SemanticToken
 import com.serenity.state.models.TextVisualLine
 import com.serenity.text.TextEditing
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CharWidth
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 

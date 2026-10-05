@@ -13,14 +13,9 @@ import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.display.DisplayScale
-import com.serenity.ui.renderer.{
-  FontSpec,
-  PaintExecutionContext,
-  RenderColor,
-  RendererCursorOverlay,
-  RendererEntryPoints
-}
+import com.serenity.ui.renderer.{FontSpec, PaintExecutionContext, RendererCursorOverlay, RendererEntryPoints}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
 import org.typelevel.log4cats.slf4j.Slf4jFactory

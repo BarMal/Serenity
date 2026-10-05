@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Color
 
 import com.serenity.config.AppConfig
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ResolvedSurfaceComposition}
 import com.serenity.ui.theme.Theme
 

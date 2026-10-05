@@ -3,8 +3,9 @@ package com.serenity
 import java.awt.{Color, Dimension, Font}
 import javax.swing.JPanel
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
-import com.serenity.ui.renderer.{CaretRecordingSurface, RenderColor}
+import com.serenity.ui.renderer.CaretRecordingSurface
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

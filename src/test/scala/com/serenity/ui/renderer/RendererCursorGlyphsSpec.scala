@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Color
 
 import com.serenity.config.{AppConfig, CursorColorConfig}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, LayoutRect}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec

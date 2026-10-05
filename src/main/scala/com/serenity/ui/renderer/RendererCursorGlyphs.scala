@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import com.serenity.config.AppConfig
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
 

@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** Paints a chapter note's overview, faded, on the blank rows under an empty chapter. A separate pass drawn after each

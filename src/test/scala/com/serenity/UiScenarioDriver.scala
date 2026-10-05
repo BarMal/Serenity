@@ -14,6 +14,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPresetStore
@@ -23,7 +24,6 @@ import com.serenity.ui.renderer.{
   Java2DRenderSurface,
   PanelOutlineDrawing,
   PixelDrawing,
-  RenderColor,
   RenderImage,
   RenderSurface,
   RendererEntryPoints,

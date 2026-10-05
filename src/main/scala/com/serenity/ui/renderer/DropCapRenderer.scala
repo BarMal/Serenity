@@ -6,6 +6,7 @@ import java.awt.{Color, Font}
 import com.serenity.lsp.model.SemanticToken
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{AppState, Buffer, TextVisualLine}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{DropCapLayout, TextLayoutSnapshot}
 import com.serenity.ui.theme.{RichTextStyling, StyledText, TextStyle, Theme}
 

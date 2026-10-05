@@ -4,6 +4,7 @@ import java.awt.font.FontRenderContext
 import java.io.Writer
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.TextStyle

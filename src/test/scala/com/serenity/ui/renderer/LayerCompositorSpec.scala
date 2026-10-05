@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import com.serenity.state.models.{BufferId, Damage}
+import com.serenity.ui.color.RenderColor
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

@@ -5,6 +5,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.{MarkdownDocumentPreview, MarkdownPreviewCache}
 import com.serenity.state.manager.FocusedTextBody
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 final case class MarkdownLensFrame(

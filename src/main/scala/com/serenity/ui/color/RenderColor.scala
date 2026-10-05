@@ -1,7 +1,8 @@
-package com.serenity.ui.renderer
+package com.serenity.ui.color
 
-/** The colour a [[RenderSurface]] paints with: one packed `0xAARRGGBB` sRGB value, alpha included. Owned by the render
-  * seam so a surface backend never has to construct a `java.awt.Color` to receive one (#1812).
+/** The colour a `RenderSurface` paints with: one packed `0xAARRGGBB` sRGB value, alpha included, so a surface backend
+  * never has to construct a `java.awt.Color` to receive one (#1812). It lives outside `ui.renderer` so the theme can
+  * hold it without depending on the render seam.
   *
   * The `Awt` conversions exist because the theme and config still hold `java.awt.Color`; they go away once those move
   * onto this type.

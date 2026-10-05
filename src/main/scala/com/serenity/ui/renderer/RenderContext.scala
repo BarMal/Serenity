@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** Everything a paint step needs that is neither `AppState` nor scene geometry: the surface being painted, the resolved

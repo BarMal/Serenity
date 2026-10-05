@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** Paints every surface that floats above or is pinned within the editor workspace: cursor-anchored overlays

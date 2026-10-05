@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Font
 
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** Geometry for one editor pane's rendered content: which buffer line each visual row shows, plus per-buffer

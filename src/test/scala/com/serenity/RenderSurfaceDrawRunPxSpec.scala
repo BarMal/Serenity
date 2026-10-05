@@ -4,8 +4,9 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, Dimension, Font}
 import javax.swing.JPanel
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.{Java2DRenderSurface, RenderColor}
+import com.serenity.ui.renderer.Java2DRenderSurface
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

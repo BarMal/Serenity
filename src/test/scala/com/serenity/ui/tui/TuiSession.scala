@@ -17,8 +17,9 @@ import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
-import com.serenity.ui.renderer.{RenderColor, RenderController}
+import com.serenity.ui.renderer.RenderController
 import com.serenity.ui.theme.config.AppThemeManager
 import org.jline.terminal.Size
 import org.jline.terminal.impl.DumbTerminal

@@ -13,8 +13,9 @@ import com.serenity.session.SessionState
 import com.serenity.session.given
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
-import com.serenity.ui.renderer.{RenderColor, RendererEntryPoints}
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

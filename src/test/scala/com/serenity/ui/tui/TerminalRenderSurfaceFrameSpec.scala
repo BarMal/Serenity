@@ -5,15 +5,9 @@ import java.io.StringWriter
 
 import com.serenity.config.AppConfig
 import com.serenity.state.models.UiSurface
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, LayoutRect, OverlayRow}
-import com.serenity.ui.renderer.{
-  PinnedPanelRenderer,
-  RenderColor,
-  TextOverlayRenderer,
-  TextOverlayView,
-  TextPanelRow,
-  TextPanelView
-}
+import com.serenity.ui.renderer.{PinnedPanelRenderer, TextOverlayRenderer, TextOverlayView, TextPanelRow, TextPanelView}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

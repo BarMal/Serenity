@@ -4,6 +4,7 @@ import java.awt.Font
 import java.awt.font.FontRenderContext
 
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** Paints the line-number column and the pinned status row (`AppState.statusLineText`), and the small chrome-text

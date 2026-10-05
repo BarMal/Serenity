@@ -4,6 +4,7 @@ import java.awt.Color
 
 import com.serenity.MockRenderSurface
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 import org.scalacheck.Gen
 import org.scalatest.matchers.should.Matchers

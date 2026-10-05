@@ -1,9 +1,10 @@
-package com.serenity.ui.renderer
+package com.serenity.ui.color
 
 import java.awt.Color
 import java.awt.image.BufferedImage
 
 import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.renderer.Java2DRenderSurface
 import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

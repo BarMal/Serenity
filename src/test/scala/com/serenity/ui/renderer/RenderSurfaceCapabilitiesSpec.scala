@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.image.BufferedImage
 
+import com.serenity.ui.color.RenderColor
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

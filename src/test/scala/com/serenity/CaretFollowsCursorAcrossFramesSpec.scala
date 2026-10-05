@@ -11,12 +11,12 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.AppState
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{
   CaretRecordingSurface,
   FontSpec,
   Java2DRenderSurface,
-  RenderColor,
   RendererCursorOverlay,
   RendererEntryPoints,
   ScreenIdentity

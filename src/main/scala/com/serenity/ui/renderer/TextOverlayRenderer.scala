@@ -6,6 +6,7 @@ import scala.util.chaining.*
 
 import com.serenity.config.AppConfig
 import com.serenity.state.models.UiSurface
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.ColorFormat.withAlpha
 import com.serenity.ui.theme.Theme

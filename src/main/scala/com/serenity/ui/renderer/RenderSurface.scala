@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import scala.annotation.unused
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.PixelRect
 import com.serenity.ui.theme.TextStyle
 
