@@ -106,6 +106,28 @@ jobs:
             fi
           fi
 
+  third-party-notices:
+    name: Third-party notices
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        uses: sbt/setup-sbt@v1
+
+      # Fails when a runtime dependency has no entry in third-party/modules.tsv, or THIRD-PARTY-NOTICES.md is stale (#2019).
+      - name: Check third-party notices cover every runtime dependency
+        run: sbt -v checkThirdPartyNotices
+
   test:
     name: Test
     runs-on: ubuntu-latest
