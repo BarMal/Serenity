@@ -7,6 +7,7 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
   CellMetrics,
   LayoutEngine,
+  RichTextContext,
   TextLayoutSnapshot,
   ViewportSize,
   VisualRowCounts,
@@ -110,8 +111,17 @@ object EditorGeometryProducer:
     val windowTopLine       = math.max(0, cursor.line - marginLines)
     val windowBudget        = math.max(24, rowsAbove + buffer.viewport.visibleLines * 3)
     val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
+    val dropCapsEnabled     = state.persisted.config.documentConfig.dropCapsEnabled
     val visualRows =
-      VisualRowCounts.forBuffer(buffer, panelWidthPx, font, cellMetricsOverride, forceCellLayout = isTui, wrapCache)
+      VisualRowCounts.forBuffer(
+        buffer,
+        panelWidthPx,
+        font,
+        cellMetricsOverride,
+        forceCellLayout = isTui,
+        wrapCache,
+        dropCapsEnabled
+      )
     val cursorRowInWindow =
       if !wordWrapEnabled then cursor.line - windowTopLine
       else
@@ -124,7 +134,9 @@ object EditorGeometryProducer:
             wordWrapEnabled = true,
             cellMetricsOverride = cellMetricsOverride,
             forceCellLayout = isTui,
-            wrapCache = wrapCache
+            wrapCache = wrapCache,
+            bufferLine = cursor.line,
+            richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled)
           )
     val windowTopVisualLine = math.max(0, cursorRowInWindow - rowsAbove)
     // Without rich text a snapshot folds each line into exactly the rows `visualRows` counts, so the window can start
