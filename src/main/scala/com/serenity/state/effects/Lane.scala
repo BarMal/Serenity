@@ -29,6 +29,10 @@ enum LaneKey:
   /** The pause after an edit before the session is saved for crash recovery: a newer edit restarts it. */
   case EditIdleSessionSave
 
+  /** The wait before notices due at `deadlineNanos` are swept away: a lane per deadline, so each runs out on its own.
+    */
+  case NoticeExpiry(deadlineNanos: Long)
+
   case Search, Analysis, Theme, Config, Presets, Keybindings, Session, Project, Dialog, Timer
 
 enum LanePolicy:

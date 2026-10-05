@@ -323,7 +323,7 @@ object EditorLayoutContract:
         None
 
   def overlayRectFor(surfaceId: SurfaceId, calculatedLayout: CalculatedLayout): Option[LayoutRect] =
-    calculatedLayout.aboveCursorOverlayStack
+    (calculatedLayout.cornerOverlayStack ++ calculatedLayout.aboveCursorOverlayStack)
       .find(_._1 == surfaceId)
       .map(_._2)
       .orElse(calculatedLayout.belowCursorOverlayStack.find(_._1 == surfaceId).map(_._2))

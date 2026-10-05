@@ -85,6 +85,7 @@ final case class OverlayViews(
     aboveCursorStack: List[TextOverlayView] = Nil,
     belowCursor: Option[TextOverlayView] = None,
     belowCursorStack: List[TextOverlayView] = Nil,
+    cornerStack: List[TextOverlayView] = Nil,
     modal: List[TextOverlayView] = Nil,
     tabBar: Option[TextOverlayView] = None
 )
@@ -109,6 +110,7 @@ object OverlayViewModel:
 
     val belowCursorStack = stackViews(layout.belowCursorOverlayStack.map(_._1), state, layout, scene)
     val belowCursor      = belowCursorStack.headOption
+    val cornerStack      = stackViews(layout.cornerOverlayStack.map(_._1), state, layout, scene)
     val modal = scene.toList.flatMap(_.modal).flatMap {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) =>
         state.surfaceById(surfaceId) match
@@ -128,6 +130,7 @@ object OverlayViewModel:
       aboveCursorStack = aboveCursorStack,
       belowCursor = belowCursor,
       belowCursorStack = belowCursorStack,
+      cornerStack = cornerStack,
       modal = modal,
       tabBar = tabBar
     )

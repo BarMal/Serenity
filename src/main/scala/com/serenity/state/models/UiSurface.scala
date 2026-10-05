@@ -326,6 +326,11 @@ enum SurfaceContent:
     */
   case RecentFilesInMode(mode: AppMode, paths: List[java.nio.file.Path])
 
+  /** A corner notice (#1717); `expiresAtNanos` is when it leaves by itself, on the monotonic clock -- never, for an
+    * error. See `NoticeReducer`.
+    */
+  case Notice(notice: com.serenity.state.models.Notice, expiresAtNanos: Option[Long])
+
 /** How a surface shares the keyboard with the editor beneath it (#1940). */
 enum SurfaceFocusPolicy:
 
@@ -351,6 +356,7 @@ final case class UiSurface(
   def focusPolicy: SurfaceFocusPolicy =
     content match
       case SurfaceContent.CommentLens(lens) if lens.mode == CommentLensMode.ReadOnly => SurfaceFocusPolicy.Peek
+      case SurfaceContent.Notice(_, _)                                               => SurfaceFocusPolicy.Peek
       case SurfaceContent.CommandPalette(_) | SurfaceContent.ModalWorkflow(_) | SurfaceContent.ThemeCreator(_) =>
         SurfaceFocusPolicy.Modal
       case _ if isFloatingPeek => SurfaceFocusPolicy.Peek

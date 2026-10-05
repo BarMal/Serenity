@@ -477,6 +477,18 @@ object UiScenarioDriver:
         initialConfig = configuredInitialConfig,
         uiPresetStore = uiPresetStore.getOrElse(UiPresetStore.default)
       )
+      driver <- over(manager, environment, artifactDirectory)
+    yield driver
+
+  /** A driver over a state manager built elsewhere -- one with substituted infrastructure, such as storage that refuses
+    * every write.
+    */
+  def over(
+    manager: StateManager,
+    environment: UiScenarioEnvironment = UiScenarioEnvironment(),
+    artifactDirectory: Option[Path] = None
+  ): IO[UiScenarioDriver] =
+    for
       _ <- manager.applyEvent(ResizeEvent(environment.viewport))
       _ <- manager.updateState(state =>
         state.copy(persisted = state.persisted.copy(theme = themeFor(environment.themeName)))

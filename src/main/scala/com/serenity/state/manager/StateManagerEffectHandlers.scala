@@ -528,7 +528,8 @@ final private[manager] class StateManagerEffectHandlers(
           workflow.openReloadConflictModal(current, bufferId, bufferLabelFor(current, bufferId))
         )
       case other =>
-        logger.error(other)(s"[FILE] Failed to save buffer $bufferId")
+        logger.error(other)(s"[FILE] Failed to save buffer $bufferId") >>
+          currentState.flatMap(current => showNotice(FileFailureNotice.forBuffer(current, bufferId, other)))
 
   protected def requestOpenFileDialog: IO[Unit] =
     fileDialog match
@@ -542,7 +543,9 @@ final private[manager] class StateManagerEffectHandlers(
     currentState.flatMap { state =>
       state.persisted.buffers.get(bufferId) match
         case Some(_) =>
-          saveBufferAs(bufferId, path)
+          saveBufferAs(bufferId, path).handleErrorWith(error =>
+            showNotice(FileFailureNotice.fileSaveFailed(bufferId, path, error, state.persisted.config))
+          )
         case None =>
           logger.debug(s"[FILE] Buffer $bufferId not found for save as")
     }

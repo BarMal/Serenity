@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
-import com.serenity.state.reducers.EditorEditSupport
+import com.serenity.state.reducers.{EditorEditSupport, NoticeReducer}
 import com.serenity.ui.layout.LayoutEngine
 
 private[manager] enum SaveKind:
@@ -58,7 +58,8 @@ private[manager] object FileResults:
             else current.richText.copy(richTextFidelity = None)
           withBuffer(state, current.copy(document = document, richText = richText))
         }
-    if save.kind == SaveKind.SaveAs then withRecentFile(merged, save.target) else merged
+    val settled = NoticeReducer.withoutTopic(merged, NoticeTopic.FileSave(save.bufferId))
+    if save.kind == SaveKind.SaveAs then withRecentFile(settled, save.target) else settled
 
   /** Replaces the buffer's content with the disk's, unless it was edited after the reload was requested. */
   def reloaded(

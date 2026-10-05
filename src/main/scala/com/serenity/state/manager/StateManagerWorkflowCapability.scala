@@ -44,7 +44,8 @@ final private[manager] class StateManagerWorkflowCapability(
     filePersistence.openFile,
     filePersistence.inspectBeforeSave,
     filePersistence.saveBufferAs,
-    continueCloseAfterFormSaveAs
+    continueCloseAfterFormSaveAs,
+    operations.showNotice
   )
 
   private val replaceWorkflow = new StateManagerReplaceWorkflow(modelCommit.updateValidated)
@@ -168,7 +169,9 @@ final private[manager] class StateManagerWorkflowCapability(
         commit(close.conflicted(workflow, _))
       case Left(error) =>
         logger.error(error)(s"[FILE] Failed to save buffer $bufferId before closing it") >>
-          commit(close.abandoned(workflow, _))
+          commit(close.abandoned(workflow, _)) >>
+          modelCommit.currentState
+            .flatMap(state => operations.showNotice(FileFailureNotice.forBuffer(state, bufferId, error)))
     }
 
   private[manager] def clearCloseActions(state: AppState): AppState = close.clearCloseActions(state)
@@ -226,7 +229,13 @@ final private[manager] class StateManagerWorkflowCapability(
               .flatMap(directory => dialog.chooseSaveFile(Some(directory), suggestedFileName))
               .flatMap {
                 case Some(path) =>
-                  filePersistence.saveBufferAs(bufferId, path) >> continueCloseAfterNativeSaveAs(bufferId)
+                  filePersistence.saveBufferAs(bufferId, path).attempt.flatMap {
+                    case Right(()) => continueCloseAfterNativeSaveAs(bufferId)
+                    case Left(error) =>
+                      operations.showNotice(
+                        FileFailureNotice.fileSaveFailed(bufferId, path, error, state.persisted.config)
+                      ) >> repromptCloseOn(bufferId)
+                  }
                 case None =>
                   repromptCloseOn(bufferId)
               }
@@ -338,7 +347,12 @@ final private[manager] class StateManagerWorkflowCapability(
       val dismissed = WorkflowSurfaces.dismissedToPriorFocus(state, surfaceId)
       val write = SessionWorkflowTransitions.sessionNamePrompt(state, surfaceId) match
         case Some((SessionNamePromptMode.SaveAs, input)) if input.trim.nonEmpty =>
-          Some(sessionManager.saveSessionAs(input.trim, dismissed).void)
+          Some(
+            sessionManager
+              .saveSessionAs(input.trim, dismissed)
+              .void
+              .handleErrorWith(error => operations.showNotice(FileFailureNotice.sessionSaveFailed(error)))
+          )
         case Some((SessionNamePromptMode.Rename(sessionId), input)) if input.trim.nonEmpty =>
           Some(sessionManager.renameSession(sessionId, input.trim))
         case _ =>
