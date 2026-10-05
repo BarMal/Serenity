@@ -159,6 +159,20 @@ object AtomicFileWriter:
   def writeBytesBlocking(path: Path, bytes: Array[Byte]): Unit =
     writeBytesBlocking(path, bytes, JdkFileSystem)
 
+  /** Renames the already-durable `source` over `target`, then syncs their directory so the rename survives a crash.
+    * Unlike the writes above, `target` is not resolved through symlinks or kept on its hardlinks: for files the
+    * caller owns outright, such as staged session files.
+    */
+  private[serenity] def replaceWith(source: Path, target: Path): IO[Unit] =
+    IO.blocking {
+      try
+        val _ = JdkFileSystem.moveAtomically(source, target)
+      catch
+        case _: AtomicMoveNotSupportedException =>
+          val _ = JdkFileSystem.moveReplacing(source, target)
+      Option(target.toAbsolutePath.getParent).foreach(JdkFileSystem.syncDirectory)
+    }
+
   private[serenity] def writeString(path: Path, content: String, fileSystem: AtomicFileSystem): IO[Unit] =
     writeBytes(path, content.getBytes(StandardCharsets.UTF_8), fileSystem)
 

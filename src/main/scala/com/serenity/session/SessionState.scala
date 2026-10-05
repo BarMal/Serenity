@@ -49,8 +49,11 @@ object SessionState:
     * Schema version 3 adds hidden buffers and the chapter and keyword notes that point at them. Both decode with
     * defaults, so an older session still restores; the bump is so an older build refuses a newer session rather than
     * silently dropping its notes.
+    *
+    * Schema version 4 moves a buffer's unsaved text out of the session file into a content file it names by
+    * `contentRef` (#1912); an older build would restore those buffers empty, so it refuses the session instead.
     */
-  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(3)
+  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(4)
 
   def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
     SessionState(

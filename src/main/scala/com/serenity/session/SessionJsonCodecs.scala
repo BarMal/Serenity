@@ -121,6 +121,7 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     revision         <- cursor.getOrElse[Option[String]]("revision")(None)
     hidden           <- cursor.getOrElse[Boolean]("hidden")(false)
     notes            <- cursor.getOrElse[List[SessionNote]]("notes")(Nil)
+    contentRef       <- cursor.getOrElse[Option[String]]("contentRef")(None)
   yield SessionBuffer(
     id,
     filePath,
@@ -142,7 +143,8 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     hasBom,
     revision,
     hidden,
-    notes
+    notes,
+    contentRef
   )
 }
 
