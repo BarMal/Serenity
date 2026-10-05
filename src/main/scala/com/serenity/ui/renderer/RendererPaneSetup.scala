@@ -86,6 +86,24 @@ object RendererPaneSetup:
         .filter(_._2.nonEmpty)
         .toMap
 
+    EditorPaneRenderPlan(
+      workspaceLayout,
+      layoutContract,
+      snapshots,
+      columnSnapshots,
+      annotationsFor(state, context, snapshots)
+    )
+
+  /** What each visible buffer line carries -- comments, diagnostics, semantic tokens, ghosts -- as of `state`. Read per
+    * frame rather than kept with the prepared scene: the scene is reused for as long as the layout is unchanged, and a
+    * diagnostic arriving without moving a single line (spell check finishing, or being switched off, while a command
+    * runner covers the editor) changes none of the things that decide that.
+    */
+  def annotationsFor(
+    state: AppState,
+    context: RenderContext,
+    snapshots: Map[PaneId, TextLayoutSnapshot]
+  ): Map[BufferId, BufferRenderAnnotations] =
     val visibleLinesByBuffer = state.persisted.layout.editorPanes.toList
       .flatMap {
         case (paneId, pane) =>
@@ -124,8 +142,7 @@ object RendererPaneSetup:
         }
       }
       .toMap
-
-    EditorPaneRenderPlan(workspaceLayout, layoutContract, snapshots, columnSnapshots, annotations)
+    annotations
 
   def visibleAnnotationLines[A](
     visibleLines: Set[Int],
