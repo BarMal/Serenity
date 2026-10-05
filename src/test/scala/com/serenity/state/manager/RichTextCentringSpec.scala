@@ -80,9 +80,7 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
     val sized  = buffer(state).copy(viewport = LayoutEngine.updateBufferViewportDimensions(buffer(state), rect, true))
     val sizedState = state.copy(persisted = state.persisted.copy(buffers = Map(bufferId -> sized)))
     val viewport   = CursorViewport.adjustForCursor(sized, sizedState, sized.editing.cursorPositions.head)
-    sizedState.copy(persisted =
-      sizedState.persisted.copy(buffers = Map(bufferId -> sized.copy(viewport = viewport)))
-    )
+    sizedState.copy(persisted = sizedState.persisted.copy(buffers = Map(bufferId -> sized.copy(viewport = viewport))))
 
   private def paintedSnapshot(state: AppState) =
     val config = state.persisted.config.editorConfig.fontConfig
@@ -101,9 +99,9 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
   "A rich-text buffer" should "paint the cursor on the centre row wherever the cursor sits" in {
     val document = richDocument(60)
     for
-      columns   <- List(40, 60, 80)
-      line      <- List(21, 22, 23, 24, 25, 33)
-      fraction  <- List(0.0, 0.5, 0.95)
+      columns  <- List(40, 60, 80)
+      line     <- List(21, 22, 23, 24, 25, 33)
+      fraction <- List(0.0, 0.5, 0.95)
     do
       val text   = document.plainText.split("\n", -1)
       val cursor = CursorPosition(line, (text(line).length * fraction).toInt)

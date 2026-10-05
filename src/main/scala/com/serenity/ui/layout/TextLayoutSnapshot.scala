@@ -134,7 +134,9 @@ object TextLayoutSnapshot:
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
     rowAffinity: RowAffinity = RowAffinity.Downstream,
-    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
+    bufferLine: Int = 0,
+    richText: RichTextContext = RichTextContext.plain
   ): Int =
     if !wordWrapEnabled then 0
     else
@@ -143,14 +145,16 @@ object TextLayoutSnapshot:
       // At a wrap boundary (one row's endColumn == the next row's startColumn) both rows match the column, and the
       // cursor's own affinity settles it exactly as `NavigationGeometry.visualRowIndexFor` does -- so viewport centring
       // measures the cursor's visual row as the row the caret is actually drawn on.
-      val matching = wrapLogicalLine(
+      val matching = wrappedLine(
         lineText,
-        0,
+        bufferLine,
         math.max(1, panelWidthPx),
-        singleFontResolver(font),
+        font,
         fontRenderContext,
         measuredLayout,
         cellMetrics,
+        richText,
+        lineLength = lineText.length,
         wrapCache = wrapCache
       ).zipWithIndex
         .filter { case (line, _) => cursorColumn >= line.startColumn && cursorColumn <= line.endColumn }
@@ -169,22 +173,89 @@ object TextLayoutSnapshot:
     maxVisualLines: Int = Int.MaxValue,
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
-    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
+    richText: RichTextContext = RichTextContext.plain
   ): Vector[TextVisualLine] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
-    wrapLogicalLine(
+    wrappedLine(
       text,
       bufferLine,
       math.max(1, panelWidthPx),
-      singleFontResolver(font),
+      font,
       fontRenderContext,
+      measuredLayout,
+      cellMetrics,
+      richText,
+      lineLength = text.length,
+      baseColumn,
+      maxVisualLines,
+      wrapCache
+    )
+
+  /** The rows one logical line wraps into, exactly as the painted layout wraps it: per-run fonts, the paragraph's drop
+    * cap role and the glyph's reserved width. Everything that counts or locates rows -- centring, scrolling, the
+    * cursor's own row -- goes through this, so what is counted is what is painted.
+    */
+  private def wrappedLine(
+    text: String,
+    bufferLine: Int,
+    panelWidthPx: Int,
+    font: Font,
+    frc: FontRenderContext,
+    measuredLayout: Boolean,
+    cellMetrics: CellMetrics,
+    richText: RichTextContext,
+    lineLength: Int,
+    baseColumn: Int = 0,
+    maxVisualLines: Int = Int.MaxValue,
+    wrapCache: WrappedLineCache
+  ): Vector[TextVisualLine] =
+    val inputs = lineLayoutInputs(font, frc, measuredLayout, richText, bufferLine, lineLength)
+    wrapLogicalLine(
+      text,
+      bufferLine,
+      panelWidthPx,
+      inputs.resolver,
+      frc,
       measuredLayout,
       cellMetrics,
       baseColumn,
       maxVisualLines,
-      wrapCache = wrapCache
+      inputs.paragraphRole,
+      inputs.glyphWidthPx,
+      wrapCache
     )
+
+  final private case class LineLayoutInputs(
+      resolver: LineFontResolver,
+      paragraphRole: ParagraphRole,
+      glyphWidthPx: Float
+  )
+
+  /** Cell layout (TUI) never consults per-run fonts -- one glyph per cell, one row per line -- nor spans a drop cap
+    * glyph across rows (`DropCapRenderer.renderGlyphCell`), so only a measured layout derives them.
+    */
+  private def lineLayoutInputs(
+    font: Font,
+    frc: FontRenderContext,
+    measuredLayout: Boolean,
+    richText: RichTextContext,
+    lineIndex: Int,
+    lineLength: Int
+  ): LineLayoutInputs =
+    val resolver =
+      if measuredLayout then resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale)
+      else singleFontResolver(font)
+    val paragraphRole = RichTextStyling.effectiveRole(
+      richText.document.flatMap(_.paragraphAt(lineIndex)).map(_.role).getOrElse(ParagraphRole.Body),
+      richText.dropCapsEnabled
+    )
+    val glyphWidthPx =
+      if measuredLayout then
+        DropCapLayout.measuredGlyphWidthPx(font, frc, richText.document, lineIndex, paragraphRole, richText.proseScale)
+      else 0.0f
+    LineLayoutInputs(resolver, paragraphRole, glyphWidthPx)
 
   /** `forceCellLayout` bypasses the font-driven measured-vs-cell auto-detection (`shouldUseMeasuredLayout`) entirely,
     * always taking the cell path. A caller with no real font rendering to measure against at all -- a terminal surface
@@ -278,6 +349,7 @@ object TextLayoutSnapshot:
     dropCapsEnabled: Boolean,
     wrapCache: WrappedLineCache
   ): Vector[TextVisualLine] =
+    val richText = RichTextContext(richDocument, proseScale, dropCapsEnabled)
     @annotation.tailrec
     def loop(lines: Vector[(Int, String)], acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
       if acc.length >= visualLineLimit then acc
@@ -291,21 +363,11 @@ object TextLayoutSnapshot:
               if wordWrapEnabled then rawLine.drop(startColumn)
               else unwrappedVisibleSlice(rawLine, startColumn, buffer.viewport.visibleColumns)
             val remainingVisualLines = math.max(0, visualLineLimit - acc.length)
-            // Cell layout (TUI) never consults per-run fonts -- one glyph per cell, one row per line -- so skip deriving
-            // them there and use the single base font.
-            val resolver =
-              if measuredLayout then resolverForLine(font, richDocument, lineIndex, rawLine.length, proseScale)
-              else singleFontResolver(font)
-            // The role `RichTextStyling.dropCapSplitFontSpans`/painting will treat this paragraph as, honouring the
-            // config toggle -- only a measured layout has real font metrics to size and reserve the glyph's width with
-            // (TUI's cell grid never spans a glyph across rows, per `DropCapRenderer.renderGlyphCell`'s own doc comment).
-            val effectiveRole =
-              richDocument.flatMap(_.paragraphAt(lineIndex)).map(_.role).getOrElse(ParagraphRole.Body)
-            val paragraphRole = RichTextStyling.effectiveRole(effectiveRole, dropCapsEnabled)
-            val glyphWidthPx =
-              if measuredLayout then
-                DropCapLayout.measuredGlyphWidthPx(font, frc, richDocument, lineIndex, paragraphRole, proseScale)
-              else 0.0f
+            val inputs =
+              lineLayoutInputs(font, frc, measuredLayout, richText, lineIndex, rawLine.length)
+            val resolver      = inputs.resolver
+            val paragraphRole = inputs.paragraphRole
+            val glyphWidthPx  = inputs.glyphWidthPx
             val wrapped =
               if remainingVisualLines <= 0 then Vector.empty
               else if wordWrapEnabled then
@@ -363,13 +425,13 @@ object TextLayoutSnapshot:
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
-    baseColumn: Int = 0,
-    maxVisualLines: Int = Int.MaxValue,
+    baseColumn: Int,
+    maxVisualLines: Int,
     // A drop cap paragraph's first `paragraphRole.lines` visual lines (0-based `lineWithinParagraph`, tracked below via
     // `acc.length`) reserve `dropCapGlyphWidthPx` of left margin so wrapping leaves room for the glyph beside them --
-    // `ParagraphRole.Body` (every non-drop-cap caller's default) makes both branches below exactly today's behaviour.
-    paragraphRole: ParagraphRole = ParagraphRole.Body,
-    dropCapGlyphWidthPx: Float = 0.0f,
+    // `ParagraphRole.Body` (every non-drop-cap paragraph) makes both branches below exactly today's behaviour.
+    paragraphRole: ParagraphRole,
+    dropCapGlyphWidthPx: Float,
     wrapCache: WrappedLineCache
   ): Vector[TextVisualLine] =
     if maxVisualLines <= 0 then Vector.empty
