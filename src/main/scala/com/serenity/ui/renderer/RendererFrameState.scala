@@ -31,7 +31,7 @@ final case class RenderInputs(
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color]
+    cursorColor: Option[RenderColor]
 )
 
 /** Per-persistence-key bookkeeping this module remembers across frames, replacing the retired `ChromeKey`/

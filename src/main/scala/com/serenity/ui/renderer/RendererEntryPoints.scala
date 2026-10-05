@@ -63,7 +63,7 @@ object RendererEntryPoints:
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     repaintOnFlush: Boolean,
     damage: Damage = Damage.Everything,
     caches: RenderCaches = RenderCaches.create()
@@ -121,7 +121,7 @@ object RendererEntryPoints:
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
     cellMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     caches: RenderCaches
   ): Unit =
     render(
@@ -145,7 +145,7 @@ object RendererEntryPoints:
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
     cellMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     damage: Damage,
     caches: RenderCaches
   ): Unit =
@@ -177,7 +177,7 @@ object RendererEntryPoints:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     caches: RenderCaches
   ): Unit =
     render(
@@ -205,7 +205,7 @@ object RendererEntryPoints:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     damage: Damage,
     caches: RenderCaches
   ): Unit =
@@ -239,7 +239,7 @@ object RendererEntryPoints:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     damage: Damage = Damage.Everything,
     caches: RenderCaches = RenderCaches.create()
   ): Option[PixelRect] =
@@ -285,7 +285,7 @@ object RendererEntryPoints:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     caches: RenderCaches = RenderCaches.create()
   ): List[PixelRect] =
     // #1105/#1215: see the surface-generic renderCursorOnly in RendererCursorOverlay for why this is scoped to a
@@ -338,7 +338,7 @@ object RendererEntryPoints:
     cursorVisible: Boolean,
     surface: RenderSurface,
     viewportSize: ViewportSize,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     caches: RenderCaches
   ): Unit =
     render(state, cursorVisible, surface, viewportSize, cursorColor, Damage.Everything, caches)
@@ -348,7 +348,7 @@ object RendererEntryPoints:
     cursorVisible: Boolean,
     surface: RenderSurface,
     viewportSize: ViewportSize,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     damage: Damage,
     caches: RenderCaches
   ): Unit =

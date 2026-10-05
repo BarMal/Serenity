@@ -14,7 +14,7 @@ import com.serenity.session.given
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{RenderColor, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -202,7 +202,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      cursorColor = Some(overrideColor),
+      cursorColor = Some(RenderColor.fromAwt(overrideColor)),
       com.serenity.state.manager.RenderCaches.create()
     )
 
@@ -219,7 +219,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       ViewportSize(80, 24),
-      cursorColor = Some(overrideColor),
+      cursorColor = Some(RenderColor.fromAwt(overrideColor)),
       com.serenity.state.manager.RenderCaches.create()
     )
 

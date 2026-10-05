@@ -42,7 +42,7 @@ object RendererFramePlanner:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     output: Option[FrameOutput],
     damage: Damage,
     caches: com.serenity.state.manager.RenderCaches = com.serenity.state.manager.RenderCaches.create()
@@ -514,7 +514,7 @@ object RendererFramePlanner:
     viewportSize: ViewportSize,
     scene: UiSceneSnapshot,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
     uiFont: java.awt.Font,

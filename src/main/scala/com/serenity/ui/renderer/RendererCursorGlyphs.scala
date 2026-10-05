@@ -50,7 +50,7 @@ object RendererCursorGlyphs:
                     screenYPx,
                     widthPx,
                     caretHeightPx,
-                    RenderColor.fromAwt(effectiveCursorColor)
+                    effectiveCursorColor
                   )
                   List(PixelRect(caretXPx, screenYPx, widthPx, caretHeightPx))
                 case None => Nil
@@ -114,7 +114,8 @@ object RendererCursorGlyphs:
     theme: Theme,
     context: RenderContext,
     isPrimaryCursor: Boolean
-  ): java.awt.Color =
-    val activeColor = context.cursorColorOverride.getOrElse(config.cursorColors.activeOr(theme.cursor))
+  ): RenderColor =
+    val activeColor =
+      context.cursorColorOverride.getOrElse(RenderColor.fromAwt(config.cursorColors.activeOr(theme.cursor)))
     if isPrimaryCursor then activeColor
-    else config.cursorColors.inactiveOr(activeColor)
+    else config.cursorColors.inactive.fold(activeColor)(RenderColor.fromAwt)

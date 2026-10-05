@@ -16,7 +16,7 @@ final case class RenderContext(
     surface: RenderSurface,
     layout: CalculatedLayout,
     cursorVisible: Boolean = true,
-    cursorColorOverride: Option[java.awt.Color] = None,
+    cursorColorOverride: Option[RenderColor] = None,
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
     uiFont: java.awt.Font,

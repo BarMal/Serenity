@@ -8,7 +8,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{RenderColor, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -79,7 +79,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       codeFont,
       textFont,
       cellMetrics,
-      Some(cursorColor),
+      Some(RenderColor.fromAwt(cursorColor)),
       com.serenity.state.manager.RenderCaches.create()
     )
 
@@ -187,7 +187,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       codeFont,
       textFont,
       cellMetrics,
-      Some(cursorColor),
+      Some(RenderColor.fromAwt(cursorColor)),
       com.serenity.state.manager.RenderCaches.create()
     )
 

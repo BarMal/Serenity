@@ -22,7 +22,7 @@ object RendererCursorOverlay:
     surface: RenderSurface,
     viewportSize: ViewportSize,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
@@ -63,7 +63,7 @@ object RendererCursorOverlay:
     layout: CalculatedLayout,
     renderPlan: EditorPaneRenderPlan,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
@@ -124,7 +124,7 @@ object RendererCursorOverlay:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     caches: RenderCaches
   ): Boolean =
     // #1105/#1215: a surface reporting no FontRenderContext (a terminal) has no real font rendering to measure
@@ -176,7 +176,7 @@ object RendererCursorOverlay:
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     caches: RenderCaches = RenderCaches.create()
   ): Boolean =
     val viewportSize = swingWin.viewportSize
@@ -237,7 +237,7 @@ object RendererCursorOverlay:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     caches: RenderCaches
   ): Boolean =
     renderWithCursorOverlay(
@@ -263,7 +263,7 @@ object RendererCursorOverlay:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     damage: Damage,
     caches: RenderCaches
   ): Boolean =
@@ -333,7 +333,7 @@ object RendererCursorOverlay:
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     damage: Damage = Damage.Everything,
     caches: RenderCaches = RenderCaches.create()
   ): Boolean =
