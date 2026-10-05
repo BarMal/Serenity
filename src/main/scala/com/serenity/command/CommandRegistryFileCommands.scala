@@ -30,6 +30,13 @@ private[command] object CommandRegistryFileCommands:
       label = "Save"
     ),
     saveAs,
+    Command.typed(
+      "export-manuscript",
+      "Export the current document, or the book its manuscript.conf lists, in standard manuscript format (DOCX).",
+      CommandIntent.File(FileIntent.ExportManuscript),
+      CommandCategory.File,
+      label = "Export Manuscript..."
+    ),
     ReopenWithEncodingCommands.chooseEncoding,
     Command.typed(
       "save-config",

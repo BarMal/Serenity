@@ -9,6 +9,8 @@ import com.serenity.text.TextEncoding
 enum FileIntent:
   case SaveCurrentFile
   case SaveCurrentFileAs
+  // #1206: compile the focused document, or the book its manuscript.conf lists, to a manuscript DOCX.
+  case ExportManuscript
   case OpenFile
   case OpenRecentFile(path: Path)
   case OpenFileSearch

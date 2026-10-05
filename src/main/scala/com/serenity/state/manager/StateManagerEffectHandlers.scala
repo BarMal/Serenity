@@ -73,6 +73,8 @@ final private[manager] class StateManagerEffectHandlers(
 
   private val reopenEffects = new ReopenWithEncodingEffects(currentState, commitState, editor, fileManager)
 
+  private val manuscriptExport = new ManuscriptExportEffects(logger, fileDialog, editor)
+
   private val configEffects = new StateManagerConfigEffects(
     currentState,
     logger,
@@ -288,6 +290,8 @@ final private[manager] class StateManagerEffectHandlers(
           case None           => logger.debug("[CMD] No focused buffer to save")
       case FileIntent.SaveCurrentFileAs =>
         requestSaveAsFileDialog(state, state.focusedBufferId)
+      case FileIntent.ExportManuscript =>
+        manuscriptExport.exportFocused(state)
       case FileIntent.OpenFile =>
         requestOpenFileDialog
       case FileIntent.OpenRecentFile(path) =>
