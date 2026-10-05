@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.Color
-
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
@@ -12,6 +10,7 @@ import com.serenity.config.AppConfigOps.*
 import com.serenity.diagnostics.{KeyLatencyTrace, LatencyStage}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.ui.color.RenderColor
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
@@ -137,7 +136,7 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
           (
             _: AppState,
             _: Boolean,
-            _: Option[Color],
+            _: Option[RenderColor],
             _: Damage,
             _: com.serenity.state.manager.RenderCaches
           ) => IO(nanos.addAndGet(3.millis.toNanos)) >> IO(trace.framePublished()),
@@ -200,7 +199,7 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
         (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
           _: com.serenity.state.manager.RenderCaches
         ) => clock.get.flatMap(now => renders.update(_ :+ now) >> clock.update(_ + renderTime)),

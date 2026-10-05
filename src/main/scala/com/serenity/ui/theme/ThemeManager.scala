@@ -98,7 +98,7 @@ object ThemeManager:
     text: String,
     theme: Theme,
     baseStyle: TextStyle = TextStyle.normal,
-    foregroundOverride: Option[java.awt.Color] = None
+    foregroundOverride: Option[com.serenity.ui.color.RenderColor] = None
   ): List[StyledText] =
     val defaultForeground = foregroundOverride.getOrElse(theme.foreground)
     val markerColor       = theme.colorFor(SyntaxElement.Delimiter)

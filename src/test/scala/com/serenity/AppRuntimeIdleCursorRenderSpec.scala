@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.Color
-
 import scala.concurrent.duration.*
 
 import cats.effect.testkit.TestControl
@@ -13,6 +11,7 @@ import com.serenity.frontend.GuiFrontend
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, Damage}
 import com.serenity.testkit.VirtualTime.runVirtual
+import com.serenity.ui.color.RenderColor
 import fs2.Stream
 import fs2.concurrent.SignallingRef
 import org.scalatest.flatspec.AnyFlatSpec
@@ -96,7 +95,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
           _: com.serenity.state.manager.RenderCaches
         ) => renderCalls.update(_ + 1),
@@ -127,7 +126,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
@@ -147,7 +146,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
     val program = for
       cursorVisible      <- Ref.of[IO, Boolean](true)
       pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
-      rendered           <- Ref.of[IO, Vector[(Boolean, Option[Color])]](Vector.empty)
+      rendered           <- Ref.of[IO, Vector[(Boolean, Option[RenderColor])]](Vector.empty)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntimeRenderLoops.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
@@ -158,7 +157,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
         renderCursorOnly = (
           _: AppState,
           visible: Boolean,
-          cursor: Option[Color],
+          cursor: Option[RenderColor],
           _: Damage,
           _: com.serenity.state.manager.RenderCaches
         ) => rendered.update(_ :+ (visible -> cursor)),
@@ -195,7 +194,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
           renderCursorOnly = (
             _: AppState,
             visible: Boolean,
-            _: Option[Color],
+            _: Option[RenderColor],
             _: Damage,
             _: com.serenity.state.manager.RenderCaches
           ) => painted.update(_ :+ visible),

@@ -135,8 +135,8 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   "Theme" should "have error and warning colors" in {
     val theme = Theme.dark
-    theme.error.foreground should not be null
-    theme.warning.foreground should not be null
+    theme.error.foreground should not be theme.background
+    theme.warning.foreground should not be theme.background
     theme.warning.foreground should not be theme.error.foreground
   }
 

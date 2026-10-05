@@ -6,12 +6,12 @@ import java.io.StringWriter
 import com.serenity.config.CursorMode
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{
   FontSpec,
   HardwareCursorShape,
   HardwareCursorStyle,
-  RenderColor,
   RenderImage,
   RendererCursorOverlay,
   RendererEntryPoints

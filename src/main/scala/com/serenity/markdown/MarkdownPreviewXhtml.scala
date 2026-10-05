@@ -1,11 +1,12 @@
 package com.serenity.markdown
 
-import java.awt.{Color, Font}
+import java.awt.Font
 import java.net.URI
 
 import scala.util.Try
 
 import com.serenity.markdown.MarkdownDocumentPreview.InlinePreviewLine
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.{ColorFormat, Theme}
 import org.commonmark.Extension
 import org.commonmark.node.Image
@@ -182,7 +183,7 @@ private[markdown] object MarkdownPreviewXhtml:
        |$inlineLensOverrides
        |""".stripMargin
 
-  private def css(color: Color): String =
+  private def css(color: RenderColor): String =
     ColorFormat.toHex(color, withAlpha = false)
 
   private def cssString(value: String): String =

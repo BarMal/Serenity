@@ -1,8 +1,7 @@
 package com.serenity.ui.renderer
 
-import java.awt.Color
-
 import com.serenity.config.AppConfig
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ResolvedSurfaceComposition}
 import com.serenity.ui.theme.Theme
 
@@ -18,8 +17,8 @@ object PinnedPanelRenderer:
     val rect            = panel.rect
     val panelBackground = theme.panel.background
 
-    surface.setForegroundColor(RenderColor.fromAwt(theme.panel.foreground))
-    surface.setBackgroundColor(RenderColor.fromAwt(panelBackground))
+    surface.setForegroundColor(theme.panel.foreground)
+    surface.setBackgroundColor(panelBackground)
     for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
 
     val textInsetPx = SurfaceTextInset.px(config)
@@ -27,8 +26,8 @@ object PinnedPanelRenderer:
     drawTitle(surface, panel, theme, textInsetPx)
     drawComposition(surface, panel.composition, theme, panelBackground, cellMetrics, textInsetPx)
 
-    surface.setForegroundColor(RenderColor.fromAwt(theme.foreground))
-    surface.setBackgroundColor(RenderColor.fromAwt(theme.background))
+    surface.setForegroundColor(theme.foreground)
+    surface.setBackgroundColor(theme.background)
 
   private def drawBorder(
     surface: RenderSurface,
@@ -44,7 +43,7 @@ object PinnedPanelRenderer:
           rect.y,
           rect.width,
           rect.height,
-          RenderColor.fromAwt(theme.border),
+          theme.border,
           config.scaledUiOutlineThicknessPx
         )
       )
@@ -71,7 +70,7 @@ object PinnedPanelRenderer:
     surface: RenderSurface,
     composition: ResolvedSurfaceComposition,
     theme: Theme,
-    panelBackground: Color,
+    panelBackground: RenderColor,
     cellMetrics: CellMetrics,
     textInsetPx: Double
   ): Unit =
@@ -88,8 +87,8 @@ object PinnedPanelRenderer:
               OverlaySegmentRowRenderer.toneForeground(box.tone, theme).getOrElse(theme.panel.foreground),
               OverlaySegmentRowRenderer.toneBackground(box.tone, theme).getOrElse(panelBackground)
             )
-        surface.setForegroundColor(RenderColor.fromAwt(foreground))
-        surface.setBackgroundColor(RenderColor.fromAwt(background))
+        surface.setForegroundColor(foreground)
+        surface.setBackgroundColor(background)
         if box.selected then
           surface.enableStyle(theme.focusStyle)
           fillRowBackground(surface, cellMetrics, x, y, width, background)
@@ -111,7 +110,7 @@ object PinnedPanelRenderer:
     x: Int,
     y: Int,
     width: Int,
-    color: Color
+    color: RenderColor
   ): Unit =
     val leftPx  = cellMetrics.toPixelX(x)
     val rightPx = cellMetrics.toPixelX(x + width)
@@ -120,9 +119,9 @@ object PinnedPanelRenderer:
       cellMetrics.toPixelY(y),
       rightPx - leftPx,
       cellMetrics.lineHeight,
-      RenderColor.fromAwt(color)
+      color
     )
 
-  private def renderText(surface: RenderSurface, x: Int, y: Int, text: String, foreground: Color): Unit =
-    surface.setForegroundColor(RenderColor.fromAwt(foreground))
+  private def renderText(surface: RenderSurface, x: Int, y: Int, text: String, foreground: RenderColor): Unit =
+    surface.setForegroundColor(foreground)
     text.zipWithIndex.foreach((char, index) => CharacterRenderer.renderChar(surface, x + index, y, char))

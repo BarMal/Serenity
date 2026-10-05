@@ -203,23 +203,16 @@ private[terminal] trait SwingWindowChromeSupport:
 
     def fromTheme(theme: Theme): ChromePalette =
       ChromePalette(
-        titleBackground = theme.panel.background,
-        titleForeground = theme.panel.foreground,
-        border = theme.panelBorder,
-        buttonHoverBackground = blend(theme.highlighted.background, theme.panel.background, 0.24),
-        buttonPressedBackground = blend(theme.highlighted.background, theme.panel.background, 0.38),
-        closeHoverBackground = theme.error.foreground,
-        closePressedBackground = blend(theme.error.foreground, theme.background, 0.82),
-        closeHoverForeground = theme.background,
-        focusBorder = theme.highlighted.foreground
+        titleBackground = theme.panel.background.toAwt,
+        titleForeground = theme.panel.foreground.toAwt,
+        border = theme.panelBorder.toAwt,
+        buttonHoverBackground = theme.highlighted.background.mixOver(theme.panel.background, 0.24).toAwt,
+        buttonPressedBackground = theme.highlighted.background.mixOver(theme.panel.background, 0.38).toAwt,
+        closeHoverBackground = theme.error.foreground.toAwt,
+        closePressedBackground = theme.error.foreground.mixOver(theme.background, 0.82).toAwt,
+        closeHoverForeground = theme.background.toAwt,
+        focusBorder = theme.highlighted.foreground.toAwt
       )
-
-    private def blend(foreground: Color, background: Color, foregroundWeight: Double): Color =
-      val clampedWeight    = foregroundWeight.max(0.0).min(1.0)
-      val backgroundWeight = 1.0 - clampedWeight
-      def channel(value: Color => Int): Int =
-        math.round(value(foreground) * clampedWeight + value(background) * backgroundWeight).toInt
-      new Color(channel(_.getRed), channel(_.getGreen), channel(_.getBlue))
 
   /** Avoids redundant native DWM updates while preserving applications for palette changes. */
   /** Remembers the last chrome palette applied, so re-syncing an unchanged theme every frame posts no toolkit work. */

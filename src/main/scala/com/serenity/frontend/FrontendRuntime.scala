@@ -1,13 +1,12 @@
 package com.serenity.frontend
 
-import java.awt.Color
-
 import cats.effect.{IO, Resource}
 import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.{InputHandler, InputRouter}
 import com.serenity.keystroke.events.Event
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.ui.color.RenderColor
 
 object FrontendRuntime:
 
@@ -24,7 +23,7 @@ object FrontendRuntime:
     (
       AppState,
       Boolean,
-      Option[Color],
+      Option[RenderColor],
       Damage,
       RenderCaches
     ) => IO[Unit]

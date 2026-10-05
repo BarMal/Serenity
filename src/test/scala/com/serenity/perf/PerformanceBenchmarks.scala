@@ -39,7 +39,6 @@ import com.serenity.ui.renderer.{
   CharacterRenderer,
   FontSpec,
   Java2DRenderSurface,
-  RenderColor,
   RendererCursorOverlay,
   RendererEntryPoints
 }
@@ -678,7 +677,7 @@ object PerformanceBenchmarks:
       logicalHeightPx = frameHeightPx
     )
     surface.setFont(FontSpec.fromAwt(textFont))
-    surface.clearViewport(RenderColor.fromAwt(Theme.light.background))
+    surface.clearViewport(Theme.light.background)
     CharacterRenderer.renderMeasuredLine(
       surface,
       xOriginPx = 0.0f,

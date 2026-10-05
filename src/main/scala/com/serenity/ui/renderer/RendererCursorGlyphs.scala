@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import com.serenity.config.AppConfig
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
 
@@ -116,6 +117,6 @@ object RendererCursorGlyphs:
     isPrimaryCursor: Boolean
   ): RenderColor =
     val activeColor =
-      context.cursorColorOverride.getOrElse(RenderColor.fromAwt(config.cursorColors.activeOr(theme.cursor)))
+      context.cursorColorOverride.getOrElse(config.cursorColors.active.fold(theme.cursor)(RenderColor.fromAwt))
     if isPrimaryCursor then activeColor
     else config.cursorColors.inactive.fold(activeColor)(RenderColor.fromAwt)

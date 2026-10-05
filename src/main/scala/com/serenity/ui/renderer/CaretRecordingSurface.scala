@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 
 /** A canvas-shaped [[Java2DRenderSurface]] that records caret fills instead of painting them, so the Swing window can

@@ -1,8 +1,8 @@
 package com.serenity
 
+import java.awt.Font
 import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
-import java.awt.{Color, Font}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.AtomicReference
 
@@ -14,6 +14,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPresetStore
@@ -23,7 +24,6 @@ import com.serenity.ui.renderer.{
   Java2DRenderSurface,
   PanelOutlineDrawing,
   PixelDrawing,
-  RenderColor,
   RenderImage,
   RenderSurface,
   RendererEntryPoints,
@@ -65,10 +65,10 @@ final case class ScenarioFrameEvidence(
 final case class ScenarioDrawnText(text: String, bounds: LayoutRect)
 
 /** A renderer region paired with the semantic colours active while it was painted. */
-final case class ScenarioPaintedRegion(bounds: LayoutRect, foreground: Color, background: Color)
+final case class ScenarioPaintedRegion(bounds: LayoutRect, foreground: RenderColor, background: RenderColor)
 
 /** A surface border submitted with its semantic focus colour. */
-final case class ScenarioBorder(bounds: LayoutRect, color: Color)
+final case class ScenarioBorder(bounds: LayoutRect, color: RenderColor)
 
 /** A text-style transition submitted while rendering a scenario frame. */
 final case class ScenarioStyleCall(action: String, style: TextStyle)
@@ -223,7 +223,7 @@ final class UiScenarioDriver private (
       (0 until environment.viewport.height * environment.cellMetrics.lineHeight).collect {
         case row
             if (0 until environment.viewport.width * environment.cellMetrics.charWidth)
-              .exists(column => image.getRGB(column, row) != state.persisted.theme.background.getRGB) =>
+              .exists(column => image.getRGB(column, row) != state.persisted.theme.background.argb) =>
           row
       }.toSet
     val drawnItems = itemRects.view.mapValues { targets =>
@@ -283,7 +283,7 @@ final class UiScenarioDriver private (
 
   private def compositedPreviewSourceLines(
     image: BufferedImage,
-    background: Color,
+    background: RenderColor,
     buffer: Buffer,
     placement: ScenarioPreviewPlacement,
     activeSourceLines: Set[Int]
@@ -305,7 +305,7 @@ final class UiScenarioDriver private (
 
   private def finalPreviewRowHasContent(
     image: BufferedImage,
-    background: Color,
+    background: RenderColor,
     placement: ScenarioPreviewPlacement,
     localPreviewRow: Int
   ): Boolean =
@@ -319,7 +319,7 @@ final class UiScenarioDriver private (
       .toInt
       .min(image.getHeight)
     left < right && top < bottom && (top until bottom).exists { y =>
-      (left until right).exists(x => image.getRGB(x, y) != background.getRGB)
+      (left until right).exists(x => image.getRGB(x, y) != background.argb)
     }
 
 final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: CellMetrics) extends RenderSurface:
@@ -328,8 +328,8 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
   private val paintedRegionsBuffer = scala.collection.mutable.ListBuffer.empty[ScenarioPaintedRegion]
   private val bordersBuffer        = scala.collection.mutable.ListBuffer.empty[ScenarioBorder]
   private val styleCallsBuffer     = scala.collection.mutable.ListBuffer.empty[ScenarioStyleCall]
-  private val foregroundColor      = AtomicReference(Color.BLACK)
-  private val backgroundColor      = AtomicReference(Color.BLACK)
+  private val foregroundColor      = AtomicReference(RenderColor.Black)
+  private val backgroundColor      = AtomicReference(RenderColor.Black)
 
   def drawnText: List[ScenarioDrawnText] = drawnTextBuffer.toList
 
@@ -344,11 +344,11 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
   override def persistentContentKey: Option[SurfaceContentIdentity] = delegate.persistentContentKey
 
   def setForegroundColor(color: RenderColor): Unit =
-    foregroundColor.set(color.toAwt)
+    foregroundColor.set(color)
     delegate.setForegroundColor(color)
 
   def setBackgroundColor(color: RenderColor): Unit =
-    backgroundColor.set(color.toAwt)
+    backgroundColor.set(color)
     delegate.setBackgroundColor(color)
 
   def getBackgroundColor: RenderColor = delegate.getBackgroundColor
@@ -431,7 +431,7 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
   override def panelOutlines: Option[PanelOutlineDrawing] = delegate.panelOutlines.map { delegateOutlines =>
     new PanelOutlineDrawing:
       def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
-        bordersBuffer += ScenarioBorder(LayoutRect(x, y, width, height), color.toAwt)
+        bordersBuffer += ScenarioBorder(LayoutRect(x, y, width, height), color)
         delegateOutlines.strokeRect(x, y, width, height, color, strokeWidth)
 
       def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =

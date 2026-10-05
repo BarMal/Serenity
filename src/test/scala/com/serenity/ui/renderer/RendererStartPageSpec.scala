@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import com.serenity.MockRenderSurface
 import com.serenity.command.{Command, CommandIntent, SessionIntent}
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CalculatedLayout, CellMetrics, LayoutRect, ViewportSize}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -133,7 +134,7 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
     val startYPx                   = math.max(0, (viewportSize.height * cellMetrics.lineHeight - totalHeightPx) / 2)
     def rowOf(lineIndex: Int): Int = cellMetrics.toRow(startYPx + lineIndex * lineHeightPx)
 
-    def foregroundOfCenteredLine(row: Int, line: String): java.awt.Color =
+    def foregroundOfCenteredLine(row: Int, line: String): RenderColor =
       val x = (viewportSize.width - line.length) / 2
       surface.getFg(x, row)
 

@@ -17,6 +17,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.AwaitCondition.awaitValue
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.ThemeConfigLoader
 import org.scalatest.flatspec.AnyFlatSpec
@@ -134,8 +135,8 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
     val theme = Theme.light.copy(
       name = "quiet-focus",
-      background = new java.awt.Color(0x112233),
-      panelBorder = new java.awt.Color(0x445566)
+      background = RenderColor.fromArgb(0xff112233),
+      panelBorder = RenderColor.fromArgb(0xff445566)
     )
     stateManager.updateState(state => state.copy(persisted = state.persisted.copy(theme = theme))).unsafeRunSync()
 

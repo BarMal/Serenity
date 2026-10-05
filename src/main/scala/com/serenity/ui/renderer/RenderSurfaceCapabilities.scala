@@ -2,6 +2,8 @@ package com.serenity.ui.renderer
 
 import java.awt.font.FontRenderContext
 
+import com.serenity.ui.color.RenderColor
+
 /** Character- and pixel-run text drawing. Every real [[RenderSurface]] implements this -- a surface that cannot draw
   * text cannot render Serenity's UI -- so [[RenderSurface.text]] exposes it directly rather than as an `Option`: the
   * type itself guarantees the capability instead of pushing a check onto every call site that draws a line of text.

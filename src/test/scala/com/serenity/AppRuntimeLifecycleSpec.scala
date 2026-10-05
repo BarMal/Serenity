@@ -1,6 +1,5 @@
 package com.serenity
 
-import java.awt.Color
 import java.nio.file.Files
 
 import scala.concurrent.duration.*
@@ -18,6 +17,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, BufferId, CursorPosition, Damage, EditingState}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -79,14 +79,14 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
         renderFull = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit
@@ -118,14 +118,14 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
         renderFull = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit
@@ -151,14 +151,14 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
         renderFull = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit
@@ -194,14 +194,14 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
         renderFull = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit

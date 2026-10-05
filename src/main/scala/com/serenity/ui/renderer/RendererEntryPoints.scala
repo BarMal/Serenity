@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** The package's entry point for painting a whole frame: a full frame either on a `SwingWindow` or a surface-generic
@@ -36,7 +37,7 @@ object RendererEntryPoints:
     caches: RenderCaches = RenderCaches.create()
   ): Unit =
     surface.hideCursor()
-    surface.clearViewport(RenderColor.fromAwt(state.persisted.theme.background))
+    surface.clearViewport(state.persisted.theme.background)
     RendererFramePlanner.forgetPreservedContent(surface, output, caches)
     RendererStartPage.renderStartPage(
       page,

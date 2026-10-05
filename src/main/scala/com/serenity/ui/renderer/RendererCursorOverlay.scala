@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** Cursor-only redraws (blink ticks that don't need a full layout) and cursor-overlay frames (a base frame painted

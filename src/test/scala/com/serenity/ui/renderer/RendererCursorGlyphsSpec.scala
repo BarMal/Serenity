@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Color
 
 import com.serenity.config.{AppConfig, CursorColorConfig}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, LayoutRect}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -119,8 +120,9 @@ class RendererCursorGlyphsSpec extends AnyFlatSpec with Matchers:
     val theme  = Theme.dark
     val config = AppConfig.default
 
+    config.cursorColors.active shouldBe None
     RendererCursorGlyphs.cursorColorFor(config, theme, contextWith(cellMetrics), isPrimaryCursor = true) shouldBe
-      RenderColor.fromAwt(config.cursorColors.activeOr(theme.cursor))
+      theme.cursor
   }
 
   it should "colour a secondary cursor from config's inactive colour, falling back to the resolved active colour" in {

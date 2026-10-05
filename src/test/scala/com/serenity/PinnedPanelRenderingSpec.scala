@@ -1,6 +1,6 @@
 package com.serenity
 
-import java.awt.{Color, Font}
+import java.awt.Font
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance

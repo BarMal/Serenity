@@ -236,11 +236,11 @@ object RendererPaneContent:
       val titleRect = contract.paneTitleRect(pane.id).getOrElse(paneLayout.titleRect)
 
       if isActive then
-        surface.setBackgroundColor(RenderColor.fromAwt(state.persisted.theme.highlighted.background))
-        surface.setForegroundColor(RenderColor.fromAwt(state.persisted.theme.highlighted.foreground))
+        surface.setBackgroundColor(state.persisted.theme.highlighted.background)
+        surface.setForegroundColor(state.persisted.theme.highlighted.foreground)
       else
-        surface.setBackgroundColor(RenderColor.fromAwt(state.persisted.theme.panel.background))
-        surface.setForegroundColor(RenderColor.fromAwt(state.persisted.theme.panel.foreground))
+        surface.setBackgroundColor(state.persisted.theme.panel.background)
+        surface.setForegroundColor(state.persisted.theme.panel.foreground)
 
       val bufferTitleBase = buffer match
         case Some(buf) =>
@@ -290,20 +290,20 @@ object RendererPaneContent:
           val centerX = titleRect.x + math.max(0, (titleRect.width - displayTitle.length) / 2)
           CharacterRenderer.renderString(surface, centerX, titleRect.y, displayTitle)
 
-    surface.setBackgroundColor(RenderColor.fromAwt(state.persisted.theme.background))
-    surface.setForegroundColor(RenderColor.fromAwt(state.persisted.theme.foreground))
+    surface.setBackgroundColor(state.persisted.theme.background)
+    surface.setForegroundColor(state.persisted.theme.foreground)
 
   private def renderEditorPaneVerticalSpacers(
     paneLayout: EditorPaneLayout,
     state: AppState,
     context: RenderContext
   ): Unit =
-    context.surface.setBackgroundColor(RenderColor.fromAwt(state.persisted.theme.margin))
+    context.surface.setBackgroundColor(state.persisted.theme.margin)
     List(paneLayout.topSpacerRect, paneLayout.bottomSpacerRect)
       .filter(rect => rect.width > 0 && rect.height > 0)
       .foreach(rect => context.surface.fillRect(rect.x, rect.y, rect.width, rect.height, ' '))
-    context.surface.setBackgroundColor(RenderColor.fromAwt(state.persisted.theme.background))
-    context.surface.setForegroundColor(RenderColor.fromAwt(state.persisted.theme.foreground))
+    context.surface.setBackgroundColor(state.persisted.theme.background)
+    context.surface.setForegroundColor(state.persisted.theme.foreground)
 
   private def renderBufferContent(
     buffer: Buffer,
@@ -351,7 +351,7 @@ object RendererPaneContent:
           val lineTopPx = rowMetrics.lineTopPx(screenLineIndex)
           val screenX   = rect.x + visualLineCellOffset(visualLine, context)
 
-          context.surface.setForegroundColor(RenderColor.fromAwt(state.persisted.theme.foreground))
+          context.surface.setForegroundColor(state.persisted.theme.foreground)
 
           if rowMetrics.lineVisible(screenLineIndex, context.surface.viewportHeight) &&
               screenY >= 0 &&

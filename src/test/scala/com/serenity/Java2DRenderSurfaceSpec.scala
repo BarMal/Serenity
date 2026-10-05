@@ -8,8 +8,9 @@ import javax.swing.JPanel
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderColor, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -216,7 +217,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    new Color(image.getRGB(82, 56), true) shouldBe Theme.light.background
+    RenderColor.fromArgb(image.getRGB(82, 56)) shouldBe Theme.light.background
   }
 
   // A background Color with alpha 0 is the transparency sentinel (#1240): `clearViewport`/`fillRect`/`putString` must

@@ -5,15 +5,9 @@ import java.io.StringWriter
 
 import com.serenity.config.AppConfig
 import com.serenity.state.models.UiSurface
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, LayoutRect, OverlayRow}
-import com.serenity.ui.renderer.{
-  PinnedPanelRenderer,
-  RenderColor,
-  TextOverlayRenderer,
-  TextOverlayView,
-  TextPanelRow,
-  TextPanelView
-}
+import com.serenity.ui.renderer.{PinnedPanelRenderer, TextOverlayRenderer, TextOverlayView, TextPanelRow, TextPanelView}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -35,7 +29,8 @@ class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
     rs.flush()
     TerminalEmulator.blank(width, height).consume(writer.toString)
 
-  private def sameRgb(a: Color, b: Color): Boolean = (a.getRGB & 0xffffff) == (b.getRGB & 0xffffff)
+  private def sameRgb(cell: Color, expected: RenderColor): Boolean =
+    (cell.getRGB & 0xffffff) == (expected.argb & 0xffffff)
 
   private def borderCells(rect: LayoutRect): List[(Int, Int)] =
     val horizontal = (rect.x until rect.right).toList.flatMap(x => List((x, rect.y), (x, rect.bottom - 1)))

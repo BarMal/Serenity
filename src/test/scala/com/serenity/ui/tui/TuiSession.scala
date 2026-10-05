@@ -18,7 +18,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.layout.ViewportSize
-import com.serenity.ui.renderer.{RenderColor, RenderController}
+import com.serenity.ui.renderer.RenderController
 import com.serenity.ui.theme.config.AppThemeManager
 import org.jline.terminal.Size
 import org.jline.terminal.impl.DumbTerminal
@@ -131,7 +131,7 @@ final class TuiSession private (
           surface,
           size,
           visible,
-          colour.map(RenderColor.fromAwt),
+          colour,
           stateManager.renderCaches
         )
       )

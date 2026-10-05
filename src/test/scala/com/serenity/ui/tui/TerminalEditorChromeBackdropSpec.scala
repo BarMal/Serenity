@@ -19,6 +19,7 @@ import com.serenity.state.models.{
   PaneId,
   Viewport
 }
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{
   CellMetrics,
   Layout,
@@ -41,14 +42,16 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val font        = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val transparent = Theme.dark.copy(background = new Color(0, 0, 0, 0), margin = new Color(0, 0, 0, 0))
-  private val viewport    = ViewportSize(60, 16)
-  private val paneId      = PaneId(0)
-  private val bufferId    = BufferId(1)
+  private val font = Font(Font.MONOSPACED, Font.PLAIN, 12)
+  private val transparent =
+    Theme.dark.copy(background = RenderColor.fromRgba(0, 0, 0, 0), margin = RenderColor.fromRgba(0, 0, 0, 0))
+  private val viewport = ViewportSize(60, 16)
+  private val paneId   = PaneId(0)
+  private val bufferId = BufferId(1)
 
-  private def sameRgb(a: Color, b: Color): Boolean = (a.getRGB & 0xffffff) == (b.getRGB & 0xffffff)
-  private def isPanel(color: Color): Boolean       = sameRgb(color, transparent.panel.background)
+  private def sameRgb(cell: Color, expected: RenderColor): Boolean =
+    (cell.getRGB & 0xffffff) == (expected.argb & 0xffffff)
+  private def isPanel(color: Color): Boolean = sameRgb(color, transparent.panel.background)
   private def isPanelOrEditor(color: Color): Boolean =
     isPanel(color) || color == TerminalEmulator.TransparentBackground
 
@@ -136,7 +139,7 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
       .withStatusLineColors(StatusLineColors(background = Some(Color.BLUE)))
     val screen = render(editorState(transparent, config))
 
-    sameRgb(screen.cellAt(viewport.width - 1, viewport.height - 1).bg, Color.BLUE) shouldBe true
+    sameRgb(screen.cellAt(viewport.width - 1, viewport.height - 1).bg, RenderColor.fromAwt(Color.BLUE)) shouldBe true
   }
 
   "pane headers in the TUI under a transparent theme" should

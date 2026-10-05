@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.Color
-
 import scala.concurrent.duration.*
 
 import cats.effect.{IO, Ref}
@@ -14,6 +12,7 @@ import com.serenity.state.manager.{Model, RenderCaches, StateEngine}
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.state.undo.UndoState
 import com.serenity.testkit.VirtualTime.runVirtual
+import com.serenity.ui.color.RenderColor
 import fs2.concurrent.SignallingRef
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -78,7 +77,7 @@ class AppRuntimeRenderLoopSpec extends AnyFlatSpec with Matchers:
       rig.pendingPaintDamage,
       IO.pure(Some(state)),
       IO.unit,
-      (_: AppState, _: Boolean, _: Option[Color], damage: Damage, _: RenderCaches) =>
+      (_: AppState, _: Boolean, _: Option[RenderColor], damage: Damage, _: RenderCaches) =>
         IO.monotonic.flatMap(now => rig.fullFrames.update(_ :+ (now -> damage))) >> onFrame,
       RenderCaches.create(),
       lastFrameStart = lastStart
@@ -94,7 +93,7 @@ class AppRuntimeRenderLoopSpec extends AnyFlatSpec with Matchers:
       checkResizeAndHandle = IO.unit,
       cursorVisible = rig.cursorVisible,
       renderCursorOnly =
-        (_: AppState, _: Boolean, _: Option[Color], _: Damage, _: RenderCaches) => rig.cursorFrames.update(_ + 1),
+        (_: AppState, _: Boolean, _: Option[RenderColor], _: Damage, _: RenderCaches) => rig.cursorFrames.update(_ + 1),
       requestFastRender = rig.emitDamage(Damage.Everything),
       cursorIdleInterval = cursorIdleInterval,
       renderCaches = RenderCaches.create()

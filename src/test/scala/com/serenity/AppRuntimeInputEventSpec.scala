@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.Color
-
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
@@ -17,6 +15,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -190,14 +189,14 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
             renderFull = (
               _: AppState,
               _: Boolean,
-              _: Option[Color],
+              _: Option[RenderColor],
               _: Damage,
               _: com.serenity.state.manager.RenderCaches
             ) => initialRenderStarted.complete(()).flatMap(_ => allowInitialRender.get),
             renderCursorOnly = (
               _: AppState,
               _: Boolean,
-              _: Option[Color],
+              _: Option[RenderColor],
               _: Damage,
               _: com.serenity.state.manager.RenderCaches
             ) => IO.unit
@@ -244,14 +243,14 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
             renderFull = (
               _: AppState,
               _: Boolean,
-              _: Option[Color],
+              _: Option[RenderColor],
               _: Damage,
               _: com.serenity.state.manager.RenderCaches
             ) => inputStarted.get >> IO.raiseError(RuntimeException("initial render failed")),
             renderCursorOnly = (
               _: AppState,
               _: Boolean,
-              _: Option[Color],
+              _: Option[RenderColor],
               _: Damage,
               _: com.serenity.state.manager.RenderCaches
             ) => IO.unit

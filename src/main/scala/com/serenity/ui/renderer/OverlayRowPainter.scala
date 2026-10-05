@@ -1,9 +1,7 @@
 package com.serenity.ui.renderer
 
-import java.awt.Color
-
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
-import com.serenity.ui.theme.ColorFormat.withAlpha
 import com.serenity.ui.theme.Theme
 
 /** Paints one row of a floating surface: the row's background, then its glyphs in whatever arrangement its
@@ -22,8 +20,8 @@ private[renderer] object OverlayRowPainter:
     row: OverlayRow,
     theme: Theme,
     cursorVisible: Boolean,
-    defaultForeground: Option[Color],
-    defaultBackground: Option[Color],
+    defaultForeground: Option[RenderColor],
+    defaultBackground: Option[RenderColor],
     font: java.awt.Font,
     cellMetrics: CellMetrics,
     textInsetPx: Double,
@@ -57,8 +55,8 @@ private[renderer] object OverlayRowPainter:
     row: OverlayRow,
     theme: Theme,
     cursorVisible: Boolean,
-    defaultForeground: Option[Color],
-    defaultBackground: Option[Color],
+    defaultForeground: Option[RenderColor],
+    defaultBackground: Option[RenderColor],
     font: java.awt.Font,
     cellMetrics: CellMetrics,
     textInsetPx: Double,
@@ -70,20 +68,20 @@ private[renderer] object OverlayRowPainter:
     val baseBg  = defaultBackground.getOrElse(theme.panel.background)
     val rowBackground =
       rowView.row.backgroundColor
-        .map(_.withAlpha(baseBg.getAlpha))
+        .map(_.withAlpha(baseBg.alpha))
         .getOrElse(
-          if rowView.row.selected then theme.highlighted.background.withAlpha(baseBg.getAlpha)
+          if rowView.row.selected then theme.highlighted.background.withAlpha(baseBg.alpha)
           else baseBg
         )
     val rowForeground =
       rowView.row.foregroundColor
-        .map(_.withAlpha(baseFg.getAlpha))
-        .getOrElse(if rowView.row.selected then theme.highlighted.foreground.withAlpha(baseFg.getAlpha) else baseFg)
+        .map(_.withAlpha(baseFg.alpha))
+        .getOrElse(if rowView.row.selected then theme.highlighted.foreground.withAlpha(baseFg.alpha) else baseFg)
     val rowLeftXPx  = cellMetrics.toPixelX(x)
     val rowRightXPx = cellMetrics.toPixelX(x + width)
 
-    surface.setForegroundColor(RenderColor.fromAwt(rowForeground))
-    surface.setBackgroundColor(RenderColor.fromAwt(rowBackground))
+    surface.setForegroundColor(rowForeground)
+    surface.setBackgroundColor(rowBackground)
     if rowView.row.selected then
       pixelHeight.foreach { height =>
         surface.pixels.fillPixelRect(
@@ -91,7 +89,7 @@ private[renderer] object OverlayRowPainter:
           yPx = pixelY.getOrElse(cellMetrics.toPixelY(y)),
           widthPx = rowRightXPx - rowLeftXPx,
           heightPx = height,
-          color = RenderColor.fromAwt(rowBackground)
+          color = rowBackground
         )
       }
     if rowView.row.selected then surface.enableStyle(theme.focusStyle)
@@ -126,8 +124,8 @@ private[renderer] object OverlayRowPainter:
     rowView: OverlayRowView,
     theme: Theme,
     cursorVisible: Boolean,
-    rowForeground: Color,
-    rowBackground: Color,
+    rowForeground: RenderColor,
+    rowBackground: RenderColor,
     font: java.awt.Font,
     cellMetrics: CellMetrics,
     pixelY: Option[Int]
@@ -233,8 +231,8 @@ private[renderer] object OverlayRowPainter:
               rowRightXPx
             )
           else if placement.cellColumn >= 0 && placement.cellColumn < width then
-            surface.setForegroundColor(RenderColor.fromAwt(theme.background))
-            surface.setBackgroundColor(RenderColor.fromAwt(theme.cursor))
+            surface.setForegroundColor(theme.background)
+            surface.setBackgroundColor(theme.cursor)
             CharacterRenderer.renderChar(surface, placement.x + placement.cellColumn, y, ' ')
         }
 
@@ -370,4 +368,4 @@ private[renderer] object OverlayRowPainter:
     val caretWidthPx = math.min(rawWidthPx, math.max(1, maxRightXPx - minXPx))
     val unclampedXPx = cellMetrics.toPixelX(x) + math.round(caretXs.lastOption.getOrElse(0.0f))
     val xPx          = math.max(minXPx, math.min(unclampedXPx, maxRightXPx - caretWidthPx))
-    surface.pixels.fillPixelRect(xPx, yPx, caretWidthPx, cellMetrics.lineHeight, RenderColor.fromAwt(theme.cursor))
+    surface.pixels.fillPixelRect(xPx, yPx, caretWidthPx, cellMetrics.lineHeight, theme.cursor)

@@ -7,8 +7,9 @@ import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{FontSpec, RenderColor, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -67,7 +68,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
 
   "Renderer" should "use the buffer's text font for editor text layout even when the command runner is active" in {
     val state        = stateWithRunnerAndMarkdownBuffer
-    val cursorColor  = java.awt.Color.RED
+    val cursorColor  = RenderColor.fromRgba(255, 0, 0)
     val surface      = new MockRenderSurface(80, 24)
     val viewportSize = ViewportSize(80, 24)
 
@@ -79,7 +80,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(codeFont),
       FontSpec.fromAwt(textFont),
       cellMetrics,
-      Some(RenderColor.fromAwt(cursorColor)),
+      Some(cursorColor),
       com.serenity.state.manager.RenderCaches.create()
     )
 
@@ -175,7 +176,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
 
   it should "use the text font for a plain-text buffer layout even when the command runner is active" in {
     val state        = stateWithRunnerAndPlainTextBuffer
-    val cursorColor  = java.awt.Color.RED
+    val cursorColor  = RenderColor.fromRgba(255, 0, 0)
     val surface      = new MockRenderSurface(80, 24)
     val viewportSize = ViewportSize(80, 24)
 
@@ -187,7 +188,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(codeFont),
       FontSpec.fromAwt(textFont),
       cellMetrics,
-      Some(RenderColor.fromAwt(cursorColor)),
+      Some(cursorColor),
       com.serenity.state.manager.RenderCaches.create()
     )
 

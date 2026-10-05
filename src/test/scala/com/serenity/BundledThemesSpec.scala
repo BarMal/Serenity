@@ -1,6 +1,7 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.SyntaxElement
 import com.serenity.ui.theme.config.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -14,8 +15,8 @@ class BundledThemesSpec extends AnyFlatSpec with Matchers:
     val darkTheme = manager.loadThemeFromResource("themes/dark.conf").unsafeRunSync()
 
     darkTheme.name shouldBe "dark"
-    darkTheme.foregroundColor shouldBe a[java.awt.Color]
-    darkTheme.backgroundColor shouldBe a[java.awt.Color]
+    darkTheme.foregroundColor shouldBe RenderColor.fromArgb(0xfff5f7fa)
+    darkTheme.backgroundColor shouldBe RenderColor.fromArgb(0xff0b0f14)
 
     // Verify syntax highlighting colors are configured
     val keywordColor = darkTheme.colorFor(SyntaxElement.Keyword)
@@ -34,8 +35,8 @@ class BundledThemesSpec extends AnyFlatSpec with Matchers:
     val lightTheme = manager.loadThemeFromResource("themes/light.conf").unsafeRunSync()
 
     lightTheme.name shouldBe "light"
-    lightTheme.foregroundColor shouldBe a[java.awt.Color]
-    lightTheme.backgroundColor shouldBe a[java.awt.Color]
+    lightTheme.foregroundColor shouldBe RenderColor.fromArgb(0xff102a43)
+    lightTheme.backgroundColor shouldBe RenderColor.fromArgb(0xfffdfdfd)
 
     // Verify syntax highlighting colors are configured
     val keywordColor = lightTheme.colorFor(SyntaxElement.Keyword)
@@ -113,6 +114,6 @@ class BundledThemesSpec extends AnyFlatSpec with Matchers:
 
     theme.name shouldBe "hex-test"
     // The exact RGB values should be preserved
-    theme.foregroundColor shouldNot be(null)
-    theme.backgroundColor shouldNot be(null)
+    theme.foregroundColor shouldBe RenderColor.White
+    theme.backgroundColor shouldBe RenderColor.Black
   }

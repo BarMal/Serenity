@@ -2,6 +2,7 @@ package com.serenity.ui.layout
 
 import com.serenity.command.*
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.ThemeCreatorState
 import org.scalatest.flatspec.AnyFlatSpec
@@ -49,7 +50,7 @@ class PickerContentResolverSpec extends AnyFlatSpec with Matchers:
       PickerContentResolver.resolveThemeCreator(state, LayoutRect(0, 0, 60, 20), SurfaceRenderMode.Floating)
 
     resolved.footer.map(_.plainText) shouldBe Some("Invalid color")
-    resolved.footer.flatMap(_.foregroundColor) shouldBe Some(java.awt.Color.RED)
+    resolved.footer.flatMap(_.foregroundColor) shouldBe Some(RenderColor.fromRgba(255, 0, 0))
   }
 
   it should "omit the footer when there is no status message" in {

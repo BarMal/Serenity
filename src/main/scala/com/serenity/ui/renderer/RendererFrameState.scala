@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import com.serenity.config.AppConfig
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** Identity of the screen a frame publishes to -- a newtype over the backing canvas/surface's own reference identity,

@@ -21,6 +21,7 @@ import com.serenity.state.models.{
   SurfacePresentation,
   UiSurface
 }
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, Layout, LayoutRect, OverlayRow, OverlaySegment, OverlayTone, ViewportSize}
 import com.serenity.ui.renderer.{
   FontSpec,
@@ -44,7 +45,8 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
 
   private val cellMetrics = CellMetrics.cellUnit
   private val font        = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val transparent = Theme.dark.copy(background = new Color(0, 0, 0, 0), margin = new Color(0, 0, 0, 0))
+  private val transparent =
+    Theme.dark.copy(background = RenderColor.fromRgba(0, 0, 0, 0), margin = RenderColor.fromRgba(0, 0, 0, 0))
 
   private def surface(width: Int, height: Int): (TerminalRenderSurface, StringWriter) =
     val writer = new StringWriter()
@@ -54,7 +56,8 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
     rs.flush()
     TerminalEmulator.blank(width, height).consume(writer.toString)
 
-  private def sameRgb(a: Color, b: Color): Boolean = (a.getRGB & 0xffffff) == (b.getRGB & 0xffffff)
+  private def sameRgb(cell: Color, expected: RenderColor): Boolean =
+    (cell.getRGB & 0xffffff) == (expected.argb & 0xffffff)
 
   private def isPanel(color: Color): Boolean = sameRgb(color, transparent.panel.background)
 
@@ -127,7 +130,7 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
 
     val screen = renderOverlay(overlay, transparent, config)
 
-    sameRgb(screen.cellAt(15, 1).bg, Color.BLUE) shouldBe true
+    sameRgb(screen.cellAt(15, 1).bg, RenderColor.fromAwt(Color.BLUE)) shouldBe true
   }
 
   "a floating overlay in the TUI under an opaque theme" should "keep painting the theme's panel colour" in {

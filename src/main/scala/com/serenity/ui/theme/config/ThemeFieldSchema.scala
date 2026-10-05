@@ -1,7 +1,6 @@
 package com.serenity.ui.theme.config
 
-import java.awt.Color
-
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.{SyntaxElement, Theme, ThemeColor}
 
 /** One optional `SyntaxColors` field: which slot it reads/writes, its HOCON path and creator-UI label, and the fallback
@@ -98,7 +97,7 @@ object ThemeFieldSchema:
       label: String,
       select: UiColors => String,
       replace: (UiColors, String) => UiColors,
-      themeValue: Theme => Color
+      themeValue: Theme => RenderColor
   )
 
   val uiForegroundField: UiScalarFieldSchema =

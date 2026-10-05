@@ -1,10 +1,11 @@
 package com.serenity.ui.renderer
 
-import java.awt.{Color, Font}
+import java.awt.Font
 
 import com.serenity.MockRenderSurface
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.state.models.{AppState, TextCaretStop, TextVisualLine}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.TextLayoutSnapshot
 import com.serenity.ui.theme.TextStyle
 import org.scalatest.flatspec.AnyFlatSpec
@@ -25,8 +26,8 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       glyphAscentPx = 36,
       glyphText = "C",
       glyphStyle = style,
-      foreground = Color.RED,
-      background = Color.BLACK
+      foreground = RenderColor.fromRgba(255, 0, 0),
+      background = RenderColor.Black
     )
 
     surface.drawRunPxCalls should have size 1
@@ -37,7 +38,7 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
     call.bgWidthPx shouldBe 24.0f
     call.lineHeightPx shouldBe 48
     call.ascentPx shouldBe 36
-    call.foreground shouldBe Color.RED
+    call.foreground shouldBe RenderColor.fromRgba(255, 0, 0)
   }
 
   it should "draw nothing for an empty glyph" in {
@@ -52,8 +53,8 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       glyphAscentPx = 36,
       glyphText = "",
       glyphStyle = TextStyle.normal,
-      foreground = Color.RED,
-      background = Color.BLACK
+      foreground = RenderColor.fromRgba(255, 0, 0),
+      background = RenderColor.Black
     )
 
     surface.drawRunPxCalls shouldBe Nil
@@ -67,8 +68,8 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       x = 2,
       y = 1,
       glyphText = "C",
-      accentForeground = Color.RED,
-      background = Color.BLACK
+      accentForeground = RenderColor.fromRgba(255, 0, 0),
+      background = RenderColor.Black
     )
 
     surface.getChar(2, 1) shouldBe 'C'
@@ -132,8 +133,8 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
     val frc                    = TextLayoutSnapshot.defaultFontRenderContext()
     val segments = Some(
       List(
-        com.serenity.ui.theme.StyledText("Hello", TextStyle.normal, Color.RED, Color.BLACK),
-        com.serenity.ui.theme.StyledText(" world", TextStyle.normal, Color.BLUE, Color.BLACK)
+        com.serenity.ui.theme.StyledText("Hello", TextStyle.normal, RenderColor.fromRgba(255, 0, 0), RenderColor.Black),
+        com.serenity.ui.theme.StyledText(" world", TextStyle.normal, RenderColor.fromRgba(0, 0, 255), RenderColor.Black)
       )
     )
 
@@ -153,7 +154,9 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
     )
 
     drawSegments.map(_.map(_.content)) shouldBe Some(List("ello", " world"))
-    drawSegments.map(_.map(_.foregroundColor)) shouldBe Some(List(Color.RED, Color.BLUE))
+    drawSegments.map(_.map(_.foregroundColor)) shouldBe Some(
+      List(RenderColor.fromRgba(255, 0, 0), RenderColor.fromRgba(0, 0, 255))
+    )
   }
 
   it should "leave the visual line and segments unchanged on the cell/TUI path" in {

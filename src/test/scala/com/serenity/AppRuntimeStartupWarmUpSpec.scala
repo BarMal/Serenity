@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.Color
-
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
@@ -15,6 +13,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -40,7 +39,7 @@ class AppRuntimeStartupWarmUpSpec extends AnyFlatSpec with Matchers:
       val visible = (
         _: AppState,
         _: Boolean,
-        _: Option[Color],
+        _: Option[RenderColor],
         _: Damage,
         _: RenderCaches
       ) => log.update(_ :+ "visible")

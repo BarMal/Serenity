@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** What a frame decided to reuse: the rows it still has to draw per pane and the pixel bands it kept. */
@@ -55,7 +56,7 @@ object RendererFramePlanner:
         case _                              => None
     } match
       case Some(page) =>
-        surface.clearViewport(RenderColor.fromAwt(state.persisted.theme.background))
+        surface.clearViewport(state.persisted.theme.background)
         forgetPreservedContent(surface, output, caches)
         RendererStartPage.renderStartPage(
           page,
@@ -127,9 +128,9 @@ object RendererFramePlanner:
         caches.frameState.rememberSnapshots(surface, editorRenderPlan.snapshots)
         framePlan match
           case Some(plan) if plan.preserved.nonEmpty =>
-            surface.clearViewportExcept(RenderColor.fromAwt(state.persisted.theme.background), plan.preserved)
+            surface.clearViewportExcept(state.persisted.theme.background, plan.preserved)
           case _ =>
-            surface.clearViewport(RenderColor.fromAwt(state.persisted.theme.background))
+            surface.clearViewport(state.persisted.theme.background)
         paintFrameLayers(state, context, editorRenderPlan, finalizedScene, framePlan, damage)
         commitFramePlan(framePlan, output)
         Some(editorRenderPlan)

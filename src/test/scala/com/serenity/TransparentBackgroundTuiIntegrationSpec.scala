@@ -1,9 +1,8 @@
 package com.serenity
 
-import java.awt.Color
-
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.{DefaultThemes, Theme}
@@ -20,7 +19,7 @@ class TransparentBackgroundTuiIntegrationSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private val transparentBackground =
-    Theme.dark.copy(background = new Color(0, 0, 0, 0), margin = new Color(0, 0, 0, 0))
+    Theme.dark.copy(background = RenderColor.fromRgba(0, 0, 0, 0), margin = RenderColor.fromRgba(0, 0, 0, 0))
 
   "Renderer" should "emit SGR 49 for the editor body when the theme background is transparent" in {
     // Some chrome (the gutter, `menuItem` rows) keeps its own opaque background, so this only asserts that SGR 49

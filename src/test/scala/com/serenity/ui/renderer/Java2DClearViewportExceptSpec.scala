@@ -4,6 +4,7 @@ import java.awt.geom.Area
 import java.awt.image.BufferedImage
 import java.awt.{AlphaComposite, Color, Font, Rectangle}
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
