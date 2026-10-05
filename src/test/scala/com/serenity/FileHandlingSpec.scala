@@ -350,7 +350,9 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
       Files.readAllBytes(sourceFile) shouldBe sourceBytes
 
       fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
-      RtfDocumentCodec.readBytesWithFidelity(Files.readAllBytes(savedFile)).map(_.fidelity.isLossless) shouldBe Right(true)
+      RtfDocumentCodec.readBytesWithFidelity(Files.readAllBytes(savedFile)).map(_.fidelity.isLossless) shouldBe Right(
+        true
+      )
     finally
       Files.deleteIfExists(sourceFile)
       Files.deleteIfExists(savedFile)

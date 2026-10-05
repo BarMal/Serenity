@@ -150,7 +150,11 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
 
     val runs = document.paragraphs.flatMap(_.runs)
     runs.map(_.text) shouldBe List("quoted ", "strong", " weak")
-    runs.map(_.style.marks) shouldBe List(Set(InlineMark.Italic), Set(InlineMark.Italic, InlineMark.Bold), Set(InlineMark.Italic))
+    runs.map(_.style.marks) shouldBe List(
+      Set(InlineMark.Italic),
+      Set(InlineMark.Italic, InlineMark.Bold),
+      Set(InlineMark.Italic)
+    )
     runs.map(_.style.fontFamily).distinct shouldBe List(Some("Georgia"))
     runs.map(_.style.fontSize).distinct shouldBe List(Some(15.0f))
   }
@@ -189,7 +193,9 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "decode \\'hh escapes using the current font's charset" in {
-    textOf("""{\rtf1\ansi\ansicpg1252{\fonttbl{\f0\fcharset0 A;}{\f1\fcharset204 B;}}\pard \'e9{\f1 \'e9}\par}""") shouldBe
+    textOf(
+      """{\rtf1\ansi\ansicpg1252{\fonttbl{\f0\fcharset0 A;}{\f1\fcharset204 B;}}\pard \'e9{\f1 \'e9}\par}"""
+    ) shouldBe
       "\u00e9\u0439"
   }
 
@@ -253,7 +259,8 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "import a Word-style document with styles, fonts, colours, code pages and unknown destinations" in {
-    val result   = RtfDocumentCodec.readBytesWithFidelity(fixture("word-sample.rtf")).fold(e => fail(e.getMessage), identity)
+    val result =
+      RtfDocumentCodec.readBytesWithFidelity(fixture("word-sample.rtf")).fold(e => fail(e.getMessage), identity)
     val document = result.document
 
     document.paragraphs.map(_.plainText) shouldBe List(
@@ -288,9 +295,7 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
       "{" * 50000
     )
 
-    malformed.foreach { rtf =>
-      RtfDocumentCodec.readBytes(rtf.getBytes(StandardCharsets.ISO_8859_1)).isLeft shouldBe true
-    }
+    malformed.foreach(rtf => RtfDocumentCodec.readBytes(rtf.getBytes(StandardCharsets.ISO_8859_1)).isLeft shouldBe true)
   }
 
   it should "never throw on any truncation of a real document" in {
@@ -323,7 +328,9 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val result = RtfDocumentCodec.readBytesWithFidelity(RtfDocumentCodec.writeBytes(source)).fold(e => fail(e.getMessage), identity)
+    val result = RtfDocumentCodec
+      .readBytesWithFidelity(RtfDocumentCodec.writeBytes(source))
+      .fold(e => fail(e.getMessage), identity)
 
     result.fidelity.isLossless shouldBe true
     result.document.paragraphs shouldBe source.paragraphs
@@ -347,7 +354,6 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
       loaded.plainText shouldBe "Saved text"
     finally Files.deleteIfExists(path)
   }
-
 
   private def decode(bytes: Array[Byte]): RichTextDocument =
     RtfDocumentCodec.readBytes(bytes).fold(error => fail(error.getMessage), identity)

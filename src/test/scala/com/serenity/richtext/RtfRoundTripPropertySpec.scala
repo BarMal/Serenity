@@ -17,11 +17,11 @@ class RtfRoundTripPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks
     "word",
     " ",
     "  ",
-    "é",
-    "€",
-    "Ж",
-    "日本",
-    "😀",
+    "\u00e9",
+    "\u20ac",
+    "\u0416",
+    "\u65e5\u672c",
+    "\ud83d\ude00",
     "\\",
     "{",
     "}",
@@ -107,9 +107,7 @@ class RtfRoundTripPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks
   }
 
   property("reading arbitrary bytes never throws") {
-    forAll { (bytes: Array[Byte]) =>
-      noException should be thrownBy RtfDocumentCodec.readBytes(bytes)
-    }
+    forAll((bytes: Array[Byte]) => noException should be thrownBy RtfDocumentCodec.readBytes(bytes))
   }
 
   property("rewriting an imported document is stable") {
