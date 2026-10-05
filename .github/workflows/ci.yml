@@ -175,7 +175,8 @@ jobs:
       # Absolute timings only compare on the same machine: GitHub's runners differ by about 2x, so a baseline recorded
       # on one runner and checked on another fails or passes by which runner each got. Instead the base commit and this
       # commit are benchmarked here, on one runner, alternating base/head twice so a slow spell on the runner hits
-      # both; each side keeps its fastest run per benchmark (`combine_perf_runs.py`).
+      # both. A benchmark fails only when every head run is past the threshold against every base run -- the head's
+      # fastest against the base's slowest (`combine_perf_runs.py`) -- since some swing 2x between runs of one commit.
       - name: Check out the base commit
         run: git worktree add --detach "$RUNNER_TEMP/base" HEAD^1
 
@@ -214,7 +215,7 @@ jobs:
               exit 1
             fi
           done
-          python3 scripts/combine_perf_runs.py perf-base.csv perf-runs/base-1.csv perf-runs/base-2.csv
+          python3 scripts/combine_perf_runs.py --pick slowest perf-base.csv perf-runs/base-1.csv perf-runs/base-2.csv
           python3 scripts/combine_perf_runs.py perf-results.csv perf-runs/head-1.csv perf-runs/head-2.csv
           python3 scripts/check_perf_regression.py perf-base.csv perf-results.csv --threshold 2.0
 

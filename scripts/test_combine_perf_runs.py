@@ -85,6 +85,36 @@ class CombinePerfRunsTests(unittest.TestCase):
         self.assertEqual(combine_perf_runs.main_with_args([out, self._path("empty.csv")]), 1)
         self.assertFalse(os.path.exists(out))
 
+    def test_slowest_keeps_each_benchmarks_slowest_p50_across_runs(self) -> None:
+        _write_csv(self._path("a.csv"), [("x", 2.0, 3.0), ("y", 1.0, 1.5)])
+        _write_csv(self._path("b.csv"), [("x", 1.0, 4.0), ("y", 1.2, 1.3)])
+        out = self._path("out.csv")
+        combine_perf_runs.main_with_args(["--pick", "slowest", out, self._path("a.csv"), self._path("b.csv")])
+        rows = check_perf_regression.parse_csv(out)
+        self.assertEqual((rows["x"].p50_ms, rows["x"].p95_ms), (2.0, 3.0))
+        self.assertEqual(rows["y"].p50_ms, 1.2)
+
+    def test_one_noisy_run_per_side_does_not_read_as_a_regression(self) -> None:
+        # Identical code on both sides: base 0.20/0.44, head 0.43/0.21.
+        _write_csv(self._path("base1.csv"), [("x", 0.20, 0.5)])
+        _write_csv(self._path("base2.csv"), [("x", 0.44, 0.6)])
+        _write_csv(self._path("head1.csv"), [("x", 0.43, 0.6)])
+        _write_csv(self._path("head2.csv"), [("x", 0.21, 0.5)])
+        base, head = self._path("base.csv"), self._path("head.csv")
+        combine_perf_runs.main_with_args(["--pick", "slowest", base, self._path("base1.csv"), self._path("base2.csv")])
+        combine_perf_runs.main_with_args([head, self._path("head1.csv"), self._path("head2.csv")])
+        self.assertEqual(check_perf_regression.main_with_args([base, head]), 0)
+
+    def test_a_regression_in_every_head_run_still_fails(self) -> None:
+        _write_csv(self._path("base1.csv"), [("x", 1.0, 1.1)])
+        _write_csv(self._path("base2.csv"), [("x", 1.2, 1.3)])
+        _write_csv(self._path("head1.csv"), [("x", 2.6, 2.7)])
+        _write_csv(self._path("head2.csv"), [("x", 2.5, 2.6)])
+        base, head = self._path("base.csv"), self._path("head.csv")
+        combine_perf_runs.main_with_args(["--pick", "slowest", base, self._path("base1.csv"), self._path("base2.csv")])
+        combine_perf_runs.main_with_args([head, self._path("head1.csv"), self._path("head2.csv")])
+        self.assertEqual(check_perf_regression.main_with_args([base, head]), 1)
+
     def test_combined_output_round_trips_through_the_regression_check(self) -> None:
         _write_csv(self._path("base1.csv"), [("x", 1.0, 1.1)])
         _write_csv(self._path("base2.csv"), [("x", 1.1, 1.2)])
