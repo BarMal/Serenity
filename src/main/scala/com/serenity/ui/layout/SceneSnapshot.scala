@@ -215,7 +215,8 @@ object UiSceneSnapshot:
     calculatedLayout: CalculatedLayout,
     initialZIndex: Int
   ): List[SceneNode] =
-    (calculatedLayout.aboveCursorOverlayStack ++ calculatedLayout.belowCursorOverlayStack).zipWithIndex
+    (calculatedLayout.aboveCursorOverlayStack ++ calculatedLayout.belowCursorOverlayStack ++
+      calculatedLayout.cornerOverlayStack).zipWithIndex
       .flatMap {
         case ((surfaceId, frame), offset) =>
           state

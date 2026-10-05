@@ -72,6 +72,7 @@ final case class CalculatedLayout(
     belowCursorOverlayRect: Option[LayoutRect] = None,
     aboveCursorOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
     belowCursorOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
+    cornerOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
     collapsedFloatingSurfaceIds: Set[SurfaceId] = Set.empty,
     floatingOverlayOffsetRows: Map[SurfaceId, Double] = Map.empty,
     lineNumberRect: Option[LayoutRect] = None,
@@ -321,6 +322,7 @@ object LayoutEngine:
       belowCursorOverlayRect = belowLayout.stack.headOption.map(_._2),
       aboveCursorOverlayStack = aboveCursorOverlayStack,
       belowCursorOverlayStack = belowLayout.stack,
+      cornerOverlayStack = OverlayStackLayout.calculateCornerOverlays(state, editorPanelRect),
       collapsedFloatingSurfaceIds = aboveLayout.collapsedSurfaceIds ++ belowLayout.collapsedSurfaceIds,
       floatingOverlayOffsetRows = floatingOffsets
     )

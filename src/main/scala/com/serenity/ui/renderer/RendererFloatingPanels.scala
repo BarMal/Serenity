@@ -49,12 +49,13 @@ object RendererFloatingPanels:
     val belowOverlays =
       if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
     belowOverlays.foreach(paintOverlay)
+    overlays.cornerStack.foreach(paintOverlay)
 
     // Recorded *after* this frame's panels are painted, so `dirtyRowsFor`'s read of this same state (via `planFrame`,
     // which always runs before this method for a given frame) still sees last frame's rects while planning this one --
     // see `RendererFrameState.previousFloatingSurfaceRects`' doc comment.
     val currentFloatingRects: Map[SurfaceId, PixelRect] =
-      (overlays.aboveCursorStack ++ belowOverlays).flatMap { overlay =>
+      (overlays.aboveCursorStack ++ belowOverlays ++ overlays.cornerStack).flatMap { overlay =>
         overlay.surfaceId.map(_ -> floatingPanelPixelRect(overlay.rect, context.cellMetrics))
       }.toMap
     context.caches.frameState.rememberFloatingSurfaceRects(context.surface, currentFloatingRects)

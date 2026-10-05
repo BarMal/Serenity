@@ -176,6 +176,8 @@ object SurfaceContentResolver:
         )
       case SurfaceContent.MarkdownPreview(_, title) =>
         ResolvedSurfaceContent(title = titleFor(mode, s"Preview: $title"))
+      case SurfaceContent.Notice(notice, _) =>
+        NoticeContent.resolve(notice, rect)
 
   private[layout] def titleFor(mode: SurfaceRenderMode, title: String): Option[String] =
     mode match

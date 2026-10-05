@@ -106,6 +106,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
     val surfaces = new EffectSurfacePort:
       def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = callsVar.update(_ :+ s"showPeek:$content")
       def showModal(modal: Modal): IO[Unit]                            = callsVar.update(_ :+ s"showModal:$modal")
+      def showNotice(notice: Notice): IO[Unit] = callsVar.update(_ :+ s"showNotice:${notice.message}")
       def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
         callsVar.update(_ :+ s"pinPanel:$content:$position:$size")
       def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit] =
@@ -133,7 +134,8 @@ private[manager] trait StateManagerEffectHandlersHarness:
       sessionPersistenceVar,
       NoOpLogger.impl[IO],
       lspQueueVar,
-      inlineLanes
+      inlineLanes,
+      notice => callsVar.update(_ :+ s"showNotice:${notice.message}")
     )
 
     val files = new EffectFilePort:

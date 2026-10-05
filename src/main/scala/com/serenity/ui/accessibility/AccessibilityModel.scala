@@ -525,8 +525,8 @@ object AccessibilitySnapshot:
     content match
       case _: SurfaceContent.CommandPalette | _: SurfaceContent.ModalWorkflow =>
         AccessibilityRole.Dialog
-      case _: SurfaceContent.StatusLine => AccessibilityRole.Status
-      case _                            => AccessibilityRole.Panel
+      case _: SurfaceContent.StatusLine | _: SurfaceContent.Notice => AccessibilityRole.Status
+      case _                                                       => AccessibilityRole.Panel
 
   private def surfaceName(content: SurfaceContent): String =
     content match
@@ -553,11 +553,13 @@ object AccessibilitySnapshot:
       case SurfaceContent.TabList(_, _)                => "Open tabs"
       case SurfaceContent.TabBar(_, _)                 => "Tab bar"
       case SurfaceContent.RecentFilesInMode(mode, _)   => s"Recent in ${mode.toString} mode"
+      case SurfaceContent.Notice(notice, _)            => notice.level.label
 
   private def surfaceValue(content: SurfaceContent): Option[String] =
     content match
       case SurfaceContent.StartPage(page)                 => page.statusMessage
       case SurfaceContent.StatusLine(text)                => Some(text)
+      case SurfaceContent.Notice(notice, _)               => Some(notice.message)
       case SurfaceContent.TabBar(entries, activeBufferId) => tabBarValue(entries, activeBufferId)
       case _                                              => None
 

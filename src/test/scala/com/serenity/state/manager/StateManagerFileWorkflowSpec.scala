@@ -51,6 +51,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
       val saved: Ref[IO, List[(BufferId, Path)]],
       val continued: Ref[IO, List[(SurfaceId, BufferId)]],
       val loaded: Ref[IO, List[Path]],
+      val notices: Ref[IO, List[Notice]],
       val fileWorkflow: StateManagerFileWorkflow
   ):
 
@@ -81,12 +82,14 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
     val saved     = Ref.of[IO, List[(BufferId, Path)]](Nil).unsafeRunSync()
     val continued = Ref.of[IO, List[(SurfaceId, BufferId)]](Nil).unsafeRunSync()
     val loaded    = Ref.of[IO, List[Path]](Nil).unsafeRunSync()
+    val notices   = Ref.of[IO, List[Notice]](Nil).unsafeRunSync()
 
     new Harness(
       stateRef,
       saved,
       continued,
       loaded,
+      notices,
       new StateManagerFileWorkflow(
         stateRef.get,
         NoOpLogger.impl[IO],
@@ -96,7 +99,8 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
         path => loaded.update(_ :+ path),
         (_, check) => check,
         (id, path) => saved.update(_ :+ (id, path)) >> saveResult,
-        (id, buffer) => continued.update(_ :+ (id, buffer))
+        (id, buffer) => continued.update(_ :+ (id, buffer)),
+        notice => notices.update(_ :+ notice)
       )
     )
 
@@ -176,6 +180,22 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
 
       fixture.continued.get.unsafeRunSync() shouldBe Nil
       fixture.currentWorkflow.statusMessage shouldBe Some("Could not save: disk full")
+    finally Files.deleteIfExists(directory)
+  }
+
+  it should "show a notice naming the file it could not write (#1717)" in {
+    val directory = Files.createTempDirectory("file-workflow-save-failure-notice")
+    try
+      val fixture = harness(
+        SaveAsFileWorkflowState(filename = "notes.txt", path = directory.toString),
+        saveResult = IO.raiseError(new java.io.IOException("No space left on device"))
+      )
+
+      fixture.fileWorkflow.submitFileWorkflowEffect(surfaceId).unsafeRunSync()
+
+      fixture.notices.get.unsafeRunSync().map(notice => (notice.level, notice.message)) shouldBe List(
+        (NoticeLevel.Error, "Couldn't save notes.txt: the disk is full.")
+      )
     finally Files.deleteIfExists(directory)
   }
 

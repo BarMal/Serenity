@@ -33,6 +33,8 @@ private[layout] object FloatingSurfaceSizing:
       // A quiet single row: as wide as its text (plus a cell of padding each side), never the whole pane.
       case SurfaceContent.StatusLine(text) =>
         math.min(contentRect.width, text.length + 2)
+      case SurfaceContent.Notice(notice, _) =>
+        NoticeContent.frameWidth(notice, contentRect.width)
       case _ =>
         contentRect.width
 
@@ -112,6 +114,8 @@ private[layout] object FloatingSurfaceSizing:
         math.min(maxHeight - 1, math.max(4, entries.size + 2))
       case SurfaceContent.RecentFilesInMode(_, paths) =>
         math.min(maxHeight - 1, math.max(4, paths.size + 2))
+      case SurfaceContent.Notice(notice, _) =>
+        NoticeContent.frameHeight(notice, maxWidth)
       case SurfaceContent.TabBar(_, _) =>
         // A single always-visible strip row, the same "quiet single line" sizing as StatusLine below -- see also
         // the matching `floor` case for it just below.

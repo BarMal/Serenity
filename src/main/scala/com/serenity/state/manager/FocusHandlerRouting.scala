@@ -110,3 +110,5 @@ final private[manager] class FocusHandlerRouting(wrapCache: WrappedLineCache):
       // dispatch. Close/reorder (#1078/#1079/#1081) remain out of scope. Routed here only so this table stays
       // exhaustive, same "look but don't touch" pattern as TabList.
       case SurfaceContent.TabBar(_, _) => peekOverlay
+      // A notice (#1717) never takes focus either; routed here only so this table stays exhaustive.
+      case SurfaceContent.Notice(_, _) => peekOverlay

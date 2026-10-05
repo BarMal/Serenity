@@ -25,6 +25,7 @@ import com.serenity.state.models.{
 import com.serenity.state.reducers.{
   CommandRunnerReducer,
   ModalEventReducer,
+  NoticeReducer,
   PinnedPanelContentReducer,
   ReducerResult,
   ThemeStateReducer
@@ -109,6 +110,9 @@ private[manager] enum EffectResult:
   /** The double-tap window of the binding recorded at `recordedAtMillis` has closed. */
   case CommandRunnerBindingExpired(recordedAtMillis: Long)
 
+  /** A notice's time ran out by `nowNanos`; every notice due by then leaves (#1717). */
+  case NoticesExpired(nowNanos: Long)
+
 private[manager] object EffectResult:
 
   def applyIfCurrent(
@@ -141,8 +145,9 @@ private[manager] object EffectResult:
       case FileLoaded(path, loaded)             => FileResults.loaded(state, path, loaded)
       // A failed save changes nothing: the buffer stays dirty. Its error is not lost here -- it travels in the result
       // to `commitSave`, which hands it to the submitter's `onFailure` or raises it to the caller that awaited the save.
-      case FileSaveFailed(_, _) => state
-      case FileLoadFailed(_, _) => state
+      case FileSaveFailed(_, _)     => state
+      case FileLoadFailed(_, _)     => state
+      case NoticesExpired(nowNanos) => NoticeReducer.expired(state, nowNanos)
 
       case UiPresetFeedback(previews, context) =>
         UiPresetTransitions.withFeedback(state, previews, context)
