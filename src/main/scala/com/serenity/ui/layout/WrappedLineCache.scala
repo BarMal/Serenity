@@ -29,7 +29,12 @@ sealed abstract class WrappedLineCache:
     incremental: Seq[Predecessor] => Option[RowWrap]
   ): Vector[TextVisualLine]
 
-  private[layout] def visualRowCounts(key: VisualRowKey, content: Rope, measure: Int => Int): VisualRowCounts
+  private[layout] def visualRowCounts(
+    key: VisualRowKey,
+    content: Rope,
+    measure: Int => Int,
+    stamp: AnyRef
+  ): VisualRowCounts
 
 /** Everything a line's wrap and caret measurement depends on except its buffer line number, which only labels the rows
   * -- so a line keeps its entry when lines are inserted or deleted above it. `resolver` carries the base font and the
@@ -94,7 +99,12 @@ object WrappedLineCache:
       incremental: Seq[Predecessor] => Option[RowWrap]
     ): Vector[TextVisualLine] = cold(maxVisualLines).rows
 
-    private[layout] def visualRowCounts(key: VisualRowKey, content: Rope, measure: Int => Int): VisualRowCounts =
+    private[layout] def visualRowCounts(
+      key: VisualRowKey,
+      content: Rope,
+      measure: Int => Int,
+      stamp: AnyRef
+    ): VisualRowCounts =
       VisualRowCounts.walking(content.lineCount, measure)
 
   def bounded(maxLines: Int = DefaultMaxLines, maxChars: Long = DefaultMaxChars): Bounded =
@@ -138,8 +148,13 @@ object WrappedLineCache:
     def wrapStats: WrapStats =
       WrapStats(coldCount.get, incrementalCount.get, rowCount.get, measuredCount.get)
 
-    private[layout] def visualRowCounts(key: VisualRowKey, content: Rope, measure: Int => Int): VisualRowCounts =
-      visualRows.counts(key, content, measure)
+    private[layout] def visualRowCounts(
+      key: VisualRowKey,
+      content: Rope,
+      measure: Int => Int,
+      stamp: AnyRef
+    ): VisualRowCounts =
+      visualRows.counts(key, content, measure, stamp)
 
     private[layout] def wrapped(key: WrappedLineKey, bufferLine: Int, maxVisualLines: Int)(
       cold: Int => RowWrap,
