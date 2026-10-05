@@ -25,6 +25,7 @@ import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync, 
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererCursorOverlay, RendererEntryPoints}
+import fs2.Stream
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 /** The TUI capability bundle for `AppRuntime.run` (issue #1112): the terminal-mode counterpart to `Main`'s Swing
@@ -54,7 +55,8 @@ object TuiRuntime:
     configPersistencePath: Option[Path],
     hasDisplay: Boolean,
     sessionRootOverride: Option[Path] = None,
-    configNotice: Option[String] = None
+    configNotice: Option[String] = None,
+    forwardedOpens: Stream[IO, List[Path]] = Stream.empty
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     // #1213: a real terminal cannot deliver Cmd/Meta as an ordinary keystroke the way AWT does for a focused Swing
     // window, so any hotkey still at its macOS/Cmd-conditioned platform default (Quit, Save, ...) is rewritten here
@@ -147,7 +149,8 @@ object TuiRuntime:
             openPath = openPath,
             systemClipboard = systemClipboard,
             frontend = frontend,
-            configNotice = configNotice
+            configNotice = configNotice,
+            forwardedOpens = forwardedOpens
           )
         yield ()
     }
