@@ -127,10 +127,16 @@ object DamageProducer:
     val (endLine, _)   = after.document.content.offsetToLineColumn(lastOffset)
     (startLine to endLine).toSet
 
+  /** The cell under each old and new caret, not its whole line: a caret is painted on one visual row, so a move inside
+    * a paragraph that wraps into many rows dirties only the rows the carets sit on.
+    */
   private def cursorDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.editing.cursorPositions == after.editing.cursorPositions then Damage.Nothing
     else
-      Damage.BufferRows(bufferId, (before.editing.cursorPositions ++ after.editing.cursorPositions).map(_.line).toSet)
+      val caretCells = (before.editing.cursorPositions ++ after.editing.cursorPositions).map { cursor =>
+        Damage.BufferCells(bufferId, cursor.line, cursor.column, Some(cursor.column + 1)): Damage
+      }
+      Damage.Nothing |+| Damage.Combined(caretCells.toSet)
 
   private def selectionDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.allSelections == after.allSelections then Damage.Nothing
@@ -176,22 +182,22 @@ object DamageProducer:
     diagnostics.iterator.flatMap(diagnostic => diagnostic.range.start.line to diagnostic.range.end.line).toSet
 
   /** A language reclassification changes every row's syntax highlighting, not just the rows an edit touched, so this
-    * reports the buffer's full line extent rather than trying to reason about which rows actually recolor.
+    * reports every row rather than trying to reason about which rows actually recolor.
     */
   private def languageDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.document.language == after.document.language then Damage.Nothing
-    else Damage.BufferRows(bufferId, (0 until after.document.content.lineCount).toSet)
+    else Damage.BufferAll(bufferId)
 
   /** Scrolling shifts which buffer line each visual row shows, so every visible row's content changes even though
     * nothing about the buffer's own data did -- this producer has no layout knowledge of which rows are actually on
-    * screen, so it reports the buffer's full line extent, the same coarse-but-safe bias [[languageDamage]] uses.
-    * `Renderer`'s retired row-by-row structural diff already redrew close to every visible row on a scroll in practice
-    * (a shifted row rarely matches what the previous frame had at the same row index), so this is not a regression from
-    * the pixels it replaces.
+    * screen, so it reports every row, the same coarse-but-safe bias [[languageDamage]] uses. `Renderer`'s retired
+    * row-by-row structural diff already redrew close to every visible row on a scroll in practice (a shifted row rarely
+    * matches what the previous frame had at the same row index), so this is not a regression from the pixels it
+    * replaces.
     */
   private def viewportDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.viewport == after.viewport then Damage.Nothing
-    else Damage.BufferRows(bufferId, (0 until after.document.content.lineCount).toSet)
+    else Damage.BufferAll(bufferId)
 
   /** `RendererPaneContent.focusedTextBodyLines` dims every row outside the active paragraph/markdown-block around the
     * cursor. Moving the cursor within the same block changes nothing this needs to report beyond what [[cursorDamage]]
@@ -215,9 +221,12 @@ object DamageProducer:
         FocusedTextBody.activeRange(afterBuffer, afterBuffer.editing.cursorPositions.headOption.map(_.line))
       if beforeRange == afterRange then Damage.Nothing
       else
-        val beforeLines = beforeRange.map(_.toSet).getOrElse((0 until beforeBuffer.document.content.lineCount).toSet)
-        val afterLines  = afterRange.map(_.toSet).getOrElse((0 until afterBuffer.document.content.lineCount).toSet)
-        Damage.BufferRows(bufferId, beforeLines.diff(afterLines) ++ afterLines.diff(beforeLines))
+        (beforeRange, afterRange) match
+          case (Some(beforeRows), Some(afterRows)) =>
+            val (beforeLines, afterLines) = (beforeRows.toSet, afterRows.toSet)
+            Damage.BufferRows(bufferId, beforeLines.diff(afterLines) ++ afterLines.diff(beforeLines))
+          // No active range dims nothing, so moving to or from one flips every line outside the other side's range.
+          case _ => Damage.BufferAll(bufferId)
 
   /** The theme, or *any* config change, forces a full repaint. Config covers far more than the syntax-highlighting
     * toggle this used to check individually -- word wrap, fonts, margins, blur radius, and dozens of other fields this
@@ -369,19 +378,14 @@ object DamageProducer:
       )
     }
 
-  /** The legacy gutter (`RendererGutter.legacyGutterContent`) shows the active pane's cursor position, language and
-    * filename, and line numbers follow the active pane's own visible lines -- so any of those changing on the active
-    * buffer dirties the gutter/line-number chrome, on top of whatever row damage that buffer's own content reports.
+  /** The pinned status row (`RendererGutter.renderGutter`) shows `statusLineText`, so that text changing is exactly
+    * when it needs repainting -- a caret move with no position segment configured, or a scroll, leaves it alone. Line
+    * numbers are not part of it: they repaint with their own rows, which the active buffer's row damage already names.
     */
   private def gutterDamage(before: AppState, after: AppState): Damage =
-    if activeGutterInputs(before) == activeGutterInputs(after) then Damage.Nothing else Damage.Chrome
+    if statusRowInputs(before) == statusRowInputs(after) then Damage.Nothing else Damage.Chrome
 
-  private def activeGutterInputs(state: AppState) =
-    for
-      paneId   <- state.persisted.layout.activeEditorPaneId
-      pane     <- state.persisted.layout.editorPanes.get(paneId)
-      bufferId <- pane.bufferId
-      buffer   <- state.persisted.buffers.get(bufferId)
-    yield (buffer.editing.cursorPositions, buffer.document.language, buffer.document.filePath, buffer.viewport)
+  private def statusRowInputs(state: AppState): Option[(Option[String], Boolean)] =
+    Option.when(state.persisted.config.statusLine.isPinned)((state.statusLineText, state.activeBuffer.isDefined))
 
   private def isSameReference(a: AnyRef, b: AnyRef): Boolean = a eq b

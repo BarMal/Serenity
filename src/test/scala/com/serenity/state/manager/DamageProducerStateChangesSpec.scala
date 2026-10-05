@@ -35,7 +35,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(state, state) shouldBe Damage.Nothing
   }
 
-  it should "report the old and new cursor rows for a cursor move, plus Chrome since the active gutter shows it" in {
+  it should "report the old and new caret cells for a cursor move, plus Chrome since the status row shows it" in {
     val before = stateWithContent("alpha\nbeta\ngamma", cursors = List(CursorPosition(0, 0)))
     val after = before.copy(persisted =
       before.persisted.copy(buffers =
@@ -49,7 +49,9 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     )
 
     DamageProducer.forTransition(before, after) shouldBe
-      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 2)), Damage.Chrome))
+      Damage.Combined(
+        Set(Damage.BufferCells(bufferId, 0, 0, Some(1)), Damage.BufferCells(bufferId, 2, 3, Some(4)), Damage.Chrome)
+      )
   }
 
   it should "report no damage when a transition changes nothing about the cursors at all" in {
@@ -57,7 +59,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, before) shouldBe Damage.Nothing
   }
 
-  it should "report every old and new row for a multi-cursor move, plus Chrome since the active gutter shows it" in {
+  it should "report every old and new caret cell for a multi-cursor move, plus Chrome since the status row shows it" in {
     val before = stateWithContent("alpha\nbeta\ngamma", cursors = List(CursorPosition(0, 0), CursorPosition(1, 0)))
     val after = before.copy(persisted =
       before.persisted.copy(buffers =
@@ -71,7 +73,15 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     )
 
     DamageProducer.forTransition(before, after) shouldBe
-      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1, 2)), Damage.Chrome))
+      Damage.Combined(
+        Set(
+          Damage.BufferCells(bufferId, 0, 0, Some(1)),
+          Damage.BufferCells(bufferId, 1, 0, Some(1)),
+          Damage.BufferCells(bufferId, 1, 2, Some(3)),
+          Damage.BufferCells(bufferId, 2, 0, Some(1)),
+          Damage.Chrome
+        )
+      )
   }
 
   it should "report the spanned rows for a selection change" in {
@@ -178,7 +188,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(2))
   }
 
-  it should "report the full buffer extent (plus Chrome, since the active gutter shows the language) on a language change" in {
+  it should "report every row (plus Chrome, since the status row shows the language) on a language change" in {
     val before = stateWithContent("first\nsecond\nthird")
     val after = before.copy(persisted =
       before.persisted.copy(buffers =
@@ -192,11 +202,11 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     )
 
     DamageProducer.forTransition(before, after) shouldBe
-      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1, 2)), Damage.Chrome))
+      Damage.Combined(Set(Damage.BufferAll(bufferId), Damage.Chrome))
   }
 
   it should
-    "report the full buffer extent (plus Chrome, since the active gutter's line numbers follow it) on a scroll" in {
+    "report every row on a scroll, and no Chrome, since line numbers repaint with their rows" in {
       val before = stateWithContent("first\nsecond\nthird")
       val after = before.copy(persisted =
         before.persisted.copy(buffers =
@@ -207,8 +217,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
         )
       )
 
-      DamageProducer.forTransition(before, after) shouldBe
-        Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1, 2)), Damage.Chrome))
+      DamageProducer.forTransition(before, after) shouldBe Damage.BufferAll(bufferId)
     }
 
   it should "report no damage from scrolling when the viewport does not actually change" in {

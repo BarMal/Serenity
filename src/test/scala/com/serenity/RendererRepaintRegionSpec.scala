@@ -125,7 +125,7 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
     region.map(_.heightPx).getOrElse(0) should be < viewport.height * 16
   }
 
-  it should "cover the whole canvas when the chrome changed too" in {
+  it should "stay bounded when a cursor move also changes the status row" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val before  = stateWith(lines, CursorPosition(0, 0))
     val after = before.copy(persisted =
@@ -142,7 +142,9 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
     val caches = com.serenity.state.manager.RenderCaches.create()
     val _      = repaintRegionFor(surface, before, Damage.Everything, caches)
 
-    // The gutter shows the cursor's line/column, so a cursor move also reports Chrome damage -- which
-    // Damage.isBufferRowsOnly excludes, correctly falling back to an unbounded (whole-canvas) repaint.
-    repaintRegionFor(surface, after, DamageProducer.forTransition(before, after), caches) shouldBe None
+    // The status row shows the cursor's line/column, so a cursor move also reports Chrome damage -- which joins the
+    // region as the status row's own rect rather than forcing a whole-canvas repaint (#1835, #1891).
+    val region = repaintRegionFor(surface, after, DamageProducer.forTransition(before, after), caches)
+    region should not be None
+    region.map(_.heightPx).getOrElse(0) should be < viewport.height * 16
   }

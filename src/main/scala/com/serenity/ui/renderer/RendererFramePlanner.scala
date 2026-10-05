@@ -416,14 +416,10 @@ object RendererFramePlanner:
           allPanesReusable &&
             ghostPaneIds.isEmpty &&
             !context.caches.frameState.screenPaneIdsChanged(output, paneIds) &&
-            Damage.isBufferRowsOnly(screenDamageSincePublish)
+            Damage.isBufferRowsOrChromeOnly(screenDamageSincePublish)
         val repaintRows =
           Option.when(boundedRepaintEligible) {
-            panes.toList.flatMap {
-              case (paneId, record) =>
-                dirtyRowsFor(screenDamageSincePublish, paneId, record, persistenceKey, context.caches).toList
-                  .flatMap(record.rowRects.lift)
-            }
+            repaintRects(state, context, renderPlan, panes, screenDamageSincePublish, persistenceKey)
           }
 
         FramePlan(
@@ -437,6 +433,39 @@ object RendererFramePlanner:
     if plan.isEmpty then forgetPreservedContent(context.surface, output, context.caches)
     plan
 
+  /** What a bounded repaint has to cover: each dirty row's band, the line-number cells beside the active pane's dirty
+    * rows (a number changes only with its row, so it repaints with it), and the pinned status row when `damage` names
+    * [[Damage.Chrome]]. The chrome layer repaints all of these into the frame every time, so these rects only decide
+    * which of those pixels reach the screen.
+    */
+  private def repaintRects(
+    state: AppState,
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    panes: Map[PaneId, PaneFrameRecord],
+    damage: Damage,
+    persistenceKey: SurfaceContentIdentity
+  ): List[PixelRect] =
+    val contract = renderPlan.layoutContract
+    val rowRects = panes.toList.flatMap {
+      case (paneId, record) =>
+        val lineNumberRows =
+          if state.persisted.layout.activeEditorPaneId.contains(paneId) then
+            (contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList)
+              .map(RendererPaneSetup.paneRowRects(_, context, record.snapshot))
+          else Nil
+        dirtyRowsFor(damage, paneId, record, persistenceKey, context.caches).toList.flatMap { row =>
+          record.rowRects.lift(row).toList ++ lineNumberRows.flatMap(_.lift(row))
+        }
+    }
+    val statusRow = contract.gutterRect.filter(_ => Damage.touchesChrome(damage)).map(pixelRectOf(context.cellMetrics))
+    rowRects ++ statusRow.toList
+
+  private def pixelRectOf(cellMetrics: CellMetrics)(rect: LayoutRect): PixelRect =
+    val leftPx = cellMetrics.toPixelX(rect.x)
+    val topPx  = cellMetrics.toPixelY(rect.y)
+    PixelRect(leftPx, topPx, cellMetrics.toPixelX(rect.right) - leftPx, cellMetrics.toPixelY(rect.bottom) - topPx)
+
   private def showsChapterGhosts(state: AppState, bufferId: BufferId): Boolean =
     state.runtime.chapterGhostsVisible &&
       state.persisted.buffers
@@ -449,8 +478,9 @@ object RendererFramePlanner:
       case NoteKey.Keyword(_) => false
 
   /** Rows of `record` that `damage` marks dirty, translated from buffer line numbers to this pane's current visual row
-    * indices, widened by one row on each side and by the rows whose glyphs reach outside the band this pane can
-    * preserve, plus any row whose pixel band was under a floating panel's *previous*-frame rect for every
+    * indices -- every row of a damaged line, but only the rows a [[Damage.BufferCells]] span falls on
+    * ([[rowsUnderSpans]]) -- widened by one row on each side and by the rows whose glyphs reach outside the band this
+    * pane can preserve, plus any row whose pixel band was under a floating panel's *previous*-frame rect for every
     * `Damage.Surface(id)` fact in `damage` ([[vacatedFloatingSurfaceRows]]). `Damage.Surface` carries no buffer-row
     * detail for `Damage.coarsenToRows` to translate -- a panel's move/resize/close only reports which surface changed,
     * not which pane pixels it used to cover -- so without this, a pane whose own content didn't change preserves rows a
@@ -475,17 +505,35 @@ object RendererFramePlanner:
     caches: com.serenity.state.manager.RenderCaches
   ): Set[Int] =
     val damageDirty =
-      if Damage.isEverything(damage) then record.rowBufferLines.indices.toSet
+      if Damage.isEverything(damage) || Damage.damagesEveryRow(record.bufferId, damage) then
+        record.rowBufferLines.indices.toSet
       else
-        val bufferLines = Damage.coarsenToRows(record.bufferId, damage)
-        val dirty = record.rowBufferLines.zipWithIndex.collect {
+        val bufferLines = Damage.damagedLines(record.bufferId, damage)
+        val lineRows = record.rowBufferLines.zipWithIndex.collect {
           case (bufferLine, row) if bufferLines.contains(bufferLine) => row
         }.toSet
+        val dirty = lineRows ++ rowsUnderSpans(record, Damage.damagedSpans(record.bufferId, damage))
         DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
           record.overflowingRows ++
           vacatedFloatingSurfaceRows(damage, record, persistenceKey, caches)
     val previousSnapshot = caches.frameState.previousSnapshotsFor(persistenceKey).get(paneId)
     damageDirty ++ DirtyLineDiff.dirtyRows(previousSnapshot, record.snapshot)
+
+  /** The visual rows each span's columns fall on. A column at a wrap boundary matches both rows it sits between, as the
+    * caret lookup does. A span that matches no row of its line (whitespace dropped at a wrap, say) dirties the whole
+    * line rather than nothing.
+    */
+  private def rowsUnderSpans(record: PaneFrameRecord, spans: Set[Damage.BufferCells]): Set[Int] =
+    spans.flatMap { span =>
+      val lineRows =
+        record.snapshot.visualLines.zipWithIndex.filter((visualLine, _) => visualLine.bufferLine == span.row)
+      val touched = lineRows.collect {
+        case (visualLine, row)
+            if span.fromColumn <= visualLine.endColumn && span.toColumn.forall(_ > visualLine.startColumn) =>
+          row
+      }
+      if touched.nonEmpty then touched else lineRows.map(_._2)
+    }
 
   /** Rows of `record` whose pixel band ([[PaneFrameRecord.rowRects]]) intersects the previous frame's rect of any
     * floating surface `damage` reports as changed ([[Damage.surfaceIds]]). A surface absent from this owner's
