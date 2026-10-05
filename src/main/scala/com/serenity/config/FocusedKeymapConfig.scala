@@ -51,6 +51,10 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
   case MoveWordRight
   case ExtendSelectionWordLeft
   case ExtendSelectionWordRight
+  case MoveSubWordLeft
+  case MoveSubWordRight
+  case ExtendSelectionSubWordLeft
+  case ExtendSelectionSubWordRight
   case ExtendSelectionToLineStart
   case ExtendSelectionToLineEnd
   case ExtendSelectionPageUp
@@ -87,6 +91,12 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
         com.serenity.keystroke.events.ExtendSelectionWordLeft
       case ExtendSelectionWordRight =>
         com.serenity.keystroke.events.ExtendSelectionWordRight
+      case MoveSubWordLeft  => com.serenity.keystroke.events.MoveSubWordLeft
+      case MoveSubWordRight => com.serenity.keystroke.events.MoveSubWordRight
+      case ExtendSelectionSubWordLeft =>
+        com.serenity.keystroke.events.ExtendSelectionSubWordLeft
+      case ExtendSelectionSubWordRight =>
+        com.serenity.keystroke.events.ExtendSelectionSubWordRight
       case ExtendSelectionToLineStart =>
         com.serenity.keystroke.events.ExtendSelectionToLineStart
       case ExtendSelectionToLineEnd =>
@@ -171,6 +181,42 @@ object EditorKeyAction:
         com.serenity.keystroke.InputKey.ArrowRight,
         None,
         Set(com.serenity.keystroke.Modifier.Ctrl, com.serenity.keystroke.Modifier.Shift)
+      )
+    ),
+    EditorKeyAction.MoveSubWordLeft -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.ArrowLeft,
+        None,
+        Set(com.serenity.keystroke.Modifier.Ctrl, com.serenity.keystroke.Modifier.Alt)
+      )
+    ),
+    EditorKeyAction.MoveSubWordRight -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.ArrowRight,
+        None,
+        Set(com.serenity.keystroke.Modifier.Ctrl, com.serenity.keystroke.Modifier.Alt)
+      )
+    ),
+    EditorKeyAction.ExtendSelectionSubWordLeft -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.ArrowLeft,
+        None,
+        Set(
+          com.serenity.keystroke.Modifier.Ctrl,
+          com.serenity.keystroke.Modifier.Alt,
+          com.serenity.keystroke.Modifier.Shift
+        )
+      )
+    ),
+    EditorKeyAction.ExtendSelectionSubWordRight -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.ArrowRight,
+        None,
+        Set(
+          com.serenity.keystroke.Modifier.Ctrl,
+          com.serenity.keystroke.Modifier.Alt,
+          com.serenity.keystroke.Modifier.Shift
+        )
       )
     ),
     EditorKeyAction.MoveToStart -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Home, None, Set.empty)),

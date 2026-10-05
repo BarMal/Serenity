@@ -183,7 +183,7 @@ object EditorEventReducer:
   private def isExtendSelectionEvent(event: TextEntryEvent): Boolean =
     event match
       case ExtendSelectionLeft | ExtendSelectionRight | ExtendSelectionWordLeft | ExtendSelectionWordRight |
-          ExtendSelectionToLineStart | ExtendSelectionToLineEnd | ExtendSelectionPageUp | ExtendSelectionPageDown =>
+          ExtendSelectionSubWordLeft | ExtendSelectionSubWordRight | ExtendSelectionToLineStart | ExtendSelectionToLineEnd | ExtendSelectionPageUp | ExtendSelectionPageDown =>
         true
       case _ => false
 
@@ -226,6 +226,10 @@ object EditorEventReducer:
         case ExtendSelectionRight     => reduceSelectionExtension(buffer, head, currentState)(rightTarget)
         case ExtendSelectionWordLeft  => reduceSelectionExtension(buffer, head, currentState)(wordLeftTarget)
         case ExtendSelectionWordRight => reduceSelectionExtension(buffer, head, currentState)(wordRightTarget)
+        case ExtendSelectionSubWordLeft =>
+          reduceSelectionExtension(buffer, head, currentState)(subWordLeftTarget)
+        case ExtendSelectionSubWordRight =>
+          reduceSelectionExtension(buffer, head, currentState)(subWordRightTarget)
         // The same landing places Home and End move to, rather than the logical line's own bounds: a shifted key
         // selects to where its unshifted form goes, and under word wrap that is the cursor's own visual row. Sharing
         // `homeTarget`/`endTarget` also carries their row affinity, so Shift+End stops at the row's end instead of
@@ -263,7 +267,7 @@ object EditorEventReducer:
             DeleteWordBackward | DeleteWordForward =>
           EditorTextEditReducer.reduce(event, ctx)
 
-        case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveToStart | MoveToEnd | MoveToStartOfFile |
+        case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveSubWordLeft | MoveSubWordRight | MoveToStart | MoveToEnd | MoveToStartOfFile |
             PageUp | PageDown | ColumnLeft | ColumnRight | MoveToEndOfFile | SelectAll =>
           EditorNavigationEventReducer.reduce(event, ctx)
 

@@ -239,6 +239,22 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     translator.translate(KeyStrokeInfo(InputKey.ArrowRight, None, ctrlShift)) shouldBe ExtendSelectionWordRight
   }
 
+  it should "treat Ctrl+Alt-arrow keys as identifier-part navigation in editor focus" in {
+    val translator = FocusedInputTranslator.forState(editorState)
+    val ctrlAlt    = Set(Modifier.Ctrl, Modifier.Alt)
+
+    translator.translate(KeyStrokeInfo(InputKey.ArrowLeft, None, ctrlAlt)) shouldBe MoveSubWordLeft
+    translator.translate(KeyStrokeInfo(InputKey.ArrowRight, None, ctrlAlt)) shouldBe MoveSubWordRight
+  }
+
+  it should "treat Ctrl+Alt+Shift-arrow keys as identifier-part selection extension in editor focus" in {
+    val translator   = FocusedInputTranslator.forState(editorState)
+    val ctrlAltShift = Set(Modifier.Ctrl, Modifier.Alt, Modifier.Shift)
+
+    translator.translate(KeyStrokeInfo(InputKey.ArrowLeft, None, ctrlAltShift)) shouldBe ExtendSelectionSubWordLeft
+    translator.translate(KeyStrokeInfo(InputKey.ArrowRight, None, ctrlAltShift)) shouldBe ExtendSelectionSubWordRight
+  }
+
   it should "treat Enter and Tab as modal form actions in modal focus" in {
     val modalState = editorState.copy(
       persisted = editorState.persisted.copy(
