@@ -12,11 +12,15 @@ import com.serenity.ui.layout.ScreenPosition
   * `CursorPeekAnchorResolution`). `TabDragSession`'s doc comment already named these five as "every other transient
   * mouse-interaction state" before this grouping existed. None of these is ever persisted, matching every other
   * pointer-driven field here.
+  *
+  * `pointerShape` is the cursor shape the last mouse move resolved; a drag leaves it alone, so a gesture keeps the
+  * shape it began with.
   */
 final case class PointerGestureState(
     hoveredEditorTarget: Option[HoveredEditorTarget] = None,
     cursorPeekSession: CursorPeekState = CursorPeekState.empty,
     cursorPeekAnchor: Option[CursorPosition] = None,
     cursorPeekResolvedAnchor: Option[ScreenPosition] = None,
-    tabDragSession: Option[TabDragSession] = None
+    tabDragSession: Option[TabDragSession] = None,
+    pointerShape: PointerShape = PointerShape.Default
 )

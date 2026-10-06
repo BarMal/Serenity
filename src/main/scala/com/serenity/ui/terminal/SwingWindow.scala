@@ -13,6 +13,7 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
 import com.serenity.diagnostics.FrameTimings
+import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
@@ -109,6 +110,14 @@ class SwingWindow(
       val publish: Runnable = () => accessibilityBridge.publish(snapshot, currentMetrics)
       if SwingUtilities.isEventDispatchThread then publish.run()
       else SwingUtilities.invokeLater(publish)
+
+  private val pointerCursorSync = new PointerCursorSync(shape =>
+    val apply: Runnable = () => canvas.setCursor(Cursor.getPredefinedCursor(PointerCursorSync.awtCursorType(shape)))
+    if SwingUtilities.isEventDispatchThread then apply.run()
+    else SwingUtilities.invokeLater(apply)
+  )
+
+  def updatePointerShape(shape: PointerShape): Unit = pointerCursorSync.sync(shape)
 
   def onImageReady(image: BufferedImage): Unit =
     onImageReady(image, None)

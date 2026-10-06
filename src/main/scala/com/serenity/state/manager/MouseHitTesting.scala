@@ -131,30 +131,52 @@ final private[manager] class MouseHitTesting(
       }
 
   def handleMouseMove(move: MouseMove, state: AppState): IO[Unit] =
-    val clearHover = commit(EditorMouseTargeting.hover(None))
+    hoverTarget(move, state).flatMap(target =>
+      commit(MouseHitTesting.recordPointerShape(PointerShape.forTarget(target)))
+    )
+
+  private def hoverTarget(move: MouseMove, state: AppState): IO[PointerHitTarget] =
+    def clearHover(target: PointerHitTarget): IO[PointerHitTarget] =
+      commit(EditorMouseTargeting.hover(None)).as(target)
     contextMenu.handleContextMenuMouseHover(move, state).flatMap {
-      case true => clearHover
+      case true => clearHover(PointerHitTarget.Control)
       case false =>
         contextualToolbar.handleContextualToolbarMouseHover(move, state).flatMap {
-          case true => clearHover
+          case true => clearHover(PointerHitTarget.Control)
           case false =>
             commandRunner.handleCommandRunnerMouseHover(move, state).flatMap {
-              case true => clearHover
+              case true => clearHover(PointerHitTarget.Control)
               case false =>
-                if MouseHitTestGeometry.isInsideFloatingSurface(move, state, port.authoritativeScene) then clearHover
+                if MouseHitTestGeometry.isInsideFloatingSurface(move, state, port.authoritativeScene) then
+                  clearHover(PointerHitTarget.Inert)
                 else
-                  pinnedPanel.handlePinnedPanelMouseHover(move, state).flatMap {
-                    case true => clearHover
-                    case false =>
-                      editorTargeting
-                        .resolveMouseTarget(move, state)
-                        .flatMap(target => commit(EditorMouseTargeting.hover(target)))
-                  }
+                  pinnedPanel.resizeHandleAt(move, state) match
+                    case Some(handle) => clearHover(handle)
+                    case None =>
+                      pinnedPanel.handlePinnedPanelMouseHover(move, state).flatMap {
+                        case true => clearHover(PointerHitTarget.Control)
+                        case false =>
+                          editorTargeting
+                            .resolveMouseTarget(move, state)
+                            .flatMap(target =>
+                              commit(EditorMouseTargeting.hover(target))
+                                .as(target.fold(PointerHitTarget.Inert)(_ => PointerHitTarget.EditorText))
+                            )
+                      }
             }
         }
     }
 
 private[manager] object MouseHitTesting:
+
+  def recordPointerShape(shape: PointerShape): Transition[Unit] =
+    Transition.modify(state =>
+      if state.runtime.pointerGesture.pointerShape == shape then state
+      else
+        state.copy(runtime =
+          state.runtime.copy(pointerGesture = state.runtime.pointerGesture.copy(pointerShape = shape))
+        )
+    )
 
   /** A click on an editor target moves the cursor there (a double/triple click selects the word/line, a shift-click
     * extends the selection) and dismisses any open context menu; a click on no editor target only dismisses the menu.

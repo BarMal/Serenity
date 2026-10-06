@@ -346,7 +346,8 @@ object Main extends IOApp:
                   () => swingWin.viewportSize,
                   () => displayState.snapshot
                 )
-              )
+              ),
+              applyPointerShape = shape => IO(swingWin.updatePointerShape(shape))
             )
 
             initialScaleSync >> AppRuntime.run(

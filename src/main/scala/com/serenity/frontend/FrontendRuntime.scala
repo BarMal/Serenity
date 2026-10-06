@@ -5,7 +5,7 @@ import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.{InputHandler, InputRouter}
 import com.serenity.keystroke.events.Event
 import com.serenity.state.manager.RenderCaches
-import com.serenity.state.models.{AppState, Damage}
+import com.serenity.state.models.{AppState, Damage, PointerShape}
 import com.serenity.ui.color.RenderColor
 
 object FrontendRuntime:
@@ -59,5 +59,6 @@ final case class FrontendRuntime(
     renderFull: FrontendRuntime.RenderFn,
     renderCursorOnly: FrontendRuntime.RenderFn,
     frameTimings: FrameTimings = FrameTimings(),
-    offscreenFrames: Option[Resource[IO, FrontendRuntime.OffscreenFrames]] = None
+    offscreenFrames: Option[Resource[IO, FrontendRuntime.OffscreenFrames]] = None,
+    applyPointerShape: PointerShape => IO[Unit] = _ => IO.unit
 )

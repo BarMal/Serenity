@@ -192,7 +192,10 @@ object AppRuntime:
         observeTransition = (before: AppState, after: AppState) =>
           typingQuietTimer.onCommit(before, after) >> followFrameTimingSetting(frameTimingEnabled)(before, after) >>
             followLatencyTraceSetting(latencyTraceEnabled)(before, after) >>
-            IO.whenA(watchInputsChanged(before, after))(watchInputs.update(_ + 1))
+            IO.whenA(watchInputsChanged(before, after))(watchInputs.update(_ + 1)) >>
+            IO.whenA(before.runtime.pointerGesture.pointerShape != after.runtime.pointerGesture.pointerShape)(
+              runtime.applyPointerShape(after.runtime.pointerGesture.pointerShape)
+            )
         _ <- stateManager.runtimeLifecycle.observeCommits((before, after) =>
           wakeOnCommit(before, after) >> observeTransition(before, after)
         )
