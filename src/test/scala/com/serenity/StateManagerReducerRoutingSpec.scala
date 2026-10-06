@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
@@ -31,9 +32,15 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-  private def createStateManager(): StateManager =
+  private def createStateManager(config: AppConfig = AppConfig.default): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerReducerRoutingSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    StateManager
+      .apply(logger, initialConfig = config, dictionaryCache = SharedDictionary.cacheFor(config))
+      .unsafeRunSync()
+
+  // The edits below start a background spell-check analysis whose result commits a diagnostics entry whenever it lands,
+  // which would change the state this spec compares against. Analysis is not what the modal gate is about.
+  private val noBackgroundAnalysis: AppConfig = AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = false))
 
   "StateManager.applyEvent" should "toggle the command runner through the application event path" in {
     val stateManager = createStateManager()
@@ -70,7 +77,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
     val tempFile = Files.createTempFile("state-manager-modal-gate", ".scala")
 
     try
-      val stateManager = createStateManager()
+      val stateManager = createStateManager(noBackgroundAnalysis)
       val bufferId     = stateManager.createBuffer("unsaved", None).unsafeRunSync()
 
       stateManager

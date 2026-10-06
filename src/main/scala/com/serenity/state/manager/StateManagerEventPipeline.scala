@@ -402,7 +402,7 @@ final private[manager] class StateManagerEventPipeline(
       case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab | NextTab |
           PreviousTab | FileSearch | GoToFile | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane |
           _: CloseTabById | MoveTabLeft | MoveTabRight | _: FocusInDirection | ToggleChapterGhosts | OpenChapterNote |
-          ToggleNotesPin | _: RunCommand =>
+          ToggleNotesPin | _: RunCommand | _: ActivateBuffer | _: OpenRecentPath =>
         reduced
       case _: CursorPeekModifierPressed | _: CursorPeekModifierReleased | CursorPeekOtherKeyPressed =>
         applyReducerResult(EventPipelineTransitions.withCursorPeekAnchorResolved(result), prevState)
