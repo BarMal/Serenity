@@ -47,7 +47,8 @@ final private[manager] class StateManagerOperationBoundary private (
     wrapCache: WrappedLineCache,
     commitsUnobserved: Ref[IO, Boolean],
     editIdleSessionSave: Option[EditIdleSessionSave],
-    announceClosedDocuments: (AppState, AppState) => IO[Unit]
+    announceClosedDocuments: (AppState, AppState) => IO[Unit],
+    forgetClosedBuffers: (AppState, AppState) => IO[Unit]
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
@@ -107,7 +108,7 @@ final private[manager] class StateManagerOperationBoundary private (
       PanelContentSync.outlineRefreshDue(committedState, fallbackState).traverse_(scheduleOutlineRefresh) >>
       PanelContentSync.explorerListingsDue(committedState, fallbackState).traverse_(listExplorerDirectory) >>
       scheduleSessionSaveIfDue(fallbackState, committedState) >>
-      announceClosedDocuments(fallbackState, committedState) >>
+      announceClosedDocuments(fallbackState, committedState) >> forgetClosedBuffers(fallbackState, committedState) >>
       commitsUnobserved.get.ifM(IO.unit, commitObserver.get.flatMap(_(fallbackState, committedState)))
 
   /** Replaces the observer told of every commit `afterCommit` follows up, with the states before and after. */
@@ -407,7 +408,10 @@ private[manager] object StateManagerOperationBoundary:
     editIdleSessionSave: Option[EditIdleSessionSave] = None,
     // A commit is the one place every way a buffer leaves `persisted.buffers` passes through -- tab close, close
     // workflows, session replacement -- so the LSP hears of each closed document here rather than per close path.
-    announceClosedDocuments: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit
+    announceClosedDocuments: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit,
+    // The model drops its own record of a closed buffer inside the commit (`ClosedBufferRetention.forgetting`); this is
+    // for the caches that live outside it.
+    forgetClosedBuffers: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit
   ): IO[StateManagerOperationBoundary] =
     for
       pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)
@@ -446,5 +450,6 @@ private[manager] object StateManagerOperationBoundary:
       wrapCache,
       commitsUnobserved,
       editIdleSessionSave,
-      announceClosedDocuments
+      announceClosedDocuments,
+      forgetClosedBuffers
     )

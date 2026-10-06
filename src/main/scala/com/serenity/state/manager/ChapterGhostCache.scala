@@ -22,6 +22,11 @@ final class ChapterGhostCache:
 
   private val entries = new AtomicReference(Map.empty[BufferId, Entry])
 
+  def retainOnly(live: BufferId => Boolean): Unit =
+    val _ = entries.updateAndGet(_.filter((id, _) => live(id)))
+
+  private[manager] def entryCount: Int = entries.get().size
+
   def ghostsFor(buffer: Buffer, buffers: Map[BufferId, Buffer]): Map[Int, String] =
     if buffer.hidden || buffer.annotations.notes.isEmpty then Map.empty
     else
