@@ -8,7 +8,7 @@ import cats.effect.*
 import cats.effect.std.Queue
 import cats.syntax.all.*
 import com.serenity.lsp.config.{LanguageId, LspServerConfig}
-import com.serenity.lsp.model.{Diagnostic, SemanticTokensLegend, TextDocumentSyncKind}
+import com.serenity.lsp.model.{Diagnostic, SemanticTokensFeatures, SemanticTokensLegend, TextDocumentSyncKind}
 import fs2.Stream
 import fs2.io.readInputStream
 import io.circe.Json
@@ -21,6 +21,7 @@ class LspConnection private (
     pendingRef: Ref[IO, Map[RequestId, Deferred[IO, Either[Throwable, Json]]]],
     notifQueue: Queue[IO, Option[Json]],
     legendRef: Ref[IO, Option[SemanticTokensLegend]],
+    featuresRef: Ref[IO, SemanticTokensFeatures],
     requestTimeout: FiniteDuration,
     logger: Logger[IO],
     syncKindRef: Ref[IO, TextDocumentSyncKind],
@@ -223,6 +224,15 @@ class LspConnection private (
   private[lsp] def recordSemanticTokensLegend(legend: Option[SemanticTokensLegend]): IO[Unit] =
     legendRef.set(legend)
 
+  /** The semantic tokens requests the server declared, read off its `initialize` result during the handshake; full-only
+    * for a connection that never ran it, which is all this client asked of a server before the others.
+    */
+  private[lsp] def semanticTokensFeatures: IO[SemanticTokensFeatures] =
+    featuresRef.get
+
+  private[lsp] def recordSemanticTokensFeatures(features: SemanticTokensFeatures): IO[Unit] =
+    featuresRef.set(features)
+
   private[lsp] def outgoingMessages: Stream[IO, Json] =
     Stream.fromQueueNoneTerminated(sendQueue)
 
@@ -292,6 +302,7 @@ object LspConnection:
       pendingRef              <- Ref.of[IO, Map[RequestId, Deferred[IO, Either[Throwable, Json]]]](Map.empty)
       notifQueue              <- Queue.bounded[IO, Option[Json]](256)
       legendRef               <- Ref.of[IO, Option[SemanticTokensLegend]](None)
+      featuresRef             <- Ref.of[IO, SemanticTokensFeatures](SemanticTokensFeatures.FullOnly)
       syncKindRef             <- Ref.of[IO, TextDocumentSyncKind](TextDocumentSyncKind.Full)
       failNextNotificationRef <- Ref.of[IO, Boolean](false)
       terminatedSignal        <- Deferred[IO, Unit]
@@ -303,6 +314,7 @@ object LspConnection:
       pendingRef,
       notifQueue,
       legendRef,
+      featuresRef,
       requestTimeout,
       logger,
       syncKindRef,
@@ -427,6 +439,7 @@ object LspConnection:
         .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(pid, rootUri))
         .handleErrorWith(ex => logger.error(ex)("[LSP] initialize failed") >> IO.raiseError(ex))
       _ <- conn.recordSemanticTokensLegend(LspProtocol.parseSemanticTokensLegend(initializeResult))
+      _ <- conn.recordSemanticTokensFeatures(LspProtocol.parseSemanticTokensFeatures(initializeResult))
       _ <- conn.setSyncKind(TextDocumentSyncKind.fromInitializeResult(initializeResult))
       _ <- conn.sendNotification(LspMethod("initialized"), LspProtocol.initializedParams)
       _ <- logger.info(s"[LSP] Handshake complete: ${conn.languageId.id}")

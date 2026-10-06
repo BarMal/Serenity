@@ -12,7 +12,7 @@ import com.serenity.app.StartupWarmUp
 import com.serenity.config.AppConfig
 import com.serenity.frontend.FrontendRuntime
 import com.serenity.keystroke.events.*
-import com.serenity.lsp.model.SemanticToken
+import com.serenity.lsp.model.SemanticTokenData
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, AppStateValidation, Damage, Focus}
@@ -76,7 +76,7 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
     StartupWarmUp.interruptsWarmUp(ScrollDown(3)) shouldBe true
     StartupWarmUp.interruptsWarmUp(MouseMove(1, 1)) shouldBe false
     StartupWarmUp.interruptsWarmUp(ResizeEvent(viewport)) shouldBe false
-    StartupWarmUp.interruptsWarmUp(LspEvent.LspSemanticTokensReceived("file:///a", List.empty[SemanticToken])) shouldBe
+    StartupWarmUp.interruptsWarmUp(LspEvent.LspSemanticTokensReceived("file:///a", SemanticTokenData.empty)) shouldBe
       false
   }
 

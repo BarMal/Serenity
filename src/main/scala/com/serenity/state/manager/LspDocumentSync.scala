@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import cats.effect.IO
 import cats.syntax.foldable.*
 import com.serenity.lsp.LspEffect
+import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
 
@@ -38,19 +39,39 @@ final private[manager] class LspDocumentSync(port: LspDocumentSyncPort):
       currentState.persisted.buffers.get(bufferId) match
         case None => IO.unit
         case Some(buffer) =>
+          val previous = previousState.persisted.buffers.get(bufferId)
           val changedContent =
-            previousState.persisted.buffers.get(bufferId).exists(_.document.content != buffer.document.content)
-          (for
-            path       <- buffer.document.filePath
-            languageId <- buffer.document.language
-            if changedContent
-          yield AppEffect.LspQueue(
-            LspQueueEffect.DocumentChanged(path.toUri.toString, languageId, buffer.document.content)
-          ))
-            .fold(IO.unit)(interpretEffect)
+            previous.exists(_.document.content != buffer.document.content)
+          val scrolled = previous.exists(before =>
+            before.viewport.topLine != buffer.viewport.topLine ||
+              before.viewport.visibleLines != buffer.viewport.visibleLines
+          )
+          val effects = for
+            path       <- buffer.document.filePath.toList
+            languageId <- buffer.document.language.toList
+            uri    = path.toUri.toString
+            change = Option.when(changedContent)(LspDocumentSync.changedDocument(uri, languageId, buffer))
+            shown  = Option.when(scrolled)(LspDocumentSync.visibleRange(uri, languageId, buffer))
+            effect <- change.toList ++ shown.toList
+          yield AppEffect.LspQueue(effect)
+          effects.traverse_(interpretEffect)
     }
 
 private[manager] object LspDocumentSync:
+
+  private def changedDocument(uri: String, languageId: LanguageId, buffer: Buffer): LspQueueEffect =
+    LspQueueEffect.DocumentChanged(uri, languageId, buffer.document.content)
+
+  private def visibleRange(uri: String, languageId: LanguageId, buffer: Buffer): LspQueueEffect =
+    val viewport = buffer.viewport
+    LspQueueEffect.Enqueue(
+      LspEffect.VisibleRangeChanged(
+        uri,
+        languageId,
+        viewport.topLine,
+        viewport.topLine + math.max(0, viewport.visibleLines - 1)
+      )
+    )
 
   def announceClosed(lspQueue: LspEffectQueue)(before: AppState, after: AppState): IO[Unit] =
     closedDocuments(before, after).traverse_(lspQueue.enqueue)
