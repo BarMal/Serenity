@@ -175,7 +175,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
       RunnerRecordBinding(doubleTap, 4_200L)
   }
 
-  it should "reject conflicting loaded hotkeys instead of dispatching the first matching action" in {
+  it should "leave a loaded trigger with one owner, and reject a conflicting config built in memory" in {
     val configFile = Files.createTempFile("serenity-conflicting-hotkeys", ".conf")
     Files.writeString(
       configFile,
@@ -194,10 +194,12 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    FocusedInputTranslator
-      .forState(loadedState)
-      .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
-      .isInstanceOf[UnhandledEvent[?]] shouldBe true
+    // A clash in a loaded file costs only the later binding (#2024), so the trigger is never ambiguous.
+    val loadedHotkeys = loadedState.persisted.config.inputConfig.hotkeyConfig
+    List(HotkeyAction.ToggleCommandRunner, HotkeyAction.Find).count(
+      loadedHotkeys.bindingsFor(_).contains(duplicate)
+    ) shouldBe 1
+    HotkeyConfig.validate(loadedHotkeys) shouldBe Right(())
     FocusedInputTranslator
       .forState(withConfig(invalidConfig))
       .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
