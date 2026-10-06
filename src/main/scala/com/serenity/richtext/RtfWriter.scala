@@ -28,9 +28,9 @@ private[richtext] object RtfWriter:
       fonts = styles.flatMap(_.fontFamily).map(sanitizedFontName).distinct.toVector,
       colors = styles.flatMap(_.color).flatMap(parseColor).distinct.toVector,
       headingLevels = paragraphs
-        .collect {
-          case RichTextParagraph(_, _, ParagraphRole.Heading(level)) =>
-            level.max(1)
+        .map(_.role)
+        .collect { case ParagraphRole.Heading(level) =>
+          level.max(1)
         }
         .distinct
         .sorted
