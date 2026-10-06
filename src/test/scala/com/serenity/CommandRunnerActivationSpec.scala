@@ -10,6 +10,7 @@ import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.SurfaceContent
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -268,7 +269,8 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   "ensureCommandRunnerSurface (via closePane)" should "use the current config, not defaults" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val sm                  = com.serenity.state.manager.StateManager.apply(logger).unsafeRunSync()
+    val sm =
+      com.serenity.state.manager.StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
     sm.updateState(s =>
       s.copy(persisted =

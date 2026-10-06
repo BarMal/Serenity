@@ -10,6 +10,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -69,7 +70,10 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
   trait ClipboardFixture:
 
     val stateManager: StateManager = StateManager
-      .apply(LoggerFactory[IO].getLogger(using LoggerName("ClipboardEventSyncSpec")))
+      .apply(
+        LoggerFactory[IO].getLogger(using LoggerName("ClipboardEventSyncSpec")),
+        dictionaryCache = SharedDictionary.default
+      )
       .unsafeRunSync()
 
     private val paneId = PaneId(0)

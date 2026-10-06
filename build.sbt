@@ -210,6 +210,8 @@ lazy val root = (project in file("."))
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "serenity", _*) => MergeStrategy.first
       case PathList("META-INF", "services", _*) => MergeStrategy.concat
+      // Multi-release module descriptors (slf4j-api, commons-logging via FontBox): meaningless in a fat jar.
+      case PathList("META-INF", "versions", _, "module-info.class") => MergeStrategy.discard
       case x @ PathList("META-INF", xs @ _*) =>
         xs.map(_.toLowerCase) match {
           case "manifest.mf" :: Nil   => MergeStrategy.discard
@@ -338,3 +340,7 @@ libraryDependencies ++= Seq(
 // replacing three independent hand-rolled approximations that could (and did, see #1271) disagree with each other.
 // Dependency only in this step -- see #1277 step 1 for the assembled-JAR size measurement that gated this addition.
 libraryDependencies += "com.ibm.icu" % "icu4j" % "78.3"
+
+// FontBox reads the bundled fonts' hmtx/hhea tables, so the paginator measures the very files the PDF will embed and
+// no AWT is involved (#1206, #2006). pdfbox-io and commons-logging come with it.
+libraryDependencies += "org.apache.pdfbox" % "fontbox" % "3.0.8"

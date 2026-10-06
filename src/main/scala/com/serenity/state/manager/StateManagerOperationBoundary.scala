@@ -341,7 +341,7 @@ final private[manager] class StateManagerOperationBoundary private (
         modelCommit.updateValidated(model =>
           Some(model.copy(app = NoticeReducer.shown(model.app, notice, now.toNanos)))
         )
-      ) >> notice.level.autoDismissAfter.traverse_ { after =>
+      ) >> notice.autoDismissAfter.traverse_ { after =>
         val deadline = now + after
         submit(
           Lane.Keyed(LaneKey.NoticeExpiry(deadline.toNanos), LanePolicy.SwitchLatest),
@@ -349,6 +349,12 @@ final private[manager] class StateManagerOperationBoundary private (
         )
       }
     }
+
+  /** Closes the question `prompt` without answering it: its asker has stopped waiting. */
+  def withdrawPrompt(prompt: NoticePromptId): IO[Unit] =
+    dispatcher.post(
+      modelCommit.updateValidated(model => Some(model.copy(app = NoticeReducer.withdrawn(model.app, prompt))))
+    )
 
   // A request arriving after shutdown has nothing left to run on, and quitting does not want it anyway.
   private def submit(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit] =

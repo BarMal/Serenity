@@ -5,7 +5,9 @@ import com.serenity.lsp.client.{
   LspApplyEditRequest,
   LspApplyEditResult,
   LspClientHooks,
+  LspMessageAction,
   LspMessageLevel,
+  LspMessageRequest,
   LspProgressUpdate,
   LspServerMessage
 }
@@ -65,6 +67,31 @@ class LspClientHooksSpec extends AnyFlatSpec with Matchers:
 
     LspClientHooks.parseApplyEdit(changes) shouldBe Some(LspApplyEditRequest(Some("Fix"), expected))
     LspClientHooks.parseApplyEdit(Json.obj()) shouldBe None
+  }
+
+  "LspClientHooks.parseMessageRequest" should "keep each action's whole item, to be handed back as the server sent it" in {
+    val importBuild = Json.obj("title" -> "Import build".asJson, "id" -> 1.asJson)
+    val notNow      = Json.obj("title" -> "Not now".asJson)
+
+    LspClientHooks.parseMessageRequest(
+      Json.obj(
+        "type"    -> 2.asJson,
+        "message" -> "New build".asJson,
+        "actions" -> Json.arr(importBuild, Json.obj("id" -> 2.asJson), notNow)
+      )
+    ) shouldBe Some(
+      LspMessageRequest(
+        LspMessageLevel.Warning,
+        "New build",
+        List(LspMessageAction("Import build", importBuild), LspMessageAction("Not now", notNow))
+      )
+    )
+  }
+
+  it should "read a request without actions, and refuse one without a message" in {
+    LspClientHooks.parseMessageRequest(Json.obj("type" -> 3.asJson, "message" -> "Hi".asJson)) shouldBe
+      Some(LspMessageRequest(LspMessageLevel.Info, "Hi", Nil))
+    LspClientHooks.parseMessageRequest(Json.obj("type" -> 3.asJson)) shouldBe None
   }
 
   "LspClientHooks.applyEditResponse" should "include the failure reason only when there is one" in {
