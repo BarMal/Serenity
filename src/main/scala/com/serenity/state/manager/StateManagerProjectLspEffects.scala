@@ -76,24 +76,20 @@ final private[manager] class StateManagerProjectLspEffects(
           }
     }
 
-  /** Reads the process output into a local buffer and hands it to the dispatcher at most once per
-    * [[OutputPublishInterval]], however fast the process writes: each hand-off waits for the dispatcher, so a busy
-    * dispatcher only makes the next batch bigger. The buffer keeps the same bounded tail the panel does.
+  /** Reads the process output into a [[ProjectTaskOutputBatcher]], which hands it to the dispatcher at most once per
+    * [[OutputPublishInterval]], and only while the process is actually writing.
     */
   private def taskJob(id: Long, command: ProjectTaskCommand): IO[Unit] =
-    IO.ref("").flatMap { unpublished =>
-      val publishOutput =
-        unpublished
-          .getAndSet("")
-          .flatMap(chunk =>
-            lanes.dispatchEffectResult(EffectResult.ProjectTaskOutput(id, chunk), _ => IO.unit).whenA(chunk.nonEmpty)
-          )
-      (IO.sleep(OutputPublishInterval) >> publishOutput).foreverM.background
-        .surround(
-          launchTask(command, chunk => unpublished.update(ProjectTaskRunner.appendOutputTail(_, chunk))).attempt
-        )
-        .flatMap(outcome => lanes.dispatchEffectResult(EffectResult.ProjectTaskFinished(id, outcome), _ => IO.unit))
-    }
+    ProjectTaskOutputBatcher
+      .create(
+        OutputPublishInterval,
+        chunk => lanes.dispatchEffectResult(EffectResult.ProjectTaskOutput(id, chunk), _ => IO.unit)
+      )
+      .flatMap { batcher =>
+        batcher.run.background
+          .surround(launchTask(command, batcher.append).attempt)
+          .flatMap(outcome => lanes.dispatchEffectResult(EffectResult.ProjectTaskFinished(id, outcome), _ => IO.unit))
+      }
 
   private def pinProjectTerminal(text: String): IO[Unit] =
     pinOrUpdateTerminalPanel(text, ProjectTaskTransitions.TerminalPosition, ProjectTaskTransitions.TerminalSize)

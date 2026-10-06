@@ -8,10 +8,8 @@ import com.serenity.state.undo.UndoState
 import com.serenity.ui.layout.WrappedLineCache
 
 /** The one holder of the model `Ref` (#1697): capabilities read the model through it and change it only through its
-  * writes. Every app-state write is validated by `StateManagerOperationBoundary.prepareCommit`; [[advanceTick]], the
-  * render tick's animation advance, is the one write that skips the boundary's `afterCommit` follow-up work (see its
-  * doc), but it is validated the same as everything else. A write that leaves the app state the very instance already
-  * committed runs neither (#1845).
+  * writes. Every app-state write is validated by `StateManagerOperationBoundary.prepareCommit`, and a write that leaves
+  * the app state the very instance already committed runs neither validation nor follow-up work (#1845).
   *
   * Transitions run inside `Ref.modify`, which may retry them, so they must be pure.
   */
