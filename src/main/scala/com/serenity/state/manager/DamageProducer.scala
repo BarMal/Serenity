@@ -72,6 +72,7 @@ object DamageProducer:
     content |+|
       cursorDamage(bufferId, beforeBuffer, afterBuffer, Damage.damagedLines(bufferId, content)) |+|
       selectionDamage(bufferId, beforeBuffer, afterBuffer) |+|
+      findMatchDamage(bufferId, before, after) |+|
       commentDamage(bufferId, beforeBuffer, afterBuffer) |+|
       diagnosticDamage(bufferId, before, after, beforeBuffer, afterBuffer) |+|
       languageDamage(bufferId, beforeBuffer, afterBuffer) |+|
@@ -148,6 +149,24 @@ object DamageProducer:
 
   private def selectionLines(selections: List[Selection]): Set[Int] =
     selections.iterator.flatMap(selection => selection.start.line to selection.end.line).toSet
+
+  /** The rows whose painted find matches change: matches that appeared or went, and the old and new current match. A
+    * match that can span lines (a regex, or a literal holding a newline) has no row extent here to report precisely, so
+    * those repaint every row.
+    */
+  private def findMatchDamage(bufferId: BufferId, before: AppState, after: AppState): Damage =
+    val beforeFind = FindHighlights.paintedFindState(before, bufferId)
+    val afterFind  = FindHighlights.paintedFindState(after, bufferId)
+    if beforeFind == afterFind then Damage.Nothing
+    else
+      val found = beforeFind.toList ++ afterFind.toList
+      if found.exists(state => state.options.regex || state.query.contains('\n')) then Damage.BufferAll(bufferId)
+      else
+        val beforeResults = beforeFind.fold(Set.empty[FindResult])(_.results.toSet)
+        val afterResults  = afterFind.fold(Set.empty[FindResult])(_.results.toSet)
+        val changed       = beforeResults.diff(afterResults) ++ afterResults.diff(beforeResults)
+        val current       = found.flatMap(_.resultSet.selectedResult)
+        Damage.BufferRows(bufferId, (changed ++ current).map(_.line))
 
   private def commentDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.annotations.documentComments == after.annotations.documentComments then Damage.Nothing

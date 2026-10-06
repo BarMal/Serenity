@@ -5,9 +5,9 @@ import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.*
 
-/** Paints per-character background highlights over an already-drawn text row: selections, document comments, and LSP
-  * diagnostics. All three share [[renderTextRangeBackground]]/[[columnsForRange]] so a highlight looks and clips
-  * identically whether the row was drawn through the measured (GUI) or cell-based (TUI) path.
+/** Paints per-character background highlights over an already-drawn text row: selections, document comments, LSP
+  * diagnostics and find matches. All of them share [[renderTextRangeBackground]]/[[columnsForRange]] so a highlight
+  * looks and clips identically whether the row was drawn through the measured (GUI) or cell-based (TUI) path.
   */
 object RendererHighlights:
 
@@ -75,6 +75,47 @@ object RendererHighlights:
           )
       }
     }
+
+  /** Find matches on this row, the selected one stronger than the rest. Painted before the selection so a selection
+    * over a match still reads as the selection.
+    */
+  def renderFindMatchHighlights(
+    surface: RenderSurface,
+    matches: List[FindHighlight],
+    visualLine: TextVisualLine,
+    rect: LayoutRect,
+    screenY: Int,
+    lineTopPx: Int,
+    theme: Theme,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot,
+    styledSegments: Option[List[StyledText]] = None
+  ): Unit =
+    matches.foreach { found =>
+      columnsForRange(found.start, found.end, visualLine, markPoint = false).foreach {
+        case (matchStart, matchEnd) =>
+          renderTextRangeBackground(
+            surface,
+            visualLine,
+            rect,
+            screenY,
+            lineTopPx,
+            theme.foreground,
+            if found.current then currentFindMatchBackground(theme) else findMatchBackground(theme),
+            context,
+            snapshot,
+            matchStart,
+            matchEnd,
+            styledSegments
+          )
+      }
+    }
+
+  def findMatchBackground(theme: Theme): RenderColor =
+    theme.accent.mixOver(theme.background, 0.3)
+
+  def currentFindMatchBackground(theme: Theme): RenderColor =
+    theme.accent.mixOver(theme.background, 0.6)
 
   def commentHighlightBackground(theme: Theme): RenderColor =
     theme.warning.background.mixOver(theme.background, 0.45)

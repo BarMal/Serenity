@@ -462,7 +462,9 @@ enum Modal:
   case Find(
       query: TextField,
       results: Vector[FindResult],
-      currentIndex: Int
+      currentIndex: Int,
+      options: FindOptions = FindOptions.default,
+      capped: Boolean = false
   )
 
   case FileWorkflow(
