@@ -104,6 +104,22 @@ object RendererPaneSetup:
     context: RenderContext,
     snapshots: Map[PaneId, TextLayoutSnapshot]
   ): Map[BufferId, BufferRenderAnnotations] =
+    val inputs = AnnotationInputs(
+      snapshots,
+      state.persisted.layout.editorPanes,
+      state.persisted.buffers,
+      state.runtime.bufferIndexMemos,
+      state.runtime.languageService,
+      java.lang.Boolean.valueOf(state.runtime.chapterGhostsVisible),
+      state.persisted.config.markdownViewMode
+    )
+    context.caches.frameState.annotationsFor(context.surface, inputs)(visibleAnnotations(state, context, snapshots))
+
+  private def visibleAnnotations(
+    state: AppState,
+    context: RenderContext,
+    snapshots: Map[PaneId, TextLayoutSnapshot]
+  ): Map[BufferId, BufferRenderAnnotations] =
     val visibleLinesByBuffer = state.persisted.layout.editorPanes.toList
       .flatMap {
         case (paneId, pane) =>

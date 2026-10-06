@@ -101,19 +101,23 @@ final class DictionaryCache:
   private[spellcheck] def retainOnly(activeKeys: Set[String]): Unit =
     val _ = entries.keySet().removeIf(key => !activeKeys.contains(key))
 
-  /** The merged snapshot for `inputs` when the latest merge was built from exactly them, otherwise `build()`. */
+  /** The merged snapshot for `inputs` when the latest merge was built from exactly them, otherwise `build()`. Callers
+    * that share one cache and ask at once wait for the first build instead of each making their own.
+    */
   private[spellcheck] def mergedFor(
     inputs: DictionaryMergeInputs,
     build: () => DictionarySnapshot
   ): DictionarySnapshot =
-    merged
-      .get()
-      .collect { case (previous, snapshot) if previous == inputs => snapshot }
-      .getOrElse {
-        val snapshot = build()
-        merged.set(Some(inputs -> snapshot))
-        snapshot
+    def reusable = merged.get().collect { case (previous, snapshot) if previous == inputs => snapshot }
+    reusable.getOrElse {
+      synchronized {
+        reusable.getOrElse {
+          val snapshot = build()
+          merged.set(Some(inputs -> snapshot))
+          snapshot
+        }
       }
+    }
 
 object DictionaryCache:
   def apply(): DictionaryCache = new DictionaryCache

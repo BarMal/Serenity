@@ -471,7 +471,10 @@ private[manager] object StateManagerOperationBoundary:
     announceClosedDocuments: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit,
     // The model drops its own record of a closed buffer inside the commit (`ClosedBufferRetention.forgetting`); this is
     // for the caches that live outside it.
-    forgetClosedBuffers: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit
+    forgetClosedBuffers: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit,
+    // Owned by this boundary unless the caller shares one on purpose (#1677: never a JVM-wide default): a harness that
+    // builds many managers in one process hands them the same cache so the dictionary is parsed once between them.
+    dictionaryCache: DictionaryCache = DictionaryCache()
   ): IO[StateManagerOperationBoundary] =
     for
       pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)
@@ -506,7 +509,7 @@ private[manager] object StateManagerOperationBoundary:
       dispatcher,
       fileWriteLedger,
       discoverDictionaryFingerprints,
-      DictionaryCache(),
+      dictionaryCache,
       listDirectory,
       commitObserver,
       wrapCache,

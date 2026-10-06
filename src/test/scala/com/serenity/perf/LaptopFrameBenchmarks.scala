@@ -188,7 +188,13 @@ private[perf] object LaptopFrameBenchmarks:
   )(using IORuntime): (StateManager, BufferId) =
     given LoggerFactory[IO] = NoOpFactory[IO]
     val sessionRoot         = Files.createTempDirectory("serenity-laptop-benchmarks")
-    val stateManager = StateManager.apply(NoOpLogger[IO], sessionRootOverride = Some(sessionRoot)).unsafeRunSync()
+    val stateManager = StateManager
+      .apply(
+        NoOpLogger[IO],
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = WarmDictionary.cacheFor(config)
+      )
+      .unsafeRunSync()
     val proseBufferId = (for
       _       <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))
       created <- stateManager.createBuffer(text, None)
