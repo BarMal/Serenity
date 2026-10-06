@@ -12,6 +12,7 @@ package com.serenity.release
 object PackageVersion {
 
   sealed abstract class Channel(val label: String)
+
   object Channel {
     case object Release    extends Channel("release")
     case object Prerelease extends Channel("prerelease")
