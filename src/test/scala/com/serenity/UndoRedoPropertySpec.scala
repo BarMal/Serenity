@@ -8,6 +8,7 @@ import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import org.scalacheck.Gen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
@@ -47,7 +48,7 @@ class UndoRedoPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wit
 
   private def freshStateManager(): StateManager =
     StateManager
-      .apply(logger, policy = SessionManager.SessionPolicy())
+      .apply(logger, policy = SessionManager.SessionPolicy(), dictionaryCache = SharedDictionary.default)
       .unsafeRunSync()
 
   private def contentOf(stateManager: StateManager, bufferId: BufferId): String =

@@ -11,6 +11,7 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.manager.{StateManager, ViewportStateReducer}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -30,7 +31,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("StateMutationValidationSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   /** Forces `nextBufferId` to collide with the buffer that `AppState.initial` already ships (`BufferId(0)`), which is
     * also the focused buffer -- the precondition under which the bypassed commit produces a duplicate `bufferOrder`

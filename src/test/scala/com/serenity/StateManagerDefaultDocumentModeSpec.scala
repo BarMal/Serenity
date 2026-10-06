@@ -8,6 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.PaneId
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -21,7 +22,7 @@ class StateManagerDefaultDocumentModeSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerDefaultDocumentModeSpec"))
-    StateManager(logger).unsafeRunSync()
+    StateManager(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   "StateManager startup" should "retain the explicit default workspace tree" in {
     val stateManager = createStateManager()

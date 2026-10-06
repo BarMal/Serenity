@@ -17,6 +17,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, BufferId, CursorPosition, Damage, EditingState}
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
@@ -169,7 +170,8 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
           StateManager.apply(
             logger,
             policy = SessionManager.SessionPolicy(saveOnAppClose = true),
-            sessionRootOverride = Some(fileRoot)
+            sessionRootOverride = Some(fileRoot),
+            dictionaryCache = SharedDictionary.default
           )
         }
       ),
@@ -211,7 +213,8 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
         StateManager.apply(
           logger,
           policy = SessionManager.SessionPolicy(saveOnAppClose = true),
-          sessionRootOverride = Some(sessionRoot)
+          sessionRootOverride = Some(sessionRoot),
+          dictionaryCache = SharedDictionary.default
         )
       ),
       awaitExternalQuit = IO.never,

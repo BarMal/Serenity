@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import fs2.concurrent.SignallingRef
@@ -23,7 +24,7 @@ class ResizeRenderTriggerSpec extends AnyFlatSpec with Matchers:
   private def makeStateManager(): IO[StateManager] =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    StateManager.apply(logger)
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
 
   "RenderController.handleResize" should "invoke onResized callback when a resize is detected" in {
     val result = for

@@ -1,9 +1,9 @@
 # Offline spell checking
 
 Serenity's spell checker (`com.serenity.spellcheck.SpellChecker`) reads standard Hunspell `.aff`/`.dic` dictionary
-pairs. British English (`en-gb`) works out of the box with the dictionary bundled in the application; any other
-language needs an already-installed OS dictionary, which is found automatically, or one configured by hand. This page
-covers all three.
+pairs. British English (`en-gb`, and a bare `en` when nothing installed serves English) works out of the box with the
+dictionary bundled in the application; any other language needs an already-installed OS dictionary, which is found
+automatically, or one configured by hand. This page covers all three.
 
 ## Config keys
 
@@ -28,7 +28,8 @@ back to the directory itself if no match is found there.
 
 When `spellcheck.dictionary_paths` is left empty, Serenity looks for a dictionary matching `spellcheck.languages` in
 the standard Hunspell/MySpell install locations for the running OS (`SpellCheckConfig.defaultOsDictionaryDirectories`,
-`SpellCheckConfig.discoverDictionarySourcePaths`) before falling back to its small built-in word list:
+`SpellCheckConfig.discoverDictionarySourcePaths`) before falling back to the bundled British English dictionary (for
+`en-gb` and a bare `en`) or to the missing-dictionary notice:
 
 - **Linux**: `/usr/share/hunspell`, `/usr/share/myspell/dicts`, `/usr/local/share/hunspell`,
   `/usr/local/share/myspell/dicts`
@@ -42,13 +43,16 @@ with nothing configured. Each language loads from the first directory that has i
 several of these directories is loaded once. This lookup is only consulted when `spellcheck.dictionary_paths` is
 empty: a path you have configured yourself is always used as configured and never silently second-guessed.
 
-When no dictionary resolves for the configured languages, every prose buffer shows one notice on its first line naming
-the directories searched, and no words are flagged -- checking against an empty word list would flag every word.
-British English never reaches this: it has a bundled dictionary (below).
+When no dictionary resolves for a configured language, every prose buffer shows one notice on its first line naming
+that language and the directories searched, and no words are flagged for it -- checking against a near-empty word list
+would flag every word. This holds for every language without a dictionary (`fr`, `el`, `en-US` and so on). Only British
+English and a bare `en` never reach it: they have a bundled dictionary (below). The notice names only the languages
+still unserved, and prose in the languages that did resolve keeps being checked.
 
 A config file saved by an earlier version keeps the values it was saved with (`spellcheck.enabled = false`,
-`spellcheck.languages = ["en"]`); change them to pick up the new defaults. `en` looks for `en.dic`, which Debian and
-Ubuntu do not install.
+`spellcheck.languages = ["en"]`); a saved `["en"]` is checked against the bundled British English dictionary unless an
+`en` dictionary is installed. `en` looks for `en.dic`, which Debian and Ubuntu do not install, and does not pick up an
+installed `en_US.dic`: select American English with `spellcheck.languages = ["en-US"]`.
 
 ## What is checked
 
@@ -104,9 +108,18 @@ unmodified copies of upstream.
   or `en-gb.dic`, in any letter case) comes from `spellcheck.dictionary_paths` or an OS directory. Removing yours brings
   the bundled one back.
 - **It is loaded on demand.** Nothing is parsed at startup, and nothing at all while `spellcheck.enabled` is `false` or
-  no `en-gb` language is configured; the first analysis after both hold parses it once and keeps it for the session.
-- **`en` is not `en-GB`.** `["en"]` keeps its small built-in word list, so an American-English dictionary installed
-  for `en` is never second-guessed.
+  neither `en-gb` nor `en` is configured; the first analysis after both hold parses it once and keeps it for the session.
+- **A bare `en` falls back to it.** Dictionary precedence for English, highest first:
+  1. A dictionary from `spellcheck.dictionary_paths`, or found in an OS directory, named for the configured language
+     (`en_US.dic` for `en-US`, `en_GB.dic` for `en-gb`, `en.dic` for `en`).
+  2. For a bare `en` only: the bundled British English dictionary, used when no supplied dictionary is named `en` or
+     `en-*` and none is named for a language you did not configure (a bare `words.dic`, which may be serving anything).
+  3. Otherwise, the missing-dictionary notice above, with nothing flagged for that language.
+
+  So `["en-US"]` with `en_US.dic` installed uses that dictionary, and `["en-US"]` with none installed shows the notice
+  rather than quietly checking American prose against British spellings.
+- **Other languages have no bundled dictionary.** `fr` and `el` carry a built-in word list of a handful of words, far too
+  small to check prose with, so they follow the notice rule instead of flagging every ordinary word.
 
 ## Setting up another language (or British English by hand)
 

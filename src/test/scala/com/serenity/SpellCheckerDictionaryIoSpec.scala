@@ -321,9 +321,9 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave compoundCandidateIndex empty when no dictionary declares COMPOUNDRULE" in {
-    val config = SpellCheckConfig(enabled = true, languages = List("en"))
-
-    val context = DictionaryLoader.loadSnapshot(config, DictionaryCache()).context
+    val config = SpellCheckConfig(enabled = true, languages = List("fr"))
+    val context =
+      DictionaryLoader.loadSnapshot(config, DictionaryCache(), List(Files.createTempDirectory("none").toString)).context
 
     context.compoundCandidateIndex shouldBe CompoundCandidateIndex.empty
   }
