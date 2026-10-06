@@ -41,7 +41,7 @@ private[layout] object ShapingBarriers:
     text.charAt(cut - 1) == ' ' && cutsCleanly(font, frc, text.charAt(cut))
 
   private[layout] def cutsCleanly(font: Font, frc: FontRenderContext, next: Char): Boolean =
-    !font.hasLayoutAttributes ||
+    (!font.hasLayoutAttributes && GlyphAdvances.layoutAdvanceMatchesSum(font, frc)) ||
       probed.computeIfAbsent(
         Probe(font, frc, next),
         probe =>
