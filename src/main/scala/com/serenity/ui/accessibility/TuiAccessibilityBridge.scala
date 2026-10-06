@@ -25,16 +25,26 @@ final class TuiAccessibilityBridge(write: String => Unit):
   import TuiAccessibilityBridge.*
 
   private val previousTitle = new AtomicReference[Option[String]](None)
+  // The title of a document carries its text, so it is built once per distinct focused node rather than on every
+  // publish of an unchanged snapshot.
+  private val describedNode = new AtomicReference[Option[(AccessibleNode, String)]](None)
 
   def publish(snapshot: AccessibilitySnapshot): Unit =
-    val title = snapshot.focused.map(describe).getOrElse(DefaultTitle)
+    val title = snapshot.focused.map(titleFor).getOrElse(DefaultTitle)
     if !previousTitle.get.contains(title) then
       write(setTitle(title))
       previousTitle.set(Some(title))
     snapshot.announcements.foreach(announcement => write(notifyAnnouncement(announcement.message)))
 
+  private def titleFor(node: AccessibleNode): String =
+    describedNode.get.filter((described, _) => described == node).map((_, title) => title).getOrElse {
+      val title = describe(node)
+      describedNode.set(Some((node, title)))
+      title
+    }
+
   private def describe(node: AccessibleNode): String =
-    val value     = node.value.filter(_.nonEmpty).fold("")(current => s": $current")
+    val value     = node.value.map(_.text).filter(_.nonEmpty).fold("")(current => s": $current")
     val selection = if node.selected then ", selected" else ""
     s"${node.role.toString.toLowerCase} ${node.name}$value$selection"
 

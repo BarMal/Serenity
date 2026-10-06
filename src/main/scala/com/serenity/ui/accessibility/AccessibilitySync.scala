@@ -1,18 +1,23 @@
 package com.serenity.ui.accessibility
 
 import cats.effect.{IO, Ref}
+import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.models.{AppState, TypingActivity}
 
-/** Memoizes the accessibility snapshot against the `AppState` last synced, so the O(document-size) projection in
-  * `AccessibilitySnapshot.from` — including materializing each visible buffer's full content for the document node — is
-  * paid once per distinct *accessibility-relevant* state instead of on every render frame.
+/** Memoizes the accessibility snapshot against the `AppState` last synced, so the projection in
+  * `AccessibilitySnapshot.from` is paid once per distinct *accessibility-relevant* state instead of on every render
+  * frame. The projection holds each document as its `Rope` rather than a copy of its text, so neither it nor the
+  * comparisons here read document text.
   *
   * A plain `AppState` reference check only catches the case where nothing at all was dispatched (e.g. a caret-blink
   * cursor-only tick). So a cache hit here is either an exact `AppState` match (cheapest), or a match on a normalized
   * view with known-irrelevant fields blanked out -- verified against `AccessibilityModel.scala` to read only `buffers`
   * (content/filePath/cursors), `focus`, `layout`, `uiSurfaces`, and `config`.
   */
-final class AccessibilitySync private (ref: Ref[IO, Option[AccessibilitySync.CacheEntry]]):
+final class AccessibilitySync private (
+    ref: Ref[IO, Option[AccessibilitySync.CacheEntry]],
+    val previewCache: MarkdownPreviewCache
+):
   import AccessibilitySync.{CacheEntry, normalize}
 
   def sync(
@@ -56,4 +61,4 @@ object AccessibilitySync:
     )
 
   def empty: IO[AccessibilitySync] =
-    Ref.of[IO, Option[CacheEntry]](None).map(new AccessibilitySync(_))
+    Ref.of[IO, Option[CacheEntry]](None).map(new AccessibilitySync(_, MarkdownPreviewCache()))

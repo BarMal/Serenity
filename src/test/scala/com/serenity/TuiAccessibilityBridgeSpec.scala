@@ -7,6 +7,7 @@ import com.serenity.ui.accessibility.{
   AccessibilityRole,
   AccessibilitySnapshot,
   AccessibleNode,
+  AccessibleValue,
   TuiAccessibilityBridge
 }
 import com.serenity.ui.layout.LayoutRect
@@ -33,7 +34,15 @@ class TuiAccessibilityBridgeSpec extends AnyFlatSpec with Matchers:
     selected: Boolean = false,
     focused: Boolean = true
   ): AccessibleNode =
-    AccessibleNode(s"node:$name", role, name, value, selected, focused, LayoutRect(0, 0, 10, 1))
+    AccessibleNode(
+      s"node:$name",
+      role,
+      name,
+      value.map(AccessibleValue.Plain.apply),
+      selected,
+      focused,
+      LayoutRect(0, 0, 10, 1)
+    )
 
   "TuiAccessibilityBridge" should "retitle the terminal with the focused node's role and name" in {
     val (written, write) = writer()
