@@ -14,6 +14,16 @@ import org.typelevel.log4cats.Logger
   */
 object SessionSetAside:
 
+  /** The error a set-aside is logged with when the file is intact but written by a newer build. */
+  case object NewerSchemaFile extends RuntimeException("session file was written by a newer build"):
+    override def fillInStackTrace(): Throwable = this
+
+  /** An unreadable file counts as not newer: it is the corrupt case, which startup alone deals with. */
+  def isNewerSchema(sessionFile: Path): IO[Boolean] =
+    IO.blocking(new String(Files.readAllBytes(sessionFile), StandardCharsets.UTF_8))
+      .map(json => SessionSalvage.reason(json) != UnreadableReason.Corrupt)
+      .handleError(_ => false)
+
   /** Text that fails to export is still in the backup, so that failure is logged rather than losing the notice. */
   def setAside(sessionFile: Path, epochMillis: Long, logger: Logger[IO]): IO[Option[UnreadableSession]] =
     IO.blocking(Files.exists(sessionFile)).flatMap {
