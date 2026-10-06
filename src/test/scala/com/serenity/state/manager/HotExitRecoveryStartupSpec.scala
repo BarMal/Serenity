@@ -13,6 +13,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent, SessionInt
 import com.serenity.keystroke.events.{Direction, InsertChar, ModalNavigate, ModalSubmit}
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -32,9 +33,13 @@ class HotExitRecoveryStartupSpec extends AnyFlatSpec with Matchers with StateMan
   /** Opens `file`, types `typed` at its start and saves the session without saving the file. */
   private def editWithoutSaving(sessionRoot: Path, file: Path, typed: String): IO[Unit] =
     for
-      editor <- StateManager(testLogger("HotExitRecoveryStartupSpec"), sessionRootOverride = Some(sessionRoot))
-      _      <- AppStartup.initializeState(editor, editor.sessionStartupInfo, Theme.default, ViewportSize(80, 24))
-      _      <- editor.fileOpener.openFile(file)
+      editor <- StateManager(
+        testLogger("HotExitRecoveryStartupSpec"),
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
+      )
+      _ <- AppStartup.initializeState(editor, editor.sessionStartupInfo, Theme.default, ViewportSize(80, 24))
+      _ <- editor.fileOpener.openFile(file)
       _ <- awaitState(editor)(s =>
         s.focusedBufferId.flatMap(s.persisted.buffers.get).exists(_.document.filePath.contains(file))
       )
@@ -44,9 +49,13 @@ class HotExitRecoveryStartupSpec extends AnyFlatSpec with Matchers with StateMan
 
   private def restarted(sessionRoot: Path): IO[StateManager] =
     for
-      editor <- StateManager(testLogger("HotExitRecoveryStartupSpec-restart"), sessionRootOverride = Some(sessionRoot))
-      _      <- AppStartup.initializeState(editor, editor.sessionStartupInfo, Theme.default, ViewportSize(80, 24))
-      _      <- editor.executeCommand(resume)
+      editor <- StateManager(
+        testLogger("HotExitRecoveryStartupSpec-restart"),
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
+      )
+      _ <- AppStartup.initializeState(editor, editor.sessionStartupInfo, Theme.default, ViewportSize(80, 24))
+      _ <- editor.executeCommand(resume)
     yield editor
 
   private def recoveryPrompts(state: AppState): List[ConfirmPrompt] =

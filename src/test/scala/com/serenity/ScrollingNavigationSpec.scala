@@ -12,7 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.manager.{StateManager, ViewportStateReducer}
 import com.serenity.state.models.*
-import com.serenity.testkit.{EditingStateFixtures, VirtualTime}
+import com.serenity.testkit.{EditingStateFixtures, SharedDictionary, VirtualTime}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
@@ -28,7 +28,9 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
   private def makeStateManager(): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    StateManager.apply(logger)(using balance, LoggerFactory[IO]).unsafeRunSync()
+    StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default)(using balance, LoggerFactory[IO])
+      .unsafeRunSync()
 
   behavior of "Scrolling and Navigation in Editor Panes"
 
@@ -435,5 +437,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
 
     val stateManager: StateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+        com.serenity.rope.Balance.default,
+        LoggerFactory[IO]
+      )
       .unsafeRunSync()

@@ -13,6 +13,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.Theme
@@ -39,7 +40,8 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
         uiPresetStore = store,
         windowSizeProvider = windowSize,
         onPreferredWindowSizeChanged = onWindowSizeChanged,
-        sessionRootOverride = sessionRoot
+        sessionRootOverride = sessionRoot,
+        dictionaryCache = SharedDictionary.default
       )
       .unsafeRunSync()
 
