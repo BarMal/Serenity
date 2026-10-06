@@ -118,8 +118,7 @@ unmodified copies of upstream.
 
   So `["en-US"]` with `en_US.dic` installed uses that dictionary, and `["en-US"]` with none installed shows the notice
   rather than quietly checking American prose against British spellings.
-- **Other languages have no bundled dictionary.** `fr` and `el` carry a built-in word list of a handful of words, far too
-  small to check prose with, so they follow the notice rule instead of flagging every ordinary word.
+- **Other languages have no bundled dictionary.** They follow the notice rule instead of flagging every ordinary word.
 
 ## Setting up another language (or British English by hand)
 
