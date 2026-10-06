@@ -39,6 +39,9 @@ final case class SessionState(
     schemaVersion: SchemaVersion = SessionState.CurrentSchemaVersion
 )
 
+/** A [[SessionState]] whose buffers' unsaved text is left out, keyed by buffer id, for the content store to take. */
+final private[session] case class SessionSnapshot(state: SessionState, unsavedText: Map[Int, UnsavedText])
+
 object SessionState:
 
   /** Schema version 2 adds workspace trees, docked panel snapshots, and maximised-node identity. A version-1 session's
@@ -56,8 +59,18 @@ object SessionState:
   val CurrentSchemaVersion: SchemaVersion = SchemaVersion(4)
 
   def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
+    assemble(appState, orderedBuffers(appState).map(SessionBuffer.fromBuffer(_, persistUnsaved)))
+
+  private[session] def snapshot(appState: AppState, persistUnsaved: Boolean): SessionSnapshot =
+    val snapshots = orderedBuffers(appState).map(SessionBuffer.snapshot(_, persistUnsaved))
+    SessionSnapshot(
+      assemble(appState, snapshots.map(_._1)),
+      snapshots.flatMap((buffer, unsaved) => unsaved.map(buffer.id -> _)).toMap
+    )
+
+  private def assemble(appState: AppState, buffers: List[SessionBuffer]): SessionState =
     SessionState(
-      buffers = orderedBuffers(appState).map(SessionBuffer.fromBuffer(_, persistUnsaved)),
+      buffers = buffers,
       layout = SessionLayout.fromAppState(appState),
       focus = SessionFocus.fromFocus(appState.persisted.focus),
       bufferOrder = appState.persisted.bufferOrder.map(_.value),

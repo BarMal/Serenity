@@ -76,7 +76,7 @@ class SessionManager(
         index = updatedIndex
       )
       _ <- contentStore.prune(canonicalMetadata.sessionFileName, state)
-      _ <- logger.info(s"[SESSION] Session saved successfully (${updatedMetadata.displayName})")
+      _ <- logger.debug(s"[SESSION] Session saved successfully (${updatedMetadata.displayName})")
     yield ()
 
   /** Save the current app state as a named session and make it current.
@@ -387,10 +387,7 @@ class SessionManager(
     appState: AppState,
     persistUnsavedBuffers: Boolean
   ): IO[SessionState] =
-    contentStore.externalise(
-      sessionFileName,
-      SessionState.fromAppState(appState, persistUnsaved = persistUnsavedBuffers)
-    )
+    contentStore.externalise(sessionFileName, SessionState.snapshot(appState, persistUnsavedBuffers))
 
   private def commitTransaction(writes: Map[String, String], deletes: List[String], index: SessionIndex): IO[Unit] =
     journal.commit(writes, deletes, SessionWriteJournal.compact(index)) >> remember(index)
