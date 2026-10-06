@@ -65,7 +65,7 @@ starts in safe mode by itself after two starts that did not finish. See [safe mo
 ## User guide
 
 - [Keyboard](docs/user/keyboard.md): every default binding on each OS, and how to change one.
-- [Spell check](docs/user/spell-check.md): turning it on and where dictionaries come from.
+- [Spell check](docs/user/spell-check.md): on by default in British English; other languages and dictionary folders.
 - [Sessions](docs/user/sessions.md): saving, resuming and naming sessions.
 - [Exporting a manuscript](docs/user/export.md): DOCX and EPUB.
 - [Safe mode and resets](docs/user/safe-mode.md)

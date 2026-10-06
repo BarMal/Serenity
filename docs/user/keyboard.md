@@ -18,7 +18,7 @@ Run `sbt "Test/runMain com.serenity.docs.KeyboardReferenceTable"` to rewrite it 
 | Save | `save` | `Ctrl+S` | `Cmd+S` |
 | Quit | `quit` | `Ctrl+Q`, `EOF` | `Cmd+Q`, `EOF` |
 | Undo | `undo` | `Ctrl+Z` | `Cmd+Z` |
-| Redo | `redo` | `Ctrl+Y` | `Cmd+Y` |
+| Redo | `redo` | `Ctrl+Y`, `Ctrl+Shift+Z` | `Cmd+Shift+Z`, `Cmd+Y` |
 | Copy | `copy` | `Ctrl+C` | `Cmd+C` |
 | Paste | `paste` | `Ctrl+V` | `Cmd+V` |
 | Cut | `cut` | `Ctrl+X` | `Cmd+X` |
