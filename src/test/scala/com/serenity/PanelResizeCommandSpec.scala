@@ -6,6 +6,7 @@ import com.serenity.command.*
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.reducers.PanelStateReducer
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -23,7 +24,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
   private def createStateManager(): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("PanelResizeCommandSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   private def resizeCommand(surfaceId: com.serenity.state.models.SurfaceId, delta: Int): Command =
     Command.typed(

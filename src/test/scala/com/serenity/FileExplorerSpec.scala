@@ -11,6 +11,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.AwaitCondition.awaitValue
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{PanelContent, PanelPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -26,7 +27,7 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
 
     val sm: StateManager = StateManager
-      .apply(logger)(using Balance.default, LoggerFactory[IO])
+      .apply(logger, dictionaryCache = SharedDictionary.default)(using Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
   behavior of "File Explorer panel"

@@ -10,7 +10,7 @@ import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker}
-import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade
 import com.serenity.state.models.*
 import com.serenity.testkit.AwaitCondition
 import org.scalatest.flatspec.AnyFlatSpec
@@ -578,9 +578,10 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
 
   "StateManager" should "refresh spell-check diagnostics after prose edits" in {
     val logger = LoggerFactory[IO].getLogger(using LoggerName("SpellCheckerSpec"))
-    val stateManager = StateManager
-      .apply(logger, initialConfig = AppConfig.default.withSpellCheck(EnglishSpellCheck))
-      .unsafeRunSync()
+    val stateManager =
+      StateManagerTestFacade
+        .warmStateManager(logger, AppConfig.default.withSpellCheck(EnglishSpellCheck))
+        .unsafeRunSync()
 
     "wurld".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
