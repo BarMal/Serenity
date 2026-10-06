@@ -30,6 +30,13 @@ object PointerShape:
       case PointerHitTarget.DockEdge(position)     => resizing(position)
       case PointerHitTarget.TextAreaMargin(margin) => resizing(margin)
 
+  /** What to show right now: a shape resolved for the other side of a blocking modal's opening or closing is stale, so
+    * it falls back to the default until the next mouse move resolves a fresh one.
+    */
+  def shown(state: AppState): PointerShape =
+    val gesture = state.runtime.pointerGesture
+    if gesture.shapeUnderModal == state.hasBlockingModal then gesture.pointerShape else Default
+
   private def resizing(position: PanelPosition): PointerShape =
     position match
       case PanelPosition.Left | PanelPosition.Right => ResizeHorizontal

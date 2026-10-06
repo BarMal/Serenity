@@ -14,7 +14,8 @@ import com.serenity.ui.layout.ScreenPosition
   * pointer-driven field here.
   *
   * `pointerShape` is the cursor shape the last mouse move resolved; a drag leaves it alone, so a gesture keeps the
-  * shape it began with.
+  * shape it began with. `shapeUnderModal` says whether that shape was resolved against a blocking modal's own hit
+  * targets (see `PointerShape.shown`).
   */
 final case class PointerGestureState(
     hoveredEditorTarget: Option[HoveredEditorTarget] = None,
@@ -22,5 +23,6 @@ final case class PointerGestureState(
     cursorPeekAnchor: Option[CursorPosition] = None,
     cursorPeekResolvedAnchor: Option[ScreenPosition] = None,
     tabDragSession: Option[TabDragSession] = None,
-    pointerShape: PointerShape = PointerShape.Default
+    pointerShape: PointerShape = PointerShape.Default,
+    shapeUnderModal: Boolean = false
 )

@@ -150,8 +150,12 @@ final private[manager] class MouseHitTesting(
                 if MouseHitTestGeometry.isInsideFloatingSurface(move, state, port.authoritativeScene) then
                   clearHover(PointerHitTarget.Inert)
                 else
-                  pinnedPanel.resizeHandleAt(move, state) match
-                    case Some(handle) => clearHover(handle)
+                  TabBarMouseHitTesting
+                    .pointerTargetAt(state, move.col, move.row)
+                    .orElse(
+                      pinnedPanel.resizeHandleAt(move, state)
+                    ) match
+                    case Some(target) => clearHover(target)
                     case None =>
                       pinnedPanel.handlePinnedPanelMouseHover(move, state).flatMap {
                         case true => clearHover(PointerHitTarget.Control)
@@ -169,12 +173,13 @@ final private[manager] class MouseHitTesting(
 
 private[manager] object MouseHitTesting:
 
-  def recordPointerShape(shape: PointerShape): Transition[Unit] =
+  def recordPointerShape(shape: PointerShape, underModal: Boolean = false): Transition[Unit] =
     Transition.modify(state =>
-      if state.runtime.pointerGesture.pointerShape == shape then state
+      val gesture = state.runtime.pointerGesture
+      if gesture.pointerShape == shape && gesture.shapeUnderModal == underModal then state
       else
         state.copy(runtime =
-          state.runtime.copy(pointerGesture = state.runtime.pointerGesture.copy(pointerShape = shape))
+          state.runtime.copy(pointerGesture = gesture.copy(pointerShape = shape, shapeUnderModal = underModal))
         )
     )
 

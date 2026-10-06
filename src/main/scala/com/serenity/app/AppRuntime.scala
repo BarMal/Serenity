@@ -18,7 +18,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
 import com.serenity.state.manager.*
-import com.serenity.state.models.{AppState, BufferId, BufferMapChanges, Damage}
+import com.serenity.state.models.{AppState, BufferId, BufferMapChanges, Damage, PointerShape}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import fs2.Stream
@@ -193,8 +193,8 @@ object AppRuntime:
           typingQuietTimer.onCommit(before, after) >> followFrameTimingSetting(frameTimingEnabled)(before, after) >>
             followLatencyTraceSetting(latencyTraceEnabled)(before, after) >>
             IO.whenA(watchInputsChanged(before, after))(watchInputs.update(_ + 1)) >>
-            IO.whenA(before.runtime.pointerGesture.pointerShape != after.runtime.pointerGesture.pointerShape)(
-              runtime.applyPointerShape(after.runtime.pointerGesture.pointerShape)
+            IO.whenA(PointerShape.shown(before) != PointerShape.shown(after))(
+              runtime.applyPointerShape(PointerShape.shown(after))
             )
         _ <- stateManager.runtimeLifecycle.observeCommits((before, after) =>
           wakeOnCommit(before, after) >> observeTransition(before, after)
