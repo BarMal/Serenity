@@ -18,7 +18,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
 import com.serenity.state.manager.*
-import com.serenity.state.models.{AppState, BufferId, Damage}
+import com.serenity.state.models.{AppState, BufferId, BufferMapChanges, Damage}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import fs2.Stream
@@ -390,10 +390,13 @@ object AppRuntime:
     * dictionaries, or the docked explorers. Errs towards yes; the loop re-derives the set and a no-op resync is free.
     */
   private[serenity] def watchInputsChanged(before: AppState, after: AppState): Boolean =
-    def openFiles(state: AppState) = state.persisted.buffers.valuesIterator.flatMap(_.document.filePath).toSet
     (before.runtime.uiSurfaces ne after.runtime.uiSurfaces) ||
-    before.persisted.config.languageToolsConfig.spellCheck != after.persisted.config.languageToolsConfig.spellCheck ||
-    ((before.persisted.buffers ne after.persisted.buffers) && openFiles(before) != openFiles(after))
+      before.persisted.config.languageToolsConfig.spellCheck != after.persisted.config.languageToolsConfig.spellCheck ||
+      before.persisted.buffers.size != after.persisted.buffers.size ||
+      BufferMapChanges.anyChanged(before.persisted.buffers, after.persisted.buffers)(
+        added = _ => true,
+        changed = _.document.filePath != _.document.filePath
+      )
 
   /** Background half of external-change detection (#1623), complementing the focus-in re-check. Watches the parent
     * directories of open local buffers, `dictionaryWatchDirectories` (#1691) and `explorerWatchDirectories`, re-derived
