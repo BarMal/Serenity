@@ -89,7 +89,7 @@ final private[session] class SessionContentStore(directoryFor: String => Option[
       case None            => IO.raiseError(new IllegalArgumentException(s"Unsafe session path: $sessionFileName"))
     }
 
-  private def fileName(ref: String): String = s"$ref.txt"
+  private def fileName(ref: String): String = SessionContentStore.contentFileName(ref)
 
   private def deleteQuietly(path: Path): IO[Unit] =
     IO.blocking(Files.deleteIfExists(path))
@@ -97,6 +97,11 @@ final private[session] class SessionContentStore(directoryFor: String => Option[
       .handleErrorWith(error => logger.warn(error)(s"[SESSION] Failed to delete content file $path"))
 
 private[session] object SessionContentStore:
+
+  /** The name of the directory holding a session file's content files, beside that file. */
+  def directoryName(sessionFileName: String): String = s"${sessionFileName.stripSuffix(".json")}.content"
+
+  def contentFileName(ref: String): String = s"$ref.txt"
 
   def digest(text: String): String =
     MessageDigest

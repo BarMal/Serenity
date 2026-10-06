@@ -106,6 +106,28 @@ jobs:
             fi
           fi
 
+  third-party-notices:
+    name: Third-party notices
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        uses: sbt/setup-sbt@v1
+
+      # Fails when a runtime dependency has no entry in third-party/modules.tsv, or THIRD-PARTY-NOTICES.md is stale (#2019).
+      - name: Check third-party notices cover every runtime dependency
+        run: sbt -v checkThirdPartyNotices
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -128,8 +150,8 @@ jobs:
         run: sbt -v clean test
 
   perf:
-    # The 1x entry keeps the original check name and baseline. The 2x entry runs the suite on a HiDPI virtual display
-    # with Java2D at 2x, matching the target laptop, so Swing's present path paints at the scale users actually see.
+    # The 2x entry runs the suite on a HiDPI virtual display with Java2D at 2x, matching the target laptop, so Swing's
+    # present path paints at the scale users actually see.
     name: ${{ matrix.scale == 1 && 'Performance benchmarks' || 'Performance benchmarks (2x HiDPI)' }}
     runs-on: ubuntu-latest
     strategy:
@@ -139,17 +161,18 @@ jobs:
           - scale: 1
             screen: 1920x1200x24
             dpi: 96
-            baseline: perf-baseline
             results: perf-benchmark-results
           - scale: 2
             screen: 3840x2400x24
             dpi: 192
-            baseline: perf-baseline-2x
             results: perf-benchmark-results-2x
 
     steps:
+      # Depth 2 so the base commit -- the PR merge commit's first parent, or master's previous commit -- is present.
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -161,10 +184,9 @@ jobs:
       - name: Set up sbt launcher
         uses: sbt/setup-sbt@v1
 
-      # Unit tests for the regression-check script's own logic (threshold comparison, cache-cold handling) --
-      # stdlib `unittest`, no Python dependency to install.
-      - name: Test the regression-check script
-        run: python3 -m unittest scripts.test_check_perf_regression -v
+      # Stdlib `unittest`, no Python dependency to install.
+      - name: Test the benchmark comparison scripts
+        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs -v
 
       # The benchmark suite builds a real `SwingWindow` (`PerformanceBenchmarks.main`'s `SwingWindow.resource`), which
       # needs a display even though nothing is ever shown on screen -- a runner with no X server at all raises
@@ -172,80 +194,60 @@ jobs:
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
-      # `PerformanceBenchmarks` (src/test/scala/com/serenity/perf) is a manual `main`-method runner, not a ScalaTest
-      # suite -- `sbt test` never touches it. Running it here and archiving its CSV is issue #1453's "at minimum
-      # periodically run and archive the CSV output for trend tracking"; the regression check below is its "or wire a
-      # subset into CI with a regression threshold" half.
-      - name: Run performance benchmarks
-        # A screen large enough for `LaptopFrameBenchmarks`' 1500x1000 window; xvfb-run's default is 1280x1024.
-        run: >-
-          xvfb-run -a -s "-screen 0 ${{ matrix.screen }} -dpi ${{ matrix.dpi }}"
-          sbt -v 'set Test / run / javaOptions += "-Dsun.java2d.uiScale=${{ matrix.scale }}"'
-          "Test/runMain com.serenity.perf.PerformanceBenchmarks"
-          | tee perf-results-raw.txt
+      # Absolute timings only compare on the same machine: GitHub's runners differ by about 2x, so a baseline recorded
+      # on one runner and checked on another fails or passes by which runner each got. Instead the base commit and this
+      # commit are benchmarked here, on one runner, alternating base/head twice so a slow spell on the runner hits
+      # both. A benchmark fails only when every head run is past the threshold against every base run -- the head's
+      # fastest against the base's slowest (`combine_perf_runs.py`) -- since some swing 2x between runs of one commit.
+      - name: Check out the base commit
+        run: git worktree add --detach "$RUNNER_TEMP/base" HEAD^1
 
-      - name: Extract benchmark CSV from sbt output
+      # `PerformanceBenchmarks` (src/test/scala/com/serenity/perf) is a manual `main`-method runner, not a ScalaTest
+      # suite -- `sbt test` never touches it.
+      - name: Run performance benchmarks on base and head
         shell: bash
         run: |
           set -euo pipefail
-          # sbt prefixes every line of runMain's stdout with "[info] "; strip that back off, then keep from the
-          # benchmark suite's own title line onward so any earlier sbt log noise is excluded. `sbt -v` also emits ANSI
-          # colour escapes around/inside that prefix (e.g. "\e[0m[\e[0minfo\e[0m] \e[0mSerenity ..."), which breaks a
-          # plain `[info] ` match -- strip those escapes first.
-          sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' perf-results-raw.txt \
-            | sed -n '/^\[info\] Serenity performance benchmarks$/,$p' \
-            | sed 's/^\[info\] //' \
-            > perf-results.csv
-          if [ ! -s perf-results.csv ]; then
-            echo "::error::No benchmark output found in sbt's runMain log -- see perf-results-raw.txt"
-            exit 1
-          fi
+          mkdir -p perf-runs
+          # sbt prefixes every line of runMain's stdout with "[info] " and `sbt -v` wraps it in ANSI colour escapes;
+          # strip both, keeping from the suite's own title line onward so earlier sbt log noise is excluded. A run that
+          # crashes leaves an empty CSV, which the combine step skips or reports.
+          bench() {
+            local dir="$1" out="$2"
+            (cd "$dir" && xvfb-run -a -s "-screen 0 ${{ matrix.screen }} -dpi ${{ matrix.dpi }}" \
+              sbt -v 'set Test / run / javaOptions += "-Dsun.java2d.uiScale=${{ matrix.scale }}"' \
+              "Test/runMain com.serenity.perf.PerformanceBenchmarks") > "$out.raw" 2>&1 || true
+            sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$out.raw" \
+              | sed -n '/^\[info\] Serenity performance benchmarks$/,$p' \
+              | sed 's/^\[info\] //' > "$out"
+            echo "$out: $(grep -c . "$out" || true) lines"
+          }
+          for round in 1 2; do
+            bench "$RUNNER_TEMP/base" "perf-runs/base-$round.csv"
+            bench . "perf-runs/head-$round.csv"
+          done
 
-      # A baseline from the *previous* run on this same runner type -- not a value committed to the repo, since an
-      # absolute millisecond figure only means anything measured on comparable hardware. Restored (never saved) on a
-      # pull request, so a PR is compared against master's last recorded numbers without a PR run ever overwriting
-      # them; saved only on a push to master, so the baseline only ever advances from a trusted, merged state.
-      - name: Restore previous benchmark baseline
-        id: restore-baseline
-        uses: actions/cache/restore@v4
-        with:
-          path: perf-baseline.csv
-          key: ${{ matrix.baseline }}-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: |
-            ${{ matrix.baseline }}-${{ runner.os }}-
-
-      # A cache-cold run (first run on a branch, or the cache evicted) has no baseline to restore. Only the run that
-      # is about to establish a fresh baseline itself -- a push to master, per the steps below -- is allowed to treat
-      # that as expected; every other run (in particular a PR) fails loudly instead of silently passing with nothing
-      # actually compared.
       - name: Check for a performance regression
         run: |
           set -euo pipefail
-          ARGS=(--threshold 2.0)
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/master" ]; then
-            ARGS+=(--allow-missing-baseline)
-          elif [ "${{ matrix.scale }}" != "1" ] && [ "${{ steps.restore-baseline.outputs.cache-matched-key }}" = "" ]; then
-            # The 2x baseline only exists once master has run this entry; until then a PR has nothing to compare.
-            echo "::warning::No 2x HiDPI baseline yet; it is recorded by the next push to master."
-            ARGS+=(--allow-missing-baseline)
-          fi
-          python3 scripts/check_perf_regression.py perf-baseline.csv perf-results.csv "${ARGS[@]}"
+          for run in perf-runs/head-1.csv perf-runs/head-2.csv; do
+            if [ ! -s "$run" ]; then
+              echo "::error::No benchmark output in $run -- the suite failed on this commit; see $run.raw:"
+              tail -n 60 "$run.raw"
+              exit 1
+            fi
+          done
+          python3 scripts/combine_perf_runs.py --pick slowest perf-base.csv perf-runs/base-1.csv perf-runs/base-2.csv
+          python3 scripts/combine_perf_runs.py perf-results.csv perf-runs/head-1.csv perf-runs/head-2.csv
+          python3 scripts/check_perf_regression.py perf-base.csv perf-results.csv --threshold 2.0
 
       - name: Archive benchmark results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.results }}
-          path: perf-results.csv
+          path: |
+            perf-results.csv
+            perf-base.csv
+            perf-runs/
           retention-days: 90
-
-      - name: Update benchmark baseline
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        run: cp perf-results.csv perf-baseline.csv
-
-      - name: Save benchmark baseline
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: actions/cache/save@v4
-        with:
-          path: perf-baseline.csv
-          key: ${{ matrix.baseline }}-${{ runner.os }}-${{ github.run_id }}
