@@ -127,6 +127,13 @@ The desktop packages pass the same flags through jpackage's `--java-options`, wi
 app image (`$APPDIR/serenity.jsa`), and build their runtime with `--generate-cds-archive` because a dynamic archive
 needs the runtime's own base archive. macOS is left out: writing into a signed `.app` would break its signature.
 
+### Heap flags in the desktop packages
+
+The packaged app runs with `-XX:+UseG1GC -XX:MaxRAMPercentage=25 -XX:G1PeriodicGCInterval=60000` on every OS. The heap
+is capped at a quarter of physical memory, and G1 (named explicitly, since the JVM picks Serial on small machines) runs
+a collection after 60 s idle so freed heap goes back to the OS. They are set beside the AppCDS flags in
+`.github/workflows/desktop-publish.yml` and `desktop-release.yml`; `sbt run` is unaffected.
+
 ### Startup warm-up
 
 Once the first frame is drawn, Serenity types, deletes and moves through a throwaway editor drawn off-screen, so the
