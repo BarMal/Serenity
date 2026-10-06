@@ -29,6 +29,9 @@ import pureconfig.{ConfigReader, ConfigSource}
   * end-marker = "END"               # "" for none
   * language = "en"                  # BCP 47 tag, for EPUB
   * identifier = "urn:uuid:..."      # EPUB's permanent book id; derived from title and author when absent
+  * labels.contents = "Inhalt"       # EPUB navigation and front-matter wording, otherwise chosen by language; also
+  *                                  # labels.guide, labels.title-page, labels.start-of-content, labels.dedication
+  *                                  # and labels.chapter ("Chapter {n}", for a chapter without a heading)
   * }}}
   */
 object ManuscriptConf:
@@ -61,7 +64,8 @@ object ManuscriptConf:
       dedication: Option[String],
       endMarker: Option[String],
       language: Option[String],
-      identifier: Option[String]
+      identifier: Option[String],
+      labels: Option[Map[String, String]]
   ) derives ConfigReader
 
   def decode(text: String, defaults: CompileSpec): Either[CompileError, CompileSpec] =
@@ -78,6 +82,7 @@ object ManuscriptConf:
       transforms <- conf.transforms.traverse(_.traverse(required(_, "transform", TextTransform.fromKey)))
       rounding   <- keyed(conf.wordCount, "word-count", WordCountRounding.fromKey)
       rules      <- sectionRules(conf, defaults.rules)
+      labels     <- conf.labels.traverse(labelOverrides)
     yield
       val author = conf.author.map(AuthorName.fromLegal).getOrElse(defaults.author)
       defaults.copy(
@@ -104,8 +109,23 @@ object ManuscriptConf:
         endMarker = conf.endMarker.fold(defaults.endMarker)(marker => Option(marker.trim).filter(_.nonEmpty)),
         format = preset.copy(paper = paper),
         language = conf.language.map(_.trim).filter(_.nonEmpty).getOrElse(defaults.language),
-        identifier = conf.identifier.map(_.trim).filter(_.nonEmpty).orElse(defaults.identifier)
+        identifier = conf.identifier.map(_.trim).filter(_.nonEmpty).orElse(defaults.identifier),
+        labels = labels.getOrElse(defaults.labels)
       )
+
+  private def labelOverrides(raw: Map[String, String]): Either[CompileError, Map[LabelKey, String]] =
+    raw.toList
+      .traverse((name, text) =>
+        LabelKey
+          .fromKey(name)
+          .toRight(
+            CompileError.InvalidConfiguration(
+              s"unknown label '$name'; expected one of ${LabelKey.values.map(_.key).mkString(", ")}"
+            )
+          )
+          .map(_ -> text)
+      )
+      .map(_.toMap)
 
   private def sectionRules(conf: ConfFile, defaults: SectionRules): Either[CompileError, SectionRules] =
     val rules = SectionRules(

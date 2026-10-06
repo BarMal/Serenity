@@ -25,7 +25,8 @@ object AuthorName:
 
 /** `shortTitle` is the running-header keyword; `byline` is the name printed under the title, which may be a pen name.
   * `language` is a BCP 47 tag and `identifier` a book's permanent id, both for reflowable formats; with no identifier
-  * the EPUB writer derives a stable one from the title and author.
+  * the EPUB writer derives a stable one from the title and author. `labels` override the navigation headings that
+  * `language` would otherwise choose.
   */
 final case class ManuscriptMeta(
     title: String,
@@ -36,7 +37,8 @@ final case class ManuscriptMeta(
     wordCount: Int,
     wordCountRounding: WordCountRounding,
     language: String = "en",
-    identifier: Option[String] = None
+    identifier: Option[String] = None,
+    labels: Map[LabelKey, String] = Map.empty
 ):
   def wordCountLine: String = wordCountRounding.describe(wordCount)
 

@@ -163,3 +163,22 @@ class ManuscriptDocxWriterSpec extends AnyFlatSpec with Matchers with EitherValu
       List("11906")
     part("word/document.xml", archive) should include("""<w:u w:val="single"/>""")
   }
+
+  it should "write the writer's HTML as marks and text, never as markup" in {
+    val book    = com.serenity.manuscript.epub.ManuscriptEpubFixture.withHtml
+    val archive = ManuscriptDocxWriter.write(book, ManuscriptFormat.Modern)
+    val texts   = DocxDocumentCodec.readBytes(archive).value.paragraphs.map(_.plainText)
+    val body    = part("word/document.xml", archive)
+
+    texts should contain("Block text & more <3")
+    texts.exists(text =>
+      text.startsWith("A bold, italic and underlined word,") && text.contains("H2O and x2.")
+    ) shouldBe
+      true
+    texts.foreach(text => text should not include regex("</?(b|i|u|div|sub|sup|script|img)[ >/]"))
+    body should not include "onerror"
+    body should not include "alert("
+    body should include("<w:b/>")
+    body should include("<w:i/>")
+    body should include("""<w:u w:val="single"/>""")
+  }

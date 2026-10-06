@@ -1,6 +1,14 @@
 package com.serenity.manuscript.epub
 
-import com.serenity.manuscript.{Block, FrontMatter, Manuscript, ParagraphKind, Section, SectionHeading}
+import com.serenity.manuscript.{
+  Block,
+  FrontMatter,
+  Manuscript,
+  NavigationLabels,
+  ParagraphKind,
+  Section,
+  SectionHeading
+}
 
 /** One content document of the book: its place in the package, and the markup between `<body>` and `</body>`. */
 final private[epub] case class EpubDocument(
@@ -32,21 +40,22 @@ private[epub] object EpubDocuments:
       case _: Section.Part    => true
       case _: Section.Chapter => false
     }
-    val built = build(manuscript.body, hasParts, Built(Vector.empty, Vector.empty, 0, 0))
+    val labels = NavigationLabels.resolve(manuscript.meta.language, manuscript.meta.labels)
+    val built  = build(manuscript.body, hasParts, labels, Built(Vector.empty, Vector.empty, 0, 0))
     EpubContent(
-      front = frontDocuments(manuscript),
+      front = frontDocuments(manuscript, labels),
       body = withEndMarker(built.documents, manuscript.endMarker),
       toc = built.toc
     )
 
   final private case class Built(documents: Vector[EpubDocument], toc: Vector[TocEntry], parts: Int, chapters: Int)
 
-  private def build(sections: Vector[Section], hasParts: Boolean, from: Built): Built =
+  private def build(sections: Vector[Section], hasParts: Boolean, labels: NavigationLabels, from: Built): Built =
     sections.foldLeft(from) { (built, section) =>
       section match
         case Section.Chapter(heading, blocks) =>
           val number   = built.chapters + 1
-          val document = chapter(number, heading, blocks, hasParts)
+          val document = chapter(number, heading, blocks, hasParts, labels)
           built.copy(
             documents = built.documents :+ document,
             toc = built.toc :+ TocEntry(document.title, document.path, Vector.empty),
@@ -55,31 +64,32 @@ private[epub] object EpubDocuments:
         case Section.Part(Some(heading), nested) =>
           val number   = built.parts + 1
           val document = part(number, heading)
-          val inner = build(nested, hasParts, Built(built.documents :+ document, Vector.empty, number, built.chapters))
+          val inner =
+            build(nested, hasParts, labels, Built(built.documents :+ document, Vector.empty, number, built.chapters))
           inner.copy(toc = built.toc :+ TocEntry(document.title, document.path, inner.toc))
         case Section.Part(None, nested) =>
-          build(nested, hasParts, built)
+          build(nested, hasParts, labels, built)
     }
 
-  private def frontDocuments(manuscript: Manuscript): Vector[EpubDocument] =
+  private def frontDocuments(manuscript: Manuscript, labels: NavigationLabels): Vector[EpubDocument] =
     manuscript.front.toVector.map {
-      case FrontMatter.TitlePage => titlePage(manuscript)
+      case FrontMatter.TitlePage => titlePage(manuscript, labels)
       case FrontMatter.Dedication(text) =>
         EpubDocument(
           "dedication",
           "dedication",
-          "Dedication",
+          labels.dedication,
           Vector(s"""<p class="dedication">${EpubXml.escape(text)}</p>""")
         )
     }
 
-  private def titlePage(manuscript: Manuscript): EpubDocument =
+  private def titlePage(manuscript: Manuscript, labels: NavigationLabels): EpubDocument =
     val meta   = manuscript.meta
     val byline = Option.when(meta.byline.trim.nonEmpty)(s"""<p class="byline">by ${EpubXml.escape(meta.byline)}</p>""")
     EpubDocument(
       "titlepage",
       "titlepage",
-      "Title Page",
+      labels.titlePage,
       Vector(s"""<h1 class="title">${EpubXml.escape(meta.title)}</h1>""") ++ byline
     )
 
@@ -90,13 +100,14 @@ private[epub] object EpubDocuments:
     number: Int,
     heading: Option[SectionHeading],
     blocks: Vector[Block],
-    hasParts: Boolean
+    hasParts: Boolean,
+    labels: NavigationLabels
   ): EpubDocument =
     val tag = if hasParts then "h2" else "h1"
     EpubDocument(
       f"chapter-$number%03d",
       "chapter",
-      heading.fold(s"Chapter $number")(_.title),
+      heading.fold(labels.chapterTitle(number))(_.title),
       heading.map(headingMarkup(tag, "chapter-title", _)).toVector ++ blockMarkup(blocks)
     )
 
