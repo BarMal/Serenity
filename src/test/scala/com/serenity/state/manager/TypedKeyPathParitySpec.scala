@@ -15,7 +15,7 @@ import com.serenity.keystroke.events.{Event, ExtendSelectionRight, InsertChar, O
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
-import com.serenity.state.undo.{HistoryEntry, UndoState}
+import com.serenity.state.undo.{HistoryEntry, HistoryStacks, HistoryStep, UndoState}
 import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{setBufferForPane, setCursorPosition}
@@ -106,13 +106,14 @@ class TypedKeyPathParitySpec extends AnyFlatSpec with Matchers:
         .map((restored, _) => ViewportResolution.resolve(restored))
         .flatMap(_.persisted.buffers.get(edit.bufferId))
         .fold(edit)(buffer => edit.copy(snapshot = edit.snapshot.copy(viewport = buffer.viewport)))
-    def placed(entry: HistoryEntry): HistoryEntry = entry match
-      case edit: HistoryEntry.BufferEdit => placedEdit(edit)
-      case other                         => other
+    def placed(step: HistoryStep): HistoryStep = step.entry match
+      case edit: HistoryEntry.BufferEdit => step.copy(entry = placedEdit(edit))
+      case _                             => step
+    def placedStacks(stacks: HistoryStacks): HistoryStacks =
+      stacks.copy(undo = stacks.undo.map(placed), redo = stacks.redo.map(placed))
     model.undo.copy(
-      undoStack = model.undo.undoStack.map(placed),
-      redoStack = model.undo.redoStack.map(placed),
-      pendingGroup = model.undo.pendingGroup.map(placedEdit)
+      buffers = model.undo.buffers.view.mapValues(history => history.copy(stacks = placedStacks(history.stacks))).toMap,
+      layout = placedStacks(model.undo.layout)
     )
 
   private val oneSlice: EventBatchSteps[Event] = EventBatchSteps((_, event) => event, _ => false, 1.hour)
