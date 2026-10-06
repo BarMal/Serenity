@@ -214,7 +214,8 @@ final case class Buffer(
     val lineCount                         = document.content.lineCount
     def inRange(position: CursorPosition) = position.line < lineCount
     def clamp(position: CursorPosition) =
-      if inRange(position) then position
+      if inRange(position) then
+        CursorPosition(position.line, position.column.min(document.content.getLine(position.line).fold(0)(_.length)))
       else
         val lastLine = (lineCount - 1).max(0)
         CursorPosition(lastLine, document.content.getLine(lastLine).fold(0)(_.length))
@@ -231,6 +232,13 @@ final case class Buffer(
         placeholders = annotations.placeholders.filter(placeholder => inRange(placeholder.position))
       )
     )
+
+  /** This buffer with its text replaced by `newContent` in a way that is not an edit: it stays as clean or dirty as it
+    * was, the content version moves so a stale rich-text document is recognised, and the cursors are brought back
+    * inside the new text.
+    */
+  def withSettledContent(newContent: Rope): Buffer =
+    copy(document = document.copy(content = newContent, contentVersion = document.contentVersion + 1)).clampedToContent
 
   /** True when closing this buffer may lose user-authored content. A hidden buffer is never closed on its own, and the
     * session keeps its text, so it never asks to be saved.

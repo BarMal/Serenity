@@ -182,12 +182,15 @@ object FidelityReport:
       )
     )
 
-  /** [[forSave]] for a document that was read from a package that is no longer available to copy from, which loses the
-    * parts of the package too, though there is no telling which.
+  /** [[forSave]] for a document whose package is no longer available to copy from. What the package held besides the
+    * document's own content is named by `imported`, the report made when it was read; all of that is lost too.
     */
-  def forDetached(document: RichTextDocument, target: SaveTarget): FidelityReport =
-    val report = forSave(document.withSource(None), target)
-    FidelityReport(report.items :+ FidelityItem(DocumentFeature.Other("document part"), Treatment.Dropped, 1))
+  def forDetached(document: RichTextDocument, target: SaveTarget, imported: Option[FidelityReport]): FidelityReport =
+    val lostParts = imported.toList
+      .flatMap(_.items)
+      .filter(item => item.treatment == Treatment.Preserved && InlineObjects.isPartFeature(item.feature))
+      .map(_.copy(treatment = Treatment.Dropped))
+    FidelityReport(forSave(document.withSource(None), target).items ++ lostParts)
 
   private def partTreatment(passthrough: Boolean): Treatment =
     if passthrough then Treatment.Preserved else Treatment.Dropped

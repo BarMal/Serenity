@@ -85,6 +85,8 @@ class SessionPackageRestoreSpec extends AnyFlatSpec with Matchers with OptionVal
 
       restored.richText.richTextDocument.value.source shouldBe empty
       restored.richText.richTextFidelity.value.wouldDrop.map(_.feature) should contain(DocumentFeature.Tables)
+      restored.richText.richTextFidelity.value.dropSummary should include("style sheet")
+      restored.richText.richTextFidelity.value.dropSummary should not include "document part"
       manager.saveBuffer(restored).attempt.unsafeRunSync().swap.toOption.value.getMessage should include("would drop")
     }
 

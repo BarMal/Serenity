@@ -17,7 +17,9 @@ final private[richtext] case class OdtNaming(
 private[richtext] object OdtParagraphWriter:
 
   def paragraphXml(paragraph: RichTextParagraph, naming: OdtNaming): String =
-    paragraph.opaqueBlock.fold(textParagraphXml(paragraph, naming))(block => if naming.native then block.raw else "")
+    paragraph.opaqueBlock.fold(textParagraphXml(paragraph, naming))(block =>
+      if naming.native then block.raw else "<text:p/>"
+    )
 
   private def textParagraphXml(paragraph: RichTextParagraph, naming: OdtNaming): String =
     val (tag, level) = paragraph.role match

@@ -386,6 +386,50 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
       Files.deleteIfExists(savedFile)
   }
 
+  it should "turn the block lines of a buffer into empty lines once saved in a format that cannot hold them" in {
+    val fileManager = new FileManager()
+    val sourceFile  = Files.createTempFile("serenity-convert-source", ".docx")
+    val savedRtf    = Files.createTempFile("serenity-convert-copy", ".rtf")
+    val savedOdt    = Files.createTempFile("serenity-convert-copy", ".odt")
+
+    try
+      Files.write(sourceFile, GoldenFixtures.zip(GoldenFixtures.wordReport.entries))
+      val buffer = fileManager.loadFile(sourceFile, BufferId(110)).unsafeRunSync()
+      val lines  = buffer.document.content.lineCount
+
+      List(savedRtf, savedOdt).foreach { target =>
+        val saved = fileManager.saveBuffer(buffer, target).unsafeRunSync()
+
+        saved.document.content.collect() should not include InlineAtom.BlockCharacter.toString
+        saved.document.content.lineCount shouldBe lines
+        saved.richText.richTextDocument.map(_.paragraphs.exists(_.isOpaqueBlock)) shouldBe Some(false)
+        saved.richTextInSync shouldBe true
+      }
+      buffer.richText.richTextDocument.map(_.paragraphs.exists(_.isOpaqueBlock)) shouldBe Some(true)
+    finally
+      Files.deleteIfExists(sourceFile)
+      Files.deleteIfExists(savedRtf)
+      Files.deleteIfExists(savedOdt)
+  }
+
+  it should "keep the block lines of a buffer saved in the format it was read from" in {
+    val fileManager = new FileManager()
+    val sourceFile  = Files.createTempFile("serenity-keep-source", ".docx")
+    val savedCopy   = Files.createTempFile("serenity-keep-copy", ".docx")
+
+    try
+      Files.write(sourceFile, GoldenFixtures.zip(GoldenFixtures.wordReport.entries))
+      val buffer = fileManager.loadFile(sourceFile, BufferId(111)).unsafeRunSync()
+
+      val saved = fileManager.saveBuffer(buffer, savedCopy).unsafeRunSync()
+
+      saved.richText.richTextDocument.map(_.paragraphs.exists(_.isOpaqueBlock)) shouldBe Some(true)
+      saved.document.content.collect() shouldBe buffer.document.content.collect()
+    finally
+      Files.deleteIfExists(sourceFile)
+      Files.deleteIfExists(savedCopy)
+  }
+
   it should "save DOCX buffers with aligned rich formatting metadata" in {
     val fileManager = new FileManager()
     val savedFile   = Files.createTempFile("serenity-docx-save", ".docx")

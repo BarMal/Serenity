@@ -17,7 +17,9 @@ private[richtext] object DocxParagraphWriter:
   private val RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
   def paragraphXml(paragraph: RichTextParagraph, context: DocxWriteContext): String =
-    paragraph.opaqueBlock.fold(textParagraphXml(paragraph, context))(block => if context.native then block.raw else "")
+    paragraph.opaqueBlock.fold(textParagraphXml(paragraph, context))(block =>
+      if context.native then block.raw else "<w:p/>"
+    )
 
   private def textParagraphXml(paragraph: RichTextParagraph, context: DocxWriteContext): String =
     val attributes = paragraph.source.filter(_ => context.native).fold("")(_.openTagAttributes)

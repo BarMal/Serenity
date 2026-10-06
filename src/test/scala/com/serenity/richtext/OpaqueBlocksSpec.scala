@@ -151,7 +151,9 @@ class OpaqueBlocksSpec extends AnyFlatSpec with Matchers with EitherValues:
     val odt = OdtDocumentCodec.writeBytes(opened)
 
     entry(odt, "content.xml").text should not include "w:tbl"
-    OdtDocumentCodec.readBytes(odt).value.paragraphs.size shouldBe 5
+    val readBack = OdtDocumentCodec.readBytes(odt).value
+    readBack.paragraphs.size shouldBe 6
+    readBack.paragraphAt(3).map(_.plainText) shouldBe Some("")
   }
 
   it should "write no table into a package it has no source for" in {

@@ -358,6 +358,17 @@ final class RichTextDocument private (
   def hasOpaqueBlockBetween(from: Int, to: Int): Boolean =
     !tree.forallInRange(from, to)((paragraph, _) => !paragraph.isOpaqueBlock)
 
+  def hasOpaqueBlock: Boolean =
+    tree.existsAny(_.isOpaqueBlock)
+
+  /** This document with each block line made an empty paragraph, as a format that cannot hold blocks writes it. */
+  def withoutBlocks: RichTextDocument =
+    new RichTextDocument(
+      tree.mapAll(paragraph => if paragraph.isOpaqueBlock then RichTextParagraph(Nil) else paragraph),
+      everyParagraphNormalized,
+      source
+    )
+
   /** Whether an edit has put other content beside a block atom. */
   def hasMixedBlock: Boolean =
     tree.existsAny(_.hasMixedBlock)
@@ -428,7 +439,7 @@ final class RichTextDocument private (
         val endOffset =
           if index == normalizedRange.end.paragraphIndex then normalizedRange.end.offset
           else paragraph.plainTextLength
-        paragraph.hasMarkThroughout(startOffset, endOffset, mark)
+        paragraph.isOpaqueBlock || paragraph.hasMarkThroughout(startOffset, endOffset, mark)
     }
     updateRange(range)((paragraph, start, end) => paragraph.setMark(start, end, mark, enabled = !shouldRemove))
 
@@ -492,7 +503,7 @@ final class RichTextDocument private (
           if index == normalizedRange.start.paragraphIndex then normalizedRange.start.offset else 0
         val endOffset =
           if index == normalizedRange.end.paragraphIndex then normalizedRange.end.offset else paragraph.plainTextLength
-        transform(paragraph, startOffset, endOffset)
+        if paragraph.isOpaqueBlock then paragraph else transform(paragraph, startOffset, endOffset)
     }
 
   private def withUpdatedParagraphs(startIndex: Int, endIndex: Int)(
@@ -512,7 +523,9 @@ final class RichTextDocument private (
       val lastIndex       = tree.paragraphCount - 1
       val startIndex      = normalizedRange.start.paragraphIndex.max(0).min(lastIndex)
       val endIndex        = normalizedRange.end.paragraphIndex.max(startIndex).min(lastIndex)
-      withUpdatedParagraphs(startIndex, endIndex)((paragraph, _) => update(paragraph))
+      withUpdatedParagraphs(startIndex, endIndex)((paragraph, _) =>
+        if paragraph.isOpaqueBlock then paragraph else update(paragraph)
+      )
 
   private[serenity] def updateInlineStyle(range: RichTextRange)(
     transform: RichTextStyle => RichTextStyle

@@ -193,7 +193,13 @@ object SessionBuffer:
   private def detached(buffer: Buffer, document: RichTextDocument, path: java.nio.file.Path): Buffer =
     buffer.copy(richText =
       buffer.richText.copy(richTextFidelity =
-        Some(FidelityReport.forDetached(document, FileType.saveTarget(FileType.fromPath(path))))
+        Some(
+          FidelityReport.forDetached(
+            document,
+            FileType.saveTarget(FileType.fromPath(path)),
+            buffer.richText.richTextFidelity
+          )
+        )
       )
     )
 

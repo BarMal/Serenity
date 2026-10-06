@@ -101,22 +101,37 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
           stored <- saveStored(path, encoded.bytes, expectedRevision)
         yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision))
       case FileType.RichText =>
-        val document = richTextDocumentForSave(buffer)
+        val document           = richTextDocumentForSave(buffer)
+        val (settled, content) = settledFor(document, None)
         saveStored(path, RtfDocumentCodec.writeBytes(document), expectedRevision)
-          .map(stored => savedBuffer(buffer, path, Some(document), stored.revision))
+          .map(stored => savedBuffer(buffer, path, Some(settled), stored.revision, content))
       case FileType.OpenDocumentText =>
-        val document = richTextDocumentForSave(buffer)
-        val bytes    = OdtDocumentCodec.writeBytes(document)
+        val document           = richTextDocumentForSave(buffer)
+        val bytes              = OdtDocumentCodec.writeBytes(document)
+        val (settled, content) = settledFor(document, Some(PackageFormat.Odt))
         saveStored(path, bytes, expectedRevision)
           .map(stored =>
-            savedBuffer(buffer, path, Some(rebasedOnSaved(document, bytes, PackageFormat.Odt)), stored.revision)
+            savedBuffer(
+              buffer,
+              path,
+              Some(rebasedOnSaved(settled, bytes, PackageFormat.Odt)),
+              stored.revision,
+              content
+            )
           )
       case FileType.WordOpenXmlDocument =>
-        val document = richTextDocumentForSave(buffer)
-        val bytes    = DocxDocumentCodec.writeBytes(document)
+        val document           = richTextDocumentForSave(buffer)
+        val bytes              = DocxDocumentCodec.writeBytes(document)
+        val (settled, content) = settledFor(document, Some(PackageFormat.Docx))
         saveStored(path, bytes, expectedRevision)
           .map(stored =>
-            savedBuffer(buffer, path, Some(rebasedOnSaved(document, bytes, PackageFormat.Docx)), stored.revision)
+            savedBuffer(
+              buffer,
+              path,
+              Some(rebasedOnSaved(settled, bytes, PackageFormat.Docx)),
+              stored.revision,
+              content
+            )
           )
       case _ =>
         for
@@ -266,20 +281,22 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
     buffer: Buffer,
     path: Path,
     richTextDocument: Option[RichTextDocument],
-    revision: Option[DocumentRevision]
+    revision: Option[DocumentRevision],
+    settledContent: Option[com.serenity.rope.Rope] = None
   ): Buffer =
-    buffer.copy(
-      document = buffer.document.copy(
+    val base = settledContent.fold(buffer)(buffer.withSettledContent)
+    base.copy(
+      document = base.document.copy(
         filePath = Some(path),
         isDirty = false,
         language = languageFromPath(path),
         revision = revision
       ),
       // `richTextDocument` (when present) is `richTextDocumentForSave(buffer)`'s result, already proven to match
-      // `buffer.document.content` -- which this save doesn't change -- so it's synced at `buffer`'s current version
-      // (#1663).
-      richText = buffer.richText
-        .withSyncedDocument(richTextDocument.map(_.normalized), buffer.document.contentVersion)
+      // `buffer.document.content` -- or, when the save settled the text, that text -- so it is synced at `base`'s
+      // current version (#1663).
+      richText = base.richText
+        .withSyncedDocument(richTextDocument.map(_.normalized), base.document.contentVersion)
         .copy(richTextFidelity = None)
     )
 
@@ -330,6 +347,20 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
         case PackageFormat.Docx => DocxDocumentCodec.readBytes(written)
         case PackageFormat.Odt  => OdtDocumentCodec.readBytes(written)
       readBack.fold(_ => document, document.rebasedOn)
+
+  /** What the buffer holds after a save in `format`, which is what the file now says. A format that cannot hold blocks
+    * wrote each block line as an empty paragraph, so the buffer's lines become empty too and a later save cannot differ
+    * from what is shown. The text is returned when it changed.
+    */
+  private def settledFor(
+    document: RichTextDocument,
+    format: Option[PackageFormat]
+  ): (RichTextDocument, Option[com.serenity.rope.Rope]) =
+    if !document.hasOpaqueBlock || document.source.exists(source => format.contains(source.format)) then
+      (document, None)
+    else
+      val withoutBlocks = document.withoutBlocks
+      (withoutBlocks, Some(com.serenity.rope.Rope(withoutBlocks.plainText)))
 
   private def richTextDocumentForSave(buffer: Buffer): RichTextDocument =
     val text = buffer.document.content.collect()

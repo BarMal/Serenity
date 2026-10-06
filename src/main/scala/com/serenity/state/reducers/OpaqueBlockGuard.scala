@@ -13,7 +13,15 @@ private[reducers] object OpaqueBlockGuard:
 
   def refuses(event: TextEntryEvent, before: Buffer, after: AppState): Boolean =
     editsText(event) && nextToBlock(before) &&
-      after.persisted.buffers.get(before.id).flatMap(_.richText.richTextDocument).exists(_.hasMixedBlock)
+      after.persisted.buffers.get(before.id).exists { edited =>
+        edited.richText.richTextDocument.exists(_.hasMixedBlock) || skippedEveryEdit(before, edited)
+      }
+
+  /** The edit paths that apply several ranges leave out one that would join a block, so an edit that did only that
+    * comes back with the text it started with, which is a refusal too.
+    */
+  private def skippedEveryEdit(before: Buffer, edited: Buffer): Boolean =
+    before.document.content == edited.document.content
 
   private def editsText(event: TextEntryEvent): Boolean =
     event match

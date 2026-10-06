@@ -73,14 +73,31 @@ private[state] object EditorEditSupport:
     // Seeded with the document only while it still describes the content, since each step re-stamps it as matching.
     edits.foldLeft((buffer.document.content, buffer.richText.richTextDocument.filter(_ => buffer.richTextInSync))) {
       case ((content, document), edit) =>
-        val nextContent = applyContentEdit(content, edit)
         val nextDocument = richTextDocumentAfterEdit(
           buffer.withEditedDocument(content, document),
           edit.start,
           edit.end,
           edit.insertedText
         )
-        (nextContent, nextDocument)
+        if joinsBlock(content, document, nextDocument, edit) then (content, document)
+        else (applyContentEdit(content, edit), nextDocument)
+    }
+
+  /** Whether `edit` would leave other content beside a block atom. A block line takes no text, so every path that edits
+    * several ranges at once (replace-all, rename, multi-cursor, Markdown formatting) skips such an edit and applies the
+    * others, leaving the block exactly as it was. The lines around the edit are looked at first, so a document with no
+    * block near the edit costs a lookup.
+    */
+  private def joinsBlock(
+    content: Rope,
+    document: Option[RichTextDocument],
+    next: Option[RichTextDocument],
+    edit: MultiCursorEdit
+  ): Boolean =
+    document.exists { current =>
+      val firstLine = content.offsetToLineColumn(edit.start)._1
+      val lastLine  = content.offsetToLineColumn(edit.end)._1
+      current.hasOpaqueBlockBetween((firstLine - 1).max(0), lastLine + 1) && next.exists(_.hasMixedBlock)
     }
 
   def applyTrackedEdits(

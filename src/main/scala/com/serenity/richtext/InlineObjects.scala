@@ -39,6 +39,14 @@ private[richtext] object InlineObjects:
       .collectFirst { case (markers, feature) if markers.exists(raw.contains) => feature }
       .getOrElse(DocumentFeature.Other("inline object"))
 
+  /** Whether `feature` is what a package part holds, as opposed to content found in the document body. */
+  def isPartFeature(feature: DocumentFeature): Boolean =
+    feature match
+      case DocumentFeature.Styles | DocumentFeature.Lists | DocumentFeature.HeadersFooters | DocumentFeature.Comments =>
+        true
+      case DocumentFeature.Other(name) => name == SettingsPart
+      case _                           => false
+
   /** What a package entry holds that the model does not, or `None` for the entries every save writes or that belong to
     * content counted on its own (an image's media file).
     */

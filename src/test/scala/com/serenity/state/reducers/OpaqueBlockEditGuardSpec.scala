@@ -124,3 +124,42 @@ class OpaqueBlockEditGuardSpec extends AnyFlatSpec with Matchers with OptionValu
       .forSave(result.richText.richTextDocument.value, SaveTarget.Rtf)
       .dropSummary shouldBe "1 table"
   }
+
+  "A batch of edits, as replace-all, rename and multi-cursor edits make" should "skip an edit that would join a block and apply the rest" in {
+    val content   = buffer0.document.content
+    val joinStart = content.lineColumnToOffset(1, 6)
+    val edits = List(
+      EditorEditSupport.MultiCursorEdit(0, joinStart, joinStart + 1, ""),
+      EditorEditSupport.MultiCursorEdit(1, 0, 1, "B")
+    ).sortBy(edit => (-edit.start, -edit.end))
+
+    val (updated, richText) =
+      EditorEditSupport.foldEditsWithRichText(buffer0, edits)((current, edit) =>
+        EditorEditSupport.insertOrUnchanged(
+          EditorEditSupport.deleteOrUnchanged(current, edit.start, edit.end),
+          edit.start,
+          edit.insertedText
+        )
+      )
+
+    updated.getLine(0) shouldBe Some("Before")
+    updated.getLine(1) shouldBe Some("middle")
+    updated.getLine(2) shouldBe Some(com.serenity.richtext.InlineAtom.BlockCharacter.toString)
+    richText.value.paragraphs.map(_.isOpaqueBlock) shouldBe List(false, false, true, false)
+    richText.value.plainText shouldBe updated.collect()
+  }
+
+  it should "still apply an edit that removes the whole block line" in {
+    val content = buffer0.document.content
+    val start   = content.lineColumnToOffset(2, 0)
+    val edits   = List(EditorEditSupport.MultiCursorEdit(0, start, start + 1, ""))
+
+    val (_, richText) =
+      EditorEditSupport.foldEditsWithRichText(buffer0, edits)((current, edit) =>
+        EditorEditSupport.deleteOrUnchanged(current, edit.start, edit.end)
+      )
+
+    richText.value.paragraphs.exists(_.isOpaqueBlock) shouldBe false
+  }
+
+  private def buffer0: Buffer = bufferAt(CursorPosition(0, 0))
