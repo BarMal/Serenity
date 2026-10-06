@@ -126,21 +126,32 @@ trait TextMeasurerContract extends AnyPropSpec with ScalaCheckPropertyChecks wit
     }
   }
 
-  property("contract: cutting text at a shaping cut leaves every character's advance and context as measured whole") {
+  // Texts are generated from advance-measurable clusters rather than filtered with `whenever`: only about one text in
+  // five is measurable by advances, so filtering whole texts exhausted ScalaCheck's discard budget on some seeds.
+  //
+  // Advances must match exactly. Context-freedom need only never be claimed by a part when the whole denies it: a
+  // character the font lacks (CJK, say) makes Java2D split the run for font fallback, which can drop a kerning pair
+  // elsewhere in the whole text, so the whole may call a character context-free that the part, shaped alone, rightly
+  // does not. The part being more cautious costs a per-row measurement; the reverse would mis-wrap.
+  property(
+    "contract: cutting text at a shaping cut leaves every character's advance as measured whole, and never more context-free"
+  ) {
     val genCut =
       for
-        text     <- genText.suchThat(_.nonEmpty)
-        font     <- genFont
         measurer <- genMeasurer
+        clusters <- Gen.choose(1, 30).flatMap(Gen.listOfN(_, genCluster.suchThat(measurer.mayMeasureByAdvances)))
+        font     <- genFont
+        text = clusters.mkString
         position <- Gen.choose(0, text.length)
       yield (text, LineFonts(font, Vector.empty), measurer, measurer.shapingCutAtOrAfter(text, position, font))
     forAll(genCut) { (text, lineFonts, measurer, cut) =>
       whenever(measurer.mayMeasureByAdvances(text)) {
-        val head = measurer.advances(text, 0, cut, 0, lineFonts)
-        val tail = measurer.advances(text, cut, text.length, 0, lineFonts)
-        perCharacter(head) ++ perCharacter(tail) shouldBe perCharacter(
-          measurer.advances(text, 0, text.length, 0, lineFonts)
-        )
+        val head     = measurer.advances(text, 0, cut, 0, lineFonts)
+        val tail     = measurer.advances(text, cut, text.length, 0, lineFonts)
+        val whole    = perCharacter(measurer.advances(text, 0, text.length, 0, lineFonts))
+        val cutParts = perCharacter(head) ++ perCharacter(tail)
+        cutParts.map(_._1) shouldBe whole.map(_._1)
+        cutParts.zip(whole).forall((part, all) => !part._2 || all._2) shouldBe true
       }
     }
   }
