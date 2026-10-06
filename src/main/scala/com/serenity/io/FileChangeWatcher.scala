@@ -86,12 +86,19 @@ object FileChangeWatcher:
 
   /** Compares listings of the watched directories every `interval`. Only wakes while something is watched. */
   def polling(interval: FiniteDuration): Resource[IO, FileChangeWatcher] =
+    pollingListings(interval, directory => IO.blocking(list(directory)))
+
+  /** [[polling]] over `listDirectory`, which maps each entry of a directory to its size and modification time. */
+  private[serenity] def pollingListings(
+    interval: FiniteDuration,
+    listDirectory: Path => IO[Map[Path, (Long, Long)]]
+  ): Resource[IO, FileChangeWatcher] =
     Resource.eval(Ref.of[IO, Map[Path, Listing]](Map.empty).map { listings =>
-      val changes = rescan(listings)
+      val changes = rescan(listings, listDirectory)
       val await   = (IO.sleep(interval) >> changes).iterateUntil(_.nonEmpty)
       new FileChangeWatcher(
         Backend(
-          sync = directories => syncListings(listings, directories),
+          sync = directories => syncListings(listings, directories, listDirectory),
           poll = timeout => await.timeoutTo(timeout, IO.pure(Set.empty)),
           await = await,
           ready = changes
@@ -160,16 +167,20 @@ object FileChangeWatcher:
   /** Each entry's size and modification time, which change when the file is written. */
   private type Listing = Map[Path, (Long, Long)]
 
-  private def syncListings(listings: Ref[IO, Map[Path, Listing]], directories: Set[Path]): IO[Unit] =
+  private def syncListings(
+    listings: Ref[IO, Map[Path, Listing]],
+    directories: Set[Path],
+    listDirectory: Path => IO[Listing]
+  ): IO[Unit] =
     listings.get.flatMap { current =>
       (directories -- current.keySet).toList
-        .traverse(directory => IO.blocking(list(directory)).map(directory -> _))
+        .traverse(directory => listDirectory(directory).map(directory -> _))
         .flatMap(added => listings.set(current.view.filterKeys(directories.contains).toMap ++ added))
     }
 
-  private def rescan(listings: Ref[IO, Map[Path, Listing]]): IO[Set[Path]] =
+  private def rescan(listings: Ref[IO, Map[Path, Listing]], listDirectory: Path => IO[Listing]): IO[Set[Path]] =
     listings.get.flatMap { previous =>
-      previous.keys.toList.traverse(directory => IO.blocking(list(directory)).map(directory -> _)).flatMap { now =>
+      previous.keys.toList.traverse(directory => listDirectory(directory).map(directory -> _)).flatMap { now =>
         val changed = now.flatMap { (directory, listing) =>
           val before = previous.getOrElse(directory, Map.empty)
           (before.keySet ++ listing.keySet).filter(path => before.get(path) != listing.get(path))

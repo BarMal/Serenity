@@ -14,6 +14,7 @@ import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
@@ -82,7 +83,8 @@ class FileWorkflowLanesSpec extends AnyFlatSpec with Matchers:
             uiPresetStore = UiPresetStore(directory.resolve("presets.json")),
             windowSizeProvider = IO.pure(None),
             onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-            fileDialog = None
+            fileDialog = None,
+            dictionaryCache = SharedDictionary.default
           )
           .copy(fileManager = new GatedListing(gate, started))
         stateManager <- StateManager.fromRuntime(runtime)

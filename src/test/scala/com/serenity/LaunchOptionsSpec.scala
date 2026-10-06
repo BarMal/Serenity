@@ -52,6 +52,35 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
     parsed(List("notes.md")).showVersion shouldBe false
   }
 
+  it should "start normally, without safe mode or any reset, when none is asked for" in {
+    val options = parsed(List("notes.md"))
+    (options.safeMode, options.resetConfig, options.resetSession) shouldBe (false, false, false)
+  }
+
+  it should "recognise --safe-mode and its --safe alias" in {
+    parsed(List("--safe-mode")).safeMode shouldBe true
+    parsed(List("--safe")).safeMode shouldBe true
+  }
+
+  it should "recognise --reset-config and --reset-session independently" in {
+    parsed(List("--reset-config")) shouldBe LaunchOptions(resetConfig = true)
+    parsed(List("--reset-session")) shouldBe LaunchOptions(resetSession = true)
+    parsed(List("--reset-config", "--reset-session", "--safe-mode", "notes.md")) shouldBe LaunchOptions(
+      openPath = Some(Path.of("notes.md")),
+      safeMode = true,
+      resetConfig = true,
+      resetSession = true
+    )
+  }
+
+  it should "document safe mode and both resets in --help" in {
+    val help = LaunchOptions.parse(List("--help")).left.toOption.map(_.toString).getOrElse("")
+    help should include("--safe-mode")
+    help should include("--reset-config")
+    help should include("--reset-session")
+    help should include("did not finish starting")
+  }
+
   it should "default eco to false" in {
     parsed(List("notes.md")).eco shouldBe false
   }

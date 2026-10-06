@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p><w:pPr><w:pStyle w:val="ContactBlock"/><w:tabs><w:tab w:val="right" w:pos="9360"/></w:tabs></w:pPr><w:r><w:t xml:space="preserve">Jane Q. Writer</w:t></w:r><w:r><w:tab/></w:r><w:r><w:t xml:space="preserve">about 1,000 words</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="ContactBlock"/></w:pPr><w:r><w:t xml:space="preserve">1 High Street</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="ContactBlock"/></w:pPr><w:r><w:t xml:space="preserve">Springfield</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="ContactBlock"/></w:pPr><w:r><w:t xml:space="preserve">jane@example.com</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Title"/><w:spacing w:before="4320"/></w:pPr><w:r><w:t xml:space="preserve">The Long Night</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Byline"/></w:pPr><w:r><w:t xml:space="preserve">by Jane Q. Writer</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Centered"/><w:pageBreakBefore/><w:spacing w:before="4320"/><w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:pPr><w:r><w:t xml:space="preserve">For M.</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/><w:spacing w:before="4320"/></w:pPr><w:r><w:t xml:space="preserve">Chapter 1</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/><w:spacing w:after="480"/></w:pPr><w:r><w:t xml:space="preserve">Arrival</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr><w:r><w:t xml:space="preserve">The train was late, and “nobody” said a word.</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr><w:r><w:t xml:space="preserve">She waited – </w:t></w:r><w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">quietly</w:t></w:r><w:r><w:t xml:space="preserve"> – by the door.</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="SceneBreak"/></w:pPr><w:r><w:t xml:space="preserve">#</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr><w:r><w:t xml:space="preserve">Morning came.</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/><w:pageBreakBefore/><w:spacing w:before="4320"/></w:pPr><w:r><w:t xml:space="preserve">Chapter 2</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/><w:spacing w:after="480"/></w:pPr><w:r><w:t xml:space="preserve">The Storm</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="BlockQuote"/></w:pPr><w:r><w:t xml:space="preserve">A quoted letter &amp; a &lt;tag&gt;.</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr><w:r><w:t xml:space="preserve">It rained.</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Centered"/><w:spacing w:before="480"/></w:pPr><w:r><w:t xml:space="preserve">END</w:t></w:r></w:p>
+    <w:sectPr><w:headerReference w:type="default" r:id="rId3"/><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/><w:pgNumType w:start="1"/></w:sectPr>
+  </w:body>
+</w:document>

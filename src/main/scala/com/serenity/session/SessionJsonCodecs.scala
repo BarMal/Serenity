@@ -10,7 +10,12 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 given Encoder[SchemaVersion] = Encoder.encodeInt.contramap(_.value)
 given Decoder[SchemaVersion] = Decoder.decodeInt.map(SchemaVersion.apply)
 
-given Encoder[SessionState] = deriveEncoder
+/** The session encoder with the config's encoding left to the caller, so one that remembers it can stand in. */
+def sessionStateEncoder(config: Encoder[AppConfig]): Encoder[SessionState] =
+  given Encoder[AppConfig] = config
+  deriveEncoder
+
+given Encoder[SessionState] = sessionStateEncoder(summon[Encoder[AppConfig]])
 
 given Encoder[SessionLayout] = deriveEncoder
 

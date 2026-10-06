@@ -14,6 +14,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.testkit.SharedDictionary
 import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
@@ -287,7 +288,8 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(
         LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeFocusWiringSpec")),
         policy = SessionManager.SessionPolicy(saveOnAppClose = false),
-        initialConfig = fastConfig
+        initialConfig = fastConfig,
+        dictionaryCache = SharedDictionary.cacheFor(fastConfig)
       )
       idleRenderCalls <- Ref.of[IO, Int](0)
       closeRequested  <- Deferred[IO, Unit]
@@ -369,7 +371,8 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
             makeStateManager = Some(logger =>
               StateManager.apply(
                 logger,
-                policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+                policy = SessionManager.SessionPolicy(saveOnAppClose = false),
+                dictionaryCache = SharedDictionary.default
               )
             ),
             awaitExternalQuit = IO.never,

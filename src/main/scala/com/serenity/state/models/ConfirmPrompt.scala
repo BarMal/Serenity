@@ -10,7 +10,8 @@ import com.serenity.command.{
   FileIntent,
   ReopenWithEncodingCommands,
   RichTextCommands,
-  RichTextIntent
+  RichTextIntent,
+  SafeModeCommands
 }
 import com.serenity.text.TextEncoding
 import com.serenity.ui.widget.{ButtonEmphasis, EndBehaviour, SelectableList}
@@ -44,6 +45,25 @@ object ConfirmPrompt:
 
   def of(title: String, message: List[String], choices: Seq[ConfirmChoice], blocking: Boolean): ConfirmPrompt =
     ConfirmPrompt(title, message, SelectableList.of(choices, EndBehaviour.Wrap), blocking)
+
+  /** The last starts did not reach a first frame, so this one began in safe mode (#2021). Staying put is the safe
+    * answer, so it is what Escape does.
+    */
+  def startedInSafeMode(unfinishedStarts: Int): ConfirmPrompt =
+    of(
+      title = "Started in Safe Mode",
+      message = List(
+        s"Serenity didn't finish starting $unfinishedStarts times in a row; started in safe mode.",
+        "Safe mode uses default settings, without your session, language servers or project tasks, and changes " +
+          "nothing on disk.",
+        "Restart normally?"
+      ),
+      choices = List(
+        ConfirmChoice("Restart normally", ConfirmAction.Run(SafeModeCommands.restartNormally), ButtonEmphasis.Primary),
+        ConfirmChoice("Stay in safe mode", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
 
   /** "Save changes before closing?" for the buffer a close is waiting on. Escape cancels the close, as Cancel does. */
   def closeUnsaved(bufferLabel: String): ConfirmPrompt =

@@ -338,11 +338,12 @@ object RendererPaneContent:
     annotations: BufferRenderAnnotations,
     dirtyRows: Option[Set[Int]]
   ): Unit =
-    val visualLines     = snapshot.visualLines
-    val xOriginPx       = context.cellMetrics.toPixelX(rect.x).toFloat
-    val contentRightXPx = context.cellMetrics.toPixelX(rect.right).toFloat
-    val activeBodyLines = focusedTextBodyLines(buffer, state)
-    val rowMetrics      = textRowMetrics(rect, context, snapshot)
+    val visualLines       = snapshot.visualLines
+    val xOriginPx         = context.cellMetrics.toPixelX(rect.x).toFloat
+    val contentRightXPx   = context.cellMetrics.toPixelX(rect.right).toFloat
+    val activeBodyLines   = focusedTextBodyLines(buffer, state)
+    val rowMetrics        = textRowMetrics(rect, context, snapshot)
+    val findMatchesByLine = findMatchesOnDrawnRows(buffer, state, visualLines, dirtyRows)
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
@@ -427,6 +428,19 @@ object RendererPaneContent:
               blendWeight = state.persisted.config.surfaceConfig.diagnosticHighlightBlendWeight
             )
 
+            RendererHighlights.renderFindMatchHighlights(
+              context.surface,
+              findMatchesByLine.getOrElse(visualLine.bufferLine, Nil),
+              visualLine,
+              rect,
+              screenY,
+              lineTopPx,
+              state.persisted.theme,
+              context,
+              snapshot,
+              styledSegments
+            )
+
             RendererHighlights.renderSelectionHighlights(
               context.surface,
               buffer,
@@ -439,6 +453,19 @@ object RendererPaneContent:
               snapshot,
               styledSegments
             )
+    }
+
+  private def findMatchesOnDrawnRows(
+    buffer: Buffer,
+    state: AppState,
+    visualLines: Vector[TextVisualLine],
+    dirtyRows: Option[Set[Int]]
+  ): Map[Int, List[FindHighlight]] =
+    FindHighlights.paintedFindState(state, buffer.id).fold(Map.empty[Int, List[FindHighlight]]) { found =>
+      val drawnLines = visualLines.zipWithIndex.collect {
+        case (visualLine, row) if dirtyRows.forall(_.contains(row)) => visualLine.bufferLine
+      }.toSet
+      FindHighlights.onLines(buffer.document.content, found, drawnLines)
     }
 
   def visualLineFits(

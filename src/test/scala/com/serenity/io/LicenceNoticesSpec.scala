@@ -45,6 +45,15 @@ class LicenceNoticesSpec extends AnyFlatSpec with Matchers:
     notices should include("Material Icons Round")
   }
 
+  they should "carry the licence terms and upstream README of the bundled British English dictionary" in {
+    val notices = LicenceNotices.notices.unsafeRunSync()
+
+    notices should include("| British English dictionary (en_GB) |")
+    notices should include("GNU LESSER GENERAL PUBLIC LICENSE")
+    notices should include("This dictionary was initially based on a subset of the")
+    notices should include("Marco A.G.Pinto")
+  }
+
   "The fonts directory" should "ship the Monaspace OFL beside the font files" in {
     val licence = resourceLines("/fonts/OFL.txt").mkString("\n")
 

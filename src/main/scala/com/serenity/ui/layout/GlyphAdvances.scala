@@ -1,15 +1,19 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.{FontRenderContext, GlyphVector}
+import java.awt.font.{FontRenderContext, GlyphVector, TextAttribute, TextLayout}
+import java.text.AttributedString
+import java.util.concurrent.ConcurrentHashMap
 
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 
 /** Each character's glyph advance over a span of text, read from one glyph vector per font run instead of a
   * `TextLayout` caret query per character. A character is context-free when its advance is the same however the text
   * around it is cut into rows: no kerning pair, ligature, contextual substitution, complex script, surrogate, format or
-  * control character (except tab) touches it. Carets over a context-free span are plain sums of advances taken from the
-  * span's start, so a row cut out of a measured paragraph has exactly the carets the row measures alone.
+  * control character (except tab) touches it; in a font whose layout advance is not its summed advances (see
+  * [[GlyphAdvances.layoutAdvanceMatchesSum]]) no character is. Carets over a context-free span are plain sums of
+  * advances taken from the span's start, so a row cut out of a measured paragraph has exactly the carets the row
+  * measures alone.
   */
 final private[layout] class GlyphAdvances private (
     private val advances: Array[Float],
@@ -58,6 +62,31 @@ private[layout] object GlyphAdvances:
   /** Below this a non-zero advance could be mistaken for a collapsed caret by `normalizeCollapsedCarets`. */
   private val SmallestDistinctAdvancePx = 0.05f
 
+  final private case class Probe(font: Font, frc: FontRenderContext)
+
+  private val layoutAgreement = ConcurrentHashMap[Probe, java.lang.Boolean]()
+
+  private val AgreementProbeText = "Hoxi "
+
+  /** Whether `TextLayout` ends a row where summed glyph advances do: a slanted face (a transformed font, or the italic
+    * AWT synthesises when a family has none) makes `TextLayout.getAdvance` include the slant overhang, so every row's
+    * trailing edge, and with it where rows wrap, would differ from the sum. Read off the font once, since the font
+    * alone does not say whether its italic is synthesised.
+    */
+  def layoutAdvanceMatchesSum(font: Font, frc: FontRenderContext): Boolean =
+    layoutAgreement.computeIfAbsent(
+      Probe(font, frc),
+      probe => probeLayoutAdvance(probe.font, probe.frc): java.lang.Boolean
+    )
+
+  private def probeLayoutAdvance(font: Font, frc: FontRenderContext): Boolean =
+    val chars  = AgreementProbeText.toCharArray
+    val glyphs = font.createGlyphVector(frc, chars)
+    val summed = (0 until glyphs.getNumGlyphs).map(glyphs.getGlyphMetrics(_).getAdvance).sum
+    val text   = AttributedString(AgreementProbeText)
+    text.addAttribute(TextAttribute.FONT, font)
+    math.abs(TextLayout(text.getIterator, frc).getAdvance - summed) <= ShapingTolerancePx
+
   def hasContextFreeCharacters(text: String): Boolean =
     !Font.textRequiresLayout(text.toCharArray, 0, text.length) && text.forall(isContextFreeCharacter)
 
@@ -97,7 +126,7 @@ private[layout] object GlyphAdvances:
   ): Unit =
     val runChars = java.util.Arrays.copyOfRange(chars, start, end)
     val nominal  = font.createGlyphVector(frc, runChars)
-    if nominal.getNumGlyphs == runChars.length then
+    if nominal.getNumGlyphs == runChars.length && layoutAdvanceMatchesSum(font, frc) then
       val codes = nominal.getGlyphCodes(0, runChars.length, new Array[Int](runChars.length))
       val memo  = GlyphAdvanceMemo(nominal)
       runChars.indices.foreach { index =>

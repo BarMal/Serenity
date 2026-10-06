@@ -26,7 +26,8 @@ final private[manager] class StateManagerWorkflowCapability(
     sessionManager: SessionManager,
     operations: StateManagerOperationBoundary,
     lanes: EffectLanePort,
-    filePersistence: StateManagerFilePersistence
+    filePersistence: StateManagerFilePersistence,
+    restarter: Option[RestartMode => IO[Unit]] = None
 )(using balance: com.serenity.rope.Balance):
   import StateManagerWorkflowCapability.{ProjectFilesLane, SessionLane}
 
@@ -70,8 +71,15 @@ final private[manager] class StateManagerWorkflowCapability(
     openFileWorkflowModal(FileWorkflowMode.SaveAs, state, Some(bufferId), Some(statusMessage))
 
   private[manager] def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
-    filePersistence.settlePendingSaves(close.closeTargets(scope, state)) >>
-      modelCommit.currentState.flatMap(current => commitClose(current, close.begun(scope, current)))
+    if restartRequestedWithoutLauncher(scope) then logger.warn("[CMD] Restarting is not available in this session")
+    else
+      filePersistence.settlePendingSaves(close.closeTargets(scope, state)) >>
+        modelCommit.currentState.flatMap(current => commitClose(current, close.begun(scope, current)))
+
+  private def restartRequestedWithoutLauncher(scope: CloseScope): Boolean =
+    scope match
+      case CloseScope.Restart(_) => restarter.isEmpty
+      case _                     => false
 
   /** Commits a close step, then -- if it resolved the last buffer -- quits or shows the start page. */
   private def commitClose(fallback: AppState, transition: CloseTransition): IO[Unit] =
@@ -85,6 +93,9 @@ final private[manager] class StateManagerWorkflowCapability(
     scope match
       case CloseScope.Quit =>
         sessionPersistence.onAppClose(committed) >> quitSignal.complete(()).attempt.void
+      case CloseScope.Restart(mode) =>
+        sessionPersistence.onAppClose(committed) >> restarter.traverse_(_(mode)) >>
+          quitSignal.complete(()).attempt.void
       case CloseScope.ReturnToStartPage =>
         snapshotAndShowStartPage(committed)
       case _ =>

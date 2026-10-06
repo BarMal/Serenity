@@ -1,8 +1,9 @@
 # Offline spell checking
 
 Serenity's spell checker (`com.serenity.spellcheck.SpellChecker`) reads standard Hunspell `.aff`/`.dic` dictionary
-pairs. It ships with no dictionary of its own; getting real, offline-capable spell checking working means either an
-already-installed OS dictionary is found automatically, or a dictionary is configured by hand. This page covers both.
+pairs. British English (`en-gb`) works out of the box with the dictionary bundled in the application; any other
+language needs an already-installed OS dictionary, which is found automatically, or one configured by hand. This page
+covers all three.
 
 ## Config keys
 
@@ -10,14 +11,18 @@ All spell-check settings live under `spellcheck.*` (`SpellCheckConfig`, `com.ser
 
 | Key                          | Default | Meaning                                                                 |
 | ----------------------------- | ------- | ------------------------------------------------------------------------ |
-| `spellcheck.enabled`          | `false` | Turns spell-check diagnostics on.                                       |
-| `spellcheck.languages`        | `["en"]`| Language codes to check against; also used to pick dictionary filenames (`en.dic`, `en_gb.dic`, `fr.dic`, ...). |
+| `spellcheck.enabled`          | `true`  | Spell-check diagnostics in prose buffers.                               |
+| `spellcheck.languages`        | `["en-GB"]` | Language codes to check against; also used to pick dictionary filenames (`en_GB.dic`, `en_US.dic`, `fr.dic`, ...). |
 | `spellcheck.dictionary_paths` | `[]`    | Explicit `.dic`/`.aff` file or directory paths to load dictionaries from. |
 | `spellcheck.words`            | `[]`    | Extra accepted words, on top of whatever dictionary is loaded.          |
 
+Language codes are read in any casing and with `-` or `_` (`en-gb`, `en_GB`, `EN-gb`) and kept as `en-GB`. Select
+American English with `spellcheck.languages = ["en-US"]`.
+
 `spellcheck.dictionary_paths` accepts either a direct path to a `.dic` (or `.aff`) file, or a directory; a directory
-is searched for a file named after each configured language (`<language>.dic`, with `-`/`_` both tried, e.g.
-`en-gb.dic` and `en_gb.dic`), falling back to the directory itself if no match is found there.
+is searched for a file named after each configured language, trying the conventional Hunspell spelling first
+(`en_GB.dic`) and then `en-GB.dic`, `en_gb.dic`, `en-gb.dic` and the upper-case forms, in any letter case, falling
+back to the directory itself if no match is found there.
 
 ## Zero-config discovery of an installed OS dictionary
 
@@ -32,19 +37,82 @@ the standard Hunspell/MySpell install locations for the running OS (`SpellCheckC
   set
 
 If one of these directories already has a dictionary for a configured language -- for example `hunspell-en-gb`
-installed via the system package manager on Linux -- spell-check works with `spellcheck.enabled = true` and nothing
-else configured. This lookup is only consulted when `spellcheck.dictionary_paths` is empty: a path you have
-configured yourself is always used as configured and never silently second-guessed.
+installed via the system package manager on Linux, which installs `/usr/share/hunspell/en_GB.dic` -- spell-check works
+with nothing configured. Each language loads from the first directory that has it, so a dictionary linked into
+several of these directories is loaded once. This lookup is only consulted when `spellcheck.dictionary_paths` is
+empty: a path you have configured yourself is always used as configured and never silently second-guessed.
 
-Note the default `spellcheck.languages` is `["en"]`, not `["en-gb"]`. A generic `en` dictionary (e.g. from
-`hunspell-en-us`) satisfies it; British English specifically requires either an OS dictionary literally named `en.dic`
-(some distributions symlink their configured default there) or adding `"en-gb"` to `spellcheck.languages` explicitly.
+When no dictionary resolves for the configured languages, every prose buffer shows one notice on its first line naming
+the directories searched, and no words are flagged -- checking against an empty word list would flag every word.
+British English never reaches this: it has a bundled dictionary (below).
 
-## Setting up British English (`en-GB`) for offline use, manually
+A config file saved by an earlier version keeps the values it was saved with (`spellcheck.enabled = false`,
+`spellcheck.languages = ["en"]`); change them to pick up the new defaults. `en` looks for `en.dic`, which Debian and
+Ubuntu do not install.
+
+## What is checked
+
+Spell check applies to prose buffers. Within them it checks the prose and leaves alone what only sits next to it:
+fenced code blocks, inline code, HTML tags, URLs, email addresses, link targets and front matter. A word is accepted if
+the dictionary has it or an affixed form of it, if every part of a hyphenated word (`well-known`, `mother-in-law`) is
+accepted, or if every part either side of an apostrophe is (`o'clock`, `author's`). A typographic apostrophe is the same
+letter as a straight one. Words with a digit in them (`1990s`, `19th-century`, `COVID-19`), all-capitals acronyms and
+capitalised words that do not start a sentence (probably names) are not checked. Only the wrong part of a hyphenated
+word is marked.
+
+## Corrections
+
+Right-click a misspelled word for a menu that leads with up to five corrections, then **Add to Dictionary**, **Ignore
+Once** and **Ignore All**. From the keyboard, the command palette offers **Show Spelling Suggestions** (the same menu,
+below the word at the cursor), **Ignore Misspelling Once** and **Ignore Misspelling Everywhere**. Choosing a correction
+replaces the word as one undoable edit.
+
+Corrections are searched for when asked for, never during the background check, so typing is not slowed by them. They
+come from the dictionary's `REP` table anywhere in the word, every single edit (a swapped, missing, extra or wrong
+letter) that is a word, dictionary stems within two edits, a stem within two edits of the word less a suffix with the
+suffix put back (`jugdment` to `judgement`), and a split into two words (`alot` to `a lot`). They are ranked by edit
+distance, with `REP` matches first, match the typo's capitalisation, and leave out words the dictionary marks
+`NOSUGGEST`.
+
+**Add to Dictionary** appends the word to `spellcheck.words` and saves the configuration, so it is accepted in every
+later session. **Ignore Once** hides that occurrence, and **Ignore All** hides the word wherever it appears (in any
+case), for the rest of the session only. An ignored occurrence shows again if the text at that place changes.
+
+## How a dictionary is held
+
+A dictionary stays as the stems in its `.dic` file. Affixes are stripped when a word is looked up, so memory follows the
+number of entries rather than the number of forms they generate, and a suffix that grants a second suffix (a
+continuation class) is understood without enumerating the combinations. Flag sets are shared between entries, and the
+index suggestions use is built the first time one is requested.
+
+## Bundled British English dictionary
+
+British English needs nothing configured: `spellcheck.enabled` and `spellcheck.languages = ["en-GB"]` are the defaults.
+A config file that predates them needs:
+
+```
+spellcheck.enabled = true
+spellcheck.languages = ["en-GB"]
+```
+
+Serenity ships LibreOffice's `en_GB` Hunspell dictionary (Marco A.G.Pinto's British English, version 4.0.1, from
+<https://github.com/LibreOffice/dictionaries/tree/master/en>) under `src/main/resources/spellcheck/`, together with its
+upstream README. Its licence terms (LGPL) and attribution are in `THIRD-PARTY-NOTICES.md`, and the files are
+unmodified copies of upstream.
+
+- **A dictionary you supply wins.** The bundled one is used only when no dictionary named for the language (`en_GB.dic`
+  or `en-gb.dic`, in any letter case) comes from `spellcheck.dictionary_paths` or an OS directory. Removing yours brings
+  the bundled one back.
+- **It is loaded on demand.** Nothing is parsed at startup, and nothing at all while `spellcheck.enabled` is `false` or
+  no `en-gb` language is configured; the first analysis after both hold parses it once and keeps it for the session.
+- **`en` is not `en-GB`.** `["en"]` keeps its small built-in word list, so an American-English dictionary installed
+  for `en` is never second-guessed.
+
+## Setting up another language (or British English by hand)
 
 Prepare this *before* going offline, since it requires downloading a dictionary:
 
-1. Obtain an `en_GB.aff` / `en_GB.dic` pair. Common sources:
+1. Obtain a `.aff` / `.dic` pair, e.g. `en_GB.aff` / `en_GB.dic`. Common sources:
    - Your OS package manager, e.g. `apt install hunspell-en-gb` on Debian/Ubuntu (installs into
      `/usr/share/hunspell`, where the zero-config discovery above will find it automatically), or the equivalent
      `myspell-en-gb` / `hunspell-en-GB` package on other distributions.
@@ -55,16 +123,7 @@ Prepare this *before* going offline, since it requires downloading a dictionary:
 3. Configure Serenity (`~/.serenity/config.conf`, or the in-app settings command runner):
    ```
    spellcheck.enabled = true
-   spellcheck.languages = ["en-gb"]
+   spellcheck.languages = ["en-GB"]
    spellcheck.dictionary_paths = ["/home/you/.serenity/dictionaries"]
    ```
    (A path to the `.dic` file directly also works; the `.aff` beside it is picked up automatically.)
-
-## Bundling a dictionary with Serenity
-
-Shipping an `en_GB.aff`/`.dic` pair inside `src/main/resources` (alongside the existing `fonts/`, `icons/`, `sprites/`
-and `themes/` bundled assets) would remove the need for step 1 above entirely for the common case. This has not been
-done yet: real Hunspell dictionaries are third-party, typically LGPL/MPL/BSD-family licensed depending on the
-specific dictionary, and picking one and bundling it correctly (attribution, license file, verifying redistribution
-terms permit shipping inside Serenity's own distributable) needs a deliberate choice of source and review, not an
-automated one. See the discussion on issue #1175 for the current state of that decision.

@@ -14,7 +14,7 @@ private[command] object CommandRegistryFileCommands:
       label = "Save As"
     )
 
-  private[command] def fileCommands: List[Command] = List(
+  private[command] def fileCommands: List[Command] = ManuscriptExportCommands.all ++ List(
     Command.typed(
       "open-settings",
       "Browse, search, inspect, and change application settings.",
@@ -37,6 +37,13 @@ private[command] object CommandRegistryFileCommands:
       CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SaveConfig)),
       CommandCategory.Settings,
       label = "Save Config"
+    ),
+    Command.typed(
+      "reset-settings",
+      "Back up config.conf, then restore every setting to its default.",
+      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.ResetSettings)),
+      CommandCategory.Settings,
+      label = "Reset Settings"
     ),
     Command.typed(
       "save-session",
@@ -112,6 +119,8 @@ private[command] object CommandRegistryFileCommands:
       CommandCategory.File,
       label = "Quit"
     ),
+    SafeModeCommands.restart,
+    SafeModeCommands.restartNormally,
     Command.typed(
       "new",
       "Create a new file.",

@@ -121,9 +121,24 @@ object RopeDiff:
     else matchingSuffixChars(a, b, n, from + 1)
 
   /** `at` is always derived from a subtree's own `weight` clamped against the other rope's `weight`, so it is
-    * mathematically always in `[0, r.weight]` and `splitAt` always succeeds; the fallback exists only so this stays
-    * total rather than partial.
+    * mathematically always in `[0, r.weight]`.
+    *
+    * The halves are only compared, never kept, so they are cut without `Rope.splitAt`'s rebalancing: cutting a large
+    * rope near one end leaves a sliver beside a large subtree, and rebalancing that rebuilds the subtree.
     */
-  private def splitAtClamped(r: Rope, at: Int)(using balance: Balance): (Rope, Rope) =
-    val clamped = math.max(0, math.min(at, r.weight))
-    r.splitAt(clamped).getOrElse((r, Rope.empty))
+  private def splitAtClamped(r: Rope, at: Int)(using Balance): (Rope, Rope) =
+    cut(r, math.max(0, math.min(at, r.weight)))
+
+  private def cut(r: Rope, at: Int)(using Balance): (Rope, Rope) =
+    r match
+      case _ if at == 0        => (Rope.empty, r)
+      case _ if at == r.weight => (r, Rope.empty)
+      case Node(left, right) =>
+        if at == left.weight then (left, right)
+        else if at < left.weight then
+          val (before, after) = cut(left, at)
+          (before, Node(after, right))
+        else
+          val (before, after) = cut(right, at - left.weight)
+          (Node(left, before), after)
+      case Leaf(value) => (Leaf(value.take(at)), Leaf(value.drop(at)))

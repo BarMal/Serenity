@@ -1,10 +1,12 @@
 package com.serenity.state.manager
 
+import com.serenity.config.AppConfig
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun, RichTextStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
+  CellMetrics,
   LayoutEngine,
   ViewportSize,
   VisualRowCounts,
@@ -45,7 +47,12 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
 
   private def richDocument(count: Int): RichTextDocument = RichTextDocument(List.tabulate(count)(paragraph))
 
-  private def stateWith(document: RichTextDocument, cursor: CursorPosition, columns: Int): AppState =
+  private def stateWith(
+    document: RichTextDocument,
+    cursor: CursorPosition,
+    columns: Int,
+    fonts: FontLoader.FontConfig = FontLoader.FontConfig()
+  ): AppState =
     val buffer = Buffer
       .fromString(bufferId, document.plainText)
       .copy(
@@ -57,7 +64,7 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
     val surface = base.persisted.config.surfaceConfig.copy(wordWrapEnabled = true, typewriterScrollingEnabled = false)
     base.copy(
       persisted = base.persisted.copy(
-        config = base.persisted.config.withSurfaceConfig(surface),
+        config = withFonts(base.persisted.config.withSurfaceConfig(surface), fonts),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = base.persisted.layout.copy(
@@ -70,6 +77,9 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
       runtime = base.runtime.copy(viewportSize = Some(ViewportSize(columns + 10, 30)))
     )
 
+  private def withFonts(config: AppConfig, fonts: FontLoader.FontConfig): AppConfig =
+    config.copy(editorConfig = config.editorConfig.copy(fontConfig = fonts))
+
   private def buffer(state: AppState): Buffer = state.persisted.buffers(bufferId)
 
   /** `state` with the viewport sized to its pane and placed by the real placement, as a cursor move leaves it. */
@@ -81,6 +91,16 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
     val sizedState = state.copy(persisted = state.persisted.copy(buffers = Map(bufferId -> sized)))
     val viewport   = CursorViewport.adjustForCursor(sized, sizedState, sized.editing.cursorPositions.head)
     sizedState.copy(persisted = sizedState.persisted.copy(buffers = Map(bufferId -> sized.copy(viewport = viewport))))
+
+  /** Rows of the pane's own (document) font that fit the pane height, as `RendererPaneSetup` counts them: the
+    * viewport's `visibleLines` are code-grid rows, and a text font with a different line height fits a different number
+    * of rows into the same pixels, so the centre row depends on the fonts in use.
+    */
+  private def paintedRowsInPane(state: AppState): Int =
+    val config       = state.persisted.config.editorConfig.fontConfig
+    val codeHeightPx = CellMetrics.fromFont(FontLoader.previewCodeFont(config)).lineHeight
+    val textHeightPx = CellMetrics.fromFont(FontLoader.previewTextFont(config)).lineHeight
+    math.max(1, buffer(state).viewport.visibleLines * codeHeightPx / math.max(1, textHeightPx))
 
   private def paintedSnapshot(state: AppState) =
     val config = state.persisted.config.editorConfig.fontConfig
@@ -99,16 +119,17 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
   "A rich-text buffer" should "paint the cursor on the centre row wherever the cursor sits" in {
     val document = richDocument(60)
     for
+      fonts    <- List(FontLoader.FontConfig(), FontLoader.FontConfig(textFontSize = 18.0f))
       columns  <- List(40, 60, 80)
       line     <- List(21, 22, 23, 24, 25, 33)
       fraction <- List(0.0, 0.5, 0.95)
     do
       val text   = document.plainText.split("\n", -1)
       val cursor = CursorPosition(line, (text(line).length * fraction).toInt)
-      val state  = placed(stateWith(document, cursor, columns))
-      withClue(s"columns=$columns line=$line fraction=$fraction: ") {
+      val state  = placed(stateWith(document, cursor, columns, fonts))
+      withClue(s"textFontSize=${fonts.textFontSize} columns=$columns line=$line fraction=$fraction: ") {
         paintedSnapshot(state).navigationGeometry.visualRowIndexFor(cursor) shouldBe Some(
-          buffer(state).viewport.visibleLines / 2
+          paintedRowsInPane(state) / 2
         )
       }
   }

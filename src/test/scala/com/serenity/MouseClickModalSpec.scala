@@ -9,6 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
@@ -24,7 +25,10 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+        com.serenity.rope.Balance.default,
+        LoggerFactory[IO]
+      )
       .unsafeRunSync()
 
   "MouseClick" should "consume workspace clicks, presses, and drags while a close confirmation is active" in {
@@ -178,8 +182,8 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
       .modalSurface
       .flatMap(_.content match
-        case SurfaceContent.ModalWorkflow(Modal.Find(_, _, currentIndex)) => Some(currentIndex)
-        case _                                                            => None) shouldBe Some(0)
+        case SurfaceContent.ModalWorkflow(Modal.Find(_, _, currentIndex, _, _)) => Some(currentIndex)
+        case _                                                                  => None) shouldBe Some(0)
 
     val replaceManager = makeStateManager()
     val replaceBuffer  = replaceManager.createBuffer("needle", None).unsafeRunSync()

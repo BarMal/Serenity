@@ -13,6 +13,7 @@ import com.serenity.session.SessionState
 import com.serenity.session.given
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints
@@ -29,7 +30,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
 
   private def makeStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("CursorModeSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   private def settingsItems(runner: CommandRunner): List[CommandSurfaceItem] =
     def descendants(group: CommandSurfaceItem.GroupItem): List[CommandSurfaceItem] =

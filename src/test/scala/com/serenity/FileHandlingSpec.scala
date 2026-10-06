@@ -12,6 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -29,7 +30,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("FileHandlingSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   "FileType detection" should "work correctly for common extensions" in {
     val scalaPath    = java.nio.file.Paths.get("test.scala")
@@ -327,6 +328,35 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
       buffer.document.filePath shouldBe Some(docxFile)
       buffer.document.isDirty shouldBe false
     finally Files.deleteIfExists(docxFile)
+  }
+
+  it should "require Save As before replacing an RTF import that contains a table or picture" in {
+    val fileManager = new FileManager()
+    val sourceFile  = Files.createTempFile("serenity-lossy-rtf-source", ".rtf")
+    val savedFile   = Files.createTempFile("serenity-lossy-rtf-copy", ".rtf")
+
+    try
+      Files.writeString(
+        sourceFile,
+        """{\rtf1\ansi\trowd\cellx2000\pard\intbl cell\cell\row\pard {\pict\pngblip 89504e47}\par}"""
+      )
+      val sourceBytes = Files.readAllBytes(sourceFile)
+
+      val buffer = fileManager.loadFile(sourceFile, BufferId(109)).unsafeRunSync()
+
+      buffer.richText.richTextFidelity.map(_.unsupportedElements) shouldBe Some(Set("table", "picture"))
+      fileManager.saveBuffer(buffer).attempt.unsafeRunSync().left.map(_.getMessage) shouldBe Left(
+        s"Saving $sourceFile would discard unsupported rich document content. Use Save As to write a new file."
+      )
+      Files.readAllBytes(sourceFile) shouldBe sourceBytes
+
+      fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
+      RtfDocumentCodec.readBytesWithFidelity(Files.readAllBytes(savedFile)).map(_.fidelity.isLossless) shouldBe Right(
+        true
+      )
+    finally
+      Files.deleteIfExists(sourceFile)
+      Files.deleteIfExists(savedFile)
   }
 
   it should "require Save As before replacing a DOCX import with unsupported content" in {

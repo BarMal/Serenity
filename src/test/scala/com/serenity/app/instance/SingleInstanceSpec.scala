@@ -7,6 +7,7 @@ import scala.concurrent.duration.DurationInt
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref, Resource}
+import com.serenity.testkit.VirtualTime
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -36,7 +37,7 @@ class SingleInstanceSpec extends AnyFlatSpec with Matchers:
           forwarded.fold(IO.unit)(_.update(_ :+ paths)) >>
             remaining.modify(next => (next.drop(1), next.headOption.getOrElse(Delivery.Unreachable))),
         isolatedSessionRoot = IO.pure(isolatedRoot),
-        forwardRetryDelay = 1.milli
+        claimRetryDelay = 1.milli
       )
     }
 
@@ -89,6 +90,79 @@ class SingleInstanceSpec extends AnyFlatSpec with Matchers:
     val noServer    = Resource.eval(IO.raiseError[Stream[IO, List[Path]]](new AssertionError("must not serve")))
 
     roleOf(coordination(failingLock, serve = noServer)) should matchPattern { case LaunchRole.Primary(_) => }
+  }
+
+  // Windows releases a killed process's file lock asynchronously, so a relaunch after a crash can briefly see a lock
+  // that is held by nobody. Only when nothing answers the forward is that worth waiting out.
+  private val retryDelay = 200.millis
+
+  final private case class Claim(role: LaunchRole, lockAttempts: Int, elapsed: scala.concurrent.duration.FiniteDuration)
+
+  /** A lock that reads as held until it has been tried `heldFor` times; `Int.MaxValue` never frees. */
+  private def claimVirtually(
+    heldFor: Int,
+    deliveries: List[Delivery],
+    claimAttempts: Int = 15
+  ): Claim =
+    VirtualTime.runVirtual {
+      for
+        tries <- Ref.of[IO, Int](0)
+        lock = Resource.eval(
+          tries.updateAndGet(_ + 1).map(n => if n > heldFor then LockAttempt.Acquired else LockAttempt.HeldElsewhere)
+        )
+        remaining <- Ref.of[IO, List[Delivery]](deliveries)
+        coordination = InstanceCoordination(
+          acquireLock = lock,
+          serve = Resource.pure(Stream.empty),
+          forward = _ => remaining.modify(next => (next.drop(1), next.headOption.getOrElse(Delivery.Unreachable))),
+          isolatedSessionRoot = IO.pure(isolatedRoot),
+          claimAttempts = claimAttempts,
+          claimRetryDelay = retryDelay
+        )
+        started <- IO.monotonic
+        role    <- SingleInstance.claim(coordination, List(notes), logger).use(IO.pure)
+        elapsed <- IO.monotonic.map(_ - started)
+        count   <- tries.get
+      yield Claim(role, count, elapsed)
+    }
+
+  it should "take the lock once a holder that cannot be reached lets go of it" in {
+    val claim = claimVirtually(heldFor = 3, deliveries = Nil)
+
+    claim.role should matchPattern { case LaunchRole.Primary(_) => }
+    claim.lockAttempts shouldBe 4
+    claim.elapsed shouldBe retryDelay * 3
+  }
+
+  it should "forward at once, without retrying the lock, when the holder answers" in {
+    val claim = claimVirtually(heldFor = Int.MaxValue, deliveries = List(Delivery.Delivered))
+
+    claim.role shouldBe LaunchRole.Forwarded
+    claim.lockAttempts shouldBe 1
+    claim.elapsed.toMillis shouldBe 0L
+  }
+
+  it should "give up on an unreachable holder after the bounded number of attempts" in {
+    val claim = claimVirtually(heldFor = Int.MaxValue, deliveries = Nil, claimAttempts = 15)
+
+    claim.role shouldBe LaunchRole.Isolated(isolatedRoot)
+    claim.lockAttempts shouldBe 15
+    claim.elapsed shouldBe retryDelay * 14
+  }
+
+  it should "not wait on a holder that answered but failed to acknowledge" in {
+    val claim = claimVirtually(heldFor = Int.MaxValue, deliveries = List(Delivery.Failed))
+
+    claim.role shouldBe LaunchRole.Isolated(isolatedRoot)
+    claim.lockAttempts shouldBe 1
+    claim.elapsed.toMillis shouldBe 0L
+  }
+
+  it should "wait out a holder that is slow to listen and then to release, within one budget" in {
+    val claim = claimVirtually(heldFor = 5, deliveries = List(Delivery.Unreachable, Delivery.Unreachable))
+
+    claim.role should matchPattern { case LaunchRole.Primary(_) => }
+    claim.lockAttempts shouldBe 6
   }
 
   "SingleInstance.forConfigDirectory" should "forward a second launch's file to the first through the real lock" in {

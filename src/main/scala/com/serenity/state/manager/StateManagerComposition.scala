@@ -41,7 +41,8 @@ private[manager] class StateManagerComposition(
     val sessionManager: SessionManager,
     val sessionPersistence: SessionPersistence,
     val renderCaches: RenderCaches,
-    operations: StateManagerOperationBoundary
+    operations: StateManagerOperationBoundary,
+    val restarter: Option[RestartMode => IO[Unit]] = None
 )(using providedBalance: Balance):
 
   private val modelCommit = operations.modelCommit
@@ -110,6 +111,7 @@ private[manager] class StateManagerComposition(
       modelCommit.updateValidated(transition)
     def scheduleDocumentAnalysis(): IO[Unit]                     = operations.scheduleDocumentAnalysis()
     def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = operations.scheduleFindSearch(request)
+    override def spellingSuggestions: String => IO[List[String]] = operations.spellingSuggestions
     def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit]  = operations.submitEffect(lane, job)
     // Called from lane jobs, off the dispatcher, so events `onApplied` enqueues are replayed the way `executeCommand`
     // replays them. `applyResult` folds a result's undo boundary into its own commit (`ModelCommit.applyModelEffects`),
@@ -140,7 +142,8 @@ private[manager] class StateManagerComposition(
     sessionManager,
     operations,
     effectEditorPort,
-    filePersistence
+    filePersistence,
+    restarter
   )
 
   private val effectSurfacePort: EffectSurfacePort = new EffectSurfacePort:

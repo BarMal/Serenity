@@ -16,6 +16,7 @@ import com.serenity.richtext.LossyRichTextOverwriteException
 import com.serenity.session.SessionSaveTrigger
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
+import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -201,7 +202,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
         .toList
         .timeoutTo(1.second, IO.pure(Nil))
     )
-    opened shouldBe List(LspEffect.FileOpened(path.toUri.toString, LanguageId.Python, "print(1)"))
+    opened shouldBe List(LspEffect.FileOpened(path.toUri.toString, LanguageId.Python, RopeText("print(1)")))
   }
 
   it should "skip the LSP refresh when the buffer's language does not change" in {
@@ -326,7 +327,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
       .unsafeRunSync()
 
     fixture.currentState.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.ModalWorkflow(Modal.Find(query, results, _))) =>
+      case List(SurfaceContent.ModalWorkflow(Modal.Find(query, results, _, _, _))) =>
         query.text shouldBe "cat"
         results.size shouldBe 2
       case other => fail(s"Expected a single Find modal surface, got $other")

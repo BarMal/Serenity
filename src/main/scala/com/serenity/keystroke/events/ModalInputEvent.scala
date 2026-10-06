@@ -1,5 +1,6 @@
 package com.serenity.keystroke.events
 
+import com.serenity.state.models.FindOption
 import com.serenity.ui.layout.SurfaceAction
 
 sealed trait ModalInputEvent
@@ -31,7 +32,11 @@ case object ModalNextField                       extends ModalInputEvent
 case object ModalPreviousField                   extends ModalInputEvent
 case object ModalSubmit                          extends ModalInputEvent
 case object ModalFindNext                        extends ModalInputEvent
-case object ModalDismiss                         extends ModalInputEvent
+case object ModalFindPrevious                    extends ModalInputEvent
+
+/** Flips one find option -- match case, whole word or regex (Alt+C/W/R by default, as in VS Code). */
+final case class ModalToggleFindOption(option: FindOption) extends ModalInputEvent
+case object ModalDismiss                                   extends ModalInputEvent
 
 /** Creates a file workflow's missing directories immediately, in one step (issue #1253) -- the explicit counterpart to
   * submitting twice (`missingPathSegments` flagged, then `confirmCreateDirectories` on a second submit). Modal-only:
@@ -72,4 +77,5 @@ object ModalInputEvent:
     event match
       case modalEvent: ModalInputEvent => Some(modalEvent)
       case FindNext                    => Some(ModalFindNext)
+      case FindPrevious                => Some(ModalFindPrevious)
       case other                       => SurfaceInput.translate[ModalInputEvent](other)

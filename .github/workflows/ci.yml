@@ -196,9 +196,9 @@ jobs:
 
       # Absolute timings only compare on the same machine: GitHub's runners differ by about 2x, so a baseline recorded
       # on one runner and checked on another fails or passes by which runner each got. Instead the base commit and this
-      # commit are benchmarked here, on one runner, alternating base/head twice so a slow spell on the runner hits
-      # both. A benchmark fails only when every head run is past the threshold against every base run -- the head's
-      # fastest against the base's slowest (`combine_perf_runs.py`) -- since some swing 2x between runs of one commit.
+      # commit are benchmarked here, on one runner, twice each in ABBA order so a slow spell on the runner hits both.
+      # A benchmark fails only when every head run is past the threshold against every base run -- the head's fastest
+      # against the base's slowest (`combine_perf_runs.py`) -- since some swing 2x between runs of one commit.
       - name: Check out the base commit
         run: git worktree add --detach "$RUNNER_TEMP/base" HEAD^1
 
@@ -222,10 +222,12 @@ jobs:
               | sed 's/^\[info\] //' > "$out"
             echo "$out: $(grep -c . "$out" || true) lines"
           }
-          for round in 1 2; do
-            bench "$RUNNER_TEMP/base" "perf-runs/base-$round.csv"
-            bench . "perf-runs/head-$round.csv"
-          done
+          # ABBA order, so whatever favours the first or last run of the job (warm caches, runner drift) falls on both
+          # sides equally instead of always on the base.
+          bench "$RUNNER_TEMP/base" perf-runs/base-1.csv
+          bench . perf-runs/head-1.csv
+          bench . perf-runs/head-2.csv
+          bench "$RUNNER_TEMP/base" perf-runs/base-2.csv
 
       - name: Check for a performance regression
         run: |

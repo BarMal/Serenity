@@ -1,8 +1,7 @@
 package com.serenity
 
 import com.serenity.keystroke.events.*
-import com.serenity.rope.{Balance, Leaf, Rope}
-import com.serenity.state.manager.CursorViewport
+import com.serenity.rope.{Leaf, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalEventReducer, WorkflowEffect}
 import com.serenity.ui.fonts.FontLoader
@@ -11,9 +10,7 @@ import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
-
-  given Balance = Balance.default
+class ModalFindReducerSpec extends AnyFlatSpec with Matchers with FindModalFixtures:
 
   private def matchAt(line: Int, column: Int): FindResult =
     FindResult(line, column)
@@ -69,60 +66,6 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
 
   object NonCollectingRope:
     def apply(delegate: Rope): NonCollectingRope = new NonCollectingRope(delegate)
-
-  private def stateWithFindModal(
-    query: String,
-    content: String,
-    cursor: CursorPosition = CursorPosition(0, 0),
-    viewport: Viewport = Viewport(0, 0, 24, 80)
-  ): AppState =
-    val bufferId = BufferId(0)
-    AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        focus = Focus.Surface(SurfaceId("find")),
-        buffers = AppState.initial.persisted.buffers.updated(
-          bufferId,
-          AppState.initial.persisted
-            .buffers(bufferId)
-            .copy(
-              document =
-                AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(content)),
-              editing = EditingState(List(cursor)),
-              viewport = viewport
-            )
-        )
-      ),
-      runtime = AppState.initial.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("find"),
-            SurfaceContent.ModalWorkflow(Modal.Find(TextField.of(query), Vector.empty, 0)),
-            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          )
-        )
-      )
-    )
-
-  private def activeFindModal(state: AppState): Option[Modal] =
-    state.modalSurface.flatMap {
-      _.content match
-        case SurfaceContent.ModalWorkflow(find @ Modal.Find(_, _, _)) => Some(find)
-        case _                                                        => None
-    }
-
-  private def completeFind(state: AppState): AppState =
-    activeFindModal(state) match
-      case Some(Modal.Find(query, _, _)) =>
-        val bufferId = BufferId(0)
-        val content  = state.persisted.buffers(bufferId).document.content
-        val reducedState = ModalEventReducer.applyFindSearchResults(
-          state,
-          FindSearchRequest(SurfaceId("find"), bufferId, query.text, content),
-          FindSearch.results(content, query.text)
-        )
-        CursorViewport.ensureVisibleCursors(state, reducedState)
-      case _ =>
-        state
 
   "ModalEventReducer" should "apply typed find result clicks and replace controls through modal input events" in {
     val findSurface = UiSurface(
@@ -278,7 +221,9 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
     activeFindModal(result.state) shouldBe Some(Modal.Find(TextField.of("needl"), Vector.empty, 0))
     result.state.persisted.buffers(bufferId).findState shouldBe None
     result.effects should matchPattern {
-      case List(AppEffect.Workflow(WorkflowEffect.RefreshFind(FindSearchRequest(_, `bufferId`, "needl", _)))) =>
+      case List(
+            AppEffect.Workflow(WorkflowEffect.RefreshFind(FindSearchRequest(_, `bufferId`, "needl", _, _, _, _)))
+          ) =>
     }
   }
 
@@ -534,7 +479,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
 
     activeFindModal(result.state) shouldBe Some(Modal.Find(TextField("needle", 3), Vector.empty, 0))
     result.effects should matchPattern {
-      case List(AppEffect.Workflow(WorkflowEffect.RefreshFind(FindSearchRequest(_, _, "needle", _)))) =>
+      case List(AppEffect.Workflow(WorkflowEffect.RefreshFind(FindSearchRequest(_, _, "needle", _, _, _, _)))) =>
     }
   }
 
@@ -558,7 +503,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
 
     activeFindModal(result.state) shouldBe Some(Modal.Find(TextField("needle", 0), Vector.empty, 0))
     result.effects should matchPattern {
-      case List(AppEffect.Workflow(WorkflowEffect.RefreshFind(FindSearchRequest(_, _, "needle", _)))) =>
+      case List(AppEffect.Workflow(WorkflowEffect.RefreshFind(FindSearchRequest(_, _, "needle", _, _, _, _)))) =>
     }
   }
 
