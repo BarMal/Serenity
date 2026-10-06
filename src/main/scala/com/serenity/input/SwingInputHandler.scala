@@ -3,6 +3,7 @@ package com.serenity.input
 import java.awt.event.*
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 import java.util.concurrent.{ConcurrentLinkedQueue, Semaphore}
+import javax.swing.KeyStroke
 
 import cats.effect.Sync
 import com.serenity.config.InputConfig
@@ -76,6 +77,15 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   private val shutdownFlag       = new AtomicBoolean(false)
   private val pendingModifierTap = new AtomicReference[ModifierTapState](ModifierTapState.empty)
   private val wheelRemainder     = new AtomicReference[WheelScrollState](WheelScrollState.empty)
+  private val lastKeyPress       = new AtomicReference[Option[(KeyStroke, Long)]](None)
+
+  /** The last key press this handler queued and when it arrived, for [[MenuActivationGuard]]. The arrival time is read
+    * from the clock here rather than from `KeyEvent.getWhen`, whose time base the platform decides.
+    */
+  def lastPressed: Option[(KeyStroke, Long)] = lastKeyPress.get()
+
+  /** Queues an event from outside the AWT listeners, in order with the keys and clicks already queued. */
+  def submit(event: Event): Unit = enqueueRaw(event)
 
   private def enqueueKey(info: KeyStrokeInfo, e: KeyEvent): Unit =
     frameTimings.keyLatency.keyReceived(e.getWhen)
@@ -140,6 +150,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     override def keyTyped(e: KeyEvent): Unit =
       translateTyped(e).foreach(enqueueKey(_, e))
     override def keyPressed(e: KeyEvent): Unit =
+      lastKeyPress.set(Some((KeyStroke.getKeyStrokeForEvent(e), System.currentTimeMillis)))
       translatePressed(e).foreach(enqueueKey(_, e))
       modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierPressed(modifier, e.getWhen)))
     override def keyReleased(e: KeyEvent): Unit =
