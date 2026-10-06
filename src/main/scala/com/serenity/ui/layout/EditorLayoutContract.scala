@@ -2,6 +2,7 @@ package com.serenity.ui.layout
 
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.InterfaceDensityMetrics
+import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.models.*
 import com.serenity.ui.layout.LayoutContractChecks.*
 
@@ -341,7 +342,8 @@ object EditorLayoutContract:
   def from(
     state: AppState,
     viewportSize: ViewportSize,
-    calculatedLayout: CalculatedLayout
+    calculatedLayout: CalculatedLayout,
+    previewCache: MarkdownPreviewCache = MarkdownPreviewCache()
   ): EditorLayoutContract =
     val viewportRect = LayoutRect(0, 0, viewportSize.width, viewportSize.height)
     val contentAreaRect = calculatedLayout.gutterRect match
@@ -353,7 +355,9 @@ object EditorLayoutContract:
       math.ceil(math.max(0.0, state.effectiveUiElementGap)).toInt
     )
     val panelGeometryById = state.pinnedSurfaces.flatMap { surface =>
-      panelRectFor(surface, state, calculatedLayout).map(rect => surface.id -> pinnedGeometry(surface, rect, state))
+      panelRectFor(surface, state, calculatedLayout).map(rect =>
+        surface.id -> pinnedGeometry(surface, rect, state, previewCache)
+      )
     }.toMap
     val maximizedSurfaceIds = state.expandedPanelSurface.toSet.map(_.id)
     val pinnedSurfaceIds    = calculatedLayout.pinnedSurfaceRects.keySet -- maximizedSurfaceIds
@@ -427,11 +431,22 @@ object EditorLayoutContract:
       floatingOverlayRowSlots = floatingOverlayRowSlots
     )
 
-  private def pinnedGeometry(surface: UiSurface, frameRect: LayoutRect, state: AppState): SurfaceGeometry =
+  private def pinnedGeometry(
+    surface: UiSurface,
+    frameRect: LayoutRect,
+    state: AppState,
+    previewCache: MarkdownPreviewCache
+  ): SurfaceGeometry =
     val resolved = surface.content match
       case SurfaceContent.MarkdownPreview(bufferId, title) =>
-        val content = state.persisted.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
-        SurfaceContentResolver.resolveMarkdownPreview(title, content, frameRect, SurfaceRenderMode.Pinned)
+        val content = state.persisted.buffers.get(bufferId).map(_.document.content)
+        SurfaceContentResolver.resolveBufferMarkdownPreview(
+          title,
+          content,
+          frameRect,
+          SurfaceRenderMode.Pinned,
+          previewCache
+        )
       case SurfaceContent.Outline(symbols, activeLocation, scroll) =>
         val resolvedOutline = SurfaceContent.Outline(
           symbols,

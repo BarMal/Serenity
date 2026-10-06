@@ -293,7 +293,11 @@ object Main extends IOApp:
             def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
               Trace.timed("render.syncAccessibility") {
                 accessibilitySync
-                  .sync(state)(previous => IO(AccessibilitySnapshot.from(state, swingWin.viewportSize, previous)))
+                  .sync(state)(previous =>
+                    IO(
+                      AccessibilitySnapshot.from(state, swingWin.viewportSize, previous, accessibilitySync.previewCache)
+                    )
+                  )
                   .flatMap(snapshot => IO(swingWin.updateAccessibility(snapshot)))
               }
 
