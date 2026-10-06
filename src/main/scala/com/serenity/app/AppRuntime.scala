@@ -22,7 +22,7 @@ import com.serenity.state.models.{AppState, BufferId, BufferMapChanges, Damage}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import fs2.Stream
-import fs2.concurrent.SignallingRef
+import fs2.concurrent.{Signal, SignallingRef}
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 object AppRuntime:
@@ -284,6 +284,7 @@ object AppRuntime:
                     frameTimingEnabled,
                     latencyTraceEnabled,
                     watchInputs.discrete.as(()),
+                    windowFocused,
                     forwardedOpens
                   )
                 )
@@ -305,6 +306,7 @@ object AppRuntime:
     frameTimingEnabled: SignallingRef[IO, Boolean],
     latencyTraceEnabled: SignallingRef[IO, Boolean],
     watchInputsChanges: Stream[IO, Unit],
+    windowFocused: Signal[IO, Boolean],
     forwardedOpens: Stream[IO, List[Path]]
   )(using logger: Logger[IO]): IO[Unit] =
     val (lifecycle, quitSignal) = (stateManager.runtimeLifecycle, stateManager.runtimeLifecycle.awaitQuit.attempt)
@@ -340,7 +342,8 @@ object AppRuntime:
           stateManager.fileService.refreshDictionaryFingerprints,
           stateManager.fileService.explorerWatchDirectories,
           stateManager.fileService.markExplorerDirectoriesStale,
-          watchInputsChanges
+          watchInputsChanges,
+          windowFocused = windowFocused
         ).interruptWhen(quitSignal).compile.drain
       ),
       AppRuntimeRenderLoops.superviseLoop("frame timing report", lifecycle.forceQuit)(
@@ -398,6 +401,9 @@ object AppRuntime:
         changed = _.document.filePath != _.document.filePath
       )
 
+  private enum WatchResync:
+    case SetChanged, FocusLost, FocusRegained
+
   /** Background half of external-change detection (#1623), complementing the focus-in re-check. Watches the parent
     * directories of open local buffers, `dictionaryWatchDirectories` (#1691) and `explorerWatchDirectories`, re-derived
     * on each `watchedSetChanges` element. A changed buffer file gets the same reload-or-prompt check the focus-in path
@@ -409,6 +415,10 @@ object AppRuntime:
     * timer. Never calling the genuinely blocking watcher while nothing is watched also keeps a buffer-less startup
     * compatible with virtual-time tests (`VirtualTime.runVirtual`'s `TestControl` treats `IO.blocking` as
     * non-terminating). Changes are gathered for `settle` after the first, so a burst checks each file once (#1885).
+    *
+    * While `windowFocused` is false nothing is watched, so a polling backend stops listing directories and a window in
+    * the background costs nothing. Regaining focus re-registers the watched set and checks every open buffer, the
+    * dictionaries and the explorers once, since changes made meanwhile were never observed.
     */
   private[serenity] def externalChangeWatchLoop(
     watcher: com.serenity.io.FileChangeWatcher,
@@ -419,7 +429,8 @@ object AppRuntime:
     explorerWatchDirectories: IO[Set[Path]] = IO.pure(Set.empty),
     markExplorerDirectoriesStale: Set[Path] => IO[Unit] = _ => IO.unit,
     watchedSetChanges: Stream[IO, Unit] = Stream.emit(()),
-    settle: FiniteDuration = 200.millis
+    settle: FiniteDuration = 200.millis,
+    windowFocused: Signal[IO, Boolean] = Signal.constant[IO, Boolean](true)
   ): Stream[IO, Unit] =
     val watched = (openBufferPaths, dictionaryWatchDirectories, explorerWatchDirectories).mapN {
       (paths, dictionaryDirectories, explorerDirectories) =>
@@ -434,9 +445,25 @@ object AppRuntime:
             IO.whenA(changedDirectories.exists(dictionaryDirectories.contains))(refreshDictionaryFingerprints) >>
             IO.whenA(staleExplorers.nonEmpty)(markExplorerDirectoriesStale(staleExplorers))
       }.flatten
+    def syncWatched(watching: SignallingRef[IO, Boolean]) =
+      watched.flatMap(directories => watcher.sync(directories) >> watching.set(directories.nonEmpty))
+    val recheckEverything = (openBufferPaths, dictionaryWatchDirectories, explorerWatchDirectories).mapN {
+      (paths, dictionaryDirectories, explorerDirectories) =>
+        paths.values.toList.traverse_(checkBufferForExternalChanges) >>
+          IO.whenA(dictionaryDirectories.nonEmpty)(refreshDictionaryFingerprints) >>
+          IO.whenA(explorerDirectories.nonEmpty)(markExplorerDirectoriesStale(explorerDirectories))
+    }.flatten
+    val focusChanges = windowFocused.discrete.changes.zipWithPrevious.collect {
+      case (_, false)          => WatchResync.FocusLost
+      case (Some(false), true) => WatchResync.FocusRegained
+    }
     Stream.eval(SignallingRef.of[IO, Boolean](false)).flatMap { watching =>
-      val resync = watchedSetChanges
-        .evalMap(_ => watched.flatMap(directories => watcher.sync(directories) >> watching.set(directories.nonEmpty)))
+      val resync = watchedSetChanges.as(WatchResync.SetChanged).merge(focusChanges).evalMap {
+        case WatchResync.SetChanged =>
+          windowFocused.get.flatMap(focused => IO.whenA(focused)(syncWatched(watching)))
+        case WatchResync.FocusLost     => watcher.sync(Set.empty) >> watching.set(false)
+        case WatchResync.FocusRegained => syncWatched(watching) >> recheckEverything
+      }
       watching.discrete.changes
         .switchMap(active =>
           if active then Stream.repeatEval(watcher.awaitChangedFiles(settle)).evalMap(react) else Stream.empty
