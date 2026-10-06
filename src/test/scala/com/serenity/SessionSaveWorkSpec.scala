@@ -7,7 +7,7 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.io.FileStamp
+import com.serenity.io.{FileStamp, SettledClock}
 import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.{Balance, Leaf}
 import com.serenity.session.{SessionBuffer, SessionManager}
@@ -41,7 +41,13 @@ class SessionSaveWorkSpec extends AnyFlatSpec with Matchers:
     Buffer(id, Document(leaf))
 
   private def newManager(root: Path): SessionManager =
-    SessionManager.create(root, AppThemeManager.create, NoOpLogger.impl[IO], SessionManager.SessionPolicy())
+    SessionManager(
+      root,
+      AppThemeManager.create,
+      NoOpLogger.impl[IO],
+      SessionManager.SessionPolicy(),
+      clock = SettledClock.aMinuteAhead
+    )
 
   "SessionBuffer.fromBuffer" should "describe a clean buffer without collecting its text" in {
     val leaf    = new CountingLeaf("text that stays on disk")
