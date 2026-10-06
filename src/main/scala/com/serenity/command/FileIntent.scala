@@ -13,6 +13,7 @@ enum FileIntent:
   case ExportManuscript(request: ManuscriptExportRequest)
   case OpenFile
   case OpenRecentFile(path: Path)
+  case ClearRecentFiles
   case OpenFileSearch
   case GoToFile
   case CloseAll

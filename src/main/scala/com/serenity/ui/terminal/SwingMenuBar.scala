@@ -10,6 +10,8 @@ import javax.swing.{JCheckBoxMenuItem, JMenu, JMenuBar, JMenuItem, KeyStroke, Sw
 import cats.effect.{IO, Resource}
 import com.serenity.command.menu.{
   CommandToggleState,
+  DynamicMenu,
+  DynamicSource,
   MenuAccelerators,
   MenuDispatch,
   MenuEntry,
@@ -122,13 +124,18 @@ object SwingMenuBar:
       mode: AppMode,
       shell: Shell,
       rows: List[Row],
-      hotkeys: Option[HotkeyConfig]
+      hotkeys: Option[HotkeyConfig],
+      sources: List[DynamicSource],
+      dynamic: List[DynamicMenu.Section]
   )
 
   sealed private trait Piece
   final private case class ItemPiece(row: Row)                        extends Piece
   final private case class SubmenuPiece(menu: JMenu, rows: List[Row]) extends Piece
   private case object SeparatorPiece                                  extends Piece
+
+  /** An item that carries its own mnemonic (or none), so it takes no part in assigning letters to labels. */
+  final private case class FixedPiece(item: JMenuItem, mnemonic: Option[MenuMnemonics.Mnemonic]) extends Piece
 
   /** One top-level menu. Only the event-dispatch thread touches it, so `populated` is a holder, not a lock. */
   final private class LazyMenu(title: MenuTitle, entries: List[MenuEntry], env: Env):
@@ -153,24 +160,40 @@ object SwingMenuBar:
       override def menuCanceled(e: MenuEvent): Unit   = ())
 
     private def show(model: Model): Unit =
-      val context = model.app.editingContext
-      val current =
-        populated.get().filter(p => p.mode == context.mode && p.shell == context.shell).getOrElse(rebuild(model))
+      val current   = populated.get().filter(isCurrent(_, model)).getOrElse(rebuild(model))
       val refreshed = refreshAccelerators(current, hotkeysOf(model))
       refreshed.rows.foreach(row => refreshState(row, model))
       populated.set(Some(refreshed))
       if menu.isPopupMenuVisible then menu.getPopupMenu.pack()
 
+    private def isCurrent(current: Populated, model: Model): Boolean =
+      val context = model.app.editingContext
+      current.mode == context.mode && current.shell == context.shell &&
+      current.dynamic == sectionsOf(current.sources, model)
+
+    private def sectionsOf(sources: List[DynamicSource], model: Model): List[DynamicMenu.Section] =
+      sources.map(DynamicMenu.expand(_, model.app, env.registry))
+
+    private def sourcesOf(entries: List[ResolvedEntry]): List[DynamicSource] =
+      entries.flatMap:
+        case ResolvedEntry.Dynamic(source)     => List(source)
+        case ResolvedEntry.Submenu(_, content) => sourcesOf(content)
+        case _                                 => Nil
+
     private def rebuild(model: Model): Populated =
       val context  = model.app.editingContext
       val resolved = MenuModel.resolve(MenuSpec(List(title -> entries)), env.registry, context.mode, context.shell)
+      val sources  = sourcesOf(resolved.flatMap(_.entries))
       menu.removeAll()
       val rows = fill(menu, resolved.flatMap(_.entries), model)
       MenuBarTheming.applyTo(menu)
-      Populated(context.mode, context.shell, rows, None)
+      Populated(context.mode, context.shell, rows, None, sources, sectionsOf(sources, model))
 
     private def fill(target: JMenu, entries: List[ResolvedEntry], model: Model): List[Row] =
-      val pieces    = tidy(entries.flatMap(piece(_, model)))
+      place(target, entries.flatMap(piece(_, model)))
+
+    private def place(target: JMenu, all: List[Piece]): List[Row] =
+      val pieces    = tidy(all)
       val labels    = pieces.flatMap(labelOf)
       val mnemonics = labels.zip(MenuMnemonics.assign(labels, Set.empty)).toMap
       pieces.flatMap:
@@ -182,15 +205,19 @@ object SwingMenuBar:
           applyMnemonic(submenu, mnemonics.get(submenu.getText).flatten)
           val _ = target.add(submenu)
           rows
+        case FixedPiece(item, mnemonic) =>
+          applyMnemonic(item, mnemonic)
+          val _ = target.add(item)
+          Nil
         case SeparatorPiece =>
           target.addSeparator()
           Nil
 
     private def labelOf(piece: Piece): Option[String] =
       piece match
-        case ItemPiece(row)           => Some(row.item.getText)
-        case SubmenuPiece(submenu, _) => Some(submenu.getText)
-        case SeparatorPiece           => None
+        case ItemPiece(row)                 => Some(row.item.getText)
+        case SubmenuPiece(submenu, _)       => Some(submenu.getText)
+        case _: FixedPiece | SeparatorPiece => None
 
     private def piece(entry: ResolvedEntry, model: Model): List[Piece] =
       entry match
@@ -198,8 +225,37 @@ object SwingMenuBar:
         case ResolvedEntry.Submenu(subtitle, children) =>
           val submenu = new JMenu(subtitle.text)
           List(SubmenuPiece(submenu, fill(submenu, children, model)))
-        case ResolvedEntry.Separator                              => List(SeparatorPiece)
-        case ResolvedEntry.Dynamic(_) | ResolvedEntry.Platform(_) => Nil
+        case ResolvedEntry.Separator       => List(SeparatorPiece)
+        case ResolvedEntry.Dynamic(source) => dynamicPieces(source, model)
+        case ResolvedEntry.Platform(_)     => Nil
+
+    private def dynamicPieces(source: DynamicSource, model: Model): List[Piece] =
+      val section = DynamicMenu.expand(source, model.app, env.registry)
+      val inner   = section.items.map(dynamicPiece(_, model))
+      section.submenuTitle match
+        case Some(submenuTitle) =>
+          val submenu = new JMenu(submenuTitle)
+          List(SubmenuPiece(submenu, place(submenu, inner)))
+        case None => inner
+
+    private def dynamicPiece(item: DynamicMenu.Item, model: Model): Piece =
+      item match
+        case choose: DynamicMenu.Item.Choose => FixedPiece(choiceItem(choose), choose.mnemonic)
+        case DynamicMenu.Item.Placeholder(text) =>
+          val placeholder = new JMenuItem(text)
+          placeholder.setEnabled(false)
+          FixedPiece(placeholder, None)
+        case DynamicMenu.Item.Run(command) => ItemPiece(Row(itemFor(command, model), command))
+        case DynamicMenu.Item.Separator    => SeparatorPiece
+
+    private def choiceItem(choose: DynamicMenu.Item.Choose): JMenuItem =
+      val item = choose.choice match
+        case _: MenuDispatch.Choice.Buffer     => new JCheckBoxMenuItem(choose.label, choose.checked)
+        case _: MenuDispatch.Choice.RecentFile => new JMenuItem(choose.label)
+      item.setToolTipText(choose.description.orNull)
+      item.getAccessibleContext.setAccessibleDescription(choose.description.orNull)
+      item.addActionListener(_ => env.host.guard.activate(MenuDispatch.eventFor(choose.choice), None, false))
+      item
 
     private def itemFor(command: Command, model: Model): JMenuItem =
       val item =

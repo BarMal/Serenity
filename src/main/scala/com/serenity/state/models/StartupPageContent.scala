@@ -12,6 +12,8 @@ import com.serenity.command.{Command, CommandIntent, FileIntent, SessionIntent, 
   */
 object StartupPageContent:
 
+  val RecentFilesLimit: Int = 5
+
   def createStartPage(
     sessionExists: Boolean,
     recentFiles: List[Path] = Nil,
@@ -55,7 +57,7 @@ object StartupPageContent:
     val recentActions = recentFiles
       .map(path => path.toAbsolutePath.normalize())
       .distinct
-      .take(5)
+      .take(RecentFilesLimit)
       .map { path =>
         StartupAction(
           s"recent:${path.toString}",
