@@ -86,7 +86,7 @@ class BundledDictionarySpec extends AnyFlatSpec with Matchers:
 
   it should "stay unparsed when no British English language is configured" in {
     val cache  = DictionaryCache()
-    val config = SpellCheckConfig(enabled = true, languages = List("en", "fr"))
+    val config = SpellCheckConfig(enabled = true, languages = List("en-US", "fr"))
 
     snapshot(config, cache)
 
@@ -108,7 +108,7 @@ class BundledDictionarySpec extends AnyFlatSpec with Matchers:
 
     snapshot(britishEnglish, cache)
     cache.size shouldBe 1
-    snapshot(britishEnglish.copy(languages = List("en")), cache)
+    snapshot(britishEnglish.copy(languages = List("en-US")), cache)
 
     cache.size shouldBe 0
   }
