@@ -42,9 +42,27 @@ with nothing configured. Each language loads from the first directory that has i
 several of these directories is loaded once. This lookup is only consulted when `spellcheck.dictionary_paths` is
 empty: a path you have configured yourself is always used as configured and never silently second-guessed.
 
-When no dictionary resolves for the configured languages, every prose buffer shows one notice on its first line naming
-the directories searched, and no words are flagged -- checking against an empty word list would flag every word.
-British English never reaches this: it has a bundled dictionary (below).
+When a configured language has no dictionary, Serenity tells the writer once per session (once per distinct wording)
+with a notice shown as a peek, not as a diagnostic on the document. It appears only while spell check is enabled and
+there is prose to check, and it waits for the next analysis if another peek is on screen. The notice names every
+language with no dictionary, the directories searched (`spellcheck.dictionary_paths` when set, otherwise the OS
+directories above), and a package suggestion per language, `hunspell-` followed by the language in lower case:
+
+```
+Spell check found no dictionary for fr.
+Searched: /usr/share/hunspell, /usr/share/myspell/dicts, ...
+Install a Hunspell dictionary (for example hunspell-fr) or set spellcheck.dictionary_paths.
+```
+
+- **Some languages resolve.** Only the missing ones are named and the rest keep being checked. The built-in word list
+  does not count as a dictionary here.
+- **None resolve.** Every configured language is named and no words are flagged, since checking against an empty word
+  list would flag every word. This notice is only given when no configured language has a built-in word list (`en`,
+  `fr` and `el` do); otherwise that small list is used and there is no notice.
+- **No notice** when a loaded dictionary is not named for any configured language (a bare `words.dic` path), since it
+  cannot be said to leave a particular language unserved.
+
+British English never counts as missing: it has a bundled dictionary (below).
 
 A config file saved by an earlier version keeps the values it was saved with (`spellcheck.enabled = false`,
 `spellcheck.languages = ["en"]`); change them to pick up the new defaults. `en` looks for `en.dic`, which Debian and

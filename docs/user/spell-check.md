@@ -60,7 +60,8 @@ Install a Hunspell dictionary (for example hunspell-fr) or set spellcheck.dictio
 The folders listed are your `spellcheck.dictionary_paths` when that is set, otherwise the folders in the table above.
 The bundled British English never counts as missing. Languages that do have a dictionary are still checked, so a missing
 language does not switch spell check off for the rest. If no language has a dictionary, nothing is flagged until one is
-found.
+found, except that `en`, `fr` and `el` have a tiny built-in word list: with only those configured, that list is used and
+there is no notice.
 
 ## What is checked
 
