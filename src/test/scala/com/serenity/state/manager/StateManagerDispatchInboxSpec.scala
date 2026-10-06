@@ -15,6 +15,7 @@ import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.state.reducers.AppEffect
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.SharedDictionary
 import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
@@ -74,7 +75,8 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       modelCommit = operations.modelCommit
       undoRecording = new UndoRecording(new UndoRecordingPort:
         def updateUndo(update: UndoState => UndoState): IO[Unit] = ModelViews.undoRef(sharedModelRef).update(update)
-        export modelCommit.updateValidated as updateModelValidated)
+        export modelCommit.updateValidated as updateModelValidated
+        export modelCommit.updateValidatedPlaced as updateModelPlaced)
       pipeline = new StateManagerEventPipeline(
         statePort,
         effectPort,
@@ -169,7 +171,8 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
           uiPresetStore = UiPresetStore(directory.resolve("presets.json")),
           windowSizeProvider = IO.pure(None),
           onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-          fileDialog = None
+          fileDialog = None,
+          dictionaryCache = SharedDictionary.default
         )
         .copy(fileManager = new GatedSaveFileManager(written, release, revisionRead))
       stateManager <- StateManager.fromRuntime(runtime)

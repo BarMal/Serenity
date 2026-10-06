@@ -10,6 +10,7 @@ import com.serenity.lsp.LspEffect
 import com.serenity.project.{ProjectTaskCommand, ProjectTaskResult, ProjectTaskRunner}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.session.{SessionManager, SessionPersistence}
+import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.models.RestartMode
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
@@ -131,7 +132,8 @@ final private[manager] case class StateManagerRuntime(
     sessionManager: SessionManager,
     sessionPersistence: SessionPersistence,
     renderCaches: RenderCaches,
-    restarter: Option[RestartMode => IO[Unit]] = None
+    restarter: Option[RestartMode => IO[Unit]] = None,
+    dictionaryCache: DictionaryCache = DictionaryCache()
 )
 
 private[manager] object StateManagerRuntime:
@@ -159,7 +161,8 @@ private[manager] object StateManagerRuntime:
       com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable,
     renderCaches: RenderCaches = RenderCaches.create(),
     projectTasksEnabled: Boolean = true,
-    restarter: Option[RestartMode => IO[Unit]] = None
+    restarter: Option[RestartMode => IO[Unit]] = None,
+    dictionaryCache: DictionaryCache = DictionaryCache()
   )(using Balance): StateManagerRuntime =
     val sessionManager = sessionRootOverride
       .map(root => SessionManager.create(root, themeManager, logger, policy))
@@ -188,5 +191,6 @@ private[manager] object StateManagerRuntime:
       sessionManager = sessionManager,
       sessionPersistence = new SessionPersistence(sessionManager, policy),
       renderCaches = renderCaches,
-      restarter = restarter
+      restarter = restarter,
+      dictionaryCache = dictionaryCache
     )

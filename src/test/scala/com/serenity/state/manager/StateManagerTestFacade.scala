@@ -4,23 +4,36 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.command.{Command, CommandCategory, CommandIntent, SessionIntent}
-import com.serenity.config.PreferredWindowSize
+import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileManager
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, ViewportSize}
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
 import org.typelevel.log4cats.noop.NoOpLogger
+import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 /** `StateManager` operations only specs use (#1692), built on the public `StateManager` API; `seededStateManager` also
   * uses the `fromRuntime` construction seam.
   */
 object StateManagerTestFacade:
+
+  /** A state manager over the shared warm dictionary, for specs that are not about dictionary loading. */
+  def warmStateManager(logger: Logger[IO], initialConfig: AppConfig = AppConfig.default)(using
+    Balance,
+    LoggerFactory[IO]
+  ): IO[StateManager] =
+    StateManager.apply(
+      logger,
+      initialConfig = initialConfig,
+      dictionaryCache = SharedDictionary.cacheFor(initialConfig)
+    )
 
   /** A state manager whose model starts from `seed` applied to the initial state, for specs that need a state validated
     * writes would reject -- a drifted id counter, focus on a missing surface. It is built through the same
@@ -59,7 +72,8 @@ object StateManagerTestFacade:
         uiPresetStore = UiPresetStore(directory.resolve("presets.json")),
         windowSizeProvider = IO.pure(None),
         onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-        fileDialog = None
+        fileDialog = None,
+        dictionaryCache = SharedDictionary.default
       )
       stateManager <- StateManager.fromRuntime(
         fileManager.fold(runtime)(manager => runtime.copy(fileManager = manager))

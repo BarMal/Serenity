@@ -12,6 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.presets.UiPresetStore
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -38,7 +39,11 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
       cacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
       sharedStateRef = ModelViews.appRef(sharedModelRef)
       pipelineLogger = org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
-      operations <- StateManagerOperationBoundary.create(sharedModelRef, pipelineLogger)
+      operations <- StateManagerOperationBoundary.create(
+        sharedModelRef,
+        pipelineLogger,
+        dictionaryCache = SharedDictionary.default
+      )
       statePort = new EventStatePort:
         val logger              = pipelineLogger
         val mouseTargetCacheRef = cacheRef
@@ -52,7 +57,8 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
       modelCommit = operations.modelCommit
       undoRecording = new UndoRecording(new UndoRecordingPort:
         def updateUndo(update: UndoState => UndoState): IO[Unit] = ModelViews.undoRef(sharedModelRef).update(update)
-        export modelCommit.updateValidated as updateModelValidated)
+        export modelCommit.updateValidated as updateModelValidated
+        export modelCommit.updateValidatedPlaced as updateModelPlaced)
     yield new StateManagerEventPipeline(
       statePort,
       effectPort,

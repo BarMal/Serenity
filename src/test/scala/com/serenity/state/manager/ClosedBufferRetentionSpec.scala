@@ -14,7 +14,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, UndoState}
-import com.serenity.testkit.AwaitCondition
+import com.serenity.testkit.{AwaitCondition, SharedDictionary}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
@@ -63,12 +63,16 @@ class ClosedBufferRetentionSpec extends AnyFlatSpec with Matchers:
         case edit: HistoryEntry.BufferEdit if edit.bufferId == id => edit
       }
 
-    def publishDiagnostics(id: BufferId): Unit =
-      val range = LspRange(LspPosition(0, 0), LspPosition(0, 1))
-      send(LspEvent.LspDiagnosticsReceived(uriOf(id).value, List(Diagnostic(range, None, "message"))))
+    def publishDiagnostics(id: BufferId): Unit = publishDiagnosticsFor(uriOf(id))
 
-    def publishSemanticTokens(id: BufferId): Unit =
-      send(LspEvent.LspSemanticTokensReceived(uriOf(id).value, List(SemanticToken(0, 0, 1, "variable", Set.empty))))
+    def publishDiagnosticsFor(uri: DocumentUri): Unit =
+      val range = LspRange(LspPosition(0, 0), LspPosition(0, 1))
+      send(LspEvent.LspDiagnosticsReceived(uri.value, List(Diagnostic(range, None, "message"))))
+
+    def publishSemanticTokens(id: BufferId): Unit = publishSemanticTokensFor(uriOf(id))
+
+    def publishSemanticTokensFor(uri: DocumentUri): Unit =
+      send(LspEvent.LspSemanticTokensReceived(uri.value, List(SemanticToken(0, 0, 1, "variable", Set.empty))))
 
     def seedChapterGhosts(id: BufferId): Unit =
       val buffer = state.persisted.buffers.getOrElse(id, fail("no such buffer"))
@@ -100,7 +104,8 @@ class ClosedBufferRetentionSpec extends AnyFlatSpec with Matchers:
           uiPresetStore = UiPresetStore(directory.resolve("presets.json")),
           windowSizeProvider = IO.pure(None),
           onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-          fileDialog = None
+          fileDialog = None,
+          dictionaryCache = SharedDictionary.default
         )
         stateManager <- StateManager.fromRuntime(runtime)
       yield Fixture(stateManager, directory)
@@ -163,6 +168,34 @@ class ClosedBufferRetentionSpec extends AnyFlatSpec with Matchers:
     val languageService = f.state.runtime.languageService
     languageService.diagnosticsState.diagnostics.keySet shouldBe Set(bUri)
     languageService.semanticTokensState.byUri.keySet shouldBe Set(bUri)
+  }
+
+  it should "drop diagnostics and semantic tokens the server publishes for its document afterwards" in {
+    val (f, a, b) = sessionWithEditedBuffers()
+    val aUri      = f.uriOf(a)
+    val bUri      = f.uriOf(b)
+    f.closeActiveBufferSaving(a)
+
+    f.publishDiagnosticsFor(aUri)
+    f.publishSemanticTokensFor(aUri)
+    f.send(LspEvent.LspSemanticTokensUnavailable(aUri.value))
+    f.publishDiagnostics(b)
+    f.publishSemanticTokens(b)
+
+    val languageService = f.state.runtime.languageService
+    languageService.diagnosticsState.diagnostics.keySet shouldBe Set(bUri)
+    languageService.semanticTokensState.byUri.keySet shouldBe Set(bUri)
+    languageService.semanticTokensState.unavailableUris shouldBe empty
+  }
+
+  it should "drop the empty publish a server sends after didClose" in {
+    val (f, a, _) = sessionWithEditedBuffers()
+    val aUri      = f.uriOf(a)
+    f.closeActiveBufferSaving(a)
+
+    f.send(LspEvent.LspDiagnosticsReceived(aUri.value, Nil))
+
+    f.state.runtime.languageService.diagnosticsState.diagnostics.keySet should not contain aUri
   }
 
   "Reopening a closed file" should "open it as a new buffer with no history carried over" in {

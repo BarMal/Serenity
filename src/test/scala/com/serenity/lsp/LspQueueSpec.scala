@@ -12,7 +12,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.testkit.RopeText
+import com.serenity.testkit.{RopeText, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -25,7 +25,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
   private def makeStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("LspQueueSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   private def setBufferLanguage(stateManager: StateManager, language: LanguageId): Unit =
     stateManager

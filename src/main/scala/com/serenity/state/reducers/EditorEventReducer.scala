@@ -67,7 +67,7 @@ object EditorEventReducer:
             val totalLines    = countLines(buffer.document.content)
             val maxTopLine    = math.max(0, totalLines - buffer.viewport.visibleLines)
             val newTopLine    = math.min(buffer.viewport.topLine + lines, maxTopLine)
-            val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
+            val newViewport   = buffer.viewport.scrolledTo(newTopLine, buffer.viewport.leftColumn, 0)
             val updatedBuffer = buffer.copy(viewport = newViewport)
             ReducerResult.noEffects(
               currentState.copy(persisted =
@@ -80,7 +80,7 @@ object EditorEventReducer:
         pane.bufferId.flatMap(currentState.persisted.buffers.get) match
           case Some(buffer) =>
             val newTopLine    = math.max(0, buffer.viewport.topLine - lines)
-            val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
+            val newViewport   = buffer.viewport.scrolledTo(newTopLine, buffer.viewport.leftColumn, 0)
             val updatedBuffer = buffer.copy(viewport = newViewport)
             ReducerResult.noEffects(
               currentState.copy(persisted =
@@ -137,7 +137,8 @@ object EditorEventReducer:
           }
           val maxLeftColumn = math.max(0, maxLineLength - viewport.visibleColumns + 1)
           val newLeftColumn = math.max(0, math.min(viewport.leftColumn + columns * direction, maxLeftColumn))
-          val updatedBuffer = buffer.copy(viewport = viewport.copy(leftColumn = newLeftColumn))
+          val updatedBuffer =
+            buffer.copy(viewport = viewport.scrolledTo(viewport.topLine, newLeftColumn, viewport.topVisualLine))
           ReducerResult.noEffects(
             currentState.copy(persisted =
               currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
@@ -183,7 +184,8 @@ object EditorEventReducer:
   private def isExtendSelectionEvent(event: TextEntryEvent): Boolean =
     event match
       case ExtendSelectionLeft | ExtendSelectionRight | ExtendSelectionWordLeft | ExtendSelectionWordRight |
-          ExtendSelectionToLineStart | ExtendSelectionToLineEnd | ExtendSelectionPageUp | ExtendSelectionPageDown =>
+          ExtendSelectionSubWordLeft | ExtendSelectionSubWordRight | ExtendSelectionToLineStart |
+          ExtendSelectionToLineEnd | ExtendSelectionPageUp | ExtendSelectionPageDown =>
         true
       case _ => false
 
@@ -226,6 +228,10 @@ object EditorEventReducer:
         case ExtendSelectionRight     => reduceSelectionExtension(buffer, head, currentState)(rightTarget)
         case ExtendSelectionWordLeft  => reduceSelectionExtension(buffer, head, currentState)(wordLeftTarget)
         case ExtendSelectionWordRight => reduceSelectionExtension(buffer, head, currentState)(wordRightTarget)
+        case ExtendSelectionSubWordLeft =>
+          reduceSelectionExtension(buffer, head, currentState)(subWordLeftTarget)
+        case ExtendSelectionSubWordRight =>
+          reduceSelectionExtension(buffer, head, currentState)(subWordRightTarget)
         // The same landing places Home and End move to, rather than the logical line's own bounds: a shifted key
         // selects to where its unshifted form goes, and under word wrap that is the cursor's own visual row. Sharing
         // `homeTarget`/`endTarget` also carries their row affinity, so Shift+End stops at the row's end instead of
@@ -263,8 +269,9 @@ object EditorEventReducer:
             DeleteWordBackward | DeleteWordForward =>
           EditorTextEditReducer.reduce(event, ctx)
 
-        case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveToStart | MoveToEnd | MoveToStartOfFile |
-            PageUp | PageDown | ColumnLeft | ColumnRight | MoveToEndOfFile | SelectAll =>
+        case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveSubWordLeft | MoveSubWordRight | MoveToStart |
+            MoveToEnd | MoveToStartOfFile | PageUp | PageDown | ColumnLeft | ColumnRight | MoveToEndOfFile |
+            SelectAll =>
           EditorNavigationEventReducer.reduce(event, ctx)
 
         case OpenGotoLine | OpenFind | OpenReplace | FindNext | FindPrevious =>

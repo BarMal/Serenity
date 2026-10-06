@@ -12,6 +12,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionSaveTrigger, UnreadableSession}
+import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -198,7 +199,8 @@ object StateManager:
     markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability =
       com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable,
     projectTasksEnabled: Boolean = true,
-    restarter: Option[RestartMode => IO[Unit]] = None
+    restarter: Option[RestartMode => IO[Unit]] = None,
+    dictionaryCache: DictionaryCache = DictionaryCache()
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     val renderCaches = RenderCaches.create(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity)
@@ -239,7 +241,8 @@ object StateManager:
         markdownPreviewWindow = markdownPreviewWindow,
         renderCaches = renderCaches,
         projectTasksEnabled = projectTasksEnabled,
-        restarter = restarter
+        restarter = restarter,
+        dictionaryCache = dictionaryCache
       )
       stateManager <- fromRuntime(runtime)
     yield stateManager
@@ -258,7 +261,8 @@ object StateManager:
           EditIdleSessionSave(idle, runtime.sessionPersistence.maybeSaveSession(_, SessionSaveTrigger.EditIdle))
         ),
         announceClosedDocuments = LspDocumentSync.announceClosed(runtime.lspQueue),
-        forgetClosedBuffers = ClosedBufferRetention.forgetRenderCaches(runtime.renderCaches)
+        forgetClosedBuffers = ClosedBufferRetention.forgetRenderCaches(runtime.renderCaches),
+        dictionaryCache = runtime.dictionaryCache
       )
       .map(operations => new StateManagerImpl(runtime, operations))
 

@@ -18,7 +18,8 @@ import com.serenity.ui.layout.*
 final private[manager] case class EditorContextMenuHitTestingPort(
     currentState: IO[AppState],
     applyReducerResult: (ReducerResult, AppState) => IO[Unit],
-    resolveMouseTarget: (MouseInputEvent, AppState) => IO[Option[(PaneId, Buffer, CursorPosition)]]
+    resolveMouseTarget: (MouseInputEvent, AppState) => IO[Option[(PaneId, Buffer, CursorPosition)]],
+    spellingItems: (AppState, Buffer, CursorPosition) => IO[List[ContextMenuItem]] = (_, _, _) => IO.pure(Nil)
 )
 
 /** Opens the editor context menu at a resolved click target, and hit-tests hover/click against its open items,
@@ -31,7 +32,11 @@ final private[manager] class EditorContextMenuHitTesting(port: EditorContextMenu
     MouseTransition.commit(currentState, applyReducerResult)(transition)
 
   def openEditorContextMenu(click: MouseClick, state: AppState): IO[Unit] =
-    resolveMouseTarget(click, state).flatMap(target => commit(EditorContextMenuHitTesting.open(target)))
+    resolveMouseTarget(click, state).flatMap { target =>
+      target
+        .traverse((_, buffer, clicked) => spellingItems(state, buffer, clicked))
+        .flatMap(spelling => commit(EditorContextMenuHitTesting.open(target, spelling.getOrElse(Nil))))
+    }
 
   def handleContextMenuMouseHover(event: MouseInputEvent, state: AppState): IO[Boolean] =
     commit(EditorContextMenuHitTesting.hover(event, state))
@@ -77,37 +82,46 @@ private[manager] object EditorContextMenuHitTesting:
       "next-document-symbol",
       "previous-document-symbol",
       "markdown-preview",
-      "toggle-outline-panel",
-      // #1531: a no-op when the cursor isn't on a flagged word, same as e.g. "delete-document-comment" above
-      // when there is no comment at the cursor.
-      "add-word-to-dictionary"
+      "toggle-outline-panel"
     )
 
   /** Opens the menu below a resolved editor target; a secondary click on no editor target only dismisses a menu that is
     * already open.
     */
-  def open(target: Option[(PaneId, Buffer, CursorPosition)]): Transition[Unit] =
+  def open(
+    target: Option[(PaneId, Buffer, CursorPosition)],
+    spelling: List[ContextMenuItem] = Nil
+  ): Transition[Unit] =
     target match
       case Some((paneId, _, clickedCursor)) =>
-        Transition.inspect(_.editingContext).flatMap(editing => openMenu(paneId, clickedCursor, editing))
+        Transition
+          .inspect(_.editingContext)
+          .flatMap(editing => openMenu(paneId, clickedCursor, editing, spelling))
       case None =>
         dismissIfOpen
 
-  private def openMenu(paneId: PaneId, clickedCursor: CursorPosition, editing: EditingContext): Transition[Unit] =
-    editorContextMenu(Focus.EditorPane(paneId), editing).fold(Transition.unit) { menu =>
-      val surface = UiSurface(
-        id = ContextMenuSurfaceId,
-        content = SurfaceContent.ContextMenu(menu),
-        presentation = SurfacePresentation.Floating(Some(clickedCursor), SurfacePlacement.BelowCursor)
-      )
-      Transition.modify { current =>
-        current
-          .copy(runtime =
-            current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(isContextMenuSurface) :+ surface)
-          )
-          .pushFocus(Focus.Surface(ContextMenuSurfaceId))
-      }
+  private def openMenu(
+    paneId: PaneId,
+    clickedCursor: CursorPosition,
+    editing: EditingContext,
+    spelling: List[ContextMenuItem]
+  ): Transition[Unit] =
+    editorContextMenu(Focus.EditorPane(paneId), editing, spelling).fold(Transition.unit) { menu =>
+      Transition.modify(withMenu(_, menu, clickedCursor))
     }
+
+  /** `state` with `menu` open just below `at`, replacing any menu already open. */
+  def withMenu(state: AppState, menu: ContextMenu, at: CursorPosition): AppState =
+    val surface = UiSurface(
+      id = ContextMenuSurfaceId,
+      content = SurfaceContent.ContextMenu(menu),
+      presentation = SurfacePresentation.Floating(Some(at), SurfacePlacement.BelowCursor)
+    )
+    state
+      .copy(runtime =
+        state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isContextMenuSurface) :+ surface)
+      )
+      .pushFocus(Focus.Surface(ContextMenuSurfaceId))
 
   def hover(event: MouseInputEvent, state: AppState): Transition[Boolean] =
     contextMenuSelectionAt(event, state) match
@@ -214,7 +228,11 @@ private[manager] object EditorContextMenuHitTesting:
       !composition.paintBoxes.exists(_.rect.contains(event.col.toDouble, event.row.toDouble)))
       .getOrElse(false)
 
-  private def editorContextMenu(targetFocus: Focus, editing: EditingContext): Option[ContextMenu] =
+  private def editorContextMenu(
+    targetFocus: Focus,
+    editing: EditingContext,
+    spelling: List[ContextMenuItem]
+  ): Option[ContextMenu] =
     val registry = CommandRegistry.withToggleUI
     val items = EditorContextMenuCommands.flatMap { name =>
       registry
@@ -222,7 +240,8 @@ private[manager] object EditorContextMenuHitTesting:
         .filter(_.scope.admits(editing))
         .map(command => ContextMenuItem(command.name, command.label, command))
     }
-    Option.when(items.nonEmpty)(ContextMenu("editor", targetFocus, items))
+    val offered = spelling ++ items
+    Option.when(offered.nonEmpty)(ContextMenu("editor", targetFocus, offered))
 
   private def isContextMenuSurface(surface: UiSurface): Boolean =
     surface.content match

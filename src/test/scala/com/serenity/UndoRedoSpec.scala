@@ -10,7 +10,7 @@ import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -320,7 +320,11 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
       SessionManager.SessionPolicy()
 
     val stateManager: StateManager = StateManager
-      .apply(LoggerFactory[IO].getLogger(using LoggerName("UndoRedoSpec")), policy = sessionPolicy)
+      .apply(
+        LoggerFactory[IO].getLogger(using LoggerName("UndoRedoSpec")),
+        policy = sessionPolicy,
+        dictionaryCache = SharedDictionary.default
+      )
       .unsafeRunSync()
 
     private val currentPaneId = AtomicReference[PaneId](PaneId(0))

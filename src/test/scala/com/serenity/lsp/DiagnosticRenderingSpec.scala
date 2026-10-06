@@ -9,6 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.state.reducers.SystemEventReducer
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.Location
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -21,6 +22,8 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
+  private val openBufferUri = "buffer:0" // AppState.initial's sole buffer (BufferId(0)) has no file path.
+
   private def diag(line: Int, severity: DiagnosticSeverity): Diagnostic =
     Diagnostic(
       range = LspRange(LspPosition(line, 0), LspPosition(line, 10)),
@@ -32,7 +35,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     given Balance = Balance.default
     val state     = AppState.initial
 
-    val uri   = "file:///foo/Bar.scala"
+    val uri   = openBufferUri
     val diags = List(diag(0, DiagnosticSeverity.Error), diag(5, DiagnosticSeverity.Warning))
 
     val result = SystemEventReducer.reduce(LspEvent.LspDiagnosticsReceived(uri, diags), state)
@@ -44,7 +47,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "replace diagnostics for the same URI" in {
     given Balance = Balance.default
-    val uri       = "file:///foo/Bar.scala"
+    val uri       = openBufferUri
     val initial   = AppState.initial
     val state = initial.copy(
       runtime = initial.runtime.copy(
@@ -64,7 +67,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "clear diagnostics when an empty list is received" in {
     given Balance = Balance.default
-    val uri       = "file:///foo/Bar.scala"
+    val uri       = openBufferUri
     val initial   = AppState.initial
     val state = initial.copy(
       runtime = initial.runtime.copy(
@@ -142,9 +145,9 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   "StateManager" should "apply LspDiagnosticsReceived and update diagnostics in AppState" in {
     val logger = LoggerFactory[IO].getLogger(using LoggerName("DiagnosticRenderingSpec"))
-    val sm     = StateManager.apply(logger).unsafeRunSync()
+    val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
-    val uri   = "file:///foo/Bar.scala"
+    val uri   = openBufferUri
     val diags = List(diag(0, DiagnosticSeverity.Error))
     sm.applyEvent(LspEvent.LspDiagnosticsReceived(uri, diags)).unsafeRunSync()
 

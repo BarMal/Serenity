@@ -9,7 +9,6 @@ import cats.syntax.traverse.*
 import com.serenity.app.AppStartup
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -30,7 +29,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
         stateManager.sessionService,
         stateManager.sessionStartupInfo,
@@ -57,7 +56,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
         stateManager.sessionService,
         stateManager.sessionStartupInfo,
@@ -87,7 +86,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
         stateManager.sessionService,
         stateManager.sessionStartupInfo,
@@ -138,7 +137,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
         stateManager.sessionService,
         stateManager.sessionStartupInfo,
@@ -182,7 +181,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
         stateManager.sessionService,
         stateManager.sessionStartupInfo,
@@ -224,7 +223,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
         stateManager.sessionService,
         stateManager.sessionStartupInfo,
@@ -483,7 +482,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("Welcome to Serenity!", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
@@ -503,7 +502,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("Hello", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
@@ -526,7 +525,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
@@ -549,7 +548,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
@@ -575,7 +574,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head

@@ -40,6 +40,12 @@ extension (rope: Rope)
   def nextWordBoundary(offset: Int): Int =
     TextEditing.nextWordBoundary(RopeCharacterSource(rope), offset)
 
+  def previousSubWordBoundary(offset: Int): Int =
+    TextEditing.previousSubWordBoundary(RopeCharacterSource(rope), offset)
+
+  def nextSubWordBoundary(offset: Int): Int =
+    TextEditing.nextSubWordBoundary(RopeCharacterSource(rope), offset)
+
   def previousGraphemeBoundary(offset: Int): Int =
     TextEditing.previousGraphemeBoundary(RopeCharacterSource(rope), offset)
 

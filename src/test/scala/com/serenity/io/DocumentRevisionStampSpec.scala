@@ -3,6 +3,9 @@ package com.serenity.io
 import java.nio.charset.StandardCharsets
 import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path}
+import java.util.concurrent.TimeUnit
+
+import scala.concurrent.duration.FiniteDuration
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
@@ -112,7 +115,37 @@ class DocumentRevisionStampSpec extends AnyFlatSpec with Matchers:
     val coarse = FileStamp(size = 3L, modifiedNanos = 100 * second, fileKey = None)
     val fine   = coarse.copy(modifiedNanos = 100 * second + 123_456L)
 
-    FileStamp.vouchesForContent(coarse, nowNanos = 100 * second + 500_000_000L) shouldBe false
-    FileStamp.vouchesForContent(coarse, nowNanos = 103 * second) shouldBe true
-    FileStamp.vouchesForContent(fine, nowNanos = 100 * second + 1_000L) shouldBe true
+    FileStamp.vouchesForContent(coarse, observedAtNanos = 100 * second + 500_000_000L) shouldBe false
+    FileStamp.vouchesForContent(coarse, observedAtNanos = 103 * second) shouldBe true
+    FileStamp.vouchesForContent(fine, observedAtNanos = 100 * second + 1_000L) shouldBe true
+  }
+
+  it should "never vouch for a same-size rewrite inside one tick, at any observation time in that tick" in {
+    val second    = 1_000_000_000L
+    val tickStart = 50 * second
+    // A write inside the tick [tickStart, tickStart + tick) leaves the stamp unchanged, so the stamp must not vouch
+    // for any observation made before the tick ended.
+    for
+      tick <- List(1L * second, 2L * second, 1_000_000L)
+      stamp = FileStamp(size = 3L, modifiedNanos = tickStart, fileKey = None)
+      offset <- 0L until tick by (tick / 20L)
+    do FileStamp.vouchesForContent(stamp, tickStart + offset) shouldBe false
+  }
+
+  "FileStamp.observe" should "read the clock before it stats, so a write between the two cannot be vouched for" in {
+    val second  = 1_000_000_000L
+    val path    = Files.createTempFile("filestamp", ".txt")
+    val settled = FileTime.from(100L * second, TimeUnit.NANOSECONDS)
+    Files.write(path, "abc".getBytes(StandardCharsets.UTF_8))
+    // The clock lands the file's mtime on a coarse tick: only a stat taken after the clock sees it.
+    def clockAt(nanos: Long) =
+      IO.blocking(Files.setLastModifiedTime(path, settled)).as(FiniteDuration(nanos, TimeUnit.NANOSECONDS))
+
+    try
+      val late  = FileStamp.observe(path, clockAt(103L * second)).unsafeRunSync()
+      val early = FileStamp.observe(path, clockAt(101L * second + 900_000_000L)).unsafeRunSync()
+      late.map(_.stamp.modifiedNanos) shouldBe Some(100L * second)
+      late.map(_.vouches) shouldBe Some(true)
+      early.map(_.vouches) shouldBe Some(false)
+    finally Files.deleteIfExists(path)
   }

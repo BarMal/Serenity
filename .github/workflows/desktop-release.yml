@@ -82,6 +82,16 @@ jobs:
           if [ "${RUNNER_OS:-}" = "Windows" ]; then
             APP_ARGS+=(--icon "$GITHUB_WORKSPACE/src/main/resources/icons/serenity.ico")
           fi
+          # Heap policy (see DEVELOPMENT.md), on every OS. A cap of a quarter of RAM stops an editor that is left open
+          # from growing to the JVM default of a quarter-to-a-half of the machine. G1 is named explicitly because the
+          # JVM falls back to Serial on small machines, which would ignore the periodic flag. Every 60 s of idleness
+          # G1 runs a collection and returns freed heap to the OS: long enough not to disturb typing or rendering,
+          # short enough that a closed large file stops costing memory within a minute.
+          APP_ARGS+=(
+            --java-options '-XX:+UseG1GC'
+            --java-options '-XX:MaxRAMPercentage=25'
+            --java-options '-XX:G1PeriodicGCInterval=60000'
+          )
           # AppCDS (see DEVELOPMENT.md): the launcher maps a class-data archive kept beside the jar and written on the
           # first exit. A dynamic archive needs the runtime's own base archive, and jlink needs the java launcher left
           # in the image to generate one. Not on macOS, where writing into the signed bundle would break its signature.

@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -19,7 +20,10 @@ class EndToEndConfigThemingSpec extends AnyFlatSpec with Matchers:
   "End-to-end config-driven theming" should "preserve theme configuration through editor operations" in {
     val themeManager = AppThemeManager.create
     val stateManager = StateManager
-      .apply(LoggerFactory[IO].getLogger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .apply(LoggerFactory[IO].getLogger, dictionaryCache = SharedDictionary.default)(using
+        com.serenity.rope.Balance.default,
+        LoggerFactory[IO]
+      )
       .unsafeRunSync()
 
     // Set up with light theme
@@ -40,7 +44,10 @@ class EndToEndConfigThemingSpec extends AnyFlatSpec with Matchers:
   it should "allow theme reloading without losing application state" in {
     val themeManager = AppThemeManager.create
     val stateManager = StateManager
-      .apply(LoggerFactory[IO].getLogger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .apply(LoggerFactory[IO].getLogger, dictionaryCache = SharedDictionary.default)(using
+        com.serenity.rope.Balance.default,
+        LoggerFactory[IO]
+      )
       .unsafeRunSync()
 
     // Set up application with content

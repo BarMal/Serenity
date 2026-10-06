@@ -47,8 +47,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] = IO.unit
     val undoRecording = new UndoRecording(new UndoRecordingPort:
       def updateUndo(update: UndoState => UndoState): IO[Unit] = ModelViews.undoRef(currentModelRef).update(update)
-      def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
-        operations.modelCommit.updateValidated(transition))
+      export operations.modelCommit.updateValidated as updateModelValidated
+      export operations.modelCommit.updateValidatedPlaced as updateModelPlaced)
     new StateManagerEventPipeline(
       statePort,
       effectPort,
@@ -254,7 +254,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
   it should "skip document analysis scheduling when spell checking is disabled" in {
     val program = for
-      modelRef <- ModelViews.modelOf(AppState.initial)
+      modelRef <- ModelViews.modelOf(com.serenity.SpellingStateFixture.spellCheckDisabled)
       starts   <- Ref.of[IO, Int](0)
       operations <- StateManagerOperationBoundary.create(
         modelRef,

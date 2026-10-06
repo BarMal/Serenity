@@ -79,13 +79,14 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
     ConfigManager.loadConfigIO(Some(missingConfig.toString)).unsafeRunSync() shouldBe AppConfig.default
   }
 
-  it should "return structured errors at the effectful configuration boundary" in {
+  it should "report an invalid value at the effectful configuration boundary without failing the load" in {
+    // Issue #2024: one unusable value used to fail the whole load, so every other setting reset to its default.
     val invalidFile = Files.createTempFile("serenity-invalid-hocon", ".conf")
     Files.writeString(invalidFile, "typography.code.size = [not-a-number]\n")
 
     ConfigManager.loadConfigResultIO(Some(invalidFile.toString)).unsafeRunSync() match
-      case Left(error)  => error.message should include("typography.code.size")
-      case Right(value) => fail(s"expected a structured load error, received $value")
+      case Right(result) => result.report.invalidEntries.map(_.key) should contain("typography.code.size")
+      case Left(error)   => fail(s"expected the load to keep going past one invalid value, received $error")
 
     val directoryPath = Files.createTempDirectory("serenity-save-error")
     ConfigManager.saveConfigIO(AppConfig.default, directoryPath).unsafeRunSync() match
@@ -148,9 +149,11 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
     )
 
     ConfigManager.loadConfigResultIO(Some(invalidFile.toString)).unsafeRunSync() match
-      case Left(error) =>
-        error.message should include("hotkey.save")
-        error.message should include("keymap.command_runner.submit")
-        error.message should include("lsp.python.enabled")
-      case Right(value) => fail(s"expected binding validation errors, received $value")
+      case Right(result) =>
+        result.report.invalidEntries.map(_.key) should contain allOf (
+          "hotkey.save",
+          "keymap.command_runner.submit",
+          "lsp.python.enabled"
+        )
+      case Left(error) => fail(s"expected binding validation errors in the report, received $error")
   }
