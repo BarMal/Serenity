@@ -241,54 +241,58 @@ object AppRuntime:
             runtime.renderFull(initialState, true, None, Damage.Everything, stateManager.renderCaches) >>
               onFirstFrame >>
               logger.info("Initial render completed, starting main loop") >>
-              startupWarmUp(runtime, initialState, initialViewportSize, firstInput).surround {
-                val idlePhase = AppRuntimeRenderLoops.idleRenderPhase(
-                  loadModel = stateManager.getModel,
-                  fastModeSignal = fastModeSignal,
-                  windowFocused = windowFocused,
-                  pendingPaintDamage = pendingPaintDamage,
-                  currentStateForDiagnostics = currentStateForDiagnostics,
-                  checkResizeAndHandle = checkResizeAndHandle,
-                  cursorVisible = cursorVisible,
-                  renderCursorOnly = runtime.renderCursorOnly,
-                  requestFastRender = requestFastRender,
-                  cursorIdleInterval = frontend.cursorIdleInterval,
-                  renderCaches = stateManager.renderCaches
+              startupWarmUp(runtime, initialState, initialViewportSize, firstInput)
+                .flatMap(_ =>
+                  runtime.menuResource(stateManager.getModel, dispatchIfRunning(resizeCallbackDispatcher)(_))
                 )
-
-                val fastPhase = AppRuntimeRenderLoops.fastRenderPhase(
-                  stateManager,
-                  fastModeSignal,
-                  pendingDamage,
-                  pendingPaintDamage,
-                  currentStateForDiagnostics,
-                  checkResizeAndHandle,
-                  runtime.renderFull,
-                  stateManager.renderCaches,
-                  lastFrameStart = lastFastFrameStart,
-                  keyLatency = runtime.frameTimings.keyLatency
-                )
-
-                val renderLoop = AppRuntimeRenderLoops.renderLoop(idlePhase, fastPhase)
-
-                com.serenity.io.FileChangeWatcher.create.use(watcher =>
-                  runRuntimeLoops(
-                    stateManager,
-                    inputHandler,
-                    inputFiber.joinWithNever,
-                    renderLoop,
-                    watcher,
-                    awaitExternalQuit,
-                    appConfig,
-                    runtime.frameTimings,
-                    frameTimingEnabled,
-                    latencyTraceEnabled,
-                    watchInputs.discrete.as(()),
-                    windowFocused,
-                    forwardedOpens
+                .surround {
+                  val idlePhase = AppRuntimeRenderLoops.idleRenderPhase(
+                    loadModel = stateManager.getModel,
+                    fastModeSignal = fastModeSignal,
+                    windowFocused = windowFocused,
+                    pendingPaintDamage = pendingPaintDamage,
+                    currentStateForDiagnostics = currentStateForDiagnostics,
+                    checkResizeAndHandle = checkResizeAndHandle,
+                    cursorVisible = cursorVisible,
+                    renderCursorOnly = runtime.renderCursorOnly,
+                    requestFastRender = requestFastRender,
+                    cursorIdleInterval = frontend.cursorIdleInterval,
+                    renderCaches = stateManager.renderCaches
                   )
-                )
-              }
+
+                  val fastPhase = AppRuntimeRenderLoops.fastRenderPhase(
+                    stateManager,
+                    fastModeSignal,
+                    pendingDamage,
+                    pendingPaintDamage,
+                    currentStateForDiagnostics,
+                    checkResizeAndHandle,
+                    runtime.renderFull,
+                    stateManager.renderCaches,
+                    lastFrameStart = lastFastFrameStart,
+                    keyLatency = runtime.frameTimings.keyLatency
+                  )
+
+                  val renderLoop = AppRuntimeRenderLoops.renderLoop(idlePhase, fastPhase)
+
+                  com.serenity.io.FileChangeWatcher.create.use(watcher =>
+                    runRuntimeLoops(
+                      stateManager,
+                      inputHandler,
+                      inputFiber.joinWithNever,
+                      renderLoop,
+                      watcher,
+                      awaitExternalQuit,
+                      appConfig,
+                      runtime.frameTimings,
+                      frameTimingEnabled,
+                      latencyTraceEnabled,
+                      watchInputs.discrete.as(()),
+                      windowFocused,
+                      forwardedOpens
+                    )
+                  )
+                }
           }
         _ <- logger.info("Serenity editor shutdown complete")
       yield ()

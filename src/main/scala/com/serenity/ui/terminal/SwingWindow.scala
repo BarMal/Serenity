@@ -205,6 +205,8 @@ class SwingWindow(
   titleLabelRef.set(Some(chromeTitleBar.titleLabel))
   titleBarRef.set(Some(chromeTitleBar.panel))
 
+  private val chromeNorth = new JPanel(new BorderLayout)
+
   private val frame: JFrame =
     val f = new JFrame(windowTitle)
     f.setIconImages(SwingWindow.applicationIconImages.asJava)
@@ -233,7 +235,9 @@ class SwingWindow(
     )
     val content = new JPanel(new BorderLayout):
       setBackground(Color.BLACK)
-    if usesCustomChrome then content.add(chromeTitleBar.panel, BorderLayout.NORTH)
+    if usesCustomChrome then
+      chromeNorth.add(chromeTitleBar.panel, BorderLayout.NORTH)
+      content.add(chromeNorth, BorderLayout.NORTH)
     content.add(canvas, BorderLayout.CENTER)
     f.setContentPane(content)
     if usesCustomChrome then
@@ -249,6 +253,22 @@ class SwingWindow(
     f
 
   def awaitClose: IO[Unit] = SwingWindow.awaitCloseLatch(closeLatch)
+
+  /** Puts `bar` where [[SwingWindow.menuBarPlacement]] says, on the event-dispatch thread, and makes room for it so the
+    * canvas keeps its size: before the window is shown by packing, afterwards by growing the frame.
+    */
+  def installMenuBar(bar: JMenuBar): Unit =
+    val install: Runnable = () =>
+      SwingWindow.menuBarPlacement(System.getProperty("os.name", ""), usesCustomChrome) match
+        case MenuBarPlacement.UnderCustomTitleBar                           => chromeNorth.add(bar, BorderLayout.SOUTH)
+        case MenuBarPlacement.ScreenMenuBar | MenuBarPlacement.FrameMenuBar => frame.setJMenuBar(bar)
+      if frame.isShowing then
+        if (frame.getExtendedState & Frame.MAXIMIZED_BOTH) == 0 then
+          frame.setSize(frame.getWidth, frame.getHeight + bar.getPreferredSize.height)
+        frame.validate()
+      else frame.pack()
+    if SwingUtilities.isEventDispatchThread then install.run()
+    else SwingUtilities.invokeAndWait(install)
 
   /** Raises the window for a later launch that handed its files over to this one (#2023). */
   def bringToFront(): Unit =
