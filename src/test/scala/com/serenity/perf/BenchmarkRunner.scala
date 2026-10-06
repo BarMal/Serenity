@@ -49,7 +49,8 @@ object BenchmarkRunner:
       warmups: Int,
       iterations: Int,
       verify: () => Unit,
-      run: () => Any
+      run: () => Any,
+      minBatch: Int = 1
   )
 
   final private[perf] case class BenchmarkResult(
@@ -119,7 +120,7 @@ object BenchmarkRunner:
     val (warmupInvocations, warmupAcc) =
       warmUp(benchmark.run, System.nanoTime() + WarmupBudgetNanos, 0, benchmark.warmups, 0L)
     sink.addAndGet(warmupAcc)
-    val batch = calibrate(benchmark.run, 1)
+    val batch = calibrate(benchmark.run, 1).max(benchmark.minBatch)
     val samples = (0 until benchmark.iterations).map { _ =>
       val started  = System.nanoTime()
       val observed = repeat(batch, benchmark.run)
