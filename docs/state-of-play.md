@@ -137,7 +137,8 @@ Priority labels used in this archived snapshot:
 ## 14. IDE And Language-Aware Features
 
 - `[x]` Syntax highlighting exists, but the parser remains intentionally simple rather than language-complete.[13][22][23]
-- `[x]` LSP wiring exists for server resolution, connection startup, workspace-root detection, and `didOpen` / `didChange` / `didClose` notifications.[33][43]
+- `[x]` LSP wiring exists for server resolution, connection startup, workspace-root detection, and `didOpen` / `didChange` / `didClose` notifications; closing a document's last tab sends `didClose` and drops its retained text.[33][43][44]
+- `[x]` LSP servers are supervised: server-to-client requests (`workspace/configuration`, `client/registerCapability`, `window/workDoneProgress/create`, `window/showMessageRequest`, `workspace/applyEdit`) are answered, `$/progress` is shown beside the language in the status line, `window/showMessage` and `logMessage` are logged, and anything else is refused with `MethodNotFound`; a server that dies is restarted with backoff and its documents reopened, up to three times in three minutes before a warning diagnostic is left on its files; a server with no open documents is sent `shutdown`/`exit` after a 30-second grace period.[65][66][67]
 - `[x]` LSP diagnostics flow back into app state and can be rendered in diagnostics surfaces.[31][33]
 - `[~][P2]` Language detection and workspace-root markers exist, but the shipped LSP path is still configured through `LspUserConfig.empty`, which limits user control compared with a fuller IDE configuration surface.[33][43]
 - `[ ][P2]` No direct implementation evidence was found for build, compilation, test running, debugging, or dependency resolution workflows.[33]
@@ -232,3 +233,6 @@ Use GitHub Issues as the canonical backlog:
 [62] `src/test/scala/com/serenity/EditorEventReducerSpec.scala`
 [63] `src/main/scala/com/serenity/state/manager/StateManagerProjectLspEffects.scala`
 [64] `src/main/scala/com/serenity/lsp/client/LspProtocol.scala`
+[65] `src/main/scala/com/serenity/lsp/client/LspServerRequests.scala`
+[66] `src/main/scala/com/serenity/lsp/LspConnectionPool.scala`
+[67] `src/main/scala/com/serenity/lsp/LspSupervisionPolicy.scala`

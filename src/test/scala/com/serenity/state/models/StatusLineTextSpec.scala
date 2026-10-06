@@ -1,6 +1,8 @@
 package com.serenity.state.models
 
 import com.serenity.config.StatusSegment
+import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.model.LspProgressTask
 import com.serenity.rope.Balance
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -32,4 +34,21 @@ class StatusLineTextSpec extends AnyFlatSpec with Matchers:
     val state = stateWith("one two three four five", wordGoal = Some(3))
 
     StatusLineText.render(state, List(StatusSegment.WordGoal)) shouldBe Some("5 / 3 words (100%)")
+  }
+
+  "Language" should "show the work its language server reports as running" in {
+    val scalaBuffer = Buffer.fromString(bufferId, "object A")
+    val withLanguage =
+      scalaBuffer.copy(document = scalaBuffer.document.copy(language = Some(LanguageId.Scala)))
+    val base =
+      AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> withLanguage)))
+    val indexing = LspProgressTask("index", "Indexing", None, Some(40))
+    val state = base.copy(runtime =
+      base.runtime.copy(languageService =
+        base.runtime.languageService.copy(progress = Map(LanguageId.Scala -> List(indexing)))
+      )
+    )
+
+    StatusLineText.render(base, List(StatusSegment.Language)) shouldBe Some("Scala")
+    StatusLineText.render(state, List(StatusSegment.Language)) shouldBe Some("Scala (Indexing 40%)")
   }
