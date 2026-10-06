@@ -342,5 +342,9 @@ libraryDependencies ++= Seq(
 libraryDependencies += "com.ibm.icu" % "icu4j" % "78.3"
 
 // FontBox reads the bundled fonts' hmtx/hhea tables, so the paginator measures the very files the PDF will embed and
-// no AWT is involved (#1206, #2006). pdfbox-io and commons-logging come with it.
-libraryDependencies += "org.apache.pdfbox" % "fontbox" % "3.0.8"
+// no AWT is involved (#1206, #2006). pdfbox-io and commons-logging come with it. PDFBox paints the PagedDocument into
+// the PDF, embedding those same files.
+libraryDependencies ++= Seq(
+  "org.apache.pdfbox" % "fontbox" % "3.0.8",
+  "org.apache.pdfbox" % "pdfbox"  % "3.0.8"
+)
