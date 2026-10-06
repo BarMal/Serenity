@@ -171,7 +171,7 @@ object SurfaceContentResolver:
       case SurfaceContent.CommentLens(lens) =>
         ResolvedSurfaceContent(
           title = titleFor(mode, "comment"),
-          header = Some(OverlayRow("comment")),
+          header = Some(OverlayRow(lens.headline)),
           rows = commentLensRows(lens)
         )
       case SurfaceContent.MarkdownPreview(_, title) =>
@@ -190,13 +190,14 @@ object SurfaceContentResolver:
     */
   private[layout] def commentLensRows(lens: CommentLensState): List[OverlayRow] =
     val (cursorLine, cursorColumn) = lineAndColumnAt(lens.draft, lens.clampedCursor)
-    splitLines(lens.draft).zipWithIndex.map { (line, index) =>
+    val draftRows = splitLines(lens.draft).zipWithIndex.map { (line, index) =>
       OverlayRow(
         plainText = line,
         selected = index == cursorLine,
         cursorColumn = Option.when(index == cursorLine)(cursorColumn)
       )
     }
+    draftRows ++ lens.threadLines.map(OverlayRow(_))
 
   private def splitLines(text: String): List[String] =
     text.split("\n", -1).toList match

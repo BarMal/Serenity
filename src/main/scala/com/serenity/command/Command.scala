@@ -53,6 +53,10 @@ enum CommentsIntent:
   case ToggleCommentLens
   case AddDocumentComment(text: String)
   case DeleteDocumentComment
+  case ReplyToDocumentComment(text: String)
+  case ResolveDocumentComment
+  case ReopenDocumentComment
+  case ToggleResolvedComments
   case NextDocumentComment
   case PreviousDocumentComment
 

@@ -16,7 +16,7 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
 
   private val paneId   = PaneId(0)
   private val bufferId = BufferId(0)
-  private val comment  = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Initial")
+  private val comment  = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Initial", id = CommentId(1))
   private val lensId   = SurfaceId("comment-lens")
 
   private def baseState: AppState =
@@ -46,7 +46,7 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
                 RenderedComment(0, "Initial", "Initial"),
                 "Initial",
                 "Initial".length,
-                Some(CommentLensTarget(0, comment))
+                Some(CommentLensTarget(comment.id, comment))
               )
             ),
             SurfacePresentation.Floating(Some(CursorPosition(0, 3)), SurfacePlacement.AboveCursor)
@@ -188,18 +188,44 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
   }
 
   "Saving a comment draft" should "change only the targeted one of two identical comments" in {
-    val twins      = withComments(baseState, List(comment, comment))
-    val secondTwin = withLens(twins)(_.copy(target = Some(CommentLensTarget(1, comment))))
+    val twin       = comment.copy(id = CommentId(2))
+    val twins      = withComments(baseState, List(comment, twin))
+    val secondTwin = withLens(twins)(_.copy(target = Some(CommentLensTarget(twin.id, twin))))
     val edited     = stateAfter(component.processEvent(ModalInsertChar('!'), secondTwin), secondTwin)
     val saved      = stateAfter(component.processEvent(ModalSubmit, edited), edited)
 
     saved.persisted.buffers(bufferId).annotations.documentComments shouldBe
-      List(comment, comment.copy(text = "Initial!"))
+      List(comment, twin.copy(text = "Initial!"))
+  }
+
+  it should "still reach its comment after an earlier comment was deleted and the list shifted" in {
+    val earlier = DocumentComment(CursorPosition(0, 8), CursorPosition(0, 17), "Earlier", id = CommentId(2))
+    val listed  = withComments(baseState, List(earlier, comment))
+    val edited  = stateAfter(component.processEvent(ModalInsertChar('!'), listed), listed)
+    val shifted = withComments(edited, List(comment))
+
+    val saved = stateAfter(component.processEvent(ModalSubmit, shifted), shifted)
+
+    saved.persisted.buffers(bufferId).annotations.documentComments shouldBe List(comment.copy(text = "Initial!"))
+  }
+
+  it should "keep the id, author, replies and resolved state of the comment it saves" in {
+    val thread = comment.copy(
+      author = Some("Ada"),
+      replies = List(CommentReply("Grace", java.time.Instant.parse("2026-10-06T10:00:00Z"), "Agreed")),
+      resolved = true
+    )
+    val threaded = withComments(baseState, List(thread))
+    val edited   = stateAfter(component.processEvent(ModalInsertChar('!'), threaded), threaded)
+
+    val saved = stateAfter(component.processEvent(ModalSubmit, edited), edited)
+
+    saved.persisted.buffers(bufferId).annotations.documentComments shouldBe List(thread.copy(text = "Initial!"))
   }
 
   it should "still reach a comment whose range an edit shifted while the lens was open" in {
     val edited  = stateAfter(component.processEvent(ModalInsertChar('!'), baseState), baseState)
-    val shifted = DocumentComment(CursorPosition(0, 2), CursorPosition(0, 9), "Initial")
+    val shifted = DocumentComment(CursorPosition(0, 2), CursorPosition(0, 9), "Initial", id = comment.id)
     val moved   = withComments(edited, List(shifted))
 
     val saved = stateAfter(component.processEvent(ModalSubmit, moved), moved)
@@ -207,8 +233,8 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
     saved.persisted.buffers(bufferId).annotations.documentComments shouldBe List(shifted.copy(text = "Initial!"))
   }
 
-  it should "leave the comments alone when the targeted slot no longer holds the opened comment" in {
-    val other    = DocumentComment(CursorPosition(0, 8), CursorPosition(0, 17), "Unrelated")
+  it should "leave the comments alone when the targeted comment is no longer in the buffer" in {
+    val other    = DocumentComment(CursorPosition(0, 8), CursorPosition(0, 17), "Unrelated", id = CommentId(2))
     val replaced = withComments(baseState, List(other))
 
     val saved = stateAfter(component.processEvent(ModalSubmit, replaced), replaced)

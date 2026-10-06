@@ -61,8 +61,9 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
   private def saveAndDismiss(state: AppState, surface: UiSurface, target: CommentLensTarget, draft: String): AppState =
     dismiss(savedDraft(state, target, draft.trim), surface)
 
-  /** An emptied draft deletes the comment. A target whose slot no longer holds the comment the lens opened on (the list
-    * was restructured underneath it) is left alone rather than overwriting whichever comment now sits there.
+  /** An emptied draft deletes the comment. A target the buffer no longer holds (the comment was deleted underneath the
+    * lens) is left alone, whatever else has taken its place. Only the text changes: this layer has no clock to stamp an
+    * edit time with.
     */
   private def savedDraft(state: AppState, target: CommentLensTarget, text: String): AppState =
     state.persisted.layout.activeEditorPaneId
@@ -70,17 +71,17 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
       .flatMap(_.bufferId)
       .flatMap(state.persisted.buffers.get)
       .fold(state) { buffer =>
-        val comments = buffer.annotations.documentComments
-        comments.lift(target.index).filter(_.text == target.comment.text).fold(state) { current =>
-          val updatedComments =
-            if text.isEmpty then comments.patch(target.index, Nil, 1)
-            else comments.updated(target.index, current.copy(text = text))
-          if updatedComments == comments then state
+        val annotations = buffer.annotations
+        annotations.comment(target.id).fold(state) { _ =>
+          val updated =
+            if text.isEmpty then annotations.withoutComment(target.id)
+            else annotations.withUpdatedComment(target.id)(_.copy(text = text))
+          if updated == annotations then state
           else
             state.copy(persisted =
               state.persisted.copy(buffers =
                 state.persisted.buffers + (buffer.id -> buffer.copy(
-                  annotations = buffer.annotations.copy(documentComments = updatedComments),
+                  annotations = updated,
                   document = buffer.document.copy(isDirty = true)
                 ))
               )

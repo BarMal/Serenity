@@ -140,7 +140,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
       annotations = baseBuffer.annotations.copy(
         bookmarks = List(CursorPosition(1, 2), CursorPosition(8, 0)),
         documentComments = List(
-          DocumentComment(CursorPosition(2, 0), CursorPosition(2, 9), "Review this paragraph.")
+          DocumentComment(CursorPosition(2, 0), CursorPosition(2, 9), "Review this paragraph.", id = CommentId(1))
         )
       )
     )
@@ -172,7 +172,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
     restoredBuffer.findState shouldBe Some(FindState("round", Vector(FindResult(0, 5), FindResult(5, 9)), 1))
     restoredBuffer.annotations.bookmarks shouldBe List(CursorPosition(1, 2), CursorPosition(8, 0))
     restoredBuffer.annotations.documentComments shouldBe List(
-      DocumentComment(CursorPosition(2, 0), CursorPosition(2, 9), "Review this paragraph.")
+      DocumentComment(CursorPosition(2, 0), CursorPosition(2, 9), "Review this paragraph.", id = CommentId(1))
     )
   }
 

@@ -78,7 +78,7 @@ class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
 
     val lens = commentLensState(state).getOrElse(fail("Expected the comment lens to open on keyboard cursor move"))
     lens.mode shouldBe CommentLensMode.ReadOnly
-    lens.target shouldBe Some(CommentLensTarget(0, comment))
+    lens.target shouldBe Some(CommentLensTarget(comment.id, comment))
     state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
@@ -101,6 +101,31 @@ class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MoveRight).unsafeRunSync() // column 6 -> 7, still outside [0, 5]
 
     sm.getCurrentState.unsafeRunSync().commentLensSurface shouldBe None
+  }
+
+  it should "not open a lens on a resolved comment, until resolved comments are shown" in {
+    val sm       = makeStateManager()
+    val bufferId = withCommentedBuffer(sm)
+    sm.updateState { state =>
+      val buffer = state.persisted.buffers(bufferId)
+      state.copy(persisted =
+        state.persisted.copy(buffers =
+          state.persisted.buffers.updated(
+            bufferId,
+            buffer.copy(annotations = buffer.annotations.copy(documentComments = List(comment.resolve)))
+          )
+        )
+      )
+    }.unsafeRunSync()
+
+    sm.applyEvent(MoveLeft).unsafeRunSync()
+    sm.getCurrentState.unsafeRunSync().commentLensSurface shouldBe None
+
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(resolvedCommentsVisible = true))).unsafeRunSync()
+    sm.applyEvent(MoveRight).unsafeRunSync()
+    sm.applyEvent(MoveLeft).unsafeRunSync()
+
+    commentLensState(sm.getCurrentState.unsafeRunSync()).flatMap(_.target).map(_.comment.resolved) shouldBe Some(true)
   }
 
   "A comment lens opened by a keyboard cursor move into the range" should

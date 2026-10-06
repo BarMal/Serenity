@@ -207,10 +207,9 @@ private[state] object EditorEditSupport:
         val (startLine, startColumn) = updatedContent.offsetToLineColumn(nextStart)
         val (endLine, endColumn)     = updatedContent.offsetToLineColumn(nextEnd)
 
-        DocumentComment(
-          CursorPosition(startLine, startColumn),
-          CursorPosition(endLine, endColumn),
-          comment.text
+        comment.copy(
+          anchor = CursorPosition(startLine, startColumn),
+          focus = CursorPosition(endLine, endColumn)
         )
       }
 

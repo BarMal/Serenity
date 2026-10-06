@@ -107,8 +107,13 @@ object CommandRunnerSettingsGroups:
     )
     // issue #1057: the one-shot navigation commands that used to sit here are ordinary palette commands. The one item
     // that stays is authoring a document comment's text, a real input rather than an action.
-    val commentsGroup = group("settings-navigation", "Comments", "Author a document comment", input("document-comment"))
-    val fontHint      = "Family, size, ligatures"
+    val commentsGroup = group(
+      "settings-navigation",
+      "Comments",
+      "Author or reply to a document comment",
+      input("document-comment", "reply-document-comment")
+    )
+    val fontHint = "Family, size, ligatures"
     val proseFontGroup = group(
       "settings-prose-font",
       "Prose Font",
