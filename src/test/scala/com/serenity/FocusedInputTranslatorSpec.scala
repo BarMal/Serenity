@@ -194,12 +194,9 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    // A clash in a loaded file costs only the later binding (#2024), so the trigger is never ambiguous.
-    val loadedHotkeys = loadedState.persisted.config.inputConfig.hotkeyConfig
-    List(HotkeyAction.ToggleCommandRunner, HotkeyAction.Find).count(
-      loadedHotkeys.bindingsFor(_).contains(duplicate)
-    ) shouldBe 1
-    HotkeyConfig.validate(loadedHotkeys) shouldBe Right(())
+    val loaded = loadedState.persisted.config.inputConfig.hotkeyConfig
+    List(HotkeyAction.ToggleCommandRunner, HotkeyAction.Find).count(loaded.bindingsFor(_).contains(duplicate)) shouldBe 1
+    HotkeyConfig.validate(loaded) shouldBe Right(())
     FocusedInputTranslator
       .forState(withConfig(invalidConfig))
       .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
