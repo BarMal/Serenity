@@ -32,9 +32,13 @@ object StartupRecovery:
     def configPersistencePath(path: Path): Option[Path] =
       Option.unless(safeMode)(path)
 
-    /** Safe mode keeps its presets beside its scratch session, so saving one never touches the user's file. */
+    /** Safe mode keeps its presets beside its scratch session, so saving one never touches the user's file. Any other
+      * launch keeps them where they always were, even on a session root of its own.
+      */
     def uiPresetStore(sessionRoot: Option[Path]): UiPresetStore =
-      sessionRoot.fold(UiPresetStore.default)(root => UiPresetStore(root.resolve("ui-presets.json")))
+      sessionRoot
+        .filter(_ => safeMode)
+        .fold(UiPresetStore.default)(root => UiPresetStore(root.resolve("ui-presets.json")))
 
     def appliedTo(state: AppState): AppState =
       StartupRecoveryState.applied(state, safeMode, crashLoopAfter)

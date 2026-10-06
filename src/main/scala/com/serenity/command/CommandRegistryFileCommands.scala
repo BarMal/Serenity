@@ -129,6 +129,13 @@ private[command] object CommandRegistryFileCommands:
       label = "New File"
     ),
     Command.typed(
+      "show-licence-and-notices",
+      "Open the Serenity licence (GPL-3.0-or-later) and the third-party notices, read-only.",
+      CommandIntent.File(FileIntent.ShowLicenceAndNotices),
+      CommandCategory.File,
+      label = "Show Licence and Notices"
+    ),
+    Command.typed(
       "next-tab",
       "Switch to the next open file.",
       CommandIntent.View(ViewIntent.NextTab),

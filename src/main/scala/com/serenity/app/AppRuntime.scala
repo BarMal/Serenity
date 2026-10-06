@@ -141,7 +141,8 @@ object AppRuntime:
     frontend: Frontend = com.serenity.frontend.GuiFrontend,
     configNotice: Option[String] = None,
     recovery: StartupRecovery.Plan = StartupRecovery.Plan.normal,
-    onFirstFrame: IO[Unit] = IO.unit
+    onFirstFrame: IO[Unit] = IO.unit,
+    forwardedOpens: Stream[IO, List[Path]] = Stream.empty
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     (Dispatcher.parallel[IO], Supervisor[IO](await = false)).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
       for
@@ -282,7 +283,8 @@ object AppRuntime:
                     runtime.frameTimings,
                     frameTimingEnabled,
                     latencyTraceEnabled,
-                    watchInputs.discrete.as(())
+                    watchInputs.discrete.as(()),
+                    forwardedOpens
                   )
                 )
               }
@@ -302,7 +304,8 @@ object AppRuntime:
     frameTimings: FrameTimings,
     frameTimingEnabled: SignallingRef[IO, Boolean],
     latencyTraceEnabled: SignallingRef[IO, Boolean],
-    watchInputsChanges: Stream[IO, Unit]
+    watchInputsChanges: Stream[IO, Unit],
+    forwardedOpens: Stream[IO, List[Path]]
   )(using logger: Logger[IO]): IO[Unit] =
     val (lifecycle, quitSignal) = (stateManager.runtimeLifecycle, stateManager.runtimeLifecycle.awaitQuit.attempt)
     (
@@ -353,8 +356,19 @@ object AppRuntime:
           .interruptWhen(quitSignal)
           .compile
           .drain
+      ),
+      AppRuntimeRenderLoops.superviseLoop("forwarded open loop", lifecycle.forceQuit)(
+        forwardedOpens.evalMap(openForwarded(stateManager.fileOpener)).interruptWhen(quitSignal).compile.drain
       )
-    ).parMapN((_, _, _, _, _, _, _, _, _, _) => ())
+    ).parMapN((_, _, _, _, _, _, _, _, _, _, _) => ())
+
+  /** Opens what a later launch handed over (#2023). A file that fails to open must not take the editor down with it. */
+  private[serenity] def openForwarded(fileOpener: FileOpener)(paths: List[Path])(using logger: Logger[IO]): IO[Unit] =
+    paths.traverse_ { path =>
+      fileOpener
+        .openFile(path)
+        .handleErrorWith(error => logger.error(error)(s"[INSTANCE] Could not open forwarded file $path"))
+    }
 
   /** Publishes `ui.render.frame_timing` only when a commit changes it, so the report stream sleeps through ordinary
     * edits.

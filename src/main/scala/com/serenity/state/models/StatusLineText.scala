@@ -1,6 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.config.{AppMode, StatusSegment}
+import com.serenity.lsp.config.LanguageId
 import com.serenity.text.TextStatistics
 
 /** Renders the configured status segments for the active buffer into the one line both placements show. */
@@ -24,7 +25,7 @@ object StatusLineText:
       case StatusSegment.Title =>
         buffer.document.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Unsaved")
       case StatusSegment.Language =>
-        buffer.document.language.fold("Plain Text")(_.displayName)
+        buffer.document.language.fold("Plain Text")(language => withServerWork(state, language))
       case StatusSegment.Mode =>
         state.editingContext.mode match
           case AppMode.Code  => "Code"
@@ -45,3 +46,9 @@ object StatusLineText:
             val total   = TextStatistics.of(buffer.document.content).wordCount
             val percent = if goal <= 0 then 0 else math.min(100, total * 100 / goal)
             s"$total / $goal words ($percent%)"
+
+  /** The language name followed by what its server is doing right now, such as `Scala (Indexing workspace 40%)`. */
+  private def withServerWork(state: AppState, language: LanguageId): String =
+    state.runtime.languageService.progress.get(language).flatMap(_.headOption) match
+      case Some(task) => s"${language.displayName} (${task.display})"
+      case None       => language.displayName

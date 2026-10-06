@@ -11,7 +11,7 @@ import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
-import com.serenity.session.{SessionManager, SessionSaveTrigger}
+import com.serenity.session.{SessionManager, SessionSaveTrigger, UnreadableSession}
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -94,7 +94,8 @@ final case class LspEffectSource(lspEffectStream: Stream[IO, LspEffect])
   */
 final case class SessionStartupInfo(
     currentSessionThemeName: IO[Option[String]],
-    sessionExists: IO[Boolean]
+    sessionExists: IO[Boolean],
+    setAsideUnreadableSession: IO[Option[UnreadableSession]] = IO.none
 )
 
 /** Opens a file into editor state.
