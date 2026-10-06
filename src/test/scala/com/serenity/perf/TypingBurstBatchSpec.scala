@@ -28,9 +28,10 @@ class TypingBurstBatchSpec extends AnyFlatSpec with Matchers:
     val (stateManager, bufferId) = editor
     stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(bufferId)
 
-  /** Whitespace typed straight after a word opens a new undo step (#1930), whose snapshot needs the viewport centred,
-    * so it settles the run before it: each one is a run the batch can no longer fold into its neighbour. The warm-up
-    * key `w` is the character before the burst.
+  /** Whitespace typed straight after a word opens a new undo step (#1930), whose snapshot needs the viewport centred:
+    * the batch settles the run before it, commits the whitespace on its own, and starts a fresh run after it, so each
+    * one costs two more runs than the burst would otherwise settle. The warm-up key `w` is the character before the
+    * burst.
     */
   private def wordBreaks: Int =
     ('w' :: burst).sliding(2).count {
@@ -58,7 +59,7 @@ class TypingBurstBatchSpec extends AnyFlatSpec with Matchers:
     val before       = wraps(batched)
     val slices       = TypingBurst.typeAsOneBatch(batched, burst).unsafeRunSync()
     val batchWraps   = wraps(batched) - before
-    val settledRuns  = slices + burstKeys / TypedRuns.MaxKeys + wordBreaks
+    val settledRuns  = slices + burstKeys / TypedRuns.MaxKeys + 2 * wordBreaks
 
     withClue(
       s"keys=$burstKeys slices=$slices word breaks=$wordBreaks runs<=$settledRuns wraps one key at a time=${perKey.sum} (most per key $mostPerKey): "
