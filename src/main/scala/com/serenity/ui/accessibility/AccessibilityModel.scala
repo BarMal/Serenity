@@ -3,6 +3,7 @@ package com.serenity.ui.accessibility
 import com.serenity.command.CommandSurfaceItem
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.InterfaceDensity
+import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -21,7 +22,7 @@ final case class AccessibleNode(
     id: String,
     role: AccessibilityRole,
     name: String,
-    value: Option[String],
+    value: Option[AccessibleValue],
     selected: Boolean,
     focused: Boolean,
     bounds: LayoutRect
@@ -43,9 +44,10 @@ object AccessibilitySnapshot:
   def from(
     state: AppState,
     viewport: ViewportSize,
-    previous: Option[AccessibilitySnapshot] = None
+    previous: Option[AccessibilitySnapshot] = None,
+    previewCache: MarkdownPreviewCache = MarkdownPreviewCache()
   ): AccessibilitySnapshot =
-    val scene = UiSceneSnapshot.from(state, viewport)
+    val scene = UiSceneSnapshot.from(state, LayoutEngine.calculateLayoutWithUI(state, viewport), viewport, previewCache)
     val visibleNodes = state.topModal match
       case Some(dialog) => scene.modal.filter(_.id == SceneNodeId.Surface(dialog.id))
       case None         => scene.nodesInPaintOrder
@@ -75,7 +77,7 @@ object AccessibilitySnapshot:
             s"pane:${paneId.value}",
             AccessibilityRole.Document,
             name,
-            buffer.map(_.document.content.toString),
+            buffer.map(found => AccessibleValue.DocumentText(found.document.content)),
             false,
             state.persisted.focus == Focus.EditorPane(paneId),
             node.contentRect
@@ -91,7 +93,7 @@ object AccessibilitySnapshot:
                 s"surface:${surfaceId.value}",
                 surfaceRole(surface.content),
                 surfaceName(surface.content),
-                surfaceValue(surface.content),
+                AccessibleValue.plain(surfaceValue(surface.content)),
                 selected = false,
                 focused = state.persisted.focus == Focus.Surface(surfaceId),
                 node.frameRect
@@ -106,7 +108,7 @@ object AccessibilitySnapshot:
                 s"surface:${surfaceId.value}",
                 surfaceRole(content),
                 surfaceName(content),
-                surfaceValue(content),
+                AccessibleValue.plain(surfaceValue(content)),
                 selected = false,
                 focused = state.persisted.focus == Focus.Modal,
                 node.frameRect
@@ -128,7 +130,7 @@ object AccessibilitySnapshot:
           s"surface:${surface.id.value}",
           surfaceRole(content),
           surfaceName(content),
-          surfaceValue(content),
+          AccessibleValue.plain(surfaceValue(content)),
           selected = false,
           focused = state.persisted.focus == Focus.Surface(surface.id),
           rect
@@ -218,7 +220,7 @@ object AccessibilitySnapshot:
               s"surface:${surface.id.value}/action:${action.id}",
               AccessibilityRole.Button,
               action.label,
-              action.detail,
+              AccessibleValue.plain(action.detail),
               selected = index == page.selectedIndex,
               focused = state.persisted.focus == Focus.Surface(surface.id) && index == page.selectedIndex,
               actionBounds(frameRect, index, page.launchActions.size)
@@ -237,7 +239,7 @@ object AccessibilitySnapshot:
         s"surface:${surfaceId.value}/status",
         AccessibilityRole.Status,
         "Status",
-        Some(message),
+        Some(AccessibleValue.Plain(message)),
         selected = false,
         focused = false,
         LayoutRect(frameRect.x, frameRect.bottom - 1, frameRect.width, 1)
@@ -292,7 +294,7 @@ object AccessibilitySnapshot:
             s"surface:${surfaceId.value}/item:${item.id}",
             role,
             itemLabel(item),
-            itemValue(item),
+            AccessibleValue.plain(itemValue(item)),
             selected,
             focused = state.persisted.focus == Focus.Surface(surfaceId) && selected,
             LayoutRect(
@@ -376,7 +378,7 @@ object AccessibilitySnapshot:
               case SurfacePaintKind.TextInput => AccessibilityRole.TextField
               case _                          => AccessibilityRole.Button
             val value = Option.when(box.kind == SurfacePaintKind.TextInput) {
-              box.text.map(_.stripPrefix(hit.semanticLabel).stripPrefix(" ")).getOrElse("")
+              AccessibleValue.Plain(box.text.map(_.stripPrefix(hit.semanticLabel).stripPrefix(" ")).getOrElse(""))
             }
             AccessibleNode(
               s"surface:${surfaceId.value}/control:${hit.focusId.value}",
@@ -435,9 +437,9 @@ object AccessibilitySnapshot:
               val absoluteIndex = rows.take(rowIndex).map(_.size).sum + index
               val (role, value) = item match
                 case ContextualToolbarItem.Input(_, _, _, input) =>
-                  AccessibilityRole.TextField -> Some(input.currentValue)
+                  AccessibilityRole.TextField -> Some(AccessibleValue.Plain(input.currentValue))
                 case ContextualToolbarItem.Dropdown(_, _, _, option) =>
-                  AccessibilityRole.Button -> Some(option.selectedOption)
+                  AccessibilityRole.Button -> Some(AccessibleValue.Plain(option.selectedOption))
                 case _ => AccessibilityRole.Button -> None
               AccessibleNode(
                 s"surface:${surfaceId.value}/item:${item.id}",
@@ -591,8 +593,9 @@ object AccessibilitySnapshot:
           node.role == AccessibilityRole.Status && !prior
             .get(node.id)
             .flatMap(_.value)
-            .contains(node.value.getOrElse(""))
-        )(node.value.map(AccessibilityAnnouncement.apply))
+            .map(_.text)
+            .contains(node.value.fold("")(_.text))
+        )(node.value.map(value => AccessibilityAnnouncement(value.text)))
         .flatten
       List(focus, status).flatten
     }
