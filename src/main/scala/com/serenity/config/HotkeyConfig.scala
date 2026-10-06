@@ -401,6 +401,12 @@ object HotkeyConfig:
   private def goToFileBindings(primaryModifier: Modifier): Map[HotkeyAction, List[HotkeyTrigger]] =
     Map(HotkeyAction.GoToFile -> List(HotkeyTrigger(InputKey.Character, Some('e'), Set(primaryModifier))))
 
+  // Cmd+Shift+Z is the macOS convention, so it leads there and Cmd+Y stays as a secondary; Ctrl+Y leads elsewhere.
+  private def redoBindings(osName: String, primaryModifier: Modifier): List[HotkeyTrigger] =
+    val shiftedZ = HotkeyTrigger(InputKey.Character, Some('z'), Set(primaryModifier, Modifier.Shift))
+    val plainY   = HotkeyTrigger(InputKey.Character, Some('y'), Set(primaryModifier))
+    if isMac(osName) then List(shiftedZ, plainY) else List(plainY, shiftedZ)
+
   def defaultBindingsFor(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
     val primaryModifier = primaryModifierFor(osName)
     def primary(key: Char, shift: Boolean = false, alt: Boolean = false): HotkeyTrigger =
@@ -428,7 +434,7 @@ object HotkeyConfig:
         HotkeyTrigger(InputKey.EOF, None, Set.empty)
       ),
       HotkeyAction.Undo      -> List(primary('z')),
-      HotkeyAction.Redo      -> List(primary('y')),
+      HotkeyAction.Redo      -> redoBindings(osName, primaryModifier),
       HotkeyAction.Copy      -> List(primary('c')),
       HotkeyAction.Paste     -> List(primary('v')),
       HotkeyAction.Cut       -> List(primary('x')),
