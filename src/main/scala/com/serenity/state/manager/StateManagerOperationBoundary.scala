@@ -445,7 +445,7 @@ private[manager] object StateManagerOperationBoundary:
     // lens in sync with the cursor regardless of what moved it -- a keyboard cursor move opens/closes it exactly as a
     // mouse click already did, without each event source having to remember to call it itself.
     AppStateValidation
-      .validated(EventPipelineTransitions.commandRunnerFocusNormalized(newState))
+      .validatedOver(fallbackState, EventPipelineTransitions.commandRunnerFocusNormalized(newState))
       .map(CommentRendering.syncFloatingLensWithCursor(_, fallbackState))
       .map(PanelContentSync.synced(_, fallbackState))
       .map(NotesPaneSync.synced(_, fallbackState))

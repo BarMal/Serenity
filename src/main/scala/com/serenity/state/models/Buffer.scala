@@ -7,7 +7,7 @@ import cats.data.NonEmptyList
 import com.serenity.io.{DocumentFormat, DocumentRevision, FileType}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
-import com.serenity.rope.Rope
+import com.serenity.rope.{Balance, ChangeSet, Rope}
 import com.serenity.text.{LineEnding, TextEncoding}
 
 opaque type BufferId = Int
@@ -89,14 +89,57 @@ final case class Document(
     // Bumped on every `content` change (`withContent`, #1663). Paired with `RichTextState.richTextSyncedVersion`
     // so `Buffer.richTextInSync` can tell in O(1) whether a stored `richTextDocument` still describes this
     // `content`, instead of re-deriving and comparing the whole plain text on every check.
-    contentVersion: Long = 0L
+    contentVersion: Long = 0L,
+    // What took `content` through its recent versions (#1838); transient, so a session never stores it and equality
+    // ignores it.
+    changes: ChangeLog = ChangeLog.empty
 ):
-  /** The only sanctioned way to change `content`: keeps `contentVersion` monotonically increasing so a
-    * `richTextDocument` stamped against the old version is correctly seen as stale by `Buffer.richTextInSync`, without
-    * re-comparing any text.
+
+  /** A way to change `content`, with [[applied]] and [[replacedWith]]: each keeps `contentVersion` monotonically
+    * increasing so a `richTextDocument` stamped against the old version is correctly seen as stale by
+    * `Buffer.richTextInSync`, without re-comparing any text. This one cannot say what changed, so it leaves a gap in
+    * [[changes]].
     */
   def withContent(newContent: Rope): Document =
-    copy(content = newContent, contentVersion = contentVersion + 1, isDirty = true, isNewEmpty = false)
+    copy(
+      content = newContent,
+      contentVersion = contentVersion + 1,
+      isDirty = true,
+      isNewEmpty = false,
+      changes = changes.gapped(contentVersion)
+    )
+
+  /** `None` unless `change` is for this document's text. */
+  def applied(change: ChangeSet): Option[Document] =
+    change.applyTo(content).map { edited =>
+      copy(
+        content = edited,
+        contentVersion = contentVersion + 1,
+        isDirty = true,
+        isNewEmpty = false,
+        changes = changes.appended(contentVersion, change)
+      )
+    }
+
+  /** `newContent` as one change spanning everything that differs, for a caller that has the text but not the edit. */
+  def replacedWith(newContent: Rope)(using Balance): Document =
+    copy(
+      content = newContent,
+      contentVersion = contentVersion + 1,
+      isDirty = true,
+      isNewEmpty = false,
+      changes = changes.appended(contentVersion, ChangeSet.fromDiff(content, newContent))
+    )
+
+  /** This document's content at the version after `previous`, for text read from outside rather than edited. */
+  def replacingContentOf(previous: Document): Document =
+    copy(contentVersion = previous.contentVersion + 1, changes = ChangeLog.at(previous.contentVersion + 1))
+
+  /** The change from `version` to now, or `None` when it cannot be known exactly. */
+  def changesSince(version: Long): Option[ChangeSet] =
+    if version == contentVersion then Some(ChangeSet.identity(content.weight))
+    else if changes.head == contentVersion then changes.since(version)
+    else None
 
 /** A buffer's cursor/selection state: one entry per live cursor, each carrying its own position, in-flight selection
   * anchor and preferred vertical-navigation column/pixel-x (`#1577`). Before `#1577` this was five separate parallel
@@ -281,6 +324,20 @@ final case class Buffer(
       document = updatedDocument,
       richText = richText.withSyncedDocument(richTextDocument, updatedDocument.contentVersion)
     )
+
+  /** This buffer as the next text of the buffer `previous`, whose id it shares, when it was built apart from it (a
+    * restored session): its version moves past `previous`'s, with a rich-text document that was in sync staying so.
+    */
+  def succeeding(previous: Buffer): Buffer =
+    if document.contentVersion > previous.document.contentVersion then this
+    else
+      val successor = document.replacingContentOf(previous.document)
+      copy(
+        document = successor,
+        richText = richText.copy(richTextSyncedVersion =
+          richText.richTextSyncedVersion.filter(_ == document.contentVersion).map(_ => successor.contentVersion)
+        )
+      )
 
   /** `O(1)`: whether `richText.richTextDocument` is known to describe `document.content` exactly, replacing a
     * `matchesPlainText` re-comparison of the whole plain text on every check (`#1663`). Relies on every writer of

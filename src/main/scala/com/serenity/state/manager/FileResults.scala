@@ -79,9 +79,16 @@ private[manager] object FileResults:
             current.document.content,
             disk.document.content
           )
+        val document = disk.document.replacingContentOf(current.document)
         withBuffer(
           state,
-          current.copy(document = disk.document, richText = disk.richText, annotations = annotations).clampedToContent
+          current
+            .copy(
+              document = document,
+              richText = disk.richText.withSyncedDocument(disk.richText.richTextDocument, document.contentVersion),
+              annotations = annotations
+            )
+            .clampedToContent
         )
       )
 

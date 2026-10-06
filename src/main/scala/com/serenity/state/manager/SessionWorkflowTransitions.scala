@@ -20,6 +20,9 @@ private[manager] object SessionWorkflowTransitions:
     */
   def restoredIntoViewport(restoredState: AppState, currentState: AppState): AppState =
     val restored = restoredState.copy(
+      persisted = restoredState.persisted.copy(buffers = restoredState.persisted.buffers.map { (id, buffer) =>
+        id -> currentState.persisted.buffers.get(id).fold(buffer)(buffer.succeeding)
+      }),
       runtime = restoredState.runtime.copy(
         uiSurfaces = restoredState.runtime.uiSurfaces.filter(_.presentation == SurfacePresentation.Docked),
         viewportSize = currentState.runtime.viewportSize,
