@@ -24,7 +24,9 @@ class LspConnection private (
     requestTimeout: FiniteDuration,
     logger: Logger[IO],
     syncKindRef: Ref[IO, TextDocumentSyncKind],
-    failNextNotificationRef: Ref[IO, Boolean]
+    failNextNotificationRef: Ref[IO, Boolean],
+    terminatedSignal: Deferred[IO, Unit],
+    hooksRef: Ref[IO, LspClientHooks]
 ):
 
   /** The server's negotiated `textDocumentSync` capability, read off the `initialize` response during the handshake
@@ -40,6 +42,14 @@ class LspConnection private (
     * first use.
     */
   private[lsp] def failNextNotification: IO[Unit] = failNextNotificationRef.set(true)
+
+  /** Completes once the connection can no longer carry messages: the server exited or closed its end, the writer
+    * failed, or the connection was released.
+    */
+  def terminated: IO[Unit] = terminatedSignal.get
+
+  private def failIfTerminated: IO[Unit] =
+    terminatedSignal.tryGet.flatMap(_.fold(IO.unit)(_ => IO.raiseError(LspConnection.LspConnectionClosed(languageId))))
 
   def sendRequest(method: LspMethod, params: Json): IO[Json] =
     sendRequest(method, params, requestTimeout)
@@ -66,7 +76,8 @@ class LspConnection private (
         // dying, and closeQueues/failPending own that case.
         val abandon = sendQueue.tryOffer(Some(LspProtocol.cancelRequest(id))).void >> cleanup
 
-        (sendQueue.offer(Some(request)) >> deferred.get.flatMap(IO.fromEither))
+        // Checked after the id is pending, so a close racing this request either fails it here or in failPending.
+        (failIfTerminated >> sendQueue.offer(Some(request)) >> deferred.get.flatMap(IO.fromEither))
           .timeoutTo(timeout, abandon >> IO.raiseError(timeoutError))
           .onCancel(abandon)
           .onError(_ => cleanup)
@@ -75,24 +86,52 @@ class LspConnection private (
   def sendNotification(method: LspMethod, params: Json): IO[Unit] =
     failNextNotificationRef.getAndSet(false).flatMap {
       case true  => IO.raiseError(new RuntimeException(s"Simulated notification failure for ${languageId.id}"))
-      case false => sendQueue.offer(Some(LspProtocol.notification(method, params))).void
+      case false => enqueueNotification(LspProtocol.notification(method, params))
     }
 
-  def processIncoming(onDiagnostics: (DocumentUri, List[Diagnostic]) => IO[Unit]): IO[Unit] =
-    Stream
-      .fromQueueNoneTerminated(notifQueue)
-      .evalMap { json =>
-        LspProtocol.notificationMethod(json).map(_.value) match
-          case Some("textDocument/publishDiagnostics") =>
-            LspProtocol.parseDiagnostics(json) match
-              case Some((uri, diags)) => onDiagnostics(uri, diags)
-              case None               => logger.warn("[LSP] Could not parse publishDiagnostics")
-          case Some(method) =>
-            logger.debug(s"[LSP] Notification: $method")
-          case None => IO.unit
-      }
-      .compile
-      .drain
+  /** Fails instead of waiting for room: `LspManager` sends notifications from the one fiber that serves every document,
+    * so a server that stopped reading must cost its own documents a notification, not stall everyone else's.
+    */
+  private def enqueueNotification(notification: Json): IO[Unit] =
+    failIfTerminated >>
+      sendQueue
+        .tryOffer(Some(notification))
+        .flatMap(IO.raiseUnless(_)(LspConnection.LspOutgoingQueueFull(languageId)))
+
+  /** Installed before the first server message can be read, so a request that arrives straight after the handshake is
+    * answered by the application rather than by the placeholder hooks.
+    */
+  def useHooks(hooks: LspClientHooks): IO[Unit] = hooksRef.set(hooks)
+
+  def processIncoming(
+    onDiagnostics: (DocumentUri, List[Diagnostic]) => IO[Unit],
+    hooks: LspClientHooks = LspClientHooks.ignoring
+  ): IO[Unit] =
+    useHooks(hooks) >>
+      Stream
+        .fromQueueNoneTerminated(notifQueue)
+        .evalMap(notification => handleNotification(notification, onDiagnostics, hooks))
+        .compile
+        .drain
+
+  private def handleNotification(
+    json: Json,
+    onDiagnostics: (DocumentUri, List[Diagnostic]) => IO[Unit],
+    hooks: LspClientHooks
+  ): IO[Unit] =
+    val params = json.hcursor.downField("params").focus.getOrElse(Json.Null)
+    LspProtocol.notificationMethod(json).map(_.value) match
+      case Some("textDocument/publishDiagnostics") =>
+        LspProtocol.parseDiagnostics(json) match
+          case Some((uri, diags)) => onDiagnostics(uri, diags)
+          case None               => logger.warn("[LSP] Could not parse publishDiagnostics")
+      case Some("window/showMessage" | "window/logMessage") =>
+        LspClientHooks.parseMessage(params).traverse_(hooks.onMessage)
+      case Some("$/progress") =>
+        LspClientHooks.parseProgress(params).traverse_(hooks.onProgress)
+      case Some(method) =>
+        logger.debug(s"[LSP] Notification: $method")
+      case None => IO.unit
 
   private[lsp] def handleIncomingJson(json: Json): IO[Unit] =
     LspProtocol.classify(json) match
@@ -103,8 +142,45 @@ class LspConnection private (
           completePending(id, Left(LspConnection.LspResponseError(languageId, code, message)))
       case JsonRpcMessage.Notification(_, _) =>
         notifQueue.offer(Some(json))
+      case JsonRpcMessage.ServerRequest(id, method, params) =>
+        logger.debug(s"[LSP] ${languageId.id} server request: ${method.value}") >>
+          handleServerRequest(id, method, params)
       case JsonRpcMessage.Malformed(raw) =>
         logger.warn(s"[LSP] ${languageId.id} received an unrecognized JSON-RPC message: ${raw.noSpaces}")
+
+  private def handleServerRequest(id: ServerRequestId, method: LspMethod, params: Json): IO[Unit] =
+    method.value match
+      case "workspace/applyEdit" =>
+        // Applying an edit waits on the application, so it must not hold up the reader that delivers every response.
+        applyEdit(id, params).start.void
+      case "window/showMessageRequest" =>
+        hooksRef.get.flatMap(hooks => LspClientHooks.parseMessage(params).traverse_(hooks.onMessage).attempt.void) >>
+          answerServerRequest(LspServerRequests.reply(id, method, params))
+      case _ =>
+        answerServerRequest(LspServerRequests.reply(id, method, params))
+
+  private def applyEdit(id: ServerRequestId, params: Json): IO[Unit] =
+    val outcome = LspClientHooks.parseApplyEdit(params) match
+      case None => IO.pure(LspApplyEditResult(applied = false, Some("Malformed workspace/applyEdit parameters")))
+      case Some(request) =>
+        hooksRef.get
+          .flatMap(_.onApplyEdit(request))
+          .timeoutTo(
+            requestTimeout,
+            IO.pure(LspApplyEditResult(applied = false, Some("Timed out applying the edit")))
+          )
+          .handleError(error =>
+            LspApplyEditResult(applied = false, Some(s"Applying the edit failed: ${error.getMessage}"))
+          )
+    outcome.flatMap(result => answerServerRequest(LspProtocol.response(id, LspClientHooks.applyEditResponse(result))))
+
+  private def answerServerRequest(reply: Json): IO[Unit] =
+    sendQueue
+      .offer(Some(reply))
+      .timeoutTo(
+        requestTimeout,
+        logger.warn(s"[LSP] ${languageId.id} could not answer a server request: writer stalled")
+      )
 
   private def completePending(id: RequestId, result: Either[Throwable, Json]): IO[Unit] =
     pendingRef.modify { pending =>
@@ -138,10 +214,14 @@ class LspConnection private (
   private[lsp] def outgoingMessages: Stream[IO, Json] =
     Stream.fromQueueNoneTerminated(sendQueue)
 
+  /** Idempotent. The end-of-stream markers are offered without waiting, since a full queue here belongs to a writer or
+    * consumer that is already stuck and is about to be cancelled.
+    */
   private[lsp] def closeQueues: IO[Unit] =
-    failPending(new RuntimeException(s"LSP connection closed for ${languageId.id}")) >>
-      sendQueue.offer(None).attempt.void >>
-      notifQueue.offer(None).attempt.void
+    terminatedSignal.complete(()).void >>
+      failPending(LspConnection.LspConnectionClosed(languageId)) >>
+      sendQueue.tryOffer(None).void >>
+      notifQueue.tryOffer(None).void
 
   private[lsp] def completeNotifications: IO[Unit] =
     notifQueue.offer(None).attempt.void
@@ -165,6 +245,25 @@ object LspConnection:
   final case class LspResponseError(languageId: LanguageId, code: Int, message: String)
       extends RuntimeException(s"LSP request failed: ${languageId.id} error $code: $message")
 
+  final case class LspConnectionClosed(languageId: LanguageId)
+      extends RuntimeException(s"LSP connection closed for ${languageId.id}")
+
+  final case class LspOutgoingQueueFull(languageId: LanguageId)
+      extends RuntimeException(s"LSP outgoing queue full for ${languageId.id}: the server is not reading")
+
+  /** How long a release waits for already-queued messages (such as `exit`) to reach the server before closing its
+    * streams.
+    */
+  private val OutgoingFlushTimeout: FiniteDuration = 1.second
+
+  private val StderrDrainShutdown: FiniteDuration = 1.second
+
+  /** Total time a release gives a server to answer `shutdown` and take `exit` before the process is destroyed. */
+  private val ServerShutdownTimeout: FiniteDuration = 2.seconds
+
+  /** How long a destroyed process gets to exit before it is destroyed forcibly. */
+  private val ServerDestroyGrace: FiniteDuration = 1.second
+
   final private case class ConnectionFibers(
       writer: Fiber[IO, Throwable, Unit],
       reader: Fiber[IO, Throwable, Unit]
@@ -183,6 +282,8 @@ object LspConnection:
       legendRef               <- Ref.of[IO, Option[SemanticTokensLegend]](None)
       syncKindRef             <- Ref.of[IO, TextDocumentSyncKind](TextDocumentSyncKind.Full)
       failNextNotificationRef <- Ref.of[IO, Boolean](false)
+      terminatedSignal        <- Deferred[IO, Unit]
+      hooksRef                <- Ref.of[IO, LspClientHooks](LspClientHooks.ignoring)
     yield new LspConnection(
       languageId,
       sendQueue,
@@ -193,7 +294,9 @@ object LspConnection:
       requestTimeout,
       logger,
       syncKindRef,
-      failNextNotificationRef
+      failNextNotificationRef,
+      terminatedSignal,
+      hooksRef
     )
 
   // Package-visible entry point — accepts pre-opened streams; used by tests via MockLspServer.
@@ -203,7 +306,9 @@ object LspConnection:
     rawOut: java.io.OutputStream,
     rootUri: WorkspaceRootUri,
     logger: Logger[IO],
-    requestTimeout: FiniteDuration = DefaultRequestTimeout
+    requestTimeout: FiniteDuration = DefaultRequestTimeout,
+    askServerToExit: LspConnection => IO[Unit] = _ => IO.unit,
+    endServer: IO[Unit] = IO.unit
   ): Resource[IO, LspConnection] =
     for
       conn <- Resource.eval(create(languageId, logger, requestTimeout))
@@ -215,6 +320,8 @@ object LspConnection:
             .evalMap(json => IO.blocking { out.write(LspFramer.encode(json)); out.flush() })
             .compile
             .drain
+            .handleErrorWith(error => logger.warn(error)("[LSP] writer stopped"))
+            .guarantee(conn.closeQueues)
             .start
           readerFiber <- readInputStream(IO.pure(in), 8192)
             .through(LspFramer.decode)
@@ -227,9 +334,12 @@ object LspConnection:
         yield ConnectionFibers(writer = writerFiber, reader = readerFiber)
       } {
         case ConnectionFibers(writerFiber, readerFiber) =>
-          closeQuietly(out) >>
-            closeQuietly(in) >>
+          askServerToExit(conn) >>
             conn.closeQueues >>
+            writerFiber.join.void.timeoutTo(OutgoingFlushTimeout, IO.unit) >>
+            closeQuietly(out) >>
+            endServer >>
+            closeQuietly(in) >>
             writerFiber.cancel >>
             readerFiber.cancel
       }
@@ -240,25 +350,62 @@ object LspConnection:
     config: LspServerConfig,
     rootUri: WorkspaceRootUri,
     logger: Logger[IO],
-    requestTimeout: FiniteDuration = DefaultRequestTimeout
+    requestTimeout: FiniteDuration = DefaultRequestTimeout,
+    stderrLogDirectory: java.nio.file.Path = LspStderrLog.defaultDirectory,
+    stderrLogMaxBytes: Long = LspStderrLog.DefaultMaxBytes
   ): Resource[IO, LspConnection] =
     for
-      process <- Resource.make(
-        IO.blocking(
-          new java.lang.ProcessBuilder(
-            (config.command :: config.defaultArgs).toArray*
-          ).start()
-        )
-      )(proc => IO.blocking(proc.destroyForcibly()).void)
+      server <- Resource.make(
+        IO.blocking(new java.lang.ProcessBuilder((config.command :: config.defaultArgs).toArray*).start())
+          .flatMap(process =>
+            LspStderrLog
+              .drain(process.getErrorStream, config.languageId, stderrLogDirectory, stderrLogMaxBytes, logger)
+              .handleErrorWith(error => logger.warn(error)(s"[LSP] ${config.languageId.id} stderr reader stopped"))
+              .start
+              .map(drain => RunningServer(process, drain))
+          )
+      )(stop)
       conn <- connect(
         config.languageId,
-        process.getInputStream,
-        process.getOutputStream,
+        server.process.getInputStream,
+        server.process.getOutputStream,
         rootUri,
         logger,
-        requestTimeout
+        requestTimeout,
+        askServerToExit = askToExit,
+        endServer = endProcess(server.process)
       )
     yield conn
+
+  final private case class RunningServer(process: java.lang.Process, stderrDrain: Fiber[IO, Throwable, Unit])
+
+  /** The process is destroyed before the drain is cancelled: the drain sits in a blocking read that only the process
+    * dying ends. A grandchild that inherited stderr can keep the pipe open past that, so the wait is bounded and the
+    * drain left to finish on its own.
+    */
+  private def stop(server: RunningServer): IO[Unit] =
+    IO.blocking(server.process.destroyForcibly()).void >>
+      server.stderrDrain.cancel.timeoutTo(StderrDrainShutdown, IO.unit)
+
+  /** `shutdown` then `exit`, together bounded by [[ServerShutdownTimeout]] so a server that never answers cannot hold
+    * the release.
+    */
+  private def askToExit(conn: LspConnection): IO[Unit] =
+    (conn.sendRequest(LspMethod("shutdown"), Json.Null, ServerShutdownTimeout).attempt >>
+      conn.sendNotification(LspMethod("exit"), Json.Null).attempt).void
+      .timeoutTo(ServerShutdownTimeout, IO.unit)
+
+  /** Ends the process so the reader's blocking read of its stdout returns: a well-behaved server has already exited
+    * after `exit`; otherwise it is destroyed, then destroyed forcibly once the grace has passed.
+    */
+  private def endProcess(process: java.lang.Process): IO[Unit] =
+    val exited = IO.blocking(process.waitFor(ServerDestroyGrace.toMillis, java.util.concurrent.TimeUnit.MILLISECONDS))
+    exited.flatMap:
+      case true => IO.unit
+      case false =>
+        IO.blocking(process.destroy()) >>
+          exited.flatMap(gone => IO.blocking(process.destroyForcibly()).void.unlessA(gone)) >>
+          exited.void
 
   private def initHandshake(conn: LspConnection, rootUri: WorkspaceRootUri, logger: Logger[IO]): IO[Unit] =
     for

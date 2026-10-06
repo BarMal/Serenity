@@ -81,6 +81,7 @@ final private[manager] class CloseWorkflowTransitions(ensureCommandRunnerSurface
           case None          => state.persisted.bufferOrder
       case CloseScope.Quit              => state.persisted.bufferOrder
       case CloseScope.ReturnToStartPage => state.persisted.bufferOrder
+      case CloseScope.Restart(_)        => state.persisted.bufferOrder
       case CloseScope.Tab(bufferId, _)  => List(bufferId).filter(state.persisted.buffers.contains)
 
   def clearCloseActions(state: AppState): AppState =
@@ -124,11 +125,14 @@ final private[manager] class CloseWorkflowTransitions(ensureCommandRunnerSurface
       state.copy(persisted = state.persisted.copy(focus = focus))
     else state
 
-  /** Scopes that leave clean buffers open rather than closing them as they go: Quit (state is discarded on exit anyway)
-    * and ReturnToStartPage (the whole session is snapshotted, then replaced by the start page).
+  /** Scopes that leave clean buffers open rather than closing them as they go: Quit and RestartInSafeMode (state is
+    * discarded on exit anyway) and ReturnToStartPage (the whole session is snapshotted, then replaced by the start
+    * page).
     */
   private def preservesBuffers(scope: CloseScope): Boolean =
-    scope == CloseScope.Quit || scope == CloseScope.ReturnToStartPage
+    scope match
+      case CloseScope.Quit | CloseScope.ReturnToStartPage | CloseScope.Restart(_) => true
+      case _                                                                      => false
 
   private def closeForScope(scope: CloseScope, state: AppState, bufferId: BufferId): AppState =
     restoreActiveTab(scope, closeBuffer(state, bufferId))

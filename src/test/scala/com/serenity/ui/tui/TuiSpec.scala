@@ -19,10 +19,12 @@ abstract class TuiSpec extends AnyFlatSpec with Matchers with TuiScriptSyntax:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
   given Logger[IO]        = LoggerFactory[IO].getLogger(using LoggerName("TuiSpec"))
 
-  /** A whole scenario's budget. Nothing in a script waits on a timer, so exceeding this means something deadlocked
-    * rather than something being slow.
+  /** A whole scenario's budget. Nothing in a script waits on a timer, so a scenario that outlasts this has deadlocked
+    * -- but a long walk (hundreds of settled repaints) is CPU-bound, and on a parallel run that shares its cores with
+    * hundreds of other suites it has taken the better part of a minute (master 16bc37a7, `TuiVerticalWalkSpec`), so the
+    * budget is sized to tell slow from stuck, not to measure speed.
     */
-  private val ScenarioTimeout: FiniteDuration = 60.seconds
+  private val ScenarioTimeout: FiniteDuration = 3.minutes
 
   /** The named keys themselves, so a script reads `press(ArrowDown)`. The builders that would collide with a
     * [[TuiScript]] step of the same name (`ctrl`, `ctrlShift`, `paste`, `text`) stay behind `TuiKeys`.

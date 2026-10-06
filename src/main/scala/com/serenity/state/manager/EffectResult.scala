@@ -16,7 +16,7 @@ import com.serenity.state.models.{
   Buffer,
   BufferId,
   FileWorkflowState,
-  FindResult,
+  FindMatches,
   FindSearchRequest,
   SessionListPurpose,
   SpellCheckFingerprint,
@@ -40,7 +40,7 @@ import com.serenity.ui.theme.Theme
   * job cancels an older one, but a result already posted before the cancel still reaches the dispatcher.
   */
 private[manager] enum EffectResult:
-  case FindSearchCompleted(request: FindSearchRequest, results: Vector[FindResult])
+  case FindSearchCompleted(request: FindSearchRequest, matches: FindMatches)
   case MarkdownPreviewSettled(bufferId: BufferId, generation: Long)
 
   /** The outline of `bufferId` as of `contentVersion`, for docked outline panels. */
@@ -121,8 +121,8 @@ private[manager] object EffectResult:
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): AppState =
     result match
-      case FindSearchCompleted(request, results) =>
-        val found = ModalEventReducer.applyFindSearchResults(state, request, results)
+      case FindSearchCompleted(request, matches) =>
+        val found = ModalEventReducer.applyFindSearchResults(state, request, matches.results, matches.capped)
         CursorViewport.ensureVisibleCursors(state, found, wrapCache = wrapCache)
       case OutlineRefreshed(bufferId, contentVersion, symbols) =>
         PanelContentSync.withRefreshedOutline(state, bufferId, contentVersion, symbols)

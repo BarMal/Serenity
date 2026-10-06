@@ -124,7 +124,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
     CommandSurfaceItem.InputItem(
       id = "spellcheck-languages",
       label = "Spell Check Languages",
-      hint = "Comma-separated codes",
+      hint = "Comma-separated codes, e.g. en-GB or en-US",
       currentValue = spellCheck.languages.mkString(","),
       kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>

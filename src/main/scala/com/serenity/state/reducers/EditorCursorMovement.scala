@@ -58,6 +58,12 @@ private[reducers] object EditorCursorMovement:
   def wordRightTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
     horizontalTarget(wordBoundaryFrom(buffer, from, (rope, offset) => rope.nextWordBoundary(offset)))
 
+  def subWordLeftTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
+    horizontalTarget(wordBoundaryFrom(buffer, from, (rope, offset) => rope.previousSubWordBoundary(offset)))
+
+  def subWordRightTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
+    horizontalTarget(wordBoundaryFrom(buffer, from, (rope, offset) => rope.nextSubWordBoundary(offset)))
+
   /** `from` is passed rather than derived: arrow keys resume from the selection focus so a right-arrow off a selection
     * lands past its end, while Home and End resume from the head cursor.
     */

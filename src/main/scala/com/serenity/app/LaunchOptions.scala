@@ -8,6 +8,13 @@ import com.monovore.decline.{Command, Help, Opts}
 /** @param showVersion
   *   `--version`: print the build identity and exit without starting the editor. Carried here rather than handled
   *   before parsing so that an unrecognised flag alongside it is still reported, instead of `--version` masking it.
+  * @param safeMode
+  *   `--safe-mode`: default settings, no session, no language servers, spell check or project tasks, and nothing on
+  *   disk touched. See [[SafeMode]].
+  * @param resetConfig
+  *   `--reset-config`: move `config.conf` aside to a timestamped backup before starting. See [[LaunchReset]].
+  * @param resetSession
+  *   `--reset-session`: move the saved session aside to a timestamped backup before starting. See [[LaunchReset]].
   */
 final case class LaunchOptions(
     openPath: Option[Path] = None,
@@ -15,7 +22,10 @@ final case class LaunchOptions(
     tui: Boolean = false,
     gui: Boolean = false,
     alpha: Boolean = false,
-    showVersion: Boolean = false
+    showVersion: Boolean = false,
+    safeMode: Boolean = false,
+    resetConfig: Boolean = false,
+    resetSession: Boolean = false
 )
 
 object LaunchOptions:
@@ -42,8 +52,38 @@ object LaunchOptions:
   private val version: Opts[Boolean] =
     Opts.flag("version", "Print the build identity and exit.").orFalse
 
+  private val safeMode: Opts[Boolean] =
+    (
+      Opts
+        .flag(
+          "safe-mode",
+          "Start with default settings and without the saved session, language servers, spell check or project " +
+            "tasks. Nothing on disk is changed. Offered automatically when recent starts did not finish starting."
+        )
+        .orFalse,
+      Opts.flag("safe", "Alias for --safe-mode.").orFalse
+    ).mapN(_ || _)
+
+  private val resetConfig: Opts[Boolean] =
+    Opts
+      .flag(
+        "reset-config",
+        "Move config.conf aside to a timestamped backup, then start with default settings."
+      )
+      .orFalse
+
+  private val resetSession: Opts[Boolean] =
+    Opts
+      .flag(
+        "reset-session",
+        "Move the saved session aside to a timestamped backup folder, then start without it."
+      )
+      .orFalse
+
   val command: Command[LaunchOptions] =
-    Command("serenity", "A calm text editor.")((open, eco, tui, gui, alpha, version).mapN(LaunchOptions.apply))
+    Command("serenity", "A calm text editor.")(
+      (open, eco, tui, gui, alpha, version, safeMode, resetConfig, resetSession).mapN(LaunchOptions.apply)
+    )
 
   /** `Left` carries the text to print. `Help.errors` distinguishes the two reasons: empty for a `--help` request,
     * non-empty for an argument the parser rejected -- which is what lets the caller exit zero for one and non-zero for

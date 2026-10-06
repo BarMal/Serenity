@@ -115,6 +115,12 @@ final case class FidelityReport(items: List[FidelityItem]):
 
   def wouldDrop: List[FidelityItem] = items.filter(_.treatment == Treatment.Dropped)
 
+  def isLossless: Boolean = wouldDrop.isEmpty
+
+  /** The names of the content a save would drop that no [[DocumentFeature]] names, as an RTF import reports it. */
+  def unsupportedElements: Set[String] =
+    wouldDrop.collect { case FidelityItem(DocumentFeature.Other(name), _, _) => name }.toSet
+
   def count(feature: DocumentFeature, treatment: Treatment): Int =
     items.filter(item => item.feature == feature && item.treatment == treatment).map(_.count).sum
 
@@ -135,6 +141,11 @@ final case class FidelityReport(items: List[FidelityItem]):
 
 object FidelityReport:
   val empty: FidelityReport = FidelityReport(Nil)
+
+  /** What an RTF import left out, which a save over the same file would drop: RTF keeps no source package to copy from.
+    */
+  def unsupported(names: Set[String]): FidelityReport =
+    FidelityReport(names.toList.sorted.map(name => FidelityItem(DocumentFeature.Other(name), Treatment.Dropped, 1)))
 
   private val Phrases: List[(Treatment, String)] = List(
     Treatment.ReadOnly  -> "preserved read-only",

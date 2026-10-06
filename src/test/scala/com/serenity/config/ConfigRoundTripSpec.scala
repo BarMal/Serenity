@@ -141,7 +141,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     )
     .withSpellCheck(
       SpellCheckConfig(
-        enabled = true,
+        enabled = false,
         languages = List("en", "fr"),
         dictionaryPaths = List("/tmp/words.dic"),
         additionalWords = List("Serenity", "scalafix")
@@ -258,7 +258,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     val file = Files.createTempFile("serenity-unreadable-config", ".conf")
     Files.writeString(file, "editor.pane_headers = false\nthis is not = valid = hocon {\n")
 
-    val preserved = ConfigManager.preserveUnreadableConfig(file)
+    val preserved = ConfigManager.backUpConfig(file, java.time.Instant.now())
 
     preserved.map(Files.readString) shouldBe Some(Files.readString(file))
     preserved.map(_.getFileName.toString).exists(_.startsWith(file.getFileName.toString)) shouldBe true

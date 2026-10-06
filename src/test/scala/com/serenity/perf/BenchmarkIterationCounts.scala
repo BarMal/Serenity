@@ -50,6 +50,19 @@ package com.serenity.perf
   *
   * `laptop.input.state_manager.typing_*` (issues #1798, #1812) take the 20 samples their `laptop.input.*` neighbours
   * already use; no CV comparison was run for them, so the count is a convention, not a derivation.
+  *
+  * `laptop.input.state_manager.go_to_line_3000_paragraphs` (2 warmups / 10 samples / batch 1 -> 100 / 40 / batch 8):
+  * one invocation is the whole jump-and-back sequence, ~20ms before the JIT has settled, so `BenchmarkRunner`
+  * calibrates batch to 1 and the 500ms warmup budget fits only ~20 invocations -- the samples were still taken while
+  * C1/C2 compiled, and the p50 drifted with it (six runs: 13.5-23.9ms, 1.78x spread; that is what CI flagged at
+  * 2.0-2.7x on unrelated PRs). The minimum warmup count forces enough invocations for the hot path to be compiled; 40
+  * samples and a minimum batch of 8 make each sample span eight sequences, so a GC pause or JIT event is averaged into
+  * it rather than being the sample. The event sequence measured is unchanged.
+  *
+  * `laptop.present.*` (8 -> 24) went with fixing what they measured, after `swing_paint_window` failed the gate on an
+  * unrelated PR at 2.19x: it timed an X-pixmap cache hit, bimodal within one run. More samples cannot fix a bimodal
+  * measurement and were not the fix; at about 3ms (1x) to 11ms (2x) per synced frame they cost under a second, and give
+  * the p50 more than eight points to sit among.
   */
 private[perf] object BenchmarkIterationCounts:
   val Damage                = 60
@@ -58,3 +71,7 @@ private[perf] object BenchmarkIterationCounts:
   val RenderMarkdown        = 24
   val LayoutVisibleViewport = 60
   val RandomTyping          = 20
+  val Present               = 24
+  val GoToLineWarmups       = 100
+  val GoToLine              = 40
+  val GoToLineBatch         = 8

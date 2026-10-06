@@ -11,7 +11,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -33,7 +33,8 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
         logger,
         sessionRootOverride = sessionRootOverride,
         configPersistencePath = configPersistencePath,
-        fileDialog = fileDialog
+        fileDialog = fileDialog,
+        dictionaryCache = SharedDictionary.default
       )
       .unsafeRunSync()
 

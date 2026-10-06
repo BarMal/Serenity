@@ -250,10 +250,9 @@ object DocumentFormat:
           preservesRichFormatting = false
         )
       case FileType.RichText | FileType.OpenDocumentText | FileType.WordOpenXmlDocument =>
-        // All three round-trip marks, alignment and headings through their own codecs (RTF approximates headings
-        // visually rather than recovering the exact level -- see `RtfDocumentCodec.headingAdjustedStyle`), so all
-        // three genuinely preserve rich formatting. This previously reported only RTF as lossless and both ODT and
-        // WordOpenXml as lossy -- backwards from the codecs' actual behaviour (#1291).
+        // All three round-trip marks, alignment and headings through their own codecs, so all three genuinely
+        // preserve rich formatting. This previously reported only RTF as lossless and both ODT and WordOpenXml as
+        // lossy -- backwards from the codecs' actual behaviour (#1291).
         DocumentFormatCapabilities(
           canOpen = true,
           canSave = true,

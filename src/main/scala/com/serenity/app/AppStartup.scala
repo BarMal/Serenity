@@ -89,7 +89,33 @@ object AppStartup:
     appConfig: AppConfig = AppConfig.default,
     openPath: Option[Path] = None,
     capabilities: FrontendCapabilities = FrontendCapabilities.gui,
-    configNotice: Option[String] = None
+    configNotice: Option[String] = None,
+    recovery: StartupRecovery.Plan = StartupRecovery.Plan.normal
+  ): IO[AppState] =
+    initialState(
+      stateManager,
+      sessionStartupInfo,
+      theme,
+      initialViewportSize,
+      appConfig,
+      openPath,
+      capabilities,
+      configNotice
+    )
+      .flatMap(state =>
+        if recovery == StartupRecovery.Plan.normal then IO.pure(state)
+        else stateManager.updateStateValidated(recovery.appliedTo) >> stateManager.getCurrentState
+      )
+
+  private def initialState(
+    stateManager: StateManager,
+    sessionStartupInfo: SessionStartupInfo,
+    theme: Theme,
+    initialViewportSize: ViewportSize,
+    appConfig: AppConfig,
+    openPath: Option[Path],
+    capabilities: FrontendCapabilities,
+    configNotice: Option[String]
   ): IO[AppState] =
     for
       unreadable <- sessionStartupInfo.setAsideUnreadableSession

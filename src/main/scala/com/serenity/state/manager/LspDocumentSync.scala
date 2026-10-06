@@ -45,7 +45,7 @@ final private[manager] class LspDocumentSync(port: LspDocumentSyncPort):
             languageId <- buffer.document.language
             if changedContent
           yield AppEffect.LspQueue(
-            LspQueueEffect.DocumentChanged(path.toUri.toString, languageId, buffer.document.content.collect())
+            LspQueueEffect.DocumentChanged(path.toUri.toString, languageId, buffer.document.content)
           ))
             .fold(IO.unit)(interpretEffect)
     }

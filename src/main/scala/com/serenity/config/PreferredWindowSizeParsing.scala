@@ -1,7 +1,6 @@
 package com.serenity.config
 
 import scala.jdk.CollectionConverters.*
-import scala.util.Try
 
 import com.typesafe.config.Config
 
@@ -14,17 +13,35 @@ import com.typesafe.config.Config
   */
 private[config] object PreferredWindowSizeParsing:
 
+  /** What one of the two keys says: nothing, something unusable, or a size. */
+  private enum Component:
+    case Absent
+    case Invalid
+    case Valid(pixels: Int)
+
+  /** A component that is stated but unusable (including an empty value or a block) falls back to the default window's,
+    * so the other, valid one is kept. One that is not stated at all still means no preferred size, as above.
+    */
   def applied(config: AppConfig, source: Config): AppConfig =
-    def intAt(spellings: Set[String]): Option[Int] =
-      source
-        .entrySet()
-        .asScala
-        .find(entry => spellings.contains(entry.getKey.stripPrefix("\"").stripSuffix("\"")))
-        .flatMap(entry => Try(source.getInt(entry.getKey)).toOption)
+    def componentAt(spellings: Set[String]): Component =
+      def keyOf(entry: java.util.Map.Entry[String, ?]): String = entry.getKey.stripPrefix("\"").stripSuffix("\"")
+      val entries                                              = source.entrySet().asScala.toList
+      entries.find(entry => spellings.contains(keyOf(entry))) match
+        case Some(entry) =>
+          FieldCodec.flatten(entry.getValue).trim.toIntOption.fold(Component.Invalid)(Component.Valid.apply)
+        case None =>
+          if entries.exists(entry => spellings.exists(spelling => keyOf(entry).startsWith(s"$spelling."))) then
+            Component.Invalid
+          else Component.Absent
 
     val widthSpellings  = ConfigRegistry.find("window.preferred.width").map(_.spellings).getOrElse(Set.empty)
     val heightSpellings = ConfigRegistry.find("window.preferred.height").map(_.spellings).getOrElse(Set.empty)
 
-    (intAt(widthSpellings), intAt(heightSpellings)) match
-      case (Some(width), Some(height)) => config.withPreferredWindowSize(PreferredWindowSize(width, height))
-      case _                           => config
+    (componentAt(widthSpellings), componentAt(heightSpellings)) match
+      case (Component.Valid(width), Component.Valid(height)) =>
+        config.withPreferredWindowSize(PreferredWindowSize(width, height))
+      case (Component.Valid(width), Component.Invalid) =>
+        config.withPreferredWindowSize(PreferredWindowSize(width, PreferredWindowSize.Default.height))
+      case (Component.Invalid, Component.Valid(height)) =>
+        config.withPreferredWindowSize(PreferredWindowSize(PreferredWindowSize.Default.width, height))
+      case _ => config

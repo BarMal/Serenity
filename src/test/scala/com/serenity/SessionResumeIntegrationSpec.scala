@@ -14,6 +14,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -47,7 +48,8 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       // ---- First launch: fresh start, new document, type content, save session ----
       firstManager <- StateManager.apply(
         testLogger("SessionResumeIntegrationSpec-first"),
-        sessionRootOverride = Some(sessionRoot)
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
       )
       firstInitial <- AppStartup.initializeState(
         firstManager,
@@ -81,7 +83,8 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       // ---- Open again: a brand-new StateManager over the same session root, exactly like a fresh process launch. ----
       secondManager <- StateManager.apply(
         testLogger("SessionResumeIntegrationSpec-second"),
-        sessionRootOverride = Some(sessionRoot)
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
       )
       secondInitial <- AppStartup.initializeState(
         secondManager,
@@ -122,7 +125,8 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       // ---- First launch: create and save a session (no TUI mode -- Runtime is never persisted). ----
       firstManager <- StateManager.apply(
         testLogger("SessionResumeIntegrationSpec-runtime-first"),
-        sessionRootOverride = Some(sessionRoot)
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
       )
       firstInitial <- AppStartup.initializeState(
         firstManager,
@@ -141,7 +145,8 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       // ---- Second launch: TUI mode with ModifyOtherKeys tier -- both are "never persisted" and must survive restore. ----
       secondManager <- StateManager.apply(
         testLogger("SessionResumeIntegrationSpec-runtime-second"),
-        sessionRootOverride = Some(sessionRoot)
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
       )
       secondInitial <- AppStartup.initializeState(
         secondManager,

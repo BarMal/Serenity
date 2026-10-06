@@ -2,7 +2,6 @@ package com.serenity.ui.layout
 
 import com.serenity.config.{HotkeyTrigger, ModalKeyAction}
 import com.serenity.state.models.*
-import com.serenity.ui.widget.TextField
 
 /** Declarative composition plans for blocking workflow surfaces. Every [[ConfirmPrompt]] is composed in
   * `ConfirmComposition` and every [[ListPicker]] in `ListPickerComposition`, split out to keep this file under the
@@ -22,10 +21,9 @@ object ModalSurfaceComposition:
     modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]] = ModalKeyAction.defaultBindings
   ): Option[ResolvedSurfaceComposition] =
     modal match
-      case Modal.Confirm(prompt)    => Some(ConfirmComposition.forPrompt(prompt, frameRect, targetRows))
-      case Modal.TextPrompt(prompt) => Some(textPromptPlan(prompt, frameRect))
-      case Modal.Find(query, results, currentIndex) =>
-        Some(findPlan(query, results, currentIndex, frameRect))
+      case Modal.Confirm(prompt)           => Some(ConfirmComposition.forPrompt(prompt, frameRect, targetRows))
+      case Modal.TextPrompt(prompt)        => Some(textPromptPlan(prompt, frameRect))
+      case find: Modal.Find                => Some(findPlan(find, frameRect, modalBindings))
       case Modal.FileWorkflow(workflow)    => Some(filePlan(workflow, frameRect, modalBindings))
       case Modal.ReplaceWorkflow(workflow) => Some(replacePlan(workflow, frameRect, targetRows))
       case Modal.ListPicker(picker)        => Some(ListPickerComposition.forPicker(picker, frameRect))
@@ -37,7 +35,7 @@ object ModalSurfaceComposition:
     val actionRows = math.max(1, targetRows)
     modal match
       case Modal.TextPrompt(_)                 => 3
-      case Modal.Find(_, results, _)           => if results.isEmpty then 5 else 6
+      case find: Modal.Find                    => if find.results.isEmpty then 5 else 6
       case Modal.ListPicker(picker)            => ListPickerComposition.frameHeight(picker)
       case Modal.PanelArrangement(arrangement) => PanelArrangementComposition.frameHeight(arrangement)
       case Modal.ReplaceWorkflow(workflow) =>
@@ -75,15 +73,15 @@ object ModalSurfaceComposition:
     inputPlan(prompt.label, prompt.input, focusId, frameRect, prompt.field.caret)
 
   private def findPlan(
-    query: TextField,
-    results: Vector[FindResult],
-    currentIndex: Int,
-    frameRect: LayoutRect
+    find: Modal.Find,
+    frameRect: LayoutRect,
+    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]]
   ): ResolvedSurfaceComposition =
     val content   = SurfaceFrameLayout(frameRect).contentRect
     val bounds    = logicalRect(content.x, content.y, content.width, content.height)
-    val resultSet = FindResultSet.normalized(query.text, results, currentIndex)
-    val headerBox = textBox("find", rowRect(bounds, 0))
+    val query     = find.query
+    val resultSet = FindResultSet.normalized(query.text, find.results, find.currentIndex, find.capped)
+    val headerBox = textBox(findHeader(find.options, modalBindings), rowRect(bounds, 0))
     val queryBox  = inputBox("Find", query.text, SurfaceFocusId("find"), rowRect(bounds, 1), caret = Some(query.caret))
     val resultBoxes = resultSet.visibleResults(math.max(0, content.height - 3)).zipWithIndex.map {
       case ((result, index), offset) =>
@@ -95,13 +93,33 @@ object ModalSurfaceComposition:
           action = Some(SurfaceAction.SelectFindResult(index))
         )
     }
+    val queryError =
+      Option.when(query.text.nonEmpty)(FindPattern.compile(query.text, find.options)).flatMap(_.left.toOption)
     val footer = Option.when(resultSet.query.nonEmpty) {
-      textBox(
-        if resultSet.results.isEmpty then "0 matches" else resultSet.selectionSummary,
-        rowRect(bounds, content.height - 1)
-      )
+      queryError match
+        case Some(error) =>
+          textBox(s"Invalid regex: ${error.message}", rowRect(bounds, content.height - 1), tone = OverlayTone.Error)
+        case None =>
+          textBox(
+            if resultSet.results.isEmpty then "0 matches" else resultSet.selectionSummary,
+            rowRect(bounds, content.height - 1)
+          )
     }
     plan(bounds, headerBox :: queryBox :: resultBoxes ++ footer.toList)
+
+  /** "find" followed by each option's state and key, e.g. `find  [x] case alt+c  [ ] word alt+w  [ ] regex alt+r`. */
+  private def findHeader(options: FindOptions, modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]]): String =
+    val toggles = List(
+      ("case", FindOption.MatchCase, ModalKeyAction.ToggleMatchCase),
+      ("word", FindOption.WholeWord, ModalKeyAction.ToggleWholeWord),
+      ("regex", FindOption.Regex, ModalKeyAction.ToggleRegex)
+    ).map {
+      case (label, option, action) =>
+        val mark = if options.isOn(option) then "[x]" else "[ ]"
+        val key  = modalBindings.getOrElse(action, Nil).headOption.fold("")(trigger => s" ${trigger.render}")
+        s"$mark $label$key"
+    }
+    ("find" :: toggles).mkString("  ")
 
   private def replacePlan(
     workflow: ReplaceWorkflowState,

@@ -9,6 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -351,5 +352,8 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
 
     val stateManager: StateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+        com.serenity.rope.Balance.default,
+        LoggerFactory[IO]
+      )
       .unsafeRunSync()

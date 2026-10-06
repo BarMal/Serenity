@@ -67,8 +67,10 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
     FileUtils.detectFileType(path) match
       case FileType.RichText =>
         openStored(location).flatMap { stored =>
-          IO.blocking(RtfDocumentCodec.readBytes(stored.content))
-            .map(document => bufferFromRichText(bufferId, path, document, revision = stored.revision))
+          IO.fromEither(RtfDocumentCodec.readBytesWithFidelity(stored.content))
+            .map(imported =>
+              bufferFromRichText(bufferId, path, imported.document, Some(imported.fidelity), stored.revision)
+            )
         }
       case FileType.OpenDocumentText =>
         openStored(location).flatMap { stored =>
@@ -260,7 +262,7 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
     bufferId: BufferId,
     path: Path,
     document: RichTextDocument,
-    fidelity: Option[FidelityReport] = None,
+    fidelity: Option[FidelityReport],
     revision: Option[DocumentRevision]
   ): Buffer =
     val normalized = document.normalized

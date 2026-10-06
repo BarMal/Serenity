@@ -319,7 +319,8 @@ object TuiSession:
         terminalConfig,
         sessionRootOverride = Some(workspace.resolve("session")),
         configPersistencePath = None,
-        previewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
+        previewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable,
+        dictionaryCache = com.serenity.testkit.SharedDictionary.cacheFor(terminalConfig)
       )(logger)
       theme    <- AppStartup.startupTheme(stateManager.sessionStartupInfo, AppThemeManager.create)
       viewport <- shell.viewportSize

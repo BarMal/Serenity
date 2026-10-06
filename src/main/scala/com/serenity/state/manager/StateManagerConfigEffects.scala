@@ -1,10 +1,21 @@
 package com.serenity.state.manager
 
+import java.nio.file.Files
+
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.*
 import com.serenity.config.AppConfigOps.*
-import com.serenity.config.{AppConfig, ConfigError, ConfigManager, LineNumberLayout, StatusLinePlacement, StatusSegment}
+import com.serenity.config.{
+  AppConfig,
+  ConfigError,
+  ConfigManager,
+  LineNumberLayout,
+  SpellCheckLanguage,
+  StatusLinePlacement,
+  StatusSegment
+}
+import com.serenity.io.TimestampedBackup
 import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
 import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
 import com.serenity.state.models.*
@@ -263,7 +274,7 @@ final private[manager] class StateManagerConfigEffects(
       case SpellCheckIntent.SetSpellCheckEnabled(enabled) =>
         updateSpellCheckConfig(_.copy(enabled = enabled))
       case SpellCheckIntent.SetSpellCheckLanguages(languages) =>
-        updateSpellCheckConfig(_.copy(languages = languages))
+        updateSpellCheckConfig(_.copy(languages = languages.map(SpellCheckLanguage.canonical)))
       case SpellCheckIntent.SetSpellCheckDictionaryPaths(paths) =>
         updateSpellCheckConfig(_.copy(dictionaryPaths = paths))
       case SpellCheckIntent.SetSpellCheckWords(words) =>
@@ -275,12 +286,43 @@ final private[manager] class StateManagerConfigEffects(
   // is a no-op with no comment at the cursor, rather than surfacing an error for a command reachable from a
   // static context-menu/command-palette entry that doesn't know in advance whether it applies.
   private def addFlaggedWordAtCursorToDictionary(state: AppState): IO[Unit] =
-    SpellChecker.flaggedWordAtCursor(state) match
-      case Some(word) =>
-        val normalized = DictionaryWord.normalize(word)
-        updateSpellCheckConfig(config => config.copy(additionalWords = (config.additionalWords :+ normalized).distinct))
-      case None =>
-        IO.unit
+    SpellChecker.flaggedWordAtCursor(state).traverse_(addWordToDictionary)
+
+  /** Persists `word` in the configured custom words, which every later session loads. */
+  private[manager] def addWordToDictionary(word: String): IO[Unit] =
+    val normalized = DictionaryWord.normalize(word)
+    updateSpellCheckConfig(config => config.copy(additionalWords = (config.additionalWords :+ normalized).distinct))
+
+  /** Moves the config file aside first and goes no further if that fails, so a reset never overwrites the only copy. A
+    * session with no config file (safe mode, whose settings are not the user's) has nothing to reset.
+    */
+  private def resetSettings: IO[Unit] =
+    configPersistencePath.fold(logger.info("[CONFIG] This session has no config file, so there is nothing to reset")) {
+      path =>
+        IO.realTimeInstant
+          .flatMap(now =>
+            IO.blocking {
+              val backup = TimestampedBackup.siblingOf(path, now)
+              Option.when(Files.exists(path))(TimestampedBackup.moveAside(path, backup))
+            }
+          )
+          .attempt
+          .flatMap {
+            case Left(error) =>
+              logger.warn(error)("[CONFIG] Settings were not reset: the config file could not be backed up")
+            case Right(backup) =>
+              backup
+                .traverse_(kept => logger.info(s"[CONFIG] Previous settings kept at $kept")) >> restoreDefaultSettings
+          }
+    }
+
+  private def restoreDefaultSettings: IO[Unit] =
+    deviceTextScaleProvider.flatMap { deviceTextScale =>
+      val defaults = AppConfig.default
+      applyConfigUpdate(_ =>
+        defaults.withFontConfig(defaults.editorConfig.fontConfig.resolveAutoTextScale(deviceTextScale))
+      ).flatMap(config => onFontConfigChanged(config.editorConfig.fontConfig))
+    }
 
   private def interpretGeneralSettingsIntent(intent: GeneralSettingsIntent, state: AppState): IO[Unit] =
     intent match
@@ -291,6 +333,8 @@ final private[manager] class StateManagerConfigEffects(
         }
       case GeneralSettingsIntent.SaveConfig =>
         persistConfigFile(state.persisted.config)
+      case GeneralSettingsIntent.ResetSettings =>
+        resetSettings
       case GeneralSettingsIntent.SetRenderFpsTarget(target) =>
         updateAppearanceConfig(_.withRenderFpsTarget(target)).void
       case GeneralSettingsIntent.SetRenderDamageGranularity(granularity) =>

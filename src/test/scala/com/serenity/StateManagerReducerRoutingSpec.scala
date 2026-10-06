@@ -13,6 +13,7 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalStateReducer, PeekStateReducer}
 import com.serenity.testkit.AwaitCondition.awaitValue
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import com.serenity.ui.widget.TextField
 import org.scalatest.concurrent.Eventually
@@ -32,7 +33,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
 
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerReducerRoutingSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   "StateManager.applyEvent" should "toggle the command runner through the application event path" in {
     val stateManager = createStateManager()

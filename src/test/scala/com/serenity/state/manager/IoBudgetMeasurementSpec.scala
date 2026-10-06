@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import java.lang.management.ManagementFactory
 import java.nio.file.{Files, Path}
 import java.util.concurrent.Executors
 
@@ -91,6 +92,58 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
 
   private val Megabyte = 1L << 20
 
+  // Allocation is counted per thread too, for the same reason as the I/O counters.
+  private val threadMemory = ManagementFactory.getThreadMXBean match
+    case sun: com.sun.management.ThreadMXBean => Some(sun)
+    case _                                    => None
+
+  private def allocatedByCurrentThread(): Long =
+    threadMemory.fold(0L)(_.getThreadAllocatedBytes(Thread.currentThread.threadId))
+
+  private val allocatedByMeasuredThreads: IO[Long] =
+    for
+      compute  <- IO(allocatedByCurrentThread())
+      blocking <- IO.blocking(allocatedByCurrentThread())
+    yield compute + blocking
+
+  private def allocationPerOp[A](runs: Int)(op: IO[A]): Long =
+    val program =
+      for
+        _      <- op
+        before <- allocatedByMeasuredThreads
+        _      <- op.replicateA_(runs)
+        after  <- allocatedByMeasuredThreads
+      yield (after - before) / runs
+    program.unsafeRunSync()(using isolated)
+
+  private val DirtyBytes = 10 * 1024
+
+  // One dirty buffer of `DirtyBytes` among `cleanBuffers` saved 1 MB files that are merely open.
+  private def editIdleSessionState(
+    cleanBuffers: Int,
+    dirtyText: String = "d" * DirtyBytes,
+    cleanText: String = "0123456789abcde\n" * 65536
+  ): AppState =
+    val initial = AppState.initial
+    val dirtyId = initial.persisted.bufferOrder.head
+    val dirty   = Buffer.fromString(dirtyId, dirtyText)
+    val clean =
+      (1 to cleanBuffers).toList.map(n => Buffer.fromFile(BufferId(1000 + n), Path.of(s"/clean/$n.txt"), cleanText))
+    initial.copy(persisted =
+      initial.persisted.copy(
+        buffers = (dirty.copy(document = dirty.document.copy(isDirty = true)) :: clean).map(b => b.id -> b).toMap,
+        bufferOrder = dirtyId :: clean.map(_.id)
+      )
+    )
+
+  private def newSession(): SessionManager =
+    SessionManager.create(
+      Files.createTempDirectory("io-budget-edit-idle"),
+      AppThemeManager.create,
+      NoOpLogger.impl[IO],
+      SessionManager.SessionPolicy.interactive
+    )
+
   "IO budget" should "be measured for file saves and focus-in" in {
     assume(countersAvailable)
     List(1, 10).foreach { megabytes =>
@@ -124,6 +177,62 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
       if megabytes == 10 then
         withClue("the payload is written once, not twice: ")(cost.written should be < (megabytes * Megabyte * 3 / 2))
     }
+  }
+
+  it should "keep an edit-idle session save to the bytes of what was edited" in {
+    assume(countersAvailable)
+    val session = newSession()
+    val state   = editIdleSessionState(cleanBuffers = 9)
+    val steady  = measure("edit-idle save, 1 dirty 10KB + 9 clean 1MB", 10)(session.saveSession(state))
+    val edits   = Ref.unsafe[IO, Int](0)
+    val typing = measure("edit-idle save after an edit", 10)(
+      edits.updateAndGet(_ + 1).flatMap(n => session.saveSession(editIdleSessionState(9, s"$n" * DirtyBytes)))
+    )
+    withClue("clean buffers are not read: ")(steady.read should be < 64L * 1024)
+    withClue("an unchanged dirty buffer is not written again: ")(steady.written should be < 64L * 1024)
+    withClue("an edited dirty buffer is written once, beside the session JSON: ")(
+      typing.written should be < DirtyBytes + 64L * 1024
+    )
+    withClue("clean buffers are not read after an edit either: ")(typing.read should be < 64L * 1024)
+  }
+
+  it should "allocate independently of the size of the clean buffers on an edit-idle session save" in {
+    assume(threadMemory.exists(_.isThreadAllocatedMemorySupported))
+    val tiny  = allocationPerOp(10)(newSession().saveSession(editIdleSessionState(cleanBuffers = 9, cleanText = "x\n")))
+    val large = allocationPerOp(10)(newSession().saveSession(editIdleSessionState(cleanBuffers = 9)))
+    val absent = allocationPerOp(10)(newSession().saveSession(editIdleSessionState(cleanBuffers = 0)))
+    info(
+      f"[ALLOC-BUDGET] edit-idle save alloc/op: 0 clean=$absent%,d B  9 clean 2B=$tiny%,d B  9 clean 1MB=$large%,d B"
+    )
+    withClue("nine open megabytes cost the save nothing beyond nine tiny buffers: ")(
+      large - tiny should be < 16L * 1024
+    )
+    withClue("a clean buffer costs its session entry, not its text: ")((large - absent) / 9 should be < 16L * 1024)
+  }
+
+  it should "allocate next to nothing on a session save that has nothing to write" in {
+    assume(threadMemory.exists(_.isThreadAllocatedMemorySupported))
+    val state = editIdleSessionState(cleanBuffers = 9)
+    val steady =
+      val session = newSession()
+      allocationPerOp(20)(session.saveSession(state))
+    info(f"[ALLOC-BUDGET] session save with nothing to write: $steady%,d B/op")
+    withClue("re-encoding the whole session state is what a no-change save used to cost: ")(
+      steady should be < 32L * 1024
+    )
+  }
+
+  it should "allocate a bounded amount on an edit-idle session save that has something to write" in {
+    assume(threadMemory.exists(_.isThreadAllocatedMemorySupported))
+    val session = newSession()
+    val edits   = Ref.unsafe[IO, Int](0)
+    // Built up front, so the measurement holds the save and not the building of the state it saves.
+    val states = Vector.tabulate(22)(n => editIdleSessionState(9, s"$n" * DirtyBytes, cleanText = "x\n"))
+    val typing = allocationPerOp(20)(edits.getAndUpdate(_ + 1).flatMap(n => session.saveSession(states(n))))
+    info(f"[ALLOC-BUDGET] edit-idle save after an edit: $typing%,d B/op")
+    withClue("the session's settings are encoded again on every edit unless they are unchanged: ")(
+      typing should be < 384L * 1024
+    )
   }
 
   it should "count external-change watcher wakeups" in {

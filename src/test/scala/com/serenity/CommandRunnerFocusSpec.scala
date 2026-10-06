@@ -8,6 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -30,7 +31,7 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerFocusSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   private def currentRunner(stateManager: StateManager) =
     stateManager.getCurrentState
