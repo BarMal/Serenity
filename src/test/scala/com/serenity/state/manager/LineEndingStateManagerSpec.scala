@@ -67,6 +67,31 @@ class LineEndingStateManagerSpec extends AnyFlatSpec with Matchers with StateMan
     savedBytes(file) shouldBe "a\r\nb\r\nc\r\n"
   }
 
+  it should "say what a save wrote when no ending was chosen" in {
+    val file               = fileWith("a\r\nb\r\nc\n")
+    val (editor, bufferId) = opened(file)
+
+    editor.fileService.saveBuffer(bufferId).timeout(20.seconds).unsafeRunSync()
+
+    val state = awaitState(editor)(promptTitles(_).contains("Line endings changed")).unsafeRunSync()
+    val messages = state.runtime.uiSurfaces
+      .map(_.content)
+      .collect { case SurfaceContent.ModalWorkflow(Modal.Confirm(prompt)) => prompt.message }
+      .flatten
+    messages should contain("Saved with CRLF line endings; the file had 1 LF, 2 CRLF.")
+  }
+
+  it should "not say so after the user chose an ending" in {
+    val file               = fileWith("a\r\nb\r\nc\n")
+    val (editor, bufferId) = opened(file)
+    editor.executeCommand(LineEndingCommands.set(bufferId, LineEnding.Lf)).timeout(20.seconds).unsafeRunSync()
+
+    saveAndAwaitClean(editor, bufferId)
+
+    savedBytes(file) shouldBe "a\nb\nc\n"
+    promptTitles(editor.getCurrentState.unsafeRunSync()) should not contain "Line endings changed"
+  }
+
   "Opening a file with one line ending" should "show no notice" in {
     val (editor, _) = opened(fileWith("a\r\nb\r\n"))
 

@@ -46,6 +46,7 @@ private[manager] object FileResults:
             encoding = saved.document.encoding,
             hasBom = saved.document.hasBom,
             mixedLineEndings = None,
+            mixedNoticePending = false,
             isDirty = current.document.isDirty && !unchanged
           )
           val richText =
@@ -59,7 +60,13 @@ private[manager] object FileResults:
             else current.richText.copy(richTextFidelity = None)
           withBuffer(state, current.copy(document = document, richText = richText))
         }
-    val settled = NoticeReducer.withoutTopic(merged, NoticeTopic.FileSave(save.bufferId))
+    val told =
+      save.snapshot.document.mixedLineEndings
+        .filter(_ => merged ne state)
+        .fold(merged)(counts =>
+          LineEndingChoice.withSavedMixedNotice(merged, save.bufferId, save.snapshot.document.lineEnding, counts)
+        )
+    val settled = NoticeReducer.withoutTopic(told, NoticeTopic.FileSave(save.bufferId))
     if save.kind == SaveKind.SaveAs then withRecentFile(settled, save.target) else settled
 
   /** Replaces the buffer's content with the disk's, unless it was edited after the reload was requested. */
@@ -80,14 +87,9 @@ private[manager] object FileResults:
             current.document.content,
             disk.document.content
           )
-        LineEndingChoice.withMixedNoticeIfNeeded(
-          withBuffer(
-            state,
-            current
-              .copy(document = disk.document, richText = disk.richText, annotations = annotations)
-              .clampedToContent
-          ),
-          bufferId
+        withBuffer(
+          state,
+          current.copy(document = disk.document, richText = disk.richText, annotations = annotations).clampedToContent
         )
       )
 
@@ -118,7 +120,7 @@ private[manager] object FileResults:
       focused.runtime.viewportSize.fold(focused)(viewportSize =>
         LayoutEngine.syncViewportDimensions(focused, viewportSize)
       )
-    LineEndingChoice.withMixedNoticeIfNeeded(withRecentFile(resized, path), bufferId)
+    withRecentFile(resized, path)
 
   private def withBuffer(state: AppState, buffer: Buffer): AppState =
     state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(buffer.id, buffer)))

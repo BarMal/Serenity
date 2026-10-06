@@ -7,6 +7,7 @@ import com.serenity.config.StatusSegment
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
+import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.text.{LineEnding, LineEndingCounts}
 import com.serenity.ui.widget.Loadable
 import org.scalatest.flatspec.AnyFlatSpec
@@ -89,21 +90,72 @@ class LineEndingChoiceSpec extends AnyFlatSpec with Matchers:
     choices.map(_.action) shouldBe LineEnding.values.toList.map(LineEndingCommands.set(bufferId, _))
   }
 
-  "Opening a mixed file" should "say what saving will do and offer the other endings" in {
-    val (state, bufferId) = withBuffer(_.copy(mixedLineEndings = Some(mixed), lineEnding = mixed.dominant))
+  private def pending(state: AppState, bufferId: BufferId): AppState =
+    state.copy(persisted =
+      state.persisted.copy(buffers =
+        state.persisted.buffers.updatedWith(bufferId)(
+          _.map(buffer =>
+            buffer.copy(document =
+              buffer.document.copy(
+                mixedLineEndings = Some(mixed),
+                lineEnding = mixed.dominant,
+                mixedNoticePending = true
+              )
+            )
+          )
+        )
+      )
+    )
 
-    val shown = prompts(LineEndingChoice.withMixedNoticeIfNeeded(state, bufferId))
+  "Opening a mixed file" should "say what saving will do and offer the other endings" in {
+    val (state, bufferId) = withBuffer(identity)
+
+    val told  = LineEndingChoice.withPendingNotice(pending(state, bufferId))
+    val shown = prompts(told)
 
     shown.map(_.title) shouldBe List("Mixed line endings")
     shown.flatMap(_.message) should contain("This file has 1 LF, 2 CRLF line endings.")
     shown.flatMap(_.message) should contain("Saving will write every line ending as CRLF.")
     shown.flatMap(_.choices.items.toList.map(_.label)) shouldBe List("OK", "Use LF instead", "Use CR instead")
+    told.persisted.buffers(bufferId).document.mixedNoticePending shouldBe false
   }
 
   it should "say nothing for a file with one line ending" in {
+    val (state, _) = withBuffer(identity)
+
+    prompts(LineEndingChoice.withPendingNotice(state)) shouldBe Nil
+  }
+
+  it should "say it only once" in {
+    val (state, bufferId) = withBuffer(identity)
+    val told              = LineEndingChoice.withPendingNotice(pending(state, bufferId))
+
+    prompts(LineEndingChoice.withPendingNotice(told.dismissTopModal)) shouldBe Nil
+  }
+
+  it should "wait behind a modal and say it once that closes" in {
+    val (state, bufferId) = withBuffer(identity)
+    val blocked =
+      ModalStateReducer.show(Modal.Confirm(ConfirmPrompt.startupNotice("Welcome")), pending(state, bufferId)).state
+
+    val held = LineEndingChoice.withPendingNotice(blocked)
+
+    prompts(held).map(_.title) shouldBe List("Serenity")
+    held.persisted.buffers(bufferId).document.mixedNoticePending shouldBe true
+
+    val told = LineEndingChoice.withPendingNotice(held.dismissTopModal)
+
+    prompts(told).map(_.title) shouldBe List("Mixed line endings")
+  }
+
+  "Saving a mixed file without choosing an ending" should "say which ending was written and what the file had" in {
     val (state, bufferId) = withBuffer(identity)
 
-    prompts(LineEndingChoice.withMixedNoticeIfNeeded(state, bufferId)) shouldBe Nil
+    val told = LineEndingChoice.withSavedMixedNotice(state, bufferId, LineEnding.Crlf, mixed)
+
+    prompts(told).flatMap(_.message) should contain(
+      "Saved with CRLF line endings; the file had 1 LF, 2 CRLF."
+    )
   }
 
   "The status line" should "show the line ending, and that a mixed file was mixed" in {

@@ -4,7 +4,8 @@ import cats.effect.IO
 import com.serenity.command.LineEndingCommands
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
-import com.serenity.text.LineEnding
+import com.serenity.state.undo.HistoryEntry
+import com.serenity.text.{LineEnding, LineEndingCounts}
 
 /** The decisions behind line endings (#1964): the picker, applying a choice, and telling the user when a file they
   * opened is mixed, since saving writes one ending throughout.
@@ -36,15 +37,45 @@ object LineEndingChoice:
       )
     )
 
-  /** The mixed-line-endings prompt for `bufferId`, when it was loaded mixed and the user has not chosen an ending. */
-  def withMixedNoticeIfNeeded(state: AppState, bufferId: BufferId): AppState =
-    state.persisted.buffers
+  /** [[withLineEnding]] on the model, recorded as one undo step when it changes anything. */
+  def changed(model: Model, bufferId: BufferId, ending: LineEnding): Model =
+    model.app.persisted.buffers
       .get(bufferId)
-      .flatMap(buffer => buffer.document.mixedLineEndings.map(buffer -> _))
-      .fold(state) { (buffer, counts) =>
-        val prompt = ConfirmPrompt.mixedLineEndings(bufferId, label(buffer), counts)
-        ModalStateReducer.show(Modal.Confirm(prompt), state).state
+      .filter(before => before.document.withLineEnding(ending) ne before.document)
+      .fold(model) { before =>
+        val undo = UndoRecording.recorded(model.undo, HistoryEntry.LineEndingChange.capture(before), groupable = false)
+        model.copy(app = withLineEnding(model.app, bufferId, ending), undo = undo)
       }
+
+  /** The mixed-line-endings prompt for the first buffer still owed one. Held back while a modal has the focus, so the
+    * notice is not lost behind it: the next commit after it closes shows it.
+    */
+  def withPendingNotice(state: AppState): AppState =
+    if state.isModalFocus then state
+    else
+      state.persisted.buffers.values
+        .find(buffer => buffer.document.mixedNoticePending && buffer.document.mixedLineEndings.isDefined)
+        .fold(state) { buffer =>
+          val told = buffer.copy(document = buffer.document.copy(mixedNoticePending = false))
+          val withTold =
+            state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(buffer.id, told)))
+          buffer.document.mixedLineEndings.fold(withTold) { counts =>
+            val prompt = ConfirmPrompt.mixedLineEndings(buffer.id, label(buffer), counts)
+            ModalStateReducer.show(Modal.Confirm(prompt), withTold).state
+          }
+        }
+
+  /** After a save that wrote `written` over a mixed file the user never chose an ending for: what changed. */
+  def withSavedMixedNotice(
+    state: AppState,
+    bufferId: BufferId,
+    written: LineEnding,
+    counts: LineEndingCounts
+  ): AppState =
+    state.persisted.buffers.get(bufferId).fold(state) { buffer =>
+      val prompt = ConfirmPrompt.savedMixedLineEndings(label(buffer), written, counts)
+      ModalStateReducer.show(Modal.Confirm(prompt), state).state
+    }
 
   private def label(buffer: Buffer): String =
     buffer.document.filePath
@@ -53,11 +84,12 @@ object LineEndingChoice:
 
 final private[manager] class LineEndingEffects(
     currentState: IO[AppState],
-    commitState: (AppState, AppState) => IO[Unit]
+    commitState: (AppState, AppState) => IO[Unit],
+    updateModelValidated: (Model => Option[Model]) => IO[Unit]
 ):
 
   def chooseLineEnding: IO[Unit] =
     currentState.flatMap(current => LineEndingChoice.withPickerOpened(current).fold(IO.unit)(commitState(_, current)))
 
   def setLineEnding(bufferId: BufferId, ending: LineEnding): IO[Unit] =
-    currentState.flatMap(current => commitState(LineEndingChoice.withLineEnding(current, bufferId, ending), current))
+    updateModelValidated(model => Some(LineEndingChoice.changed(model, bufferId, ending)))

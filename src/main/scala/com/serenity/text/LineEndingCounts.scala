@@ -18,6 +18,13 @@ final case class LineEndingCounts(lf: Int, crlf: Int, cr: Int):
 
   def isMixed: Boolean = LineEnding.values.count(ending => count(ending) > 0) > 1
 
+  /** Each terminator present with its count, such as `40 LF, 3 CRLF`. */
+  def describe: String =
+    LineEnding.values.toList
+      .filter(ending => count(ending) > 0)
+      .map(ending => s"${count(ending)} ${ending.label}")
+      .mkString(", ")
+
   /** The majority terminator; a tie goes to the earliest of `Lf`, `Crlf`, `Cr`, so an empty or single-line file is
     * `Lf`.
     */

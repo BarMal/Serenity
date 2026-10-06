@@ -211,6 +211,7 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
         language = languageFromPath(path),
         lineEnding = lineEndings.dominant,
         mixedLineEndings = Option.when(lineEndings.isMixed)(lineEndings),
+        mixedNoticePending = lineEndings.isMixed,
         encoding = decoded.encoding,
         hasBom = decoded.hasBom,
         revision = revision
@@ -252,7 +253,8 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
         isDirty = false,
         language = languageFromPath(path),
         revision = revision,
-        mixedLineEndings = None
+        mixedLineEndings = None,
+        mixedNoticePending = false
       ),
       // `richTextDocument` (when present) is `richTextDocumentForSave(buffer)`'s result, already proven to match
       // `buffer.document.content` -- which this save doesn't change -- so it's synced at `buffer`'s current version

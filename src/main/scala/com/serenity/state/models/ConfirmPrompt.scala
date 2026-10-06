@@ -226,15 +226,11 @@ object ConfirmPrompt:
     * and the answer is also available as a command until the file is saved.
     */
   def mixedLineEndings(bufferId: BufferId, bufferLabel: String, counts: LineEndingCounts): ConfirmPrompt =
-    val breakdown =
-      LineEnding.values.toList
-        .filter(ending => counts.count(ending) > 0)
-        .map(ending => s"${counts.count(ending)} ${ending.label}")
     of(
       title = "Mixed line endings",
       message = List(
         bufferLabel,
-        s"This file has ${breakdown.mkString(", ")} line endings.",
+        s"This file has ${counts.describe} line endings.",
         s"Saving will write every line ending as ${counts.dominant.label}."
       ),
       choices = ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary) ::
@@ -243,5 +239,15 @@ object ConfirmPrompt:
           .map(ending =>
             ConfirmChoice(s"Use ${ending.label} instead", ConfirmAction.Run(LineEndingCommands.set(bufferId, ending)))
           ),
+      blocking = false
+    )
+
+  /** A mixed file was saved without the user having chosen an ending (#1964), so the lines that changed are reported.
+    */
+  def savedMixedLineEndings(bufferLabel: String, written: LineEnding, counts: LineEndingCounts): ConfirmPrompt =
+    of(
+      title = "Line endings changed",
+      message = List(bufferLabel, s"Saved with ${written.label} line endings; the file had ${counts.describe}."),
+      choices = List(ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary)),
       blocking = false
     )

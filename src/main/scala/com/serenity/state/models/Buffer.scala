@@ -92,7 +92,9 @@ final case class Document(
     contentVersion: Long = 0L,
     // Set on load when the file mixed terminators and cleared once a save has made it uniform or the user has chosen
     // `lineEnding` (#1964): until then a save rewrites lines the user never touched, which the editor has to say.
-    mixedLineEndings: Option[LineEndingCounts] = None
+    mixedLineEndings: Option[LineEndingCounts] = None,
+    // The user has not yet been told about `mixedLineEndings`: it waits for no modal to be in the way.
+    mixedNoticePending: Boolean = false
 ):
 
   /** The line ending saved from now on. Marks the document dirty whenever that changes the bytes a save writes, which
@@ -100,7 +102,7 @@ final case class Document(
     */
   def withLineEnding(ending: LineEnding): Document =
     if ending == lineEnding && mixedLineEndings.isEmpty then this
-    else copy(lineEnding = ending, mixedLineEndings = None, isDirty = true)
+    else copy(lineEnding = ending, mixedLineEndings = None, mixedNoticePending = false, isDirty = true)
 
   /** The only sanctioned way to change `content`: keeps `contentVersion` monotonically increasing so a
     * `richTextDocument` stamped against the old version is correctly seen as stale by `Buffer.richTextInSync`, without

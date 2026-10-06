@@ -73,7 +73,7 @@ final private[manager] class StateManagerEffectHandlers(
   )
 
   private val reopenEffects     = new ReopenWithEncodingEffects(currentState, commitState, editor, fileManager)
-  private val lineEndingEffects = new LineEndingEffects(currentState, commitState)
+  private val lineEndingEffects = new LineEndingEffects(currentState, commitState, updateModelValidated)
   private val manuscriptExport  = new ManuscriptExportEffects(logger, fileDialog, editor, currentState, commitState)
 
   private val configEffects = new StateManagerConfigEffects(
