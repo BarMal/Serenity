@@ -12,7 +12,7 @@ import org.scalatest.matchers.should.Matchers
 class CommandRunnerCommandBindingsSpec extends AnyFlatSpec with Matchers:
 
   "CommandRunner.commandBindings" should "only key on command names that are currently registered" in {
-    val registeredNames = CommandRegistry.default.getAllCommands.map(_.name).toSet
+    val registeredNames = CommandRegistry.withToggleUI.getAllCommands.map(_.name).toSet
     val boundNames      = CommandRunner.commandBindings(AppConfig.default).keySet
 
     boundNames.diff(registeredNames) shouldBe Set.empty

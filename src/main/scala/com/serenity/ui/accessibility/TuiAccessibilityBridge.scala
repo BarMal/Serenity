@@ -10,9 +10,8 @@ import java.util.concurrent.atomic.AtomicReference
   * on the emulator's own widget, a console screen reader, ...) reading that text and the window title directly. This
   * bridge speaks to that baseline instead of inventing one:
   *
-  *   - OSC 0 retitles the terminal window with the focused node's role, name, value and selection state on every focus
-  *     change, so a screen reader's window-title-changed announcement fires. The title is otherwise dead weight the
-  *     emulator paints once at startup and never revisits.
+  *   - OSC 0 retitles the terminal window with the title the runtime supplies, rewriting it only when it changes, so a
+  *     screen reader's window-title-changed announcement fires. The title carries no document text.
   *   - An OSC 9 desktop notification carries every [[AccessibilityAnnouncement]] `AccessibilitySnapshot` computes,
   *     since raw text alone -- what a generic screen reader reading the terminal's cell grid already gets -- carries no
   *     semantic role, focus or selection state (a bare "Save" reads the same whether it is a button label or a status
@@ -26,21 +25,15 @@ final class TuiAccessibilityBridge(write: String => Unit):
 
   private val previousTitle = new AtomicReference[Option[String]](None)
 
-  def publish(snapshot: AccessibilitySnapshot): Unit =
-    val title = snapshot.focused.map(describe).getOrElse(DefaultTitle)
+  def publishTitle(title: String): Unit =
     if !previousTitle.get.contains(title) then
       write(setTitle(title))
       previousTitle.set(Some(title))
+
+  def publish(snapshot: AccessibilitySnapshot): Unit =
     snapshot.announcements.foreach(announcement => write(notifyAnnouncement(announcement.message)))
 
-  private def describe(node: AccessibleNode): String =
-    val value     = node.value.filter(_.nonEmpty).fold("")(current => s": $current")
-    val selection = if node.selected then ", selected" else ""
-    s"${node.role.toString.toLowerCase} ${node.name}$value$selection"
-
 object TuiAccessibilityBridge:
-  private val DefaultTitle = "Serenity editor"
-
   private val Escape: Char = 0x1b.toChar
   private val Bel: Char    = 0x07.toChar
 
