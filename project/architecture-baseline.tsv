@@ -12,7 +12,6 @@ main/scala/com/serenity/app/RuntimeDisplayState.scala	forbidden mutable state at
 main/scala/com/serenity/io/SwingFileDialog.scala	forbidden mutable state at line 35: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/rope/Rope.scala	file length	615
 main/scala/com/serenity/spellcheck/HunspellFreeCompoundMatcher.scala	forbidden mutable state at line 106: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	601
 main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 272: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 346: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererEntryPoints.scala	forbidden mutable state at line 74: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
@@ -33,7 +32,5 @@ test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	722
 test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	713
 test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	646
 test/scala/com/serenity/SpellCheckerSpec.scala	file length	602
-test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	748
-test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	292
 test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	619
 test/scala/com/serenity/ui/tui/TerminalEmulator.scala	method interpret	84

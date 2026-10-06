@@ -1,76 +1,29 @@
 package com.serenity.perf
 
-import java.awt.Font
-import java.awt.image.BufferedImage
 import java.nio.file.{Files, Path}
 
 import cats.effect.{IO, Resource}
-import com.serenity.config.{AppConfig, MarkdownViewMode}
-import com.serenity.keystroke.events.{
-  DeleteBackward,
-  DeleteWordBackward,
-  ExtendSelectionRight,
-  InsertChar,
-  MoveDown,
-  MoveRight,
-  ScrollDown
-}
-import com.serenity.lsp.client.{DocumentUri, LspFramer}
-import com.serenity.lsp.config.LanguageId
-import com.serenity.markdown.{MarkdownDocumentPreview, MarkdownPreviewCache}
-import com.serenity.perf.BenchmarkFixtures.{
-  deepViewport,
-  editorState,
-  editorStateForRichDocument,
-  largeFindDocument,
-  largeMarkdownDocument,
-  largeMultilineDocument,
-  largeRichTextDocument,
-  largeSingleLineJson,
-  withCursorsOnConsecutiveLines
-}
+import com.serenity.lsp.client.LspFramer
+import com.serenity.perf.BenchmarkFixtures.largeSingleLineJson
 import com.serenity.project.{ProjectTaskDetector, ProjectTaskKind, ProjectTaskTerminal}
 import com.serenity.rope.{Balance, Rope}
-import com.serenity.state.manager.RenderCaches
-import com.serenity.state.models.*
-import com.serenity.state.reducers.{EditorEventReducer, ModalEventReducer}
-import com.serenity.ui.layout.{CellMetrics, Layout, TextLayoutSnapshot}
-import com.serenity.ui.renderer.{
-  CharacterRenderer,
-  FontSpec,
-  Java2DRenderSurface,
-  RendererCursorOverlay,
-  RendererEntryPoints
-}
 import com.serenity.ui.terminal.SwingWindow
-import com.serenity.ui.theme.Theme
-import com.serenity.ui.widget.TextField
 import io.circe.Json
 
 object PerformanceBenchmarks:
 
-  private val reusableFramePools = Map(
-    1.0 -> new SwingWindow.ReusableImagePool,
-    2.0 -> new SwingWindow.ReusableImagePool
-  )
-
   given Balance = Balance.default
-
-  private val monoFont      = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val textFont      = Font(Font.SERIF, Font.PLAIN, 14)
-  private val uiFont        = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-  private val cellMetrics   = CellMetrics.fromFont(monoFont)
-  private val uiMetrics     = CellMetrics.fromFont(uiFont)
-  private val viewportSize  = BenchmarkFixtures.viewportSize
-  private val frameWidthPx  = viewportSize.width * cellMetrics.charWidth
-  private val frameHeightPx = viewportSize.height * cellMetrics.lineHeight
 
   def main(args: Array[String]): Unit =
     import cats.effect.unsafe.implicits.global
 
     SwingWindow
-      .resource(metrics = cellMetrics, chromeMetrics = uiMetrics)
-      .flatMap(window => LaptopFrameBenchmarks.presentWindowResource(cellMetrics, uiMetrics).map(window -> _))
+      .resource(metrics = RenderBenchmarks.cellMetrics, chromeMetrics = RenderBenchmarks.uiMetrics)
+      .flatMap(window =>
+        LaptopFrameBenchmarks
+          .presentWindowResource(RenderBenchmarks.cellMetrics, RenderBenchmarks.uiMetrics)
+          .map(window -> _)
+      )
       .flatMap(windows => projectTaskFixtureResource.map(projectRoot => windows -> projectRoot))
       .use {
         case ((window, presentWindow), projectRoot) =>
@@ -82,273 +35,21 @@ object PerformanceBenchmarks:
       }
       .unsafeRunSync()
 
-  /** Reducer benchmarks, extracted so `benchmarks` is not a single monolith and so the per-family coverage #993 depends
-    * on is visible in one place.
-    */
-  private[perf] def reducerBenchmarks(
-    editingState: AppState,
-    plainScrollState: AppState,
-    richScrollState: AppState,
-    deepViewport: Viewport
-  ): List[BenchmarkRunner.Benchmark] =
-    val normalEditingResult = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), editingState)
-    val backspaceResult     = EditorEventReducer.reduce(DeleteBackward, PaneId(0), editingState)
-    val wordDeleteResult    = EditorEventReducer.reduce(DeleteWordBackward, PaneId(0), editingState)
-    val moveRightResult     = EditorEventReducer.reduce(MoveRight, PaneId(0), editingState)
-    val extendRightResult   = EditorEventReducer.reduce(ExtendSelectionRight, PaneId(0), editingState)
-    val multiCursorState    = withCursorsOnConsecutiveLines(editingState, 50, fromLine = 5_000, column = 4)
-    val multiCursorWrapState = multiCursorState.copy(persisted =
-      multiCursorState.persisted.copy(config = multiCursorState.persisted.config.withWordWrap(true))
-    )
-    val multiInsertResult   = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
-    val multiMoveResult     = EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
-    val multiMoveDownResult = com.serenity.VerticalNavSupport.dispatch(MoveDown, PaneId(0), multiCursorWrapState)
-    val plainScrollResult   = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
-    val richScrollResult    = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
-    val originalLine        = editingState.persisted.buffers.get(BufferId(1)).flatMap(_.document.content.getLine(6_000))
-    val expectedEditedLine  = originalLine.map(_.patch(12, "x", 0))
-    val expectedBackspacedLine = originalLine.map(_.patch(11, "", 1))
-
-    def editedLine(result: com.serenity.state.reducers.ReducerResult): Option[String] =
-      result.state.persisted.buffers.get(BufferId(1)).flatMap(_.document.content.getLine(6_000))
-
-    def reducedBuffer(result: com.serenity.state.reducers.ReducerResult): Option[Buffer] =
-      result.state.persisted.buffers.get(BufferId(1))
-
-    def reducedCursor(result: com.serenity.state.reducers.ReducerResult): Option[CursorPosition] =
-      reducedBuffer(result).flatMap(_.editing.cursorPositions.headOption)
-
-    def reducedSelection(result: com.serenity.state.reducers.ReducerResult): Option[Selection] =
-      reducedBuffer(result).flatMap(_.primarySelection)
-
-    List(
-      BenchmarkRunner.Benchmark(
-        "reducer.normal_editing",
-        3,
-        BenchmarkIterationCounts.Reducer,
-        () =>
-          assert(
-            expectedEditedLine.exists(line => editedLine(normalEditingResult).contains(line))
-          ),
-        () => EditorEventReducer.reduce(InsertChar('x'), PaneId(0), editingState)
-      ),
-      BenchmarkRunner.Benchmark(
-        "reducer.backspace",
-        3,
-        BenchmarkIterationCounts.Reducer,
-        () =>
-          assert(
-            expectedBackspacedLine.exists(line => editedLine(backspaceResult).contains(line))
-          ),
-        () => EditorEventReducer.reduce(DeleteBackward, PaneId(0), editingState)
-      ),
-      BenchmarkRunner.Benchmark(
-        "reducer.delete_word_backward",
-        3,
-        BenchmarkIterationCounts.Reducer,
-        () =>
-          assert(
-            editedLine(wordDeleteResult).exists(_.length < expectedBackspacedLine.fold(0)(_.length))
-          ),
-        () => EditorEventReducer.reduce(DeleteWordBackward, PaneId(0), editingState)
-      ),
-      BenchmarkRunner.Benchmark(
-        "reducer.arrow_navigation",
-        3,
-        BenchmarkIterationCounts.Reducer,
-        () => assert(reducedCursor(moveRightResult).exists(_.column == 13)),
-        () => EditorEventReducer.reduce(MoveRight, PaneId(0), editingState)
-      ),
-      BenchmarkRunner.Benchmark(
-        "reducer.extend_selection",
-        3,
-        BenchmarkIterationCounts.Reducer,
-        () => assert(reducedSelection(extendRightResult).exists(_.focus.column == 13)),
-        () => EditorEventReducer.reduce(ExtendSelectionRight, PaneId(0), editingState)
-      ),
-      BenchmarkRunner.Benchmark(
-        "reducer.multi_cursor_insert",
-        3,
-        BenchmarkIterationCounts.Reducer,
-        () => assert(reducedBuffer(multiInsertResult).exists(_.editing.cursors.size == 50)),
-        () => EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
-      ),
-      BenchmarkRunner.Benchmark(
-        "reducer.multi_cursor_move",
-        3,
-        BenchmarkIterationCounts.Reducer,
-        () => assert(reducedBuffer(multiMoveResult).exists(_.editing.cursorPositions.forall(_.column == 5))),
-        () => EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
-      ),
-      BenchmarkRunner.Benchmark(
-        "reducer.multi_cursor_move_down",
-        3,
-        BenchmarkIterationCounts.Reducer,
-        () => assert(reducedBuffer(multiMoveDownResult).exists(_.editing.cursors.size == 50)),
-        () => com.serenity.VerticalNavSupport.dispatch(MoveDown, PaneId(0), multiCursorWrapState)
-      ),
-      BenchmarkRunner.Benchmark(
-        "reducer.deep_scroll.plain",
-        3,
-        BenchmarkIterationCounts.Reducer,
-        () => assert(reducedTopLine(plainScrollResult) == Some(deepViewport.topLine + 40)),
-        () => EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
-      ),
-      BenchmarkRunner.Benchmark(
-        "reducer.deep_scroll.rich_text",
-        3,
-        BenchmarkIterationCounts.Reducer,
-        () => assert(reducedTopLine(richScrollResult) == Some(deepViewport.topLine + 40)),
-        () => EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
-      )
-    )
-
   private def benchmarks(cursorWindow: SwingWindow, projectRoot: Path): List[BenchmarkRunner.Benchmark] =
-    val jsonText             = largeSingleLineJson(entries = 20_000)
-    val multilineText        = largeMultilineDocument(lines = 15_000)
-    val findText             = largeFindDocument(matches = 12_000)
-    val frequentTermDocument = Rope("the " * 500_000)
-    val frequentTermMatches  = FindSearch.search(frequentTermDocument, "the", FindOptions.default, anchor = 0)
-    val markdownLines        = largeMarkdownDocument(sections = 800)
-    val markdownSource       = markdownLines.mkString("\n")
-    // Shared across every markdown benchmark below, matching a real render's cache reuse across calls (#1677).
-    val markdownPreviewCache = MarkdownPreviewCache()
-    val renderCaches         = RenderCaches.create() // reused below, mirroring StateManager (#1677)
-    val longMeasuredLine = TextLayoutSnapshot.visualLineForText(
-      "Wi" * 8_000,
-      bufferLine = 0,
-      textFont
-    )
-    val richDocument      = largeRichTextDocument(lines = 6_000)
-    val richState         = editorStateForRichDocument(richDocument)
-    val multilineState    = editorState(multilineText, None)
-    val markdownStateBase = editorState(markdownSource, Some(LanguageId.Markdown))
-    val markdownState = markdownStateBase.copy(persisted =
-      markdownStateBase.persisted.copy(config =
-        AppConfig.default
-          .withLineNumbers(false)
-          .withoutStatusLine
-          .withWordWrap(false)
-          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
-      )
-    )
-    val commentsState = multilineState.copy(persisted =
-      multilineState.persisted.copy(buffers = multilineState.persisted.buffers.view.mapValues { buffer =>
-        buffer.copy(annotations =
-          buffer.annotations.copy(documentComments =
-            (10 until 3_000 by 3)
-              .map(line => DocumentComment(CursorPosition(line, 0), CursorPosition(line, 20), "note"))
-              .toList
-          )
-        )
-      }.toMap)
-    )
-    val diagnosticsState = commentsState.copy(runtime =
-      commentsState.runtime.copy(languageService = LanguageServiceState(diagnosticsState = benchmarkDiagnosticsState))
-    )
-    val plainScrollState = multilineState.copy(persisted =
-      multilineState.persisted.copy(buffers =
-        multilineState.persisted.buffers.view.mapValues(_.copy(viewport = deepViewport)).toMap
-      )
-    )
-    val deepRichDocument = largeRichTextDocument(lines = 15_000)
-    val deepRichState    = editorStateForRichDocument(deepRichDocument)
-    val richScrollState = deepRichState.copy(persisted =
-      deepRichState.persisted.copy(buffers =
-        deepRichState.persisted.buffers.view
-          .mapValues(_.copy(viewport = deepViewport))
-          .toMap
-      )
-    )
-    val findState = editorState(findText, None)
-    val editingState = findState.copy(persisted =
-      findState.persisted.copy(buffers =
-        findState.persisted.buffers.view
-          .mapValues(buffer => buffer.copy(editing = EditingState(List(CursorPosition(6_000, 12)))))
-          .toMap
-      )
-    )
+    ropeBenchmarks() ++
+      RenderBenchmarks.frameBenchmarks(cursorWindow) ++
+      ReducerBenchmarks.benchmarks() ++
+      DamageBenchmarks.benchmarks() ++
+      CommandRunnerBenchmarks.benchmarks() ++
+      EqualsBenchmarks.benchmarks() ++
+      FindReplaceBenchmarks.benchmarks() ++
+      lspAndProjectBenchmarks(projectRoot) ++
+      RenderBenchmarks.markdownBenchmarks()
+
+  private def ropeBenchmarks(): List[BenchmarkRunner.Benchmark] =
+    val jsonText          = largeSingleLineJson(entries = 20_000)
     val jsonSearchResults = Rope(jsonText).searchAll("\"k19999\"")
     val jsonCursorOffset  = Rope(jsonText).lineColumnToOffset(0, jsonText.length - 5)
-    val layoutSnapshot = plainScrollState.persisted.buffers
-      .get(BufferId(1))
-      .map(buffer =>
-        com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
-          buffer,
-          panelWidthPx = frameWidthPx,
-          monoFont,
-          wordWrapEnabled = false
-        )
-      )
-    val findResultSet = FindResultSet.normalized(
-      "needle",
-      (0 until 12_000).toVector.map(line => FindResult(line, 10)),
-      requestedIndex = 6_000
-    )
-    val findQuerySurfaceId = SurfaceId("benchmark-find")
-    val findQueryState = findState.copy(
-      persisted = findState.persisted.copy(focus = Focus.Surface(findQuerySurfaceId)),
-      runtime = findState.runtime.copy(uiSurfaces =
-        List(
-          UiSurface(
-            findQuerySurfaceId,
-            SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("needle"), Vector.empty, 0)),
-            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          )
-        )
-      )
-    )
-    val findQueryRequest = FindSearchRequest(
-      findQuerySurfaceId,
-      BufferId(1),
-      "needle",
-      findQueryState.persisted.buffers(BufferId(1)).document.content
-    )
-    def landFindQuery(): AppState =
-      val matches = FindSearch.search(
-        findQueryRequest.content,
-        findQueryRequest.query,
-        findQueryRequest.options,
-        findQueryRequest.anchor
-      )
-      ModalEventReducer.applyFindSearchResults(findQueryState, findQueryRequest, matches.results, matches.capped)
-    val completeFindQuery = landFindQuery()
-    val findKeystrokeState = findQueryState.copy(runtime =
-      findQueryState.runtime.copy(uiSurfaces =
-        List(
-          UiSurface(
-            findQuerySurfaceId,
-            SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("needl"), Vector.empty, 0)),
-            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          )
-        )
-      )
-    )
-    val findKeystrokeResult = ModalEventReducer.reduce(ModalType.Find, InsertChar('e'), findKeystrokeState)
-    val lspMessages = (1 to 250).toList.map { id =>
-      Json.obj("jsonrpc" -> Json.fromString("2.0"), "id" -> Json.fromInt(id), "method" -> Json.fromString("benchmark"))
-    }
-    val framedLspMessages = lspMessages.flatMap(LspFramer.encode).toArray
-    val projectTask       = ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test)
-    prepareCursorBaseFrame(plainScrollState, cursorWindow, renderCaches)
-    val fullFrame               = renderedFrame(richState, deviceScale = 1.0, renderCaches)
-    val diagnosticsAndComments  = renderedFrame(diagnosticsState, deviceScale = 1.0, renderCaches)
-    val hidpiFrame              = renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
-    val visibleFindResults      = findResultSet.visibleResults(maxResults = 80)
-    val decodedLspMessages      = decodeLspMessages(framedLspMessages)
-    val projectTaskPresentation = projectTask.map(ProjectTaskTerminal.started)
-    val markdownPreviewWindow =
-      MarkdownDocumentPreview.previewWindow(
-        markdownLines,
-        activeLine = Some(1_200),
-        fallbackTopLine = 1_000,
-        cache = markdownPreviewCache,
-        maxSourceLines = 80
-      )
-    val markdownHtmlFragment =
-      MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
-    val markdownLensFrame     = renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
-    val longMeasuredLineFrame = renderedLongMeasuredLine(longMeasuredLine)
 
     List(
       BenchmarkRunner.Benchmark(
@@ -364,376 +65,38 @@ object PerformanceBenchmarks:
         20,
         () => assert(jsonCursorOffset == jsonText.length - 5),
         () => Rope(jsonText).lineColumnToOffset(0, jsonText.length - 5)
-      ),
+      )
+    )
+
+  private def lspAndProjectBenchmarks(projectRoot: Path): List[BenchmarkRunner.Benchmark] =
+    val lspMessages = (1 to 250).toList.map { id =>
+      Json.obj("jsonrpc" -> Json.fromString("2.0"), "id" -> Json.fromInt(id), "method" -> Json.fromString("benchmark"))
+    }
+    val framedLspMessages       = lspMessages.flatMap(LspFramer.encode).toArray
+    val projectTask             = ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test)
+    val decodedLspMessages      = decodeLspMessages(framedLspMessages)
+    val projectTaskPresentation = projectTask.map(ProjectTaskTerminal.started)
+
+    List(
       BenchmarkRunner.Benchmark(
-        "layout.large_multiline.visible_viewport",
+        "lsp.framer.large_batch",
         3,
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        () => assert(layoutSnapshot.exists(_.visualLines.size == viewportSize.height)),
-        () =>
-          plainScrollState.persisted.buffers.get(BufferId(1)).foreach { buffer =>
-            val _ = com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
-              buffer,
-              panelWidthPx = frameWidthPx,
-              monoFont,
-              wordWrapEnabled = false
-            )
-          }
+        BenchmarkIterationCounts.LspFramer,
+        () => assert(decodedLspMessages == lspMessages),
+        () => decodeLspMessages(framedLspMessages)
       ),
       BenchmarkRunner.Benchmark(
-        "render.full_frame.java2d",
-        2,
-        8,
-        () => assert(renderedFrameHasPixels(fullFrame)),
-        () => renderedFrame(richState, deviceScale = 1.0, renderCaches)
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.long_measured_line.java2d",
-        2,
-        8,
-        () => assert(renderedFrameHasPixels(longMeasuredLineFrame)),
-        () =>
-          val _ = renderedLongMeasuredLine(longMeasuredLine)
-          ()
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.cursor_only.scene_reuse.java2d_overlay",
-        2,
-        8,
-        () => assert(renderedCursorOverlay(plainScrollState, cursorWindow, renderCaches)),
-        () =>
-          val _ = renderedCursorOverlay(plainScrollState, cursorWindow, renderCaches)
-          ()
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.diagnostics_and_comments.java2d",
-        2,
-        8,
-        () => assert(renderedFrameHasPixels(diagnosticsAndComments)),
-        () => renderedFrame(diagnosticsState, deviceScale = 1.0, renderCaches)
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.hidpi_frame.java2d",
-        2,
-        8,
+        "project_task.responsiveness",
+        3,
+        20,
         () =>
           assert(
-            hidpiFrame.getWidth == frameWidthPx * 2 &&
-              hidpiFrame.getHeight == frameHeightPx * 2 &&
-              renderedFrameHasPixels(hidpiFrame)
+            projectTask.exists(command => command.workingDirectory == projectRoot && command.executable == "sbt") &&
+              projectTaskPresentation.exists(_.contains("Running test task"))
           ),
-        () => renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
-      )
-    ) ++ reducerBenchmarks(editingState, plainScrollState, richScrollState, deepViewport) ++
-      DamageBenchmarks.benchmarks() ++ CommandRunnerBenchmarks.benchmarks() ++ equalsBenchmarks() ++ List(
-        BenchmarkRunner.Benchmark(
-          "find_replace.large_result_set",
-          3,
-          20,
-          () => assert(visibleFindResults.size == 80 && visibleFindResults.exists(_._1 == FindResult(6_000, 10))),
-          () => findResultSet.visibleResults(maxResults = 80)
-        ),
-        BenchmarkRunner.Benchmark(
-          "find_replace.large_query_update",
-          3,
-          20,
-          () =>
-            assert(
-              completeFindQuery.persisted
-                .buffers(BufferId(1))
-                .findState
-                .exists(found => found.results.length == FindSearch.MatchLimit && found.capped)
-            ),
-          () => landFindQuery()
-        ),
-        // A term in every word of a 2 MB document: the search stops at the match cap instead of collecting them all.
-        BenchmarkRunner.Benchmark(
-          "find_replace.frequent_term_search",
-          3,
-          20,
-          () => assert(frequentTermMatches.capped && frequentTermMatches.results.length == FindSearch.MatchLimit),
-          () => FindSearch.search(frequentTermDocument, "the", FindOptions.default, anchor = 0)
-        ),
-        BenchmarkRunner.Benchmark(
-          "find_replace.large_query_keystroke",
-          3,
-          20,
-          () => assert(findKeystrokeResult.effects.nonEmpty),
-          () => ModalEventReducer.reduce(ModalType.Find, InsertChar('e'), findKeystrokeState)
-        ),
-        BenchmarkRunner.Benchmark(
-          "lsp.framer.large_batch",
-          3,
-          BenchmarkIterationCounts.LspFramer,
-          () => assert(decodedLspMessages == lspMessages),
-          () => decodeLspMessages(framedLspMessages)
-        ),
-        BenchmarkRunner.Benchmark(
-          "project_task.responsiveness",
-          3,
-          20,
-          () =>
-            assert(
-              projectTask.exists(command => command.workingDirectory == projectRoot && command.executable == "sbt") &&
-                projectTaskPresentation.exists(_.contains("Running test task"))
-            ),
-          () => ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test).map(ProjectTaskTerminal.started)
-        ),
-        BenchmarkRunner.Benchmark(
-          "markdown.preview.window_mapping",
-          3,
-          20,
-          () => assert(markdownPreviewWindow.firstSourceLine >= 0 && markdownPreviewWindow.source.nonEmpty),
-          () =>
-            MarkdownDocumentPreview.previewWindow(
-              markdownLines,
-              activeLine = Some(1_200),
-              fallbackTopLine = 1_000,
-              cache = markdownPreviewCache,
-              maxSourceLines = 80
-            )
-        ),
-        BenchmarkRunner.Benchmark(
-          "markdown.preview.html_fragment",
-          2,
-          8,
-          () => assert(markdownHtmlFragment.contains("<h2>")),
-          () =>
-            MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
-        ),
-        BenchmarkRunner.Benchmark(
-          "render.markdown.inline_lens",
-          2,
-          BenchmarkIterationCounts.RenderMarkdown,
-          () => assert(renderedFrameHasPixels(markdownLensFrame)),
-          () => renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
-        )
-      )
-
-  /** 2,000 synthetic LSP diagnostics attached to a single benchmark document, for the diagnostics-rendering fixture. */
-  private def benchmarkDiagnosticsState: DiagnosticsState =
-    val diagnostics = (0 until 2_000).toList.map { line =>
-      com.serenity.lsp.model.Diagnostic(
-        com.serenity.lsp.model.LspRange(
-          com.serenity.lsp.model.LspPosition(line, 0),
-          com.serenity.lsp.model.LspPosition(line, 8)
-        ),
-        Some(com.serenity.lsp.model.DiagnosticSeverity.Warning),
-        s"benchmark diagnostic $line",
-        Some("benchmark")
-      )
-    }
-    DiagnosticsState(diagnostics = Map(DocumentUri("file:///benchmark.scala") -> diagnostics))
-
-  /** Measures `Buffer.equals`/`AppState.equals` under the three shapes of comparison the reducers actually perform: the
-    * same instance (the hand-rolled `eq` fast path), a `.copy()` of it (a different instance whose fields -- including
-    * the `Rope` content -- are still the same shared references), and an independently built value with equal content
-    * but no shared references anywhere in the tree. Only the last case forces a full structural walk of the `Rope`,
-    * which has no custom `equals` of its own -- this is #1002's deferred "removed, or their retention is justified by
-    * measurement" acceptance criterion.
-    */
-  private def equalsBenchmarks(): List[BenchmarkRunner.Benchmark] =
-    val content     = largeMultilineDocument(lines = 15_000)
-    val stateA      = editorState(content, None)
-    val stateB      = editorState(content, None)
-    val stateACopy  = stateA.copy()
-    val bufferA     = stateA.persisted.buffers(BufferId(1))
-    val bufferB     = stateB.persisted.buffers(BufferId(1))
-    val bufferACopy = bufferA.copy()
-
-    List(
-      BenchmarkRunner.Benchmark(
-        "equals.appstate.same_reference",
-        3,
-        20,
-        () => assert(stateA == stateA),
-        () => stateA == stateA
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.appstate.shared_fields_different_instance",
-        3,
-        20,
-        () => assert(stateA == stateACopy),
-        () => stateA == stateACopy
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.appstate.independent_equal_content",
-        3,
-        20,
-        () => assert(stateA == stateB),
-        () => stateA == stateB
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.buffer.same_reference",
-        3,
-        20,
-        () => assert(bufferA == bufferA),
-        () => bufferA == bufferA
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.buffer.shared_fields_different_instance",
-        3,
-        20,
-        () => assert(bufferA == bufferACopy),
-        () => bufferA == bufferACopy
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.buffer.independent_equal_content",
-        3,
-        20,
-        () => assert(bufferA == bufferB),
-        () => bufferA == bufferB
-      )
-    ) ++ multiBufferEqualsBenchmarks()
-
-  /** The equals-benchmark scenarios above compare a single buffer in isolation, but `AppState.equals` walks the whole
-    * `persisted.buffers` map on every dispatched event. A real session has many open buffers, and the common case is
-    * one buffer edited while the rest are untouched -- so this measures a 30-buffer session under that exact shape,
-    * where 29 of 30 map entries are the same `Buffer` references across both sides of the comparison and only one
-    * differs, alongside the same-reference and no-shared-references extremes for contrast.
-    */
-  private def multiBufferEqualsBenchmarks(): List[BenchmarkRunner.Benchmark] =
-    val bufferCount    = 30
-    val linesPerBuffer = 2_000
-    val paneId         = PaneId(0)
-    def session(): AppState =
-      val buffers = (0 until bufferCount).map { i =>
-        val id = BufferId(i)
-        id -> Buffer.fromString(id, largeMultilineDocument(lines = linesPerBuffer))
-      }.toMap
-      AppState.initial.copy(persisted =
-        AppState.initial.persisted.copy(
-          buffers = buffers,
-          bufferOrder = buffers.keys.toList,
-          layout = Layout(
-            editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, BufferId(0))),
-            activeEditorPaneId = Some(paneId),
-            workspaceTree = Some(com.serenity.TestWorkspaceTrees.linear(paneId))
-          )
-        )
-      )
-
-    val baseSession        = session()
-    val independentSession = session()
-
-    val editedBufferId = BufferId(bufferCount - 1)
-    val editedBuffer   = baseSession.persisted.buffers(editedBufferId)
-    val oneEditedBuffers = baseSession.persisted.buffers.updated(
-      editedBufferId,
-      editedBuffer.copy(editing = EditingState(List(CursorPosition(0, 1))))
-    )
-    val oneBufferEditedSession = baseSession.copy(persisted = baseSession.persisted.copy(buffers = oneEditedBuffers))
-
-    List(
-      BenchmarkRunner.Benchmark(
-        "equals.appstate.multi_buffer_session.same_reference",
-        3,
-        20,
-        () => assert(baseSession == baseSession),
-        () => baseSession == baseSession
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.appstate.multi_buffer_session.one_buffer_edited",
-        3,
-        20,
-        () => assert(baseSession != oneBufferEditedSession),
-        () => baseSession == oneBufferEditedSession
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.appstate.multi_buffer_session.independent_equal_content",
-        3,
-        20,
-        () => assert(baseSession == independentSession),
-        () => baseSession == independentSession
+        () => ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test).map(ProjectTaskTerminal.started)
       )
     )
-
-  private def renderedFrame(state: AppState, deviceScale: Double, caches: RenderCaches): BufferedImage =
-    val image = reusableFramePools(deviceScale).acquire(
-      math.ceil(frameWidthPx * deviceScale).toInt,
-      math.ceil(frameHeightPx * deviceScale).toInt,
-      BufferedImage.TYPE_INT_ARGB
-    )
-    val surface = new Java2DRenderSurface(
-      image,
-      cellMetrics,
-      monoFont,
-      _ => (),
-      logicalWidthPx = frameWidthPx,
-      logicalHeightPx = frameHeightPx,
-      deviceScaleX = deviceScale,
-      deviceScaleY = deviceScale
-    )
-    RendererEntryPoints.render(
-      state,
-      cursorVisible = true,
-      surface,
-      viewportSize,
-      FontSpec.fromAwt(monoFont),
-      FontSpec.fromAwt(textFont),
-      cellMetrics,
-      None,
-      caches
-    )
-    reusableFramePools(deviceScale).publish(image)
-    image
-
-  private def renderedFrameHasPixels(image: BufferedImage): Boolean =
-    image.getWidth > 0 && image.getHeight > 0 && ((image.getRGB(0, 0) >>> 24) & 0xff) > 0
-
-  private def renderedLongMeasuredLine(line: com.serenity.state.models.TextVisualLine): BufferedImage =
-    val image = new BufferedImage(frameWidthPx, frameHeightPx, BufferedImage.TYPE_INT_ARGB)
-    val surface = new Java2DRenderSurface(
-      image,
-      cellMetrics,
-      textFont,
-      _ => (),
-      logicalWidthPx = frameWidthPx,
-      logicalHeightPx = frameHeightPx
-    )
-    surface.setFont(FontSpec.fromAwt(textFont))
-    surface.clearViewport(Theme.light.background)
-    CharacterRenderer.renderMeasuredLine(
-      surface,
-      xOriginPx = 0.0f,
-      yPx = 0,
-      lineHeightPx = cellMetrics.lineHeight,
-      ascentPx = cellMetrics.ascent,
-      line,
-      Theme.light,
-      clipRightXPx = Some(frameWidthPx.toFloat)
-    )
-    image
-
-  private def prepareCursorBaseFrame(state: AppState, window: SwingWindow, caches: RenderCaches): Unit =
-    RendererEntryPoints.render(
-      state,
-      cursorVisible = false,
-      window,
-      FontSpec.fromAwt(monoFont),
-      FontSpec.fromAwt(textFont),
-      FontSpec.fromAwt(uiFont),
-      uiMetrics,
-      cursorColor = None,
-      repaintOnFlush = false,
-      caches = caches
-    )
-
-  private def renderedCursorOverlay(state: AppState, window: SwingWindow, caches: RenderCaches): Boolean =
-    RendererCursorOverlay.renderCursorOnly(
-      state,
-      cursorVisible = true,
-      window,
-      FontSpec.fromAwt(monoFont),
-      FontSpec.fromAwt(textFont),
-      FontSpec.fromAwt(uiFont),
-      uiMetrics,
-      None,
-      caches = caches
-    )
-
-  private def reducedTopLine(result: com.serenity.state.reducers.ReducerResult): Option[Int] =
-    result.state.persisted.buffers.get(BufferId(1)).map(_.viewport.topLine)
 
   private def decodeLspMessages(bytes: Array[Byte]): List[Json] =
     import cats.effect.unsafe.implicits.global
