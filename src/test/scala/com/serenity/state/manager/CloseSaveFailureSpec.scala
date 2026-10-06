@@ -14,6 +14,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
@@ -75,7 +76,8 @@ class CloseSaveFailureSpec extends AnyFlatSpec with Matchers:
             uiPresetStore = UiPresetStore(directory.resolve("presets.json")),
             windowSizeProvider = IO.pure(None),
             onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-            fileDialog = None
+            fileDialog = None,
+            dictionaryCache = SharedDictionary.default
           )
           .copy(fileManager = new FailingFileManager(failingNames.map(directory.resolve)))
         stateManager <- StateManager.fromRuntime(runtime)

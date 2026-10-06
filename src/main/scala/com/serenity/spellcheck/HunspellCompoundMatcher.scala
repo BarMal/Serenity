@@ -36,6 +36,9 @@ object CompoundCandidateIndex:
   */
 private[spellcheck] object HunspellCompoundMatcher:
 
+  def ruleFlags(compoundRules: List[String]): Set[String] =
+    compoundRules.flatMap(tokenizeCompoundPattern).map(_.flag).toSet
+
   def matches(
     word: String,
     compoundRules: List[String],

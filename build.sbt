@@ -196,6 +196,14 @@ lazy val root = (project in file("."))
       )
       Seq(file)
     }.taskValue,
+    // The classpath the kill-recovery spec launches its child JVM with: sbt runs specs in its own JVM, whose
+    // `java.class.path` is not the project's.
+    Test / resourceGenerators += Def.task {
+      val file      = (Test / resourceManaged).value / "crash" / "test-classpath.txt"
+      val classpath = (Test / classDirectory).value +: (Test / dependencyClasspath).value.files
+      IO.write(file, classpath.map(_.getAbsolutePath).mkString(java.io.File.pathSeparator))
+      Seq(file)
+    }.taskValue,
     Compile / mainClass := Some("Main"),
     assembly / mainClass := Some("Main"),
     assembly / assemblyJarName := "Serenity.jar",
@@ -233,7 +241,13 @@ lazy val root = (project in file("."))
       // "Upload test reports" step in .github/workflows/desktop-publish.yml, which uploads this directory as a build
       // artifact on every run (`if: always()`) so a future failure's full detail is recoverable even when the
       // console log again comes back summary-only.
-      Tests.Argument(TestFrameworks.ScalaTest, "-u", "target/test-reports")
+      Tests.Argument(TestFrameworks.ScalaTest, "-u", "target/test-reports"),
+      // Master CI's Test job has hung for 50+ minutes with no output and no way to tell which test was stuck: the
+      // console reporter prints nothing per test, and nothing at all for a run that never ends. The slowpoke
+      // detector raises an alert naming any test still running after 120 s, then every 60 s; HangReporter prints
+      // those alerts straight to stdout together with the stacks of the threads running suites.
+      Tests.Argument(TestFrameworks.ScalaTest, "-W", "120", "60"),
+      Tests.Argument(TestFrameworks.ScalaTest, "-C", "com.serenity.testkit.HangReporter")
     ),
     // Real-OS-boundary specs (a genuine loopback socket, a genuine sun.misc.Signal.raise -- see
     // com.serenity.testkit.RealBoundaryTest's doc comment) are excluded from `sbt test`'s discovery of the whole
@@ -303,6 +317,12 @@ libraryDependencies ++= Seq(
   "org.commonmark"   % "commonmark-ext-task-list-items" % commonMarkVersion,
   "org.xhtmlrenderer" % "flying-saucer-core"          % "10.5.0"
 )
+
+// EPUBCheck (W3C, BSD-3-Clause, so compatible with this project's GPL) validates the exported EPUB in specs only.
+// Test scope: it is never on the runtime classpath and never reaches the assembled JAR.
+// xercesImpl is excluded because it takes over the JVM's default XML parser and then rejects the hardening flags
+// RichTextXmlParser sets, which would break every DOCX/ODT spec sharing this test classpath.
+libraryDependencies += ("org.w3c" % "epubcheck" % "5.4.0" % Test).exclude("xerces", "xercesImpl")
 
 val jlineVersion = "3.30.16"
 

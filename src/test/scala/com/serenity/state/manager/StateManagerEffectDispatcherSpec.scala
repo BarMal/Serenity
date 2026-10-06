@@ -7,6 +7,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
 import com.serenity.state.models.{BufferId, SurfaceId}
 import com.serenity.state.reducers.*
+import com.serenity.testkit.RopeText
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -126,7 +127,8 @@ class StateManagerEffectDispatcherSpec extends AnyFlatSpec with Matchers:
 
   it should "route LspQueue to the lspQueue dependency" in {
     val fixture = harness()
-    val effect  = LspQueueEffect.DocumentChanged("file:///a.md", com.serenity.lsp.config.LanguageId.Markdown, "hi")
+    val effect =
+      LspQueueEffect.DocumentChanged("file:///a.md", com.serenity.lsp.config.LanguageId.Markdown, RopeText("hi"))
 
     fixture.interpreter.interpret(AppEffect.LspQueue(effect)).unsafeRunSync()
 

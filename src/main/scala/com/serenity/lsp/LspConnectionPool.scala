@@ -7,6 +7,7 @@ import cats.effect.{IO, Ref, Unique}
 import cats.syntax.all.*
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.LspManager.{ConnectionIdentity, ConnectionProvider, ManagedConnection, ResolvedConnection}
+import com.serenity.lsp.OpenDocument.textOf
 import com.serenity.lsp.client.{
   DocumentUri,
   LspApplyEditRequest,
@@ -41,7 +42,7 @@ final private[lsp] class LspConnectionPool private (
     crashes: Ref[IO, Map[ConnectionIdentity, List[FiniteDuration]]],
     idleSince: Ref[IO, Map[ConnectionIdentity, Unique.Token]],
     documentVersions: Ref[IO, Map[DocumentUri, Int]],
-    documentTexts: Ref[IO, Map[DocumentUri, String]],
+    openDocuments: Ref[IO, OpenDocument.Registry],
     lock: Mutex[IO],
     supervisor: Supervisor[IO],
     provider: ConnectionProvider,
@@ -71,6 +72,12 @@ final private[lsp] class LspConnectionPool private (
             mayConnect(resolved.identity).ifM(spawn(resolved), IO.pure(LspAttachment.Suspended(resolved.identity)))
         }
     }
+
+  /** Whether a server, running or down, is expected to serve `uri`: unlike having a connection, this holds while the
+    * server waits out a restart backoff.
+    */
+  def hasServer(uri: DocumentUri): IO[Boolean] =
+    documents.get.map(_.contains(uri))
 
   def associate(uri: DocumentUri, identity: ConnectionIdentity): IO[Unit] =
     idleSince.update(_ - identity) >>
@@ -107,8 +114,8 @@ final private[lsp] class LspConnectionPool private (
     * opened, and the edit is all-or-nothing, as `workspace/applyEdit` defaults to.
     */
   private def applyServerEdit(request: LspApplyEditRequest): IO[LspApplyEditResult] =
-    documentTexts.get.flatMap { texts =>
-      request.edits.keys.filterNot(texts.contains).toList match
+    openDocuments.get.flatMap { open =>
+      request.edits.keys.filterNot(open.contains).toList match
         case Nil =>
           applyEvent(LspEvent.LspWorkspaceEditRequested(request.edits.map((uri, edits) => uri.value -> edits)))
             .as(LspApplyEditResult(applied = true, None))
@@ -181,13 +188,14 @@ final private[lsp] class LspConnectionPool private (
     (crashes.get, IO.monotonic).mapN((all, now) => policy.mayConnect(all.getOrElse(identity, Nil), now))
 
   private def reopenDocuments(identity: ConnectionIdentity, connection: LspConnection): IO[Unit] =
-    (documentsOf(identity), documentVersions.get, documentTexts.get).flatMapN { (uris, versions, texts) =>
+    (documentsOf(identity), documentVersions.get, openDocuments.get).flatMapN { (uris, versions, open) =>
       uris.traverse_ { uri =>
-        texts.get(uri).traverse_ { text =>
+        open.textOf(uri).traverse_ { text =>
           connection
             .sendNotification(
               LspMethod("textDocument/didOpen"),
-              LspProtocol.didOpenParams(uri, identity.serverConfig.languageId.id, versions.getOrElse(uri, 1), text)
+              LspProtocol
+                .didOpenParams(uri, identity.serverConfig.languageId.id, versions.getOrElse(uri, 1), text.collect())
             )
             .handleErrorWith(ex => logger.error(ex)(s"[LSP] reopening ${uri.value} failed"))
         }
@@ -266,7 +274,7 @@ private[lsp] object LspConnectionPool:
 
   def create(
     documentVersions: Ref[IO, Map[DocumentUri, Int]],
-    documentTexts: Ref[IO, Map[DocumentUri, String]],
+    openDocuments: Ref[IO, OpenDocument.Registry],
     supervisor: Supervisor[IO],
     provider: ConnectionProvider,
     policy: LspSupervisionPolicy,
@@ -285,7 +293,7 @@ private[lsp] object LspConnectionPool:
       crashes,
       idleSince,
       documentVersions,
-      documentTexts,
+      openDocuments,
       lock,
       supervisor,
       provider,

@@ -2,8 +2,7 @@ package com.serenity.state.models
 
 import scala.collection.Searching.{Found, InsertionPoint}
 
-import com.serenity.rope.{Rope, RopeCharacterSource}
-import com.serenity.text.TextEditing
+import com.serenity.rope.Rope
 
 final case class FindResult(line: Int, column: Int)
 
@@ -12,64 +11,68 @@ object FindResult:
 
   def at(position: CursorPosition): FindResult = FindResult(position.line, position.column)
 
-/** Immutable identity for a background find operation. */
+/** How a find query matches text. Case-insensitive literal matching is the default, as in VS Code. */
+final case class FindOptions(matchCase: Boolean = false, wholeWord: Boolean = false, regex: Boolean = false):
+
+  def toggled(option: FindOption): FindOptions =
+    option match
+      case FindOption.MatchCase => copy(matchCase = !matchCase)
+      case FindOption.WholeWord => copy(wholeWord = !wholeWord)
+      case FindOption.Regex     => copy(regex = !regex)
+
+  def isOn(option: FindOption): Boolean =
+    option match
+      case FindOption.MatchCase => matchCase
+      case FindOption.WholeWord => wholeWord
+      case FindOption.Regex     => regex
+
+object FindOptions:
+  val default: FindOptions = FindOptions()
+
+enum FindOption:
+  case MatchCase, WholeWord, Regex
+
+/** What landing results do: `Seed` selects the first match at or after the caret and moves the caret there (a new
+  * query); `Refresh` re-syncs results after the document changed under an open find, leaving the caret alone.
+  */
+enum FindSearchPurpose:
+  case Seed, Refresh
+
+/** Immutable identity for a background find operation. `anchor` is the offset the search starts from and wraps around,
+  * so a capped result window always holds the matches nearest the caret.
+  */
 final case class FindSearchRequest(
     surfaceId: SurfaceId,
     bufferId: BufferId,
     query: String,
-    content: Rope
+    content: Rope,
+    options: FindOptions = FindOptions.default,
+    anchor: Int = 0,
+    purpose: FindSearchPurpose = FindSearchPurpose.Seed
 )
 
-object FindSearch:
+/** At most [[FindSearch.MatchLimit]] matches in document order; `capped` when the document holds more. */
+final case class FindMatches(results: Vector[FindResult], capped: Boolean)
 
-  /** Finds whole-grapheme occurrences in deterministic document order.
-    *
-    * Uses `RopeCharacterSource`'s leaf-caching adapter rather than reading through `Rope.index` directly: the per-match
-    * grapheme-boundary check now scans through ICU4J's `BreakIterator` (#1277 step 3), which reads several neighbouring
-    * characters per boundary rather than one, so an uncached `O(log n)` re-descent per character turned into the
-    * dominant cost over a large document with many matches.
-    */
-  def results(content: Rope, query: String): Vector[FindResult] =
-    if query.isEmpty then Vector.empty
-    else
-      val source = RopeCharacterSource(content)
-      content
-        .searchAll(query)
-        .iterator
-        .collect {
-          case offset if TextEditing.isWholeGraphemeRange(source, offset, offset + query.length) =>
-            val (line, column) = content.offsetToLineColumn(offset)
-            FindResult(line, column)
-        }
-        .toVector
-
-  /** Whether `result` still marks a whole-grapheme occurrence of `query` in `content`. Stored results are line/column
-    * positions taken from an earlier revision, so an edit the find state did not observe can leave them pointing at
-    * other text, or at a column the line no longer has (which `lineColumnToOffset` would silently clamp).
-    */
-  def stillMatches(content: Rope, query: String, result: FindResult): Boolean =
-    val offset         = content.lineColumnToOffset(result.line, result.column)
-    val end            = offset + query.length
-    val (line, column) = content.offsetToLineColumn(offset)
-    val samePosition   = line == result.line && column == result.column
-    samePosition && content.sliceString(offset, end) == query &&
-    TextEditing.isWholeGraphemeRange(RopeCharacterSource(content), offset, end)
+object FindMatches:
+  val empty: FindMatches = FindMatches(Vector.empty, capped = false)
 
 final case class FindResultSet private (
     query: String,
     results: Vector[FindResult],
-    currentIndex: Int
+    currentIndex: Int,
+    capped: Boolean
 ):
   def selectedResult: Option[FindResult] =
     results.lift(currentIndex)
 
   def move(delta: Int): FindResultSet =
-    FindResultSet.normalized(query, results, currentIndex + delta)
+    FindResultSet.normalized(query, results, currentIndex + delta, capped)
 
   def selectionSummary: String =
     selectedResult match
       case Some(result) =>
-        s"$matchCountLabel, ${currentIndex + 1}/${results.length} at ${result.line + 1}:${result.column + 1}"
+        s"$matchCountLabel, ${currentIndex + 1}/$countText at ${result.line + 1}:${result.column + 1}"
       case None =>
         matchCountLabel
 
@@ -82,16 +85,21 @@ final case class FindResultSet private (
       val start      = math.max(0, math.min(currentIndex - halfWindow, maxStart))
       results.slice(start, start + windowSize).zip(start until start + windowSize).toList
 
-  private def matchCountLabel: String =
-    results.length match
-      case 1     => "1 match"
-      case count => s"$count matches"
+  def matchCountLabel: String =
+    if capped then s"$countText matches"
+    else
+      results.length match
+        case 1     => "1 match"
+        case count => s"$count matches"
+
+  private def countText: String =
+    if capped then s"${results.length}+" else results.length.toString
 
 object FindResultSet:
-  val empty: FindResultSet = FindResultSet("", Vector.empty, 0)
+  val empty: FindResultSet = FindResultSet("", Vector.empty, 0, capped = false)
 
   /** Index of the first result at or after `caret`, or 0 when every result lies before it. `results` must be in
-    * document order, as `FindSearch.results` produces them.
+    * document order, as `FindSearch` produces them.
     */
   def indexAtOrAfter(results: Vector[FindResult], caret: CursorPosition): Int =
     wrapIndex(results.search(FindResult.at(caret)).insertionPoint, results.length)
@@ -103,9 +111,14 @@ object FindResultSet:
       case InsertionPoint(index) => index
     wrapIndex(next, results.length)
 
-  def normalized(query: String, results: Vector[FindResult], requestedIndex: Int): FindResultSet =
+  def normalized(
+    query: String,
+    results: Vector[FindResult],
+    requestedIndex: Int,
+    capped: Boolean = false
+  ): FindResultSet =
     if query.isEmpty then empty
-    else FindResultSet(query, results, wrapIndex(requestedIndex, results.length))
+    else FindResultSet(query, results, wrapIndex(requestedIndex, results.length), capped && results.nonEmpty)
 
   private def wrapIndex(index: Int, resultCount: Int): Int =
     if resultCount <= 0 then 0
@@ -116,11 +129,13 @@ object FindResultSet:
 final case class FindState(
     query: String,
     results: Vector[FindResult],
-    currentIndex: Int
+    currentIndex: Int,
+    options: FindOptions = FindOptions.default,
+    capped: Boolean = false
 ):
   def resultSet: FindResultSet =
-    FindResultSet.normalized(query, results, currentIndex)
+    FindResultSet.normalized(query, results, currentIndex, capped)
 
 object FindState:
-  def fromResultSet(resultSet: FindResultSet): FindState =
-    FindState(resultSet.query, resultSet.results, resultSet.currentIndex)
+  def fromResultSet(resultSet: FindResultSet, options: FindOptions): FindState =
+    FindState(resultSet.query, resultSet.results, resultSet.currentIndex, options, resultSet.capped)

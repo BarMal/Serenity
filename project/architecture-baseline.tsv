@@ -10,20 +10,17 @@
 # had drifted above what the tree measures.
 main/scala/com/serenity/app/RuntimeDisplayState.scala	forbidden mutable state at line 78: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/io/SwingFileDialog.scala	forbidden mutable state at line 35: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/rope/Rope.scala	file length	615
 main/scala/com/serenity/spellcheck/HunspellFreeCompoundMatcher.scala	forbidden mutable state at line 106: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	601
 main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 272: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 346: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererEntryPoints.scala	forbidden mutable state at line 74: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererEntryPoints.scala	forbidden mutable state at line 247: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/ui/renderer/RendererFramePlanner.scala	forbidden mutable state at line 232: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/ui/renderer/RendererFramePlanner.scala	forbidden mutable state at line 287: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/renderer/RendererFramePlanner.scala	forbidden mutable state at line 235: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/renderer/RendererFramePlanner.scala	forbidden mutable state at line 290: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/tui/MarkdownPreviewWindow.scala	forbidden mutable state at line 71: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/tui/TerminalInputHandler.scala	forbidden mutable state at line 196: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/tui/TerminalInputHandler.scala	forbidden mutable state at line 326: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/tui/TuiRuntime.scala	forbidden mutable state at line 85: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	639
 test/scala/com/serenity/GutterAndLineNumbersSpec.scala	file length	693
 test/scala/com/serenity/LayoutEngineSpec.scala	file length	669
 test/scala/com/serenity/LineWrappingSpec.scala	file length	751
@@ -32,8 +29,5 @@ test/scala/com/serenity/RendererSnapshotReuseSpec.scala	file length	629
 test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	722
 test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	713
 test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	646
-test/scala/com/serenity/SpellCheckerSpec.scala	file length	602
-test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	748
-test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	292
 test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	619
 test/scala/com/serenity/ui/tui/TerminalEmulator.scala	method interpret	84

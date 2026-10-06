@@ -33,7 +33,7 @@ object ModalEventReducer:
   def modalType(modal: Modal): ModalType =
     modal match
       case Modal.TextPrompt(_)       => ModalType.TextPrompt
-      case Modal.Find(_, _, _)       => ModalType.Find
+      case _: Modal.Find             => ModalType.Find
       case Modal.FileWorkflow(_)     => ModalType.FileWorkflow
       case Modal.ReplaceWorkflow(_)  => ModalType.ReplaceWorkflow
       case Modal.Confirm(_)          => ModalType.Confirm
@@ -66,9 +66,16 @@ object ModalEventReducer:
   def applyFindSearchResults(
     state: AppState,
     request: FindSearchRequest,
-    results: Vector[FindResult]
+    results: Vector[FindResult],
+    capped: Boolean = false
   ): AppState =
-    ModalFindReducer.applyFindSearchResults(state, request, results)
+    ModalFindReducer.applyFindSearchResults(state, request, results, capped)
+
+  /** The search an open find needs after `before` -> `after`: it just opened on a stored query, or the document it
+    * searches changed underneath it.
+    */
+  def findRefreshDue(before: AppState, after: AppState): Option[FindSearchRequest] =
+    ModalFindReducer.refreshDue(before, after)
 
   /** The id/payload owning input: a blocking `ModalDialog` (#814) if open, else the focused modeless workflow. */
   private[reducers] def currentModal(state: AppState): Option[(SurfaceId, Modal)] =

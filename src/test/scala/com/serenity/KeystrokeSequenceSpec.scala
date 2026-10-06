@@ -8,6 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -24,7 +25,7 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
 
       // Given: Empty buffer ready for input
       bufferId     <- stateManager.createBuffer("", None)
@@ -96,7 +97,7 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
 
       // Given: Buffer with some text
       bufferId     <- stateManager.createBuffer("The quik brown fox", None)
@@ -136,7 +137,7 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
 
       // Given: Multiline buffer
       initialText = """Line 1
@@ -207,7 +208,7 @@ Final line""".replace("\r\n", "\n")
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
 
       // Given: Text with multiple words
       bufferId     <- stateManager.createBuffer("Hello world this is a test", None)
@@ -258,7 +259,7 @@ Final line""".replace("\r\n", "\n")
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
 
       // Given: Empty buffer
       bufferId     <- stateManager.createBuffer("", None)
@@ -313,7 +314,7 @@ Final line""".replace("\r\n", "\n")
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
 
       // Given: Single line of text
       bufferId     <- stateManager.createBuffer("Single line", None)
@@ -375,7 +376,7 @@ Third""".replace("\r\n", "\n")
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
 
       // Given: Small text
       bufferId     <- stateManager.createBuffer("AB\nCD", None)
@@ -428,7 +429,7 @@ Third""".replace("\r\n", "\n")
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
 
       // Given: Multiline text
       bufferId     <- stateManager.createBuffer("First\nSecond\nThird", None)
@@ -461,7 +462,7 @@ Third""".replace("\r\n", "\n")
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
 
       // Given: Buffer with content
       bufferId     <- stateManager.createBuffer("Initial state", None)
@@ -526,7 +527,10 @@ Line 3""".replace("\r\n", "\n")
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
 
     val stateManager: StateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+        com.serenity.rope.Balance.default,
+        LoggerFactory[IO]
+      )
       .unsafeRunSync()
 
     def setupBuffer(content: String): BufferId =

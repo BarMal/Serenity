@@ -16,6 +16,7 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition}
 import com.serenity.ui.presets.UiPresetStore
@@ -155,7 +156,8 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
             uiPresetStore = UiPresetStore(directory.resolve("presets.json")),
             windowSizeProvider = IO.pure(None),
             onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-            fileDialog = fileDialog
+            fileDialog = fileDialog,
+            dictionaryCache = SharedDictionary.default
           )
           .copy(fileManager =
             new GatedFileManager(directory.resolve(gatedName), gates, log, directory.resolve("refused.txt"))

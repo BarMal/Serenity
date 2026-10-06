@@ -8,8 +8,9 @@ import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.lsp.LspEffect
 import com.serenity.project.{ProjectTaskCommand, ProjectTaskResult, ProjectTaskRunner}
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.session.{SessionManager, SessionPersistence}
+import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.models.RestartMode
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
@@ -37,7 +38,7 @@ final private[manager] class LspEffectQueue private (
       case LspEffect.FileChanged(uri, languageId, text, _) => enqueueDocumentChange(uri, languageId, text)
       case other => pendingChanges.update(_.closedFor(other.uri)) >> queue.offer(Entry.Immediate(other))
 
-  def enqueueDocumentChange(uri: String, languageId: com.serenity.lsp.config.LanguageId, text: String): IO[Unit] =
+  def enqueueDocumentChange(uri: String, languageId: com.serenity.lsp.config.LanguageId, text: Rope): IO[Unit] =
     pendingChanges.modify { pending =>
       val change = PendingChange(languageId, text)
       pending.open.get(uri) match
@@ -90,7 +91,7 @@ private[manager] object LspEffectQueue:
     case Immediate(effect: LspEffect)
     case Change(uri: String, token: Long)
 
-  final private case class PendingChange(languageId: com.serenity.lsp.config.LanguageId, text: String)
+  final private case class PendingChange(languageId: com.serenity.lsp.config.LanguageId, text: Rope)
 
   /** Queued changes' latest text by token; `open` names, per document, the queued change a new edit may still join. */
   final private case class PendingChanges(nextToken: Long, open: Map[String, Long], texts: Map[Long, PendingChange]):
@@ -131,7 +132,8 @@ final private[manager] case class StateManagerRuntime(
     sessionManager: SessionManager,
     sessionPersistence: SessionPersistence,
     renderCaches: RenderCaches,
-    restarter: Option[RestartMode => IO[Unit]] = None
+    restarter: Option[RestartMode => IO[Unit]] = None,
+    dictionaryCache: DictionaryCache = DictionaryCache()
 )
 
 private[manager] object StateManagerRuntime:
@@ -159,7 +161,8 @@ private[manager] object StateManagerRuntime:
       com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable,
     renderCaches: RenderCaches = RenderCaches.create(),
     projectTasksEnabled: Boolean = true,
-    restarter: Option[RestartMode => IO[Unit]] = None
+    restarter: Option[RestartMode => IO[Unit]] = None,
+    dictionaryCache: DictionaryCache = DictionaryCache()
   )(using Balance): StateManagerRuntime =
     val sessionManager = sessionRootOverride
       .map(root => SessionManager.create(root, themeManager, logger, policy))
@@ -188,5 +191,6 @@ private[manager] object StateManagerRuntime:
       sessionManager = sessionManager,
       sessionPersistence = new SessionPersistence(sessionManager, policy),
       renderCaches = renderCaches,
-      restarter = restarter
+      restarter = restarter,
+      dictionaryCache = dictionaryCache
     )

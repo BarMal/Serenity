@@ -85,6 +85,18 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
     bufferAfter(MoveWordLeft, before).editing.cursorPositions shouldBe List(CursorPosition(0, 6))
   }
 
+  "MoveSubWordRight" should "land on the end of the next identifier part" in {
+    val before = stateWith("fooBar_baz qux", List(CursorPosition(0, 0)))
+
+    bufferAfter(MoveSubWordRight, before).editing.cursorPositions shouldBe List(CursorPosition(0, 3))
+  }
+
+  "MoveSubWordLeft" should "land on the start of the previous identifier part" in {
+    val before = stateWith("fooBar_baz qux", List(CursorPosition(0, 11)))
+
+    bufferAfter(MoveSubWordLeft, before).editing.cursorPositions shouldBe List(CursorPosition(0, 7))
+  }
+
   "MoveToStartOfFile" should "move the cursor to line 0, column 0 regardless of starting position" in {
     val before = stateWith("alpha\nbeta\ngamma", List(CursorPosition(2, 3)))
 

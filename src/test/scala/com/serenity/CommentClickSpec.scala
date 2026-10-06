@@ -9,6 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -26,7 +27,10 @@ class CommentClickSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+        com.serenity.rope.Balance.default,
+        LoggerFactory[IO]
+      )
       .unsafeRunSync()
 
   private val comment = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "A note about hello")

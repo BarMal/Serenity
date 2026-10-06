@@ -1,6 +1,7 @@
 package com.serenity.lsp.client
 
 import com.serenity.lsp.model.*
+import com.serenity.rope.{Balance, Rope}
 import io.circe.syntax.*
 import io.circe.{HCursor, Json}
 
@@ -220,8 +221,21 @@ object LspProtocol:
       case TextDocumentSyncKind.Incremental => incrementalDidChangeParams(uri, version, previousText, newText)
       case _                                => didChangeParams(uri, version, newText)
 
+  /** The notification for an edit between two ropes. Incremental sync reads only what changed, and no sync kind builds
+    * the old document's text; `Full` collects the new text once, here, because this is where it is sent.
+    */
+  def didChangeParams(uri: DocumentUri, version: Int, previous: Rope, next: Rope, syncKind: TextDocumentSyncKind)(using
+    Balance
+  ): Json =
+    syncKind match
+      case TextDocumentSyncKind.Incremental =>
+        incrementalDidChangeParams(uri, version, TextChangeDiff.diff(previous, next))
+      case _ => didChangeParams(uri, version, next.collect())
+
   private def incrementalDidChangeParams(uri: DocumentUri, version: Int, previousText: String, newText: String): Json =
-    val change = TextChangeDiff.diff(previousText, newText)
+    incrementalDidChangeParams(uri, version, TextChangeDiff.diff(previousText, newText))
+
+  private def incrementalDidChangeParams(uri: DocumentUri, version: Int, change: TextChangeDiff.Change): Json =
     Json.obj(
       "textDocument" -> Json.obj("uri" -> uri.value.asJson, "version" -> version.asJson),
       "contentChanges" -> Json.arr(

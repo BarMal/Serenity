@@ -123,11 +123,12 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
 
     keys(changes) should contain allOf (
       "editor.smart_punctuation",
-      "spellcheck.enabled",
       "editor.typewriter_scrolling",
       "editor.focused_text_body",
       "typography.prose.measure"
     )
+    // Spell check is on by default now, so there is nothing for the Writing workflow to turn on.
+    keys(changes) should not contain "spellcheck.enabled"
   }
 
   it should "report docked-panel and workspace-tree presence changes" in {
