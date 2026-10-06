@@ -65,6 +65,8 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
 
     def send(bytes: Array[Byte]): Unit = reader.feed(bytes)
 
+    def closeInput(): Unit = reader.feedEof()
+
   private def liveTerminal(): LiveHarness =
     val out                = new ByteArrayOutputStream()
     val (terminal, reader) = FakeTerminalReader.dumbTerminal(new org.jline.terminal.Size(80, 24), out)
@@ -213,12 +215,18 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
     terminal.getAttributes.toString
 
   /** Cancels a fiber once it is inside `use`, so the release under test is the one cancellation triggers. */
-  private def cancelInsideUse(terminal: Terminal): Unit =
+  private def cancelInsideUse(
+    terminal: Terminal,
+    deadlines: TerminalShell.NegotiationDeadlines = TerminalShell.NegotiationDeadlines.Production
+  ): Unit =
     val program = for
       entered <- Deferred[IO, Unit]
-      fiber   <- TerminalShell.forTerminal(terminal).use(_ => entered.complete(()) >> IO.never).start
-      _       <- entered.get
-      _       <- fiber.cancel
+      fiber <- TerminalShell
+        .forTerminal(terminal, deadlines = deadlines)
+        .use(_ => entered.complete(()) >> IO.never)
+        .start
+      _ <- entered.get
+      _ <- fiber.cancel
     yield ()
     program.unsafeRunSync()
 
@@ -239,6 +247,12 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
   // the values TerminalShell requested (mode 2, formatOtherKeys=1) -- see #1109/#1200's "confirmed tier" follow-up.
   private val confirmingReply = s"$esc[>4;2m$esc[>4;1f"
 
+  // Replies arrive from another thread, so a test that expects one must not race the production 100 ms deadline on a
+  // loaded runner. A generous deadline is safe: a confirming reply ends the probe at once, and tests that expect no
+  // reply keep the production deadline (or an input that is already at EOF), so they stay fast.
+  private val replyAwaitingDeadlines =
+    TerminalShell.NegotiationDeadlines.Production.copy(modifyOtherKeysMillis = 10000L)
+
   "acquiring the shell against a terminal that answers the kitty query" should
     "push kitty's enhancement flags and report the Kitty tier" in {
       val harness = dumbTerminal(bytes(s"$esc[?1u"))
@@ -256,12 +270,18 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
   /** Sends `reply` into `harness` once its written output shows the `XTQFMTKEYS` query -- i.e. once the kitty phase has
     * already given up and the modifyOtherKeys confirmation phase has actually started -- on a background daemon thread,
     * so the reply lands in the confirmation phase's read window rather than being drained by the kitty phase's earlier
-    * scan (see [[liveTerminal]]'s doc).
+    * scan (see [[liveTerminal]]'s doc). `thenCloseInput` ends the stream after the reply, so a reply that must be
+    * rejected (rather than confirmed) finishes the probe at once instead of waiting out a generous deadline.
     */
-  private def replyAfterModifyOtherKeysQuery(harness: LiveHarness, reply: Array[Byte]): Unit =
+  private def replyAfterModifyOtherKeysQuery(
+    harness: LiveHarness,
+    reply: Array[Byte],
+    thenCloseInput: Boolean = false
+  ): Unit =
     val sender = new Thread(() =>
       eventually(harness.written should include(xtqFmtKeysQuery))
       harness.send(reply)
+      if thenCloseInput then harness.closeInput()
     )
     sender.setDaemon(true)
     sender.start()
@@ -272,7 +292,10 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
       replyAfterModifyOtherKeysQuery(harness, bytes(confirmingReply))
 
       val tier =
-        TerminalShell.forTerminal(harness.terminal).use(shell => IO(shell.keyboardProtocolTier)).unsafeRunSync()
+        TerminalShell
+          .forTerminal(harness.terminal, deadlines = replyAwaitingDeadlines)
+          .use(shell => IO(shell.keyboardProtocolTier))
+          .unsafeRunSync()
 
       tier shouldBe TerminalShell.KeyboardProtocolTier.ModifyOtherKeys
       val written = harness.written
@@ -316,13 +339,13 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
     "fall back to the Legacy tier just like no reply at all" in {
       val wrongValues = s"$esc[>4;0m$esc[>4;0f"
       val harness     = liveTerminal()
-      replyAfterModifyOtherKeysQuery(harness, bytes(wrongValues))
+      replyAfterModifyOtherKeysQuery(harness, bytes(wrongValues), thenCloseInput = true)
 
       // Pinned off Windows for the same reason as the "answers neither query" test above -- an unconfirmed
       // negotiation falls through to Win32Input rather than Legacy on a real Windows host (#1320), so this test must
       // fix osName rather than inherit it from the actual CI runner.
       val tier = TerminalShell
-        .forTerminal(harness.terminal, osName = "Linux")
+        .forTerminal(harness.terminal, osName = "Linux", deadlines = replyAwaitingDeadlines)
         .use(shell => IO(shell.keyboardProtocolTier))
         .unsafeRunSync()
 
@@ -360,7 +383,10 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
       replyAfterModifyOtherKeysQuery(harness, bytes(confirmingReply))
 
       val tier =
-        TerminalShell.forTerminal(harness.terminal).use(shell => IO(shell.keyboardProtocolTier)).unsafeRunSync()
+        TerminalShell
+          .forTerminal(harness.terminal, deadlines = replyAwaitingDeadlines)
+          .use(shell => IO(shell.keyboardProtocolTier))
+          .unsafeRunSync()
 
       tier shouldBe TerminalShell.KeyboardProtocolTier.ModifyOtherKeys
       val written = harness.written
@@ -374,7 +400,11 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
       replyAfterModifyOtherKeysQuery(harness, bytes(confirmingReply))
       val boom = new RuntimeException("boom")
 
-      TerminalShell.forTerminal(harness.terminal).use(_ => IO.raiseError[Unit](boom)).attempt.unsafeRunSync()
+      TerminalShell
+        .forTerminal(harness.terminal, deadlines = replyAwaitingDeadlines)
+        .use(_ => IO.raiseError[Unit](boom))
+        .attempt
+        .unsafeRunSync()
 
       val written = harness.written
       written should include(modifyOtherKeysDisable)
@@ -386,7 +416,7 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
       val harness = liveTerminal()
       replyAfterModifyOtherKeysQuery(harness, bytes(confirmingReply))
 
-      cancelInsideUse(harness.terminal)
+      cancelInsideUse(harness.terminal, replyAwaitingDeadlines)
 
       val written = harness.written
       written should include(modifyOtherKeysDisable)
