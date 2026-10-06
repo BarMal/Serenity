@@ -5,10 +5,14 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import java.util.concurrent.TimeUnit
 
+import scala.concurrent.duration.DurationInt
+
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Resource}
+import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.noop.NoOpLogger
 
 /** #2023: the lock that keeps two Serenity processes from sharing one session. */
 class InstanceLockSpec extends AnyFlatSpec with Matchers:
@@ -42,13 +46,29 @@ class InstanceLockSpec extends AnyFlatSpec with Matchers:
       for
         heldElsewhere <- InstanceLock.acquire(lockFile).use(IO.pure)
         _             <- IO.blocking(child.destroyForcibly().waitFor(30, TimeUnit.SECONDS))
-        afterCrash    <- InstanceLock.acquire(lockFile).use(IO.pure)
+        afterCrash    <- relaunchAfterCrash(lockFile)
       yield (heldElsewhere, afterCrash)
     }
 
     outcome.unsafeRunSync() shouldBe (LockAttempt.HeldElsewhere, LockAttempt.Acquired)
     Files.exists(lockFile) shouldBe true
   }
+
+  // Windows frees a dead process's lock asynchronously, so a relaunch goes through the same bounded retry a user's
+  // does: nothing answers the forward, so the launch keeps trying the lock until the OS lets go.
+  private def relaunchAfterCrash(lockFile: Path): IO[LockAttempt] =
+    val coordination = InstanceCoordination(
+      acquireLock = InstanceLock.acquire(lockFile),
+      serve = Resource.pure(Stream.empty),
+      forward = _ => IO.pure(Delivery.Unreachable),
+      isolatedSessionRoot = IO.blocking(Files.createTempDirectory("instance-lock-isolated")),
+      claimAttempts = 100,
+      claimRetryDelay = 100.millis
+    )
+    SingleInstance.claim(coordination, Nil, NoOpLogger[IO]).use {
+      case LaunchRole.Primary(_) => IO.pure(LockAttempt.Acquired)
+      case _                     => IO.pure(LockAttempt.HeldElsewhere)
+    }
 
   /** A child JVM, run from a single Java source file, that locks `lockFile` and holds it until it is killed. */
   private def holdingProcess(lockFile: Path): Resource[IO, Process] =
