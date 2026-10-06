@@ -9,7 +9,7 @@ final case class ThemeFollowConfig(
     followSystem: Boolean = false,
     lightTheme: String = "light",
     darkTheme: String = "dark",
-    highContrastTheme: String = "dark"
+    highContrastTheme: String = "high-contrast"
 ):
 
   /** `None` leaves the current theme alone: not following, or the OS did not say. */

@@ -18,6 +18,10 @@ class ThemeFollowConfigSpec extends AnyFlatSpec with Matchers:
     AppConfig.default.themeFollowConfig.followSystem shouldBe false
   }
 
+  it should "default the high-contrast appearance to the bundled high-contrast theme" in {
+    AppConfig.default.themeFollowConfig.highContrastTheme shouldBe "high-contrast"
+  }
+
   "theme selection" should "pick the configured theme for each known appearance" in {
     following.themeFor(OsAppearance.Light) shouldBe Some("paper")
     following.themeFor(OsAppearance.Dark) shouldBe Some("ink")
