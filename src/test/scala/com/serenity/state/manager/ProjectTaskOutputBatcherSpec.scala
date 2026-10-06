@@ -62,6 +62,20 @@ class ProjectTaskOutputBatcherSpec extends AnyFlatSpec with Matchers:
     runVirtual(program) shouldBe List((Interval, "one two three"))
   }
 
+  it should "publish at the next refresh boundary after the task started, not an interval after the chunk" in {
+    val program = withBatcher { (batcher, published) =>
+      for
+        start <- IO.monotonic
+        _     <- IO.sleep(Interval * 2 + 50.millis)
+        _     <- batcher.append("late")
+        _     <- IO.sleep(5.seconds)
+        out   <- published
+      yield out.map { case (at, batch) => (at - start, batch) }
+    }
+
+    runVirtual(program) shouldBe List((Interval * 3, "late"))
+  }
+
   it should "start a new batch for output arriving after a publish, then fall silent again" in {
     val program = withBatcher { (batcher, published) =>
       for

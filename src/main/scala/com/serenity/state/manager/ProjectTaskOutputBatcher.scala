@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{DurationLong, FiniteDuration}
 
 import cats.effect.std.Queue
 import cats.effect.{IO, Ref}
@@ -11,7 +11,8 @@ import com.serenity.project.ProjectTaskRunner
   * keeps the same bounded tail the terminal panel does.
   *
   * Event-driven: the first chunk into an empty buffer wakes [[run]], which then waits out the interval so the rest of a
-  * burst joins the batch. A silent task leaves [[run]] parked on the wake-up rather than polling.
+  * burst joins the batch, at the next refresh boundary (a multiple of `interval` after [[run]] started, the cadence the
+  * panel has always had). A silent task leaves [[run]] parked on the wake-up rather than polling.
   */
 final private[manager] class ProjectTaskOutputBatcher private (
     unpublished: Ref[IO, String],
@@ -28,7 +29,14 @@ final private[manager] class ProjectTaskOutputBatcher private (
       }
       .flatMap(wasEmpty => IO.whenA(wasEmpty)(wakeups.tryOffer(()).void))
 
-  val run: IO[Nothing] = (wakeups.take >> IO.sleep(interval) >> flush).foreverM
+  val run: IO[Nothing] =
+    IO.monotonic.flatMap(started => (wakeups.take >> untilNextRefresh(started) >> flush).foreverM)
+
+  private def untilNextRefresh(started: FiniteDuration): IO[Unit] =
+    IO.monotonic.flatMap { now =>
+      val intoInterval = (now - started).toNanos % interval.toNanos
+      IO.sleep(interval - intoInterval.nanos)
+    }
 
   private def flush: IO[Unit] =
     unpublished.getAndSet("").flatMap(batch => IO.whenA(batch.nonEmpty)(publish(batch)))
