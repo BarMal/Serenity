@@ -5,7 +5,7 @@ import java.awt.{AWTEvent, EventQueue}
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.event.{MenuEvent, MenuListener}
-import javax.swing.{JCheckBoxMenuItem, JMenu, JMenuBar, JMenuItem, KeyStroke, SwingUtilities}
+import javax.swing.{JCheckBoxMenuItem, JMenu, JMenuBar, JMenuItem, JToggleButton, KeyStroke, SwingUtilities}
 
 import cats.effect.{IO, Resource}
 import com.serenity.command.menu.{
@@ -115,6 +115,10 @@ object SwingMenuBar:
     private val held                    = new AtomicReference[Option[Model]](seed)
     def get(): Option[Model]            = held.get()
     def set(model: Option[Model]): Unit = held.set(model)
+
+  final private class FixedTickModel(ticked: Boolean) extends JToggleButton.ToggleButtonModel:
+    override def isSelected: Boolean                  = ticked
+    override def setSelected(selected: Boolean): Unit = ()
 
   final private case class Env(host: Host, registry: CommandRegistry, latest: Snapshot)
 
@@ -250,11 +254,17 @@ object SwingMenuBar:
 
     private def choiceItem(choose: DynamicMenu.Item.Choose): JMenuItem =
       val item = choose.choice match
-        case _: MenuDispatch.Choice.Buffer     => new JCheckBoxMenuItem(choose.label, choose.checked)
+        case _: MenuDispatch.Choice.Buffer     => tickedItem(choose)
         case _: MenuDispatch.Choice.RecentFile => new JMenuItem(choose.label)
       item.setToolTipText(choose.description.orNull)
       item.getAccessibleContext.setAccessibleDescription(choose.description.orNull)
       item.addActionListener(_ => env.host.guard.activate(MenuDispatch.eventFor(choose.choice), None, false))
+      item
+
+    /** A tick that only the model sets: a click must not flip it, since the model may still say otherwise. */
+    private def tickedItem(choose: DynamicMenu.Item.Choose): JCheckBoxMenuItem =
+      val item = new JCheckBoxMenuItem(choose.label)
+      item.setModel(new FixedTickModel(choose.checked))
       item
 
     private def itemFor(command: Command, model: Model): JMenuItem =

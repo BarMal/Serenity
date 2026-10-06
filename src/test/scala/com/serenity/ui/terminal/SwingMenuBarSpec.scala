@@ -458,6 +458,25 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
     fixture.sent.asScala.toList shouldBe List(ActivateBuffer(BufferId(7)))
   }
 
+  it should "keep its ticks as they were when a buffer is chosen, until the model changes" in {
+    val before  = withExtraBuffer(modelOf(config()), BufferId(7), "/p/seven.md")
+    val fixture = new Fixture(before)
+    def ticks   = items(fixture.open(MenuTitle.Window)).filter(_.getText.matches("\\d .*")).map(_.isSelected)
+
+    ticks shouldBe List(true, false)
+
+    val seven = fixture.itemLabelled(MenuTitle.Window, "2 seven.md")
+    seven.doClick(0)
+
+    seven.isSelected shouldBe false
+    seven.getAccessibleContext.getAccessibleStateSet.contains(AccessibleState.CHECKED) shouldBe false
+    fixture.sent.asScala.toList shouldBe List(ActivateBuffer(BufferId(7)))
+
+    fixture.model.set(before.copy(app = EditorState.switchToBuffer(before.app, BufferId(7)))).unsafeRunSync()
+
+    ticks shouldBe List(false, true)
+  }
+
   it should "not leave a separator last when no buffer is open" in {
     val empty  = modelOf(config())
     val noTabs = empty.copy(app = empty.app.copy(persisted = empty.app.persisted.copy(bufferOrder = Nil)))
