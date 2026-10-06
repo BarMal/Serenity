@@ -56,3 +56,17 @@ class ManuscriptEpubCheckSpec extends AnyFlatSpec with Matchers:
   it should "report no errors and no warnings for a book written with raw HTML" in {
     problemsIn(ManuscriptEpubFixture.withHtml) shouldBe (Nil, 0, 0, 0)
   }
+
+  private def untitled(conf: String): Manuscript =
+    ManuscriptEpubFixture.headingless(conf).fold(error => sys.error(error.message), identity)
+
+  it should "report no errors and no warnings for French document titles" in {
+    problemsIn(untitled("language = \"fr\"")) shouldBe (Nil, 0, 0, 0)
+  }
+
+  it should "report no errors and no warnings for document titles overridden in manuscript.conf" in {
+    problemsIn(
+      untitled("labels.title-page = \"A & B\"\nlabels.dedication = \"<x>\"\nlabels.chapter = \"No. {n}\"")
+    ) shouldBe
+      (Nil, 0, 0, 0)
+  }

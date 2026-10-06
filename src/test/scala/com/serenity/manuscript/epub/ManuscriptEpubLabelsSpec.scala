@@ -6,12 +6,13 @@ import java.nio.file.{Files, Path}
 import javax.xml.parsers.DocumentBuilderFactory
 
 import com.serenity.manuscript.Manuscript
+import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
 
 /** The navigation document's headings follow the book's language, and `manuscript.conf` can override each of them. */
-class ManuscriptEpubLabelsSpec extends AnyFlatSpec with Matchers with TableDrivenPropertyChecks:
+class ManuscriptEpubLabelsSpec extends AnyFlatSpec with Matchers with TableDrivenPropertyChecks with EitherValues:
 
   private def nav(manuscript: Manuscript): String =
     ManuscriptEpubWriter
@@ -88,4 +89,66 @@ class ManuscriptEpubLabelsSpec extends AnyFlatSpec with Matchers with TableDrive
   it should "ignore a blank overriding label" in {
     headings(nav(ManuscriptEpubFixture.fromConf("language = \"de\"\nlabels.contents = \"  \""))) shouldBe
       ("Inhalt", "Wegweiser")
+  }
+
+  private def part(manuscript: Manuscript, name: String): String =
+    ManuscriptEpubWriter
+      .parts(manuscript, ManuscriptEpubFixture.modified)
+      .collectFirst { case (`name`, content) => content }
+      .getOrElse(fail(s"missing $name"))
+
+  private def titleOf(document: String): String =
+    "<title>(.*)</title>".r.findFirstMatchIn(document).fold("")(_.group(1))
+
+  private def documentTitles(manuscript: Manuscript): (String, String, String, String) =
+    val toc = """<a href="text/chapter-001.xhtml">(.*)</a>""".r
+      .findFirstMatchIn(part(manuscript, "OEBPS/nav.xhtml"))
+      .fold("")(_.group(1))
+    (
+      titleOf(part(manuscript, "OEBPS/text/titlepage.xhtml")),
+      titleOf(part(manuscript, "OEBPS/text/dedication.xhtml")),
+      titleOf(part(manuscript, "OEBPS/text/chapter-001.xhtml")),
+      toc
+    )
+
+  private def headingless(conf: String): Manuscript =
+    ManuscriptEpubFixture.headingless(conf).value
+
+  it should "title the title page, dedication and an untitled chapter in the book's language" in
+    forAll(
+      Table(
+        ("language", "titles"),
+        ("en", ("Title Page", "Dedication", "Chapter 1", "Chapter 1")),
+        ("en-GB", ("Title Page", "Dedication", "Chapter 1", "Chapter 1")),
+        ("fr", ("Page de titre", "Dédicace", "Chapitre 1", "Chapitre 1")),
+        ("de", ("Titelseite", "Widmung", "Kapitel 1", "Kapitel 1")),
+        ("es", ("Portada", "Dedicatoria", "Capítulo 1", "Capítulo 1")),
+        ("it", ("Frontespizio", "Dedica", "Capitolo 1", "Capitolo 1")),
+        ("pt-BR", ("Folha de rosto", "Dedicatória", "Capítulo 1", "Capítulo 1")),
+        ("nl", ("Titelpagina", "Opdracht", "Hoofdstuk 1", "Hoofdstuk 1")),
+        ("xx", ("Title Page", "Dedication", "Chapter 1", "Chapter 1"))
+      )
+    )((language, titles) => documentTitles(headingless(s"""language = "$language"""")) shouldBe titles)
+
+  it should "match the golden French title page and dedication" in {
+    val book = headingless("language = \"fr\"")
+
+    canonical(part(book, "OEBPS/text/titlepage.xhtml")) shouldBe canonical(golden("fr-titlepage.xhtml"))
+    canonical(part(book, "OEBPS/text/dedication.xhtml")) shouldBe canonical(golden("fr-dedication.xhtml"))
+  }
+
+  it should "let manuscript.conf override the document titles, with {n} standing for the chapter number" in {
+    val conf =
+      """language = "de"
+        |labels.title-page = "Titel & Autor"
+        |labels.dedication = "Für M."
+        |labels.chapter = "Kapitel {n} ohne Titel"
+        |""".stripMargin
+
+    documentTitles(headingless(conf)) shouldBe
+      ("Titel &amp; Autor", "Für M.", "Kapitel 1 ohne Titel", "Kapitel 1 ohne Titel")
+  }
+
+  it should "keep the chapter label as written when it has no {n}" in {
+    documentTitles(headingless("labels.chapter = \"Unnamed\""))._3 shouldBe "Unnamed"
   }

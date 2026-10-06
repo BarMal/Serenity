@@ -5,6 +5,7 @@ import java.time.Instant
 import com.serenity.manuscript.docx.ManuscriptDocxFixture
 import com.serenity.manuscript.{
   AuthorName,
+  CompileError,
   CompileSpec,
   HeadingTemplate,
   Manuscript,
@@ -39,6 +40,12 @@ object ManuscriptEpubFixture:
       .decode(conf, ManuscriptDocxFixture.spec)
       .flatMap(ManuscriptCompiler.compile(_, List(SourceDocument.Markdown(ManuscriptDocxFixture.markdown))))
       .fold(error => sys.error(error.message), identity)
+
+  /** A dedicated book whose only chapter has no heading, so its titles come from the label table, then `conf`. */
+  def headingless(conf: String): Either[CompileError, Manuscript] =
+    ManuscriptConf
+      .decode(conf, CompileSpec.forTitle("Untitled").copy(dedication = Some("For M.")))
+      .flatMap(ManuscriptCompiler.compile(_, List(SourceDocument.Markdown("Just prose."))))
 
   /** Raw HTML in the source: marks, breaks, a block, and tags that must never reach the output as markup. */
   def withHtml: Manuscript =

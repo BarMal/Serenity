@@ -29,8 +29,9 @@ import pureconfig.{ConfigReader, ConfigSource}
   * end-marker = "END"               # "" for none
   * language = "en"                  # BCP 47 tag, for EPUB
   * identifier = "urn:uuid:..."      # EPUB's permanent book id; derived from title and author when absent
-  * labels.contents = "Inhalt"       # EPUB navigation headings, otherwise chosen by language; also
-  *                                  # labels.guide, labels.title-page and labels.start-of-content
+  * labels.contents = "Inhalt"       # EPUB navigation and front-matter wording, otherwise chosen by language; also
+  *                                  # labels.guide, labels.title-page, labels.start-of-content, labels.dedication
+  *                                  # and labels.chapter ("Chapter {n}", for a chapter without a heading)
   * }}}
   */
 object ManuscriptConf:
