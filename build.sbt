@@ -196,6 +196,14 @@ lazy val root = (project in file("."))
       )
       Seq(file)
     }.taskValue,
+    // The classpath the kill-recovery spec launches its child JVM with: sbt runs specs in its own JVM, whose
+    // `java.class.path` is not the project's.
+    Test / resourceGenerators += Def.task {
+      val file      = (Test / resourceManaged).value / "crash" / "test-classpath.txt"
+      val classpath = (Test / classDirectory).value +: (Test / dependencyClasspath).value.files
+      IO.write(file, classpath.map(_.getAbsolutePath).mkString(java.io.File.pathSeparator))
+      Seq(file)
+    }.taskValue,
     Compile / mainClass := Some("Main"),
     assembly / mainClass := Some("Main"),
     assembly / assemblyJarName := "Serenity.jar",
