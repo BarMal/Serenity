@@ -10,6 +10,7 @@ import com.serenity.frontend.{FrontendCapabilities, MarkdownPreviewWindowAvailab
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import com.serenity.ui.tui.MarkdownPreviewWindow
 import org.scalatest.flatspec.AnyFlatSpec
@@ -41,7 +42,9 @@ class MarkdownPreviewWindowStateSpec extends AnyFlatSpec with Matchers:
     markdownPreviewWindow: MarkdownPreviewWindowAvailability
   ): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("MarkdownPreviewWindowStateSpec"))
-    StateManager.apply(logger, markdownPreviewWindow = markdownPreviewWindow).unsafeRunSync()
+    StateManager
+      .apply(logger, markdownPreviewWindow = markdownPreviewWindow, dictionaryCache = SharedDictionary.default)
+      .unsafeRunSync()
 
   private val bufferId = BufferId(1)
   private val paneId   = PaneId(1)

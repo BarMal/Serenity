@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.state.manager.StateManager
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -19,7 +20,7 @@ class SinglePaneRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
       state        <- stateManager.getCurrentState
     yield
       // Verify we start with 1 pane
@@ -52,7 +53,7 @@ class SinglePaneRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger           <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager     <- StateManager.apply(logger)
+      stateManager     <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
       initialState     <- stateManager.getCurrentState
       _                <- stateManager.applyEvent(com.serenity.keystroke.events.NewTab)
       stateAfterNewTab <- stateManager.getCurrentState

@@ -43,14 +43,15 @@ enum ConfigDiagnostic:
   case ConflictingHotkey(conflict: HotkeyConflict)
   case NewerFileVersion(found: ConfigVersion, supported: ConfigVersion)
   case Migrated(from: ConfigVersion, to: ConfigVersion)
+  case MigrationWarning(from: ConfigVersion, note: String)
   case DeprecatedKey(key: String, replacement: String)
   case RemovedKey(key: String)
   case UnknownKey(key: String)
 
   /** Whether the user lost something they asked for, as opposed to housekeeping the log is enough for. */
   def needsAttention: Boolean = this match
-    case _: InvalidValue | _: ConflictingHotkey | _: NewerFileVersion => true
-    case _                                                            => false
+    case _: InvalidValue | _: ConflictingHotkey | _: NewerFileVersion | _: MigrationWarning => true
+    case _                                                                                  => false
 
   def message: String = this match
     case InvalidValue(key, value, reason) => s"$key = $value: $reason"
@@ -58,8 +59,9 @@ enum ConfigDiagnostic:
       s"hotkey ${conflict.trigger} is bound to ${conflict.keptBy} and ${conflict.droppedFrom.mkString(", ")}; " +
         s"${conflict.keptBy} keeps it"
     case NewerFileVersion(found, supported) =>
-      s"config.version = ${found.value} is newer than this Serenity understands (${supported.value}); " +
-        "settings it does not recognise are kept as they are"
+      s"config.version = ${found.value} is from a newer Serenity (this one understands up to ${supported.value}); " +
+        "settings this version does not know are kept but ignored"
+    case MigrationWarning(from, note)    => s"upgrading config from version ${from.value}: $note"
     case Migrated(from, to)              => s"config upgraded from version ${from.value} to ${to.value}"
     case DeprecatedKey(key, replacement) => s"$key is deprecated, use $replacement"
     case RemovedKey(key)                 => s"$key is no longer a setting and is ignored"

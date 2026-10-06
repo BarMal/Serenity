@@ -6,6 +6,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec
@@ -20,7 +21,7 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers:
   private def makeStateManager(): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   "RendererEntryPoints.render" should "complete without error given an AppState with no active pane" in {
     val surface = new MockRenderSurface(80, 24)

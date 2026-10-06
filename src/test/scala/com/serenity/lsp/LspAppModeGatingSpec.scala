@@ -15,8 +15,8 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.BufferId
-import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
+import com.serenity.testkit.{RopeText, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -32,7 +32,7 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("LspAppModeGatingSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   private def setBufferPath(stateManager: StateManager, file: java.nio.file.Path): Unit =
     stateManager
