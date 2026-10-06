@@ -5,7 +5,8 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import fs2.Stream
 
-/** Turns [[FrameTimings]] into one `[FRAME]` log line per interval while `ui.render.frame_timing` is on. */
+/** Switches [[FrameTimings]] with `ui.render.frame_timing` and, while it is on, logs one `[FRAME]` line per interval.
+  */
 object FrameTimingReport:
 
   val Interval: FiniteDuration = 5.seconds
@@ -16,7 +17,9 @@ object FrameTimingReport:
 
   /** Runs a report timer only while `enabled` last said on, so with frame timing off nothing wakes at all (#1938). */
   def stream(timings: FrameTimings, enabled: Stream[IO, Boolean], log: String => IO[Unit]): Stream[IO, Unit] =
-    enabled.changes.switchMap(on => if on then reporting(timings, log) else Stream.empty)
+    enabled.changes.switchMap(on =>
+      Stream.exec(IO(timings.setEnabled(on))) ++ (if on then reporting(timings, log) else Stream.empty)
+    )
 
   /** Discards what gathered while timing was off, so the first line covers only its own window. */
   private def reporting(timings: FrameTimings, log: String => IO[Unit]): Stream[IO, Unit] =
