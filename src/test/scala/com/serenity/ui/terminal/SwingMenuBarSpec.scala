@@ -48,7 +48,7 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
   private def label(commandName: String): String =
     registry.findCommand(commandName).getOrElse(fail(s"$commandName is not registered")).label
 
-  final private class Fixture(initial: Model):
+  final private class Fixture(initial: Model, readsModel: Boolean = true):
     val model  = Ref.unsafe[IO, Model](initial)
     val sent   = new ConcurrentLinkedQueue[Event]()
     val canvas = new JPanel
@@ -70,9 +70,10 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
 
     val bar: JMenuBar =
       SwingMenuBar.build(
-        SwingMenuBar.Host(model.get, _.unsafeRunSync(), guard),
+        SwingMenuBar.Host(model.get, io => if readsModel then io.unsafeRunSync(), guard),
         MenuSpec.forOs("Linux"),
-        registry
+        registry,
+        Some(initial)
       )
 
     def menu(title: MenuTitle): JMenu = bar.getMenu(bar.getComponents.indexWhere(isMenuTitled(title)))
@@ -162,6 +163,28 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
       kinds.headOption should not be Some(true)
       kinds.lastOption should not be Some(true)
       kinds.zip(kinds.drop(1)).count((a, b) => a && b) shouldBe 0
+  }
+
+  it should "show its items the moment it first opens, with no model read to wait for" in {
+    val fixture = new Fixture(modelOf(config()), readsModel = false)
+    val file    = fixture.menu(MenuTitle.File)
+
+    file.getMenuComponentCount shouldBe 0
+    file.setSelected(true)
+
+    items(file).map(_.getText) should contain(label("save"))
+    items(file).find(_.getText == label("undo")) shouldBe None
+    fixture.menu(MenuTitle.Edit).setSelected(true)
+    items(fixture.menu(MenuTitle.Edit)).find(_.getText == label("undo")).map(_.isEnabled) shouldBe Some(false)
+    Option(items(file).find(_.getText == label("save")).map(_.getAccelerator)).flatten should not be empty
+  }
+
+  it should "have its mnemonics settled from the seed without a model read" in {
+    val bound   = linux.withBinding(HotkeyAction.Undo, "alt+f")
+    val fixture = new Fixture(modelOf(config(hotkeys = bound)), readsModel = false)
+
+    fixture.menu(MenuTitle.File).getMnemonic should not be KeyEvent.VK_F
+    fixture.menu(MenuTitle.Edit).getMnemonic shouldBe KeyEvent.VK_E
   }
 
   "Menu items" should "show the keymap's accelerator" in {

@@ -41,17 +41,22 @@ object SwingMenuBar:
   def enabledFor(osName: String): Boolean =
     !osName.toLowerCase(Locale.ROOT).contains("mac")
 
-  def build(host: Host, spec: MenuSpec, registry: CommandRegistry): JMenuBar =
-    val bar   = new JMenuBar
-    val menus = spec.menus.map((title, entries) => new LazyMenu(title, entries, host, registry))
+  /** `seed` is the model as it was when the bar was built. It lets a menu fill the moment it opens, so none is ever
+    * shown empty; the read each open makes afterwards only brings it up to date.
+    */
+  def build(host: Host, spec: MenuSpec, registry: CommandRegistry, seed: Option[Model] = None): JMenuBar =
+    val bar    = new JMenuBar
+    val latest = new Snapshot(seed)
+    val menus  = spec.menus.map((title, entries) => new LazyMenu(title, entries, Env(host, registry, latest)))
     menus.foreach(menu => bar.add(menu.menu))
-    applyTopLevelMnemonics(menus.map(_.menu), Set.empty)
+    applyTopLevelMnemonics(menus.map(_.menu), seed.fold(Set.empty[Char])(model => altLettersOf(model)))
     host.runAsync(
       host.readModel.flatMap(model =>
         IO(
-          SwingUtilities.invokeLater(() =>
-            applyTopLevelMnemonics(menus.map(_.menu), MenuMnemonics.altLetters(hotkeysOf(model)))
-          )
+          SwingUtilities.invokeLater { () =>
+            latest.set(Some(model))
+            applyTopLevelMnemonics(menus.map(_.menu), altLettersOf(model))
+          }
         )
       )
     )
@@ -69,9 +74,11 @@ object SwingMenuBar:
         handler.flatMap: input =>
           val guard = new MenuActivationGuard(() => input.lastPressed, input.submit(_))
           val host  = Host(menuHost.readModel, menuHost.runAsync, guard)
-          IO.blocking(
-            SwingUtilities.invokeAndWait(() =>
-              window.installMenuBar(build(host, MenuSpec.forOs(osName), CommandRegistry.withToggleUI))
+          menuHost.readModel.flatMap(seed =>
+            IO.blocking(
+              SwingUtilities.invokeAndWait(() =>
+                window.installMenuBar(build(host, MenuSpec.forOs(osName), CommandRegistry.withToggleUI, Some(seed)))
+              )
             )
           )
       )
@@ -86,6 +93,8 @@ object SwingMenuBar:
 
   private def osName: String = System.getProperty("os.name", "")
 
+  private def altLettersOf(model: Model): Set[Char] = MenuMnemonics.altLetters(hotkeysOf(model))
+
   private def hotkeysOf(model: Model): HotkeyConfig = model.app.persisted.config.inputConfig.hotkeyConfig
 
   private def applyTopLevelMnemonics(menus: List[JMenu], avoid: Set[Char]): Unit =
@@ -99,6 +108,13 @@ object SwingMenuBar:
         item.setMnemonic(found.char.toUpper)
         item.setDisplayedMnemonicIndex(found.index)
       case None => item.setMnemonic(0)
+
+  final private class Snapshot(seed: Option[Model]):
+    private val held                    = new AtomicReference[Option[Model]](seed)
+    def get(): Option[Model]            = held.get()
+    def set(model: Option[Model]): Unit = held.set(model)
+
+  final private case class Env(host: Host, registry: CommandRegistry, latest: Snapshot)
 
   final private case class Row(item: JMenuItem, command: Command)
 
@@ -115,14 +131,24 @@ object SwingMenuBar:
   private case object SeparatorPiece                                  extends Piece
 
   /** One top-level menu. Only the event-dispatch thread touches it, so `populated` is a holder, not a lock. */
-  final private class LazyMenu(title: MenuTitle, entries: List[MenuEntry], host: Host, registry: CommandRegistry):
+  final private class LazyMenu(title: MenuTitle, entries: List[MenuEntry], env: Env):
     val menu = new JMenu(title.text)
 
     private val populated = new AtomicReference[Option[Populated]](None)
 
     menu.addMenuListener(new MenuListener:
       override def menuSelected(e: MenuEvent): Unit =
-        host.runAsync(host.readModel.flatMap(model => IO(SwingUtilities.invokeLater(() => show(model)))))
+        env.latest.get().foreach(show)
+        env.host.runAsync(
+          env.host.readModel.flatMap(model =>
+            IO(
+              SwingUtilities.invokeLater { () =>
+                env.latest.set(Some(model))
+                show(model)
+              }
+            )
+          )
+        )
       override def menuDeselected(e: MenuEvent): Unit = ()
       override def menuCanceled(e: MenuEvent): Unit   = ())
 
@@ -137,7 +163,7 @@ object SwingMenuBar:
 
     private def rebuild(model: Model): Populated =
       val context  = model.app.editingContext
-      val resolved = MenuModel.resolve(MenuSpec(List(title -> entries)), registry, context.mode, context.shell)
+      val resolved = MenuModel.resolve(MenuSpec(List(title -> entries)), env.registry, context.mode, context.shell)
       menu.removeAll()
       val rows = fill(menu, resolved.flatMap(_.entries), model)
       Populated(context.mode, context.shell, rows, None)
@@ -183,7 +209,7 @@ object SwingMenuBar:
 
     private def activate(item: JMenuItem, command: Command): Unit =
       val accelerator = Option(item.getAccelerator)
-      host.guard.activate(
+      env.host.guard.activate(
         MenuDispatch.eventFor(CommandId(command.name)),
         accelerator,
         viaAcceleratorKey(accelerator, EventQueue.getCurrentEvent)
