@@ -20,7 +20,7 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
       List(
         Option.when(relative.contains("Debug"))(s"$relative uses a debug-era file name"),
         Option.when(DebugSuitePattern.findFirstIn(content).nonEmpty)(s"$relative uses a debug-era suite name"),
-        Option.when(ConsoleOutputPattern.findFirstIn(content).nonEmpty)(
+        Option.when(!ChildProcessMains(relative) && ConsoleOutputPattern.findFirstIn(content).nonEmpty)(
           s"$relative writes to stdout during normal tests"
         ),
         Option.when(DisabledAnnotationPattern.findFirstIn(content).nonEmpty)(
@@ -46,7 +46,10 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
         .toList
     }
 
-  private val DebugSuitePattern         = (raw"\bclass\s+" + "Deb" + "ug" + raw"\w*Sp" + "ec" + raw"\b").r
+  // Entry points a spec launches as a separate JVM: their stdout is the channel the parent spec reads, not test noise.
+  private val ChildProcessMains = Set("crash/KillRecoveryChild.scala")
+
+  private val DebugSuitePattern        = (raw"\bclass\s+" + "Deb" + "ug" + raw"\w*Sp" + "ec" + raw"\b").r
   private val ConsoleOutputPattern      = ("println" + raw"\s*\(").r
   private val DisabledAnnotationPattern = ("@" + "Ignore").r
   private val DisabledTestCallPattern   = (raw"\b" + "ignore" + raw"\s*\(").r
