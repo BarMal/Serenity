@@ -54,7 +54,7 @@ Serenity keeps everything under `.serenity` in your home folder on every OS (`~/
 
 Serenity's own code makes no network connections, and has no telemetry or update check. Your files, settings,
 sessions and logs stay on your machine. Language servers are separate programs that Serenity starts when you work in a
-language that has one; they behave as their own authors made them.
+language that has one; they behave as their own authors made them. The full statement is in [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## If something goes wrong
 
