@@ -166,6 +166,7 @@ object SwingMenuBar:
       val resolved = MenuModel.resolve(MenuSpec(List(title -> entries)), env.registry, context.mode, context.shell)
       menu.removeAll()
       val rows = fill(menu, resolved.flatMap(_.entries), model)
+      MenuBarTheming.applyTo(menu)
       Populated(context.mode, context.shell, rows, None)
 
     private def fill(target: JMenu, entries: List[ResolvedEntry], model: Model): List[Row] =

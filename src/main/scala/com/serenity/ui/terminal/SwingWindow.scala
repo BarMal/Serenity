@@ -55,6 +55,8 @@ class SwingWindow(
   private val chromePaletteRef         = new AtomicReference(SwingWindow.ChromePalette.fromTheme(Theme.default))
   private val nativeChromeThemeCache   = new SwingWindow.ChromePaletteCache
   private val customChromePaletteCache = new SwingWindow.ChromePaletteCache
+  private val menuBarRef               = new AtomicReference[Option[JMenuBar]](None)
+  private val menuBarPaletteRef        = new AtomicReference[Option[MenuBarPalette]](None)
   private val pendingResize            = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch               = new CountDownLatch(1)
   private val baseImageRef             = new AtomicReference[Option[BufferedImage]](None)
@@ -259,6 +261,8 @@ class SwingWindow(
     */
   def installMenuBar(bar: JMenuBar): Unit =
     val install: Runnable = () =>
+      menuBarRef.set(Some(bar))
+      menuBarPaletteRef.get().foreach(MenuBarTheming.apply(bar, _))
       SwingWindow.menuBarPlacement(System.getProperty("os.name", ""), usesCustomChrome) match
         case MenuBarPlacement.UnderCustomTitleBar                           => chromeNorth.add(bar, BorderLayout.SOUTH)
         case MenuBarPlacement.ScreenMenuBar | MenuBarPlacement.FrameMenuBar => frame.setJMenuBar(bar)
@@ -335,6 +339,20 @@ class SwingWindow(
     onResizeCallbackRef.get().foreach(_.apply())
 
   def updateChromeTheme(theme: Theme): Unit =
+    updateTitleBarTheme(theme)
+    updateMenuBarTheme(MenuBarPalette.fromTheme(theme))
+
+  /** The bar follows the editor theme in every chrome mode, so it is restyled only when the palette changed. */
+  private def updateMenuBarTheme(palette: MenuBarPalette): Unit =
+    if !menuBarPaletteRef.get().contains(palette) then
+      menuBarPaletteRef.set(Some(palette))
+      menuBarRef
+        .get()
+        .foreach: bar =>
+          val restyle: Runnable = () => MenuBarTheming.apply(bar, palette)
+          if SwingUtilities.isEventDispatchThread then restyle.run() else SwingUtilities.invokeLater(restyle)
+
+  private def updateTitleBarTheme(theme: Theme): Unit =
     if usesCustomChrome then
       val palette = SwingWindow.ChromePalette.fromTheme(theme)
       if customChromePaletteCache.recordIfChanged(palette, supported = true) then

@@ -20,6 +20,7 @@ import com.serenity.state.manager.Model
 import com.serenity.state.models.{AppState, BufferId, PaneId, Shell}
 import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, UndoState}
 import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -371,4 +372,18 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
     val undo    = fixture.itemLabelled(MenuTitle.Edit, label("undo"))
 
     undo.getAccessibleContext.getAccessibleDescription should not be empty
+  }
+
+  it should "style a menu filled after the bar was themed, and restyle it when the theme changes" in {
+    val fixture = new Fixture(modelOf(config()))
+    val dark    = MenuBarPalette.fromTheme(Theme.dark)
+    val light   = MenuBarPalette.fromTheme(Theme.light)
+    SwingUtilities.invokeAndWait(() => MenuBarTheming.apply(fixture.bar, dark))
+
+    val save = fixture.itemLabelled(MenuTitle.File, label("save"))
+    save.getBackground shouldBe dark.popupBackground.toAwt
+    save.getForeground shouldBe dark.popupForeground.toAwt
+
+    SwingUtilities.invokeAndWait(() => MenuBarTheming.apply(fixture.bar, light))
+    save.getBackground shouldBe light.popupBackground.toAwt
   }
