@@ -4,10 +4,9 @@ import com.serenity.rope.Rope
 
 /** Word/character counts and an estimated reading time for a span of prose.
   *
-  * `characterCount` includes whitespace; `characterCountExcludingWhitespace` does not. `wordCount` is the number of
-  * maximal runs of non-whitespace characters (the same definition `wc -w` uses), computed incrementally from the
-  * `Rope`'s own per-node bookkeeping (see `Rope.wordCount`/`Rope.nonWhitespaceCount`) rather than by rescanning the
-  * whole buffer -- `of` only ever reads the root node's already-maintained fields.
+  * Words and characters are defined by [[TextCounts]]: `characterCount` counts grapheme clusters, whitespace included,
+  * and `characterCountExcludingWhitespace` leaves the whitespace ones out. `of` only reads the root node's
+  * incrementally maintained summary (see `Rope.textSummary`) rather than rescanning the whole buffer.
   */
 final case class TextStatistics(
     wordCount: Int,
@@ -34,7 +33,7 @@ object TextStatistics:
   def of(content: Rope): TextStatistics =
     TextStatistics(
       wordCount = content.wordCount,
-      characterCount = content.weight,
+      characterCount = content.characterCount,
       characterCountExcludingWhitespace = content.nonWhitespaceCount
     )
 
@@ -42,8 +41,9 @@ object TextStatistics:
     * document) sets the cost of counting.
     */
   def ofString(text: String): TextStatistics =
+    val counts = TextCounts.of(text)
     TextStatistics(
-      wordCount = Rope.countWordRuns(text),
-      characterCount = text.length,
-      characterCountExcludingWhitespace = text.count(!_.isWhitespace)
+      wordCount = counts.words,
+      characterCount = counts.characters,
+      characterCountExcludingWhitespace = counts.nonWhitespaceCharacters
     )

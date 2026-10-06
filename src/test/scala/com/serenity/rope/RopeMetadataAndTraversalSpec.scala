@@ -82,14 +82,14 @@ class RopeMetadataAndTraversalSpec extends AnyFlatSpec with Matchers:
     rope.wordCount.shouldBe(9)
     rope.nonWhitespaceCount.shouldBe("Thequickbrownfoxjumpsoverthelazydog.".length)
 
-  it should "count unicode and CJK content as maximal non-whitespace runs" in new RopeSpecScope:
+  it should "count unicode words once and CJK characters one each" in new RopeSpecScope:
     val rope = Rope("café naïve 你好世界 emoji🎉test")
-    rope.wordCount.shouldBe(4)
-    rope.nonWhitespaceCount.shouldBe(rope.collect().count(!_.isWhitespace))
+    rope.wordCount.shouldBe(8)
+    rope.nonWhitespaceCount.shouldBe(rope.collect().count(!_.isWhitespace) - 1)
 
-  it should "count punctuation-only content as words" in new RopeSpecScope:
+  it should "not count punctuation-only content as words" in new RopeSpecScope:
     val rope = Rope("... !!! ,,,")
-    rope.wordCount.shouldBe(3)
+    rope.wordCount.shouldBe(0)
     rope.nonWhitespaceCount.shouldBe(9)
 
   it should "maintain word metadata incrementally across rope operations" in new ChunkedRopeSpecScope:
