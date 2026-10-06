@@ -71,7 +71,8 @@ final private[manager] class StateManagerEffectHandlers(
       def completeQuit: IO[Unit] = quitSignal.complete(()).attempt.void
   )
 
-  private val reopenEffects = new ReopenWithEncodingEffects(currentState, commitState, editor, fileManager)
+  private val reopenEffects    = new ReopenWithEncodingEffects(currentState, commitState, editor, fileManager)
+  private val manuscriptExport = new ManuscriptExportEffects(logger, fileDialog, editor, currentState, commitState)
 
   private val configEffects = new StateManagerConfigEffects(
     currentState,
@@ -289,6 +290,7 @@ final private[manager] class StateManagerEffectHandlers(
           case None           => logger.debug("[CMD] No focused buffer to save")
       case FileIntent.SaveCurrentFileAs =>
         requestSaveAsFileDialog(state, state.focusedBufferId)
+      case FileIntent.ExportManuscript(request) => manuscriptExport.run(request, state)
       case FileIntent.OpenFile =>
         requestOpenFileDialog
       case FileIntent.OpenRecentFile(path) =>
@@ -321,10 +323,7 @@ final private[manager] class StateManagerEffectHandlers(
       case FileIntent.SaveWithoutFormatting(bufferId) =>
         currentState.flatMap(current => commitState(RichTextReducer.withoutFormatting(bufferId, current), current)) >>
           saveBufferEffect(bufferId)
-      case FileIntent.ChooseReopenEncoding =>
-        currentState.flatMap(current =>
-          ReopenWithEncoding.withPickerOpened(current).fold(IO.unit)(commitState(_, current))
-        )
+      case FileIntent.ChooseReopenEncoding => reopenEffects.chooseEncoding
       case FileIntent.ReopenWithEncoding(bufferId, encoding, discardEdits) =>
         reopenEffects.reopen(bufferId, encoding, discardEdits)
 

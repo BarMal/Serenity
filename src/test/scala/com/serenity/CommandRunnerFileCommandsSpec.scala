@@ -13,8 +13,10 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import org.scalatest.concurrent.Eventually.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.time.{Seconds, Span}
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
@@ -132,6 +134,53 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.persisted.buffers(bufferId).document.filePath shouldBe Some(targetPath)
     updatedState.persisted.buffers(bufferId).document.isDirty shouldBe false
     Files.readString(targetPath) shouldBe "saved through dialog"
+  }
+
+  it should "export the focused buffer as a manuscript through the native save dialog, leaving the buffer as it was" in {
+    val targetPath   = Files.createTempDirectory("serenity-export").resolve("novel-manuscript.docx")
+    val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val document = state.persisted.buffers(bufferId).document
+        val buffer = state.persisted
+          .buffers(bufferId)
+          .copy(document = document.copy(content = com.serenity.rope.Rope("# Arrival\n\nThe train was late.")))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "export-manuscript-docx", "export-manuscript-docx")
+
+    eventually(timeout(Span(20, Seconds)))(Files.exists(targetPath) shouldBe true)
+    val exported = com.serenity.richtext.DocxDocumentCodec.readBytes(Files.readAllBytes(targetPath))
+    exported.map(_.paragraphs.map(_.plainText)).getOrElse(Nil) should contain allOf ("Arrival", "The train was late.")
+    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect() shouldBe
+      "# Arrival\n\nThe train was late."
+  }
+
+  it should "export the focused buffer as an EPUB through the native save dialog" in {
+    val targetPath   = Files.createTempDirectory("serenity-export-epub").resolve("novel-manuscript.epub")
+    val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val document = state.persisted.buffers(bufferId).document
+        val buffer = state.persisted
+          .buffers(bufferId)
+          .copy(document = document.copy(content = com.serenity.rope.Rope("# Arrival\n\nThe train was late.")))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "export-manuscript-epub", "export-manuscript-epub")
+
+    eventually(timeout(Span(20, Seconds)))(Files.exists(targetPath) shouldBe true)
+    val entry = new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(Files.readAllBytes(targetPath)))
+    entry.getNextEntry.getName shouldBe "mimetype"
+    String(entry.readAllBytes(), "UTF-8") shouldBe "application/epub+zip"
   }
 
   it should "open a selected file through the native open-file dialog" in {

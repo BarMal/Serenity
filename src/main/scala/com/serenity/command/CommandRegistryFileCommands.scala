@@ -14,7 +14,7 @@ private[command] object CommandRegistryFileCommands:
       label = "Save As"
     )
 
-  private[command] def fileCommands: List[Command] = List(
+  private[command] def fileCommands: List[Command] = ManuscriptExportCommands.all ++ List(
     Command.typed(
       "open-settings",
       "Browse, search, inspect, and change application settings.",
