@@ -257,7 +257,8 @@ object StateManager:
         editIdleSessionSave = runtime.policy.saveOnEditIdle.map(idle =>
           EditIdleSessionSave(idle, runtime.sessionPersistence.maybeSaveSession(_, SessionSaveTrigger.EditIdle))
         ),
-        announceClosedDocuments = LspDocumentSync.announceClosed(runtime.lspQueue)
+        announceClosedDocuments = LspDocumentSync.announceClosed(runtime.lspQueue),
+        forgetClosedBuffers = ClosedBufferRetention.forgetRenderCaches(runtime.renderCaches)
       )
       .map(operations => new StateManagerImpl(runtime, operations))
 

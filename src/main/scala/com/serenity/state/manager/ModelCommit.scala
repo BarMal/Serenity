@@ -58,7 +58,10 @@ final private[manager] class ModelCommit(
       val reduced = EffectResult.reduce(current.app, result, wrapCache = wrapCache)
       if (reduced.state eq current.app) && reduced.effects.isEmpty then (current, IO.unit)
       else
-        val next = ModelCommit.applyModelEffects(current.copy(app = reduced.state), reduced.effects)
+        val next = ClosedBufferRetention.forgetting(
+          current.app,
+          ModelCommit.applyModelEffects(current.copy(app = reduced.state), reduced.effects)
+        )
         StateManagerOperationBoundary.prepareCommit(next.app, current.app) match
           case Right(committed) =>
             (
@@ -78,7 +81,8 @@ final private[manager] class ModelCommit(
       transition(current) match
         case None                                       => (current, IO.unit)
         case Some((next, _)) if next.app eq current.app => (next, IO.unit)
-        case Some((next, fallbackState)) =>
+        case Some((transitioned, fallbackState)) =>
+          val next = ClosedBufferRetention.forgetting(current.app, transitioned)
           StateManagerOperationBoundary.prepareCommit(next.app, fallbackState) match
             case Right(committedState) =>
               (next.copy(app = committedState), operations.afterCommit(fallbackState, committedState))
