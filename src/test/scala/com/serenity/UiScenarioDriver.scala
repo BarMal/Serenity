@@ -14,6 +14,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
@@ -475,7 +476,8 @@ object UiScenarioDriver:
         deviceTextScaleProvider = IO.pure(environment.deviceScale),
         sessionRootOverride = Some(configuredSessionRoot),
         initialConfig = configuredInitialConfig,
-        uiPresetStore = uiPresetStore.getOrElse(UiPresetStore.default)
+        uiPresetStore = uiPresetStore.getOrElse(UiPresetStore.default),
+        dictionaryCache = SharedDictionary.cacheFor(configuredInitialConfig)
       )
       driver <- over(manager, environment, artifactDirectory)
     yield driver

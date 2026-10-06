@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -19,7 +20,7 @@ class StartupStateSpec extends AnyFlatSpec with Matchers:
 
     // Given: Fresh StateManager (simulates app startup)
     val logger       = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager.apply(logger).unsafeRunSync()
+    val stateManager = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
     // When: Get the initial state
     val initialState = stateManager.getCurrentState.unsafeRunSync()
@@ -46,7 +47,7 @@ class StartupStateSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
 
     val logger       = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager.apply(logger).unsafeRunSync()
+    val stateManager = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Next IDs should be set correctly for future creations

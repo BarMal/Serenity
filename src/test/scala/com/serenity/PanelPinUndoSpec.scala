@@ -8,6 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -27,8 +28,14 @@ class PanelPinUndoSpec extends AnyFlatSpec with Matchers:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   trait PanelFixture:
+
     val sm: StateManager =
-      StateManager.apply(LoggerFactory[IO].getLogger(using LoggerName("PanelPinUndoSpec"))).unsafeRunSync()
+      StateManager
+        .apply(
+          LoggerFactory[IO].getLogger(using LoggerName("PanelPinUndoSpec")),
+          dictionaryCache = SharedDictionary.default
+        )
+        .unsafeRunSync()
 
   private def viewCommand(intent: ViewIntent): Command =
     Command.typed("test-view-command", "A test view command.", CommandIntent.View(intent), CommandCategory.View)

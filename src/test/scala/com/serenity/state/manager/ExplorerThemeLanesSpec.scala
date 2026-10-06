@@ -16,6 +16,7 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.testkit.AwaitCondition.awaitValue
+import com.serenity.testkit.SharedDictionary
 import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, PanelPosition, PanelTarget}
@@ -110,7 +111,8 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
           uiPresetStore = UiPresetStore(sessionRoot.resolve("ui-presets.json")),
           windowSizeProvider = IO.pure(None),
           onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-          fileDialog = None
+          fileDialog = None,
+          dictionaryCache = SharedDictionary.default
         )
         .copy(fileManager = new GatedFileManager(listings))
       manager <- StateManager.fromRuntime(runtime)

@@ -13,6 +13,7 @@ import com.serenity.app.AppStartup
 import com.serenity.session.{SessionManager, SessionState, UnreadableSession}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
@@ -95,7 +96,11 @@ class SessionDowngradeSpec extends AnyFlatSpec with Matchers with OptionValues w
     yield root
 
   private def launch(root: Path): IO[AppState] =
-    StateManager(testLogger("SessionDowngradeSpec"), sessionRootOverride = Some(root)).flatMap { stateManager =>
+    StateManager(
+      testLogger("SessionDowngradeSpec"),
+      sessionRootOverride = Some(root),
+      dictionaryCache = SharedDictionary.default
+    ).flatMap { stateManager =>
       AppStartup
         .initializeState(stateManager, stateManager.sessionStartupInfo, Theme.default, ViewportSize(80, 24))
         .timeout(30.seconds)
