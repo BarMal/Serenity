@@ -165,10 +165,10 @@ object AppRuntime:
           recovery
         )
         surfaceConfig = initialState.persisted.config.surfaceConfig
-        inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
-        inputHandler <- runtime.inputHandler(inputRouter)
-        _            <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
-        _            <- inputRouter.setCursorPeekEnabled(surfaceConfig.commandRunnerCursorPeekEnabled)
+        inputRouter    <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
+        inputHandler   <- runtime.inputHandler(inputRouter)
+        _              <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
+        _              <- inputRouter.setCursorPeekEnabled(surfaceConfig.commandRunnerCursorPeekEnabled)
         fastModeSignal <- SignallingRef.of[IO, Boolean](false)
         pendingDamage  <- Ref.of[IO, Damage](Damage.Nothing)
         // Separate from pendingDamage: that ref answers "did more damage arrive while the fast phase ran" (see
@@ -180,10 +180,10 @@ object AppRuntime:
         // The resize/idle-recovery paths don't have a before/after AppState to diff, so they report the coarsest
         // damage rather than none -- inputEventPhase is the one caller that reports real per-event damage.
         requestFastRender = emitDamage(Damage.Everything)
-        typingQuietTimer <- TypingQuietTimer.create(timerSupervisor, TypingQuietTimer.expireIn(stateManager))
+        typingQuietTimer    <- TypingQuietTimer.create(timerSupervisor, TypingQuietTimer.expireIn(stateManager))
         frameTimingEnabled  <- SignallingRef.of[IO, Boolean](surfaceConfig.frameTimingEnabled)
         latencyTraceEnabled <- SignallingRef.of[IO, Boolean](surfaceConfig.latencyTraceEnabled)
-        watchInputs <- SignallingRef.of[IO, Long](0L)
+        watchInputs         <- SignallingRef.of[IO, Long](0L)
         wakeOnCommit = wakeRenderLoopOnCommit(emitDamage)
         observeTransition = (before: AppState, after: AppState) =>
           typingQuietTimer.onCommit(before, after) >> followFrameTimingSetting(frameTimingEnabled)(before, after) >>
