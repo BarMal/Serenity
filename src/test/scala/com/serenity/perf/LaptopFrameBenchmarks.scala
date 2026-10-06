@@ -204,6 +204,8 @@ private[perf] object LaptopFrameBenchmarks:
       _ <- stateManager.applyEvent(ResizeEvent(viewport))
       _ <- stateManager.setCursorPosition(paneId, cursorLine, cursorColumn)
       _ <- stateManager.updateState(scrolledToCursor(created))
+      // Every fixture is built before the first benchmark is timed, so an analysis still running here would overlap it.
+      _ <- stateManager.runtimeLifecycle.awaitEffects
     yield created).unsafeRunSync()
     (stateManager, proseBufferId)
 
