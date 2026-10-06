@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.*
 import cats.syntax.foldable.*
-import com.serenity.config.PreferredWindowSize
+import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.{LspEffect, LspNotices}
@@ -42,7 +42,8 @@ private[manager] class StateManagerComposition(
     val sessionPersistence: SessionPersistence,
     val renderCaches: RenderCaches,
     operations: StateManagerOperationBoundary,
-    val restarter: Option[RestartMode => IO[Unit]] = None
+    val restarter: Option[RestartMode => IO[Unit]] = None,
+    configOnDisk: Option[AppConfig] = None
 )(using providedBalance: Balance):
 
   private val modelCommit = operations.modelCommit
@@ -57,6 +58,7 @@ private[manager] class StateManagerComposition(
   private val runtimeOnFontConfigChanged     = onFontConfigChanged
   private val runtimeDeviceTextScaleProvider = deviceTextScaleProvider
   private val runtimeConfigPersistencePath   = configPersistencePath
+  private val runtimeConfigOnDisk            = configOnDisk
   private val runtimeUiPresetStore           = uiPresetStore
   private val runtimeWindowSizeProvider      = windowSizeProvider
   private val runtimeFileDialog              = fileDialog
@@ -98,6 +100,7 @@ private[manager] class StateManagerComposition(
     val onFontConfigChanged        = runtimeOnFontConfigChanged
     val deviceTextScaleProvider    = runtimeDeviceTextScaleProvider
     val configPersistencePath      = runtimeConfigPersistencePath
+    override val configOnDisk      = runtimeConfigOnDisk
     val uiPresetStore              = runtimeUiPresetStore
     val windowSizeProvider         = runtimeWindowSizeProvider
     val markdownPreviewWindow      = runtimeMarkdownPreviewWindow
@@ -277,7 +280,8 @@ private[manager] class StateManagerComposition(
     operations.refreshDictionaryFingerprints(),
     operations.dictionaryWatchDirectories,
     operations.explorerWatchDirectories,
-    operations.markExplorerDirectoriesStale
+    operations.markExplorerDirectoriesStale,
+    effects.configWatch
   )
 
   // PaneManager's/PanelManager's methods are excluded from the facade export (#1017/#1724): they have no real

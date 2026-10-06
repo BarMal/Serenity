@@ -10,6 +10,7 @@ import cats.syntax.all.*
 import com.serenity.app.AppRuntime
 import com.serenity.io.FileChangeWatcher
 import com.serenity.rope.Balance
+import com.serenity.state.manager.ConfigFileWatch
 import com.serenity.state.models.BufferId
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.concurrent.SignallingRef
@@ -334,6 +335,73 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
     checkedRegain shouldBe List(bufferId)
     checkedAfter shouldBe List(bufferId)
     checkedResumed shouldBe List(bufferId, bufferId)
+  }
+
+  "externalChangeWatchLoop with a config file" should "reload it when it changes, and not for a sibling file (#1934)" in {
+    val directory = Path.of("/virtual/serenity")
+    val config    = directory.resolve("config.conf")
+    val sibling   = directory.resolve("session.json")
+
+    val program = for
+      listings <- Ref.of[IO, Map[Path, (Long, Long)]](Map(config -> (1L, 1L), sibling -> (1L, 1L)))
+      reloads  <- Ref.of[IO, Int](0)
+      result <- FileChangeWatcher.pollingListings(1.second, _ => listings.get).use { watcher =>
+        val loop = AppRuntime.externalChangeWatchLoop(
+          watcher,
+          openBufferPaths = IO.pure(Map.empty),
+          checkBufferForExternalChanges = _ => IO.unit,
+          configWatch = Some(ConfigFileWatch(config, reloads.update(_ + 1)))
+        )
+        loop.compile.drain.background.surround(
+          for
+            _             <- IO.sleep(5.seconds)
+            _             <- listings.update(_.updated(sibling, (2L, 2L)))
+            _             <- IO.sleep(5.seconds)
+            afterSibling  <- reloads.get
+            _             <- listings.update(_.updated(config, (2L, 2L)))
+            _             <- IO.sleep(5.seconds)
+            afterConfig   <- reloads.get
+            _             <- listings.update(_.updated(config, (3L, 3L)))
+            _             <- IO.sleep(5.seconds)
+            afterSecondGo <- reloads.get
+          yield (afterSibling, afterConfig, afterSecondGo)
+        )
+      }
+    yield result
+
+    runVirtual(program) shouldBe (0, 1, 2)
+  }
+
+  it should "check the config file again on regaining focus, since changes made meanwhile were never seen (#1934)" in {
+    val config = Path.of("/virtual/serenity/config.conf")
+
+    val program = for
+      reloads     <- Ref.of[IO, Int](0)
+      windowFocus <- SignallingRef.of[IO, Boolean](true)
+      result <- FileChangeWatcher.pollingListings(1.second, _ => IO.pure(Map(config -> (1L, 1L)))).use { watcher =>
+        val loop = AppRuntime.externalChangeWatchLoop(
+          watcher,
+          openBufferPaths = IO.pure(Map.empty),
+          checkBufferForExternalChanges = _ => IO.unit,
+          configWatch = Some(ConfigFileWatch(config, reloads.update(_ + 1))),
+          windowFocused = windowFocus
+        )
+        loop.compile.drain.background.surround(
+          for
+            _       <- IO.sleep(5.seconds)
+            before  <- reloads.get
+            _       <- windowFocus.set(false)
+            _       <- IO.sleep(5.seconds)
+            blurred <- reloads.get
+            _       <- windowFocus.set(true)
+            _       <- IO.sleep(5.seconds)
+            regain  <- reloads.get
+          yield (before, blurred, regain)
+        )
+      }
+    yield result
+
+    runVirtual(program) shouldBe (0, 0, 1)
   }
 
   "watchInputsChanged" should "announce an opened file but not an edit to one already open (#1938)" in {

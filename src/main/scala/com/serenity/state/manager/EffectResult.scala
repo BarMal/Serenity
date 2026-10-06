@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import com.serenity.command.CommandRegistry
-import com.serenity.config.SpellCheckDictionaryFingerprint
+import com.serenity.config.{AppConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.io.ProjectFileListing
 import com.serenity.keystroke.events.RunnerBindingRecordingExpired
 import com.serenity.lsp.client.DocumentUri
@@ -110,6 +110,11 @@ private[manager] enum EffectResult:
   /** The double-tap window of the binding recorded at `recordedAtMillis` has closed. */
   case CommandRunnerBindingExpired(recordedAtMillis: Long)
 
+  /** The config file as edited from outside. `base` is the config the file was last known to match: the edit applies
+    * only while the live config is still that, so a setting changed here in the meantime is not undone by it.
+    */
+  case ConfigReloaded(base: Option[AppConfig], loaded: AppConfig)
+
   /** A notice's time ran out by `nowNanos`; every notice due by then leaves (#1717). */
   case NoticesExpired(nowNanos: Long)
 
@@ -145,9 +150,10 @@ private[manager] object EffectResult:
       case FileLoaded(path, loaded)             => FileResults.loaded(state, path, loaded)
       // A failed save changes nothing: the buffer stays dirty. Its error is not lost here -- it travels in the result
       // to `commitSave`, which hands it to the submitter's `onFailure` or raises it to the caller that awaited the save.
-      case FileSaveFailed(_, _)     => state
-      case FileLoadFailed(_, _)     => state
-      case NoticesExpired(nowNanos) => NoticeReducer.expired(state, nowNanos)
+      case FileSaveFailed(_, _)         => state
+      case FileLoadFailed(_, _)         => state
+      case NoticesExpired(nowNanos)     => NoticeReducer.expired(state, nowNanos)
+      case ConfigReloaded(base, loaded) => StateManagerConfigEffects.reloaded(state, base, loaded)
 
       case UiPresetFeedback(previews, context) =>
         UiPresetTransitions.withFeedback(state, previews, context)

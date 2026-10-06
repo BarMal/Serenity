@@ -343,6 +343,7 @@ object AppRuntime:
           stateManager.fileService.refreshDictionaryFingerprints,
           stateManager.fileService.explorerWatchDirectories,
           stateManager.fileService.markExplorerDirectoriesStale,
+          stateManager.fileService.configWatch,
           watchInputsChanges,
           windowFocused = windowFocused
         ).interruptWhen(quitSignal).compile.drain
@@ -406,10 +407,10 @@ object AppRuntime:
     case SetChanged, FocusLost, FocusRegained
 
   /** Background half of external-change detection (#1623), complementing the focus-in re-check. Watches the parent
-    * directories of open local buffers, `dictionaryWatchDirectories` (#1691) and `explorerWatchDirectories`, re-derived
-    * on each `watchedSetChanges` element. A changed buffer file gets the same reload-or-prompt check the focus-in path
-    * runs; a change under a dictionary directory refreshes the dictionary fingerprints; a changed explorer directory is
-    * marked stale.
+    * directories of open local buffers, `dictionaryWatchDirectories` (#1691), `explorerWatchDirectories` and the config
+    * file's (#1934), re-derived on each `watchedSetChanges` element. A changed buffer file gets the reload-or-prompt
+    * check of the focus-in path; a change under a dictionary directory refreshes its fingerprints; a changed explorer
+    * directory is marked stale; a changed config file is reloaded.
     *
     * Event-driven (#1938): with something watched the loop blocks in the watcher until a change arrives, and with
     * nothing watched it never calls the watcher at all, waiting for the set to change. Either way it does not wake on a
@@ -431,13 +432,15 @@ object AppRuntime:
     refreshDictionaryFingerprints: IO[Unit] = IO.unit,
     explorerWatchDirectories: IO[Set[Path]] = IO.pure(Set.empty),
     markExplorerDirectoriesStale: Set[Path] => IO[Unit] = _ => IO.unit,
+    configWatch: Option[ConfigFileWatch] = None,
     watchedSetChanges: Stream[IO, Unit] = Stream.emit(()),
     settle: FiniteDuration = 200.millis,
     windowFocused: Signal[IO, Boolean] = Signal.constant[IO, Boolean](true)
   ): Stream[IO, Unit] =
     val watched = (openBufferPaths, dictionaryWatchDirectories, explorerWatchDirectories).mapN {
       (paths, dictionaryDirectories, explorerDirectories) =>
-        paths.keySet.flatMap(path => Option(path.getParent)) ++ dictionaryDirectories ++ explorerDirectories
+        paths.keySet.flatMap(path => Option(path.getParent)) ++ dictionaryDirectories ++ explorerDirectories ++
+          configWatch.flatMap(watch => Option(watch.file.getParent))
     }
     val react = (changed: Set[Path]) =>
       (openBufferPaths, dictionaryWatchDirectories, explorerWatchDirectories).mapN {
@@ -446,7 +449,8 @@ object AppRuntime:
           val staleExplorers     = changedDirectories.intersect(explorerDirectories)
           changed.flatMap(paths.get).toList.traverse_(checkBufferForExternalChanges) >>
             IO.whenA(changedDirectories.exists(dictionaryDirectories.contains))(refreshDictionaryFingerprints) >>
-            IO.whenA(staleExplorers.nonEmpty)(markExplorerDirectoriesStale(staleExplorers))
+            IO.whenA(staleExplorers.nonEmpty)(markExplorerDirectoriesStale(staleExplorers)) >>
+            configWatch.filter(watch => changed.contains(watch.file)).traverse_(_.reload)
       }.flatten
     def syncWatched(watching: SignallingRef[IO, Boolean]) =
       watched.flatMap(directories => watcher.sync(directories) >> watching.set(directories.nonEmpty))
@@ -454,7 +458,8 @@ object AppRuntime:
       (paths, dictionaryDirectories, explorerDirectories) =>
         paths.values.toList.traverse_(checkBufferForExternalChanges) >>
           IO.whenA(dictionaryDirectories.nonEmpty)(refreshDictionaryFingerprints) >>
-          IO.whenA(explorerDirectories.nonEmpty)(markExplorerDirectoriesStale(explorerDirectories))
+          IO.whenA(explorerDirectories.nonEmpty)(markExplorerDirectoriesStale(explorerDirectories)) >>
+          configWatch.traverse_(_.reload)
     }.flatten
     val focusChanges = windowFocused.discrete.changes.zipWithPrevious.collect {
       case (_, false)          => WatchResync.FocusLost
@@ -462,8 +467,7 @@ object AppRuntime:
     }
     Stream.eval(SignallingRef.of[IO, Boolean](false)).flatMap { watching =>
       val resync = watchedSetChanges.as(WatchResync.SetChanged).merge(focusChanges).evalMap {
-        case WatchResync.SetChanged =>
-          windowFocused.get.flatMap(focused => IO.whenA(focused)(syncWatched(watching)))
+        case WatchResync.SetChanged    => windowFocused.get.flatMap(focused => IO.whenA(focused)(syncWatched(watching)))
         case WatchResync.FocusLost     => watcher.sync(Set.empty) >> watching.set(false)
         case WatchResync.FocusRegained => syncWatched(watching) >> recheckEverything
       }

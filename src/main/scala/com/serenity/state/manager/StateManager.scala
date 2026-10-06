@@ -138,7 +138,9 @@ final case class FileService(
     refreshDictionaryFingerprints: IO[Unit],
     // The directories docked explorers show, and a way to have them re-listed after a change made outside the editor.
     explorerWatchDirectories: IO[Set[Path]],
-    markExplorerDirectoriesStale: Set[Path] => IO[Unit]
+    markExplorerDirectoriesStale: Set[Path] => IO[Unit],
+    // #1934: the config file the same loop watches, absent when this session keeps no config file.
+    configWatch: Option[ConfigFileWatch]
 )
 
 trait StateManager extends StateEngine:
@@ -234,6 +236,7 @@ object StateManager:
         onFontConfigChanged = onFontConfigChanged,
         deviceTextScaleProvider = deviceTextScaleProvider,
         configPersistencePath = configPersistencePath,
+        configOnDisk = configPersistencePath.map(_ => initialConfig),
         uiPresetStore = uiPresetStore,
         windowSizeProvider = windowSizeProvider,
         onPreferredWindowSizeChanged = onPreferredWindowSizeChanged,
@@ -326,7 +329,8 @@ object StateManager:
       runtime.sessionPersistence,
       runtime.renderCaches,
       operations,
-      runtime.restarter
+      runtime.restarter,
+      runtime.configOnDisk
     )
 
     export composition.*

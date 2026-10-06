@@ -6,7 +6,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.*
 import com.serenity.config.AppConfigOps.*
-import com.serenity.config.{AppConfig, AppMode, PanelEscapeTarget, PerMode}
+import com.serenity.config.{AppConfig, AppMode, ConfigManager, PanelEscapeTarget, PerMode, WindowChromeMode}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
@@ -41,6 +41,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
       val analysisRuns: Ref[IO, Int],
       val events: Ref[IO, List[Event]],
       val committedStates: Ref[IO, List[AppState]],
+      val notices: Ref[IO, List[Notice]],
       val configPath: Option[Path],
       val config: StateManagerConfigEffects
   ):
@@ -49,7 +50,8 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
   private def harness(
     initialState: AppState = AppState.initial,
     persistConfig: Boolean = true,
-    deviceTextScale: Double = 1.0
+    deviceTextScale: Double = 1.0,
+    configOnDisk: Option[AppConfig] = None
   ): Harness =
     val root       = Files.createTempDirectory("config-effects-spec")
     val configPath = Option.when(persistConfig)(root.resolve("config.json"))
@@ -60,6 +62,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     val analyses   = Ref.of[IO, Int](0).unsafeRunSync()
     val events     = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
     val committed  = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
+    val notices    = Ref.of[IO, List[Notice]](Nil).unsafeRunSync()
 
     val editor = new EffectEditorPort:
       def enqueueEvent(event: Event): IO[Unit] = events.update(_ :+ event)
@@ -85,6 +88,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
       analyses,
       events,
       committed,
+      notices,
       configPath,
       new StateManagerConfigEffects(
         stateRef.get,
@@ -94,7 +98,9 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
         fontConfig => fonts.update(_ :+ fontConfig),
         IO.pure(deviceTextScale),
         editor,
-        com.serenity.state.manager.RenderCaches.create()
+        com.serenity.state.manager.RenderCaches.create(),
+        showNotice = notice => notices.update(_ :+ notice),
+        configOnDisk = configOnDisk
       )
     )
 
@@ -349,4 +355,139 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.configPath.map(path => Files.exists(path)) shouldBe Some(true)
     fixture.sessionTriggers.get.unsafeRunSync() shouldBe Nil
+  }
+
+  private def textOf(config: AppConfig): String = ConfigManager.configToString(config)
+
+  private def editExternally(fixture: Harness, text: String): Unit =
+    fixture.configPath.foreach(path => Files.writeString(path, text): Unit)
+
+  private def reload(fixture: Harness): Unit =
+    fixture.config.watch.foreach(_.reload.unsafeRunSync())
+
+  private def noticeTexts(fixture: Harness): List[String] =
+    fixture.notices.get.unsafeRunSync().map(_.message)
+
+  "Reloading the config file" should "apply an outside edit to the live config" in {
+    val fixture = harness(configOnDisk = Some(AppConfig.default))
+
+    editExternally(fixture, textOf(AppConfig.default.withWheelScrollLines(7)))
+    reload(fixture)
+
+    fixture.currentConfig.inputConfig.wheelScrollLines shouldBe 7
+    noticeTexts(fixture) shouldBe Nil
+  }
+
+  it should "leave a change made here but not yet written alone when the watcher reports our own write" in {
+    val fixture = harness()
+
+    fixture.config.updateConfig(_.withWheelScrollLines(7)).unsafeRunSync()
+    fixture.stateRef.update(StateManagerConfigEffects.configUpdated(_, _.withWheelScrollLines(9))).unsafeRunSync()
+    reload(fixture)
+
+    fixture.currentConfig.inputConfig.wheelScrollLines shouldBe 9
+    noticeTexts(fixture) shouldBe Nil
+  }
+
+  it should "keep a setting changed here over an outside edit made at the same time, and say so" in {
+    val fixture = harness(configOnDisk = Some(AppConfig.default))
+
+    fixture.stateRef.update(StateManagerConfigEffects.configUpdated(_, _.withWheelScrollLines(9))).unsafeRunSync()
+    editExternally(fixture, textOf(AppConfig.default.withWheelScrollLines(7)))
+    reload(fixture)
+
+    fixture.currentConfig.inputConfig.wheelScrollLines shouldBe 9
+    noticeTexts(fixture).exists(_.contains("settings from this session were kept")) shouldBe true
+  }
+
+  it should "take the file over settings that could not be written, since nothing here is worth protecting" in {
+    val fixture = harness()
+
+    fixture.stateRef.update(StateManagerConfigEffects.configUpdated(_, _.withWheelScrollLines(9))).unsafeRunSync()
+    editExternally(fixture, textOf(AppConfig.default.withWheelScrollLines(7)))
+    reload(fixture)
+
+    fixture.currentConfig.inputConfig.wheelScrollLines shouldBe 7
+  }
+
+  it should "apply every valid setting of an edited file and name the invalid one in a notice" in {
+    val fixture = harness(configOnDisk = Some(AppConfig.default))
+    val edited = textOf(AppConfig.default.withLineNumbers(false))
+      .replaceAll("(?m)^editor\\.wheel_scroll_lines = .*$", "editor.wheel_scroll_lines = lots")
+
+    editExternally(fixture, edited)
+    reload(fixture)
+
+    fixture.currentConfig.surfaceConfig.showLineNumbers shouldBe false
+    fixture.currentConfig.inputConfig.wheelScrollLines shouldBe AppConfig.default.inputConfig.wheelScrollLines
+    noticeTexts(fixture).exists(text =>
+      text.contains("editor.wheel_scroll_lines") && text.contains("were kept")
+    ) shouldBe true
+  }
+
+  it should "keep the settings in use and say so when the edited file cannot be parsed" in {
+    val fixture = harness(configOnDisk = Some(AppConfig.default))
+
+    editExternally(fixture, "editor { unclosed")
+    reload(fixture)
+
+    fixture.currentConfig shouldBe AppConfig.default
+    noticeTexts(fixture).exists(text =>
+      text.contains("could not be parsed") && text.contains("already in use")
+    ) shouldBe true
+  }
+
+  it should "apply a setting that needs a restart and say that it does" in {
+    val fixture = harness(configOnDisk = Some(AppConfig.default))
+    val chrome  = WindowChromeMode.values.find(_ != AppConfig.default.windowChromeMode).get
+
+    editExternally(fixture, textOf(AppConfig.default.withWindowChromeMode(chrome)))
+    reload(fixture)
+
+    fixture.currentConfig.windowChromeMode shouldBe chrome
+    noticeTexts(fixture).exists(text => text.contains("window.chrome") && text.contains("restarting")) shouldBe true
+  }
+
+  it should "report the new font config to the runtime" in {
+    val fixture = harness(configOnDisk = Some(AppConfig.default))
+    val font    = AppConfig.default.editorConfig.fontConfig.copy(uiFontSize = 19.0f)
+
+    editExternally(fixture, textOf(AppConfig.default.withFontConfig(font)))
+    reload(fixture)
+
+    fixture.fontConfigs.get.unsafeRunSync().map(_.uiFontSize) shouldBe List(19.0f)
+  }
+
+  it should "reschedule document analysis when the spell-check settings are edited" in {
+    val fixture    = harness(configOnDisk = Some(AppConfig.default))
+    val spellCheck = AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = false)
+
+    editExternally(fixture, textOf(AppConfig.default.withSpellCheck(spellCheck)))
+    reload(fixture)
+
+    fixture.analysisRuns.get.unsafeRunSync() shouldBe 1
+  }
+
+  it should "do nothing when the file was only reformatted" in {
+    val fixture = harness(configOnDisk = Some(AppConfig.default))
+
+    editExternally(fixture, textOf(AppConfig.default) + "# a note to self\n")
+    reload(fixture)
+
+    fixture.currentConfig shouldBe AppConfig.default
+    fixture.committedStates.get.unsafeRunSync() shouldBe Nil
+    noticeTexts(fixture) shouldBe Nil
+  }
+
+  it should "keep the settings in use when the file is gone" in {
+    val fixture = harness(configOnDisk = Some(AppConfig.default))
+
+    reload(fixture)
+
+    fixture.currentConfig shouldBe AppConfig.default
+    noticeTexts(fixture) shouldBe Nil
+  }
+
+  it should "have nothing to watch when this session keeps no config file" in {
+    harness(persistConfig = false).config.watch shouldBe None
   }
