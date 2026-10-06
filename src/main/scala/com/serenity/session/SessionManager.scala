@@ -281,10 +281,11 @@ class SessionManager(
       case false => IO.pure(SessionIndex.empty)
       case true =>
         for
-          stamp  <- IO.blocking(FileStamp.read(indexFile))
+          stamp  <- FileStamp.observe(indexFile)
           cached <- indexCache.get
           index <- (stamp, cached) match
-            case (Some(current), Some((cachedStamp, cachedIndex))) if current == cachedStamp => IO.pure(cachedIndex)
+            case (Some(current), Some((cachedStamp, cachedIndex))) if current.stamp == cachedStamp =>
+              IO.pure(cachedIndex)
             case _ =>
               readUtf8(indexFile)
                 .flatMap(jsonString => IO.fromEither(_root_.io.circe.parser.decode[SessionIndex](jsonString)))
@@ -295,14 +296,12 @@ class SessionManager(
     }
 
   private def remember(index: SessionIndex): IO[Unit] =
-    IO.blocking(FileStamp.read(indexFile)).flatMap(cache(_, index))
+    FileStamp.observe(indexFile).flatMap(cache(_, index))
 
   // The stamp is taken before the read, and kept only when it can vouch for the content: see
   // FileStamp.vouchesForContent.
-  private def cache(stamp: Option[FileStamp], index: SessionIndex): IO[Unit] =
-    IO.realTime.flatMap(now =>
-      indexCache.set(stamp.filter(FileStamp.vouchesForContent(_, now.toNanos)).map(_ -> index))
-    )
+  private def cache(stamp: Option[FileStamp.Observed], index: SessionIndex): IO[Unit] =
+    indexCache.set(stamp.filter(_.vouches).map(_.stamp -> index))
 
   private def sanitizeIndex(index: SessionIndex): IO[SessionIndex] =
     index.sessions
@@ -403,11 +402,11 @@ class SessionManager(
 
   private def commitCurrent(sessionFileName: String, state: SessionState, index: SessionIndex): IO[Unit] =
     commitTransaction(Map(sessionFileName -> stateEncoder.compact(state)), Nil, index) >>
-      IO.realTime.flatMap(now =>
+      IO.realTime.flatMap(observedAt =>
         IO.blocking(safeSessionPath(sessionFileName).flatMap(FileStamp.read)).flatMap { stamp =>
           lastSaved.set(
             stamp
-              .filter(FileStamp.vouchesForContent(_, now.toNanos))
+              .filter(FileStamp.vouchesForContent(_, observedAt.toNanos))
               .map(SessionManager.SavedSession(sessionFileName, index, state, _))
           )
         }

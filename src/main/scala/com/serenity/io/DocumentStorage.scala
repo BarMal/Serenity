@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import java.security.MessageDigest
 import java.time.Instant
 
+import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 
 import cats.effect.IO
@@ -34,8 +35,20 @@ object FileStamp:
       fileKey = Option(attributes.fileKey).map(_.toString)
     )
 
-  def vouchesForContent(stamp: FileStamp, nowNanos: Long): Boolean =
-    stamp.modifiedNanos % CoarseTickNanos != 0L || nowNanos - stamp.modifiedNanos >= CoarseWindowNanos
+  /** `observedAtNanos` must be a clock reading taken BEFORE the stat that produced `stamp`. A reading taken after it
+    * can fall past the end of the tick while the stat did not: a same-size write landing in that gap keeps the stamp
+    * and is never noticed.
+    */
+  def vouchesForContent(stamp: FileStamp, observedAtNanos: Long): Boolean =
+    stamp.modifiedNanos % CoarseTickNanos != 0L || observedAtNanos - stamp.modifiedNanos >= CoarseWindowNanos
+
+  final case class Observed(stamp: FileStamp, vouches: Boolean)
+
+  /** Reads the clock, then stats: the order [[vouchesForContent]] requires. */
+  def observe(path: Path, clock: IO[FiniteDuration] = IO.realTime): IO[Option[Observed]] =
+    clock.flatMap(observedAt =>
+      IO.blocking(read(path)).map(_.map(stamp => Observed(stamp, vouchesForContent(stamp, observedAt.toNanos))))
+    )
 
   /** Blocking. `None` for a path that is not a regular file. */
   def read(path: Path): Option[FileStamp] =
@@ -176,17 +189,21 @@ object LocalDocumentStorageProvider:
     location: StorageLocation,
     probe: StorageIoProbe
   ): IO[Either[DocumentStorageError, StoredDocument]] =
-    IO.blocking[Either[DocumentStorageError, BasicFileAttributes]] {
-      if !Files.exists(path) then Left(DocumentStorageError.NotFound(location))
-      else if !Files.isRegularFile(path) || !Files.isReadable(path) then
-        Left(DocumentStorageError.AccessDenied(location))
-      else Right(attributes(path))
-    }.flatMap(_.traverse { before =>
-      for
-        content  <- readContent(path, probe)
-        revision <- revisionOf(content, before, probe)
-      yield StoredDocument(content, metadata(path, before, Some(revision)))
-    }).handleError(error => Left(storageError(location, error)))
+    IO.realTime
+      .flatMap(observedAt =>
+        IO.blocking[Either[DocumentStorageError, BasicFileAttributes]] {
+          if !Files.exists(path) then Left(DocumentStorageError.NotFound(location))
+          else if !Files.isRegularFile(path) || !Files.isReadable(path) then
+            Left(DocumentStorageError.AccessDenied(location))
+          else Right(attributes(path))
+        }.flatMap(_.traverse { before =>
+          for
+            content  <- readContent(path, probe)
+            revision <- revisionOf(content, before, observedAt.toNanos, probe)
+          yield StoredDocument(content, metadata(path, before, Some(revision)))
+        })
+      )
+      .handleError(error => Left(storageError(location, error)))
 
   private def statLocal(path: Path, location: StorageLocation): IO[Either[DocumentStorageError, FileStamp]] =
     IO.blocking(FileStamp.read(path))
@@ -206,9 +223,10 @@ object LocalDocumentStorageProvider:
         case false => IO.pure(Left(DocumentStorageError.Conflict(location)))
         case true =>
           for
-            _        <- AtomicFileWriter.writeBytes(path, content)
-            written  <- IO.blocking(attributes(path))
-            revision <- revisionOf(content, written, probe)
+            _          <- AtomicFileWriter.writeBytes(path, content)
+            observedAt <- IO.realTime
+            written    <- IO.blocking(attributes(path))
+            revision   <- revisionOf(content, written, observedAt.toNanos, probe)
           yield Right(StoredDocument(content, metadata(path, written, Some(revision))))
       }
       .handleError(error => Left(storageError(location, error)))
@@ -232,13 +250,14 @@ object LocalDocumentStorageProvider:
   private def revisionOf(
     content: Array[Byte],
     stated: BasicFileAttributes,
+    observedAtNanos: Long,
     probe: StorageIoProbe
   ): IO[DocumentRevision] =
-    (digestOf(content, probe), IO.realTime).mapN { (digest, now) =>
+    digestOf(content, probe).map { digest =>
       val stamp = FileStamp.of(stated)
       DocumentRevision(
         digest,
-        Option.when(stamp.size == content.length.toLong && FileStamp.vouchesForContent(stamp, now.toNanos))(stamp)
+        Option.when(stamp.size == content.length.toLong && FileStamp.vouchesForContent(stamp, observedAtNanos))(stamp)
       )
     }
 
