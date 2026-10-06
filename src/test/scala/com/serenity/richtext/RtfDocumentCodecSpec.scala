@@ -227,6 +227,8 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
     )
 
     result.fidelity.unsupportedElements should contain("table")
+    result.fidelity.count(DocumentFeature.Tables, Treatment.Dropped) shouldBe 1
+    result.fidelity.dropSummary shouldBe "1 table"
     result.fidelity.isLossless shouldBe false
     result.document.plainText should include("first")
     result.document.plainText should include("second")
@@ -239,6 +241,8 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
     )
 
     result.fidelity.unsupportedElements should contain("picture")
+    result.fidelity.count(DocumentFeature.Images, Treatment.Dropped) shouldBe 1
+    result.fidelity.dropSummary shouldBe "1 image"
     result.fidelity.isLossless shouldBe false
     result.document.plainText shouldBe "before  after"
   }
@@ -249,6 +253,9 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
     ).fidelity
 
     fidelity.unsupportedElements should contain allOf ("strikethrough", "superscript", "field", "footnote")
+    fidelity.count(DocumentFeature.Fields, Treatment.Dropped) shouldBe 1
+    fidelity.count(DocumentFeature.Notes, Treatment.Dropped) shouldBe 1
+    fidelity.count(DocumentFeature.Other("strikethrough"), Treatment.Dropped) shouldBe 1
   }
 
   it should "skip unknown destinations as opaque groups and report them by name" in {

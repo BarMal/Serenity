@@ -117,9 +117,9 @@ final case class FidelityReport(items: List[FidelityItem]):
 
   def isLossless: Boolean = wouldDrop.isEmpty
 
-  /** The names of the content a save would drop that no [[DocumentFeature]] names, as an RTF import reports it. */
+  /** The names an RTF import gives the content a save would drop. */
   def unsupportedElements: Set[String] =
-    wouldDrop.collect { case FidelityItem(DocumentFeature.Other(name), _, _) => name }.toSet
+    wouldDrop.map(item => FidelityReport.rtfName(item.feature)).toSet
 
   def count(feature: DocumentFeature, treatment: Treatment): Int =
     items.filter(item => item.feature == feature && item.treatment == treatment).map(_.count).sum
@@ -145,7 +145,26 @@ object FidelityReport:
   /** What an RTF import left out, which a save over the same file would drop: RTF keeps no source package to copy from.
     */
   def unsupported(names: Set[String]): FidelityReport =
-    FidelityReport(names.toList.sorted.map(name => FidelityItem(DocumentFeature.Other(name), Treatment.Dropped, 1)))
+    FidelityReport(names.toList.sorted.map(name => FidelityItem(featureOfRtfName(name), Treatment.Dropped, 1)))
+
+  private val RtfFeatures: Map[String, DocumentFeature] = Map(
+    "table"           -> DocumentFeature.Tables,
+    "picture"         -> DocumentFeature.Images,
+    "list"            -> DocumentFeature.Lists,
+    "field"           -> DocumentFeature.Fields,
+    "footnote"        -> DocumentFeature.Notes,
+    "comment"         -> DocumentFeature.Comments,
+    "header/footer"   -> DocumentFeature.HeadersFooters,
+    "embedded object" -> DocumentFeature.Embedded
+  )
+
+  private def featureOfRtfName(name: String): DocumentFeature =
+    RtfFeatures.getOrElse(name, DocumentFeature.Other(name))
+
+  private def rtfName(feature: DocumentFeature): String =
+    feature match
+      case DocumentFeature.Other(name) => name
+      case named => RtfFeatures.collectFirst { case (name, `named`) => name }.getOrElse(named.toString)
 
   private val Phrases: List[(Treatment, String)] = List(
     Treatment.ReadOnly  -> "preserved read-only",

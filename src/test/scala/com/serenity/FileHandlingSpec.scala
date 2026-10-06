@@ -345,7 +345,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
       buffer.richText.richTextFidelity.map(_.unsupportedElements) shouldBe Some(Set("table", "picture"))
       fileManager.saveBuffer(buffer).attempt.unsafeRunSync().left.map(_.getMessage) shouldBe Left(
-        s"Saving $sourceFile would drop 1 picture and 1 table. Use Save As to write a new file."
+        s"Saving $sourceFile would drop 1 image and 1 table. Use Save As to write a new file."
       )
       Files.readAllBytes(sourceFile) shouldBe sourceBytes
 
