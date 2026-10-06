@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent, FontIntent, SettingsIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, FontIntent, SessionIntent, SettingsIntent}
 import com.serenity.config.ConfigManagerTestSupport
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
@@ -149,6 +149,54 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
       .fontConfig
       .textScaleMultiplier shouldBe 2.0
     observed.get().last.textScaleMultiplier shouldBe 2.0
+  }
+
+  it should "persist font family changes made through UI font settings, and keep them after a restart and resume" in {
+    val sessionRoot  = Files.createTempDirectory("font-config-persistence")
+    val configFile   = sessionRoot.resolve("config.conf")
+    val expectedFont = FontLoader.availableUiFamilies.lift(1).getOrElse(FontLoader.availableUiFamilies.head)
+    val stateManager =
+      StateManager
+        .apply(
+          testLogger("StateManagerFontConfigSpec"),
+          sessionRootOverride = Some(sessionRoot),
+          configPersistencePath = Some(configFile),
+          dictionaryCache = SharedDictionary.default
+        )
+        .unsafeRunSync()
+
+    openSettingsSubmenu(stateManager, UiFontSettingsGroupId)
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    if FontLoader.availableUiFamilies.size > 1 then stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
+    stateManager.saveSession.unsafeRunSync()
+
+    // A restart loads config.conf at startup, then resumes the session saved by the earlier run.
+    val saved = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+    saved.editorConfig.fontConfig.uiFontFamily shouldBe expectedFont
+    val restarted =
+      StateManager
+        .apply(
+          testLogger("StateManagerFontConfigSpec"),
+          sessionRootOverride = Some(sessionRoot),
+          initialConfig = saved,
+          dictionaryCache = SharedDictionary.cacheFor(saved)
+        )
+        .unsafeRunSync()
+    restarted
+      .executeCommand(
+        Command.typed(
+          "restore-session",
+          "Restore session",
+          CommandIntent.Session(SessionIntent.StartupRestoreSession),
+          CommandCategory.View
+        )
+      )
+      .unsafeRunSync()
+
+    restarted.getCurrentState.unsafeRunSync().persisted.config.editorConfig.fontConfig.uiFontFamily shouldBe
+      expectedFont
   }
 
   it should "persist font size changes made through code font settings to the config file" in {
