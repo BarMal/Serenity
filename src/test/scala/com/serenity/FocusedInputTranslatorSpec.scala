@@ -194,9 +194,9 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val loaded = loadedState.persisted.config.inputConfig.hotkeyConfig
-    List(HotkeyAction.ToggleCommandRunner, HotkeyAction.Find).count(loaded.bindingsFor(_).contains(duplicate)) shouldBe 1
-    HotkeyConfig.validate(loaded) shouldBe Right(())
+    val keys = loadedState.persisted.config.inputConfig.hotkeyConfig
+    List(HotkeyAction.ToggleCommandRunner, HotkeyAction.Find).count(keys.bindingsFor(_).contains(duplicate)) shouldBe 1
+    HotkeyConfig.validate(keys) shouldBe Right(())
     FocusedInputTranslator
       .forState(withConfig(invalidConfig))
       .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
