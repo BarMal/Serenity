@@ -131,10 +131,11 @@ object StartupWarmUp:
     viewport: ViewportSize,
     frames: Resource[IO, FrontendRuntime.OffscreenFrames],
     firstInput: Deferred[IO, Unit],
-    plan: Plan = Plan.default
+    plan: Plan = Plan.default,
+    scratchRoot: Path = systemTempDirectory
   )(using Balance): IO[Outcome] =
     lowPriorityThread.use { warmUpThread =>
-      val warmUp = (throwawayEditor(config, theme, viewport, document(plan.paragraphs)), frames).tupled
+      val warmUp = (throwawayEditor(config, theme, viewport, document(plan.paragraphs), scratchRoot), frames).tupled
         .use((editor, offscreen) => exercise(editor, offscreen, plan, firstInput))
         .evalOn(warmUpThread)
       IO.race(firstInput.get, warmUp).map(_.fold(_ => Outcome.Interrupted, identity))
@@ -168,13 +169,19 @@ object StartupWarmUp:
           }
     remaining(List.fill(plan.rounds)(round).flatten, 0)
 
-  private def throwawayEditor(config: AppConfig, theme: Theme, viewport: ViewportSize, content: String)(using
-    Balance
-  ): Resource[IO, StateManager] =
+  def systemTempDirectory: Path = Path.of(System.getProperty("java.io.tmpdir"))
+
+  private def throwawayEditor(
+    config: AppConfig,
+    theme: Theme,
+    viewport: ViewportSize,
+    content: String,
+    scratchRoot: Path
+  )(using Balance): Resource[IO, StateManager] =
     given LoggerFactory[IO] = NoOpFactory[IO]
     val noSessionWrites     = SessionManager.SessionPolicy(saveOnFileChange = false, saveOnAppClose = false)
     for
-      sessionRoot <- Resource.make(IO.blocking(Files.createTempDirectory("serenity-warm-up")))(deleteTree)
+      sessionRoot <- Resource.make(IO.blocking(Files.createTempDirectory(scratchRoot, "serenity-warm-up")))(deleteTree)
       editor <- Resource.make(
         StateManager(NoOpLogger[IO], noSessionWrites, sessionRootOverride = Some(sessionRoot), initialConfig = config)
       )(_.runtimeLifecycle.forceQuit)
