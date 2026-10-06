@@ -247,6 +247,7 @@ object Main extends IOApp:
     loggerFactory: LoggerFactory[IO]
   ): IO[Unit] =
     for
+      smokeReady   <- Deferred[IO, Unit]
       displayState <- RuntimeDisplayState.create(appConfig.editorConfig.fontConfig)
       initialDisplay = displayState.snapshot
       frameTimings   = FrameTimings()
@@ -356,7 +357,8 @@ object Main extends IOApp:
               appConfig = actualAppConfig,
               configNotice = configNotice,
               recovery = startup.plan,
-              onFirstFrame = startup.markStarted,
+              onFirstFrame =
+                startup.markStarted >> IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady)),
               makeStateManager = Some(logger =>
                 com.serenity.state.manager.StateManager.apply(
                   logger,
@@ -378,7 +380,9 @@ object Main extends IOApp:
                   fileDialog = Some(SwingFileDialog(swingWin.canvas))
                 )
               ),
-              awaitExternalQuit = swingWin.awaitClose,
+              awaitExternalQuit =
+                if launchOptions.smokeTest then IO.race(swingWin.awaitClose, smokeReady.get).void
+                else swingWin.awaitClose,
               registerResizeCallback = cb => swingWin.setOnResize(cb),
               registerFocusCallback = cb => swingWin.setOnFocusChange(cb),
               openPath = launchOptions.openPath,
