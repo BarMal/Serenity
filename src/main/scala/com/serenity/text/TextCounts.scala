@@ -42,7 +42,13 @@ object TextCounts:
   private val threadLocalCharacters: ThreadLocal[BreakIterator] =
     ThreadLocal.withInitial(() => BreakIterator.getCharacterInstance())
 
+  private val segmentationRuns = new java.util.concurrent.atomic.AtomicLong(0L)
+
+  /** How many texts have been segmented so far; lets specs prove that building or editing a rope segments nothing. */
+  private[serenity] def segmentationCount: Long = segmentationRuns.get()
+
   def of(text: String): TextCounts =
+    segmentationRuns.incrementAndGet()
     val characters = threadLocalCharacters.get()
     characters.setText(text)
     val words = threadLocalWords.get()
