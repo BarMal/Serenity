@@ -4,8 +4,6 @@ import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
 
-import scala.concurrent.duration.*
-
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, SpellCheckConfig}
@@ -14,6 +12,7 @@ import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.AwaitCondition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -589,12 +588,16 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     immediateState.runtime.languageService.diagnosticsState.diagnostics
       .getOrElse(SpellChecker.bufferDiagnosticsUri(BufferId(0)), Nil) shouldBe Nil
 
-    IO.sleep(300.millis).unsafeRunSync()
-
-    val state = stateManager.getCurrentState.unsafeRunSync()
-    val diagnostics =
-      state.runtime.languageService.diagnosticsState.diagnostics
-        .getOrElse(SpellChecker.bufferDiagnosticsUri(BufferId(0)), Nil)
+    // Polled rather than slept: the debounced analysis also loads the dictionary, which can outlast a fixed wait on a
+    // loaded CI runner.
+    val diagnostics = AwaitCondition
+      .awaitValue(
+        stateManager.getCurrentState.map(
+          _.runtime.languageService.diagnosticsState.diagnostics
+            .getOrElse(SpellChecker.bufferDiagnosticsUri(BufferId(0)), Nil)
+        )
+      )(_.nonEmpty)
+      .unsafeRunSync()
 
     diagnostics.map(_.source) shouldBe List(Some("spell-check"))
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: wurld")
