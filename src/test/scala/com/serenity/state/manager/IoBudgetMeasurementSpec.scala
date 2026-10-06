@@ -121,10 +121,17 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
   // What the file API itself charges for the operations a save cannot avoid. A path is resolved to a native string and
   // a stat result is built on every call, and Windows allocates several times what Linux does for both, so a budget
   // fixed in bytes on one platform fails on the other without any encoding having crept back in. Budgets are the
-  // encoding allowance plus this, measured where the test runs.
+  // encoding allowance plus this, measured where the test runs. Linux keeps its exact bound: the allowance is zero there.
   private val StatsPerSave = 16
 
+  private val platformChargesFileApi =
+    val osName = System.getProperty("os.name", "").toLowerCase
+    osName.startsWith("windows") || osName.startsWith("mac")
+
   private def fileApiAllocation(atomicWrites: Int): Long =
+    if platformChargesFileApi then measuredFileApiAllocation(atomicWrites) else 0L
+
+  private def measuredFileApiAllocation(atomicWrites: Int): Long =
     val directory = Files.createTempDirectory("io-budget-file-api")
     val file      = Files.writeString(directory.resolve("probe.txt"), "probe")
     val payload   = Array.fill[Byte](DirtyBytes)('d')
