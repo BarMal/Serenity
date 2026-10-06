@@ -233,7 +233,13 @@ lazy val root = (project in file("."))
       // "Upload test reports" step in .github/workflows/desktop-publish.yml, which uploads this directory as a build
       // artifact on every run (`if: always()`) so a future failure's full detail is recoverable even when the
       // console log again comes back summary-only.
-      Tests.Argument(TestFrameworks.ScalaTest, "-u", "target/test-reports")
+      Tests.Argument(TestFrameworks.ScalaTest, "-u", "target/test-reports"),
+      // Master CI's Test job has hung for 50+ minutes with no output and no way to tell which test was stuck: the
+      // console reporter prints nothing per test, and nothing at all for a run that never ends. The slowpoke
+      // detector raises an alert naming any test still running after 120 s, then every 60 s; HangReporter prints
+      // those alerts straight to stdout together with the stacks of the threads running suites.
+      Tests.Argument(TestFrameworks.ScalaTest, "-W", "120", "60"),
+      Tests.Argument(TestFrameworks.ScalaTest, "-C", "com.serenity.testkit.HangReporter")
     ),
     // Real-OS-boundary specs (a genuine loopback socket, a genuine sun.misc.Signal.raise -- see
     // com.serenity.testkit.RealBoundaryTest's doc comment) are excluded from `sbt test`'s discovery of the whole
