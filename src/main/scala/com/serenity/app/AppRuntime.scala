@@ -164,12 +164,11 @@ object AppRuntime:
           configNotice,
           recovery
         )
+        surfaceConfig = initialState.persisted.config.surfaceConfig
         inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
         inputHandler <- runtime.inputHandler(inputRouter)
         _            <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
-        _ <- inputRouter.setCursorPeekEnabled(
-          initialState.persisted.config.surfaceConfig.commandRunnerCursorPeekEnabled
-        )
+        _            <- inputRouter.setCursorPeekEnabled(surfaceConfig.commandRunnerCursorPeekEnabled)
         fastModeSignal <- SignallingRef.of[IO, Boolean](false)
         pendingDamage  <- Ref.of[IO, Damage](Damage.Nothing)
         // Separate from pendingDamage: that ref answers "did more damage arrive while the fast phase ran" (see
@@ -182,12 +181,8 @@ object AppRuntime:
         // damage rather than none -- inputEventPhase is the one caller that reports real per-event damage.
         requestFastRender = emitDamage(Damage.Everything)
         typingQuietTimer <- TypingQuietTimer.create(timerSupervisor, TypingQuietTimer.expireIn(stateManager))
-        frameTimingEnabled <- SignallingRef.of[IO, Boolean](
-          initialState.persisted.config.surfaceConfig.frameTimingEnabled
-        )
-        latencyTraceEnabled <- SignallingRef.of[IO, Boolean](
-          initialState.persisted.config.surfaceConfig.latencyTraceEnabled
-        )
+        frameTimingEnabled  <- SignallingRef.of[IO, Boolean](surfaceConfig.frameTimingEnabled)
+        latencyTraceEnabled <- SignallingRef.of[IO, Boolean](surfaceConfig.latencyTraceEnabled)
         watchInputs <- SignallingRef.of[IO, Long](0L)
         wakeOnCommit = wakeRenderLoopOnCommit(emitDamage)
         observeTransition = (before: AppState, after: AppState) =>
