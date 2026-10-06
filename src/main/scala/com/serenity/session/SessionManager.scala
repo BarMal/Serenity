@@ -79,9 +79,13 @@ class SessionManager(
       updatedIndex      = upsertSession(index, updatedMetadata).copy(currentSessionId = Some(updatedMetadata.id))
       state     <- stagedState(canonicalMetadata.sessionFileName, appState, persistUnsavedBuffers)
       unchanged <- isUnchanged(canonicalMetadata.sessionFileName, index, state)
-      _         <- if unchanged then IO.unit else commitCurrent(canonicalMetadata.sessionFileName, state, updatedIndex)
-      _         <- contentStore.prune(canonicalMetadata.sessionFileName, state)
-      _         <- logger.debug(s"[SESSION] Session saved successfully (${updatedMetadata.displayName})")
+      _ <-
+        if unchanged then IO.unit
+        else
+          setAsideIfNewer(canonicalMetadata.sessionFileName, onlyIfChangedSinceLastSave = true) >>
+            commitCurrent(canonicalMetadata.sessionFileName, state, updatedIndex)
+      _ <- contentStore.prune(canonicalMetadata.sessionFileName, state)
+      _ <- logger.debug(s"[SESSION] Session saved successfully (${updatedMetadata.displayName})")
     yield ()
 
   /** Save the current app state as a named session and make it current.
@@ -103,6 +107,7 @@ class SessionManager(
       (pruned, toDelete) = pruneHistory(withNew)
       updatedIndex       = pruned.copy(currentSessionId = Some(sessionId))
       state <- stagedState(metadata.sessionFileName, appState, policy.persistUnsavedBuffers)
+      _     <- toDelete.traverse_(setAsideIfNewer(_, onlyIfChangedSinceLastSave = false))
       _ <- commitTransaction(
         writes = Map(metadata.sessionFileName -> stateEncoder.compact(state)),
         deletes = toDelete,
@@ -264,6 +269,23 @@ class SessionManager(
             .as(Option.empty[UnreadableSession])
             .handleErrorWith(setAside(path, _))
       }
+    }
+
+  /** A save or history prune about to replace or delete a session file written by a newer build keeps it instead, as
+    * startup would have (#2037): this build could not read it, and a newer one still can. A file this manager wrote
+    * itself, and has not seen change, is not read again.
+    */
+  private def setAsideIfNewer(sessionFileName: String, onlyIfChangedSinceLastSave: Boolean): IO[Unit] =
+    IO.blocking(safeSessionPath(sessionFileName)).flatMap {
+      case None => IO.unit
+      case Some(path) =>
+        for
+          lastStamp <- lastSaved.get.map(_.filter(_.sessionFileName == sessionFileName).map(_.sessionFileStamp))
+          stamp     <- IO.blocking(FileStamp.read(path))
+          untouched = onlyIfChangedSinceLastSave && stamp == lastStamp
+          newer <- if untouched || stamp.isEmpty then IO.pure(false) else SessionSetAside.isNewerSchema(path)
+          _     <- if newer then setAside(path, SessionSetAside.NewerSchemaFile).void else IO.unit
+        yield ()
     }
 
   private def setAside(sessionFile: Path, error: Throwable): IO[Option[UnreadableSession]] =
