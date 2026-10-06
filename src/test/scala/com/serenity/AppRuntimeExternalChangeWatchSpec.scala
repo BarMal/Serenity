@@ -266,7 +266,9 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
   // A native watcher can report a write after the settle window that covered it (Windows delivers last-write
   // notifications lazily). The listing here changes twice while the real file does not, which is that late report.
   it should "not check a file again for a late report of a write it already checked (#1885)" in {
-    val file     = ownFile("external-change-watch-late")
+    val file = ownFile("external-change-watch-late")
+    // Long settled, so its stamp vouches for its content whatever the filesystem's timestamp precision.
+    Files.setLastModifiedTime(file, java.nio.file.attribute.FileTime.from(java.time.Instant.now.minusSeconds(60)))
     val bufferId = BufferId(1)
     val program = for
       listings <- Ref.of[IO, Map[Path, (Long, Long)]](Map(file -> (1L, 1L)))
