@@ -5,6 +5,7 @@ import cats.effect.{Deferred, Fiber, IO, Ref, Resource}
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
+import com.serenity.testkit.RopeText
 import fs2.Stream
 import io.circe.Json
 import io.circe.syntax.*
@@ -104,7 +105,7 @@ private[lsp] trait LspManagerSpecFixture extends Matchers:
     Json.obj("jsonrpc" -> "2.0".asJson, "id" -> id.asJson, "result" -> result)
 
   protected def open(manager: Harness): IO[Unit] =
-    manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo"))) >>
+    manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo")))) >>
       takeMessage(manager.connection).flatMap { message =>
         IO(message.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didOpen"))
       }

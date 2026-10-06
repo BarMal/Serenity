@@ -178,8 +178,8 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
       .modalSurface
       .flatMap(_.content match
-        case SurfaceContent.ModalWorkflow(Modal.Find(_, _, currentIndex)) => Some(currentIndex)
-        case _                                                            => None) shouldBe Some(0)
+        case SurfaceContent.ModalWorkflow(Modal.Find(_, _, currentIndex, _, _)) => Some(currentIndex)
+        case _                                                                  => None) shouldBe Some(0)
 
     val replaceManager = makeStateManager()
     val replaceBuffer  = replaceManager.createBuffer("needle", None).unsafeRunSync()

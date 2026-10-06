@@ -6,6 +6,7 @@ import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
 import com.serenity.lsp.model.{SemanticToken, SemanticTokensLegend}
+import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.Stream
 import io.circe.Json
@@ -82,7 +83,7 @@ class LspManagerSemanticTokensSpec extends AnyFlatSpec with Matchers:
     Json.obj("jsonrpc" -> "2.0".asJson, "id" -> id.asJson, "result" -> result)
 
   private def open(manager: Harness): IO[Unit] =
-    manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo"))) >>
+    manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo")))) >>
       takeMessage(manager.connection).void
 
   "LspManager" should "send a semanticTokens/full request and emit the decoded tokens when the server supports it" in {
@@ -141,7 +142,9 @@ class LspManagerSemanticTokensSpec extends AnyFlatSpec with Matchers:
             _       <- manager.connection.recordSemanticTokensLegend(Some(SemanticTokensLegend(List("keyword"), Nil)))
             _       <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
             request <- takeMessage(manager.connection)
-            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+            _ <- manager.effects.offer(
+              Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo2"), version = 2))
+            )
             _ <- takeMessage(manager.connection)
             _ <- manager.connection.handleIncomingJson(
               response(requestId(request), Json.obj("data" -> List(0, 0, 3, 0, 0).map(_.asJson).asJson))

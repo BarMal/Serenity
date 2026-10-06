@@ -195,6 +195,26 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     footer.rect.y should be > query.rect.y
   }
 
+  it should "show each find option's state and key in the find header" in {
+    val plan = planFor(Modal.Find(TextField.of("needle"), Vector.empty, 0, FindOptions(wholeWord = true)))
+
+    plan.paintBoxes.flatMap(_.text) should contain("find  [ ] case alt+c  [x] word alt+w  [ ] regex alt+r")
+  }
+
+  it should "count a capped find as more than the matches it keeps" in {
+    val plan = planFor(Modal.Find(TextField.of("x"), Vector(FindResult(0, 0), FindResult(0, 2)), 0, capped = true))
+
+    plan.paintBoxes.flatMap(_.text) should contain("2+ matches, 1/2+ at 1:1")
+  }
+
+  it should "show an invalid regex as an error rather than a match count" in {
+    val plan = planFor(Modal.Find(TextField.of("ne(dle"), Vector.empty, 0, FindOptions(regex = true)))
+
+    val footer = plan.paintBoxes.find(_.text.exists(_.startsWith("Invalid regex"))).getOrElse(fail("expected error"))
+    footer.tone shouldBe OverlayTone.Error
+    plan.paintBoxes.flatMap(_.text) should not contain "0 matches"
+  }
+
   it should "compose replace fields and actions with stable semantic identities" in {
     val workflow = ReplaceWorkflowState(
       findText = "before",

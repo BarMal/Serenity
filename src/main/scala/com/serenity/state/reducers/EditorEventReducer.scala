@@ -273,7 +273,7 @@ object EditorEventReducer:
             SelectAll =>
           EditorNavigationEventReducer.reduce(event, ctx)
 
-        case OpenGotoLine | OpenFind | OpenReplace | FindNext =>
+        case OpenGotoLine | OpenFind | OpenReplace | FindNext | FindPrevious =>
           EditorFindEventReducer.reduce(event, ctx)
 
         case Copy | Cut | Paste | CutToDarlings | RestoreDarling | PasteFromHistory(_) =>

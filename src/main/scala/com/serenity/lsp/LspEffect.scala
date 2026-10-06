@@ -1,13 +1,15 @@
 package com.serenity.lsp
 
 import com.serenity.lsp.config.LanguageId
+import com.serenity.rope.Rope
 import com.serenity.state.models.CursorPosition
 
 enum LspEffect:
   def uri: String
 
-  case FileOpened(uri: String, languageId: LanguageId, text: String)
-  case FileChanged(uri: String, languageId: LanguageId, text: String, version: Int)
+  // The text travels as the rope: the characters are only collected when a server is sent them.
+  case FileOpened(uri: String, languageId: LanguageId, text: Rope)
+  case FileChanged(uri: String, languageId: LanguageId, text: Rope, version: Int)
   case FileClosed(uri: String, languageId: LanguageId)
   case HoverRequested(uri: String, languageId: LanguageId, line: Int, character: Int, anchor: CursorPosition)
   case CompletionRequested(uri: String, languageId: LanguageId, line: Int, character: Int, anchor: CursorPosition)

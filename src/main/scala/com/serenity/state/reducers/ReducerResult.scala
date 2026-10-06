@@ -6,6 +6,7 @@ import cats.syntax.all.*
 import com.serenity.command.Command
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
+import com.serenity.rope.Rope
 import com.serenity.state.models.{AppState, BufferId, CloseScope, SurfaceId}
 import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.PanelPosition
@@ -51,7 +52,7 @@ enum WorkflowEffect:
 
 enum LspQueueEffect:
   case Enqueue(effect: LspEffect)
-  case DocumentChanged(uri: String, languageId: LanguageId, text: String)
+  case DocumentChanged(uri: String, languageId: LanguageId, text: Rope)
 
 /** A reducer's own declaration that the change it just performed is undoable, carrying the [[HistoryEntry]] that
   * restores it -- see #1016. `groupable` marks whether this should coalesce into an already-open run of edits

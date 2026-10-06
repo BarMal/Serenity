@@ -15,6 +15,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.BufferId
+import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -63,7 +64,7 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
 
       val effect =
         stateManager.lspEffectSource.lspEffectStream.take(1).compile.lastOrError.timeout(3.seconds).unsafeRunSync()
-      effect shouldBe LspEffect.FileOpened(file.toUri.toString, LanguageId.Scala, "")
+      effect shouldBe LspEffect.FileOpened(file.toUri.toString, LanguageId.Scala, RopeText(""))
     finally Files.deleteIfExists(file): Unit
   }
 

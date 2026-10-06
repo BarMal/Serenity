@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage
 import java.awt.{Font, RenderingHints}
 import java.io.{ByteArrayInputStream, StringReader}
 import java.net.URI
+import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{Files, Path, Paths}
 import java.util.Locale
 import javax.imageio.ImageIO
@@ -11,6 +12,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 import scala.util.Try
 
+import com.serenity.markdown.DecodedImageCache.DecodedImageKey
 import com.serenity.ui.theme.Theme
 import org.w3c.dom.Document
 import org.xhtmlrenderer.resource.ImageResource
@@ -34,7 +36,7 @@ private[markdown] object MarkdownPreviewImageResources:
     factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
     factory.newDocumentBuilder().parse(InputSource(StringReader(xhtml)))
 
-  final class PreviewResourcePolicy(baseUri: Option[URI]):
+  final class PreviewResourcePolicy(baseUri: Option[URI], decodedImages: DecodedImageCache = DecodedImageCache()):
 
     private val resourceRoot = baseUri
       .filter(uri => uri.getScheme == "file" && uri.getHost == null)
@@ -53,9 +55,14 @@ private[markdown] object MarkdownPreviewImageResources:
       for
         parsed <- Try(URI.create(uri)).toOption
         path   <- permittedFile(parsed)
-        bytes  <- readBounded(path)
-        image  <- decodeImage(bytes)
+        key    <- decodedImageKey(path)
+        image  <- decodedImages.decoded(key)(readBounded(path))
       yield image
+
+    private def decodedImageKey(path: Path): Option[DecodedImageKey] =
+      Try(Files.readAttributes(path, classOf[BasicFileAttributes])).toOption
+        .filter(_.size <= MaxImageBytes)
+        .map(attrs => DecodedImageKey(path, attrs.lastModifiedTime.toMillis, attrs.size))
 
     private def permittedFile(uri: URI): Option[Path] =
       Option
@@ -80,33 +87,33 @@ private[markdown] object MarkdownPreviewImageResources:
         finally input.close()
       }.toOption.flatten
 
-    private def decodeImage(bytes: Array[Byte]): Option[BufferedImage] =
-      Try {
-        Option(ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))).flatMap { input =>
-          val readers = ImageIO.getImageReaders(input)
-          if !readers.hasNext then
+  private[markdown] def decodeWithinLimits(bytes: Array[Byte]): Option[BufferedImage] =
+    Try {
+      Option(ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))).flatMap { input =>
+        val readers = ImageIO.getImageReaders(input)
+        if !readers.hasNext then
+          input.close()
+          None
+        else
+          val reader = readers.next()
+          try
+            reader.setInput(input, true, true)
+            val width  = reader.getWidth(0)
+            val height = reader.getHeight(0)
+            Option
+              .when(
+                width > 0 &&
+                  height > 0 &&
+                  width <= MaxImageDimension &&
+                  height <= MaxImageDimension &&
+                  width.toLong * height.toLong <= MaxImagePixels
+              )(Option(ImageIO.read(new ByteArrayInputStream(bytes))))
+              .flatten
+          finally
+            reader.dispose()
             input.close()
-            None
-          else
-            val reader = readers.next()
-            try
-              reader.setInput(input, true, true)
-              val width  = reader.getWidth(0)
-              val height = reader.getHeight(0)
-              Option
-                .when(
-                  width > 0 &&
-                    height > 0 &&
-                    width <= MaxImageDimension &&
-                    height <= MaxImageDimension &&
-                    width.toLong * height.toLong <= MaxImagePixels
-                )(Option(ImageIO.read(new ByteArrayInputStream(bytes))))
-                .flatten
-            finally
-              reader.dispose()
-              input.close()
-        }
-      }.toOption.flatten
+      }
+    }.toOption.flatten
 
   def previewReplacedElementFactory(resourcePolicy: PreviewResourcePolicy): SwingReplacedElementFactory =
     new PreviewReplacedElementFactory(resourcePolicy)

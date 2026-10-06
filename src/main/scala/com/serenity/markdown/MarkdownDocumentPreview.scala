@@ -202,7 +202,7 @@ object MarkdownDocumentPreview:
         safeWidth,
         safeHeight
       )
-      val resourcePolicy = new MarkdownPreviewImageResources.PreviewResourcePolicy(baseUri)
+      val resourcePolicy = new MarkdownPreviewImageResources.PreviewResourcePolicy(baseUri, cache.decodedImages)
       renderer.getSharedContext.setReplacedElementFactory(
         MarkdownPreviewImageResources.previewReplacedElementFactory(resourcePolicy)
       )

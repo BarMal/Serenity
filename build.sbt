@@ -304,6 +304,12 @@ libraryDependencies ++= Seq(
   "org.xhtmlrenderer" % "flying-saucer-core"          % "10.5.0"
 )
 
+// EPUBCheck (W3C, BSD-3-Clause, so compatible with this project's GPL) validates the exported EPUB in specs only.
+// Test scope: it is never on the runtime classpath and never reaches the assembled JAR.
+// xercesImpl is excluded because it takes over the JVM's default XML parser and then rejects the hardening flags
+// RichTextXmlParser sets, which would break every DOCX/ODT spec sharing this test classpath.
+libraryDependencies += ("org.w3c" % "epubcheck" % "5.4.0" % Test).exclude("xerces", "xercesImpl")
+
 val jlineVersion = "3.30.16"
 
 // TUI shell (#1107): raw mode, alternate screen, resize signals, terminal size. jline-terminal-jni is the modern

@@ -2,6 +2,7 @@ package com.serenity.lsp
 
 import com.serenity.lsp.config.*
 import com.serenity.lsp.model.*
+import com.serenity.testkit.RopeText
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -69,7 +70,7 @@ class LspPhase0Spec extends AnyFlatSpec with Matchers with OptionValues:
   }
 
   "LspEffect" should "carry language id and uri" in {
-    val effect = LspEffect.FileOpened("file:///foo/Bar.scala", LanguageId.Scala, "object Foo")
+    val effect = LspEffect.FileOpened("file:///foo/Bar.scala", LanguageId.Scala, RopeText("object Foo"))
     effect match
       case LspEffect.FileOpened(uri, lang, _) =>
         uri shouldBe "file:///foo/Bar.scala"

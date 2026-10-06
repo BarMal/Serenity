@@ -70,6 +70,11 @@ private[perf] object BenchmarkFixtures:
   def deepViewport: Viewport =
     Viewport(topLine = 10_000, leftColumn = 0, visibleColumns = viewportSize.width, visibleLines = viewportSize.height)
 
+  def scrolledToDeepViewport(state: AppState): AppState =
+    state.copy(persisted =
+      state.persisted.copy(buffers = state.persisted.buffers.view.mapValues(_.copy(viewport = deepViewport)).toMap)
+    )
+
   def largeSingleLineJson(entries: Int): String =
     (1 to entries).map(i => s""""k$i":$i""").mkString("{", ",", "}")
 

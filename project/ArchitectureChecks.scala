@@ -72,6 +72,15 @@ object ArchitectureChecks {
         "a concrete frontend's own implementation package",
       mainOnly = true
     ),
+    // #1206: the manuscript model, compiler and writers are pure; reading sources, dialogs and the disk belong to the
+    // shell, and the future paginator must not measure through AWT.
+    ImportRule(
+      "com/serenity/manuscript",
+      Seq("java.awt", "org.apache.pdfbox", "cats.effect", "com.serenity.state"),
+      "the manuscript package is the pure export core: take sources and settings as values, and leave IO, AWT and " +
+        "the editor state to the shell",
+      mainOnly = true
+    ),
     ImportRule(
       "com/serenity/command",
       Seq("com.serenity.ui.tui", "com.serenity.ui.terminal"),

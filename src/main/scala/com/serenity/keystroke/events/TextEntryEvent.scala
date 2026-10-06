@@ -58,6 +58,7 @@ final case class ScrollRight(columns: Int) extends ScrollEvent
 case object OpenGotoLine                   extends ModalRequestEvent
 case object OpenReplace                    extends ModalRequestEvent
 case object FindNext                       extends TextEntryEvent
+case object FindPrevious                   extends TextEntryEvent
 case object Enter                          extends TextEntryEvent
 case object OpenFind                       extends ModalRequestEvent
 case object Escape                         extends TextEntryEvent

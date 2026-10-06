@@ -71,7 +71,8 @@ final private[manager] class StateManagerEffectHandlers(
       def completeQuit: IO[Unit] = quitSignal.complete(()).attempt.void
   )
 
-  private val reopenEffects = new ReopenWithEncodingEffects(currentState, commitState, editor, fileManager)
+  private val reopenEffects    = new ReopenWithEncodingEffects(currentState, commitState, editor, fileManager)
+  private val manuscriptExport = new ManuscriptExportEffects(logger, fileDialog, editor, currentState, commitState)
 
   private val configEffects = new StateManagerConfigEffects(
     currentState,
@@ -289,6 +290,7 @@ final private[manager] class StateManagerEffectHandlers(
           case None           => logger.debug("[CMD] No focused buffer to save")
       case FileIntent.SaveCurrentFileAs =>
         requestSaveAsFileDialog(state, state.focusedBufferId)
+      case FileIntent.ExportManuscript(request) => manuscriptExport.run(request, state)
       case FileIntent.OpenFile =>
         requestOpenFileDialog
       case FileIntent.OpenRecentFile(path) =>
@@ -321,10 +323,7 @@ final private[manager] class StateManagerEffectHandlers(
       case FileIntent.SaveWithoutFormatting(bufferId) =>
         currentState.flatMap(current => commitState(RichTextReducer.withoutFormatting(bufferId, current), current)) >>
           saveBufferEffect(bufferId)
-      case FileIntent.ChooseReopenEncoding =>
-        currentState.flatMap(current =>
-          ReopenWithEncoding.withPickerOpened(current).fold(IO.unit)(commitState(_, current))
-        )
+      case FileIntent.ChooseReopenEncoding => reopenEffects.chooseEncoding
       case FileIntent.ReopenWithEncoding(bufferId, encoding, discardEdits) =>
         reopenEffects.reopen(bufferId, encoding, discardEdits)
 
@@ -349,7 +348,7 @@ final private[manager] class StateManagerEffectHandlers(
           buffer.document.filePath match
             case Some(path) if buffer.document.language != language =>
               val uri  = path.toUri.toString
-              val text = buffer.document.content.collect()
+              val text = buffer.document.content
               val closeOld =
                 buffer.document.language.fold(IO.unit)(previous =>
                   lspQueue.enqueue(LspEffect.FileClosed(uri, previous))
@@ -560,26 +559,22 @@ final private[manager] class StateManagerEffectHandlers(
     activeEditorBufferId(state)
       .flatMap(state.persisted.buffers.get)
       .flatMap { buffer =>
-        buffer.findState match
-          case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
-            val resultSet =
-              FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult).toVector, currentIndex)
-            Some(Modal.Find(TextField.of(resultSet.query), resultSet.results, resultSet.currentIndex))
-          case _ =>
-            None
+        buffer.findState.filter(_.query.nonEmpty).map { found =>
+          val caret     = buffer.editing.cursors.head.position
+          val content   = buffer.document.content
+          val anchor    = content.lineColumnToOffset(caret.line, caret.column)
+          val matches   = FindSearch.search(content, found.query, found.options, anchor)
+          val resultSet = FindResultSet.normalized(found.query, matches.results, found.currentIndex, matches.capped)
+          Modal.Find(
+            TextField.of(resultSet.query),
+            resultSet.results,
+            resultSet.currentIndex,
+            found.options,
+            resultSet.capped
+          )
+        }
       }
       .getOrElse(Modal.Find(TextField(), Vector.empty, 0))
-
-  private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
-    if query.isEmpty then Nil
-    else
-      buffer.document.content
-        .searchAll(query)
-        .filter(offset => buffer.document.content.isWholeGraphemeRange(offset, offset + query.length))
-        .map(offset => buffer.document.content.offsetToCursorPosition(offset))
-
-  private def toFindResult(cursor: CursorPosition): FindResult =
-    FindResult(cursor.line, cursor.column)
 
   private[manager] def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig

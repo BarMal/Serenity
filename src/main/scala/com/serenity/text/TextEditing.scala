@@ -139,6 +139,15 @@ object TextEditing:
     graphemeBoundaryAfterOrAt(source, normalizedStart) == normalizedStart &&
     graphemeBoundaryBeforeOrAt(source, normalizedEnd) == normalizedEnd
 
+  /** Whether the non-empty `[start, end)` starts and ends on UAX #29 word boundaries: a whole-word find for `cat`
+    * matches `the cat sat` but not `concatenate` or `cat's`, which UAX #29 keeps as one word.
+    */
+  def isWholeWordRange(source: CharacterSource, start: Int, end: Int): Boolean =
+    0 <= start && start < end && end <= source.length && {
+      val iterator = threadLocalWordBreakIterator.get().forSource(source)
+      iterator.isBoundary(start) && iterator.isBoundary(end)
+    }
+
   private def clamp(cursor: Int, length: Int): Int =
     math.max(0, math.min(cursor, length))
 

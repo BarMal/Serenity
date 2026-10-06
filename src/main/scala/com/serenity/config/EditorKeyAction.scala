@@ -37,6 +37,8 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
   case NewLine
   case Tab
   case ReverseTab
+  case FindNext
+  case FindPrevious
 
   def event: EditorEvent =
     this match
@@ -83,6 +85,8 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
       case NewLine            => com.serenity.keystroke.events.NewLine
       case Tab                => com.serenity.keystroke.events.TabKey
       case ReverseTab         => com.serenity.keystroke.events.ReverseTabKey
+      case FindNext           => com.serenity.keystroke.events.FindNext
+      case FindPrevious       => com.serenity.keystroke.events.FindPrevious
 
 object EditorKeyAction:
 
@@ -227,7 +231,11 @@ object EditorKeyAction:
     EditorKeyAction.Escape     -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty)),
     EditorKeyAction.NewLine    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty)),
     EditorKeyAction.Tab        -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Tab, None, Set.empty)),
-    EditorKeyAction.ReverseTab -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ReverseTab, None, Set.empty))
+    EditorKeyAction.ReverseTab -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ReverseTab, None, Set.empty)),
+    EditorKeyAction.FindNext   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.F3, None, Set.empty)),
+    EditorKeyAction.FindPrevious -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.F3, None, Set(com.serenity.keystroke.Modifier.Shift))
+    )
   )
 
   given KeymapActionCodec[EditorKeyAction] with
