@@ -136,6 +136,20 @@ private[command] object CommandRegistryFileCommands:
       label = "Show Licence and Notices"
     ),
     Command.typed(
+      "about",
+      "Open the About Serenity document: version, file locations, privacy statement, licence and notices.",
+      CommandIntent.File(FileIntent.ShowAbout),
+      CommandCategory.File,
+      label = "About Serenity"
+    ),
+    Command.typed(
+      "open-releases-page",
+      "Open the Serenity releases page in the default browser.",
+      CommandIntent.File(FileIntent.OpenReleasesPage),
+      CommandCategory.File,
+      label = "Open Releases Page"
+    ),
+    Command.typed(
       "next-tab",
       "Switch to the next open file.",
       CommandIntent.View(ViewIntent.NextTab),

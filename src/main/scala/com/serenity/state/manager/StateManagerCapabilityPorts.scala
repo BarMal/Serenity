@@ -87,6 +87,9 @@ private[manager] trait EffectFilePort:
   // #1623: saves over a file that changed on disk since it was read, skipping the stale-save check.
   def forceSaveExistingBuffer(bufferId: BufferId): IO[Unit]
 
+  /** Hands a URL to the desktop browser; fails where there is no browser to hand it to. */
+  def openExternalUrl(uri: java.net.URI): IO[Unit] = com.serenity.io.ExternalBrowser.browse(uri)
+
 private[manager] trait EffectSessionPort:
   def sessionPersistence: SessionPersistence
   def saveSession(): IO[Unit]

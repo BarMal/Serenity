@@ -21,6 +21,10 @@ enum FileIntent:
   case NewFile
   // #2019: the GPL-3.0-or-later licence and third-party notices bundled in the jar, opened read-only.
   case ShowLicenceAndNotices
+  // The About Serenity document; show-licence-and-notices opens the same document.
+  case ShowAbout
+  // Option B of the update notice: the browser makes the request, Serenity opens no socket.
+  case OpenReleasesPage
   case SetBufferLanguage(language: Option[LanguageId])
   // #1623: the ways out of a file changed on disk under unsaved edits -- see ExternalChangeCommands.
   case ReloadFromDisk(bufferId: BufferId)

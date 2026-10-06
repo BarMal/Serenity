@@ -20,7 +20,7 @@ import org.typelevel.log4cats.Logger
   * previous one, so a server never occupies more than twice the cap on disk. Successive server starts append to the
   * same file, each introduced by a header line, so what a crashed server said survives its restart.
   */
-private[lsp] object LspStderrLog:
+private[serenity] object LspStderrLog:
 
   val DefaultMaxBytes: Long = 512L * 1024
 
