@@ -43,14 +43,16 @@ class TypedRunsJoinSpec extends AnyFlatSpec with Matchers:
 
   private val smartPunctuation = AppConfig.default.withWordWrap(true).withSmartPunctuation(true)
 
-  private def editor: IO[(StateManager, BufferId)] =
+  private def editor: IO[(StateManager, BufferId)] = editor(smartPunctuation)
+
+  private def editor(config: AppConfig): IO[(StateManager, BufferId)] =
     for
       stateManager <- StateManager(
         NoOpLogger[IO],
         sessionRootOverride = Some(Files.createTempDirectory("typed-run-join")),
         dictionaryCache = SharedDictionary.default
       )
-      _ <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = smartPunctuation)))
+      _        <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))
       bufferId <- stateManager.createBuffer(proseDocument, None)
       state    <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
@@ -148,4 +150,29 @@ class TypedRunsJoinSpec extends AnyFlatSpec with Matchers:
     val (centredAfterEach, placements) = program.unsafeRunSync()
     centredAfterEach.distinct shouldBe List(Some(true))
     placements shouldBe Set(ViewportPlacement.Placed)
+  }
+
+  "Undo and redo in column mode" should "reach the viewports that dispatching the keys one by one does" in {
+    val config = smartPunctuation.withColumnMode(true)
+    def shown(stateManager: StateManager, bufferId: BufferId) =
+      stateManager.getCurrentState.map(
+        _.persisted.buffers
+          .get(bufferId)
+          .map(buffer => (buffer.document.content.toString, buffer.editing, buffer.viewport))
+      )
+    val program = for
+      (batched, bufferId) <- editor(config)
+      (perKey, _)         <- editor(config)
+      _                   <- typedAsOneBatch(batched)
+      _                   <- keys.traverse_(perKey.applyEvent)
+      differ <- (List.fill(8)(Undo) ++ List.fill(8)(Redo)).zipWithIndex.traverse { (event, index) =>
+        for
+          _        <- batched.applyEvent(event)
+          _        <- perKey.applyEvent(event)
+          expected <- shown(perKey, bufferId)
+          actual   <- shown(batched, bufferId)
+        yield Option.when(actual != expected)(s"$event #$index")
+      }
+    yield differ.flatten
+    program.unsafeRunSync() shouldBe empty
   }
