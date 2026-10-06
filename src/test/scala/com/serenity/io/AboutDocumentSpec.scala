@@ -45,10 +45,10 @@ class AboutDocumentSpec extends AnyFlatSpec with Matchers:
   it should "list where the config, sessions and logs live" in {
     val document = render()
 
-    document should include("Config: /home/u/.serenity/config.conf")
-    document should include("Sessions: /home/u/.serenity")
-    document should include("Log: /home/u/.serenity/serenity.log")
-    document should include("Language server logs: /home/u/.serenity/logs")
+    document should include(s"Config: ${aboutInfo.configFile}")
+    document should include(s"Sessions: ${aboutInfo.sessionDirectory}")
+    document should include(s"Log: ${aboutInfo.logFile}")
+    document should include(s"Language server logs: ${aboutInfo.lspLogDirectory}")
   }
 
   it should "link to the releases page" in {
