@@ -47,6 +47,24 @@ sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 `third-party/`; `sbt checkThirdPartyNotices` (run in CI) fails if it is stale or a dependency has no registry row. See
 [CONTRIBUTING.md](CONTRIBUTING.md#licensing).
 
+### Changelog
+
+`CHANGELOG.md` has two kinds of level-two heading and no others:
+
+- `## [Unreleased]`, exactly once and first. User-visible changes land here, grouped under `###` date headings.
+- `## X.Y.Z — YYYY-MM-DD` (an em dash; `X.Y.Z-rc.N` is allowed), one per release, newest first.
+
+To cut a release, rename `[Unreleased]` to the version heading and add a fresh empty `## [Unreleased]` above it. The
+release workflow publishes the matching section as the release notes and fails if it is missing or empty.
+
+`ChangelogSectionsSpec` fails when the file has no `[Unreleased]` section or a malformed heading. To preview the notes for
+a version, or for the unreleased section:
+
+```bash
+sbt "Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md 1.2.0"
+sbt "Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md --unreleased"
+```
+
 ## Automated standards
 
 Three layers enforce `docs/coding-standards.md` rather than leaving it to review.
