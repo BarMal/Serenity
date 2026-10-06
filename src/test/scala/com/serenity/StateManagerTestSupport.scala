@@ -9,7 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.AppState
-import com.serenity.testkit.AwaitCondition
+import com.serenity.testkit.{AwaitCondition, SharedDictionary}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
@@ -35,7 +35,8 @@ trait StateManagerTestSupport:
           onFontConfigChanged = onFontConfigChanged,
           deviceTextScaleProvider = deviceTextScaleProvider,
           sessionRootOverride = Some(root),
-          fileDialog = fileDialog
+          fileDialog = fileDialog,
+          dictionaryCache = SharedDictionary.default
         )
       )
 
