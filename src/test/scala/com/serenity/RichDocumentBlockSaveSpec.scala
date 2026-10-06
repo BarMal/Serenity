@@ -116,16 +116,43 @@ class RichDocumentBlockSaveSpec extends AnyFlatSpec with Matchers:
         val saved = fileManager.saveBuffer(buffer, target).unsafeRunSync()
         val bytes = Files.readAllBytes(target)
 
-        String(bytes, "UTF-8") should not include InlineAtom.BlockCharacter.toString
-        saved.document.content.collect() should not include InlineAtom.BlockCharacter.toString
+        markersIn(String(bytes, "UTF-8")) shouldBe Nil
+        markersIn(saved.document.content.collect()) shouldBe Nil
+        String(bytes, "UTF-8") shouldBe saved.document.content.collect()
         saved.document.content.lineCount shouldBe lines
         saved.richText.richTextDocument shouldBe None
 
         fileManager.saveBuffer(saved).unsafeRunSync()
-        val again = String(Files.readAllBytes(target), "UTF-8")
-        again should not include InlineAtom.BlockCharacter.toString
-        again.linesIterator.size shouldBe lines
+        Files.readAllBytes(target) shouldBe bytes
       }
+    finally
+      Files.deleteIfExists(sourceFile)
+      Files.deleteIfExists(savedMd)
+      Files.deleteIfExists(savedTxt)
+  }
+
+  it should "write a soft break as a line break and no internal marker to Markdown or plain text" in {
+    val fileManager = new FileManager()
+    val sourceFile  = Files.createTempFile("serenity-break-source", ".docx")
+    val savedMd     = Files.createTempFile("serenity-break-copy", ".md")
+    val savedTxt    = Files.createTempFile("serenity-break-copy", ".txt")
+    val body        = """<w:p><w:r><w:t>a</w:t><w:br/><w:t>b</w:t></w:r></w:p>"""
+    val xml =
+      s"""<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>$body</w:body></w:document>"""
+
+    try
+      Files.write(
+        sourceFile,
+        GoldenFixtures.zip(List("word/document.xml" -> xml.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+      )
+      val buffer = fileManager.loadFile(sourceFile, BufferId(113)).unsafeRunSync()
+
+      fileManager.saveBuffer(buffer, savedTxt).unsafeRunSync()
+      fileManager.saveBuffer(buffer, savedMd).unsafeRunSync()
+
+      String(Files.readAllBytes(savedTxt), "UTF-8") shouldBe "a\nb"
+      String(Files.readAllBytes(savedMd), "UTF-8") shouldBe "a\\\nb"
+      List(savedTxt, savedMd).foreach(target => markersIn(String(Files.readAllBytes(target), "UTF-8")) shouldBe Nil)
     finally
       Files.deleteIfExists(sourceFile)
       Files.deleteIfExists(savedMd)
@@ -149,3 +176,6 @@ class RichDocumentBlockSaveSpec extends AnyFlatSpec with Matchers:
       Files.deleteIfExists(sourceFile)
       Files.deleteIfExists(savedCopy)
   }
+
+  private def markersIn(text: String): List[Char] =
+    List(InlineAtom.BlockCharacter, InlineAtom.OpaqueCharacter, InlineAtom.SoftBreakCharacter).filter(text.contains(_))

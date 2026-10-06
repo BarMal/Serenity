@@ -97,9 +97,10 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
       case FileType.Markdown =>
         for
           _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
-          encoded = encodedForSave(buffer, markdownContentForSave(buffer))
+          written = markdownContentForSave(buffer)
+          encoded = encodedForSave(buffer, written)
           stored <- saveStored(path, encoded.bytes, expectedRevision)
-        yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision, withoutBlockLines(buffer)))
+        yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision, settledToWritten(buffer, written)))
       case FileType.RichText =>
         val document           = richTextDocumentForSave(buffer)
         val (settled, content) = settledFor(document, None)
@@ -136,9 +137,10 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
       case _ =>
         for
           _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
-          encoded = encodedForSave(buffer, plainTextForSave(buffer))
+          written = plainTextForSave(buffer)
+          encoded = encodedForSave(buffer, written)
           stored <- saveStored(path, encoded.bytes, expectedRevision)
-        yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision, withoutBlockLines(buffer))))
+        yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision, settledToWritten(buffer, written))))
 
   /** The document in the DOCX or ODT at `path` as it is now, when that file is still at `expected`, the revision a
     * document restored from a session was last read or written at. Only then do the body blocks a restored document
@@ -348,15 +350,14 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
         case PackageFormat.Odt  => OdtDocumentCodec.readBytes(written)
       readBack.fold(_ => document, document.rebasedOn)
 
-  /** The buffer's text with each block line emptied, when it has any: Markdown and plain text write a block as an empty
-    * line, and the buffer, which loses its rich document with the save, keeps no placeholder character that the file
-    * does not have. An empty line rather than a marker such as "[table]": the file must say exactly what the buffer
-    * shows, and a marker would be text the user never wrote.
+  /** The text a Markdown or plain-text save wrote, as the buffer's text, when the buffer came from a rich document. The
+    * rope of such a buffer holds the internal placeholders of soft breaks, objects and blocks, which the file does not,
+    * and the buffer loses its rich document with the save; left as it was, a later in-place save would write the
+    * placeholders. A block is an empty line and not a marker such as "[table]": the file must say exactly what the
+    * buffer shows, and a marker would be text the user never wrote.
     */
-  private def withoutBlockLines(buffer: Buffer): Option[com.serenity.rope.Rope] =
-    buffer.richText.richTextDocument
-      .filter(_.hasOpaqueBlock)
-      .map(_ => com.serenity.rope.Rope(buffer.document.content.collect().filterNot(_ == InlineAtom.BlockCharacter)))
+  private def settledToWritten(buffer: Buffer, written: String): Option[com.serenity.rope.Rope] =
+    buffer.richText.richTextDocument.map(_ => com.serenity.rope.Rope(written))
 
   /** What the buffer holds after a save in `format`, which is what the file now says. A format that cannot hold blocks
     * wrote each block line as an empty paragraph, so the buffer's lines become empty too and a later save cannot differ
@@ -398,9 +399,10 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
 
   private def markdownRun(run: com.serenity.richtext.RichTextRun): String =
     run.atom match
-      case Some(InlineAtom.Block(_, _)) => ""
-      case Some(_)                      => MarkdownHardBreak
-      case None                         => markdownMarkedText(run)
+      case Some(InlineAtom.Block(_, _))  => ""
+      case Some(InlineAtom.SoftBreak)    => MarkdownHardBreak
+      case Some(InlineAtom.Opaque(_, _)) => ""
+      case None                          => markdownMarkedText(run)
 
   private def markdownMarkedText(run: com.serenity.richtext.RichTextRun): String =
     val marks = run.style.marks
