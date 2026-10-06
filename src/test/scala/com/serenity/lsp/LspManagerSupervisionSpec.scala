@@ -10,6 +10,7 @@ import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity}
+import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.Stream
 import io.circe.Json
@@ -80,13 +81,15 @@ class LspManagerSupervisionSpec extends AnyFlatSpec with Matchers with LspManage
   "LspManager" should "restart a server that dies and reopen its documents with their latest text" in
     supervised(fastRestarts) { manager =>
       for
-        _             <- manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo")))
-        first         <- manager.nextServer
+        _     <- manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo"))))
+        first <- manager.nextServer
         firstMessages <- first.drainReceived(3)
-        _      <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
-        _      <- first.takeReceived
-        _      <- first.shutdown()
-        second <- manager.nextServer
+        _ <- manager.effects.offer(
+          Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo2"), version = 2))
+        )
+        _              <- first.takeReceived
+        _              <- first.shutdown()
+        second         <- manager.nextServer
         secondMessages <- second.drainReceived(3).timeout(testTimeout)
       yield
         methods(firstMessages) shouldBe handshakeAndOpen
@@ -98,7 +101,7 @@ class LspManagerSupervisionSpec extends AnyFlatSpec with Matchers with LspManage
     supervised(fastRestarts.copy(maxRestarts = 2)) { manager =>
       val crashOnce = manager.nextServer.flatMap(server => server.drainReceived(3) >> server.shutdown())
       for
-        _ <- manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo")))
+        _ <- manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo"))))
         _ <- crashOnce
         _ <- crashOnce
         _ <- crashOnce
@@ -184,12 +187,12 @@ class LspManagerSupervisionSpec extends AnyFlatSpec with Matchers with LspManage
           )(_.cancel)
           .use { managerFiber =>
             val edits = (2 to 301).toList.map(version =>
-              Some(LspEffect.FileChanged(stalledUri, LanguageId.Scala, s"object Stalled$version", version))
+              Some(LspEffect.FileChanged(stalledUri, LanguageId.Scala, RopeText(s"object Stalled$version"), version))
             )
             for
-              _ <- effects.offer(Some(LspEffect.FileOpened(stalledUri, LanguageId.Scala, "object Stalled")))
+              _ <- effects.offer(Some(LspEffect.FileOpened(stalledUri, LanguageId.Scala, RopeText("object Stalled"))))
               _ <- edits.traverse_(effects.offer)
-              _ <- effects.offer(Some(LspEffect.FileOpened(healthyUri, LanguageId.Scala, "object Healthy")))
+              _ <- effects.offer(Some(LspEffect.FileOpened(healthyUri, LanguageId.Scala, RopeText("object Healthy"))))
               _ <- expectNotification(healthy, "textDocument/didOpen", healthyUri).timeout(testTimeout)
               _ <- effects.offer(None)
               _ <- managerFiber.joinWithNever

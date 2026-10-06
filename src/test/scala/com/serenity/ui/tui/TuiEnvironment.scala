@@ -30,7 +30,7 @@ object TuiViewport:
   */
 final case class TuiEnvironment(
     viewport: ViewportSize = TuiViewport.Default,
-    config: AppConfig = AppConfig.default,
+    config: AppConfig = TuiEnvironment.DefaultConfig,
     file: Option[TuiEnvironment.SourceFile] = None,
     useOsc52Clipboard: Boolean = true,
     escDeadline: FiniteDuration = TuiEnvironment.PausesOnlyEscDeadline
@@ -66,6 +66,12 @@ object TuiEnvironment:
   final case class SourceFile(name: String, content: String)
 
   val DefaultFileName = "scratch.md"
+
+  /** The defaults, less spell check: its background analysis (and, with no dictionary installed, its one-off notice)
+    * would draw over screens these scenarios compare cell by cell, at a moment that depends on the machine.
+    */
+  val DefaultConfig: AppConfig =
+    AppConfig.default.withSpellCheck(AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = false))
 
   /** Long enough never to fire within a scenario. [[TuiSession.feed]] marks the pause after a lone Escape itself, so
     * the clock never decides whether an `ESC` starts a sequence -- under load it could otherwise expire before the rest

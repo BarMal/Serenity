@@ -36,6 +36,12 @@ class StatusLineTextSpec extends AnyFlatSpec with Matchers:
     StatusLineText.render(state, List(StatusSegment.WordGoal)) shouldBe Some("5 / 3 words (100%)")
   }
 
+  it should "count a spaceless Chinese sentence one word per character toward the goal" in {
+    val state = stateWith("我们今天去公园", wordGoal = Some(10))
+
+    StatusLineText.render(state, List(StatusSegment.WordGoal)) shouldBe Some("7 / 10 words (70%)")
+  }
+
   "Language" should "show the work its language server reports as running" in {
     val scalaBuffer = Buffer.fromString(bufferId, "object A")
     val withLanguage =

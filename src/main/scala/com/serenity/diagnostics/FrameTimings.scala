@@ -1,7 +1,7 @@
 package com.serenity.diagnostics
 
 import java.util.Locale
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
 import cats.effect.IO
 
@@ -156,16 +156,28 @@ object FrameTimingState:
 /** Records [[FrameTimingState]] transitions from whichever thread reaches each point: the toolkit's event thread for
   * input arrival and painting, the input loop and the paint executor for the rest. An `AtomicReference` rather than a
   * `Ref` because the event-thread callers are synchronous Swing callbacks with nothing to run an `IO` on.
+  *
+  * Records nothing until [[setEnabled]] switches it on (`ui.render.frame_timing`), so with timing off every hook is a
+  * flag read.
   */
 final class FrameTimings(clock: () => Long = () => System.nanoTime()):
-  private val state = new AtomicReference(FrameTimingState.start(clock()))
+  private val enabled = new AtomicBoolean(false)
+  private val state   = new AtomicReference(FrameTimingState.start(clock()))
 
   /** Rides along with the frame phases so the frontends that already report them feed it without further wiring. */
   val keyLatency: KeyLatencyTrace = KeyLatencyTrace(clock)
 
+  def isEnabled: Boolean = enabled.get()
+
+  /** Starts from an empty window either way, so nothing half-recorded before a toggle is reported after it. */
+  def setEnabled(on: Boolean): Unit =
+    state.set(FrameTimingState.start(clock()))
+    enabled.set(on)
+
   private def update(transition: (FrameTimingState, Long) => FrameTimingState): Unit =
-    val now = clock()
-    val _   = state.updateAndGet(transition(_, now))
+    if enabled.get() then
+      val now = clock()
+      val _   = state.updateAndGet(transition(_, now))
 
   def inputArrived(): Unit       = update(_.inputArrived(_))
   def inputApplyFinished(): Unit = update(_.inputApplyFinished(_))
@@ -184,7 +196,8 @@ final class FrameTimings(clock: () => Long = () => System.nanoTime()):
   /** Returns the paint's start, to hand back to [[paintFinished]]. */
   def paintStarted(): Long =
     val now = clock()
-    val _   = state.updateAndGet(_.paintStarted(now))
+    if enabled.get() then
+      val _ = state.updateAndGet(_.paintStarted(now))
     keyLatency.paintStarted()
     now
 
@@ -193,16 +206,18 @@ final class FrameTimings(clock: () => Long = () => System.nanoTime()):
     keyLatency.paintFinished()
 
   def timed[A](phase: FramePhase)(work: => A): A =
-    val start = clock()
-    try work
-    finally
-      val end = clock()
-      val _   = state.updateAndGet(_.record(phase, end - start))
+    if enabled.get() then
+      val start = clock()
+      try work
+      finally update((current, end) => current.record(phase, end - start))
+    else work
 
   def timedIO[A](phase: FramePhase)(work: IO[A]): IO[A] =
-    IO(clock()).flatMap(start =>
-      work.guarantee(IO(clock()).map(end => state.updateAndGet(_.record(phase, end - start))).void)
-    )
+    IO(enabled.get()).flatMap { on =>
+      if on then
+        IO(clock()).flatMap(start => work.guarantee(IO(update((current, end) => current.record(phase, end - start)))))
+      else work
+    }
 
   /** The summary of everything since the previous drain, starting a new window. */
   def drain(): FrameTimingSummary =

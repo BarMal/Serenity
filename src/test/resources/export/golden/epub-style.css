@@ -1,0 +1,48 @@
+body {
+  margin: 5%;
+  line-height: 1.4;
+}
+h1, h2 {
+  text-align: center;
+  font-weight: bold;
+  margin: 3em 0 2em;
+}
+h1.title {
+  margin-top: 30%;
+}
+p {
+  margin: 0;
+  text-indent: 1.5em;
+}
+p.first, p.byline, p.centered, p.dedication, p.end-marker, p.scene-break {
+  text-indent: 0;
+}
+p.byline, p.centered, p.dedication, p.end-marker, p.scene-break {
+  text-align: center;
+}
+p.byline {
+  margin-top: 1em;
+}
+p.dedication {
+  margin-top: 30%;
+  font-style: italic;
+}
+p.scene-break {
+  margin: 1.4em 0;
+}
+p.end-marker {
+  margin-top: 2em;
+}
+blockquote {
+  margin: 1em 2em;
+}
+blockquote p {
+  text-indent: 0;
+}
+pre {
+  font-family: monospace;
+  white-space: pre-wrap;
+}
+.underline {
+  text-decoration: underline;
+}

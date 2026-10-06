@@ -23,10 +23,14 @@ case object MoveLeft                    extends NavigationEvent
 case object MoveRight                   extends NavigationEvent
 case object MoveWordLeft                extends NavigationEvent
 case object MoveWordRight               extends NavigationEvent
+case object MoveSubWordLeft             extends NavigationEvent
+case object MoveSubWordRight            extends NavigationEvent
 case object ExtendSelectionLeft         extends NavigationEvent
 case object ExtendSelectionRight        extends NavigationEvent
 case object ExtendSelectionWordLeft     extends NavigationEvent
 case object ExtendSelectionWordRight    extends NavigationEvent
+case object ExtendSelectionSubWordLeft  extends NavigationEvent
+case object ExtendSelectionSubWordRight extends NavigationEvent
 case object ExtendSelectionToLineStart  extends NavigationEvent
 case object ExtendSelectionToLineEnd    extends NavigationEvent
 case object ExtendSelectionPageUp       extends NavigationEvent
@@ -54,6 +58,7 @@ final case class ScrollRight(columns: Int) extends ScrollEvent
 case object OpenGotoLine                   extends ModalRequestEvent
 case object OpenReplace                    extends ModalRequestEvent
 case object FindNext                       extends TextEntryEvent
+case object FindPrevious                   extends TextEntryEvent
 case object Enter                          extends TextEntryEvent
 case object OpenFind                       extends ModalRequestEvent
 case object Escape                         extends TextEntryEvent

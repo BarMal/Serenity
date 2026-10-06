@@ -1,4 +1,5 @@
 import java.nio.file.Path
+import java.time.Instant
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.Duration
@@ -8,14 +9,24 @@ import cats.effect.unsafe.IORuntimeConfig
 import cats.syntax.all.*
 import com.serenity.BuildInfo
 import com.serenity.app.*
+import com.serenity.app.LaunchReset.Moved
 import com.serenity.app.instance.{LaunchRole, SingleInstance}
-import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning}
+import com.serenity.config.{
+  AppConfig,
+  ConfigDiagnostic,
+  ConfigLoadResult,
+  ConfigManager,
+  ConfigMigrationReport,
+  ConfigMigrationWarning,
+  ConfigNotice
+}
 import com.serenity.diagnostics.{FrameKind, FramePhase, FrameTimings, Trace, TuiConsoleLogFilter}
 import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
+import com.serenity.state.models.RestartMode
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.display.DisplayScale
@@ -48,10 +59,30 @@ object Main extends IOApp:
           IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
         case Right(options) if options.showVersion =>
           IO(println(s"Serenity ${BuildInfo.version} (${BuildInfo.commit})")).as(ExitCode.Success)
-        case Right(options) => launch(options, toolkit)
+        case Right(options) => launchUntilSettled(options, toolkit)
     }
 
-  private def launch(launchOptionsForLogging: LaunchOptions, toolkit: ToolkitSelection.Decision): IO[ExitCode] =
+  /** A restart ends the running editor and starts the next one in this same JVM, so the terminal and the toolkit choice
+    * carry straight over; the single-instance lock is released and taken again by the next launch. It drops the
+    * one-shot resets.
+    */
+  private def launchUntilSettled(options: LaunchOptions, toolkit: ToolkitSelection.Decision): IO[ExitCode] =
+    Ref.of[IO, Option[RestartMode]](None).flatMap { restartRequested =>
+      launch(options, toolkit, mode => restartRequested.set(Some(mode))) >> restartRequested.get.flatMap {
+        case Some(mode) =>
+          launchUntilSettled(
+            options.copy(safeMode = mode == RestartMode.InSafeMode, resetConfig = false, resetSession = false),
+            toolkit
+          )
+        case None => IO.pure(ExitCode.Success)
+      }
+    }
+
+  private def launch(
+    launchOptionsForLogging: LaunchOptions,
+    toolkit: ToolkitSelection.Decision,
+    requestRestart: RestartMode => IO[Unit]
+  ): IO[ExitCode] =
     // #1215/#1669: must run before the `given logger` below, which triggers logback's one-time console-appender setup
     // on its first call -- `TuiConsoleLogFilter` checks this per log event, but it still has to be configured before
     // the very first event a TUI launch could otherwise leak onto the terminal surface it is about to take over. The
@@ -73,7 +104,7 @@ object Main extends IOApp:
       instances = SingleInstance.forConfigDirectory(SessionManager.defaultSessionRoot(), logger)
       _ <- SingleInstance.claim(instances, requested, logger).use {
         case LaunchRole.Forwarded => reportForwarded(requested)
-        case role                 => runAs(role, launchOptionsForLogging)
+        case role                 => runAs(role, launchOptionsForLogging, requestRestart)
       }
     yield ExitCode.Success
 
@@ -83,34 +114,84 @@ object Main extends IOApp:
       else s"Serenity is already running; opened ${paths.mkString(", ")} there."
     logger.info(s"[INSTANCE] $message") >> IO.println(message)
 
-  private def runAs(role: LaunchRole, launchOptions: LaunchOptions)(using logger: Logger[IO]): IO[Unit] =
+  /** Everything here follows the instance claim: a launch that handed its files to the running one has already
+    * returned, so it records no start attempt and moves no file.
+    */
+  private def runAs(role: LaunchRole, launchOptions: LaunchOptions, requestRestart: RestartMode => IO[Unit])(using
+    logger: Logger[IO]
+  ): IO[Unit] =
     for
-      configResult <- ConfigManager.loadConfigResultIO()
-      // A config that cannot be read means this session runs on defaults -- every setting the user had, gone until
-      // they restart with a readable file. Keep their file aside before anything can overwrite it, and carry a notice
-      // the start page can show: the log line below is invisible in TUI mode, where stderr goes to nowhere.
-      configNotice <- configResult.fold(
-        error =>
-          logger.error(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}") >>
-            IO.blocking(ConfigManager.preserveUnreadableConfig(ConfigManager.defaultConfigPath)).map { preserved =>
-              val kept = preserved.fold("")(path => s" A copy was kept at $path.")
-              Some(s"Configuration could not be read, so this session is using defaults.$kept")
-            },
-        _ => IO.pure(None)
+      startedAt                   <- IO.realTimeInstant
+      (configMoved, sessionMoved) <- applyResets(role, launchOptions, startedAt)
+      unfinishedStarts            <- countUnfinishedStarts(launchOptions)
+      plan = StartupRecovery.plan(
+        launchOptions,
+        StartupCrashGuard.decide(unfinishedStarts, launchOptions.safeMode),
+        configMoved,
+        sessionMoved
       )
-      configLoad = configResult.getOrElse(
-        com.serenity.config.ConfigLoadResult(AppConfig.default, com.serenity.config.ConfigMigrationReport.empty)
+      // Safe mode never reads the user's config, so a file it cannot parse is not even set aside.
+      configResult <-
+        if plan.safeMode then IO.pure(Right(ConfigLoadResult(SafeMode.config, ConfigMigrationReport.empty)))
+        else ConfigManager.loadConfigResultIO()
+      // Only a file that cannot be parsed at all means defaults for the session. It is left exactly as it is, and
+      // saving is refused while it stays that way. Anything less costs only the settings that were invalid, and the
+      // start page names them: the log is invisible in TUI mode, where stderr goes to nowhere.
+      (loaded, configNotice) = ConfigNotice.forOutcome(ConfigManager.defaultConfigPath, configResult)
+      _ <- configResult.left.toOption.traverse_(error =>
+        logger.error(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}")
       )
       _ <- ConfigMigrationWarning
-        .message(ConfigManager.defaultConfigPath, configLoad.report)
+        .message(ConfigManager.defaultConfigPath, loaded.report)
         .fold(IO.unit)(message => logger.warn(message))
-      appConfig     = resolveAppConfig(configLoad.config, launchOptions)
-      startupNotice = Option((configNotice.toList ++ role.notice).mkString(" ")).filter(_.nonEmpty)
-      session       = SessionChoice(role.sessionRootOverride, forwardedOpensOf(role))
-      _ <-
-        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, launchOptions, startupNotice, session)
-        else runGui(appConfig, launchOptions, startupNotice, session)
+      // The warning above already lists deprecated, unknown, removed and invalid entries.
+      _ <- loaded.report.diagnostics.collect {
+        case diagnostic @ (_: ConfigDiagnostic.ConflictingHotkey | _: ConfigDiagnostic.NewerFileVersion |
+            _: ConfigDiagnostic.Migrated) =>
+          logger.warn(s"[CONFIG] ${diagnostic.message}")
+      }.sequence_
+      appConfig = resolveAppConfig(loaded.config, launchOptions)
+      startup   = Startup(plan, requestRestart, StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker))
+      // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
+      instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten
+      notice         = plan.noticeWith(Option((configNotice.toList ++ instanceNotice).mkString(" ")).filter(_.nonEmpty))
+      _ <- safeModeSessionRoot(plan).use { scratchRoot =>
+        val session = SessionChoice(scratchRoot.orElse(role.sessionRootOverride), forwardedOpensOf(role))
+        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, launchOptions, notice, startup, session)
+        else runGui(appConfig, launchOptions, notice, startup, session)
+      }
+      _ <- startup.markStarted
     yield ()
+
+  /** What the recovery plan adds to a launch beyond the config: the plan itself, how to ask for a restart, and what to
+    * do once the first frame is painted.
+    */
+  final private case class Startup(
+      plan: StartupRecovery.Plan,
+      requestRestart: RestartMode => IO[Unit],
+      markStarted: IO[Unit]
+  )
+
+  /** A launch already in safe mode only reads the marker: a safe start that dies must not push the next one further. */
+  private def countUnfinishedStarts(options: LaunchOptions): IO[Int] =
+    if options.safeMode then StartupCrashGuard.peekUnfinishedStarts(StartupCrashGuard.defaultMarker)
+    else StartupCrashGuard.recordStartAttempt(StartupCrashGuard.defaultMarker)
+
+  /** Safe mode writes its session into a scratch folder, so the real one is neither read nor replaced. */
+  private def safeModeSessionRoot(plan: StartupRecovery.Plan): Resource[IO, Option[Path]] =
+    if plan.safeMode then SafeMode.scratchSessionRoot.map(Some(_)) else Resource.pure(None)
+
+  /** An isolated launch does not own the session folder, so a reset must not move what the running instance writes. */
+  private def applyResets(role: LaunchRole, options: LaunchOptions, at: Instant): IO[(List[Moved], List[Moved])] =
+    for
+      config <-
+        if options.resetConfig then LaunchReset.backUpConfig(ConfigManager.defaultConfigPath, at) else IO.pure(Nil)
+      session <-
+        if options.resetSession && role.sessionRootOverride.isEmpty then
+          LaunchReset.backUpSession(SessionManager.defaultSessionRoot(), at)
+        else IO.pure(Nil)
+      _ <- (config ++ session).traverse_(moved => IO(System.err.println(s"Moved ${moved.from} to ${moved.to}")))
+    yield (config, session)
 
   /** Which session this process may write, and the files later launches hand it. */
   final private case class SessionChoice(rootOverride: Option[Path], forwardedOpens: Stream[IO, List[Path]])
@@ -128,6 +209,7 @@ object Main extends IOApp:
     appConfig: AppConfig,
     launchOptions: LaunchOptions,
     configNotice: Option[String],
+    startup: Startup,
     session: SessionChoice
   )(using
     logger: Logger[IO],
@@ -141,10 +223,13 @@ object Main extends IOApp:
         shell = TerminalShell.resource,
         appConfig = appConfig,
         openPath = launchOptions.openPath,
-        configPersistencePath = Some(ConfigManager.defaultConfigPath),
+        configPersistencePath = startup.plan.configPersistencePath(ConfigManager.defaultConfigPath),
         hasDisplay = LaunchOptions.isDisplayReachable(sys.env),
         sessionRootOverride = session.rootOverride,
         configNotice = configNotice,
+        recovery = startup.plan,
+        restarter = Some(startup.requestRestart),
+        onFirstFrame = startup.markStarted,
         forwardedOpens = session.forwardedOpens
       )
 
@@ -155,6 +240,7 @@ object Main extends IOApp:
     appConfig: AppConfig,
     launchOptions: LaunchOptions,
     configNotice: Option[String],
+    startup: Startup,
     session: SessionChoice
   )(using
     logger: Logger[IO],
@@ -170,7 +256,8 @@ object Main extends IOApp:
           initialDisplay.uiMetrics,
           appConfig.windowChromeMode,
           appConfig.preferredWindowSize,
-          frameTimings
+          frameTimings,
+          startup.plan.windowTitle
         ),
         PaintExecutionContext.resource
       ).tupled
@@ -268,6 +355,8 @@ object Main extends IOApp:
               runtime = frontendRuntime,
               appConfig = actualAppConfig,
               configNotice = configNotice,
+              recovery = startup.plan,
+              onFirstFrame = startup.markStarted,
               makeStateManager = Some(logger =>
                 com.serenity.state.manager.StateManager.apply(
                   logger,
@@ -280,7 +369,10 @@ object Main extends IOApp:
                         swingWin.updateMetrics(display.codeMetrics, display.uiMetrics)
                       },
                   deviceTextScaleProvider = IO.blocking(swingWin.detectedDeviceTextScale),
-                  configPersistencePath = Some(ConfigManager.defaultConfigPath),
+                  configPersistencePath = startup.plan.configPersistencePath(ConfigManager.defaultConfigPath),
+                  projectTasksEnabled = !startup.plan.safeMode,
+                  restarter = Some(startup.requestRestart),
+                  uiPresetStore = startup.plan.uiPresetStore(session.rootOverride),
                   windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
                   onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
                   fileDialog = Some(SwingFileDialog(swingWin.canvas))

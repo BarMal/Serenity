@@ -24,7 +24,8 @@ class SwingWindow(
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
     initialChromeMetrics: CellMetrics,
     frameTimings: FrameTimings = FrameTimings(),
-    env: Map[String, String] = sys.env
+    env: Map[String, String] = sys.env,
+    windowTitle: String = SwingWindow.WindowTitle
 ):
 
   private val usesCustomChrome =
@@ -193,7 +194,8 @@ class SwingWindow(
     () => chromeSpacerSize,
     () => chromeTitleBarSize,
     () => toggleMaximize(),
-    activateChromeControl
+    activateChromeControl,
+    windowTitle
   )
 
   maxBtnRef.set(chromeTitleBar.maxButton)
@@ -204,7 +206,7 @@ class SwingWindow(
   titleBarRef.set(Some(chromeTitleBar.panel))
 
   private val frame: JFrame =
-    val f = new JFrame(SwingWindow.WindowTitle)
+    val f = new JFrame(windowTitle)
     f.setIconImages(SwingWindow.applicationIconImages.asJava)
     f.setUndecorated(usesCustomChrome)
     f.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE)
@@ -414,17 +416,19 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
     chromeMetrics: CellMetrics = DefaultMetrics,
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
     preferredWindowSize: Option[PreferredWindowSize] = None,
-    frameTimings: FrameTimings = FrameTimings()
+    frameTimings: FrameTimings = FrameTimings(),
+    title: String = WindowTitle
   ): Resource[IO, SwingWindow] =
     Resource.make(
       IO.blocking {
-        val initialSize = preferredWindowSize.map(_.normalized).getOrElse(PreferredWindowSize(1024, 768))
+        val initialSize = preferredWindowSize.map(_.normalized).getOrElse(PreferredWindowSize.Default)
         val win = new SwingWindow(
           new Dimension(initialSize.width, initialSize.height),
           metrics,
           chromeMode,
           chromeMetrics,
-          frameTimings
+          frameTimings,
+          windowTitle = title
         )
         win.start()
         win

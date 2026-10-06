@@ -5,7 +5,7 @@ import scala.concurrent.duration.*
 import cats.effect.std.Supervisor
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
-import com.serenity.config.{AppConfig, StatusLinePlacement}
+import com.serenity.config.{AppConfig, SpellCheckConfig, StatusLinePlacement}
 import com.serenity.input.{InputRouter, PendingInput, SystemClipboard}
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -97,7 +97,7 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
           for
             sm <- StateManager(
               LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
-              initialConfig = AppConfig.default
+              initialConfig = noBackgroundAnalysis
             )
             timer  <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
             _      <- sm.runtimeLifecycle.observeCommits(timer.onCommit(_, _))
@@ -111,6 +111,9 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
 
     burstEnded shouldBe (true, false)
   }
+
+  // Spell check analyses in the background and commits its result, which these specs would count as typing activity.
+  private val noBackgroundAnalysis: AppConfig = AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = false))
 
   private val floatingStatusLine: AppState =
     val state = AppState.initial
@@ -165,7 +168,7 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
           for
             sm <- StateManager(
               LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
-              initialConfig = AppConfig.default
+              initialConfig = noBackgroundAnalysis
             )
             timer          <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
             observedByWake <- Ref.of[IO, Int](0)

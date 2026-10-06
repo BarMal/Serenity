@@ -12,12 +12,12 @@ import com.serenity.diagnostics.Trace
 import com.serenity.document.CommentRendering
 import com.serenity.io.{FileBrowser, FileEntry}
 import com.serenity.lsp.client.DocumentUri
-import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker}
+import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker, SpellSuggester}
 import com.serenity.state.core.NotesPaneSync
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.NoticeReducer
-import com.serenity.ui.layout.{DirEntry, WrappedLineCache}
+import com.serenity.state.reducers.{ModalEventReducer, NoticeReducer, PeekStateReducer}
+import com.serenity.ui.layout.{DirEntry, PeekContent, WrappedLineCache}
 import org.typelevel.log4cats.Logger
 
 /** Operations emitted by capabilities for ordered interpretation at the event boundary. */
@@ -30,6 +30,7 @@ final private[manager] class StateManagerOperationBoundary private (
     modelRef: Ref[IO, Model],
     documentAnalysisInputsRef: Ref[IO, Option[Map[DocumentUri, SpellCheckFingerprint]]],
     dictionaryFingerprintsRef: Ref[IO, Option[(SpellCheckConfig, List[SpellCheckDictionaryFingerprint])]],
+    announcedNotices: Ref[IO, Set[String]],
     logger: Logger[IO],
     val effectLanes: EffectLanes,
     releaseEffectLanes: IO[Unit],
@@ -47,7 +48,8 @@ final private[manager] class StateManagerOperationBoundary private (
     wrapCache: WrappedLineCache,
     commitsUnobserved: Ref[IO, Boolean],
     editIdleSessionSave: Option[EditIdleSessionSave],
-    announceClosedDocuments: (AppState, AppState) => IO[Unit]
+    announceClosedDocuments: (AppState, AppState) => IO[Unit],
+    forgetClosedBuffers: (AppState, AppState) => IO[Unit]
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
@@ -104,10 +106,11 @@ final private[manager] class StateManagerOperationBoundary private (
   /** The follow-up work of every `ModelCommit` app-state commit. */
   private[manager] def afterCommit(fallbackState: AppState, committedState: AppState): IO[Unit] =
     logModalTransition(fallbackState, committedState) >> scheduleDocumentAnalysis() >>
+      ModalEventReducer.findRefreshDue(fallbackState, committedState).traverse_(scheduleFindSearch) >>
       PanelContentSync.outlineRefreshDue(committedState, fallbackState).traverse_(scheduleOutlineRefresh) >>
       PanelContentSync.explorerListingsDue(committedState, fallbackState).traverse_(listExplorerDirectory) >>
       scheduleSessionSaveIfDue(fallbackState, committedState) >>
-      announceClosedDocuments(fallbackState, committedState) >>
+      announceClosedDocuments(fallbackState, committedState) >> forgetClosedBuffers(fallbackState, committedState) >>
       commitsUnobserved.get.ifM(IO.unit, commitObserver.get.flatMap(_(fallbackState, committedState)))
 
   /** Replaces the observer told of every commit `afterCommit` follows up, with the states before and after. */
@@ -197,9 +200,21 @@ final private[manager] class StateManagerOperationBoundary private (
     * safe to call every watch-loop cycle without itself touching the filesystem.
     */
   def dictionaryWatchDirectories: IO[Set[java.nio.file.Path]] =
-    modelCommit.currentState.map(state =>
-      SpellCheckConfig.dictionaryWatchDirectories(state.persisted.config.languageToolsConfig.spellCheck)
-    )
+    (modelCommit.currentState, dictionaryFingerprintsRef.get).mapN { (state, discovered) =>
+      val config  = state.persisted.config.languageToolsConfig.spellCheck
+      val watched = SpellCheckConfig.dictionaryWatchDirectories(config)
+      if config.normalized.dictionaryPaths.nonEmpty then watched
+      else watched.intersect(StateManagerOperationBoundary.discoveredDictionaryDirectories(discovered))
+    }
+
+  /** Corrections for `word` under the current spell-check configuration, searched for now: the background analysis
+    * deliberately never does this (#1939). The dictionary comes from the cache the analysis keeps warm.
+    */
+  def spellingSuggestions(word: String): IO[List[String]] =
+    modelCommit.currentState.flatMap { state =>
+      val config = state.persisted.config.languageToolsConfig.spellCheck
+      IO.blocking(SpellSuggester.suggest(word, DictionaryLoader.loadSnapshot(config, dictionaryCache).context))
+    }
 
   def explorerWatchDirectories: IO[Set[Path]] =
     modelCommit.currentState.map(PanelContentSync.explorerWatchDirectories)
@@ -257,8 +272,8 @@ final private[manager] class StateManagerOperationBoundary private (
     submit(
       FindSearchLane,
       IO.sleep(FindSearchDebounce) >>
-        IO.delay(FindSearch.results(request.content, request.query))
-          .flatMap(results => postResult(EffectResult.FindSearchCompleted(request, results)))
+        IO.delay(FindSearch.search(request.content, request.query, request.options, request.anchor))
+          .flatMap(matches => postResult(EffectResult.FindSearchCompleted(request, matches)))
     )
 
   /** Supersedes any pending markdown-preview commit for `bufferId` with one that, after
@@ -350,18 +365,64 @@ final private[manager] class StateManagerOperationBoundary private (
           IO.blocking(DictionaryLoader.loadSnapshot(spellCheckConfig, dictionaryCache)).flatMap { dictionary =>
             val expected = SpellChecker.analysisFingerprints(snapshot, dictionary.fingerprints)
             val analyzed = SpellChecker.refreshDiagnostics(snapshot, dictionary)
-            postResult(EffectResult.DocumentAnalysisCompleted(analyzed, expected, dictionary.fingerprints))
+            announceMissingDictionary(
+              Option
+                .when(spellCheckConfig.enabled && hasProseToCheck(snapshot))(dictionary.context.missingDictionary)
+                .flatten
+            ) >>
+              postResult(EffectResult.DocumentAnalysisCompleted(analyzed, expected, dictionary.fingerprints)) >>
+              // Idle time after the result is published, so the first request for corrections does not pay for it.
+              IO.blocking(dictionary.context.stems.foreach(_.prepareSuggestions()))
           }
         }
       }).handleErrorWith(error =>
       documentAnalysisInputsRef.set(None) >> logger.error(error)("[ANALYSIS] Document analysis refresh failed")
     )
 
+  /** Tells the writer, once per session and only when there is prose to check, that spell check has no dictionary to
+    * check against (#1680). It is a notice rather than a diagnostic on the document: nothing is wrong with the text,
+    * and a mark on every document's first line would stay until a dictionary was installed. A peek already showing (the
+    * result of something the writer just did) is not replaced; the notice waits for the next analysis.
+    */
+  private def announceMissingDictionary(notice: Option[String]): IO[Unit] =
+    notice.traverse_ { text =>
+      announcedNotices.get.flatMap(seen => IO.unlessA(seen.contains(text))(dispatcher.post(announceIfFree(text))))
+    }
+
+  private def announceIfFree(text: String): IO[Unit] =
+    modelCommit.currentState.flatMap { state =>
+      IO.whenA(state.peekSurface.isEmpty)(
+        announcedNotices.update(_ + text) >>
+          modelCommit.updateValidated(model => Some(StateManagerOperationBoundary.withNotice(model, text)))
+      )
+    }
+
+  private def hasProseToCheck(state: AppState): Boolean =
+    state.persisted.buffers.values.exists(buffer => buffer.usesTextFont && buffer.document.content.weight > 0)
+
   private def requiresDocumentAnalysis(state: AppState): Boolean =
     state.persisted.config.languageToolsConfig.spellCheck.enabled ||
       state.runtime.languageService.diagnosticsState.spellCheckCache.nonEmpty
 
 private[manager] object StateManagerOperationBoundary:
+
+  def withNotice(model: Model, text: String): Model =
+    val at = model.app.activeCursorPosition.getOrElse(CursorPosition(0, 0))
+    model.copy(app = PeekStateReducer.show(PeekContent.QuickInfo(text), at, model.app).state)
+
+  /** Spell check is on by default (#1680), so watching every standard dictionary directory would poll the OS on every
+    * machine, including ones with no dictionary installed at all; zero-config watching follows only the directories a
+    * discovered dictionary actually lives in. A dictionary installed later is still picked up when the window regains
+    * focus (`refreshDictionaryFingerprints`).
+    */
+  def discoveredDictionaryDirectories(
+    discovered: Option[(SpellCheckConfig, List[SpellCheckDictionaryFingerprint])]
+  ): Set[Path] =
+    discovered.toList
+      .flatMap(_._2)
+      .filter(fingerprint => fingerprint.exists && !fingerprint.isDirectory)
+      .flatMap(fingerprint => Option(java.nio.file.Paths.get(fingerprint.path).getParent))
+      .toSet
 
   /** What a commit of `newState` over `fallbackState` would write, or why it is rejected: every commit path runs this
     * so none of them can skip validation or the fix-ups below.
@@ -407,13 +468,20 @@ private[manager] object StateManagerOperationBoundary:
     editIdleSessionSave: Option[EditIdleSessionSave] = None,
     // A commit is the one place every way a buffer leaves `persisted.buffers` passes through -- tab close, close
     // workflows, session replacement -- so the LSP hears of each closed document here rather than per close path.
-    announceClosedDocuments: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit
+    announceClosedDocuments: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit,
+    // The model drops its own record of a closed buffer inside the commit (`ClosedBufferRetention.forgetting`); this is
+    // for the caches that live outside it.
+    forgetClosedBuffers: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit,
+    // Owned by this boundary unless the caller shares one on purpose (#1677: never a JVM-wide default): a harness that
+    // builds many managers in one process hands them the same cache so the dictionary is parsed once between them.
+    dictionaryCache: DictionaryCache = DictionaryCache()
   ): IO[StateManagerOperationBoundary] =
     for
       pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)
       documentAnalysisInputsRef <- Ref.of[IO, Option[Map[DocumentUri, SpellCheckFingerprint]]](None)
       dictionaryFingerprintsRef <-
         Ref.of[IO, Option[(SpellCheckConfig, List[SpellCheckDictionaryFingerprint])]](None)
+      announcedNotices   <- Ref.of[IO, Set[String]](Set.empty)
       effectsShutdownRef <- Ref.of[IO, Boolean](false)
       effectsShutDown    <- Deferred[IO, Unit]
       submittedEffects   <- Ref.of[IO, Long](0L)
@@ -429,6 +497,7 @@ private[manager] object StateManagerOperationBoundary:
       modelRef,
       documentAnalysisInputsRef,
       dictionaryFingerprintsRef,
+      announcedNotices,
       logger,
       effectLanes,
       releaseEffectLanes,
@@ -440,11 +509,12 @@ private[manager] object StateManagerOperationBoundary:
       dispatcher,
       fileWriteLedger,
       discoverDictionaryFingerprints,
-      DictionaryCache(),
+      dictionaryCache,
       listDirectory,
       commitObserver,
       wrapCache,
       commitsUnobserved,
       editIdleSessionSave,
-      announceClosedDocuments
+      announceClosedDocuments,
+      forgetClosedBuffers
     )

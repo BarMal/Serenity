@@ -106,8 +106,7 @@ object RendererFramePlanner:
             caches.frameState.rememberPreparedScene(surface, next)
             next
           }
-        val finalizedScene   = prepared.scene
-        val editorRenderPlan = prepared.renderPlan
+        val finalizedScene = prepared.scene
         val context = RenderContext(
           surface,
           finalizedScene.calculatedLayout,
@@ -119,6 +118,10 @@ object RendererFramePlanner:
           cellMetrics,
           uiMetrics,
           caches
+        )
+        // The prepared scene is reused while the layout is, which says nothing of the annotations drawn on it.
+        val editorRenderPlan = prepared.renderPlan.copy(
+          annotations = RendererPaneSetup.annotationsFor(state, context, prepared.renderPlan.snapshots)
         )
         val framePlan = planFrame(state, context, editorRenderPlan, viewportSize, output, damage)
         // Recorded *after* `planFrame` (and thus `dirtyRowsFor`) has read this surface's snapshots for this frame, so

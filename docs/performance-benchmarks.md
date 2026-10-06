@@ -25,8 +25,13 @@ Scenarios cover:
 - visible animation tick advancement
 - `laptop.*`: the editor at a real laptop's size (1500x1000 logical at 2x, word-wrapped lorem ipsum, default config):
   full frames with and without a Frosted pinned panel, keystrokes applied through a live `StateManager`, and Swing
-  painting a 1500x1000 window. The window needs a screen at least that large, so run it with
-  `xvfb-run -a -s "-screen 0 1920x1200x24"`.
+  presenting into a 1500x1000 window. The window needs a screen at least that large, so run it with
+  `xvfb-run -a -s "-screen 0 1920x1200x24"` (at 2x, `-screen 0 3840x2400x24 -dpi 192` and `-Dsun.java2d.uiScale=2`).
+- `laptop.present.swing_fresh_frame_synced_1500x1000`: a full-window present of a device-size frame changed since
+  it was last shown, as every rendered frame is, timed until the X server has finished it (`Toolkit.sync`). It
+  replaced `swing_paint_window_1500x1000`, which re-presented one untouched image: Java2D caches such an image as an
+  X pixmap, so that benchmark skipped the upload a real frame pays and timed only how far the client ran ahead of
+  Xvfb -- bimodal within one run (0.02 vs 0.4 ms on CI), and a 7x p50 spread across five local runs.
 
 - `laptop.input.state_manager.typing_random_letters`: seeded-random letters (about one in six a space) typed at the
   prose cursor, so nearly every keystroke misses the wrap cache that `continuous_typing`'s cyclic a..z and

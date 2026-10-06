@@ -195,7 +195,7 @@ private[manager] object ReplaceWorkflowTransitions:
       .map(cursor => FindResult(cursor.line, cursor.column))
       .toVector
     val resultSet = FindResultSet.normalized(findText, results, requestedIndex)
-    Option.when(resultSet.results.nonEmpty)(FindState.fromResultSet(resultSet))
+    Option.when(resultSet.results.nonEmpty)(FindState.fromResultSet(resultSet, FindOptions.default))
 
   private def refreshedFindStateAfterOffset(
     content: com.serenity.rope.Rope,

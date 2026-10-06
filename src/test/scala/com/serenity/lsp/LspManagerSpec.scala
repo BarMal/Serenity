@@ -8,6 +8,7 @@ import com.serenity.keystroke.events.LspEvent
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.CursorPosition
+import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.Stream
 import io.circe.Json
@@ -28,7 +29,9 @@ class LspManagerSpec extends AnyFlatSpec with Matchers with LspManagerSpecFixtur
             )
             hover <- takeMessage(manager.connection)
             _ = hover.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/hover")
-            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+            _ <- manager.effects.offer(
+              Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo2"), version = 2))
+            )
             // The change supersedes the in-flight hover, so the manager cancels it -- and cancelling now tells the
             // server to stop (#1285) before the new work goes out, rather than leaving it computing an answer nobody
             // will read.
@@ -53,8 +56,10 @@ class LspManagerSpec extends AnyFlatSpec with Matchers with LspManagerSpecFixtur
               Some(LspEffect.DefinitionRequested(uri, LanguageId.Scala, 0, 1, anchor, "Foo"))
             )
             request <- takeMessage(manager.connection)
-            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
-            _ <- takeMessage(manager.connection)
+            _ <- manager.effects.offer(
+              Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo2"), version = 2))
+            )
+            _       <- takeMessage(manager.connection)
             pending <- manager.connection.pendingRequestCount
             _ = pending shouldBe 0
             _ <- manager.connection.handleIncomingJson(
@@ -271,13 +276,13 @@ class LspManagerSpec extends AnyFlatSpec with Matchers with LspManagerSpecFixtur
         )(_.cancel)
         .use { managerFiber =>
           for
-            _                    <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
-            _                    <- takeMessage(firstConnection)
-            _                    <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
-            _                    <- bothConnected.get
-            _                    <- takeMessage(secondConnection)
-            _                    <- effects.offer(None)
-            _                    <- managerFiber.joinWithNever
+            _ <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, RopeText("object Foo"))))
+            _ <- takeMessage(firstConnection)
+            _ <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, RopeText("object Bar"))))
+            _ <- bothConnected.get
+            _ <- takeMessage(secondConnection)
+            _ <- effects.offer(None)
+            _ <- managerFiber.joinWithNever
             attemptedConnections <- connected.get
           yield
             // Each open resolves twice -- once for the didOpen itself, once more for the automatic semantic-tokens
@@ -319,14 +324,18 @@ class LspManagerSpec extends AnyFlatSpec with Matchers with LspManagerSpecFixtur
         )(_.cancel)
         .use { managerFiber =>
           for
-            _ <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
+            _ <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, RopeText("object Foo"))))
             _ <- expectNotification(firstConnection, "textDocument/didOpen", firstUri)
-            _ <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
+            _ <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, RopeText("object Bar"))))
             _ <- expectNotification(secondConnection, "textDocument/didOpen", secondUri)
-            _ <- effects.offer(Some(LspEffect.FileChanged(firstUri, LanguageId.Scala, "object Foo2", version = 2)))
+            _ <- effects.offer(
+              Some(LspEffect.FileChanged(firstUri, LanguageId.Scala, RopeText("object Foo2"), version = 2))
+            )
             _ <- expectNotification(firstConnection, "textDocument/didChange", firstUri)
             _ <- noMessage(secondConnection)
-            _ <- effects.offer(Some(LspEffect.FileChanged(secondUri, LanguageId.Scala, "object Bar2", version = 2)))
+            _ <- effects.offer(
+              Some(LspEffect.FileChanged(secondUri, LanguageId.Scala, RopeText("object Bar2"), version = 2))
+            )
             _ <- expectNotification(secondConnection, "textDocument/didChange", secondUri)
             _ <- noMessage(firstConnection)
             _ <- effects.offer(Some(LspEffect.FileClosed(firstUri, LanguageId.Scala)))
@@ -368,7 +377,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers with LspManagerSpecFixtur
         )(_.cancel)
         .use { managerFiber =>
           for
-            _           <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo")))
+            _           <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo"))))
             _           <- takeMessage(connection)
             beforeClose <- evictions.get
             _           <- effects.offer(Some(LspEffect.FileClosed(uri, LanguageId.Scala)))
@@ -415,12 +424,12 @@ class LspManagerSpec extends AnyFlatSpec with Matchers with LspManagerSpecFixtur
         )(_.cancel)
         .use { managerFiber =>
           for
-            _             <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
-            _             <- takeMessage(connection)
-            _             <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
-            _             <- takeMessage(connection)
-            _             <- effects.offer(Some(LspEffect.FileClosed(firstUri, LanguageId.Scala)))
-            _             <- takeMessage(connection)
+            _ <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, RopeText("object Foo"))))
+            _ <- takeMessage(connection)
+            _ <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, RopeText("object Bar"))))
+            _ <- takeMessage(connection)
+            _ <- effects.offer(Some(LspEffect.FileClosed(firstUri, LanguageId.Scala)))
+            _ <- takeMessage(connection)
             firstRelease  <- released.tryGet
             _             <- effects.offer(Some(LspEffect.FileClosed(secondUri, LanguageId.Scala)))
             _             <- takeMessage(connection)
@@ -475,9 +484,9 @@ class LspManagerSpec extends AnyFlatSpec with Matchers with LspManagerSpecFixtur
         )(_.cancel)
         .use { managerFiber =>
           for
-            _ <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
+            _ <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, RopeText("object Foo"))))
             _ <- takeMessage(firstConnection)
-            _ <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
+            _ <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, RopeText("object Bar"))))
             _ <- connected.get
             _ <- takeMessage(secondConnection)
             _ <- effects.offer(None)

@@ -5,6 +5,7 @@ import com.serenity.keystroke.events.LspEvent
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{LspPosition, LspRange, LspTextEdit}
 import com.serenity.state.models.CursorPosition
+import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
 import io.circe.Json
 import io.circe.syntax.*
@@ -63,9 +64,11 @@ class LspManagerReferenceRenameSpec extends AnyFlatSpec with Matchers with LspMa
               Some(LspEffect.ReferencesRequested(uri, LanguageId.Scala, 0, 1, anchor, "Foo"))
             )
             request <- takeMessage(manager.connection)
-            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
-            _ <- takeMessage(manager.connection)
-            _ <- manager.connection.handleIncomingJson(response(requestId(request), Json.arr()))
+            _ <- manager.effects.offer(
+              Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo2"), version = 2))
+            )
+            _      <- takeMessage(manager.connection)
+            _      <- manager.connection.handleIncomingJson(response(requestId(request), Json.arr()))
             events <- manager.events.get
             _ = events shouldBe Nil
             _ <- manager.stop

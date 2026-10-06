@@ -59,6 +59,9 @@ final private[manager] class ReopenWithEncodingEffects(
     fileManager: FileManager
 ):
 
+  def chooseEncoding: IO[Unit] =
+    currentState.flatMap(current => ReopenWithEncoding.withPickerOpened(current).fold(IO.unit)(commitState(_, current)))
+
   def reopen(bufferId: BufferId, encoding: TextEncoding, discardEdits: Boolean): IO[Unit] =
     currentState.flatMap { state =>
       ReopenWithEncoding.withDiscardConfirmation(state, bufferId, encoding, discardEdits) match

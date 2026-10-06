@@ -4,7 +4,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.LspProgressTask
-import com.serenity.state.models.AppState
+import com.serenity.state.models.{AppState, LanguageServiceState}
 import com.serenity.ui.layout.*
 
 object SystemEventReducer:
@@ -25,17 +25,10 @@ object SystemEventReducer:
   private def reduceLspEvent(event: LspEvent, state: AppState): ReducerResult =
     event match
       case LspEvent.LspDiagnosticsReceived(rawUri, diagnostics) =>
-        val uri = DocumentUri(rawUri)
-        ReducerResult.noEffects(
-          state.copy(runtime =
-            state.runtime.copy(languageService =
-              state.runtime.languageService.copy(diagnosticsState =
-                state.runtime.languageService.diagnosticsState
-                  .copy(diagnostics = state.runtime.languageService.diagnosticsState.diagnostics + (uri -> diagnostics))
-              )
-            )
-          )
-        )
+        withOpenDocumentData(rawUri, state) { (uri, languageService) =>
+          val held = languageService.diagnosticsState
+          languageService.copy(diagnosticsState = held.copy(diagnostics = held.diagnostics + (uri -> diagnostics)))
+        }
 
       case LspEvent.LspHoverReceived(text, anchor) =>
         PeekStateReducer.show(PeekContent.QuickInfo(text), anchor, state)
@@ -73,34 +66,33 @@ object SystemEventReducer:
       case LspEvent.LspWorkspaceEditRequested(edits) => WorkspaceEditReducer(edits, state)
 
       case LspEvent.LspSemanticTokensReceived(rawUri, tokens) =>
-        val uri = DocumentUri(rawUri)
-        ReducerResult.noEffects(
-          state.copy(runtime =
-            state.runtime.copy(languageService =
-              state.runtime.languageService.copy(semanticTokensState =
-                state.runtime.languageService.semanticTokensState.copy(
-                  byUri = state.runtime.languageService.semanticTokensState.byUri + (uri -> tokens),
-                  unavailableUris = state.runtime.languageService.semanticTokensState.unavailableUris - uri
-                )
-              )
-            )
+        withOpenDocumentData(rawUri, state) { (uri, languageService) =>
+          val held = languageService.semanticTokensState
+          languageService.copy(semanticTokensState =
+            held.copy(byUri = held.byUri + (uri -> tokens), unavailableUris = held.unavailableUris - uri)
           )
-        )
+        }
 
       case LspEvent.LspSemanticTokensUnavailable(rawUri) =>
-        val uri = DocumentUri(rawUri)
-        ReducerResult.noEffects(
-          state.copy(runtime =
-            state.runtime.copy(languageService =
-              state.runtime.languageService.copy(semanticTokensState =
-                state.runtime.languageService.semanticTokensState.copy(
-                  byUri = state.runtime.languageService.semanticTokensState.byUri - uri,
-                  unavailableUris = state.runtime.languageService.semanticTokensState.unavailableUris + uri
-                )
-              )
-            )
+        withOpenDocumentData(rawUri, state) { (uri, languageService) =>
+          val held = languageService.semanticTokensState
+          languageService.copy(semanticTokensState =
+            held.copy(byUri = held.byUri - uri, unavailableUris = held.unavailableUris + uri)
           )
-        )
+        }
+
+  // A server may still publish for a document after it was closed (an in-flight publish, a re-publish on didClose);
+  // nothing reads language data for a document without a buffer, so it would only leak.
+  private def withOpenDocumentData(rawUri: String, state: AppState)(
+    update: (DocumentUri, LanguageServiceState) => LanguageServiceState
+  ): ReducerResult =
+    val uri    = DocumentUri(rawUri)
+    val isOpen = state.persisted.buffers.values.exists(state.runtime.bufferIndexMemos.uriFor(_) == uri)
+    ReducerResult.noEffects(
+      if isOpen then
+        state.copy(runtime = state.runtime.copy(languageService = update(uri, state.runtime.languageService)))
+      else state
+    )
 
   private def withProgress(
     state: AppState,

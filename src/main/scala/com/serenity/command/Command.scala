@@ -5,7 +5,7 @@ import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.session.SessionId
-import com.serenity.state.models.{BufferId, ClipboardEntry, CloseWorkflowChoice, PanelId, SurfaceId}
+import com.serenity.state.models.{BufferId, ClipboardEntry, CloseWorkflowChoice, PanelId, RestartMode, SurfaceId}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.layout.PanelPosition
 
@@ -19,6 +19,8 @@ enum CommandCategory:
 
 enum LifecycleIntent:
   case QuitApp
+  // Quits like QuitApp (unsaved work is still asked about), then starts again; see SafeModeCommands.
+  case Restart(mode: RestartMode)
   // What the "save changes before closing?" prompt's answers run; see CloseCommands.
   case ResolveClose(choice: CloseWorkflowChoice)
 
@@ -279,10 +281,24 @@ enum SpellCheckIntent:
   // threaded through the command.
   case AddWordAtCursorToDictionary
 
+/** What the writer does with a misspelling (#1939). The menu and popup act on a word they have already resolved, so
+  * those cases carry it rather than looking at the cursor, which a right-click leaves where it was.
+  */
+enum SpellingIntent:
+  case ShowSuggestions
+  case Replace(line: Int, start: Int, end: Int, misspelled: String, replacement: String)
+  case AddToDictionary(word: String)
+  case IgnoreOnce(line: Int, start: Int, end: Int, word: String)
+  case IgnoreEverywhere(word: String)
+  case IgnoreOnceAtCursor
+  case IgnoreEverywhereAtCursor
+
 /** Settings with no more specific home: render tuning and the settings surface's own open/save commands. */
 enum GeneralSettingsIntent:
   case OpenSettings
   case SaveConfig
+  // Moves config.conf aside to a timestamped backup, then restores every setting to its default.
+  case ResetSettings
   case SetRenderFpsTarget(target: RenderFpsTarget)
   case SetRenderDamageGranularity(granularity: RenderDamageGranularity)
   case SetCommandRunnerVisibleRows(rows: Option[Int])
@@ -312,6 +328,7 @@ enum CommandIntent:
   case Comments(intent: CommentsIntent)
   case Placeholders(intent: PlaceholderIntent)
   case Darlings(intent: DarlingIntent)
+  case Spelling(intent: SpellingIntent)
   case Navigation(intent: NavigationIntent)
   case Lsp(intent: LspIntent)
   case Theme(intent: ThemeIntent)

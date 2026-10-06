@@ -95,6 +95,7 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
 
   it should "time each input's wait for the input loop and its application to the state" in {
     val timings = com.serenity.diagnostics.FrameTimings()
+    timings.setEnabled(true)
     val program = for
       cursorVisible <- Ref.of[IO, Boolean](true)
       router = new InputRouter[IO, Event]:

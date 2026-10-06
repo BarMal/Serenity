@@ -264,6 +264,59 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
     runVirtual(wakeups) should be <= 1
   }
 
+  "externalChangeWatchLoop with window focus" should "not poll while unfocused and recheck once on regaining focus" in {
+    val directory = java.nio.file.Path.of("/virtual/notes")
+    val file      = directory.resolve("chapter.md")
+    val bufferId  = BufferId(1)
+
+    val program = for
+      listings    <- Ref.of[IO, Map[java.nio.file.Path, (Long, Long)]](Map(file -> (1L, 1L)))
+      listCalls   <- Ref.of[IO, Int](0)
+      checked     <- Ref.of[IO, List[BufferId]](Nil)
+      windowFocus <- SignallingRef.of[IO, Boolean](true)
+      result <- FileChangeWatcher
+        .pollingListings(1.second, _ => listCalls.update(_ + 1) >> listings.get)
+        .use { watcher =>
+          val loop = AppRuntime.externalChangeWatchLoop(
+            watcher,
+            openBufferPaths = IO.pure(Map(file -> bufferId)),
+            checkBufferForExternalChanges = id => checked.update(_ :+ id),
+            windowFocused = windowFocus
+          )
+          loop.compile.drain.background.surround(
+            for
+              _              <- IO.sleep(5.seconds)
+              pollsFocused   <- listCalls.get
+              _              <- windowFocus.set(false)
+              _              <- IO.sleep(100.millis)
+              callsAtBlur    <- listCalls.get
+              _              <- listings.set(Map(file -> (2L, 2L)))
+              _              <- IO.sleep(30.seconds)
+              callsBlurred   <- listCalls.get
+              checkedBlurred <- checked.get
+              _              <- windowFocus.set(true)
+              _              <- IO.sleep(100.millis)
+              checkedRegain  <- checked.get
+              _              <- IO.sleep(10.seconds)
+              checkedAfter   <- checked.get
+              _              <- listings.set(Map(file -> (3L, 3L)))
+              _              <- IO.sleep(3.seconds)
+              checkedResumed <- checked.get
+            yield (pollsFocused, callsAtBlur, callsBlurred, checkedBlurred, checkedRegain, checkedAfter, checkedResumed)
+          )
+        }
+    yield result
+
+    val (pollsFocused, callsAtBlur, callsBlurred, checkedBlurred, checkedRegain, checkedAfter, checkedResumed) =
+      runVirtual(program)
+    pollsFocused should be > 0
+    callsBlurred shouldBe callsAtBlur
+    checkedBlurred shouldBe Nil
+    checkedRegain shouldBe List(bufferId)
+    checkedAfter shouldBe List(bufferId)
+    checkedResumed shouldBe List(bufferId, bufferId)
+  }
+
   "watchInputsChanged" should "announce an opened file but not an edit to one already open (#1938)" in {
     val file    = Files.createTempFile("external-change-watch-inputs", ".md")
     val initial = com.serenity.state.models.AppState.initial

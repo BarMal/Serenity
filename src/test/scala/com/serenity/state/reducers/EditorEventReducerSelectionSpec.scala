@@ -95,6 +95,20 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
     extended.primarySelection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(0, 4)))
   }
 
+  "ExtendSelectionSubWordRight" should "anchor at the cursor and move the focus to the end of the identifier part" in {
+    val extended = reduce(bufferOf("fooBar_baz", CursorPosition(0, 0)), ExtendSelectionSubWordRight)
+
+    extended.editing.cursorPositions shouldBe List(CursorPosition(0, 3))
+    extended.primarySelection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(0, 3)))
+  }
+
+  "ExtendSelectionSubWordLeft" should "keep the original anchor across repeated presses" in {
+    val extended =
+      reduce(bufferOf("fooBar_baz", CursorPosition(0, 10)), ExtendSelectionSubWordLeft, ExtendSelectionSubWordLeft)
+
+    extended.primarySelection shouldBe Some(Selection(CursorPosition(0, 10), CursorPosition(0, 3)))
+  }
+
   "Extending a selection by word" should "hold the anchor when the direction reverses" in {
     val extended =
       reduce(bufferOf("foo bar baz", CursorPosition(0, 4)), ExtendSelectionWordRight, ExtendSelectionWordLeft)

@@ -50,6 +50,11 @@ package com.serenity.perf
   *
   * `laptop.input.state_manager.typing_*` (issues #1798, #1812) take the 20 samples their `laptop.input.*` neighbours
   * already use; no CV comparison was run for them, so the count is a convention, not a derivation.
+  *
+  * `laptop.present.*` (8 -> 24) went with fixing what they measured, after `swing_paint_window` failed the gate on an
+  * unrelated PR at 2.19x: it timed an X-pixmap cache hit, bimodal within one run. More samples cannot fix a bimodal
+  * measurement and were not the fix; at about 3ms (1x) to 11ms (2x) per synced frame they cost under a second, and give
+  * the p50 more than eight points to sit among.
   */
 private[perf] object BenchmarkIterationCounts:
   val Damage                = 60
@@ -58,3 +63,4 @@ private[perf] object BenchmarkIterationCounts:
   val RenderMarkdown        = 24
   val LayoutVisibleViewport = 60
   val RandomTyping          = 20
+  val Present               = 24

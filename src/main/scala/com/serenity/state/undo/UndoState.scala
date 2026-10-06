@@ -153,6 +153,17 @@ final case class UndoState(
 
   def clearRedo: UndoState = copy(redoStack = Vector.empty)
 
+  /** Forgets every buffer edit whose buffer is no longer `live`. A closed buffer's entries can never be replayed -- a
+    * reopened file is a new buffer under a fresh id -- yet each holds a rope, and the one at the head of a stack would
+    * stop undo and redo cold, since restoring it finds no buffer. The same instance comes back when nothing is lost.
+    */
+  def retainingBuffers(live: BufferId => Boolean): UndoState =
+    val retainedUndo    = UndoState.retained(undoStack, live)
+    val retainedRedo    = UndoState.retained(redoStack, live)
+    val retainedPending = pendingGroup.filter(group => live(group.bufferId))
+    if (retainedUndo eq undoStack) && (retainedRedo eq redoStack) && (retainedPending eq pendingGroup) then this
+    else copy(undoStack = retainedUndo, redoStack = retainedRedo, pendingGroup = retainedPending)
+
   def pushUndo(entry: HistoryEntry, clearRedo: Boolean = true): UndoState =
     copy(
       undoStack = boundedPush(entry, undoStack),
@@ -176,3 +187,11 @@ final case class UndoState(
 
 object UndoState:
   val DefaultMaxUndoDepth: Int = 1000
+
+  private def retained(stack: Vector[HistoryEntry], live: BufferId => Boolean): Vector[HistoryEntry] =
+    if stack.forall(isLive(_, live)) then stack else stack.filter(isLive(_, live))
+
+  private def isLive(entry: HistoryEntry, live: BufferId => Boolean): Boolean =
+    entry match
+      case edit: HistoryEntry.BufferEdit => live(edit.bufferId)
+      case _                             => true

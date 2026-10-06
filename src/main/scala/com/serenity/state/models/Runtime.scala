@@ -50,6 +50,8 @@ final case class Runtime(
     // once a later apply has been requested. Cleared when that request resolves.
     pendingUiPresetApply: Option[Long] = None,
     projectTasks: ProjectTasks = ProjectTasks(),
+    // Never persisted: set once at startup when this launch is in safe mode, so the status line can say so.
+    safeMode: Boolean = false,
     // Refreshed each time the command palette opens, which is where project commands are offered.
     projectPresence: ProjectPresence = ProjectPresence.Unchecked,
     // Never persisted: whether a chapter note's overview is painted, faded, under an empty chapter. The notes themselves

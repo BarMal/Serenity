@@ -68,6 +68,32 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     config.bindings shouldBe HotkeyConfig.forOs("Linux").bindings
   }
 
+  // Issue #2015: Cmd+Shift+Z is the macOS redo convention; Cmd+Y stays as a secondary because nothing else holds it.
+  // Windows/Linux keep Ctrl+Y first and also accept Ctrl+Shift+Z, the other common editor redo key.
+  it should "bind Redo to Cmd+Shift+Z on macOS, keeping Cmd+Y as a secondary" in {
+    HotkeyConfig.defaultBindingsFor("Mac OS X")(HotkeyAction.Redo).map(_.render) shouldBe
+      List("meta+shift+z", "meta+y")
+  }
+
+  it should "bind Redo to Ctrl+Y and Ctrl+Shift+Z on Windows and Linux" in
+    List("Linux", "Windows 11").foreach { osName =>
+      HotkeyConfig.defaultBindingsFor(osName)(HotkeyAction.Redo).map(_.render) shouldBe
+        List("ctrl+y", "ctrl+shift+z")
+    }
+
+  it should "keep the default bindings conflict-free, command bindings included, on every OS" in
+    List("Linux", "Windows 11", "Mac OS X").foreach { osName =>
+      HotkeyConfig.validate(HotkeyConfig.forOs(osName)) shouldBe Right(())
+      HotkeyConfig.forOs(osName).bindingsFor(HotkeyAction.Redo).size shouldBe 2
+    }
+
+  it should "rewrite the macOS Redo default to a working Ctrl binding for the terminal" in {
+    val config = HotkeyConfig.forOs("Mac OS X").forTerminalUse
+
+    config.bindingsFor(HotkeyAction.Redo).map(_.render) shouldBe List("ctrl+y", "ctrl+shift+z")
+    HotkeyConfig.validate(config) shouldBe Right(())
+  }
+
   it should "report conflicting bindings during validation" in {
     val bindings = Map(
       HotkeyAction.Find    -> HotkeyConfig.defaultBindingsFor("Linux")(HotkeyAction.Find),

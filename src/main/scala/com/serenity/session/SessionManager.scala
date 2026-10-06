@@ -33,6 +33,8 @@ class SessionManager(
 
   private val sessionsRootAbsolute = sessionsDirectory.toAbsolutePath.normalize
 
+  private val stateEncoder = new SessionStateEncoder
+
   private val journal = new SessionWriteJournal(pendingFile, indexFile, safeSessionPath, logger)
 
   private val contentStore = new SessionContentStore(
@@ -42,6 +44,10 @@ class SessionManager(
 
   // The index as this manager last wrote or read it, keyed by the stamp the file had then (#1912).
   private val indexCache: Ref[IO, Option[(FileStamp, SessionIndex)]] = Ref.unsafe(None)
+
+  // What the last save of the current session left on disk. A later save of the same state against the same files has
+  // nothing to write, and finding that out costs a few stats rather than encoding the whole session (#2064).
+  private val lastSaved: Ref[IO, Option[SessionManager.SavedSession]] = Ref.unsafe(None)
 
   /** Save the current app state to the current session, creating one if needed.
     */
@@ -69,14 +75,11 @@ class SessionManager(
       canonicalMetadata = metadata.copy(sessionFileName = canonicalSessionFileName(sessionId))
       updatedMetadata   = canonicalMetadata.copy(updatedAtEpochMillis = now)
       updatedIndex      = upsertSession(index, updatedMetadata).copy(currentSessionId = Some(updatedMetadata.id))
-      state <- stagedState(canonicalMetadata.sessionFileName, appState, persistUnsavedBuffers)
-      _ <- commitTransaction(
-        writes = Map(canonicalMetadata.sessionFileName -> SessionWriteJournal.compact(state)),
-        deletes = Nil,
-        index = updatedIndex
-      )
-      _ <- contentStore.prune(canonicalMetadata.sessionFileName, state)
-      _ <- logger.info(s"[SESSION] Session saved successfully (${updatedMetadata.displayName})")
+      state     <- stagedState(canonicalMetadata.sessionFileName, appState, persistUnsavedBuffers)
+      unchanged <- isUnchanged(canonicalMetadata.sessionFileName, index, state)
+      _         <- if unchanged then IO.unit else commitCurrent(canonicalMetadata.sessionFileName, state, updatedIndex)
+      _         <- contentStore.prune(canonicalMetadata.sessionFileName, state)
+      _         <- logger.debug(s"[SESSION] Session saved successfully (${updatedMetadata.displayName})")
     yield ()
 
   /** Save the current app state as a named session and make it current.
@@ -99,7 +102,7 @@ class SessionManager(
       updatedIndex       = pruned.copy(currentSessionId = Some(sessionId))
       state <- stagedState(metadata.sessionFileName, appState, policy.persistUnsavedBuffers)
       _ <- commitTransaction(
-        writes = Map(metadata.sessionFileName -> SessionWriteJournal.compact(state)),
+        writes = Map(metadata.sessionFileName -> stateEncoder.compact(state)),
         deletes = toDelete,
         index = updatedIndex
       )
@@ -387,10 +390,28 @@ class SessionManager(
     appState: AppState,
     persistUnsavedBuffers: Boolean
   ): IO[SessionState] =
-    contentStore.externalise(
-      sessionFileName,
-      SessionState.fromAppState(appState, persistUnsaved = persistUnsavedBuffers)
-    )
+    contentStore.externalise(sessionFileName, SessionState.snapshot(appState, persistUnsavedBuffers))
+
+  // Both files are checked as well as the state: a session file or index changed or removed since this manager wrote
+  // them is rewritten, however equal the state.
+  private def isUnchanged(sessionFileName: String, index: SessionIndex, state: SessionState): IO[Boolean] =
+    lastSaved.get.flatMap {
+      case Some(saved) if saved.matches(sessionFileName, index, state) =>
+        IO.blocking(safeSessionPath(sessionFileName).flatMap(FileStamp.read)).map(_ == Some(saved.sessionFileStamp))
+      case _ => IO.pure(false)
+    }
+
+  private def commitCurrent(sessionFileName: String, state: SessionState, index: SessionIndex): IO[Unit] =
+    commitTransaction(Map(sessionFileName -> stateEncoder.compact(state)), Nil, index) >>
+      IO.realTime.flatMap(now =>
+        IO.blocking(safeSessionPath(sessionFileName).flatMap(FileStamp.read)).flatMap { stamp =>
+          lastSaved.set(
+            stamp
+              .filter(FileStamp.vouchesForContent(_, now.toNanos))
+              .map(SessionManager.SavedSession(sessionFileName, index, state, _))
+          )
+        }
+      )
 
   private def commitTransaction(writes: Map[String, String], deletes: List[String], index: SessionIndex): IO[Unit] =
     journal.commit(writes, deletes, SessionWriteJournal.compact(index)) >> remember(index)
@@ -455,6 +476,17 @@ class SessionManager(
     IO.realTime.map(_.toMillis)
 
 object SessionManager:
+
+  /** The current session as a save left it: the index and state written, and the stamp its session file then had. */
+  final private case class SavedSession(
+      sessionFileName: String,
+      index: SessionIndex,
+      state: SessionState,
+      sessionFileStamp: FileStamp
+  ):
+    // Equal but for the index's update time, which a save with nothing to write leaves alone.
+    def matches(fileName: String, current: SessionIndex, candidate: SessionState): Boolean =
+      sessionFileName == fileName && index == current && state == candidate
 
   /** Create a SessionManager with the default session root directory.
     */
