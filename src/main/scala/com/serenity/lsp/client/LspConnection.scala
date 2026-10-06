@@ -258,6 +258,12 @@ object LspConnection:
 
   private val StderrDrainShutdown: FiniteDuration = 1.second
 
+  /** Total time a release gives a server to answer `shutdown` and take `exit` before the process is destroyed. */
+  private val ServerShutdownTimeout: FiniteDuration = 2.seconds
+
+  /** How long a destroyed process gets to exit before it is destroyed forcibly. */
+  private val ServerDestroyGrace: FiniteDuration = 1.second
+
   final private case class ConnectionFibers(
       writer: Fiber[IO, Throwable, Unit],
       reader: Fiber[IO, Throwable, Unit]
@@ -300,7 +306,9 @@ object LspConnection:
     rawOut: java.io.OutputStream,
     rootUri: WorkspaceRootUri,
     logger: Logger[IO],
-    requestTimeout: FiniteDuration = DefaultRequestTimeout
+    requestTimeout: FiniteDuration = DefaultRequestTimeout,
+    askServerToExit: LspConnection => IO[Unit] = _ => IO.unit,
+    endServer: IO[Unit] = IO.unit
   ): Resource[IO, LspConnection] =
     for
       conn <- Resource.eval(create(languageId, logger, requestTimeout))
@@ -326,9 +334,11 @@ object LspConnection:
         yield ConnectionFibers(writer = writerFiber, reader = readerFiber)
       } {
         case ConnectionFibers(writerFiber, readerFiber) =>
-          conn.closeQueues >>
+          askServerToExit(conn) >>
+            conn.closeQueues >>
             writerFiber.join.void.timeoutTo(OutgoingFlushTimeout, IO.unit) >>
             closeQuietly(out) >>
+            endServer >>
             closeQuietly(in) >>
             writerFiber.cancel >>
             readerFiber.cancel
@@ -361,7 +371,9 @@ object LspConnection:
         server.process.getOutputStream,
         rootUri,
         logger,
-        requestTimeout
+        requestTimeout,
+        askServerToExit = askToExit,
+        endServer = endProcess(server.process)
       )
     yield conn
 
@@ -374,6 +386,26 @@ object LspConnection:
   private def stop(server: RunningServer): IO[Unit] =
     IO.blocking(server.process.destroyForcibly()).void >>
       server.stderrDrain.cancel.timeoutTo(StderrDrainShutdown, IO.unit)
+
+  /** `shutdown` then `exit`, together bounded by [[ServerShutdownTimeout]] so a server that never answers cannot hold
+    * the release.
+    */
+  private def askToExit(conn: LspConnection): IO[Unit] =
+    (conn.sendRequest(LspMethod("shutdown"), Json.Null, ServerShutdownTimeout).attempt >>
+      conn.sendNotification(LspMethod("exit"), Json.Null).attempt).void
+      .timeoutTo(ServerShutdownTimeout, IO.unit)
+
+  /** Ends the process so the reader's blocking read of its stdout returns: a well-behaved server has already exited
+    * after `exit`; otherwise it is destroyed, then destroyed forcibly once the grace has passed.
+    */
+  private def endProcess(process: java.lang.Process): IO[Unit] =
+    val exited = IO.blocking(process.waitFor(ServerDestroyGrace.toMillis, java.util.concurrent.TimeUnit.MILLISECONDS))
+    exited.flatMap:
+      case true => IO.unit
+      case false =>
+        IO.blocking(process.destroy()) >>
+          exited.flatMap(gone => IO.blocking(process.destroyForcibly()).void.unlessA(gone)) >>
+          exited.void
 
   private def initHandshake(conn: LspConnection, rootUri: WorkspaceRootUri, logger: Logger[IO]): IO[Unit] =
     for
