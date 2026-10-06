@@ -140,6 +140,8 @@ object AppRuntime:
     systemClipboard: SystemClipboard[IO] = SystemClipboard.awt[IO],
     frontend: Frontend = com.serenity.frontend.GuiFrontend,
     configNotice: Option[String] = None,
+    recovery: StartupRecovery.Plan = StartupRecovery.Plan.normal,
+    onFirstFrame: IO[Unit] = IO.unit,
     forwardedOpens: Stream[IO, List[Path]] = Stream.empty
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     (Dispatcher.parallel[IO], Supervisor[IO](await = false)).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
@@ -158,7 +160,8 @@ object AppRuntime:
           appConfig,
           openPath,
           frontend.capabilities,
-          configNotice
+          configNotice,
+          recovery
         )
         inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
         inputHandler <- runtime.inputHandler(inputRouter)
@@ -236,6 +239,7 @@ object AppRuntime:
         _ <-
           Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
             runtime.renderFull(initialState, true, None, Damage.Everything, stateManager.renderCaches) >>
+              onFirstFrame >>
               logger.info("Initial render completed, starting main loop") >>
               startupWarmUp(runtime, initialState, initialViewportSize, firstInput).surround {
                 val idlePhase = AppRuntimeRenderLoops.idleRenderPhase(

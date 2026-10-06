@@ -145,6 +145,34 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
       paths.shouldBe(List(explicitDic))
     }
 
+  // Hunspell packages name their files `en_GB.dic` while language tags are lowercased, so a case-sensitive filesystem
+  // (Linux) would never match `hunspell-en-gb` without a case-insensitive lookup.
+  it should "find an OS dictionary whose filename differs from the language tag only in case" in {
+    val osDirectory = Files.createTempDirectory("serenity-os-hunspell-case")
+    val enGbDic     = osDirectory.resolve("en_GB.dic")
+    Files.writeString(enGbDic, "1\ncolour", StandardCharsets.UTF_8)
+
+    val paths = SpellCheckConfig.discoverDictionarySourcePaths(
+      SpellCheckConfig(languages = List("en-gb")),
+      osDictionaryDirectories = List(osDirectory.toString)
+    )
+
+    paths.shouldBe(List(enGbDic))
+  }
+
+  it should "find a dictionary in a configured directory whose filename differs from the language tag only in case" in {
+    val directory = Files.createTempDirectory("serenity-explicit-case")
+    val enGbDic   = directory.resolve("en_GB.dic")
+    Files.writeString(enGbDic, "1\ncolour", StandardCharsets.UTF_8)
+
+    val paths = SpellCheckConfig.discoverDictionarySourcePaths(
+      SpellCheckConfig(languages = List("en-gb"), dictionaryPaths = List(directory.toString)),
+      osDictionaryDirectories = Nil
+    )
+
+    paths.shouldBe(List(enGbDic))
+  }
+
   "SpellCheckConfig.defaultOsDictionaryDirectories" should "list standard Linux Hunspell/MySpell locations" in {
     val directories = SpellCheckConfig.defaultOsDictionaryDirectories(osName = "Linux")
 

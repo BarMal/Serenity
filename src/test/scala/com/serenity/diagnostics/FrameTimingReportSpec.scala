@@ -14,6 +14,7 @@ class FrameTimingReportSpec extends AnyFlatSpec with Matchers:
 
   private def withOneFrame(): FrameTimings =
     val timings = FrameTimings()
+    timings.setEnabled(true)
     timings.renderStarted()
     timings.framePublished()
     timings.renderFinished(FrameKind.Full)
@@ -46,7 +47,26 @@ class FrameTimingReportSpec extends AnyFlatSpec with Matchers:
     timings.drain().frames shouldBe empty
   }
 
-  "FrameTimingReport.stream" should "schedule no wakeups at all while frame timing is off" in {
+  "FrameTimingReport.stream" should "switch recording with the setting" in {
+    val timings = FrameTimings()
+    val program = for
+      enabled  <- SignallingRef.of[IO, Boolean](false)
+      fiber    <- FrameTimingReport.stream(timings, enabled.discrete, _ => IO.unit).compile.drain.start
+      _        <- IO.sleep(1.second)
+      off      <- IO(timings.isEnabled)
+      _        <- enabled.set(true)
+      _        <- IO.sleep(1.second)
+      on       <- IO(timings.isEnabled)
+      _        <- enabled.set(false)
+      _        <- IO.sleep(1.second)
+      offAgain <- IO(timings.isEnabled)
+      _        <- fiber.cancel
+    yield (off, on, offAgain)
+
+    runVirtual(program) shouldBe ((false, true, false))
+  }
+
+  it should "schedule no wakeups at all while frame timing is off" in {
     val program = for
       enabled <- SignallingRef.of[IO, Boolean](false)
       _       <- FrameTimingReport.stream(FrameTimings(), enabled.discrete, _ => IO.unit).compile.drain

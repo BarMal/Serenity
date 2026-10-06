@@ -1,7 +1,9 @@
 package com.serenity.config
 
 import java.nio.file.{Files, Path, Paths}
+import java.util.Locale
 
+import scala.util.Using
 import scala.util.control.NonFatal
 
 import com.serenity.lsp.config.LspUserConfig
@@ -109,7 +111,7 @@ object SpellCheckConfig:
     pathOption(directory)
       .filter(path => Files.isDirectory(path))
       .toList
-      .flatMap(dir => languages.flatMap(languageCandidates).map(dir.resolve).filter(path => Files.exists(path)))
+      .flatMap(languageDictionariesIn(_, languages))
 
   /** Discovers dictionary source paths and fingerprints their current on-disk state. Filesystem IO throughout -- call
     * only from `IO.blocking`. The resulting immutable list is what pure analysis and state-commit comparisons must be
@@ -151,8 +153,7 @@ object SpellCheckConfig:
     pathOption(path)
       .map { sourcePath =>
         if Files.isDirectory(sourcePath) then
-          val candidates = languages.flatMap(languageCandidates).map(sourcePath.resolve)
-          val existing   = candidates.filter(path => Files.exists(path))
+          val existing = languageDictionariesIn(sourcePath, languages)
           if existing.nonEmpty then existing else List(sourcePath)
         else
           val normalizedPath = sourcePath.toString
@@ -160,6 +161,21 @@ object SpellCheckConfig:
             List(sourcePath.resolveSibling(sourcePath.getFileName.toString.dropRight(4) + ".dic"))
           else List(sourcePath)
       }
+      .getOrElse(Nil)
+
+  /** The entries of `directory` named for one of `languages`, matched ignoring case: language tags are lowercased but
+    * Hunspell packages ship `en_GB.dic`, which a case-sensitive filesystem would otherwise never match.
+    */
+  private def languageDictionariesIn(directory: Path, languages: List[String]): List[Path] =
+    val present = entryNames(directory)
+    languages
+      .flatMap(languageCandidates)
+      .flatMap(candidate => present.find(_.toLowerCase(Locale.ROOT) == candidate))
+      .distinct
+      .map(directory.resolve)
+
+  private def entryNames(directory: Path): List[String] =
+    Using(Files.list(directory))(_.map(_.getFileName.toString).toArray.toList.collect { case name: String => name })
       .getOrElse(Nil)
 
   private def languageCandidates(language: String): List[String] =

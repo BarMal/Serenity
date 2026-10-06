@@ -35,8 +35,8 @@ final case class InstanceCoordination(
     serve: Resource[IO, Stream[IO, List[Path]]],
     forward: List[Path] => IO[Delivery],
     isolatedSessionRoot: IO[Path],
-    forwardAttempts: Int = 10,
-    forwardRetryDelay: FiniteDuration = 200.millis
+    claimAttempts: Int = 15,
+    claimRetryDelay: FiniteDuration = 200.millis
 )
 
 /** One Serenity per config directory (#2023), so two processes never save over each other's session. */
@@ -51,11 +51,45 @@ object SingleInstance:
       isolatedSessionRoot = IO.blocking(Files.createTempDirectory("serenity-isolated-session"))
     )
 
-  /** Holds the lock, and the listener, for as long as the returned role is in use. */
+  /** What a launch does about a held lock, given how the running instance answered the forward. */
+  private[instance] enum Step:
+    case StepAside, RunIsolated, TryAgain
+
+  private[instance] def stepAfterForward(delivery: Delivery, attemptsLeft: Int): Step =
+    delivery match
+      case Delivery.Delivered                       => Step.StepAside
+      case Delivery.Unreachable if attemptsLeft > 1 => Step.TryAgain
+      case _                                        => Step.RunIsolated
+
+  /** Holds the lock, and the listener, for as long as the returned role is in use.
+    *
+    * A held lock whose holder does not answer is retried, bounded by `claimAttempts`: Windows releases a dead process's
+    * file lock asynchronously (LockFileEx: "the time it takes for the operating system to unlock these locks depends
+    * upon available system resources"), so a relaunch after a crash can see a lock nobody holds any more. A holder that
+    * answers is forwarded to at once. Only `Unreachable` is retried: a request that got through but went unacknowledged
+    * might already have opened its files.
+    */
   def claim(coordination: InstanceCoordination, paths: List[Path], logger: Logger[IO]): Resource[IO, LaunchRole] =
+    claimWithAttemptsLeft(coordination, paths, logger, coordination.claimAttempts)
+
+  private def claimWithAttemptsLeft(
+    coordination: InstanceCoordination,
+    paths: List[Path],
+    logger: Logger[IO],
+    attemptsLeft: Int
+  ): Resource[IO, LaunchRole] =
     coordination.acquireLock.attempt.flatMap {
-      case Right(LockAttempt.Acquired)      => servePrimary(coordination, logger)
-      case Right(LockAttempt.HeldElsewhere) => Resource.eval(forwardOrIsolate(coordination, paths, logger))
+      case Right(LockAttempt.Acquired) => servePrimary(coordination, logger)
+      case Right(LockAttempt.HeldElsewhere) =>
+        Resource.eval(coordination.forward(paths)).flatMap { delivery =>
+          stepAfterForward(delivery, attemptsLeft) match
+            case Step.TryAgain =>
+              Resource.eval(IO.sleep(coordination.claimRetryDelay)).flatMap { _ =>
+                claimWithAttemptsLeft(coordination, paths, logger, attemptsLeft - 1)
+              }
+            case Step.StepAside   => Resource.pure(LaunchRole.Forwarded)
+            case Step.RunIsolated => Resource.eval(isolate(coordination, delivery, logger))
+        }
       // Without the lock this launch cannot know it is alone, so it must not take a socket another instance may own.
       case Left(error) =>
         Resource.eval(
@@ -74,27 +108,9 @@ object SingleInstance:
           .as(LaunchRole.Primary(Stream.empty))
     }
 
-  private def forwardOrIsolate(
-    coordination: InstanceCoordination,
-    paths: List[Path],
-    logger: Logger[IO]
-  ): IO[LaunchRole] =
-    forwardPatiently(coordination, paths, coordination.forwardAttempts).flatMap {
-      case Delivery.Delivered => IO.pure(LaunchRole.Forwarded)
-      case undelivered =>
-        coordination.isolatedSessionRoot
-          .flatTap { sessionRoot =>
-            logger.warn(s"[INSTANCE] Could not reach the running instance ($undelivered); using session $sessionRoot")
-          }
-          .map(LaunchRole.Isolated(_))
-    }
-
-  /** The running instance may hold the lock a moment before it listens. Only `Unreachable` is retried: a request that
-    * got through but went unacknowledged might already have opened its files.
-    */
-  private def forwardPatiently(coordination: InstanceCoordination, paths: List[Path], remaining: Int): IO[Delivery] =
-    coordination.forward(paths).flatMap {
-      case Delivery.Unreachable if remaining > 1 =>
-        IO.sleep(coordination.forwardRetryDelay) >> forwardPatiently(coordination, paths, remaining - 1)
-      case delivery => IO.pure(delivery)
-    }
+  private def isolate(coordination: InstanceCoordination, undelivered: Delivery, logger: Logger[IO]): IO[LaunchRole] =
+    coordination.isolatedSessionRoot
+      .flatTap { sessionRoot =>
+        logger.warn(s"[INSTANCE] Could not reach the running instance ($undelivered); using session $sessionRoot")
+      }
+      .map(LaunchRole.Isolated(_))

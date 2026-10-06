@@ -16,8 +16,10 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
     def read(): Long                = now.get()
 
   private def recorder(): (FrameTimings, ManualClock) =
-    val clock = ManualClock()
-    (FrameTimings(() => clock.read()), clock)
+    val clock   = ManualClock()
+    val timings = FrameTimings(() => clock.read())
+    timings.setEnabled(true)
+    (timings, clock)
 
   "FrameTimings" should "attribute one keystroke's journey to each phase it passes through" in {
     val (timings, clock) = recorder()
@@ -165,4 +167,47 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
     clock.advanceMs(5_000)
 
     timings.drain().logLine shouldBe "[FRAME] window=5.0s full=0 (0.0/s) cursor=0 (0.0/s) | no samples"
+  }
+
+  it should "record nothing while frame timing is off, however many frames pass" in {
+    val clock   = ManualClock()
+    val timings = FrameTimings(() => clock.read())
+
+    (1 to 10_000).foreach { _ =>
+      timings.inputArrived()
+      timings.inputApplyStarted()
+      timings.inputApplyFinished()
+      timings.renderStarted()
+      timings.framePublished()
+      timings.renderFinished(FrameKind.Full)
+      timings.paintFinished(timings.paintStarted())
+      timings.timed(FramePhase.Sync)(())
+      clock.advanceMs(1)
+    }
+
+    val summary = timings.drain()
+    timings.isEnabled shouldBe false
+    summary.phases shouldBe empty
+    summary.frames shouldBe empty
+  }
+
+  it should "start recording when enabled and stop again when disabled, discarding what was half-recorded" in {
+    val (timings, clock) = recorder()
+    timings.setEnabled(false)
+    timings.renderStarted()
+    timings.setEnabled(true)
+    clock.advanceMs(4)
+    timings.renderFinished(FrameKind.Full)
+
+    timings.drain().phases shouldBe empty
+
+    timings.renderStarted()
+    clock.advanceMs(4)
+    timings.renderFinished(FrameKind.Full)
+    timings.drain().phases(FramePhase.Render).p50Ms shouldBe 4.0
+
+    timings.setEnabled(false)
+    timings.renderStarted()
+    timings.renderFinished(FrameKind.Full)
+    timings.drain().frames shouldBe empty
   }

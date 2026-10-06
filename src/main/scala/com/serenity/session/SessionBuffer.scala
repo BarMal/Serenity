@@ -6,6 +6,7 @@ import cats.effect.IO
 import com.serenity.io.{DocumentRevision, FileManager}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
+import com.serenity.rope.Rope
 import com.serenity.state.models.*
 import com.serenity.text.{LineEnding, TextEncoding}
 
@@ -83,11 +84,31 @@ final case class SessionDarling(
     originalPosition: SessionCursorPosition
 )
 
+/** A buffer's text as of one content version, still a rope: collecting it is left to whoever needs the characters. */
+final private[session] case class UnsavedText(content: Rope, version: Long)
+
 object SessionBuffer:
 
   def fromBuffer(buffer: Buffer, persistUnsaved: Boolean = true): SessionBuffer =
-    val text = buffer.document.content.toString
-    SessionBuffer(
+    val (session, unsaved) = snapshot(buffer, persistUnsaved)
+    session.copy(unsavedContent = unsaved.map(_.content.toString))
+
+  /** The buffer's session entry without its unsaved text, and that text where the entry is to carry it. Clean buffers
+    * are described without touching their content, so a snapshot costs nothing in the size of what is merely open.
+    */
+  private[session] def snapshot(buffer: Buffer, persistUnsaved: Boolean): (SessionBuffer, Option[UnsavedText]) =
+    val content = buffer.document.content
+    val unsaved =
+      Option.when(persistUnsaved || buffer.hidden || buffer.hasUnsavedChanges)(
+        UnsavedText(content, buffer.document.contentVersion)
+      )
+    // The stamp vouches for a document in sync; one without it is compared with the text, which is the only case
+    // that collects it.
+    val richTextDocument =
+      buffer.richText.richTextDocument.filter(document =>
+        buffer.richTextInSync || document.matchesPlainText(content.toString)
+      )
+    val session = SessionBuffer(
       id = buffer.id.value,
       filePath = buffer.document.filePath.map(_.toString),
       isDirty = buffer.document.isDirty,
@@ -100,10 +121,7 @@ object SessionBuffer:
       viewport = SessionViewport.fromViewport(buffer.viewport),
       // Clean, file-backed buffers rely on the on-disk file (see toBufferIO's disk-read fallback) --
       // only a buffer with actual unsaved content needs its text re-serialized into session JSON.
-      unsavedContent =
-        if persistUnsaved || buffer.hidden || buffer.hasUnsavedChanges then Some(text)
-        else None,
-      richTextDocument = buffer.richText.richTextDocument.filter(_.matchesPlainText(text)),
+      richTextDocument = richTextDocument,
       richTextFidelity = buffer.richText.richTextFidelity,
       findState = buffer.findState.map(SessionFindState.fromFindState),
       bookmarks = buffer.annotations.bookmarks.map(SessionCursorPosition.fromCursorPosition),
@@ -114,11 +132,9 @@ object SessionBuffer:
       hidden = buffer.hidden,
       notes = buffer.annotations.notes.toList.map(SessionNote.fromEntry).sortBy(SessionNote.order)
     )
+    (session, unsaved)
 
   def toBuffer(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): Buffer =
-    import com.serenity.rope.Rope
-    import java.nio.file.Paths
-
     Buffer(
       id = BufferId(sessionBuffer.id),
       document = Document(
