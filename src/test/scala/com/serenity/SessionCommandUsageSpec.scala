@@ -8,6 +8,7 @@ import cats.syntax.all.*
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -25,7 +26,8 @@ class SessionCommandUsageSpec extends AnyFlatSpec with Matchers:
     StateManager
       .apply(
         LoggerFactory[IO].getLogger(using LoggerName("SessionCommandUsageSpec")),
-        sessionRootOverride = Some(Files.createTempDirectory("session-command-usage-spec"))
+        sessionRootOverride = Some(Files.createTempDirectory("session-command-usage-spec")),
+        dictionaryCache = SharedDictionary.default
       )
       .unsafeRunSync()
 

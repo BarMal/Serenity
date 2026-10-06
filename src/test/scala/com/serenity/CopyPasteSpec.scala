@@ -9,7 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -264,7 +264,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
   trait ClipFixture:
 
     val stateManager: StateManager = StateManager
-      .apply(LoggerFactory[IO].getLogger(using LoggerName("CopyPasteSpec")))
+      .apply(LoggerFactory[IO].getLogger(using LoggerName("CopyPasteSpec")), dictionaryCache = SharedDictionary.default)
       .unsafeRunSync()
 
     private val activePaneId   = AtomicReference[PaneId](PaneId(0))

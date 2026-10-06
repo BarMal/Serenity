@@ -5,7 +5,6 @@ import cats.effect.unsafe.implicits.global
 import cats.syntax.traverse.*
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
@@ -35,7 +34,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- warmStateManager(logger)
 
       bufferId <- stateManager.createBuffer("", None)
       state    <- stateManager.getCurrentState
@@ -74,8 +73,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   it should "handle cursor navigation across wrapped visual lines" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+    val stateManager = warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
@@ -128,8 +126,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   it should "adjust viewport size dynamically based on terminal size changes" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+    val stateManager = warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
@@ -170,8 +167,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   it should "handle multiple paragraphs with wrapped lines correctly" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+    val stateManager = warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
@@ -219,8 +215,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   it should "scroll viewport to keep cursor visible when navigating wrapped lines" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+    val stateManager = warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
@@ -262,8 +257,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   it should "dynamically update viewport dimensions based on terminal size" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+    val stateManager = warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("test content", None).unsafeRunSync()
@@ -313,8 +307,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   it should "preserve exact cursor position during window resize operations" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+    val stateManager = warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
@@ -368,8 +361,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   it should "step one visual row at a time deep inside a paragraph far longer than a screenful" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+    val stateManager = warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
@@ -436,8 +428,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   it should "navigate up and down through visual lines correctly" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+    val stateManager = warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
@@ -513,8 +504,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   it should "jump straight to the previous logical line instead of stepping through visual rows when visual-line navigation is disabled" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+    val stateManager = warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
@@ -554,8 +544,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   it should "navigate across multiple buffer lines with wrapped content" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+    val stateManager = warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
@@ -629,8 +618,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   it should "move Home/End to the current visual row's own bounds when visual-line navigation is enabled" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+    val stateManager = warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
@@ -689,8 +677,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   it should "still move Home/End to the logical line's bounds when visual-line navigation is disabled" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+    val stateManager = warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
