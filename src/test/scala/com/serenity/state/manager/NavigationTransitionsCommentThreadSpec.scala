@@ -236,3 +236,69 @@ class NavigationTransitionsCommentThreadSpec extends AnyFlatSpec with Matchers:
 
     comments(after) shouldBe List(resolved)
   }
+
+  "Saving a lens draft" should "change the text of the comment with that id and stamp the edit" in {
+    val state = stateWith(List(first, second), CursorPosition(1, 0))
+
+    val after = run(CommentsIntent.SaveCommentDraft(second.id, "  Rewritten "), state)
+
+    comments(after) shouldBe List(first, second.copy(text = "Rewritten", editedAt = Some(replied)))
+    after.persisted.buffers(BufferId(0)).document.isDirty shouldBe true
+  }
+
+  it should "change only the targeted one of two identical comments" in {
+    val twin  = first.copy(id = CommentId(2))
+    val state = stateWith(List(first, twin), CursorPosition(1, 0))
+
+    comments(run(CommentsIntent.SaveCommentDraft(twin.id, "Changed"), state)).map(_.text) shouldBe
+      List("First", "Changed")
+  }
+
+  it should "keep the id, author, replies and resolved state of the comment" in {
+    val thread = first.copy(
+      author = Some(author),
+      replies = List(CommentReply("Grace", wrote, "Agreed")),
+      resolved = true
+    )
+
+    val after =
+      run(CommentsIntent.SaveCommentDraft(thread.id, "Changed"), stateWith(List(thread), CursorPosition(1, 0)))
+
+    comments(after) shouldBe List(thread.copy(text = "Changed", editedAt = Some(replied)))
+  }
+
+  it should "reach a comment whose range an edit shifted or whose list position moved" in {
+    val shifted = second.copy(anchor = CursorPosition(1, 1), focus = CursorPosition(1, 3))
+    val state   = stateWith(List(shifted, first), CursorPosition(1, 0))
+
+    comments(run(CommentsIntent.SaveCommentDraft(second.id, "Changed"), state)).map(c => c.id -> c.text) shouldBe
+      List(second.id -> "Changed", first.id -> "First")
+  }
+
+  it should "delete the comment when the draft is empty" in {
+    val state = stateWith(List(first, second), CursorPosition(1, 0))
+
+    val after = run(CommentsIntent.SaveCommentDraft(first.id, "   "), state)
+
+    comments(after) shouldBe List(second)
+    after.persisted.buffers(BufferId(0)).document.isDirty shouldBe true
+  }
+
+  it should "leave the buffer clean when the text did not change" in {
+    val state = stateWith(List(first), CursorPosition(1, 0))
+
+    val after = run(CommentsIntent.SaveCommentDraft(first.id, "First"), state)
+
+    comments(after) shouldBe List(first)
+    after.persisted.buffers(BufferId(0)).document.isDirty shouldBe false
+  }
+
+  it should "be ignored for a comment the buffer no longer holds" in {
+    NavigationTransitions.comments(
+      CommentsIntent.SaveCommentDraft(CommentId(9), "Changed"),
+      stateWith(List(first), CursorPosition(1, 0)),
+      replied
+    ) shouldBe NavigationOutcome.Ignored(
+      Some("[CMD] Save comment draft requested for a comment that is no longer in the buffer")
+    )
+  }

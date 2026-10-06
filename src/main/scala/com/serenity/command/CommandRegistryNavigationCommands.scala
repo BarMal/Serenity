@@ -42,7 +42,7 @@ private[command] object CommandRegistryNavigationCommands:
       label = "Reopen Document Comment"
     ),
     Command.typed(
-      "toggle-resolved-comments",
+      "show-resolved-comments",
       "Show or hide resolved document comments in the comment lens, highlights and comment navigation.",
       CommandIntent.Comments(CommentsIntent.ToggleResolvedComments),
       CommandCategory.View,

@@ -34,6 +34,7 @@ private[manager] object NavigationTransitions:
       case CommentsIntent.ToggleCommentLens            => toggleCommentLens(state)
       case CommentsIntent.AddDocumentComment(text)     => addDocumentComment(state, text, now)
       case CommentsIntent.DeleteDocumentComment        => deleteDocumentComment(state)
+      case CommentsIntent.SaveCommentDraft(id, text)   => saveCommentDraft(state, id, text, now)
       case CommentsIntent.ReplyToDocumentComment(text) => replyToDocumentComment(state, text, now)
       case CommentsIntent.ResolveDocumentComment       => setCommentResolved(state, resolved = true)
       case CommentsIntent.ReopenDocumentComment        => setCommentResolved(state, resolved = false)
@@ -312,6 +313,22 @@ private[manager] object NavigationTransitions:
 
   private def withDocumentComments(state: AppState, buffer: Buffer, annotations: Annotations): AppState =
     withBuffer(state, buffer.copy(annotations = annotations, document = buffer.document.copy(isDirty = true)))
+
+  /** An emptied draft deletes the comment. A comment the buffer no longer holds is left alone. */
+  private def saveCommentDraft(state: AppState, id: CommentId, text: String, now: Instant): NavigationOutcome =
+    activeEditorBuffer(state) match
+      case Some((_, buffer)) =>
+        buffer.annotations.comment(id) match
+          case Some(_) =>
+            val draft = text.trim
+            val saved =
+              if draft.isEmpty then buffer.annotations.withoutComment(id)
+              else buffer.annotations.withUpdatedComment(id)(_.withText(draft, now))
+            applied(if saved == buffer.annotations then state else withDocumentComments(state, buffer, saved))
+          case None =>
+            ignored("[CMD] Save comment draft requested for a comment that is no longer in the buffer")
+      case None =>
+        ignored("[CMD] Save comment draft requested without an active editor buffer")
 
   private def replyToDocumentComment(state: AppState, text: String, now: Instant): NavigationOutcome =
     val replyText = text.trim

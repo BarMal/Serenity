@@ -1,5 +1,6 @@
 package com.serenity.state.components
 
+import com.serenity.command.{Command, CommandCategory, CommandIntent, CommentsIntent}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.ui.widget.{TextField, WidgetInput}
@@ -17,7 +18,7 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
           case SurfaceContent.CommentLens(lens @ CommentLensState(_, _, _, Some(target), CommentLensMode.Editable)) =>
             event match
               case ModalSubmit =>
-                ComponentResult.updateState(_ => saveAndDismiss(state, surface, target, lens.draft))
+                saveAndDismiss(state, surface, target, lens.draft)
               case ModalDismiss =>
                 ComponentResult.updateState(_ => dismiss(state, surface))
               case other =>
@@ -58,36 +59,24 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
       )
     )
 
-  private def saveAndDismiss(state: AppState, surface: UiSurface, target: CommentLensTarget, draft: String): AppState =
-    dismiss(savedDraft(state, target, draft.trim), surface)
-
-  /** An emptied draft deletes the comment. A target the buffer no longer holds (the comment was deleted underneath the
-    * lens) is left alone, whatever else has taken its place. Only the text changes: this layer has no clock to stamp an
-    * edit time with.
-    */
-  private def savedDraft(state: AppState, target: CommentLensTarget, text: String): AppState =
-    state.persisted.layout.activeEditorPaneId
-      .flatMap(state.persisted.layout.editorPanes.get)
-      .flatMap(_.bufferId)
-      .flatMap(state.persisted.buffers.get)
-      .fold(state) { buffer =>
-        val annotations = buffer.annotations
-        annotations.comment(target.id).fold(state) { _ =>
-          val updated =
-            if text.isEmpty then annotations.withoutComment(target.id)
-            else annotations.withUpdatedComment(target.id)(_.copy(text = text))
-          if updated == annotations then state
-          else
-            state.copy(persisted =
-              state.persisted.copy(buffers =
-                state.persisted.buffers + (buffer.id -> buffer.copy(
-                  annotations = updated,
-                  document = buffer.document.copy(isDirty = true)
-                ))
-              )
-            )
-        }
-      }
+  /** The text is written by a command, so the edit is stamped from the effect clock this layer does not have. */
+  private def saveAndDismiss(
+    state: AppState,
+    surface: UiSurface,
+    target: CommentLensTarget,
+    draft: String
+  ): ComponentResult =
+    ComponentResult.composite(
+      ComponentResult.updateState(_ => dismiss(state, surface)),
+      ComponentResult.executeCommand(
+        Command.typed(
+          "save-comment-draft",
+          "Save the comment lens draft.",
+          CommandIntent.Comments(CommentsIntent.SaveCommentDraft(target.id, draft)),
+          CommandCategory.Edit
+        )
+      )
+    )
 
   private def dismiss(state: AppState, surface: UiSurface): AppState =
     val withoutLens =
