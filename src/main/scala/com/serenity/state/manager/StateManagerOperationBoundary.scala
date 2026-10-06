@@ -16,7 +16,7 @@ import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, DictionarySna
 import com.serenity.state.core.NotesPaneSync
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{ModalEventReducer, NoticeReducer, PeekStateReducer}
+import com.serenity.state.reducers.{ModalEventReducer, NoticeReducer, PeekStateReducer, SettingsPreviewReducer}
 import com.serenity.ui.layout.{DirEntry, PeekContent, WrappedLineCache}
 import org.typelevel.log4cats.Logger
 
@@ -106,13 +106,24 @@ final private[manager] class StateManagerOperationBoundary private (
 
   /** The follow-up work of every `ModelCommit` app-state commit. */
   private[manager] def afterCommit(fallbackState: AppState, committedState: AppState): IO[Unit] =
-    logModalTransition(fallbackState, committedState) >> scheduleDocumentAnalysis() >>
+    logModalTransition(fallbackState, committedState) >> reapplyAbandonedPreview(fallbackState, committedState) >>
+      scheduleDocumentAnalysis() >>
       ModalEventReducer.findRefreshDue(fallbackState, committedState).traverse_(scheduleFindSearch) >>
       PanelContentSync.outlineRefreshDue(committedState, fallbackState).traverse_(scheduleOutlineRefresh) >>
       PanelContentSync.explorerListingsDue(committedState, fallbackState).traverse_(listExplorerDirectory) >>
       scheduleSessionSaveIfDue(fallbackState, committedState) >>
       announceClosedDocuments(fallbackState, committedState) >> forgetClosedBuffers(fallbackState, committedState) >>
       commitsUnobserved.get.ifM(IO.unit, commitObserver.get.flatMap(_(fallbackState, committedState)))
+
+  /** A preview that `prepareCommit` put back because the runner went away leaves the font loader on the previewed
+    * fonts; the event makes the reducers ask for them to be reloaded.
+    */
+  private def reapplyAbandonedPreview(before: AppState, after: AppState): IO[Unit] =
+    enqueueEvent(com.serenity.keystroke.events.SettingsPreviewAbandoned)
+      .whenA(
+        before.runtime.pendingSetting.isDefined && after.runtime.pendingSetting.isEmpty &&
+          before.persisted.config != after.persisted.config
+      )
 
   /** Replaces the observer told of every commit `afterCommit` follows up, with the states before and after. */
   def observeCommits(observer: (AppState, AppState) => IO[Unit]): IO[Unit] =
@@ -445,7 +456,9 @@ private[manager] object StateManagerOperationBoundary:
     // lens in sync with the cursor regardless of what moved it -- a keyboard cursor move opens/closes it exactly as a
     // mouse click already did, without each event source having to remember to call it itself.
     AppStateValidation
-      .validated(EventPipelineTransitions.commandRunnerFocusNormalized(newState))
+      .validated(
+        EventPipelineTransitions.commandRunnerFocusNormalized(SettingsPreviewReducer.withoutOrphanedPreview(newState))
+      )
       .map(CommentRendering.syncFloatingLensWithCursor(_, fallbackState))
       .map(PanelContentSync.synced(_, fallbackState))
       .map(NotesPaneSync.synced(_, fallbackState))

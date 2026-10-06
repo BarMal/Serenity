@@ -8,7 +8,7 @@ import com.serenity.state.models.{AppState, PendingSetting}
   * theme: the previewed value is live in the state, but saving reads the committed one, so a preview is never written
   * to disk.
   */
-private[reducers] object SettingsPreviewReducer:
+object SettingsPreviewReducer:
 
   /** Whether `intent` sets one value that can be put back by restoring the config and theme. Everything else is
     * committed as soon as it is chosen: relative changes (a toggle or step would apply again on each highlight),
@@ -110,6 +110,12 @@ private[reducers] object SettingsPreviewReducer:
         List(AppEffect.Settings(SettingsEffect.ReapplyConfig))
       )
     }
+
+  /** `state` with a preview that has outlived the command runner put back: a preview exists only while the runner it
+    * was made in is open, however the runner came to be gone.
+    */
+  def withoutOrphanedPreview(state: AppState): AppState =
+    if state.commandRunnerSurface.isEmpty then revert(state).state else state
 
   /** Commits the value being previewed under `scope`, if there is one. */
   def committing(state: AppState, scope: String): Option[ReducerResult] =
