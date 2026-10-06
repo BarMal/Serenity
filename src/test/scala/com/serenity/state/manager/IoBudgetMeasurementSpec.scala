@@ -210,6 +210,18 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
     withClue("a clean buffer costs its session entry, not its text: ")((large - absent) / 9 should be < 16L * 1024)
   }
 
+  it should "allocate next to nothing on a session save that has nothing to write" in {
+    assume(threadMemory.exists(_.isThreadAllocatedMemorySupported))
+    val state = editIdleSessionState(cleanBuffers = 9)
+    val steady =
+      val session = newSession()
+      allocationPerOp(20)(session.saveSession(state))
+    info(f"[ALLOC-BUDGET] session save with nothing to write: $steady%,d B/op")
+    withClue("re-encoding the whole session state is what a no-change save used to cost: ")(
+      steady should be < 32L * 1024
+    )
+  }
+
   it should "count external-change watcher wakeups" in {
     // Its own directory, so only this spec's activity reaches the watcher.
     val file   = Files.createFile(Files.createTempDirectory("io-budget-watch").resolve("notes.txt"))
