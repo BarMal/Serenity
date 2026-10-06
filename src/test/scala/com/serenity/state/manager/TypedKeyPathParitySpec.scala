@@ -16,6 +16,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -72,7 +73,11 @@ class TypedKeyPathParitySpec extends AnyFlatSpec with Matchers:
 
   private def editor(scenario: Scenario): IO[(StateManager, BufferId)] =
     for
-      stateManager <- StateManager(NoOpLogger[IO], sessionRootOverride = Some(Files.createTempDirectory("parity")))
+      stateManager <- StateManager(
+        NoOpLogger[IO],
+        sessionRootOverride = Some(Files.createTempDirectory("parity")),
+        dictionaryCache = SharedDictionary.default
+      )
       _ <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = scenario.config)))
       bufferId <- stateManager.createBuffer(document, None)
       state    <- stateManager.getCurrentState

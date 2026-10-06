@@ -14,7 +14,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, UndoState}
-import com.serenity.testkit.AwaitCondition
+import com.serenity.testkit.{AwaitCondition, SharedDictionary}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
@@ -104,7 +104,8 @@ class ClosedBufferRetentionSpec extends AnyFlatSpec with Matchers:
           uiPresetStore = UiPresetStore(directory.resolve("presets.json")),
           windowSizeProvider = IO.pure(None),
           onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-          fileDialog = None
+          fileDialog = None,
+          dictionaryCache = SharedDictionary.default
         )
         stateManager <- StateManager.fromRuntime(runtime)
       yield Fixture(stateManager, directory)

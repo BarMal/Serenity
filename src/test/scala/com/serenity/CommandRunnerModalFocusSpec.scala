@@ -8,6 +8,7 @@ import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -21,7 +22,7 @@ class CommandRunnerModalFocusSpec extends AnyFlatSpec with Matchers:
 
   private def withRunnerOpen(): (StateManager, SurfaceId) =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerModalFocusSpec"))
-    val sm     = StateManager.apply(logger).unsafeRunSync()
+    val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
     sm.applyEvent(InsertChar('x')).unsafeRunSync()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val runnerId = sm.getCurrentState.unsafeRunSync().commandRunnerSurface.map(_.id).getOrElse(fail("no runner"))

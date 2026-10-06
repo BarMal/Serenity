@@ -6,6 +6,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -50,5 +51,11 @@ class LargeBufferEditingSpec extends AnyFlatSpec with Matchers:
   trait EditorFixture:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+
     val stateManager: StateManager =
-      StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO]).unsafeRunSync()
+      StateManager
+        .apply(logger, dictionaryCache = SharedDictionary.default)(using
+          com.serenity.rope.Balance.default,
+          LoggerFactory[IO]
+        )
+        .unsafeRunSync()

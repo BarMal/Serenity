@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import java.security.MessageDigest
 import java.time.Instant
 
+import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 
 import cats.effect.IO
@@ -26,6 +27,11 @@ object FileStamp:
   private val CoarseTickNanos   = 1_000_000L
   private val CoarseWindowNanos = 2_000_000_000L
 
+  /** How a stat is taken; a seam so a test can model a filesystem with a coarse timestamp tick. */
+  type Attributes = Path => BasicFileAttributes
+
+  val filesystem: Attributes = Files.readAttributes(_, classOf[BasicFileAttributes])
+
   def of(attributes: BasicFileAttributes): FileStamp =
     val modified = attributes.lastModifiedTime.toInstant
     FileStamp(
@@ -34,12 +40,29 @@ object FileStamp:
       fileKey = Option(attributes.fileKey).map(_.toString)
     )
 
-  def vouchesForContent(stamp: FileStamp, nowNanos: Long): Boolean =
-    stamp.modifiedNanos % CoarseTickNanos != 0L || nowNanos - stamp.modifiedNanos >= CoarseWindowNanos
+  /** `observedAtNanos` must be a clock reading taken BEFORE the stat that produced `stamp`. A reading taken after it
+    * can fall past the end of the tick while the stat did not: a same-size write landing in that gap keeps the stamp
+    * and is never noticed.
+    */
+  def vouchesForContent(stamp: FileStamp, observedAtNanos: Long): Boolean =
+    stamp.modifiedNanos % CoarseTickNanos != 0L || observedAtNanos - stamp.modifiedNanos >= CoarseWindowNanos
+
+  final case class Observed(stamp: FileStamp, vouches: Boolean)
+
+  /** Reads the clock, then stats: the order [[vouchesForContent]] requires. */
+  def observe(
+    path: Path,
+    clock: IO[FiniteDuration] = IO.realTime,
+    attributes: Attributes = filesystem
+  ): IO[Option[Observed]] =
+    clock.flatMap(observedAt =>
+      IO.blocking(read(path, attributes))
+        .map(_.map(stamp => Observed(stamp, vouchesForContent(stamp, observedAt.toNanos))))
+    )
 
   /** Blocking. `None` for a path that is not a regular file. */
-  def read(path: Path): Option[FileStamp] =
-    Option.when(Files.isRegularFile(path))(of(Files.readAttributes(path, classOf[BasicFileAttributes])))
+  def read(path: Path, attributes: Attributes = filesystem): Option[FileStamp] =
+    Option.when(Files.isRegularFile(path))(of(attributes(path)))
 
 /** Identifies the revision of a document as reported by its storage provider. `value` is the content digest; `stamp` is
   * the file as it stood when that digest was taken, so a later identical stat confirms the revision without a read.
@@ -111,7 +134,15 @@ final case class DocumentStorageProvider(
   */
 object LocalDocumentStorageProvider:
 
-  def apply(probe: StorageIoProbe = StorageIoProbe.none): DocumentStorageProvider =
+  /** How this adapter samples time and stats files: the order is load-bearing, see [[FileStamp.vouchesForContent]]. */
+  final private case class Sampling(clock: IO[FiniteDuration], attributes: FileStamp.Attributes)
+
+  def apply(
+    probe: StorageIoProbe = StorageIoProbe.none,
+    clock: IO[FiniteDuration] = IO.realTime,
+    attributes: FileStamp.Attributes = FileStamp.filesystem
+  ): DocumentStorageProvider =
+    val sampling = Sampling(clock, attributes)
     DocumentStorageProvider(
       id = "local",
       supports = {
@@ -125,23 +156,23 @@ object LocalDocumentStorageProvider:
       open = location =>
         localPath(location) match
           case Left(error) => IO.pure(Left(error))
-          case Right(path) => readLocal(path, location, probe),
+          case Right(path) => readLocal(path, location, probe, sampling),
       stat = location =>
         localPath(location) match
           case Left(error) => IO.pure(Left(error))
-          case Right(path) => statLocal(path, location),
+          case Right(path) => statLocal(path, location, sampling),
       save = (location, content, expectedRevision) =>
         localPath(location) match
           case Left(error) => IO.pure(Left(error))
-          case Right(path) => saveLocal(path, location, content, expectedRevision, probe),
+          case Right(path) => saveLocal(path, location, content, expectedRevision, probe, sampling),
       copy = (source, destination) =>
         (localPath(source), localPath(destination)) match
           case (Left(error), _) => IO.pure(Left(error))
           case (_, Left(error)) => IO.pure(Left(error))
           case (Right(sourcePath), Right(destinationPath)) =>
-            readLocal(sourcePath, source, probe).flatMap {
+            readLocal(sourcePath, source, probe, sampling).flatMap {
               case Left(error)     => IO.pure(Left(error))
-              case Right(document) => saveLocal(destinationPath, destination, document.content, None, probe)
+              case Right(document) => saveLocal(destinationPath, destination, document.content, None, probe, sampling)
             }
     )
 
@@ -174,22 +205,31 @@ object LocalDocumentStorageProvider:
   private def readLocal(
     path: Path,
     location: StorageLocation,
-    probe: StorageIoProbe
+    probe: StorageIoProbe,
+    sampling: Sampling
   ): IO[Either[DocumentStorageError, StoredDocument]] =
-    IO.blocking[Either[DocumentStorageError, BasicFileAttributes]] {
-      if !Files.exists(path) then Left(DocumentStorageError.NotFound(location))
-      else if !Files.isRegularFile(path) || !Files.isReadable(path) then
-        Left(DocumentStorageError.AccessDenied(location))
-      else Right(attributes(path))
-    }.flatMap(_.traverse { before =>
-      for
-        content  <- readContent(path, probe)
-        revision <- revisionOf(content, before, probe)
-      yield StoredDocument(content, metadata(path, before, Some(revision)))
-    }).handleError(error => Left(storageError(location, error)))
+    sampling.clock
+      .flatMap(observedAt =>
+        IO.blocking[Either[DocumentStorageError, BasicFileAttributes]] {
+          if !Files.exists(path) then Left(DocumentStorageError.NotFound(location))
+          else if !Files.isRegularFile(path) || !Files.isReadable(path) then
+            Left(DocumentStorageError.AccessDenied(location))
+          else Right(sampling.attributes(path))
+        }.flatMap(_.traverse { before =>
+          for
+            content  <- readContent(path, probe)
+            revision <- revisionOf(content, before, observedAt.toNanos, probe)
+          yield StoredDocument(content, metadata(path, before, Some(revision)))
+        })
+      )
+      .handleError(error => Left(storageError(location, error)))
 
-  private def statLocal(path: Path, location: StorageLocation): IO[Either[DocumentStorageError, FileStamp]] =
-    IO.blocking(FileStamp.read(path))
+  private def statLocal(
+    path: Path,
+    location: StorageLocation,
+    sampling: Sampling
+  ): IO[Either[DocumentStorageError, FileStamp]] =
+    IO.blocking(FileStamp.read(path, sampling.attributes))
       .map(_.toRight(DocumentStorageError.NotFound(location)))
       .handleError(error => Left(storageError(location, error)))
 
@@ -198,24 +238,31 @@ object LocalDocumentStorageProvider:
     location: StorageLocation,
     content: Array[Byte],
     expectedRevision: Option[DocumentRevision],
-    probe: StorageIoProbe
+    probe: StorageIoProbe,
+    sampling: Sampling
   ): IO[Either[DocumentStorageError, StoredDocument]] =
     expectedRevision
-      .fold(IO.pure(true))(onDiskMatches(path, _, probe))
+      .fold(IO.pure(true))(onDiskMatches(path, _, probe, sampling))
       .flatMap[Either[DocumentStorageError, StoredDocument]] {
         case false => IO.pure(Left(DocumentStorageError.Conflict(location)))
         case true =>
           for
-            _        <- AtomicFileWriter.writeBytes(path, content)
-            written  <- IO.blocking(attributes(path))
-            revision <- revisionOf(content, written, probe)
+            _          <- AtomicFileWriter.writeBytes(path, content)
+            observedAt <- sampling.clock
+            written    <- IO.blocking(sampling.attributes(path))
+            revision   <- revisionOf(content, written, observedAt.toNanos, probe)
           yield Right(StoredDocument(content, metadata(path, written, Some(revision))))
       }
       .handleError(error => Left(storageError(location, error)))
 
   /** A stat that `expected` vouches for settles it; only a file whose stat moved is read and hashed. */
-  private def onDiskMatches(path: Path, expected: DocumentRevision, probe: StorageIoProbe): IO[Boolean] =
-    IO.blocking(FileStamp.read(path)).flatMap {
+  private def onDiskMatches(
+    path: Path,
+    expected: DocumentRevision,
+    probe: StorageIoProbe,
+    sampling: Sampling
+  ): IO[Boolean] =
+    IO.blocking(FileStamp.read(path, sampling.attributes)).flatMap {
       case None                                      => IO.pure(false)
       case Some(stamp) if expected.vouchesFor(stamp) => IO.pure(true)
       case Some(_) => readContent(path, probe).flatMap(digestOf(_, probe)).map(_ == expected.value)
@@ -232,13 +279,14 @@ object LocalDocumentStorageProvider:
   private def revisionOf(
     content: Array[Byte],
     stated: BasicFileAttributes,
+    observedAtNanos: Long,
     probe: StorageIoProbe
   ): IO[DocumentRevision] =
-    (digestOf(content, probe), IO.realTime).mapN { (digest, now) =>
+    digestOf(content, probe).map { digest =>
       val stamp = FileStamp.of(stated)
       DocumentRevision(
         digest,
-        Option.when(stamp.size == content.length.toLong && FileStamp.vouchesForContent(stamp, now.toNanos))(stamp)
+        Option.when(stamp.size == content.length.toLong && FileStamp.vouchesForContent(stamp, observedAtNanos))(stamp)
       )
     }
 

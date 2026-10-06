@@ -6,6 +6,7 @@ import com.serenity.keystroke.events.{NewTab, ResizeEvent}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -20,8 +21,8 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     given com.serenity.rope.Balance = com.serenity.rope.Balance.default
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
     val logger                      = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager                = StateManager.apply(logger).unsafeRunSync()
-    val defaultMinPaneWidth         = 50 // Expected default minimum
+    val stateManager        = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    val defaultMinPaneWidth = 50 // Expected default minimum
 
   it should "enforce minimum pane width of 50 characters by default" in new PaneConstraintFixture:
     // Given: Narrow terminal width that can only fit 1 pane at minimum width

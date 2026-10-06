@@ -10,6 +10,7 @@ import com.serenity.state.components.{ComponentResult, PinnedPanelComponent}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{PinnedPanelViewModel, TextPanelRow}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -127,7 +128,7 @@ class ListPanelScrollSpec extends AnyFlatSpec with Matchers:
   private def makeStateManager(): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("ListPanelScrollSpec"))
-    StateManager(logger).unsafeRunSync()
+    StateManager(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   private def managerWith(content: SurfaceContent): StateManager =
     val sm = makeStateManager()
