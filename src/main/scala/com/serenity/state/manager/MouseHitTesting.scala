@@ -84,51 +84,81 @@ final private[manager] class MouseHitTesting(
       case _ =>
         IO.unit
 
+  private def beginGesture(gesture: PointerGesture): IO[Unit] =
+    commit(MouseHitTesting.recordGesture(gesture))
+
   def handleMousePress(press: MousePress, state: AppState): IO[Unit] =
     if press.button != MouseButton.Primary then IO.unit
     else
       contextualToolbar.handleContextualToolbarMouseHover(press, state).flatMap {
-        case true => IO.unit
+        case true => beginGesture(PointerGesture.Other)
         case false =>
           commandRunner.handleCommandRunnerMouseHover(press, state).flatMap {
-            case true => IO.unit
+            case true => beginGesture(PointerGesture.Other)
             case false =>
-              if MouseHitTestGeometry.isInsideFloatingSurface(press, state, port.authoritativeScene) then IO.unit
+              if MouseHitTestGeometry.isInsideFloatingSurface(press, state, port.authoritativeScene) then
+                beginGesture(PointerGesture.Other)
               else
                 tabBarDrag.handleTabBarPress(press, state).flatMap {
-                  case true => IO.unit
+                  case true => beginGesture(PointerGesture.TabReorder)
                   case false =>
-                    pinnedPanel.handlePinnedPanelMouseSelect(press, state, focusPanel = true).flatMap {
-                      case true => IO.unit
-                      case false =>
-                        editorTargeting
-                          .resolveMouseTarget(press, state)
-                          .flatMap(target => commit(MouseHitTesting.editorPress(press, target)))
-                    }
+                    pinnedPanel.resizeHandleAt(press, state) match
+                      case Some(_: PointerHitTarget.DockEdge) => beginGesture(PointerGesture.PanelResize)
+                      case Some(_)                            => beginGesture(PointerGesture.TextAreaResize)
+                      case None =>
+                        pinnedPanel.handlePinnedPanelMouseSelect(press, state, focusPanel = true).flatMap {
+                          case true => beginGesture(PointerGesture.Other)
+                          case false =>
+                            editorTargeting
+                              .resolveMouseTarget(press, state)
+                              .flatMap { target =>
+                                val gesture =
+                                  if target.isDefined then PointerGesture.TextSelection else PointerGesture.Other
+                                commit(
+                                  MouseHitTesting
+                                    .editorPress(press, target)
+                                    .flatMap(_ => MouseHitTesting.recordGesture(gesture))
+                                )
+                              }
+                        }
                 }
           }
       }
 
+  /** A drag continues the gesture its press began. Without a recorded press it falls back to resolving the drag from
+    * where the pointer is.
+    */
   def handleMouseDrag(drag: MouseDrag, state: AppState): IO[Unit] =
     if drag.button != MouseButton.Primary then IO.unit
     else
-      pinnedPanel.handleTextAreaResizeDrag(drag, state).flatMap {
-        case true => IO.unit
-        case false =>
-          pinnedPanel.handlePinnedPanelResizeDrag(drag, state).flatMap {
-            case true => IO.unit
-            case false =>
-              tabBarDrag.handleTabBarDrag(drag, state).flatMap {
-                case true => IO.unit
-                case false =>
-                  if MouseHitTestGeometry.isInsideFloatingSurface(drag, state, port.authoritativeScene) then IO.unit
-                  else
-                    editorTargeting
-                      .resolveMouseTarget(drag, state)
-                      .flatMap(target => commit(MouseHitTesting.editorDrag(target)))
-              }
-          }
-      }
+      state.runtime.pointerGesture.activeGesture match
+        case Some(PointerGesture.PanelResize)    => pinnedPanel.handlePinnedPanelResizeDrag(drag, state).void
+        case Some(PointerGesture.TextAreaResize) => pinnedPanel.handleTextAreaResizeDrag(drag, state).void
+        case Some(PointerGesture.TabReorder)     => tabBarDrag.handleTabBarDrag(drag, state).void
+        case Some(PointerGesture.TextSelection)  => editorDrag(drag, state)
+        case Some(PointerGesture.Other)          => IO.unit
+        case None                                => dragFromPointer(drag, state)
+
+  private def dragFromPointer(drag: MouseDrag, state: AppState): IO[Unit] =
+    pinnedPanel.handleTextAreaResizeDrag(drag, state).flatMap {
+      case true => IO.unit
+      case false =>
+        pinnedPanel.handlePinnedPanelResizeDrag(drag, state).flatMap {
+          case true => IO.unit
+          case false =>
+            tabBarDrag.handleTabBarDrag(drag, state).flatMap {
+              case true  => IO.unit
+              case false => editorDrag(drag, state)
+            }
+        }
+    }
+
+  private def editorDrag(drag: MouseDrag, state: AppState): IO[Unit] =
+    if MouseHitTestGeometry.isInsideFloatingSurface(drag, state, port.authoritativeScene) then IO.unit
+    else
+      editorTargeting
+        .resolveMouseTarget(drag, state)
+        .flatMap(target => commit(MouseHitTesting.editorDrag(target)))
 
   def handleMouseMove(move: MouseMove, state: AppState): IO[Unit] =
     hoverTarget(move, state).flatMap(target =>
@@ -172,6 +202,13 @@ final private[manager] class MouseHitTesting(
     }
 
 private[manager] object MouseHitTesting:
+
+  def recordGesture(gesture: PointerGesture): Transition[Unit] =
+    Transition.modify(state =>
+      val pointer = state.runtime.pointerGesture
+      if pointer.activeGesture.contains(gesture) then state
+      else state.copy(runtime = state.runtime.copy(pointerGesture = pointer.copy(activeGesture = Some(gesture))))
+    )
 
   def recordPointerShape(shape: PointerShape, underModal: Boolean = false): Transition[Unit] =
     Transition.modify(state =>
