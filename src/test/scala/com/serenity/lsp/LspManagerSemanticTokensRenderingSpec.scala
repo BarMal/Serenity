@@ -6,6 +6,7 @@ import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
 import com.serenity.lsp.model.{SemanticToken, SemanticTokensLegend}
+import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.Stream
 import io.circe.Json
@@ -95,7 +96,7 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
     Json.obj("jsonrpc" -> "2.0".asJson, "id" -> id.asJson, "result" -> result)
 
   private def open(manager: Harness): IO[Unit] =
-    manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo"))) >>
+    manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo")))) >>
       takeMessage(manager.connection).flatMap { message =>
         IO(message.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didOpen"))
       }
@@ -136,7 +137,9 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
             _ <- manager.connection.recordSemanticTokensLegend(Some(SemanticTokensLegend(List("keyword"), Nil)))
             _ <- open(manager)
             openTokensRequest <- takeMessage(manager.connection) // the didOpen-triggered semanticTokens request
-            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+            _ <- manager.effects.offer(
+              Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo2"), version = 2))
+            )
             // The didOpen-triggered request above is still tracked as in-flight (nothing prunes a completed fiber's
             // entry proactively), so FileChanged's invalidateDocument cancels it first -- the same cancel-before-
             // continuing behavior `LspManagerSpec` covers for hover, now also reachable through semantic tokens.
@@ -221,7 +224,7 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
         )(_.cancel)
         .use { managerFiber =>
           for
-            _    <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo")))
+            _    <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo"))))
             _    <- applied.get
             seen <- events.get
             _    <- effects.offer(None)
@@ -280,11 +283,11 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
           fileUri: DocumentUri,
           onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
         ): IO[Option[LspManager.ResolvedConnection]] = IO.pure(None)
-      _ <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo")))
-      _ <- effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo1", 2)))
-      _ <- effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo12", 3)))
-      _ <- effects.offer(Some(LspEffect.FileChanged(unopenedUri, LanguageId.Scala, "object Bar1", 2)))
-      _ <- effects.offer(Some(LspEffect.FileChanged(unopenedUri, LanguageId.Scala, "object Bar12", 3)))
+      _ <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo"))))
+      _ <- effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo1"), 2)))
+      _ <- effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo12"), 3)))
+      _ <- effects.offer(Some(LspEffect.FileChanged(unopenedUri, LanguageId.Scala, RopeText("object Bar1"), 2)))
+      _ <- effects.offer(Some(LspEffect.FileChanged(unopenedUri, LanguageId.Scala, RopeText("object Bar12"), 3)))
       _ <- effects.offer(None)
       _ <- LspManager.runWithProvider(
         Stream.fromQueueNoneTerminated(effects),
@@ -312,9 +315,9 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
           fileUri: DocumentUri,
           onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
         ): IO[Option[LspManager.ResolvedConnection]] = IO.pure(None)
-      _ <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo")))
+      _ <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo"))))
       _ <- effects.offer(Some(LspEffect.FileClosed(uri, LanguageId.Scala)))
-      _ <- effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo1", 2)))
+      _ <- effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo1"), 2)))
       _ <- effects.offer(None)
       _ <- LspManager.runWithProvider(
         Stream.fromQueueNoneTerminated(effects),

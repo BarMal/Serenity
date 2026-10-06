@@ -245,7 +245,7 @@ final private[manager] class StateManagerFilePersistence(
       currentState.flatMap { state =>
         val opened = state.persisted.buffers.values.exists(_.document.filePath.contains(path))
         if opened && state.editingContext.hasCodeTooling then
-          lspQueue.enqueue(LspEffect.FileOpened(path.toUri.toString, languageId, loaded.document.content.collect()))
+          lspQueue.enqueue(LspEffect.FileOpened(path.toUri.toString, languageId, loaded.document.content))
         else IO.unit
       }
     }
@@ -271,7 +271,7 @@ final private[manager] class StateManagerFilePersistence(
     val next = for
       path       <- saved.document.filePath
       languageId <- saved.document.language
-    yield (path.toUri.toString, languageId, saved.document.content.collect())
+    yield (path.toUri.toString, languageId, saved.document.content)
     val nextIdentity = next.map { case (uri, languageId, _) => (uri, languageId) }
     if previous == nextIdentity then IO.unit
     else

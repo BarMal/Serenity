@@ -256,6 +256,8 @@ object LspConnection:
     */
   private val OutgoingFlushTimeout: FiniteDuration = 1.second
 
+  private val StderrDrainShutdown: FiniteDuration = 1.second
+
   final private case class ConnectionFibers(
       writer: Fiber[IO, Throwable, Unit],
       reader: Fiber[IO, Throwable, Unit]
@@ -338,25 +340,40 @@ object LspConnection:
     config: LspServerConfig,
     rootUri: WorkspaceRootUri,
     logger: Logger[IO],
-    requestTimeout: FiniteDuration = DefaultRequestTimeout
+    requestTimeout: FiniteDuration = DefaultRequestTimeout,
+    stderrLogDirectory: java.nio.file.Path = LspStderrLog.defaultDirectory,
+    stderrLogMaxBytes: Long = LspStderrLog.DefaultMaxBytes
   ): Resource[IO, LspConnection] =
     for
-      process <- Resource.make(
-        IO.blocking(
-          new java.lang.ProcessBuilder(
-            (config.command :: config.defaultArgs).toArray*
-          ).start()
-        )
-      )(proc => IO.blocking(proc.destroyForcibly()).void)
+      server <- Resource.make(
+        IO.blocking(new java.lang.ProcessBuilder((config.command :: config.defaultArgs).toArray*).start())
+          .flatMap(process =>
+            LspStderrLog
+              .drain(process.getErrorStream, config.languageId, stderrLogDirectory, stderrLogMaxBytes, logger)
+              .handleErrorWith(error => logger.warn(error)(s"[LSP] ${config.languageId.id} stderr reader stopped"))
+              .start
+              .map(drain => RunningServer(process, drain))
+          )
+      )(stop)
       conn <- connect(
         config.languageId,
-        process.getInputStream,
-        process.getOutputStream,
+        server.process.getInputStream,
+        server.process.getOutputStream,
         rootUri,
         logger,
         requestTimeout
       )
     yield conn
+
+  final private case class RunningServer(process: java.lang.Process, stderrDrain: Fiber[IO, Throwable, Unit])
+
+  /** The process is destroyed before the drain is cancelled: the drain sits in a blocking read that only the process
+    * dying ends. A grandchild that inherited stderr can keep the pipe open past that, so the wait is bounded and the
+    * drain left to finish on its own.
+    */
+  private def stop(server: RunningServer): IO[Unit] =
+    IO.blocking(server.process.destroyForcibly()).void >>
+      server.stderrDrain.cancel.timeoutTo(StderrDrainShutdown, IO.unit)
 
   private def initHandshake(conn: LspConnection, rootUri: WorkspaceRootUri, logger: Logger[IO]): IO[Unit] =
     for
