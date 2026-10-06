@@ -5,13 +5,14 @@ import scala.concurrent.duration.*
 import cats.effect.std.Supervisor
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
-import com.serenity.config.{AppConfig, StatusLinePlacement}
+import com.serenity.config.{AppConfig, SpellCheckConfig, StatusLinePlacement}
 import com.serenity.input.{InputRouter, PendingInput, SystemClipboard}
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Damage, TypingActivity}
+import com.serenity.testkit.SharedDictionary
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.{Chunk, Stream}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -97,7 +98,8 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
           for
             sm <- StateManager(
               LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
-              initialConfig = AppConfig.default
+              initialConfig = noBackgroundAnalysis,
+              dictionaryCache = SharedDictionary.cacheFor(noBackgroundAnalysis)
             )
             timer  <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
             _      <- sm.runtimeLifecycle.observeCommits(timer.onCommit(_, _))
@@ -111,6 +113,9 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
 
     burstEnded shouldBe (true, false)
   }
+
+  // Spell check analyses in the background and commits its result, which these specs would count as typing activity.
+  private val noBackgroundAnalysis: AppConfig = AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = false))
 
   private val floatingStatusLine: AppState =
     val state = AppState.initial
@@ -138,7 +143,8 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
           for
             sm <- StateManager(
               LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
-              initialConfig = floatingStatusLine.persisted.config
+              initialConfig = floatingStatusLine.persisted.config,
+              dictionaryCache = SharedDictionary.cacheFor(floatingStatusLine.persisted.config)
             )
             seen  <- Ref.of[IO, Vector[Damage]](Vector.empty)
             timer <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
@@ -165,7 +171,8 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
           for
             sm <- StateManager(
               LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
-              initialConfig = AppConfig.default
+              initialConfig = noBackgroundAnalysis,
+              dictionaryCache = SharedDictionary.cacheFor(noBackgroundAnalysis)
             )
             timer          <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
             observedByWake <- Ref.of[IO, Int](0)

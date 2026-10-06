@@ -7,6 +7,7 @@ import com.serenity.TestWorkspaceTrees
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -52,7 +53,8 @@ class RenderCachesIsolationSpec extends AnyFlatSpec with Matchers:
   private def newStateManager(capacity: Int): IO[StateManager] =
     StateManager.apply(
       Slf4jFactory.create[IO].getLogger(using LoggerName("RenderCachesIsolationSpec")),
-      initialConfig = AppConfig.default.withRendererFrameStateCacheCapacity(capacity)
+      initialConfig = AppConfig.default.withRendererFrameStateCacheCapacity(capacity),
+      dictionaryCache = SharedDictionary.default
     )
 
   "Two StateManagers with different render-frame-state cache capacities" should

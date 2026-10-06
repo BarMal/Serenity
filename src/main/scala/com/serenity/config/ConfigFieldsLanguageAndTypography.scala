@@ -27,7 +27,9 @@ private[config] object ConfigFieldsLanguageAndTypography:
     field("spellcheck.languages", "spellcheck_languages")(stringList)(
       _.languageToolsConfig.spellCheck.normalized.languages,
       (config, value) =>
-        config.withSpellCheck(config.languageToolsConfig.spellCheck.copy(languages = value.map(_.toLowerCase)))
+        config.withSpellCheck(
+          config.languageToolsConfig.spellCheck.copy(languages = value.map(SpellCheckLanguage.canonical))
+        )
     ),
     field("spellcheck.dictionary_paths", "spellcheck.dictionary.paths", "spellcheck_dictionary_paths")(stringList)(
       _.languageToolsConfig.spellCheck.normalized.dictionaryPaths,

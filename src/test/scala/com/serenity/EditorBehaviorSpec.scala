@@ -9,7 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
@@ -588,5 +588,11 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers with Eventually:
   trait EditorFixture:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+
     val stateManager: StateManager =
-      StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO]).unsafeRunSync()
+      StateManager
+        .apply(logger, dictionaryCache = SharedDictionary.default)(using
+          com.serenity.rope.Balance.default,
+          LoggerFactory[IO]
+        )
+        .unsafeRunSync()

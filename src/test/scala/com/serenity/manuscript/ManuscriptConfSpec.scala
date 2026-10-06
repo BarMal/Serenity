@@ -21,6 +21,22 @@ class ManuscriptConfSpec extends AnyFlatSpec with Matchers with EitherValues:
     (blank.language, blank.identifier) shouldBe ("en", None)
   }
 
+  it should "reject a label no heading uses, naming it" in {
+    ManuscriptConf.decode("labels.colophon = \"Colophon\"", defaults).left.value.message should include("colophon")
+  }
+
+  it should "accept each label the e-book uses" in {
+    val conf =
+      """labels.contents = "A"
+        |labels.guide = "B"
+        |labels.title-page = "C"
+        |labels.start-of-content = "D"
+        |labels.dedication = "E"
+        |labels.chapter = "F {n}"""".stripMargin
+
+    ManuscriptConf.decode(conf, defaults) shouldBe a[Right[?, ?]]
+  }
+
   it should "decode every key" in {
     val conf =
       """title = "The Long Night"

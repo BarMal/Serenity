@@ -17,6 +17,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.AwaitCondition.awaitValue
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.ThemeConfigLoader
@@ -50,7 +51,8 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         logger,
         sessionRootOverride = sessionRootOverride,
         configPersistencePath = configPersistencePath,
-        fileDialog = fileDialog
+        fileDialog = fileDialog,
+        dictionaryCache = SharedDictionary.default
       )
       .unsafeRunSync()
 
@@ -164,7 +166,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         state.copy(persisted =
           state.persisted.copy(
             buffers = state.persisted.buffers + (bufferId -> buffer),
-            config = state.persisted.config.withSpellCheck(SpellCheckConfig(enabled = false))
+            config = state.persisted.config.withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
           )
         )
       }

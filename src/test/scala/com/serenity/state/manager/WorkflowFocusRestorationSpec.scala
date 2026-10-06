@@ -11,6 +11,7 @@ import com.serenity.session.{SessionId, SessionMetadata}
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalEventReducer, ModalStateReducer, PeekStateReducer}
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{PanelPosition, PeekContent}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -37,7 +38,8 @@ class WorkflowFocusRestorationSpec extends AnyFlatSpec with Matchers:
     StateManager
       .apply(
         LoggerFactory[IO].getLogger(using LoggerName("WorkflowFocusRestorationSpec")),
-        sessionRootOverride = Some(Files.createTempDirectory("workflow-focus-restoration-sessions"))
+        sessionRootOverride = Some(Files.createTempDirectory("workflow-focus-restoration-sessions")),
+        dictionaryCache = SharedDictionary.default
       )
       .unsafeRunSync()
 

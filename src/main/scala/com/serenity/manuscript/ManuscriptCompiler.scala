@@ -36,7 +36,8 @@ object ManuscriptCompiler:
       wordCount = ManuscriptText.wordCount(body),
       wordCountRounding = spec.wordCountRounding,
       language = spec.language,
-      identifier = spec.identifier
+      identifier = spec.identifier,
+      labels = spec.labels
     )
 
   private def frontMatter(spec: CompileSpec): List[FrontMatter] =

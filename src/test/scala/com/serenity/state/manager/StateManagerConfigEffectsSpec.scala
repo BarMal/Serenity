@@ -154,7 +154,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
 
   it should "add the flagged word at the cursor to the custom spell-check dictionary" in {
     val text       = "hello wurld today"
-    val config     = com.serenity.config.SpellCheckConfig(enabled = true)
+    val config     = com.serenity.config.SpellCheckConfig(enabled = true, languages = List("en"))
     val bufferId   = BufferId(0)
     val baseBuffer = AppState.initial.persisted.buffers(bufferId)
     val buffer = baseBuffer.copy(
@@ -199,7 +199,8 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
   it should "not duplicate a word already in the custom spell-check dictionary" in {
     val text = "hello wurld today"
     val staleDiagnostic =
-      com.serenity.spellcheck.SpellChecker.check(text, com.serenity.config.SpellCheckConfig(enabled = true))
+      com.serenity.spellcheck.SpellChecker
+        .check(text, com.serenity.config.SpellCheckConfig(enabled = true, languages = List("en")))
     val config     = com.serenity.config.SpellCheckConfig(enabled = true, additionalWords = List("wurld"))
     val bufferId   = BufferId(0)
     val baseBuffer = AppState.initial.persisted.buffers(bufferId)

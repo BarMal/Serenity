@@ -12,7 +12,7 @@ import com.serenity.keystroke.events.{Enter, InsertChar}
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.AppState
-import com.serenity.testkit.AwaitCondition
+import com.serenity.testkit.{AwaitCondition, SharedDictionary}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
@@ -29,9 +29,14 @@ class EditIdleSessionSaveSpec extends AnyFlatSpec with Matchers with StateManage
 
   private def startEditor(sessionRoot: Path, policy: SessionManager.SessionPolicy): IO[StateManager] =
     for
-      editor <- StateManager(testLogger("EditIdleSessionSaveSpec"), policy, sessionRootOverride = Some(sessionRoot))
-      _      <- AppStartup.initializeState(editor, editor.sessionStartupInfo, Theme.default, ViewportSize(80, 24))
-      _      <- editor.applyEvent(Enter)
+      editor <- StateManager(
+        testLogger("EditIdleSessionSaveSpec"),
+        policy,
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
+      )
+      _ <- AppStartup.initializeState(editor, editor.sessionStartupInfo, Theme.default, ViewportSize(80, 24))
+      _ <- editor.applyEvent(Enter)
     yield editor
 
   private def bufferTexts(restored: Option[AppState]): List[String] =
@@ -45,7 +50,11 @@ class EditIdleSessionSaveSpec extends AnyFlatSpec with Matchers with StateManage
     SessionManager.create(sessionRoot, AppThemeManager.create, readerLogger, policy).loadSession().map(bufferTexts)
 
   private def restartedTexts(sessionRoot: Path): IO[List[String]] =
-    StateManager(testLogger("EditIdleSessionSaveSpec-restart"), sessionRootOverride = Some(sessionRoot))
+    StateManager(
+      testLogger("EditIdleSessionSaveSpec-restart"),
+      sessionRootOverride = Some(sessionRoot),
+      dictionaryCache = SharedDictionary.default
+    )
       .flatMap(_.sessionService.loadSession)
       .map(bufferTexts)
 

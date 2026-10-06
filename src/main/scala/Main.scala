@@ -12,7 +12,15 @@ import com.serenity.BuildInfo
 import com.serenity.app.*
 import com.serenity.app.LaunchReset.Moved
 import com.serenity.app.instance.{LaunchRole, SingleInstance}
-import com.serenity.config.{AppConfig, ConfigLoadResult, ConfigManager, ConfigMigrationReport, ConfigMigrationWarning}
+import com.serenity.config.{
+  AppConfig,
+  ConfigDiagnostic,
+  ConfigLoadResult,
+  ConfigManager,
+  ConfigMigrationReport,
+  ConfigMigrationWarning,
+  ConfigNotice
+}
 import com.serenity.diagnostics.{
   CrashRecord,
   CrashReport,
@@ -208,25 +216,23 @@ object Main extends IOApp:
       configResult <-
         if plan.safeMode then IO.pure(Right(ConfigLoadResult(SafeMode.config, ConfigMigrationReport.empty)))
         else ConfigManager.loadConfigResultIO()
-      // A config that cannot be read means this session runs on defaults -- every setting the user had, gone until
-      // they restart with a readable file. Keep their file aside before anything can overwrite it, and carry a notice
-      // the start page can show: the log line below is invisible in TUI mode, where stderr goes to nowhere.
-      configNotice <- configResult.fold(
-        error =>
-          logger.error(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}") >>
-            IO.blocking(ConfigManager.preserveUnreadableConfig(ConfigManager.defaultConfigPath)).map { preserved =>
-              val kept = preserved.fold("")(path => s" A copy was kept at $path.")
-              Some(s"Configuration could not be read, so this session is using defaults.$kept")
-            },
-        _ => IO.pure(None)
-      )
-      configLoad = configResult.getOrElse(
-        com.serenity.config.ConfigLoadResult(AppConfig.default, com.serenity.config.ConfigMigrationReport.empty)
+      // Only a file that cannot be parsed at all means defaults for the session. It is left exactly as it is, and
+      // saving is refused while it stays that way. Anything less costs only the settings that were invalid, and the
+      // start page names them: the log is invisible in TUI mode, where stderr goes to nowhere.
+      (loaded, configNotice) = ConfigNotice.forOutcome(ConfigManager.defaultConfigPath, configResult)
+      _ <- configResult.left.toOption.traverse_(error =>
+        logger.error(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}")
       )
       _ <- ConfigMigrationWarning
-        .message(ConfigManager.defaultConfigPath, configLoad.report)
+        .message(ConfigManager.defaultConfigPath, loaded.report)
         .fold(IO.unit)(message => logger.warn(message))
-      appConfig = resolveAppConfig(configLoad.config, launchOptions)
+      // The warning above already lists deprecated, unknown, removed and invalid entries.
+      _ <- loaded.report.diagnostics.collect {
+        case diagnostic @ (_: ConfigDiagnostic.ConflictingHotkey | _: ConfigDiagnostic.NewerFileVersion |
+            _: ConfigDiagnostic.Migrated) =>
+          logger.warn(s"[CONFIG] ${diagnostic.message}")
+      }.sequence_
+      appConfig = resolveAppConfig(loaded.config, launchOptions)
       startup   = Startup(plan, requestRestart, StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker))
       // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
       instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten

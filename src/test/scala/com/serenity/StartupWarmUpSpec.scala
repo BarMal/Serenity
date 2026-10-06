@@ -16,6 +16,7 @@ import com.serenity.lsp.model.SemanticToken
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, AppStateValidation, Damage, Focus}
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -102,10 +103,14 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
   it should "leave the session it starts from untouched, and clean up after itself" in {
     val sessionRoot = Files.createTempDirectory("serenity-warm-up-spec-session")
     val program = for
-      user <- StateManager.apply(NoOpLogger[IO], sessionRootOverride = Some(sessionRoot))
-      _    <- user.applyEvent(ResizeEvent(viewport))
-      _    <- "draft".toList.traverse_(char => user.applyEvent(InsertChar(char)))
-      _    <- user.runtimeLifecycle.awaitEffects
+      user <- StateManager.apply(
+        NoOpLogger[IO],
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
+      )
+      _ <- user.applyEvent(ResizeEvent(viewport))
+      _ <- "draft".toList.traverse_(char => user.applyEvent(InsertChar(char)))
+      _ <- user.runtimeLifecycle.awaitEffects
       before      = warmUpDirectories
       filesBefore = sessionFiles(sessionRoot)
       modelBefore <- user.getModel

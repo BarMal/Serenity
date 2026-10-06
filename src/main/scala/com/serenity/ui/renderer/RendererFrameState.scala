@@ -77,6 +77,17 @@ final case class CachedPanelLayer(
     frameRect: LayoutRect
 )
 
+/** What a frame's annotations are worked out from, compared by object identity: each part is an immutable value the
+  * state replaces rather than edits, so the same object is the same answer and nothing needs deep comparison.
+  */
+final class AnnotationInputs private (private val parts: Vector[AnyRef]):
+
+  def sameAs(other: AnnotationInputs): Boolean =
+    parts.length == other.parts.length && parts.lazyZip(other.parts).forall(_ eq _)
+
+object AnnotationInputs:
+  def apply(parts: AnyRef*): AnnotationInputs = new AnnotationInputs(parts.toVector)
+
 /** The render-plan cache entry [[RendererFramePlanner.prepareScene]] produces and cursor-only entry points reuse when
   * nothing that would invalidate it has changed.
   */
@@ -226,6 +237,28 @@ final class RendererFrameState(initialCapacity: Int):
     * -- it redraws in full, which is what a non-persisting surface does anyway.
     */
   private val preparedScenes = new BoundedRefCache[SurfaceContentIdentity, PreparedScene](cacheCapacity)
+
+  private val annotationMemos =
+    new BoundedRefCache[SurfaceContentIdentity, (AnnotationInputs, Map[BufferId, BufferRenderAnnotations])](
+      cacheCapacity
+    )
+
+  /** `compute`'s result for `inputs`, reused for as long as the surface's next frame is handed the very same inputs. A
+    * surface that persists nothing has no frame to carry it over to, so it works them out each time.
+    */
+  def annotationsFor(surface: RenderSurface, inputs: AnnotationInputs)(
+    compute: => Map[BufferId, BufferRenderAnnotations]
+  ): Map[BufferId, BufferRenderAnnotations] =
+    surface.persistentContentKey.fold(compute) { key =>
+      annotationMemos
+        .get(key)
+        .collect { case (previous, annotations) if previous.sameAs(inputs) => annotations }
+        .getOrElse {
+          val annotations = compute
+          annotationMemos.put(key, inputs -> annotations)
+          annotations
+        }
+    }
 
   def preparedSceneFor(surface: RenderSurface): Option[PreparedScene] =
     surface.persistentContentKey.flatMap(preparedScenes.get)

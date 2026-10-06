@@ -10,6 +10,7 @@ import com.serenity.config.ConfigManagerTestSupport
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.{FontConfig, TextScaleMode}
 import com.serenity.ui.layout.ViewportSize
@@ -104,7 +105,8 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
           onFontConfigChanged = config => IO(observed.updateAndGet(_ :+ config)),
           deviceTextScaleProvider = IO.pure(2.0),
           sessionRootOverride = Some(sessionRoot),
-          initialConfig = initialConfig
+          initialConfig = initialConfig,
+          dictionaryCache = SharedDictionary.cacheFor(initialConfig)
         )
         .unsafeRunSync()
 
@@ -156,7 +158,8 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
       StateManager
         .apply(
           testLogger("StateManagerFontConfigSpec"),
-          sessionRootOverride = Some(sessionRoot)
+          sessionRootOverride = Some(sessionRoot),
+          dictionaryCache = SharedDictionary.default
         )
         .unsafeRunSync()
 
@@ -178,7 +181,8 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
       StateManager
         .apply(
           testLogger("StateManagerFontConfigSpec"),
-          configPersistencePath = Some(configFile)
+          configPersistencePath = Some(configFile),
+          dictionaryCache = SharedDictionary.default
         )
         .unsafeRunSync()
 
@@ -201,7 +205,8 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
       StateManager
         .apply(
           testLogger("StateManagerFontConfigSpec"),
-          configPersistencePath = Some(configFile)
+          configPersistencePath = Some(configFile),
+          dictionaryCache = SharedDictionary.default
         )
         .unsafeRunSync()
 
