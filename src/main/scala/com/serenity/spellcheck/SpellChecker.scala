@@ -35,16 +35,23 @@ object SpellChecker:
     val normalized = config.normalized
     if !normalized.enabled then Nil
     else
-      // With no word list every word would be flagged; `DictionaryContext.missingDictionary` is what tells the writer.
+      // With no dictionary stems and a missing-dictionary notice every word would be flagged; the notice is what tells
+      // the writer. A notice alongside stems only names a language that went unserved, so the others are still checked.
       dictionaryLoadDiagnostics(dictionary.failures) ++
-        Option.when(dictionary.missingDictionary.isEmpty)(unknownWordDiagnostics(text, dictionary)).toList.flatten
+        Option
+          .when(dictionary.stems.nonEmpty || dictionary.missingDictionary.isEmpty)(
+            unknownWordDiagnostics(text, dictionary)
+          )
+          .toList
+          .flatten
 
   private def unknownWordDiagnostics(text: String, dictionary: DictionaryContext): List[Diagnostic] =
-    ProseTokenizer.lines(text).flatMap { line =>
-      line.words
-        .flatMap(word => misspelledParts(line.text, word, dictionary))
-        .map(misspelled => unknownWordDiagnostic(line.index, misspelled, dictionary))
-    }
+    ProseTokenizer.lines(text).flatMap(lineDiagnostics(_, dictionary))
+
+  private[spellcheck] def lineDiagnostics(line: ProseLine, dictionary: DictionaryContext): List[Diagnostic] =
+    line.words
+      .flatMap(word => misspelledParts(line.text, word, dictionary))
+      .map(misspelled => unknownWordDiagnostic(line.index, misspelled, dictionary))
 
   /** The parts of `word` to flag: all of it, or, for a hyphenated word that is not itself a dictionary word, only the
     * hyphen-separated parts that are wrong, as hunspell's default `BREAK` does.
@@ -100,14 +107,15 @@ object SpellChecker:
             val entry = state.runtime.languageService.diagnosticsState.spellCheckCache
               .get(uri)
               .filter(_.fingerprint == fingerprint)
-              .getOrElse {
-                val spellDiagnostics = analyzeText(
-                  buffer.document.content.collect(),
+              .getOrElse(
+                analyzedEntry(
+                  buffer,
                   state.persisted.config.languageToolsConfig.spellCheck,
+                  fingerprint,
+                  state.runtime.languageService.diagnosticsState.spellCheckCache.get(uri),
                   dictionary.context
                 )
-                SpellCheckCacheEntry(fingerprint, spellDiagnostics)
-              }
+              )
             val visible = withoutIgnored(buffer, uri, entry.diagnostics, ignores)
             val nextDiagnostics =
               if visible.isEmpty then diagnostics
@@ -123,6 +131,28 @@ object SpellChecker:
         )
       )
     )
+
+  /** `buffer`'s diagnostics, starting from `previous` -- what was found when it was last checked -- when only the text
+    * has changed since. The same words are flagged as in [[analyzeText]] over the whole text, but a one-character edit
+    * reads the line it is on instead of the document.
+    */
+  private def analyzedEntry(
+    buffer: Buffer,
+    config: SpellCheckConfig,
+    fingerprint: SpellCheckFingerprint,
+    previous: Option[SpellCheckCacheEntry],
+    dictionary: DictionaryContext
+  ): SpellCheckCacheEntry =
+    val loadFailures = dictionaryLoadDiagnostics(dictionary.failures)
+    if !config.normalized.enabled then SpellCheckCacheEntry(fingerprint, Nil)
+    else if dictionary.missingDictionary.nonEmpty then SpellCheckCacheEntry(fingerprint, loadFailures)
+    else
+      val analysis = ParagraphSpellCheck.analyze(
+        buffer.document.content,
+        previous.filter(_.fingerprint.sameDictionaryAndConfig(fingerprint)).flatMap(_.analysis),
+        dictionary
+      )
+      SpellCheckCacheEntry(fingerprint, loadFailures ++ analysis.unknownWords, Some(analysis))
 
   /** Pure: `dictionaryFingerprints` must be discovered once (via `SpellCheckConfig.discoverDictionaryFingerprints` or
     * `DictionaryLoader.loadSnapshot`, both `IO.blocking`) and passed in -- this method never reads the filesystem, so

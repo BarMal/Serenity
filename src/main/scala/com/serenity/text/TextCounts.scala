@@ -42,13 +42,22 @@ object TextCounts:
   private val threadLocalCharacters: ThreadLocal[BreakIterator] =
     ThreadLocal.withInitial(() => BreakIterator.getCharacterInstance())
 
-  private val segmentationRuns = new java.util.concurrent.atomic.AtomicLong(0L)
+  // One cell per thread, so counting costs a thread-local read and an increment, and no thread sees another's runs.
+  private val threadLocalSegmentations: ThreadLocal[Array[Long]] =
+    ThreadLocal.withInitial(() => new Array[Long](1))
 
-  /** How many texts have been segmented so far; lets specs prove that building or editing a rope segments nothing. */
-  private[serenity] def segmentationCount: Long = segmentationRuns.get()
+  /** Runs `body` and returns its result with how many texts the calling thread segmented meanwhile; lets specs prove
+    * that building or editing a rope segments nothing. Work other threads do concurrently is not counted, and neither
+    * is work `body` hands to another thread.
+    */
+  private[serenity] def countSegmentations[A](body: => A): (A, Long) =
+    val runs   = threadLocalSegmentations.get()
+    val before = runs(0)
+    val result = body
+    (result, runs(0) - before)
 
   def of(text: String): TextCounts =
-    segmentationRuns.incrementAndGet()
+    threadLocalSegmentations.get()(0) += 1
     val characters = threadLocalCharacters.get()
     characters.setText(text)
     val words = threadLocalWords.get()

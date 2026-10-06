@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.*
 import java.util.UUID
 
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.jdk.CollectionConverters.*
 import scala.util.Try
 
@@ -21,7 +21,9 @@ class SessionManager(
     sessionRoot: Path,
     themeManager: AppThemeManager,
     logger: Logger[IO],
-    policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()
+    policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy(),
+    clock: IO[FiniteDuration] = IO.realTime,
+    attributes: FileStamp.Attributes = FileStamp.filesystem
 ):
 
   private val indexFile: Path         = sessionRoot.resolve("session-index.json")
@@ -281,10 +283,11 @@ class SessionManager(
       case false => IO.pure(SessionIndex.empty)
       case true =>
         for
-          stamp  <- IO.blocking(FileStamp.read(indexFile))
+          stamp  <- FileStamp.observe(indexFile, clock, attributes)
           cached <- indexCache.get
           index <- (stamp, cached) match
-            case (Some(current), Some((cachedStamp, cachedIndex))) if current == cachedStamp => IO.pure(cachedIndex)
+            case (Some(current), Some((cachedStamp, cachedIndex))) if current.stamp == cachedStamp =>
+              IO.pure(cachedIndex)
             case _ =>
               readUtf8(indexFile)
                 .flatMap(jsonString => IO.fromEither(_root_.io.circe.parser.decode[SessionIndex](jsonString)))
@@ -295,14 +298,12 @@ class SessionManager(
     }
 
   private def remember(index: SessionIndex): IO[Unit] =
-    IO.blocking(FileStamp.read(indexFile)).flatMap(cache(_, index))
+    FileStamp.observe(indexFile, clock, attributes).flatMap(cache(_, index))
 
   // The stamp is taken before the read, and kept only when it can vouch for the content: see
   // FileStamp.vouchesForContent.
-  private def cache(stamp: Option[FileStamp], index: SessionIndex): IO[Unit] =
-    IO.realTime.flatMap(now =>
-      indexCache.set(stamp.filter(FileStamp.vouchesForContent(_, now.toNanos)).map(_ -> index))
-    )
+  private def cache(stamp: Option[FileStamp.Observed], index: SessionIndex): IO[Unit] =
+    indexCache.set(stamp.filter(_.vouches).map(_.stamp -> index))
 
   private def sanitizeIndex(index: SessionIndex): IO[SessionIndex] =
     index.sessions
@@ -397,17 +398,18 @@ class SessionManager(
   private def isUnchanged(sessionFileName: String, index: SessionIndex, state: SessionState): IO[Boolean] =
     lastSaved.get.flatMap {
       case Some(saved) if saved.matches(sessionFileName, index, state) =>
-        IO.blocking(safeSessionPath(sessionFileName).flatMap(FileStamp.read)).map(_ == Some(saved.sessionFileStamp))
+        IO.blocking(safeSessionPath(sessionFileName).flatMap(FileStamp.read(_, attributes)))
+          .map(_ == Some(saved.sessionFileStamp))
       case _ => IO.pure(false)
     }
 
   private def commitCurrent(sessionFileName: String, state: SessionState, index: SessionIndex): IO[Unit] =
     commitTransaction(Map(sessionFileName -> stateEncoder.compact(state)), Nil, index) >>
-      IO.realTime.flatMap(now =>
-        IO.blocking(safeSessionPath(sessionFileName).flatMap(FileStamp.read)).flatMap { stamp =>
+      clock.flatMap(observedAt =>
+        IO.blocking(safeSessionPath(sessionFileName).flatMap(FileStamp.read(_, attributes))).flatMap { stamp =>
           lastSaved.set(
             stamp
-              .filter(FileStamp.vouchesForContent(_, now.toNanos))
+              .filter(FileStamp.vouchesForContent(_, observedAt.toNanos))
               .map(SessionManager.SavedSession(sessionFileName, index, state, _))
           )
         }
