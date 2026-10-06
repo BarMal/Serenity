@@ -34,6 +34,10 @@ object ConfigFileFormat:
       }
       .mkString("", "\n", "\n")
 
+  /** Every setting [[render]] would write, in the order it writes them. */
+  def settings(config: AppConfig): List[(String, HoconValue)] =
+    lines(config).collect { case Right(setting) => setting }
+
   /** The settings [[render]] would emit that reading the file back would not return, empty when there are none.
     *
     * A key at a path that also has children (`editor.cursor` alongside `editor.cursor.mode`) is not an error to the

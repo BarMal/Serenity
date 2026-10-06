@@ -492,7 +492,9 @@ object HotkeyConfig:
         config.commandBindings.toList.sortBy(_._1).map((commandId, triggers) => s"command.$commandId" -> triggers)
     )
 
-  private def actionTargets(bindings: Map[HotkeyAction, List[HotkeyTrigger]]): List[(String, List[HotkeyTrigger])] =
+  private[config] def actionTargets(
+    bindings: Map[HotkeyAction, List[HotkeyTrigger]]
+  ): List[(String, List[HotkeyTrigger])] =
     bindings.toList.map((action, triggers) => action.configKey -> triggers)
 
   private def conflictIn(targets: List[(String, List[HotkeyTrigger])]): Either[String, Unit] =
