@@ -1,11 +1,11 @@
 package com.serenity.lsp.client
 
-import scala.annotation.tailrec
-
 import java.io.{InputStream, OutputStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardCopyOption, StandardOpenOption}
 import java.time.Instant
+
+import scala.annotation.tailrec
 
 import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
