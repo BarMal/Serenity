@@ -208,11 +208,14 @@ object DictionaryLoader:
     cache.mergedFor(
       DictionaryMergeInputs(normalized, fingerprints, bundled.map(_.name)),
       () =>
+        val sourceResults  = sourcePaths.map(loadDictionary(_, cache))
+        val bundledResults = bundled.map(loadBundled(_, cache))
         mergeSnapshot(
           normalized,
-          sourcePaths.map(loadDictionary(_, cache)) ++ bundled.map(loadBundled(_, cache)),
+          sourceResults ++ bundledResults,
           fingerprints,
-          osDictionaryDirectories
+          osDictionaryDirectories,
+          unresolvedLanguages(normalized, sourcePaths.zip(sourceResults), bundled.zip(bundledResults))
         )
     )
 
@@ -220,7 +223,8 @@ object DictionaryLoader:
     normalized: SpellCheckConfig,
     externalResults: List[DictionaryLoadResult],
     fingerprints: List[SpellCheckDictionaryFingerprint],
-    osDictionaryDirectories: List[String]
+    osDictionaryDirectories: List[String],
+    unresolved: Option[List[String]]
   ): DictionarySnapshot =
     val stems = externalResults.map(_.wordList).filterNot(_.isEmpty)
     val externalReplacements =
@@ -275,22 +279,60 @@ object DictionaryLoader:
       compoundWordMax = compoundWordMax,
       compoundFlagTrie = compoundFlagTrie,
       compoundCheckRules = compoundCheckRules,
-      missingDictionary = Option.when(stems.isEmpty && fallbackWords.isEmpty)(
-        missingDictionaryNotice(normalized, osDictionaryDirectories)
+      missingDictionary = languagesToAnnounce(normalized, stems.nonEmpty, fallbackWords.nonEmpty, unresolved).map(
+        missingDictionaryNotice(normalized, _, osDictionaryDirectories)
       )
     )
     DictionarySnapshot(context, fingerprints)
 
-  private def missingDictionaryNotice(config: SpellCheckConfig, osDictionaryDirectories: List[String]): String =
+  /** The configured languages no loaded dictionary serves, or `None` when a loaded dictionary is not named for any
+    * configured language (a bare `words.dic` path) and so cannot be said to leave a particular language unserved.
+    */
+  private def unresolvedLanguages(
+    config: SpellCheckConfig,
+    sources: List[(Path, DictionaryLoadResult)],
+    bundled: List[(BundledDictionary, DictionaryLoadResult)]
+  ): Option[List[String]] =
+    val requested = config.languages.map(BundledDictionary.languageKey).toSet
+    val loadedNames = sources
+      .collect { case (path, result) if !result.wordList.isEmpty => path }
+      .map(BundledDictionary.dictionaryLanguage)
+    val servedByBundled = bundled.collect {
+      case (dictionary, result) if !result.wordList.isEmpty => dictionary.languages
+    }.flatten
+    Option.when(loadedNames.forall(_.exists(requested.contains))) {
+      val served = loadedNames.flatten.toSet ++ servedByBundled
+      config.languages.filterNot(language => served.contains(BundledDictionary.languageKey(language)))
+    }
+
+  /** Every configured language when nothing at all resolved; otherwise only the unserved ones, and only while some
+    * dictionary did load (a built-in fallback list is too small to count as serving a language).
+    */
+  private def languagesToAnnounce(
+    config: SpellCheckConfig,
+    hasStems: Boolean,
+    hasFallbackWords: Boolean,
+    unresolved: Option[List[String]]
+  ): Option[List[String]] =
+    if !hasStems && !hasFallbackWords then Some(config.languages)
+    else if hasStems && config.enabled then unresolved.filter(_.nonEmpty)
+    else None
+
+  private def missingDictionaryNotice(
+    config: SpellCheckConfig,
+    missing: List[String],
+    osDictionaryDirectories: List[String]
+  ): String =
     val searched = if config.dictionaryPaths.nonEmpty then config.dictionaryPaths else osDictionaryDirectories
     List(
-      s"Spell check found no dictionary for ${config.languages.mkString(", ")}.",
+      s"Spell check found no dictionary for ${missing.mkString(", ")}.",
       s"Searched: ${if searched.isEmpty then "nowhere" else searched.mkString(", ")}",
-      s"Install a Hunspell dictionary (for example ${suggestedPackage(config)}) or set spellcheck.dictionary_paths."
+      s"Install a Hunspell dictionary (for example ${suggestedPackages(missing)}) or set spellcheck.dictionary_paths."
     ).mkString("\n")
 
-  private def suggestedPackage(config: SpellCheckConfig): String =
-    config.languages.headOption.fold("hunspell-en-gb")(language => s"hunspell-${language.toLowerCase(Locale.ROOT)}")
+  private def suggestedPackages(languages: List[String]): String =
+    if languages.isEmpty then "hunspell-en-gb"
+    else languages.map(language => s"hunspell-${language.toLowerCase(Locale.ROOT)}").mkString(", ")
 
   private def loadDictionary(path: Path, cache: DictionaryCache): DictionaryLoadResult =
     val dependencyPaths = SpellCheckConfig.dictionaryDependencyPaths(List(path))

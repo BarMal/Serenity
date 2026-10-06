@@ -70,11 +70,11 @@ private[spellcheck] object BundledDictionary:
     val supplied  = sourcePaths.flatMap(dictionaryLanguage).toSet
     all.filter(dictionary => dictionary.languages.exists(requested.contains) && !dictionary.languages.exists(supplied))
 
-  private def dictionaryLanguage(path: Path): Option[String] =
+  def dictionaryLanguage(path: Path): Option[String] =
     Option(path.getFileName)
       .map(_.toString)
       .filter(_.toLowerCase.endsWith(".dic"))
       .map(name => languageKey(name.dropRight(4)))
 
-  private def languageKey(tag: String): String =
+  def languageKey(tag: String): String =
     tag.trim.toLowerCase.replace('_', '-')

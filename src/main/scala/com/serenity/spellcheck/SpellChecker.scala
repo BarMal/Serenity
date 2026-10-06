@@ -35,9 +35,15 @@ object SpellChecker:
     val normalized = config.normalized
     if !normalized.enabled then Nil
     else
-      // With no word list every word would be flagged; `DictionaryContext.missingDictionary` is what tells the writer.
+      // With no dictionary stems and a missing-dictionary notice every word would be flagged; the notice is what tells
+      // the writer. A notice alongside stems only names a language that went unserved, so the others are still checked.
       dictionaryLoadDiagnostics(dictionary.failures) ++
-        Option.when(dictionary.missingDictionary.isEmpty)(unknownWordDiagnostics(text, dictionary)).toList.flatten
+        Option
+          .when(dictionary.stems.nonEmpty || dictionary.missingDictionary.isEmpty)(
+            unknownWordDiagnostics(text, dictionary)
+          )
+          .toList
+          .flatten
 
   private def unknownWordDiagnostics(text: String, dictionary: DictionaryContext): List[Diagnostic] =
     ProseTokenizer.lines(text).flatMap { line =>
