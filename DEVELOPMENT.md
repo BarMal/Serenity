@@ -57,12 +57,12 @@ sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 To cut a release, rename `[Unreleased]` to the version heading and add a fresh empty `## [Unreleased]` above it. The
 release workflow publishes the matching section as the release notes and fails if it is missing or empty.
 
-`ChangelogSectionsSpec` fails when the file has no `[Unreleased]` section or a malformed heading. To preview the notes for
-a version, or for the unreleased section:
+`ChangelogSectionsSpec` fails when the file has no `[Unreleased]` section or a malformed heading. To write the notes for
+a version, or for the unreleased section, to a file (the release workflow publishes that file):
 
 ```bash
-sbt "Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md 1.2.0"
-sbt "Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md --unreleased"
+sbt "Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md 1.2.0 notes.md"
+sbt "Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md --unreleased notes.md"
 ```
 
 ## Automated standards
