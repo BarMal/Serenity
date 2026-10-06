@@ -84,8 +84,8 @@ private[manager] class StateManagerComposition(
   // instance shared by all three, rather than `events` building its own as it used to.
   private val undoRecording = new UndoRecording(new UndoRecordingPort:
     def updateUndo(update: UndoState => UndoState): IO[Unit] = modelCommit.updateUndo(update)
-    def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
-      modelCommit.updateValidated(transition))
+    def updateModelPlaced(transition: Model => Option[Model]): IO[Unit] =
+      modelCommit.updateValidatedPlaced(transition))
 
   private val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
     def currentState: IO[AppState] = modelCommit.currentState

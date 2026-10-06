@@ -120,8 +120,8 @@ class TypedKeyPathParitySpec extends AnyFlatSpec with Matchers:
     val accepted = new ConcurrentLinkedQueue[Model]()
     val events   = stateManager.composition.events
     val recording = TypedRuns(
-      (event, model, nowNanos, joining) =>
-        events.typedRunStep(event, model, nowNanos, joining).map { typed =>
+      (event, model, nowNanos) =>
+        events.typedRunStep(event, model, nowNanos).map { typed =>
           accepted.add(typed); typed
         },
       events.commitTypedRun,

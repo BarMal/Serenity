@@ -7,7 +7,7 @@ import com.serenity.state.undo.{HistoryEntry, UndoState}
 /** State the event pipeline exposes for recording and replaying undo/redo history. */
 private[manager] trait UndoRecordingPort:
   def updateUndo(update: UndoState => UndoState): IO[Unit]
-  def updateModelValidated(transition: Model => Option[Model]): IO[Unit]
+  def updateModelPlaced(transition: Model => Option[Model]): IO[Unit]
 
 /** Records undoable changes and replays undo/redo history, independent of event dispatch and focus routing.
   * `recordUndoBoundary` applies the fact a reducer (or other direct call site, e.g. the replace workflow) already
@@ -24,10 +24,10 @@ final private[manager] class UndoRecording(port: UndoRecordingPort):
     updateUndo(UndoRecording.recorded(_, entry, groupable))
 
   def applyUndo(@annotation.unused prevState: AppState): IO[Unit] =
-    updateModelValidated(UndoRecording.undone)
+    updateModelPlaced(UndoRecording.undone)
 
   def applyRedo(@annotation.unused prevState: AppState): IO[Unit] =
-    updateModelValidated(UndoRecording.redone)
+    updateModelPlaced(UndoRecording.redone)
 
 private[manager] object UndoRecording:
 
