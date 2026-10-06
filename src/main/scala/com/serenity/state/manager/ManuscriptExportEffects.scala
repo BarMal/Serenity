@@ -3,8 +3,9 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.IO
+import com.serenity.command.ManuscriptExportRequest
 import com.serenity.io.{FileDialog, FileUtils}
-import com.serenity.manuscript.SourceDocument
+import com.serenity.manuscript.{ManuscriptFileFormat, SourceDocument}
 import com.serenity.publish.{ExportOrigin, ManuscriptExport}
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.{AppState, Buffer}
@@ -17,10 +18,21 @@ final private[manager] class ManuscriptExportEffects(
     logger: Logger[IO],
     fileDialog: Option[FileDialog],
     lanes: EffectLanePort,
-    writeDocx: (ExportOrigin, Path) => IO[Unit] = ManuscriptExport.writeDocx
+    currentState: IO[AppState],
+    commitState: (AppState, AppState) => IO[Unit],
+    writeDocx: (ExportOrigin, Path) => IO[Unit] = ManuscriptExport.writeDocx,
+    writeEpub: (ExportOrigin, Path) => IO[Unit] = ManuscriptExport.writeEpub
 ):
 
-  def exportFocused(state: AppState): IO[Unit] =
+  def run(request: ManuscriptExportRequest, state: AppState): IO[Unit] =
+    request match
+      case ManuscriptExportRequest.ChooseFormat =>
+        currentState.flatMap(current =>
+          ManuscriptExportPicker.withPickerOpened(current).fold(IO.unit)(commitState(_, current))
+        )
+      case ManuscriptExportRequest.As(format) => exportFocused(state, format)
+
+  def exportFocused(state: AppState, format: ManuscriptFileFormat = ManuscriptFileFormat.Docx): IO[Unit] =
     state.focusedBufferId.flatMap(state.persisted.buffers.get) match
       case None => logger.debug("[EXPORT] Export Manuscript requested without a focused buffer")
       case Some(buffer) =>
@@ -30,19 +42,24 @@ final private[manager] class ManuscriptExportEffects(
           case Some(dialog) =>
             lanes.submitEffect(
               ManuscriptExportEffects.DialogLane,
-              chooseAndWrite(dialog, ManuscriptExportEffects.originOf(buffer))
+              chooseAndWrite(dialog, ManuscriptExportEffects.originOf(buffer), format)
             )
 
-  private def chooseAndWrite(dialog: FileDialog, origin: ExportOrigin): IO[Unit] =
+  private def writer(format: ManuscriptFileFormat): (ExportOrigin, Path) => IO[Unit] =
+    format match
+      case ManuscriptFileFormat.Docx => writeDocx
+      case ManuscriptFileFormat.Epub => writeEpub
+
+  private def chooseAndWrite(dialog: FileDialog, origin: ExportOrigin, format: ManuscriptFileFormat): IO[Unit] =
     origin.path
       .flatMap(path => Option(path.toAbsolutePath.getParent))
       .fold(FileUtils.getCurrentDirectory)(IO.pure)
       .flatMap(directory =>
-        dialog.chooseSaveFile(Some(directory), Some(ManuscriptExport.suggestedFileName(origin.path)))
+        dialog.chooseSaveFile(Some(directory), Some(ManuscriptExport.suggestedFileName(origin.path, format)))
       )
       .flatMap {
         case Some(target) =>
-          writeDocx(origin, target) >> logger.info(s"[EXPORT] Exported manuscript to $target")
+          writer(format)(origin, target) >> logger.info(s"[EXPORT] Exported manuscript to $target")
         case None => IO.unit
       }
       .handleErrorWith(error => logger.error(error)(s"[EXPORT] Manuscript export failed: ${error.getMessage}"))

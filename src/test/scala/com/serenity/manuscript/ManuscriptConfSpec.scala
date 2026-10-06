@@ -12,6 +12,15 @@ class ManuscriptConfSpec extends AnyFlatSpec with Matchers with EitherValues:
     ManuscriptConf.decode("", defaults).value shouldBe defaults
   }
 
+  it should "decode the e-book language and identifier, trimmed, and ignore blank ones" in {
+    val configured =
+      ManuscriptConf.decode("language = \" fr-CA \"\nidentifier = \" urn:isbn:9780000000002 \"", defaults).value
+    val blank = ManuscriptConf.decode("language = \" \"\nidentifier = \"\"", defaults).value
+
+    (configured.language, configured.identifier) shouldBe ("fr-CA", Some("urn:isbn:9780000000002"))
+    (blank.language, blank.identifier) shouldBe ("en", None)
+  }
+
   it should "decode every key" in {
     val conf =
       """title = "The Long Night"

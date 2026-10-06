@@ -14,7 +14,7 @@ private[command] object CommandRegistryFileCommands:
       label = "Save As"
     )
 
-  private[command] def fileCommands: List[Command] = List(
+  private[command] def fileCommands: List[Command] = ManuscriptExportCommands.all ++ List(
     Command.typed(
       "open-settings",
       "Browse, search, inspect, and change application settings.",
@@ -30,13 +30,6 @@ private[command] object CommandRegistryFileCommands:
       label = "Save"
     ),
     saveAs,
-    Command.typed(
-      "export-manuscript",
-      "Export the current document, or the book its manuscript.conf lists, in standard manuscript format (DOCX).",
-      CommandIntent.File(FileIntent.ExportManuscript),
-      CommandCategory.File,
-      label = "Export Manuscript..."
-    ),
     ReopenWithEncodingCommands.chooseEncoding,
     Command.typed(
       "save-config",

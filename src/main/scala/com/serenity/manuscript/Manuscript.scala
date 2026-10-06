@@ -24,6 +24,8 @@ object AuthorName:
     AuthorName(trimmed, trimmed.split("\\s+").lastOption.getOrElse(""))
 
 /** `shortTitle` is the running-header keyword; `byline` is the name printed under the title, which may be a pen name.
+  * `language` is a BCP 47 tag and `identifier` a book's permanent id, both for reflowable formats; with no identifier
+  * the EPUB writer derives a stable one from the title and author.
   */
 final case class ManuscriptMeta(
     title: String,
@@ -32,7 +34,9 @@ final case class ManuscriptMeta(
     byline: String,
     contact: List[String],
     wordCount: Int,
-    wordCountRounding: WordCountRounding
+    wordCountRounding: WordCountRounding,
+    language: String = "en",
+    identifier: Option[String] = None
 ):
   def wordCountLine: String = wordCountRounding.describe(wordCount)
 
@@ -54,6 +58,11 @@ enum WordCountRounding(val key: String, val unit: Int):
 object WordCountRounding:
   def fromKey(key: String): Option[WordCountRounding] =
     WordCountRounding.values.find(_.key == key.trim.toLowerCase)
+
+/** The files a manuscript can be exported as. */
+enum ManuscriptFileFormat(val key: String, val extension: String, val label: String):
+  case Docx extends ManuscriptFileFormat("docx", "docx", "Word document (DOCX)")
+  case Epub extends ManuscriptFileFormat("epub", "epub", "E-book (EPUB 3)")
 
 enum FrontMatter:
   case TitlePage

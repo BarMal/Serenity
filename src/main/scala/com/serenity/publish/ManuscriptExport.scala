@@ -2,12 +2,22 @@ package com.serenity.publish
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
+import java.time.Instant
 
-import cats.effect.IO
+import cats.effect.{Clock, IO}
 import cats.syntax.all.*
 import com.serenity.io.{AtomicFileWriter, FileType}
 import com.serenity.manuscript.docx.ManuscriptDocxWriter
-import com.serenity.manuscript.{CompileError, CompileSpec, ManuscriptCompiler, ManuscriptConf, SourceDocument}
+import com.serenity.manuscript.epub.ManuscriptEpubWriter
+import com.serenity.manuscript.{
+  CompileError,
+  CompileSpec,
+  Manuscript,
+  ManuscriptCompiler,
+  ManuscriptConf,
+  ManuscriptFileFormat,
+  SourceDocument
+}
 import com.serenity.richtext.{DocxDocumentCodec, OdtDocumentCodec, RtfDocumentCodec}
 
 final class ManuscriptExportException(val error: CompileError) extends RuntimeException(error.message)
@@ -16,28 +26,38 @@ final class ManuscriptExportException(val error: CompileError) extends RuntimeEx
 final case class ExportOrigin(path: Option[Path], snapshot: SourceDocument)
 
 /** The shell around the pure compiler and writer: finds `manuscript.conf`, reads the sources it names, and writes the
-  * DOCX. Nothing here touches the editor's buffers; the origin is a snapshot taken before the export starts.
+  * DOCX or EPUB. Nothing here touches the editor's buffers; the origin is a snapshot taken before the export starts.
   */
 object ManuscriptExport:
 
   /** The draft's own name is never offered, so an export cannot overwrite the source it came from. */
-  def suggestedFileName(origin: Option[Path]): String =
-    origin.flatMap(stemOf).fold("manuscript.docx")(stem => s"$stem-manuscript.docx")
+  def suggestedFileName(origin: Option[Path], format: ManuscriptFileFormat = ManuscriptFileFormat.Docx): String =
+    origin.flatMap(stemOf).fold(s"manuscript.${format.extension}")(stem => s"$stem-manuscript.${format.extension}")
 
   def writeDocx(origin: ExportOrigin, target: Path): IO[Unit] =
     compiledDocx(origin).flatMap(AtomicFileWriter.writeBytes(target, _))
 
+  /** The EPUB's `dcterms:modified` is the time of this export. */
+  def writeEpub(origin: ExportOrigin, target: Path): IO[Unit] =
+    Clock[IO].realTimeInstant.flatMap(compiledEpub(origin, _)).flatMap(AtomicFileWriter.writeBytes(target, _))
+
+  def compiledDocx(origin: ExportOrigin): IO[Array[Byte]] =
+    compiled(origin).map((spec, manuscript) => ManuscriptDocxWriter.write(manuscript, spec.format))
+
+  def compiledEpub(origin: ExportOrigin, modified: Instant): IO[Array[Byte]] =
+    compiled(origin).map((_, manuscript) => ManuscriptEpubWriter.write(manuscript, modified))
+
   /** With a `manuscript.conf` beside the origin that lists sources, those are the book, read in order -- the origin's
     * own entry from the snapshot, so unsaved edits are exported. Otherwise the book is the origin alone.
     */
-  def compiledDocx(origin: ExportOrigin): IO[Array[Byte]] =
+  private def compiled(origin: ExportOrigin): IO[(CompileSpec, Manuscript)] =
     for
       spec <- specFor(origin)
       sources <- spec.includedSourcePaths match
         case Nil   => IO.pure(List(origin.snapshot))
         case paths => paths.traverse(readSource(origin, confDirectory(origin), _))
       manuscript <- IO.fromEither(ManuscriptCompiler.compile(spec, sources).leftMap(ManuscriptExportException(_)))
-    yield ManuscriptDocxWriter.write(manuscript, spec.format)
+    yield (spec, manuscript)
 
   private def confDirectory(origin: ExportOrigin): Option[Path] =
     origin.path.flatMap(path => Option(path.toAbsolutePath.getParent))

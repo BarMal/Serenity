@@ -5,7 +5,7 @@ import java.nio.file.Path
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.io.FileDialog
-import com.serenity.manuscript.SourceDocument
+import com.serenity.manuscript.{ManuscriptFileFormat, SourceDocument}
 import com.serenity.publish.ExportOrigin
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Rope
@@ -52,6 +52,8 @@ class ManuscriptExportEffectsSpec extends AnyFlatSpec with Matchers:
         NoOpLogger[IO],
         Some(dialog(Some(target), asked)),
         immediateLanes,
+        IO.pure(AppState.initial),
+        (_, _) => IO.unit,
         (origin, path) => written.update(_ :+ (origin -> path))
       )
       _         <- effects.exportFocused(stateWith(markdownBuffer(draft, "# One\n\nText.")))
@@ -65,6 +67,31 @@ class ManuscriptExportEffectsSpec extends AnyFlatSpec with Matchers:
     writes shouldBe List(ExportOrigin(Some(draft), SourceDocument.Markdown("# One\n\nText.")) -> target)
   }
 
+  it should "offer an .epub name and use the EPUB writer when asked for an EPUB" in {
+    val draft  = Path.of("/books/novel.md").toAbsolutePath
+    val target = Path.of("/books/out.epub").toAbsolutePath
+    val run = for
+      asked <- Ref.of[IO, List[(Option[Path], Option[String])]](Nil)
+      docx  <- Ref.of[IO, Int](0)
+      epub  <- Ref.of[IO, List[Path]](Nil)
+      effects = ManuscriptExportEffects(
+        NoOpLogger[IO],
+        Some(dialog(Some(target), asked)),
+        immediateLanes,
+        IO.pure(AppState.initial),
+        (_, _) => IO.unit,
+        (_, _) => docx.update(_ + 1),
+        (_, path) => epub.update(_ :+ path)
+      )
+      _         <- effects.exportFocused(stateWith(markdownBuffer(draft, "# One\n\nText.")), ManuscriptFileFormat.Epub)
+      questions <- asked.get
+      docxCount <- docx.get
+      epubPaths <- epub.get
+    yield (questions, docxCount, epubPaths)
+
+    run.unsafeRunSync() shouldBe (List(Some(draft.getParent) -> Some("novel-manuscript.epub")), 0, List(target))
+  }
+
   it should "write nothing when the dialog is cancelled, and log rather than raise a failed export" in {
     val run = for
       asked   <- Ref.of[IO, List[(Option[Path], Option[String])]](Nil)
@@ -73,12 +100,16 @@ class ManuscriptExportEffectsSpec extends AnyFlatSpec with Matchers:
         NoOpLogger[IO],
         Some(dialog(None, asked)),
         immediateLanes,
+        IO.pure(AppState.initial),
+        (_, _) => IO.unit,
         (_, _) => written.update(_ + 1)
       )
       failing = ManuscriptExportEffects(
         NoOpLogger[IO],
         Some(dialog(Some(Path.of("out.docx")), asked)),
         immediateLanes,
+        IO.pure(AppState.initial),
+        (_, _) => IO.unit,
         (_, _) => IO.raiseError(RuntimeException("disk full"))
       )
       _      <- cancelled.exportFocused(AppState.initial)

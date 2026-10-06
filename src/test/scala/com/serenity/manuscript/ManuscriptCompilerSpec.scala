@@ -76,6 +76,14 @@ class ManuscriptCompilerSpec extends AnyFlatSpec with Matchers with EitherValues
     manuscript.endMarker shouldBe Some("END")
   }
 
+  it should "carry the e-book language and identifier into the meta" in {
+    val manuscript =
+      compiled(plain.copy(language = "de", identifier = Some("urn:uuid:1b4e28ba-2fa1-11d2-883f-0016d3cca427")), "# One")
+
+    (manuscript.meta.language, manuscript.meta.identifier) shouldBe
+      ("de", Some("urn:uuid:1b4e28ba-2fa1-11d2-883f-0016d3cca427"))
+  }
+
   it should "educate punctuation across run boundaries but not inside code" in {
     val manuscript = compiled(plain.copy(transforms = List(TextTransform.SmartPunctuation)), "\"*Now*\" -- `\"x\"`")
 

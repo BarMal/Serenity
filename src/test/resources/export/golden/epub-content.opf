@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="en">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="book-id">urn:uuid:097f6f35-5cc5-3ca2-9dea-ad75e28c3d59</dc:identifier>
+    <dc:title>The Long Night</dc:title>
+    <dc:language>en</dc:language>
+    <dc:creator>Jane Q. Writer</dc:creator>
+    <meta property="dcterms:modified">2026-10-05T12:30:00Z</meta>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="style" href="css/style.css" media-type="text/css"/>
+    <item id="titlepage" href="text/titlepage.xhtml" media-type="application/xhtml+xml"/>
+    <item id="dedication" href="text/dedication.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter-001" href="text/chapter-001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter-002" href="text/chapter-002.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="titlepage"/>
+    <itemref idref="dedication"/>
+    <itemref idref="chapter-001"/>
+    <itemref idref="chapter-002"/>
+  </spine>
+</package>

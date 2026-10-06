@@ -34,7 +34,9 @@ object ManuscriptCompiler:
       byline = spec.byline.getOrElse(spec.author.legal),
       contact = spec.contact,
       wordCount = ManuscriptText.wordCount(body),
-      wordCountRounding = spec.wordCountRounding
+      wordCountRounding = spec.wordCountRounding,
+      language = spec.language,
+      identifier = spec.identifier
     )
 
   private def frontMatter(spec: CompileSpec): List[FrontMatter] =

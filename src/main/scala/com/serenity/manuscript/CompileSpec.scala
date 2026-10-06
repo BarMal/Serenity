@@ -101,7 +101,9 @@ final case class CompileSpec(
     wordCountRounding: WordCountRounding,
     dedication: Option[String],
     endMarker: Option[String],
-    format: ManuscriptFormat
+    format: ManuscriptFormat,
+    language: String = "en",
+    identifier: Option[String] = None
 ):
   def includedSourcePaths: List[String] =
     sources.filter(_.include).map(_.path)

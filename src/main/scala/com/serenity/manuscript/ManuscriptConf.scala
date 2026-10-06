@@ -27,6 +27,8 @@ import pureconfig.{ConfigReader, ConfigSource}
   * word-count = "novel"             # novel | short-fiction | exact
   * dedication = "For M."
   * end-marker = "END"               # "" for none
+  * language = "en"                  # BCP 47 tag, for EPUB
+  * identifier = "urn:uuid:..."      # EPUB's permanent book id; derived from title and author when absent
   * }}}
   */
 object ManuscriptConf:
@@ -57,7 +59,9 @@ object ManuscriptConf:
       titlePage: Option[Boolean],
       wordCount: Option[String],
       dedication: Option[String],
-      endMarker: Option[String]
+      endMarker: Option[String],
+      language: Option[String],
+      identifier: Option[String]
   ) derives ConfigReader
 
   def decode(text: String, defaults: CompileSpec): Either[CompileError, CompileSpec] =
@@ -98,7 +102,9 @@ object ManuscriptConf:
         wordCountRounding = rounding.getOrElse(defaults.wordCountRounding),
         dedication = conf.dedication.orElse(defaults.dedication),
         endMarker = conf.endMarker.fold(defaults.endMarker)(marker => Option(marker.trim).filter(_.nonEmpty)),
-        format = preset.copy(paper = paper)
+        format = preset.copy(paper = paper),
+        language = conf.language.map(_.trim).filter(_.nonEmpty).getOrElse(defaults.language),
+        identifier = conf.identifier.map(_.trim).filter(_.nonEmpty).orElse(defaults.identifier)
       )
 
   private def sectionRules(conf: ConfFile, defaults: SectionRules): Either[CompileError, SectionRules] =

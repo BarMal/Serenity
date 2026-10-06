@@ -1,9 +1,12 @@
 package com.serenity.publish
 
+import java.io.ByteArrayInputStream
 import java.nio.file.{Files, Path}
+import java.time.Instant
+import java.util.zip.ZipInputStream
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.manuscript.{CompileError, SourceDocument}
+import com.serenity.manuscript.{CompileError, ManuscriptFileFormat, SourceDocument}
 import com.serenity.richtext.{DocxDocumentCodec, RichTextDocument}
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -20,7 +23,57 @@ class ManuscriptExportSpec extends AnyFlatSpec with Matchers with EitherValues:
     ManuscriptExport.suggestedFileName(None) shouldBe "manuscript.docx"
   }
 
-  "ManuscriptExport" should "export the snapshot alone, titled after its file, when there is no manuscript.conf" in {
+  it should "suggest an .epub name for an EPUB export" in {
+    ManuscriptExport.suggestedFileName(Some(Path.of("books", "novel.md")), ManuscriptFileFormat.Epub) shouldBe
+      "novel-manuscript.epub"
+    ManuscriptExport.suggestedFileName(None, ManuscriptFileFormat.Epub) shouldBe "manuscript.epub"
+  }
+
+  private def epubEntries(bytes: Array[Byte]): List[(String, String)] =
+    val input = ZipInputStream(ByteArrayInputStream(bytes))
+    try
+      Iterator
+        .continually(Option(input.getNextEntry))
+        .takeWhile(_.isDefined)
+        .flatten
+        .map(entry => entry.getName -> String(input.readAllBytes(), "UTF-8"))
+        .toList
+    finally input.close()
+
+  "ManuscriptExport" should "compile an EPUB from the same sources, language and identifier a manuscript.conf sets" in {
+    val directory = Files.createTempDirectory("manuscript-export-epub")
+    Files.writeString(directory.resolve("01.md"), "# Arrival\n\nFrom disk.")
+    Files.writeString(
+      directory.resolve("manuscript.conf"),
+      "title = \"The Long Night\"\nlanguage = \"fr\"\nidentifier = \"urn:isbn:9780000000002\"\nsources = [{ path = \"01.md\" }]\n"
+    )
+    val origin = ExportOrigin(Some(directory.resolve("01.md")), SourceDocument.Markdown("Edited, unsaved."))
+
+    val entries =
+      epubEntries(ManuscriptExport.compiledEpub(origin, Instant.parse("2026-10-05T12:30:00Z")).unsafeRunSync())
+
+    entries.map(_._1).headOption shouldBe Some("mimetype")
+    val opf = entries.collectFirst { case ("OEBPS/content.opf", text) => text }.getOrElse(fail("no package document"))
+    opf should include("<dc:language>fr</dc:language>")
+    opf should include("urn:isbn:9780000000002")
+    opf should include("2026-10-05T12:30:00Z")
+    entries.collectFirst { case ("OEBPS/text/chapter-001.xhtml", text) => text }.getOrElse("") should include(
+      "Edited, unsaved."
+    )
+  }
+
+  it should "write the EPUB to the target, stamped with the time of the export" in {
+    val directory = Files.createTempDirectory("manuscript-export-epub-write")
+    val target    = directory.resolve("out.epub")
+
+    ManuscriptExport.writeEpub(ExportOrigin(None, SourceDocument.Markdown("Text.")), target).unsafeRunSync()
+
+    val entries = epubEntries(Files.readAllBytes(target))
+    entries.headOption shouldBe Some("mimetype" -> "application/epub+zip")
+    entries.collectFirst { case ("OEBPS/content.opf", text) => text }.getOrElse("") should include("dcterms:modified")
+  }
+
+  it should "export the snapshot alone, titled after its file, when there is no manuscript.conf" in {
     val directory = Files.createTempDirectory("manuscript-export-single")
     val origin    = ExportOrigin(Some(directory.resolve("novel.md")), SourceDocument.Markdown("# One\n\nUnsaved text."))
 
