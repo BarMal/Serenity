@@ -557,9 +557,12 @@ object AccessibilitySnapshot:
 
   private def surfaceValue(content: SurfaceContent): Option[String] =
     content match
-      case SurfaceContent.StartPage(page)                 => page.statusMessage
-      case SurfaceContent.StatusLine(text)                => Some(text)
-      case SurfaceContent.Notice(notice, _)               => Some(notice.message)
+      case SurfaceContent.StartPage(page)  => page.statusMessage
+      case SurfaceContent.StatusLine(text) => Some(text)
+      case SurfaceContent.Notice(notice, _) =>
+        Some(
+          notice.prompt.fold(notice.message)(prompt => s"${notice.message} Options: ${prompt.actions.mkString(", ")}")
+        )
       case SurfaceContent.TabBar(entries, activeBufferId) => tabBarValue(entries, activeBufferId)
       case _                                              => None
 
