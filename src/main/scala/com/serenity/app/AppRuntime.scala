@@ -285,7 +285,8 @@ object AppRuntime:
                     latencyTraceEnabled,
                     watchInputs.discrete.as(()),
                     windowFocused,
-                    forwardedOpens
+                    forwardedOpens,
+                    recovery.crashRecorder
                   )
                 )
               }
@@ -307,25 +308,26 @@ object AppRuntime:
     latencyTraceEnabled: SignallingRef[IO, Boolean],
     watchInputsChanges: Stream[IO, Unit],
     windowFocused: Signal[IO, Boolean],
-    forwardedOpens: Stream[IO, List[Path]]
+    forwardedOpens: Stream[IO, List[Path]],
+    recordCrash: StartupRecovery.CrashRecorder
   )(using logger: Logger[IO]): IO[Unit] =
     val (lifecycle, quitSignal) = (stateManager.runtimeLifecycle, stateManager.runtimeLifecycle.awaitQuit.attempt)
     (
       awaitInputLoop,
-      AppRuntimeRenderLoops.superviseLoop("render loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("render loop", lifecycle.forceQuit, recordCrash)(
         renderLoop.interruptWhen(quitSignal).compile.drain
       ),
       lifecycle.awaitQuit,
-      AppRuntimeRenderLoops.superviseLoop("interval save loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("interval save loop", lifecycle.forceQuit, recordCrash)(
         lifecycle.intervalSaveStream.compile.drain
       ),
-      AppRuntimeRenderLoops.superviseLoop("external quit coordinator", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("external quit coordinator", lifecycle.forceQuit, recordCrash)(
         coordinateExternalQuit(awaitExternalQuit, lifecycle.forceQuit, lifecycle.awaitQuit)
       ),
-      AppRuntimeRenderLoops.superviseLoop("input shutdown", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("input shutdown", lifecycle.forceQuit, recordCrash)(
         shutdownInputAfterQuit(lifecycle.awaitQuit, inputHandler.shutdown)
       ),
-      AppRuntimeRenderLoops.superviseLoop("LSP loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("LSP loop", lifecycle.forceQuit, recordCrash)(
         LspManager.run(
           stateManager.lspEffectSource.lspEffectStream,
           stateManager.applyEvent,
@@ -333,7 +335,7 @@ object AppRuntime:
           appConfig.languageToolsConfig.lspUserConfig
         )
       ),
-      AppRuntimeRenderLoops.superviseLoop("external change watch loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("external change watch loop", lifecycle.forceQuit, recordCrash)(
         externalChangeWatchLoop(
           fileChangeWatcher,
           stateManager.fileService.openBufferPaths,
@@ -346,21 +348,21 @@ object AppRuntime:
           windowFocused = windowFocused
         ).interruptWhen(quitSignal).compile.drain
       ),
-      AppRuntimeRenderLoops.superviseLoop("frame timing report", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("frame timing report", lifecycle.forceQuit, recordCrash)(
         FrameTimingReport
           .stream(frameTimings, frameTimingEnabled.discrete, line => logger.info(line))
           .interruptWhen(quitSignal)
           .compile
           .drain
       ),
-      AppRuntimeRenderLoops.superviseLoop("latency trace report", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("latency trace report", lifecycle.forceQuit, recordCrash)(
         KeyLatencyReport
           .stream(frameTimings.keyLatency, latencyTraceEnabled.discrete, line => logger.info(line))
           .interruptWhen(quitSignal)
           .compile
           .drain
       ),
-      AppRuntimeRenderLoops.superviseLoop("forwarded open loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("forwarded open loop", lifecycle.forceQuit, recordCrash)(
         forwardedOpens.evalMap(openForwarded(stateManager.fileOpener)).interruptWhen(quitSignal).compile.drain
       )
     ).parMapN((_, _, _, _, _, _, _, _, _, _, _) => ())

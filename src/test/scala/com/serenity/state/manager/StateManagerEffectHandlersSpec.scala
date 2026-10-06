@@ -177,6 +177,17 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
     opened.map(_.getFileName.toString) should contain(LicenceNotices.documentName)
   }
 
+  it should "show the About prompt for ShowAbout" in {
+    val fixture = harness()
+
+    fixture.handlers
+      .interpretCommand(command(CommandIntent.Diagnostics(DiagnosticsIntent.ShowAbout)), AppState.initial)
+      .unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe
+      List(s"showModal:${Modal.Confirm(ConfirmPrompt.about(com.serenity.diagnostics.RuntimeIdentity.current))}")
+  }
+
   it should "update the buffer language and open the LSP document when app mode is Code" in {
     val path = Path.of("main.py")
     val state = AppState.initial.copy(persisted =

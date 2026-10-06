@@ -310,6 +310,7 @@ enum SettingsIntent:
   */
 enum CommandIntent:
   case Lifecycle(intent: LifecycleIntent)
+  case Diagnostics(intent: DiagnosticsIntent)
   case File(intent: FileIntent)
   case Edit(intent: EditIntent)
   case RichText(intent: RichTextIntent)

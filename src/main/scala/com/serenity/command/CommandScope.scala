@@ -68,8 +68,8 @@ object CommandScope:
         CommandFamily.Prose
       case CommandIntent.Edit(edit) => editFamily(edit)
       case CommandIntent.View(view) => viewScope(view).family
-      case CommandIntent.Lifecycle(_) | CommandIntent.File(_) | CommandIntent.Comments(_) |
-          CommandIntent.Navigation(_) | CommandIntent.Theme(_) | CommandIntent.Session(_) |
+      case CommandIntent.Lifecycle(_) | CommandIntent.Diagnostics(_) | CommandIntent.File(_) |
+          CommandIntent.Comments(_) | CommandIntent.Navigation(_) | CommandIntent.Theme(_) | CommandIntent.Session(_) |
           CommandIntent.Keybindings(_) | CommandIntent.UiPresets(_) | CommandIntent.Settings(_) =>
         CommandFamily.Core
 
