@@ -14,7 +14,7 @@ import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
   * dictionaries into a `DictionaryContext`.
   */
 final private[spellcheck] case class DictionaryLoadResult(
-    words: Set[String],
+    wordList: AffixedWordList,
     replacements: Map[String, List[String]],
     failures: List[String],
     iconv: List[(String, String)],
@@ -27,7 +27,9 @@ final private[spellcheck] case class DictionaryLoadResult(
     compoundMiddleFlag: Option[String],
     compoundEndFlag: Option[String],
     compoundWordMax: Option[Int],
-    compoundCheckRules: CompoundCheckRules
+    compoundCheckRules: CompoundCheckRules,
+    tryCharacters: String,
+    breaksAtHyphens: Boolean = true
 )
 
 /** One entry per normalized dictionary path (or bundled dictionary), holding only the most recently loaded version of
@@ -99,19 +101,23 @@ final class DictionaryCache:
   private[spellcheck] def retainOnly(activeKeys: Set[String]): Unit =
     val _ = entries.keySet().removeIf(key => !activeKeys.contains(key))
 
-  /** The merged snapshot for `inputs` when the latest merge was built from exactly them, otherwise `build()`. */
+  /** The merged snapshot for `inputs` when the latest merge was built from exactly them, otherwise `build()`. Callers
+    * that share one cache and ask at once wait for the first build instead of each making their own.
+    */
   private[spellcheck] def mergedFor(
     inputs: DictionaryMergeInputs,
     build: () => DictionarySnapshot
   ): DictionarySnapshot =
-    merged
-      .get()
-      .collect { case (previous, snapshot) if previous == inputs => snapshot }
-      .getOrElse {
-        val snapshot = build()
-        merged.set(Some(inputs -> snapshot))
-        snapshot
+    def reusable = merged.get().collect { case (previous, snapshot) if previous == inputs => snapshot }
+    reusable.getOrElse {
+      synchronized {
+        reusable.getOrElse {
+          val snapshot = build()
+          merged.set(Some(inputs -> snapshot))
+          snapshot
+        }
       }
+    }
 
 object DictionaryCache:
   def apply(): DictionaryCache = new DictionaryCache
@@ -205,21 +211,23 @@ object DictionaryLoader:
         mergeSnapshot(
           normalized,
           sourcePaths.map(loadDictionary(_, cache)) ++ bundled.map(loadBundled(_, cache)),
-          fingerprints
+          fingerprints,
+          osDictionaryDirectories
         )
     )
 
   private def mergeSnapshot(
     normalized: SpellCheckConfig,
     externalResults: List[DictionaryLoadResult],
-    fingerprints: List[SpellCheckDictionaryFingerprint]
+    fingerprints: List[SpellCheckDictionaryFingerprint],
+    osDictionaryDirectories: List[String]
   ): DictionarySnapshot =
-    val externalWords = externalResults.flatMap(_.words).toSet
+    val stems = externalResults.map(_.wordList).filterNot(_.isEmpty)
     val externalReplacements =
       mergeReplacementMaps(externalResults.map(_.replacements))
     val failures = externalResults.flatMap(_.failures)
     val fallbackWords =
-      if normalized.dictionaryPaths.nonEmpty && externalWords.nonEmpty then Set.empty[String]
+      if normalized.dictionaryPaths.nonEmpty && stems.nonEmpty then Set.empty[String]
       else normalized.languages.flatMap(language => BuiltInDictionaries.getOrElse(language, Set.empty)).toSet
 
     val compoundWordFlags = mergeCompoundWordFlags(externalResults.map(_.compoundWordFlags))
@@ -248,7 +256,10 @@ object DictionaryLoader:
     val compoundCheckRules = mergeCompoundCheckRules(externalResults.map(_.compoundCheckRules))
 
     val context = DictionaryContext(
-      words = (externalWords ++ fallbackWords ++ normalized.additionalWords).map(DictionaryWord.normalize),
+      words = (fallbackWords ++ normalized.additionalWords).map(DictionaryWord.normalize),
+      stems = stems,
+      tryCharacters = externalResults.map(_.tryCharacters).mkString,
+      breaksAtHyphens = externalResults.forall(_.breaksAtHyphens),
       replacements = externalReplacements,
       failures = failures.distinct,
       iconv = externalResults.flatMap(_.iconv).distinct,
@@ -263,9 +274,23 @@ object DictionaryLoader:
       compoundEndFlag = compoundEndFlag,
       compoundWordMax = compoundWordMax,
       compoundFlagTrie = compoundFlagTrie,
-      compoundCheckRules = compoundCheckRules
+      compoundCheckRules = compoundCheckRules,
+      missingDictionary = Option.when(stems.isEmpty && fallbackWords.isEmpty)(
+        missingDictionaryNotice(normalized, osDictionaryDirectories)
+      )
     )
     DictionarySnapshot(context, fingerprints)
+
+  private def missingDictionaryNotice(config: SpellCheckConfig, osDictionaryDirectories: List[String]): String =
+    val searched = if config.dictionaryPaths.nonEmpty then config.dictionaryPaths else osDictionaryDirectories
+    List(
+      s"Spell check found no dictionary for ${config.languages.mkString(", ")}.",
+      s"Searched: ${if searched.isEmpty then "nowhere" else searched.mkString(", ")}",
+      s"Install a Hunspell dictionary (for example ${suggestedPackage(config)}) or set spellcheck.dictionary_paths."
+    ).mkString("\n")
+
+  private def suggestedPackage(config: SpellCheckConfig): String =
+    config.languages.headOption.fold("hunspell-en-gb")(language => s"hunspell-${language.toLowerCase(Locale.ROOT)}")
 
   private def loadDictionary(path: Path, cache: DictionaryCache): DictionaryLoadResult =
     val dependencyPaths = SpellCheckConfig.dictionaryDependencyPaths(List(path))
@@ -319,23 +344,17 @@ object DictionaryLoader:
       .filter(line => line.nonEmpty && !line.startsWith("#"))
       .flatMap(line => HunspellFormat.parseEntry(line, affixRules))
 
-    val words = entries
-      .flatMap(entry => HunspellFormat.expand(entry, affixRules))
-      .map(DictionaryWord.normalize)
-      .toSet
+    val wordList = AffixedWordList.build(entries.iterator, affixRules)
 
     // COMPOUNDRULE (#1187) and free-form COMPOUNDFLAG (#1198) both match compound candidates against dictionary
-    // entries' own flags, keyed by their normalized text -- computed only when the affix file actually declares
-    // one of these compounding mechanisms, since it is otherwise unused.
-    val declaresFreeFormCompounding =
-      affixRules.compoundFlag.isDefined || affixRules.compoundBeginFlag.isDefined ||
-        affixRules.compoundMiddleFlag.isDefined || affixRules.compoundEndFlag.isDefined
-    val compoundWordFlags =
-      if affixRules.compoundRules.isEmpty && !declaresFreeFormCompounding then Map.empty[String, Set[String]]
-      else entries.groupMapReduce(entry => DictionaryWord.normalize(entry.word))(_.flags)(_ ++ _)
+    // entries' own flags, keyed by their normalized text. Only entries carrying a flag one of those mechanisms
+    // consults can ever be a compound member, so only those are kept: on an ordinary dictionary that is none.
+    val compoundWordFlags = entries
+      .filter(entry => entry.flags.exists(affixRules.compoundRelevantFlags.contains))
+      .groupMapReduce(entry => DictionaryWord.normalize(entry.word))(_.flags)(_ ++ _)
 
     DictionaryLoadResult(
-      words,
+      wordList,
       affixRules.replacements,
       unsupportedAff,
       affixRules.iconv,
@@ -348,12 +367,14 @@ object DictionaryLoader:
       affixRules.compoundMiddleFlag,
       affixRules.compoundEndFlag,
       affixRules.compoundWordMax,
-      affixRules.compoundCheckRules
+      affixRules.compoundCheckRules,
+      affixRules.tryCharacters,
+      affixRules.breaksAtHyphens
     )
 
   private def failedLoad(failure: String): DictionaryLoadResult =
     DictionaryLoadResult(
-      Set.empty,
+      AffixedWordList.empty,
       Map.empty,
       List(failure),
       Nil,
@@ -366,7 +387,8 @@ object DictionaryLoader:
       None,
       None,
       None,
-      CompoundCheckRules.empty
+      CompoundCheckRules.empty,
+      ""
     )
 
   private def affixPathFor(dictionaryPath: Path): Option[Path] =

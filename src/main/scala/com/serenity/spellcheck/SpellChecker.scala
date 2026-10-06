@@ -7,15 +7,14 @@ import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.model.*
 import com.serenity.state.models.*
 
+/** A flagged word and where it stands: `start` and `end` are columns on `line`. */
+final case class Misspelling(line: Int, start: Int, end: Int, word: String)
+
 object SpellChecker:
 
   val Source: String = "spell-check"
 
-  // A hyphen/apostrophe-joined segment after the first may also carry digits (#1528): a numeric compound like
-  // "COVID-19" would otherwise only match its "COVID" prefix -- the "-19" suffix cannot extend a purely-letter
-  // token -- leaving the orphaned "COVID" fragment to fail the dictionary lookup on its own. The leading segment stays
-  // letters-only so a bare number is never tokenized as a word by itself.
-  private val WordPattern = """[\p{L}\p{M}]+(?:['’-][\p{L}\p{M}\p{N}]+)*""".r
+  val UnknownWordCode: String = "unknown-word"
 
   /** Convenience entry point that discovers and loads dictionaries itself -- handy for tests and one-off checks, but it
     * performs filesystem IO synchronously and so must never be called from a pure state method or from inside
@@ -36,42 +35,46 @@ object SpellChecker:
     val normalized = config.normalized
     if !normalized.enabled then Nil
     else
+      // With no word list every word would be flagged; `DictionaryContext.missingDictionary` is what tells the writer.
       dictionaryLoadDiagnostics(dictionary.failures) ++
-        text
-          .split("\n", -1)
-          .zipWithIndex
-          .flatMap { (line, lineIndex) =>
-            WordPattern
-              .findAllMatchIn(line)
-              // ICONV (#1182): normalize input character variants (ligatures, alternate quote glyphs, ...) to the
-              // form the dictionary was built from before checking membership -- exactly what hunspell itself does
-              // before matching checked text against the dictionary.
-              .filterNot(match_ =>
-                isAccepted(HunspellFormat.applyConversionTable(match_.matched, dictionary.iconv), dictionary) ||
-                  isExemptFromCasing(match_.matched, isSentenceInitial(line, match_.start))
-              )
-              .map { match_ =>
-                val word          = match_.matched
-                val convertedWord = HunspellFormat.applyConversionTable(word, dictionary.iconv)
-                // OCONV (#1182): applied only to generated suggestions, matching hunspell's output-conversion
-                // semantics -- the word as typed (`word`, above) is shown unconverted in the diagnostic message.
-                val suggestions = dictionary.replacements
-                  .getOrElse(DictionaryWord.normalize(convertedWord), Nil)
-                  .map(HunspellFormat.applyConversionTable(_, dictionary.oconv))
-                Diagnostic(
-                  range = LspRange(
-                    LspPosition(lineIndex, match_.start),
-                    LspPosition(lineIndex, match_.end)
-                  ),
-                  severity = Some(DiagnosticSeverity.Warning),
-                  message = diagnosticMessage(word, suggestions),
-                  source = Some(Source),
-                  code = Some("unknown-word")
-                )
-              }
-              .toList
-          }
-          .toList
+        Option.when(dictionary.missingDictionary.isEmpty)(unknownWordDiagnostics(text, dictionary)).toList.flatten
+
+  private def unknownWordDiagnostics(text: String, dictionary: DictionaryContext): List[Diagnostic] =
+    ProseTokenizer.lines(text).flatMap { line =>
+      line.words
+        .flatMap(word => misspelledParts(line.text, word, dictionary))
+        .map(misspelled => unknownWordDiagnostic(line.index, misspelled, dictionary))
+    }
+
+  /** The parts of `word` to flag: all of it, or, for a hyphenated word that is not itself a dictionary word, only the
+    * hyphen-separated parts that are wrong, as hunspell's default `BREAK` does.
+    */
+  private def misspelledParts(line: String, word: ProseWord, dictionary: DictionaryContext): List[ProseWord] =
+    val sentenceInitial = isSentenceInitial(line, word.start)
+    def flagged(part: ProseWord, partSentenceInitial: Boolean): Boolean =
+      !isAccepted(part.text, dictionary) && !isExemptFromCasing(part.text, partSentenceInitial)
+    if !flagged(word, sentenceInitial) then Nil
+    else
+      ProseTokenizer.hyphenParts(word) match
+        case single @ List(_)                 => single
+        case _ if !dictionary.breaksAtHyphens => List(word)
+        case parts =>
+          parts.zipWithIndex.collect { case (part, index) if flagged(part, sentenceInitial && index == 0) => part }
+
+  private def unknownWordDiagnostic(lineIndex: Int, word: ProseWord, dictionary: DictionaryContext): Diagnostic =
+    // OCONV (#1182): applied only to generated suggestions, matching hunspell's output-conversion semantics -- the
+    // word as typed is shown unconverted in the diagnostic message. Only the REP table's exact entry is looked up here;
+    // searching for near spellings (SpellSuggester) waits until a suggestion is asked for.
+    val suggestions = dictionary.replacements
+      .getOrElse(DictionaryWord.normalize(HunspellFormat.applyConversionTable(word.text, dictionary.iconv)), Nil)
+      .map(HunspellFormat.applyConversionTable(_, dictionary.oconv))
+    Diagnostic(
+      range = LspRange(LspPosition(lineIndex, word.start), LspPosition(lineIndex, word.end)),
+      severity = Some(DiagnosticSeverity.Warning),
+      message = diagnosticMessage(word.text, suggestions),
+      source = Some(Source),
+      code = Some(UnknownWordCode)
+    )
 
   /** Pure: recomputes cached diagnostics against an already-loaded `dictionary` snapshot. Callers obtain that snapshot
     * once via `DictionaryLoader.loadSnapshot` inside `IO.blocking`, then pass the same immutable value here -- this
@@ -83,6 +86,7 @@ object SpellChecker:
       .filter(_._2.nonEmpty)
       .toMap
 
+    val ignores = state.runtime.languageService.diagnosticsState.spellIgnores
     val (refreshed, cache) =
       state.persisted.buffers.values.foldLeft((preserved, Map.empty[DocumentUri, SpellCheckCacheEntry])) {
         case ((diagnostics, cache), buffer) =>
@@ -104,9 +108,10 @@ object SpellChecker:
                 )
                 SpellCheckCacheEntry(fingerprint, spellDiagnostics)
               }
+            val visible = withoutIgnored(buffer, uri, entry.diagnostics, ignores)
             val nextDiagnostics =
-              if entry.diagnostics.isEmpty then diagnostics
-              else diagnostics + (uri -> entry.diagnostics)
+              if visible.isEmpty then diagnostics
+              else diagnostics + (uri -> visible)
             nextDiagnostics -> (cache + (uri -> entry))
           else diagnostics -> cache
       }
@@ -151,7 +156,7 @@ object SpellChecker:
         current.runtime.copy(languageService =
           current.runtime.languageService.copy(diagnosticsState =
             current.runtime.languageService.diagnosticsState.copy(
-              diagnostics = analyzed.runtime.languageService.diagnosticsState.diagnostics,
+              diagnostics = withoutIgnoredWords(current, analyzed.runtime.languageService.diagnosticsState.diagnostics),
               spellCheckCache = analyzed.runtime.languageService.diagnosticsState.spellCheckCache
             )
           )
@@ -165,14 +170,75 @@ object SpellChecker:
     */
   def flaggedWordAtCursor(state: AppState): Option[String] =
     for
-      buffer <- state.activeBuffer
-      cursor <- state.activeCursorPosition
-      diagnostic <- state.runtime.languageService.diagnosticsState.diagnostics
-        .getOrElse(diagnosticsUri(buffer), Nil)
-        .find(diagnostic => diagnostic.source.contains(Source) && containsCursor(diagnostic.range, cursor))
+      buffer     <- state.activeBuffer
+      cursor     <- state.activeCursorPosition
+      misspelled <- misspellingAt(state, buffer, cursor)
+    yield misspelled.word
+
+  /** The misspelling `position` sits on or just after in `buffer`, which need not be the active one: a right-click
+    * lands in whichever pane was clicked.
+    */
+  def misspellingAt(state: AppState, buffer: Buffer, position: CursorPosition): Option[Misspelling] =
+    state.runtime.languageService.diagnosticsState.diagnostics
+      .getOrElse(diagnosticsUri(buffer), Nil)
+      .filter(isUnknownWord)
+      .find(diagnostic => containsCursor(diagnostic.range, position))
+      .flatMap(misspellingOf(buffer, _))
+
+  private def isUnknownWord(diagnostic: Diagnostic): Boolean =
+    diagnostic.source.contains(Source) && diagnostic.code.contains(UnknownWordCode)
+
+  private def misspellingOf(buffer: Buffer, diagnostic: Diagnostic): Option[Misspelling] =
+    for
       line <- buffer.document.content.getLine(diagnostic.range.start.line)
       word <- wordInRange(line, diagnostic.range)
-    yield word
+    yield Misspelling(
+      diagnostic.range.start.line,
+      diagnostic.range.start.character,
+      diagnostic.range.end.character,
+      word
+    )
+
+  private def withoutIgnored(
+    buffer: Buffer,
+    uri: DocumentUri,
+    diagnostics: List[Diagnostic],
+    ignores: SpellIgnores
+  ): List[Diagnostic] =
+    if ignores == SpellIgnores.empty then diagnostics
+    else
+      diagnostics.filterNot { diagnostic =>
+        isUnknownWord(diagnostic) &&
+        misspellingOf(buffer, diagnostic).exists(found =>
+          ignores.hides(uri, IgnoredOccurrence(found.line, found.start, found.word))
+        )
+      }
+
+  /** `state` with the writer's dismissals applied to the diagnostics already published, so a dismissal shows at once
+    * instead of waiting for the next analysis.
+    */
+  def withIgnoresApplied(state: AppState): AppState =
+    val diagnosticsState = state.runtime.languageService.diagnosticsState
+    state.copy(runtime =
+      state.runtime.copy(languageService =
+        state.runtime.languageService.copy(diagnosticsState =
+          diagnosticsState.copy(diagnostics = withoutIgnoredWords(state, diagnosticsState.diagnostics))
+        )
+      )
+    )
+
+  /** `diagnostics` less what the writer has dismissed since the analysis they came from started. */
+  private def withoutIgnoredWords(
+    current: AppState,
+    diagnostics: Map[DocumentUri, List[Diagnostic]]
+  ): Map[DocumentUri, List[Diagnostic]] =
+    val ignores = current.runtime.languageService.diagnosticsState.spellIgnores
+    if ignores == SpellIgnores.empty then diagnostics
+    else
+      val buffers = current.persisted.buffers.values.map(buffer => diagnosticsUri(buffer) -> buffer).toMap
+      diagnostics
+        .map((uri, found) => uri -> buffers.get(uri).fold(found)(withoutIgnored(_, uri, found, ignores)))
+        .filter((_, found) => found.nonEmpty)
 
   private def containsCursor(range: LspRange, cursor: CursorPosition): Boolean =
     cursor.line == range.start.line && cursor.column >= range.start.character &&
@@ -217,39 +283,16 @@ object SpellChecker:
       case values =>
         s"$base (suggestions: ${values.mkString(", ")})"
 
-  private def isAccepted(word: String, dictionary: DictionaryContext): Boolean =
-    val normalized = DictionaryWord.normalize(word)
-    normalized.length < 3 || dictionary.words.contains(normalized) ||
-    HunspellCompoundMatcher.matches(
-      normalized,
-      dictionary.compoundRules,
-      dictionary.compoundCandidateIndex,
-      dictionary.compoundMin
-    ) ||
-    // Free-form COMPOUNDFLAG compounding (#1198) is a second, independent mechanism a dictionary may declare
-    // alongside COMPOUNDRULE (real Croatian/Persian .aff files do this) -- tried as a sibling ('||'-shaped) so either
-    // mechanism accepting the word is sufficient, and neither masks the other's rejection.
-    HunspellFreeCompoundMatcher.matches(
-      normalized,
-      dictionary.compoundFlagTrie,
-      HunspellFreeCompoundMatcher.CompoundFlags(
-        dictionary.compoundFlag,
-        dictionary.compoundBeginFlag,
-        dictionary.compoundMiddleFlag,
-        dictionary.compoundEndFlag
-      ),
-      dictionary.compoundMin,
-      dictionary.compoundWordMax,
-      // CHECKCOMPOUND*/SIMPLIFIEDTRIPLE/CHECKCOMPOUNDPATTERN (#1198, PR 2 of 2): a post-hoc filter over the
-      // segmentation(s) the DP above finds, backed by the same word/flag/REP data `dictionary.words`,
-      // `dictionary.compoundWordFlags` and `dictionary.replacements` already carry for standalone lookup.
-      dictionary.compoundCheckRules,
-      dictionary.compoundWordFlags,
-      dictionary.words,
-      dictionary.replacements,
-      // CHECKCOMPOUNDCASE needs the word as typed, not `normalized`'s case-folded form used for the trie walk.
-      originalWord = word
-    )
+  /** Whether the dictionary accepts `token`, after ICONV (#1182) normalises input character variants (ligatures,
+    * alternate quote glyphs, ...) exactly as hunspell does before matching. A typographic apostrophe is the same letter
+    * as a straight one whether or not the dictionary declares it, and a word joined by apostrophes is right when each
+    * of its parts is ("o'clock", "colour's").
+    */
+  private def isAccepted(token: String, dictionary: DictionaryContext): Boolean =
+    val converted = HunspellFormat.applyConversionTable(token, dictionary.iconv)
+    val straight  = converted.replace('’', '\'').replace('ʼ', '\'')
+    WordAcceptance.accepts(converted, dictionary) || WordAcceptance.accepts(straight, dictionary) ||
+    (straight.contains('\'') && straight.split('\'').forall(part => WordAcceptance.accepts(part, dictionary)))
 
   /** Whether `word` should be skipped regardless of dictionary membership (#1528):
     *   - it carries a digit at all (a numeric compound like "COVID-19" or an alphanumeric identifier like "MP3" --

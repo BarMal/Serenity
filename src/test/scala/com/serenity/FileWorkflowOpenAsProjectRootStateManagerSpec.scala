@@ -4,6 +4,7 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.keystroke.events.ModalOpenAsProjectRoot
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -27,7 +28,10 @@ class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Mat
 
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("FileWorkflowOpenAsProjectRootStateManagerSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    // Spell check off: its background analysis commits on its own and these specs compare states across a command.
+    StateManager
+      .apply(logger, initialConfig = AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = false)))
+      .unsafeRunSync()
 
   private def currentWorkflow(stateManager: StateManager): Option[FileWorkflowState] =
     stateManager.getCurrentState

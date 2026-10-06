@@ -8,6 +8,10 @@ final case class PreferredWindowSize(width: Int, height: Int):
   def normalized: PreferredWindowSize =
     PreferredWindowSize(width.max(400), height.max(300))
 
+object PreferredWindowSize:
+  /** The size of the window when the config states none. */
+  val Default: PreferredWindowSize = PreferredWindowSize(1024, 768)
+
 final case class WindowConfig(
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
     preferredSize: Option[PreferredWindowSize] = None

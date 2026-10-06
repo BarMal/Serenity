@@ -188,7 +188,13 @@ private[perf] object LaptopFrameBenchmarks:
   )(using IORuntime): (StateManager, BufferId) =
     given LoggerFactory[IO] = NoOpFactory[IO]
     val sessionRoot         = Files.createTempDirectory("serenity-laptop-benchmarks")
-    val stateManager = StateManager.apply(NoOpLogger[IO], sessionRootOverride = Some(sessionRoot)).unsafeRunSync()
+    val stateManager = StateManager
+      .apply(
+        NoOpLogger[IO],
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = WarmDictionary.cacheFor(config)
+      )
+      .unsafeRunSync()
     val proseBufferId = (for
       _       <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))
       created <- stateManager.createBuffer(text, None)
@@ -198,6 +204,8 @@ private[perf] object LaptopFrameBenchmarks:
       _ <- stateManager.applyEvent(ResizeEvent(viewport))
       _ <- stateManager.setCursorPosition(paneId, cursorLine, cursorColumn)
       _ <- stateManager.updateState(scrolledToCursor(created))
+      // Every fixture is built before the first benchmark is timed, so an analysis still running here would overlap it.
+      _ <- stateManager.runtimeLifecycle.awaitEffects
     yield created).unsafeRunSync()
     (stateManager, proseBufferId)
 

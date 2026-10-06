@@ -421,7 +421,7 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
   ): Resource[IO, SwingWindow] =
     Resource.make(
       IO.blocking {
-        val initialSize = preferredWindowSize.map(_.normalized).getOrElse(PreferredWindowSize(1024, 768))
+        val initialSize = preferredWindowSize.map(_.normalized).getOrElse(PreferredWindowSize.Default)
         val win = new SwingWindow(
           new Dimension(initialSize.width, initialSize.height),
           metrics,

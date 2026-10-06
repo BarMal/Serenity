@@ -281,6 +281,18 @@ enum SpellCheckIntent:
   // threaded through the command.
   case AddWordAtCursorToDictionary
 
+/** What the writer does with a misspelling (#1939). The menu and popup act on a word they have already resolved, so
+  * those cases carry it rather than looking at the cursor, which a right-click leaves where it was.
+  */
+enum SpellingIntent:
+  case ShowSuggestions
+  case Replace(line: Int, start: Int, end: Int, misspelled: String, replacement: String)
+  case AddToDictionary(word: String)
+  case IgnoreOnce(line: Int, start: Int, end: Int, word: String)
+  case IgnoreEverywhere(word: String)
+  case IgnoreOnceAtCursor
+  case IgnoreEverywhereAtCursor
+
 /** Settings with no more specific home: render tuning and the settings surface's own open/save commands. */
 enum GeneralSettingsIntent:
   case OpenSettings
@@ -316,6 +328,7 @@ enum CommandIntent:
   case Comments(intent: CommentsIntent)
   case Placeholders(intent: PlaceholderIntent)
   case Darlings(intent: DarlingIntent)
+  case Spelling(intent: SpellingIntent)
   case Navigation(intent: NavigationIntent)
   case Lsp(intent: LspIntent)
   case Theme(intent: ThemeIntent)

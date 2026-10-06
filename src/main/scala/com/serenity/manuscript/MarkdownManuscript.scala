@@ -59,8 +59,11 @@ object MarkdownManuscript:
         List(preformatted(code.getLiteral))
       case code: IndentedCodeBlock =>
         List(preformatted(code.getLiteral))
-      case _: HtmlBlock =>
-        Nil
+      case html: HtmlBlock =>
+        HtmlMarkup.parts(html.getLiteral).flatMap {
+          case HtmlMarkup.Part.Text(runs) => paragraphElement(rules, runs, kind).toList
+          case HtmlMarkup.Part.SceneBreak => List(SourceElement.Content(Block.SceneBreak))
+        }
       case list: ListBlock =>
         listElements(rules, list, kind)
       case row: TableRow =>
@@ -103,15 +106,16 @@ object MarkdownManuscript:
   private def inlineRuns(parent: Node): List[RichTextRun] =
     runsWithin(parent, RichTextStyle.empty)
 
-  /** `<u>`/`</u>` are how Serenity's own Markdown save writes underline, so they toggle the mark for later siblings. */
+  /** Inline tags change the style of later siblings; `<u>`/`</u>` are how Serenity's own Markdown save writes
+    * underline. See [[HtmlMarkup]] for what each tag means.
+    */
   private def runsWithin(parent: Node, style: RichTextStyle): List[RichTextRun] =
     children(parent)
       .foldLeft((Vector.empty[RichTextRun], style)) {
         case ((runs, current), html: HtmlInline) =>
-          html.getLiteral.trim.toLowerCase match
-            case "<u>"  => (runs, current.withMark(InlineMark.Underline))
-            case "</u>" => (runs, current.withoutMark(InlineMark.Underline))
-            case _      => (runs, current)
+          HtmlMarkup.effect(html.getLiteral) match
+            case HtmlMarkup.Effect.LineBreak => (runs :+ RichTextRun("\n", current), current)
+            case effect                      => (runs, HtmlMarkup.applied(current, effect))
         case ((runs, current), child) =>
           (runs ++ runsOf(child, current), current)
       }

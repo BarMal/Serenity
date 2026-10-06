@@ -2,6 +2,10 @@ package com.serenity.config
 
 import java.nio.file.Path
 
+import scala.util.Try
+
+import com.typesafe.config.{Config, ConfigValueFactory}
+
 /** The on-disk config file format's schema version (`config.version`), distinct from
   * [[com.serenity.session.SessionState.SchemaVersion]] -- a different persisted format with its own version history.
   */
@@ -30,10 +34,28 @@ final case class ConfigMigrationReport(
     deprecatedEntries: List[DeprecatedConfigEntry] = Nil,
     unknownKeys: List[String] = Nil,
     invalidEntries: List[InvalidConfigEntry] = Nil,
-    removedKeys: List[String] = Nil
+    removedKeys: List[String] = Nil,
+    hotkeyConflicts: List[HotkeyConflict] = Nil,
+    migratedFrom: Option[ConfigVersion] = None
 ):
+  def newerThanSupported: Boolean = version.value > ConfigVersion.Current.value
+
   def hasWarnings: Boolean =
-    deprecatedEntries.nonEmpty || unknownKeys.nonEmpty || invalidEntries.nonEmpty || removedKeys.nonEmpty
+    deprecatedEntries.nonEmpty || unknownKeys.nonEmpty || invalidEntries.nonEmpty || removedKeys.nonEmpty ||
+      hotkeyConflicts.nonEmpty || newerThanSupported
+
+  /** Whether rewriting the file would drop something the user wrote that is still in it. */
+  def needsBackupBeforeRewrite: Boolean =
+    invalidEntries.nonEmpty || hotkeyConflicts.nonEmpty || newerThanSupported
+
+  def diagnostics: List[ConfigDiagnostic] =
+    invalidEntries.map(entry => ConfigDiagnostic.InvalidValue(entry.key, entry.value, entry.reason)) ++
+      hotkeyConflicts.map(ConfigDiagnostic.ConflictingHotkey.apply) ++
+      Option.when(newerThanSupported)(ConfigDiagnostic.NewerFileVersion(version, ConfigVersion.Current)) ++
+      migratedFrom.map(from => ConfigDiagnostic.Migrated(from, ConfigVersion.Current)) ++
+      deprecatedEntries.map(entry => ConfigDiagnostic.DeprecatedKey(entry.key, entry.replacement)) ++
+      removedKeys.map(ConfigDiagnostic.RemovedKey.apply) ++
+      unknownKeys.map(ConfigDiagnostic.UnknownKey.apply)
 
 object ConfigMigrationReport:
   val empty: ConfigMigrationReport = ConfigMigrationReport(ConfigVersion.Current)
@@ -88,3 +110,37 @@ object ConfigMigrationWarning:
 
   private def section(title: String, lines: List[String]): Option[String] =
     Option.when(lines.nonEmpty)((title :: lines).mkString("\n"))
+
+/** Upgrades a config file written by an older format version to the current one, before it is read.
+  *
+  * Each [[Step]] carries a file from `from` to `from + 1`. There is none yet because the format has not changed since
+  * version 1; the first change to it adds a step here rather than teaching the parser a second spelling.
+  */
+object ConfigMigrations:
+
+  final case class Step(from: ConfigVersion, migrate: Config => Config)
+
+  final case class Outcome(config: Config, found: ConfigVersion, applied: List[ConfigVersion])
+
+  val steps: List[Step] = Nil
+
+  /** A file with no usable `config.version` predates versioning, which is the same format as version 1. */
+  def versionOf(source: Config): ConfigVersion =
+    Try(source.getInt("config.version")).toOption
+      .filter(_ > 0)
+      .fold(ConfigVersion.Current)(ConfigVersion.apply)
+
+  def migrate(
+    source: Config,
+    available: List[Step] = steps,
+    target: ConfigVersion = ConfigVersion.Current
+  ): Outcome =
+    val found = versionOf(source)
+    val due = available
+      .filter(step => step.from.value >= found.value && step.from.value < target.value)
+      .sortBy(_.from.value)
+    val migrated = due.foldLeft(source)((current, step) => step.migrate(current))
+    val stamped =
+      if due.isEmpty then migrated
+      else migrated.withValue("config.version", ConfigValueFactory.fromAnyRef(target.value))
+    Outcome(stamped, found, due.map(_.from))
