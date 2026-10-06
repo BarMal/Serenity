@@ -210,6 +210,8 @@ lazy val root = (project in file("."))
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "serenity", _*) => MergeStrategy.first
       case PathList("META-INF", "services", _*) => MergeStrategy.concat
+      // Multi-release module descriptors (slf4j-api, commons-logging via FontBox): meaningless in a fat jar.
+      case PathList("META-INF", "versions", _, "module-info.class") => MergeStrategy.discard
       case x @ PathList("META-INF", xs @ _*) =>
         xs.map(_.toLowerCase) match {
           case "manifest.mf" :: Nil   => MergeStrategy.discard

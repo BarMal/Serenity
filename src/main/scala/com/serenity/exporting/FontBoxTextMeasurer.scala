@@ -1,4 +1,4 @@
-package com.serenity.`export`
+package com.serenity.exporting
 
 import java.io.IOException
 
@@ -35,7 +35,7 @@ final class FontBoxTextMeasurer private (faces: Map[(FontFamily, FaceStyle), Fon
 object FontBoxTextMeasurer:
 
   /** One parsed face. `advanceUnits` is `Left(codePoint)` for a code point the face has no glyph for. */
-  final private[`export`] class Face(
+  final private[exporting] class Face(
       font: TrueTypeFont,
       lookup: CmapLookup,
       val unitsPerEm: Int,

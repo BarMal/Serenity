@@ -1,4 +1,4 @@
-package com.serenity.`export`
+package com.serenity.exporting
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global

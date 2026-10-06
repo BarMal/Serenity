@@ -81,12 +81,12 @@ object ArchitectureChecks {
         "font parsing and the editor state to the shell",
       mainOnly = true
     ),
-    // S5: the export package is the effectful edge of that core (font loading, later the PDF painter); it reads the
+    // S5: the exporting package is the effectful edge of that core (font loading, later the PDF painter); it reads the
     // manuscript model but never the editor state, and never AWT, so measurement and painting stay on one font file.
     ImportRule(
-      "com/serenity/export",
+      "com/serenity/exporting/",
       Seq("java.awt", "com.serenity.state"),
-      "the export package measures and paints from the bundled font files through FontBox/PDFBox: no AWT, and the " +
+      "the exporting package measures and paints from the bundled font files through FontBox/PDFBox: no AWT, and the " +
         "editor state reaches it only as values",
       mainOnly = true
     ),
