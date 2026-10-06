@@ -79,7 +79,6 @@ final private[manager] class StateManagerEffectHandlers(
     currentState,
     logger,
     configPersistencePath,
-    sessionPersistence,
     onFontConfigChanged,
     deviceTextScaleProvider,
     editor,

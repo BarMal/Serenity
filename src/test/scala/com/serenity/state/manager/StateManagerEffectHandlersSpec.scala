@@ -522,7 +522,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
 
     reported.inputConfig.wheelScrollLines shouldBe 11
     fixture.currentState.persisted.config.inputConfig.wheelScrollLines shouldBe 11
-    fixture.sessionTriggers.get.unsafeRunSync() shouldBe List(SessionSaveTrigger.Manual)
+    fixture.sessionTriggers.get.unsafeRunSync() shouldBe Nil
   }
 
   it should "report the resulting font config from updateFontConfig" in {

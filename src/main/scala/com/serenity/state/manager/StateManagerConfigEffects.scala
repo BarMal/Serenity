@@ -19,22 +19,20 @@ import com.serenity.config.{
   StatusSegment
 }
 import com.serenity.io.{FileStamp, TimestampedBackup}
-import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
 import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.CommandRunnerReducer
 
 /** Config-update infrastructure and the settings-intent dispatch that drives it: appearance, cursor, panel chrome,
   * spell-check, and general settings all funnel through the same commit-then-persist path. The state change commits
-  * once, validated, on the dispatcher; the config file write and the session auto-save run on the Config lane (#1697),
-  * once per burst of changes, the write skipped when nothing in the file would change and the save skipped by the
-  * session manager when nothing in the session did. An outside edit of the file is reloaded on that same lane (#1934).
+  * once, validated, on the dispatcher; the config file write runs on the Config lane (#1697), once per burst of changes
+  * and skipped when nothing in the file would change. An outside edit of the file is reloaded on that same lane
+  * (#1934). The session is not involved: it keeps no settings.
   */
 final private[manager] class StateManagerConfigEffects(
     currentState: IO[AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     configPersistencePath: Option[java.nio.file.Path],
-    sessionPersistence: SessionPersistence,
     onFontConfigChanged: com.serenity.ui.fonts.FontLoader.FontConfig => IO[Unit],
     deviceTextScaleProvider: IO[Double],
     editor: EffectEditorPort,
@@ -63,8 +61,8 @@ final private[manager] class StateManagerConfigEffects(
   private[manager] def updateTextDisplayConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
 
-  /** Commits `update` (plus `syncState`) as one validated model write, then asks for the config file to be written and
-    * the session saved. Returns the config live afterwards -- the old one if validation rejected the change.
+  /** Commits `update` (plus `syncState`) as one validated model write, then asks for the config file to be written.
+    * Returns the config live afterwards -- the old one if validation rejected the change.
     */
   private def applyConfigUpdate(
     update: AppConfig => AppConfig,
@@ -363,7 +361,7 @@ final private[manager] class StateManagerConfigEffects(
     )
 
   private def requestConfigWrite: IO[Unit] =
-    writes.request(editor.submitEffect(PersistenceLanes.Config, _), writeLatestConfig >> autoSaveSession)
+    writes.request(editor.submitEffect(PersistenceLanes.Config, _), writeLatestConfig)
 
   private def writeLatestConfig: IO[Unit] =
     configFile.traverse_(file =>
@@ -371,11 +369,6 @@ final private[manager] class StateManagerConfigEffects(
         .flatMap(state => file.writeIfChanged(state.persisted.config))
         .flatMap(_.fold(reportSaveFailure, _ => IO.unit))
     )
-
-  private def autoSaveSession: IO[Unit] =
-    currentState
-      .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
-      .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after config change failed"))
 
   private def reportSaveFailure(error: ConfigError): IO[Unit] =
     logger.warn(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}")

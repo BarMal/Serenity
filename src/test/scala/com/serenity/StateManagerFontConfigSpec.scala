@@ -151,30 +151,6 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     observed.get().last.textScaleMultiplier shouldBe 2.0
   }
 
-  it should "persist font family changes made through UI font settings" in {
-    val sessionRoot  = Files.createTempDirectory("font-config-persistence")
-    val expectedFont = FontLoader.availableUiFamilies.lift(1).getOrElse(FontLoader.availableUiFamilies.head)
-    val stateManager =
-      StateManager
-        .apply(
-          testLogger("StateManagerFontConfigSpec"),
-          sessionRootOverride = Some(sessionRoot),
-          dictionaryCache = SharedDictionary.default
-        )
-        .unsafeRunSync()
-
-    openSettingsSubmenu(stateManager, UiFontSettingsGroupId)
-    stateManager.applyEvent(Enter).unsafeRunSync()
-    if FontLoader.availableUiFamilies.size > 1 then stateManager.applyEvent(MoveDown).unsafeRunSync()
-    stateManager.applyEvent(Enter).unsafeRunSync()
-
-    // The session auto-save runs on the Config lane after the dispatch returns (#1697).
-    stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
-    val loaded = stateManager.sessionService.loadSession.unsafeRunSync()
-
-    loaded.map(_.persisted.config.editorConfig.fontConfig.uiFontFamily) shouldBe Some(expectedFont)
-  }
-
   it should "persist font size changes made through code font settings to the config file" in {
     val configFile = Files.createTempDirectory("font-config-file").resolve("config.conf")
     val stateManager =

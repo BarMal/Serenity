@@ -91,14 +91,12 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
   private def configEffects(
     rig: Rig,
     saveConfig: (AppConfig, Path) => IO[Either[ConfigError, Unit]],
-    sessionTriggers: Ref[IO, List[SessionSaveTrigger]],
     root: Path
   ): StateManagerConfigEffects =
     new StateManagerConfigEffects(
       rig.stateRef.get,
       quietLogger,
       Some(root.resolve("config.conf")),
-      new RecordingSessionPersistence(sessionTriggers, root),
       _ => IO.unit,
       IO.pure(1.0),
       rig.editor,
@@ -181,12 +179,11 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
     val root = Files.createTempDirectory("persistence-lanes-config-burst")
     val program =
       for
-        rig      <- rig()
-        gate     <- Deferred[IO, Unit]
-        written  <- Ref.of[IO, List[AppConfig]](Nil)
-        triggers <- Ref.of[IO, List[SessionSaveTrigger]](Nil)
-        writer   <- gatedWriter(gate, written)
-        config = configEffects(rig, writer, triggers, root)
+        rig     <- rig()
+        gate    <- Deferred[IO, Unit]
+        written <- Ref.of[IO, List[AppConfig]](Nil)
+        writer  <- gatedWriter(gate, written)
+        config = configEffects(rig, writer, root)
         _ <- (1 to 5).toList.traverse_(lines =>
           rig.operations.dispatch(config.updateConfig(_.withWheelScrollLines(lines)).void)
         )
@@ -195,22 +192,20 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
         _             <- gate.complete(())
         _             <- rig.operations.awaitEffects
         afterRelease  <- written.get
-        saves         <- triggers.get
-      yield (committed, beforeRelease, afterRelease.map(_.inputConfig.wheelScrollLines), saves)
+      yield (committed, beforeRelease, afterRelease.map(_.inputConfig.wheelScrollLines))
 
-    runVirtual(program) shouldBe (5, Nil, List(5), List(SessionSaveTrigger.Manual))
+    runVirtual(program) shouldBe (5, Nil, List(5))
   }
 
   it should "write a change made while an earlier write is still running after it, in order" in {
     val root = Files.createTempDirectory("persistence-lanes-config-fifo")
     val program =
       for
-        rig      <- rig()
-        gate     <- Deferred[IO, Unit]
-        written  <- Ref.of[IO, List[AppConfig]](Nil)
-        triggers <- Ref.of[IO, List[SessionSaveTrigger]](Nil)
-        writer   <- gatedWriter(gate, written)
-        config = configEffects(rig, writer, triggers, root)
+        rig     <- rig()
+        gate    <- Deferred[IO, Unit]
+        written <- Ref.of[IO, List[AppConfig]](Nil)
+        writer  <- gatedWriter(gate, written)
+        config = configEffects(rig, writer, root)
         _      <- rig.operations.dispatch(config.updateConfig(_.withWheelScrollLines(7)).void)
         _      <- IO.sleep(WriteCoalescer.Debounce * 2)
         _      <- rig.operations.dispatch(config.updateConfig(_.withWheelScrollLines(9)).void)
@@ -226,10 +221,9 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
     val root = Files.createTempDirectory("persistence-lanes-config-unchanged")
     val program =
       for
-        rig      <- rig()
-        written  <- Ref.of[IO, List[AppConfig]](Nil)
-        triggers <- Ref.of[IO, List[SessionSaveTrigger]](Nil)
-        config = configEffects(rig, (saved, _) => written.update(_ :+ saved).as(Right(())), triggers, root)
+        rig     <- rig()
+        written <- Ref.of[IO, List[AppConfig]](Nil)
+        config = configEffects(rig, (saved, _) => written.update(_ :+ saved).as(Right(())), root)
         _      <- rig.operations.dispatch(config.updateConfig(_.withWheelScrollLines(7)).void)
         _      <- rig.operations.awaitEffects
         _      <- rig.operations.dispatch(config.updateConfig(_.withWheelScrollLines(7)).void)
@@ -246,12 +240,11 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
     val root = Files.createTempDirectory("persistence-lanes-keybinding")
     val program =
       for
-        rig      <- rig()
-        gate     <- Deferred[IO, Unit]
-        written  <- Ref.of[IO, List[AppConfig]](Nil)
-        triggers <- Ref.of[IO, List[SessionSaveTrigger]](Nil)
-        writer   <- gatedWriter(gate, written)
-        config      = configEffects(rig, writer, triggers, root)
+        rig     <- rig()
+        gate    <- Deferred[IO, Unit]
+        written <- Ref.of[IO, List[AppConfig]](Nil)
+        writer  <- gatedWriter(gate, written)
+        config      = configEffects(rig, writer, root)
         keybindings = new StateManagerKeybindingEffects(rig.stateRef.get, rig.commit, config.updateConfig)
         _ <- rig.operations.dispatch(config.updateConfig(_.withWheelScrollLines(7)).void)
         _ <- rig.operations.dispatch(
@@ -360,12 +353,11 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
     val root = Files.createTempDirectory("persistence-lanes-shutdown-drain")
     val program =
       for
-        rig      <- rig()
-        gate     <- Deferred[IO, Unit]
-        written  <- Ref.of[IO, List[AppConfig]](Nil)
-        triggers <- Ref.of[IO, List[SessionSaveTrigger]](Nil)
-        writer   <- gatedWriter(gate, written)
-        config = configEffects(rig, writer, triggers, root)
+        rig     <- rig()
+        gate    <- Deferred[IO, Unit]
+        written <- Ref.of[IO, List[AppConfig]](Nil)
+        writer  <- gatedWriter(gate, written)
+        config = configEffects(rig, writer, root)
         _        <- rig.operations.dispatch(config.updateConfig(_.withWheelScrollLines(7)).void)
         shutdown <- rig.operations.shutdownEffects().start
         _        <- IO.sleep(1.second)
@@ -382,12 +374,11 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
     val root = Files.createTempDirectory("persistence-lanes-shutdown-grace")
     val program =
       for
-        rig      <- rig()
-        gate     <- Deferred[IO, Unit]
-        written  <- Ref.of[IO, List[AppConfig]](Nil)
-        triggers <- Ref.of[IO, List[SessionSaveTrigger]](Nil)
-        writer   <- gatedWriter(gate, written)
-        config = configEffects(rig, writer, triggers, root)
+        rig     <- rig()
+        gate    <- Deferred[IO, Unit]
+        written <- Ref.of[IO, List[AppConfig]](Nil)
+        writer  <- gatedWriter(gate, written)
+        config = configEffects(rig, writer, root)
         _      <- rig.operations.dispatch(config.updateConfig(_.withWheelScrollLines(7)).void)
         _      <- rig.operations.shutdownEffects()
         landed <- written.get

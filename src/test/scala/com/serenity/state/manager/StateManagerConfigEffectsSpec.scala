@@ -9,34 +9,23 @@ import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{AppConfig, AppMode, ConfigManager, PanelEscapeTarget, PerMode, WindowChromeMode}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
-import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.noop.NoOpLogger
 
-/** Exercises [[StateManagerConfigEffects]] on its own: a real config path in a temp directory, a session-persistence
-  * double that records triggers instead of writing, and an [[EffectEditorPort]] double, so each settings intent can be
-  * checked for the config it writes *and* the collaborator it calls.
+/** Exercises [[StateManagerConfigEffects]] on its own: a real config path in a temp directory and an
+  * [[EffectEditorPort]] double, so each settings intent can be checked for the config it writes *and* the collaborator
+  * it calls.
   */
 class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  final private class RecordingSessionPersistence(triggers: Ref[IO, List[SessionSaveTrigger]], root: Path)
-      extends SessionPersistence(
-        SessionManager.create(root, AppThemeManager.create, NoOpLogger.impl[IO], SessionManager.SessionPolicy()),
-        SessionManager.SessionPolicy()
-      ):
-    override def maybeSaveSession(appState: AppState, trigger: SessionSaveTrigger): IO[Unit] =
-      triggers.update(_ :+ trigger)
-
   final private class Harness(
       val stateRef: Ref[IO, AppState],
-      val sessionTriggers: Ref[IO, List[SessionSaveTrigger]],
       val fontConfigs: Ref[IO, List[FontLoader.FontConfig]],
       val analysisRuns: Ref[IO, Int],
       val events: Ref[IO, List[Event]],
@@ -57,7 +46,6 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     val configPath = Option.when(persistConfig)(root.resolve("config.json"))
     val modelRef   = Ref.of[IO, Model](Model(initialState, UndoState())).unsafeRunSync()
     val stateRef   = ModelViews.appRef(modelRef)
-    val triggers   = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
     val fonts      = Ref.of[IO, List[FontLoader.FontConfig]](Nil).unsafeRunSync()
     val analyses   = Ref.of[IO, Int](0).unsafeRunSync()
     val events     = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
@@ -83,7 +71,6 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
 
     new Harness(
       stateRef,
-      triggers,
       fonts,
       analyses,
       events,
@@ -94,7 +81,6 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
         stateRef.get,
         NoOpLogger.impl[IO],
         configPath,
-        new RecordingSessionPersistence(triggers, root),
         fontConfig => fonts.update(_ :+ fontConfig),
         IO.pure(deviceTextScale),
         editor,
@@ -104,23 +90,21 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  "StateManagerConfigEffects" should "apply a config update to state, persist it, and auto-save the session" in {
+  "StateManagerConfigEffects" should "apply a config update to state and persist it" in {
     val fixture = harness()
 
     fixture.config.updateConfig(_.withWheelScrollLines(7)).unsafeRunSync().inputConfig.wheelScrollLines shouldBe 7
 
     fixture.currentConfig.inputConfig.wheelScrollLines shouldBe 7
-    fixture.sessionTriggers.get.unsafeRunSync() shouldBe List(SessionSaveTrigger.Manual)
     fixture.configPath.map(path => Files.exists(path)) shouldBe Some(true)
   }
 
-  it should "still auto-save the session when no config file is configured" in {
+  it should "apply a config update to state when no config file is configured" in {
     val fixture = harness(persistConfig = false)
 
     fixture.config.updateConfig(_.withWheelScrollLines(3)).unsafeRunSync()
 
     fixture.currentConfig.inputConfig.wheelScrollLines shouldBe 3
-    fixture.sessionTriggers.get.unsafeRunSync() shouldBe List(SessionSaveTrigger.Manual)
   }
 
   it should "resolve the device text scale and report the resulting font config" in {
@@ -243,7 +227,6 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     fixture.events.get.unsafeRunSync() shouldBe List(com.serenity.keystroke.events.ToggleContextualToolbar)
-    fixture.sessionTriggers.get.unsafeRunSync() shouldBe Nil
   }
 
   it should "propagate a contextual toolbar display mode change into the live toolbar surface" in {
@@ -348,13 +331,12 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
       PerMode(code = PanelEscapeTarget.Editor, prose = PanelEscapeTarget.Previous)
   }
 
-  it should "write the current config to disk on an explicit save without touching the session" in {
+  it should "write the current config to disk on an explicit save" in {
     val fixture = harness()
 
     fixture.config.persistConfigFile(AppConfig.default.withWheelScrollLines(9)).unsafeRunSync()
 
     fixture.configPath.map(path => Files.exists(path)) shouldBe Some(true)
-    fixture.sessionTriggers.get.unsafeRunSync() shouldBe Nil
   }
 
   private def textOf(config: AppConfig): String = ConfigManager.configToString(config)
