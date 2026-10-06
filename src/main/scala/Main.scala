@@ -95,6 +95,7 @@ object Main extends IOApp:
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
 
     for
+      _         <- BuildLogLines.announce
       _         <- logger.info(s"[TOOLKIT] ${toolkit.choice} (${toolkit.reason})")
       _         <- Java2DPipeline.installSafeDefaults()
       _         <- IO(CrashReporter.install())
