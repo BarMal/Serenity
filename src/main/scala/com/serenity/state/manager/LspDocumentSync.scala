@@ -51,7 +51,7 @@ final private[manager] class LspDocumentSync(port: LspDocumentSyncPort):
             languageId <- buffer.document.language.toList
             uri    = path.toUri.toString
             change = Option.when(changedContent)(LspDocumentSync.changedDocument(uri, languageId, buffer))
-            shown  = Option.when(scrolled)(LspDocumentSync.visibleRange(uri, languageId, buffer))
+            shown  = Option.when(scrolled)(LspDocumentSync.visibleRange(uri, languageId, buffer, currentState))
             effect <- change.toList ++ shown.toList
           yield AppEffect.LspQueue(effect)
           effects.traverse_(interpretEffect)
@@ -62,16 +62,9 @@ private[manager] object LspDocumentSync:
   private def changedDocument(uri: String, languageId: LanguageId, buffer: Buffer): LspQueueEffect =
     LspQueueEffect.DocumentChanged(uri, languageId, buffer.document.content)
 
-  private def visibleRange(uri: String, languageId: LanguageId, buffer: Buffer): LspQueueEffect =
-    val viewport = buffer.viewport
-    LspQueueEffect.Enqueue(
-      LspEffect.VisibleRangeChanged(
-        uri,
-        languageId,
-        viewport.topLine,
-        viewport.topLine + math.max(0, viewport.visibleLines - 1)
-      )
-    )
+  private def visibleRange(uri: String, languageId: LanguageId, buffer: Buffer, state: AppState): LspQueueEffect =
+    val lines = VisibleBufferLines.of(buffer, state)
+    LspQueueEffect.Enqueue(LspEffect.VisibleRangeChanged(uri, languageId, lines.first, lines.last))
 
   def announceClosed(lspQueue: LspEffectQueue)(before: AppState, after: AppState): IO[Unit] =
     closedDocuments(before, after).traverse_(lspQueue.enqueue)

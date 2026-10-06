@@ -39,11 +39,13 @@ class LspDocumentSyncViewportSpec extends AnyFlatSpec with Matchers:
       effects <- sent.get
     yield effects).unsafeRunSync()
 
+  private val document = (1 to 300).map(n => s"line $n").mkString("\n")
+
   private val top = Viewport(topLine = 0, visibleLines = 30, visibleColumns = 80)
 
   "LspDocumentSync" should "announce the visible lines when the viewport scrolls" in {
-    val before = stateWith("a\nb", top)
-    val after  = stateWith("a\nb", top.copy(topLine = 100))
+    val before = stateWith(document, top)
+    val after  = stateWith(document, top.copy(topLine = 100))
 
     effectsOf(before, after) shouldBe List(
       AppEffect.LspQueue(
@@ -53,8 +55,8 @@ class LspDocumentSyncViewportSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "announce the visible lines when the viewport is resized" in {
-    val before = stateWith("a\nb", top)
-    val after  = stateWith("a\nb", top.copy(visibleLines = 50))
+    val before = stateWith(document, top)
+    val after  = stateWith(document, top.copy(visibleLines = 50))
 
     effectsOf(before, after) shouldBe List(
       AppEffect.LspQueue(
@@ -63,22 +65,33 @@ class LspDocumentSyncViewportSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "stop the visible lines at the end of the document" in {
+    val before = stateWith(document, top)
+    val after  = stateWith(document, top.copy(topLine = 290))
+
+    effectsOf(before, after) shouldBe List(
+      AppEffect.LspQueue(
+        LspQueueEffect.Enqueue(LspEffect.VisibleRangeChanged(uri, LanguageId.Scala, 290, 299))
+      )
+    )
+  }
+
   it should "announce nothing when neither the content nor the viewport changed" in {
-    val state = stateWith("a\nb", top)
+    val state = stateWith(document, top)
 
     effectsOf(state, state) shouldBe Nil
   }
 
   it should "announce both the new text and the visible lines when an edit scrolls the viewport" in {
-    val before = stateWith("a\nb", top)
-    val after  = stateWith("a\nb\nc", top.copy(topLine = 3))
+    val before = stateWith(document, top)
+    val after  = stateWith(document + "\nc", top.copy(topLine = 3))
 
     val effects = effectsOf(before, after)
 
     effects.collect {
       case AppEffect.LspQueue(LspQueueEffect.DocumentChanged(changed, _, text)) =>
         (changed, text.collect())
-    } shouldBe List((uri, "a\nb\nc"))
+    } shouldBe List((uri, document + "\nc"))
     effects.drop(1) shouldBe List(
       AppEffect.LspQueue(LspQueueEffect.Enqueue(LspEffect.VisibleRangeChanged(uri, LanguageId.Scala, 3, 32)))
     )

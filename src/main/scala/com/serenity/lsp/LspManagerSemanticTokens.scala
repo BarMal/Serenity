@@ -27,6 +27,12 @@ import org.typelevel.log4cats.Logger
 /** The result a server last gave for a document, which a later `full/delta` request is relative to. */
 final private[lsp] case class TokenBaseline(resultId: String, data: IArray[Int])
 
+/** Which refresh a document is waiting out the debounce delay for: one that asks for everything, or only for the lines
+  * a scroll brought into view.
+  */
+private[lsp] enum PendingRefresh:
+  case Everything, VisibleLines
+
 /** What [[LspManagerSemanticTokens]] remembers per document between requests: the server's last result (the base of the
   * next delta), the lines the editor shows, and whether tokens are on screen -- with the document version a
   * whole-document result was shown for, if one was.
@@ -34,7 +40,9 @@ final private[lsp] case class TokenBaseline(resultId: String, data: IArray[Int])
 final private[lsp] class SemanticTokensSession private (
     baselines: Ref[IO, Map[DocumentUri, TokenBaseline]],
     visible: Ref[IO, Map[DocumentUri, LineRange]],
-    shown: Ref[IO, Map[DocumentUri, Option[Int]]]
+    shown: Ref[IO, Map[DocumentUri, Option[Int]]],
+    claimed: Ref[IO, Map[DocumentUri, LineRange]],
+    pending: Ref[IO, Map[DocumentUri, PendingRefresh]]
 ):
 
   def baselineOf(uri: DocumentUri): IO[Option[TokenBaseline]] = baselines.get.map(_.get(uri))
@@ -55,7 +63,21 @@ final private[lsp] class SemanticTokensSession private (
 
   def markPartial(uri: DocumentUri): IO[Unit] = shown.update(held => held.updated(uri, held.get(uri).flatten))
 
-  def forgetResults(uri: DocumentUri): IO[Unit] = baselines.update(_ - uri) >> shown.update(_ - uri)
+  /** Whether the caller is the one to request `lines`: false while the same lines are already being requested. */
+  def claimRange(uri: DocumentUri, lines: LineRange): IO[Boolean] =
+    claimed.modify(held => if held.get(uri).contains(lines) then (held, false) else (held.updated(uri, lines), true))
+
+  def releaseRange(uri: DocumentUri, lines: LineRange): IO[Unit] =
+    claimed.update(held => if held.get(uri).contains(lines) then held - uri else held)
+
+  def pendingOf(uri: DocumentUri): IO[Option[PendingRefresh]] = pending.get.map(_.get(uri))
+
+  def markPending(uri: DocumentUri, refresh: PendingRefresh): IO[Unit] = pending.update(_.updated(uri, refresh))
+
+  def clearPending(uri: DocumentUri): IO[Unit] = pending.update(_ - uri)
+
+  def forgetResults(uri: DocumentUri): IO[Unit] =
+    baselines.update(_ - uri) >> shown.update(_ - uri) >> claimed.update(_ - uri) >> pending.update(_ - uri)
 
   def forget(uri: DocumentUri): IO[Unit] = forgetResults(uri) >> visible.update(_ - uri)
 
@@ -66,7 +88,9 @@ private[lsp] object SemanticTokensSession:
       baselines <- Ref.of[IO, Map[DocumentUri, TokenBaseline]](Map.empty)
       visible   <- Ref.of[IO, Map[DocumentUri, LineRange]](Map.empty)
       shown     <- Ref.of[IO, Map[DocumentUri, Option[Int]]](Map.empty)
-    yield new SemanticTokensSession(baselines, visible, shown)
+      claimed   <- Ref.of[IO, Map[DocumentUri, LineRange]](Map.empty)
+      pending   <- Ref.of[IO, Map[DocumentUri, PendingRefresh]](Map.empty)
+    yield new SemanticTokensSession(baselines, visible, shown, claimed, pending)
 
 /** Semantic tokens for the documents [[LspManager]] serves: debounced requests, `full/delta` and `range` where the
   * server offers them, and tokens that move with the text between a local edit and the server's answer.
@@ -110,21 +134,40 @@ final private[lsp] class LspManagerSemanticTokens(
       lineCount  <- openDocuments.get.map(_.textOf(uri).fold(0)(_.lineCount))
       plan = SemanticTokensPlan.choose(features, baseline.map(_.resultId), lineCount, visible)
       _ <- plan.primary.traverse_(startPrimary(rawUri, languageId, _))
-      _ <- plan.preview.traverse_(startPreview(rawUri, languageId, _))
+      _ <- plan.preview.traverse_(startPreview(rawUri, languageId, _, connected = connection.isDefined))
     yield ()
 
   /** Requests tokens once no further call has come for `debounce`: each call replaces the timer the last one started,
     * so a burst of edits makes one request.
     */
   def refreshAfterQuiet(rawUri: String, languageId: LanguageId): IO[Unit] =
-    val key = RequestKey(DocumentUri(rawUri), RequestKind.SemanticTokensDebounce)
-    val delayed = (IO.sleep(debounce) >> pool.serialized(refreshNow(rawUri, languageId)))
+    afterQuiet(rawUri, PendingRefresh.Everything)(refreshNow(rawUri, languageId))
+
+  /** Asks only for the lines on screen once the viewport has stopped moving for `debounce`, reading them when the timer
+    * fires so the newest are used.
+    */
+  private def refreshVisibleAfterQuiet(rawUri: String, languageId: LanguageId): IO[Unit] =
+    afterQuiet(rawUri, PendingRefresh.VisibleLines)(refreshVisible(rawUri, languageId))
+
+  private def afterQuiet(rawUri: String, refresh: PendingRefresh)(request: IO[Unit]): IO[Unit] =
+    val uri = DocumentUri(rawUri)
+    val key = RequestKey(uri, RequestKind.SemanticTokensDebounce)
+    val delayed = (IO.sleep(debounce) >> session.clearPending(uri) >> pool.serialized(request))
       .handleErrorWith(ex => logger.error(ex)(s"[LSP] semanticTokens refresh failed: $rawUri"))
     for
       earlier <- requestFibers.modify(fibers => (fibers - key, fibers.get(key)))
       _       <- earlier.traverse_(_.cancel)
+      _       <- session.markPending(uri, refresh)
       timer   <- supervisor.supervise(delayed)
       _       <- requestFibers.update(_.updated(key, timer))
+    yield ()
+
+  private def refreshVisible(rawUri: String, languageId: LanguageId): IO[Unit] =
+    val uri = DocumentUri(rawUri)
+    for
+      connection <- pool.connectionFor(uri)
+      visible    <- session.visibleOf(uri)
+      _          <- visible.traverse_(startPreview(rawUri, languageId, _, connected = connection.isDefined))
     yield ()
 
   /** Moves the tokens on screen with the text that changed from `previous` to `next`, until the server answers for
@@ -142,16 +185,33 @@ final private[lsp] class LspManagerSemanticTokens(
         IO.unit
       )
 
-  /** A server that can only answer for a range has nothing for lines scrolled into view until it is asked again. */
+  /** A server that offers `range` is asked for the lines scrolled into view when it has no answer for them: one that
+    * offers nothing else has none until it is asked, and one that sends the whole document has none while that answer
+    * is pending or the text has changed since. A refresh already waiting out its delay will read the newest lines
+    * itself, so it is left to do so.
+    */
   def visibleRangeChanged(rawUri: String, languageId: LanguageId, firstLine: Int, lastLine: Int): IO[Unit] =
     val uri = DocumentUri(rawUri)
     session.setVisible(uri, LineRange(firstLine, lastLine)) >>
       pool.connectionFor(uri).flatMap { connection =>
         connection.traverse_(
-          _.semanticTokensFeatures
-            .flatMap(features => refreshAfterQuiet(rawUri, languageId).whenA(features.range && !features.full))
+          _.semanticTokensFeatures.flatMap(features =>
+            if !features.range then IO.unit
+            else if !features.full then refreshAfterQuiet(rawUri, languageId)
+            else scrolledWithFullOffered(rawUri, languageId)
+          )
         )
       }
+
+  private def scrolledWithFullOffered(rawUri: String, languageId: LanguageId): IO[Unit] =
+    val uri = DocumentUri(rawUri)
+    for
+      version  <- documentVersions.get.map(_.get(uri))
+      complete <- session.completeVersionOf(uri)
+      pending  <- session.pendingOf(uri)
+      _ <- refreshVisibleAfterQuiet(rawUri, languageId)
+        .whenA(version != complete && !pending.contains(PendingRefresh.Everything))
+    yield ()
 
   private def startRequest(kind: RequestKind, uri: DocumentUri, languageId: LanguageId)(
     request: (LspConnection, RequestContext) => IO[Unit]
@@ -256,9 +316,13 @@ final private[lsp] class LspManagerSemanticTokens(
   private def fetchedFrom(result: Option[SemanticTokensResult]): Option[Fetched] =
     result.collect { case SemanticTokensResult.Full(resultId, data) => Fetched(resultId, data) }
 
-  private def startPreview(rawUri: String, languageId: LanguageId, lines: LineRange): IO[Unit] =
+  /** Requests `lines` unless the same lines are already being requested, and cancels a request for others, which the
+    * viewport has since left. A request that cannot reach a server is not claimed, as nothing would release it.
+    */
+  private def startPreview(rawUri: String, languageId: LanguageId, lines: LineRange, connected: Boolean): IO[Unit] =
     val uri = DocumentUri(rawUri)
-    startRequest(RequestKind.SemanticTokensRange, uri, languageId) { (connection, context) =>
+    val key = RequestKey(uri, RequestKind.SemanticTokensRange)
+    val send = startRequest(RequestKind.SemanticTokensRange, uri, languageId) { (connection, context) =>
       Trace
         .timed(s"lsp.semanticTokens.range.$rawUri")(
           whenServed(connection)(_.range) { legend =>
@@ -275,7 +339,14 @@ final private[lsp] class LspManagerSemanticTokens(
           }
         )
         .handleErrorWith(ex => logger.error(ex)(s"[LSP] semanticTokens range failed: $rawUri"))
+        .guarantee(session.releaseRange(uri, lines))
     }
+    if !connected then send
+    else
+      session.claimRange(uri, lines).flatMap { claimed =>
+        val supersede = requestFibers.modify(fibers => (fibers - key, fibers.get(key))).flatMap(_.traverse_(_.cancel))
+        (supersede >> send).whenA(claimed)
+      }
 
   /** A preview is shown only while no whole-document result has been shown for its version: it would otherwise replace
     * lines the fuller answer already settled.
