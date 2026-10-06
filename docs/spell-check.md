@@ -43,7 +43,8 @@ several of these directories is loaded once. This lookup is only consulted when 
 empty: a path you have configured yourself is always used as configured and never silently second-guessed.
 
 When no dictionary resolves for the configured languages, every prose buffer shows one notice on its first line naming
-the directories searched, and no words are flagged -- checking against an empty word list would flag every word. British English never reaches this: it has a bundled dictionary (below).
+the directories searched, and no words are flagged -- checking against an empty word list would flag every word.
+British English never reaches this: it has a bundled dictionary (below).
 
 A config file saved by an earlier version keeps the values it was saved with (`spellcheck.enabled = false`,
 `spellcheck.languages = ["en"]`); change them to pick up the new defaults. `en` looks for `en.dic`, which Debian and
