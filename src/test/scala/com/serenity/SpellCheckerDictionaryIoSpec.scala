@@ -47,7 +47,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     // `analyzeText` takes a `DictionaryContext` rather than a `SpellCheckConfig` path list, so there is nothing in
     // its signature capable of reaching the filesystem: discovery/loading is a separate, explicit step
     // (`DictionaryLoader.loadSnapshot`) that pure analysis never performs itself.
-    val config = SpellCheckConfig(enabled = true)
+    val config = SpellCheckConfig(enabled = true, languages = List("en"))
     val dictionary =
       DictionaryContext(words = Set("hand", "built"), replacements = Map.empty, failures = Nil)
 
@@ -57,7 +57,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "surface dictionary load failures from a precomputed context without re-reading the filesystem" in {
-    val config = SpellCheckConfig(enabled = true)
+    val config = SpellCheckConfig(enabled = true, languages = List("en"))
     val dictionary =
       DictionaryContext(words = Set.empty, replacements = Map.empty, failures = List("boom"))
 
@@ -69,7 +69,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   "SpellChecker.analysisFingerprints and applyIfCurrent" should "accept precomputed dictionary fingerprints instead of reading the filesystem themselves" in {
     // Neither method takes a `SpellCheckConfig`'s raw dictionary paths without also being handed the fingerprints
     // for them, so a caller cannot invoke either from inside `Ref.update` and have it silently touch disk.
-    val config     = SpellCheckConfig(enabled = true)
+    val config     = SpellCheckConfig(enabled = true, languages = List("en"))
     val bufferId   = BufferId(0)
     val baseBuffer = AppState.initial.persisted.buffers(bufferId)
     val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(content = Rope("hello")))
@@ -91,7 +91,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     // dodge cross-suite interference on a shared process-wide map.
     val cache      = DictionaryCache()
     val dictionary = writeDic("serenity-bounded-cache", List("hello"))
-    val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     cache.entryCount(dictionary) shouldBe 0
     DictionaryLoader.loadSnapshot(config, cache)
@@ -110,9 +110,9 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     val cache       = DictionaryCache()
     val dictionaryA = writeDic("serenity-evict-a", List("hello"))
     val dictionaryB = writeDic("serenity-evict-b", List("world"))
-    val bothConfig =
-      SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionaryA.toString, dictionaryB.toString))
-    val onlyAConfig = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionaryA.toString))
+    val english     = SpellCheckConfig(enabled = true, languages = List("en"))
+    val bothConfig  = english.copy(dictionaryPaths = List(dictionaryA.toString, dictionaryB.toString))
+    val onlyAConfig = english.copy(dictionaryPaths = List(dictionaryA.toString))
 
     DictionaryLoader.loadSnapshot(bothConfig, cache)
     cache.entryCount(dictionaryA) shouldBe 1
@@ -127,9 +127,9 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
 
   it should "never let two independently constructed DictionaryCache instances share cache entries" in {
     val dictionary = writeDic("serenity-cache-isolation", List("hello"))
-    val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
-    val cacheA     = DictionaryCache()
-    val cacheB     = DictionaryCache()
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
+    val cacheA = DictionaryCache()
+    val cacheB = DictionaryCache()
 
     DictionaryLoader.loadSnapshot(config, cacheA)
 
@@ -140,7 +140,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   it should "pick up a dictionary's latest content after repeated edits despite the bounded cache" in {
     val cache      = DictionaryCache()
     val dictionary = writeDic("serenity-bounded-cache-content", List("hello"))
-    val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     DictionaryLoader.loadSnapshot(config, cache)
 
@@ -167,7 +167,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         "SYLLABLENUM I"
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("hello wurld", config)
 
@@ -184,7 +184,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
       List("draft/G"),
       List("SET UTF-8", "SFX G Y 1", "SFX G 0 ing .")
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("draft drafting", config)
 
@@ -204,7 +204,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         "COMPOUNDWORDMAX 3"
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("understand", config)
 
@@ -225,7 +225,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         "ICONV ﬁ fi"
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     // "ﬁle" is the ligature-typed variant of "file" (fi-ligature + "le").
     val diagnostics = SpellChecker.check("ﬁle wurld", config)
@@ -246,7 +246,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         "REP cafe caf'e"
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("cafe", config)
 
@@ -266,7 +266,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         "SFX G 0 ing ."
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("draft drafting", config)
 
@@ -288,7 +288,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         "COMPOUNDRULE A*B*C*"
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     // "abc" and "aac" are in hunspell's own compoundrule2.good; "cba" (reversed flag order) is not generated by
     // any A*B*C* derivation and is absent from compoundrule2.good.
@@ -312,7 +312,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         "COMPOUNDRULE A*B*C*"
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val context = DictionaryLoader.loadSnapshot(config, DictionaryCache()).context
 
@@ -321,7 +321,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave compoundCandidateIndex empty when no dictionary declares COMPOUNDRULE" in {
-    val config = SpellCheckConfig(enabled = true)
+    val config = SpellCheckConfig(enabled = true, languages = List("en"))
 
     val context = DictionaryLoader.loadSnapshot(config, DictionaryCache()).context
 
@@ -341,7 +341,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         "COMPOUNDRULE A*B"
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("gartentuer haustuer tuerhaus zutuer", config)
 
@@ -374,7 +374,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         "SFX C 0 obb/BX ."
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("nagy nagyobb legnagyobb legeslegnagyobb legnagy legeslegnagy", config)
 
@@ -399,7 +399,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
           "COMPOUNDFLAG A"
         )
       )
-      val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+      val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
       val diagnostics = SpellChecker.check("foobar barfoo foobarfoo fooxy", config)
 
@@ -412,7 +412,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
       List("foo/A", "bar/A"),
       List("SET UTF-8", "COMPOUNDMIN 3", "COMPOUNDFLAG A")
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("foo bar foobar", config)
 
@@ -428,7 +428,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
       List("sol/A", "skinn/A"),
       List("SET UTF-8", "COMPOUNDMIN 3", "COMPOUNDFLAG A")
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("solskinn", config)
 
@@ -441,7 +441,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
       List("aa/A", "bb/A", "cc/A", "dd/A"),
       List("SET UTF-8", "COMPOUNDMIN 2", "COMPOUNDFLAG A", "COMPOUNDWORDMAX 2")
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("aabb aabbcc", config)
 
@@ -463,7 +463,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         "COMPOUNDEND W"
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("unstandder derstandun", config)
 
@@ -486,7 +486,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         "COMPOUNDFLAG C"
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("gartenhaus foobar bargarten", config)
 
@@ -507,7 +507,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
       List("foo/A", "Bar/A"),
       List("SET UTF-8", "COMPOUNDMIN 1", "COMPOUNDFLAG A", "CHECKCOMPOUNDCASE")
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("fooBar", config)
 
@@ -521,7 +521,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
       List("foo/A", "bar/A"),
       List("SET UTF-8", "COMPOUNDMIN 1", "COMPOUNDFLAG A", "CHECKCOMPOUNDDUP")
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("foofoo foobar", config)
 
@@ -537,7 +537,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         List("szer/A", "wiz/A", "szerviz"),
         List("SET UTF-8", "COMPOUNDMIN 1", "COMPOUNDFLAG A", "CHECKCOMPOUNDREP", "REP 1", "REP w v")
       )
-      val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+      val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
       val diagnostics = SpellChecker.check("szerwiz", config)
 
@@ -551,7 +551,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
       List("foo/A", "opera/A"),
       List("SET UTF-8", "COMPOUNDMIN 1", "COMPOUNDFLAG A", "CHECKCOMPOUNDTRIPLE")
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("fooopera operafoo", config)
 
@@ -567,7 +567,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         List("glass/A", "sko/A"),
         List("SET UTF-8", "COMPOUNDMIN 2", "COMPOUNDFLAG A", "CHECKCOMPOUNDTRIPLE", "SIMPLIFIEDTRIPLE")
       )
-      val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+      val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
       val diagnostics = SpellChecker.check("glasssko glassko", config)
 
@@ -589,7 +589,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
           "CHECKCOMPOUNDPATTERN o b z"
         )
       )
-      val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+      val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
       val diagnostics = SpellChecker.check("foobar fozar", config)
 
@@ -610,7 +610,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
         "CHECKCOMPOUNDPATTERN o/X b/Y z"
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("booban boobar bozan", config)
 
@@ -634,7 +634,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
           "SFX B 0 s ."
         )
       )
-      val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+      val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
       val diagnostics = SpellChecker.check("pseudo pseudos pseudofoo foopseudo", config)
 

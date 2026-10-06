@@ -1,9 +1,11 @@
 package com.serenity.state.manager
 
 import cats.syntax.foldable.*
+import cats.syntax.traverse.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.diagnostics.Trace
 import com.serenity.keystroke.events.*
+import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.components.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
@@ -115,7 +117,12 @@ final private[manager] class StateManagerEventPipeline(
     EditorContextMenuHitTestingPort(
       currentState = modelCommit.currentState,
       applyReducerResult = applyReducerResult,
-      resolveMouseTarget = editorMouseTargeting.resolveMouseTarget
+      resolveMouseTarget = editorMouseTargeting.resolveMouseTarget,
+      spellingItems = (state, buffer, at) =>
+        SpellChecker
+          .misspellingAt(state, buffer, at)
+          .traverse(found => operations.spellingSuggestions(found.word).map(SpellingMenu.items(found, _)))
+          .map(_.getOrElse(Nil))
     )
   )
 

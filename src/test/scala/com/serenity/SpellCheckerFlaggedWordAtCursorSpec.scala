@@ -16,7 +16,7 @@ class SpellCheckerFlaggedWordAtCursorSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   it should "find the word covered by the spell-check diagnostic at the cursor" in {
-    val config     = SpellCheckConfig(enabled = true)
+    val config     = SpellCheckConfig(enabled = true, languages = List("en"))
     val bufferId   = BufferId(0)
     val text       = "hello wurld today"
     val baseBuffer = AppState.initial.persisted.buffers(bufferId)
@@ -42,7 +42,7 @@ class SpellCheckerFlaggedWordAtCursorSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not resolve a flagged word when the cursor sits outside every diagnostic range" in {
-    val config     = SpellCheckConfig(enabled = true)
+    val config     = SpellCheckConfig(enabled = true, languages = List("en"))
     val bufferId   = BufferId(0)
     val text       = "hello wurld today"
     val baseBuffer = AppState.initial.persisted.buffers(bufferId)

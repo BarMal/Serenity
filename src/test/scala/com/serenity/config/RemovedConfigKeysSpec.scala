@@ -244,7 +244,7 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
     Files.writeString(file, oldDefault)
     val result = ConfigManagerTestSupport.loadConfigResult(Some(file.toString))
 
-    result.config shouldBe AppConfig.default
+    result.config shouldBe AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
     result.report.unknownKeys shouldBe Nil
     result.report.invalidEntries shouldBe Nil
     result.report.deprecatedEntries shouldBe Nil
@@ -266,5 +266,8 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val decoded = json.as[SessionState].getOrElse(fail("the stored session no longer decodes"))
 
-    decoded.config shouldBe AppConfig.default.withWordWrap(false).withLineNumbers(false)
+    decoded.config shouldBe AppConfig.default
+      .withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
+      .withWordWrap(false)
+      .withLineNumbers(false)
   }

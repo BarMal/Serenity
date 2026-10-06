@@ -37,6 +37,17 @@ import com.serenity.config.SpellCheckDictionaryFingerprint
   * `HunspellFreeCompoundMatcher.matches` applies them to each adjacent pair of members in a segmentation it finds,
   * using `words`/`replacements`/`compoundWordFlags` above for the standalone-word and pattern-reconstruction lookups
   * `CHECKCOMPOUNDREP`/`CHECKCOMPOUNDPATTERN` need.
+  *
+  * `words` holds only the words with no dictionary file behind them (the configured extra words and the built-in
+  * fallback lists); a dictionary's own words stay as stems in `stems` and are recognised by stripping affixes at lookup
+  * time (#1939), so memory follows the number of `.dic` entries rather than the number of forms they generate.
+  * `tryCharacters` is the `.aff` `TRY` string, the letters suggestion search draws insertions and substitutions from.
+  * `breaksAtHyphens` is false only for a dictionary that says `BREAK 0`: otherwise a hyphenated word is right when each
+  * of its parts is.
+  *
+  * `missingDictionary` (#1680) is the notice to show, once, when no word list at all resolved for the configured
+  * languages: checking prose against an empty list would flag every word, so analysis flags none and this is shown
+  * instead.
   */
 final case class DictionaryContext(
     words: Set[String],
@@ -54,8 +65,15 @@ final case class DictionaryContext(
     compoundEndFlag: Option[String] = None,
     compoundWordMax: Option[Int] = None,
     compoundFlagTrie: CompoundTrie = CompoundTrie.empty,
-    compoundCheckRules: CompoundCheckRules = CompoundCheckRules.empty
-)
+    compoundCheckRules: CompoundCheckRules = CompoundCheckRules.empty,
+    missingDictionary: Option[String] = None,
+    stems: List[AffixedWordList] = Nil,
+    tryCharacters: String = "",
+    breaksAtHyphens: Boolean = true
+):
+
+  /** Whether `word` (already `DictionaryWord.normalize`d) is a dictionary word or an affixed form of one. */
+  def knows(word: String): Boolean = words.contains(word) || stems.exists(_.contains(word))
 
 /** The result of one explicit dictionary-discovery pass: the loaded words/replacements/failures plus the on-disk
   * fingerprints that produced them. Obtain one via `DictionaryLoader.loadSnapshot`, called from `IO.blocking`, then

@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.*
+import com.serenity.keystroke.events.{CutToDarlings, RestoreDarling}
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.*
@@ -104,6 +105,9 @@ final private[manager] class StateManagerEffectHandlers(
     showPeek,
     showModal
   )
+
+  private val spellingEffects =
+    new StateManagerSpellingEffects(editor, currentState, interpretEffect, configEffects.addWordToDictionary)
 
   private val navigationEffects =
     new StateManagerNavigationEffects(
@@ -249,22 +253,24 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def dispatchCommand(command: Command, state: AppState, recordUsage: Boolean): IO[Unit] =
     val dispatch = command.intent match
-      case CommandIntent.Lifecycle(intent)    => interpretLifecycleIntent(intent, state)
-      case CommandIntent.File(intent)         => interpretFileIntent(intent, state)
-      case CommandIntent.Edit(intent)         => interpretEditIntent(intent)
-      case CommandIntent.RichText(intent)     => richTextEffects.interpret(intent)
-      case CommandIntent.Comments(intent)     => navigationEffects.interpretComments(intent)
-      case CommandIntent.Placeholders(intent) => navigationEffects.interpretPlaceholders(intent)
-      case CommandIntent.Darlings(intent)     => interpretDarlingIntent(intent)
-      case CommandIntent.Navigation(intent)   => navigationEffects.interpretNavigation(intent)
-      case CommandIntent.Lsp(intent)          => projectLspEffects.interpretLsp(intent, state)
-      case CommandIntent.Theme(intent)        => surfacePopupEffects.interpretThemeIntent(intent, state)
-      case CommandIntent.View(intent)         => panelEffects.interpret(intent, state)
-      case CommandIntent.Project(intent)      => projectLspEffects.interpretProject(intent, state)
-      case CommandIntent.Session(intent)      => interpretSessionIntent(intent, state)
-      case CommandIntent.Keybindings(intent)  => keybindingEffects.interpret(intent)
-      case CommandIntent.UiPresets(intent)    => uiPresetEffects.interpret(intent)
-      case CommandIntent.Settings(intent)     => configEffects.interpret(intent, state)
+      case CommandIntent.Lifecycle(intent)                      => interpretLifecycleIntent(intent, state)
+      case CommandIntent.File(intent)                           => interpretFileIntent(intent, state)
+      case CommandIntent.Edit(intent)                           => interpretEditIntent(intent)
+      case CommandIntent.RichText(intent)                       => richTextEffects.interpret(intent)
+      case CommandIntent.Comments(intent)                       => navigationEffects.interpretComments(intent)
+      case CommandIntent.Placeholders(intent)                   => navigationEffects.interpretPlaceholders(intent)
+      case CommandIntent.Darlings(DarlingIntent.CutToDarlings)  => enqueueEvent(CutToDarlings)
+      case CommandIntent.Darlings(DarlingIntent.RestoreDarling) => enqueueEvent(RestoreDarling)
+      case CommandIntent.Spelling(intent)                       => spellingEffects.interpret(intent)
+      case CommandIntent.Navigation(intent)                     => navigationEffects.interpretNavigation(intent)
+      case CommandIntent.Lsp(intent)                            => projectLspEffects.interpretLsp(intent, state)
+      case CommandIntent.Theme(intent)       => surfacePopupEffects.interpretThemeIntent(intent, state)
+      case CommandIntent.View(intent)        => panelEffects.interpret(intent, state)
+      case CommandIntent.Project(intent)     => projectLspEffects.interpretProject(intent, state)
+      case CommandIntent.Session(intent)     => interpretSessionIntent(intent, state)
+      case CommandIntent.Keybindings(intent) => keybindingEffects.interpret(intent)
+      case CommandIntent.UiPresets(intent)   => uiPresetEffects.interpret(intent)
+      case CommandIntent.Settings(intent)    => configEffects.interpret(intent, state)
     // issue #1048: MRU tracking -- every executed registry command counts toward its recency, regardless of what
     // triggered it (palette, hotkey, mouse click, ...), living on `persisted` since `CommandRunner` itself is
     // reconstructed fresh each time the palette opens (`CommandRunner.recordCommandUsage`'s own doc). Left out:
@@ -313,9 +319,8 @@ final private[manager] class StateManagerEffectHandlers(
             current
           )
         )
-      case FileIntent.ShowLicenceAndNotices => com.serenity.io.LicenceNotices.open(loadFile)
-      case FileIntent.SetBufferLanguage(language) =>
-        setBufferLanguage(state, language)
+      case FileIntent.ShowLicenceAndNotices       => com.serenity.io.LicenceNotices.open(loadFile)
+      case FileIntent.SetBufferLanguage(language) => setBufferLanguage(state, language)
       case FileIntent.ReloadFromDisk(bufferId) =>
         reloadBuffer(bufferId)
       case FileIntent.OverwriteOnDisk(bufferId) =>
@@ -394,11 +399,6 @@ final private[manager] class StateManagerEffectHandlers(
         enqueueEvent(com.serenity.keystroke.events.Redo)
       case EditIntent.FormatCurrentFile =>
         logger.debug("[CMD] Format command requested")
-
-  private def interpretDarlingIntent(intent: DarlingIntent): IO[Unit] =
-    intent match
-      case DarlingIntent.CutToDarlings  => enqueueEvent(com.serenity.keystroke.events.CutToDarlings)
-      case DarlingIntent.RestoreDarling => enqueueEvent(com.serenity.keystroke.events.RestoreDarling)
 
   // Read inside the validated model write rather than from a snapshot: a command can run off the dispatcher.
   private def showModalValidated(modalFor: AppState => Modal): IO[Unit] =

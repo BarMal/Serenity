@@ -164,7 +164,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         state.copy(persisted =
           state.persisted.copy(
             buffers = state.persisted.buffers + (bufferId -> buffer),
-            config = state.persisted.config.withSpellCheck(SpellCheckConfig(enabled = false))
+            config = state.persisted.config.withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
           )
         )
       }

@@ -216,7 +216,9 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
   private def spellCheckedState(content: String): AppState =
     val enabled = AppState.initial.copy(persisted =
       AppState.initial.persisted.copy(config =
-        AppConfig.default.withSpellCheck(AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = true))
+        AppConfig.default.withSpellCheck(
+          AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = true, languages = List("en"))
+        )
       )
     )
     withEditorContent(enabled, content)

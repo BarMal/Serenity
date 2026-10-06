@@ -204,9 +204,16 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     model.app.runtime.uiSurfaces.exists(_.content == SurfaceContent.Diagnostics(Nil))
 
   "Pinning a panel" should "commit the panel and its undo boundary in one write" in {
+    // Spell check is off so no analysis result lands in the diagnostics panel this test judges the pin by.
+    val quiet = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(config =
+        AppState.initial.persisted.config
+          .withSpellCheck(AppState.initial.persisted.config.languageToolsConfig.spellCheck.copy(enabled = false))
+      )
+    )
     val program =
       for
-        recorded     <- recording(Model(AppState.initial, UndoState()))
+        recorded     <- recording(Model(quiet, UndoState()))
         stateManager <- stateManagerOver(recorded.modelRef)
         _            <- stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Diagnostics)))
         writes       <- recorded.recordedWrites
@@ -216,7 +223,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     val (writes, after) = program.unsafeRunSync()
 
     diagnosticsPinned(after) shouldBe true
-    after.undo.undoStack shouldBe Vector(HistoryEntry.PanelChange.capture(AppState.initial))
+    after.undo.undoStack shouldBe Vector(HistoryEntry.PanelChange.capture(quiet))
     all(writes.map(model => diagnosticsPinned(model) == model.undo.undoStack.nonEmpty)) shouldBe true
   }
 
