@@ -29,8 +29,9 @@ private[richtext] object RtfWriter:
       colors = styles.flatMap(_.color).flatMap(parseColor).distinct.toVector,
       headingLevels = paragraphs
         .map(_.role)
-        .collect { case ParagraphRole.Heading(level) =>
-          level.max(1)
+        .collect {
+          case ParagraphRole.Heading(level) =>
+            level.max(1)
         }
         .distinct
         .sorted
@@ -82,7 +83,7 @@ private[richtext] object RtfWriter:
 
   private def runText(run: RichTextRun, tables: Tables): String =
     val words = styleWords(run.style, tables)
-    val text  = run.atom.fold(escape(run.text)) {
+    val text = run.atom.fold(escape(run.text)) {
       case InlineAtom.SoftBreak    => "\\line "
       case InlineAtom.Opaque(_, _) => ""
     }
