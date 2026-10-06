@@ -10,6 +10,7 @@ import com.serenity.config.AppConfig
 import com.serenity.project.{ProjectTaskCommand, ProjectTaskKind}
 import com.serenity.rope.Balance
 import com.serenity.state.models.RestartMode
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -28,7 +29,9 @@ class SafeModeStateManagerSpec extends AnyFlatSpec with Matchers:
   "Restart in Safe Mode" should "ask the launcher to restart, then quit" in {
     val restarts = Ref.unsafe[IO, List[RestartMode]](Nil)
     val manager =
-      StateManager.apply(logger, restarter = Some(mode => restarts.update(_ :+ mode))).unsafeRunSync()
+      StateManager
+        .apply(logger, restarter = Some(mode => restarts.update(_ :+ mode)), dictionaryCache = SharedDictionary.default)
+        .unsafeRunSync()
 
     manager.executeCommand(SafeModeCommands.restart).unsafeRunSync()
 
@@ -39,7 +42,9 @@ class SafeModeStateManagerSpec extends AnyFlatSpec with Matchers:
   "Restart Normally" should "ask the launcher for a normal restart, then quit" in {
     val restarts = Ref.unsafe[IO, List[RestartMode]](Nil)
     val manager =
-      StateManager.apply(logger, restarter = Some(mode => restarts.update(_ :+ mode))).unsafeRunSync()
+      StateManager
+        .apply(logger, restarter = Some(mode => restarts.update(_ :+ mode)), dictionaryCache = SharedDictionary.default)
+        .unsafeRunSync()
 
     manager.executeCommand(SafeModeCommands.restartNormally).unsafeRunSync()
 
@@ -48,7 +53,7 @@ class SafeModeStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave a session that cannot restart running" in {
-    val manager = StateManager.apply(logger).unsafeRunSync()
+    val manager = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
     manager.executeCommand(SafeModeCommands.restart).unsafeRunSync()
 
@@ -59,7 +64,9 @@ class SafeModeStateManagerSpec extends AnyFlatSpec with Matchers:
     val folder = Files.createTempDirectory("serenity-reset-settings")
     val config = folder.resolve("config.conf")
     Files.writeString(config, "editor.word_wrap = false\n", StandardCharsets.UTF_8)
-    val manager = StateManager.apply(logger, configPersistencePath = Some(config)).unsafeRunSync()
+    val manager = StateManager
+      .apply(logger, configPersistencePath = Some(config), dictionaryCache = SharedDictionary.default)
+      .unsafeRunSync()
 
     run(manager, "reset-settings")
     manager.runtimeLifecycle.awaitEffects.unsafeRunSync()
@@ -71,7 +78,7 @@ class SafeModeStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "change nothing when there is no config file behind the session" in {
-    val manager = StateManager.apply(logger).unsafeRunSync()
+    val manager = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
     val before  = manager.getCurrentState.unsafeRunSync().persisted.config
 
     run(manager, "reset-settings")
@@ -80,7 +87,9 @@ class SafeModeStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   "A state manager without project tasks" should "fail to launch one instead of running it" in {
-    val manager = StateManager.apply(logger, projectTasksEnabled = false).unsafeRunSync()
+    val manager = StateManager
+      .apply(logger, projectTasksEnabled = false, dictionaryCache = SharedDictionary.default)
+      .unsafeRunSync()
     val command = ProjectTaskCommand(ProjectTaskKind.Test, "make", Path.of("."), "true", Nil)
 
     manager.composition.runProjectTask(command, _ => IO.unit).attempt.unsafeRunSync().isLeft shouldBe true

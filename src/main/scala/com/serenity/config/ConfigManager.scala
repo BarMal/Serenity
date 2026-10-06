@@ -1,9 +1,8 @@
 package com.serenity.config
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
-import java.time.format.DateTimeFormatter
-import java.time.{Instant, ZoneOffset}
+import java.nio.file.{Files, Path, Paths}
+import java.time.Instant
 import java.util.Locale
 
 import scala.jdk.CollectionConverters.*
@@ -14,15 +13,7 @@ import cats.effect.IO
 import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
-import com.typesafe.config.{
-  Config,
-  ConfigException,
-  ConfigFactory,
-  ConfigParseOptions,
-  ConfigRenderOptions,
-  ConfigValue,
-  ConfigValueType
-}
+import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigParseOptions, ConfigValue, ConfigValueType}
 import org.slf4j.LoggerFactory
 
 /** Manages loading and saving application configuration */
@@ -66,20 +57,23 @@ object ConfigManager:
             Left(ConfigError("load", path, s"Failed to load configuration: ${error.getMessage}", Some(error)))
     }
 
-  private[config] def parseConfigResult(path: Path): ConfigLoadResult =
-    parseConfigResult(parseHoconFile(path))
+  private[config] def parseConfigResult(
+    path: Path,
+    plan: ConfigMigrations.Plan = ConfigMigrations.installed
+  ): ConfigLoadResult =
+    parseConfigResult(parseHoconFile(path), plan)
 
-  private def parseConfigResult(raw: Config): ConfigLoadResult =
-    val migration           = ConfigMigrations.migrate(raw)
+  private def parseConfigResult(raw: Config, plan: ConfigMigrations.Plan): ConfigLoadResult =
+    val migration           = ConfigMigrations.migrate(raw, plan)
     val source              = migration.config
     val (config, conflicts) = parseConfig(source)
-    val report              = inspectConfig(source)
+    val report = inspectConfig(source, migration.found, ConfigVersionStatus.classify(raw, plan.target), plan.target)
     ConfigLoadResult(
       config,
       report.copy(
-        version = migration.found,
         hotkeyConflicts = conflicts,
-        migratedFrom = migration.applied.headOption.map(_ => migration.found)
+        migratedFrom = migration.applied.headOption.map(_ => migration.found),
+        migrationNotes = migration.notes
       )
     )
 
@@ -143,21 +137,10 @@ object ConfigManager:
             "value and the parent of other keys."
         )
 
-  private val backupStamp = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmssSSS'Z'").withZone(ZoneOffset.UTC)
-
-  /** Copy the config file to a timestamped sibling (`config.conf.bak-<UTC time>`), returning where it went.
-    *
-    * Never replaces an earlier backup: a second bad launch or save must not destroy the only copy of what the user
-    * wrote. `None` when the copy could not be made, in which case the caller must not go on to overwrite the file.
+  /** Copy the config file to a timestamped sibling (`config.conf.bak-<UTC time>`), returning where it went. See
+    * [[ConfigBackup]].
     */
-  def backUpConfig(path: Path, at: Instant): Option[Path] =
-    try
-      val target = path.resolveSibling(s"${path.getFileName}.bak-${backupStamp.format(at)}")
-      Files.copy(path, target)
-      Some(target)
-    catch
-      case _: FileAlreadyExistsException => None
-      case NonFatal(_)                   => None
+  def backUpConfig(path: Path, at: Instant): Option[Path] = ConfigBackup(path, at)
 
   /** Save configuration on the Cats Effect blocking pool with a structured failure result.
     *
@@ -169,9 +152,21 @@ object ConfigManager:
     * after a backup -- only when a line edit cannot express the change.
     */
   def saveConfigIO(config: AppConfig, configPath: Path): IO[Either[ConfigError, Unit]] =
-    IO.realTimeInstant.flatMap(now => IO.blocking(saveBlocking(config, configPath, now)))
+    saveConfigWith(config, configPath, ConfigMigrations.installed)
 
-  private def saveBlocking(config: AppConfig, path: Path, now: Instant): Either[ConfigError, Unit] =
+  private[config] def saveConfigWith(
+    config: AppConfig,
+    configPath: Path,
+    plan: ConfigMigrations.Plan
+  ): IO[Either[ConfigError, Unit]] =
+    IO.realTimeInstant.flatMap(now => IO.blocking(saveBlocking(config, configPath, now, plan)))
+
+  private def saveBlocking(
+    config: AppConfig,
+    path: Path,
+    now: Instant,
+    plan: ConfigMigrations.Plan
+  ): Either[ConfigError, Unit] =
     def failure(problem: String, cause: Option[Throwable] = None): Either[ConfigError, Unit] =
       Left(ConfigError("save", path, s"Failed to save configuration: $problem", cause))
 
@@ -189,7 +184,7 @@ object ConfigManager:
     renderedConfig(config) match
       case Left(problem) => failure(problem)
       case Right(text) =>
-        existingConfig(path) match
+        existingConfig(path, plan) match
           case ExistingConfig.Absent => write(text)
           case ExistingConfig.Unparseable(problem) =>
             failure(
@@ -197,7 +192,7 @@ object ConfigManager:
                 "fix or remove it to save settings again."
             )
           case existing: ExistingConfig.Readable =>
-            editInPlace(path, existing, config) match
+            editInPlace(path, existing, config, plan) match
               case Edit.Unchanged => Right(())
               case Edit.Patched(patched, replacedKeys) =>
                 val invalidKeys = existing.loaded.report.invalidEntries.map(entry => canonicalKey(entry.key)).toSet
@@ -205,7 +200,9 @@ object ConfigManager:
                   writeAfterBackup(patched)
                 else write(patched)
               case Edit.Whole =>
-                withPreservedSettings(text, existing.source).fold(failure(_), writeAfterBackup)
+                val written =
+                  ConfigVersioning.stamp(text, ConfigVersioning.writtenVersion(existing.loaded.report, plan.target))
+                ConfigPreservedSettings(written, existing.source).fold(failure(_), writeAfterBackup)
 
   private enum Edit:
     case Unchanged
@@ -214,18 +211,25 @@ object ConfigManager:
 
   private def canonicalKey(key: String): String = ConfigRegistry.find(key).map(_.key).getOrElse(key)
 
-  private def editInPlace(path: Path, existing: ExistingConfig.Readable, config: AppConfig): Edit =
+  private def editInPlace(
+    path: Path,
+    existing: ExistingConfig.Readable,
+    config: AppConfig,
+    plan: ConfigMigrations.Plan
+  ): Edit =
     val before = ConfigFileFormat.settings(existing.loaded.config).map((key, value) => key -> value.rendered).toMap
     val after  = ConfigFileFormat.settings(config)
     val kept   = after.map(_._1).toSet
     def spellingsOf(key: String): Set[String] = ConfigRegistry.find(key).fold(Set(key))(_.spellings)
-    val changes =
+    val settingChanges =
       after.collect {
         case (key, value) if !before.get(key).contains(value.rendered) =>
           ConfigTextPatch.Change(key, spellingsOf(key), Some(value.rendered))
       } ++ before.keys.toList.sorted
         .filterNot(kept.contains)
         .map(key => ConfigTextPatch.Change(key, spellingsOf(key), None))
+
+    val changes = settingChanges ++ ConfigVersioning.stampChange(existing.loaded.report, plan.target)
 
     def unmet(text: String, wanted: List[ConfigTextPatch.Change]): Option[List[ConfigTextPatch.Change]] =
       settingsOfText(path, text).map(loaded => wanted.filterNot(change => loaded.get(change.key) == change.value))
@@ -234,11 +238,11 @@ object ConfigManager:
     else if existing.loaded.report.migratedFrom.nonEmpty then Edit.Whole
     else
       val patched = ConfigTextPatch(existing.text, changes)
-      unmet(patched.text, changes) match
+      unmet(patched.text, settingChanges) match
         case Some(Nil) => Edit.Patched(patched.text, patched.replacedKeys)
         case Some(stuck) =>
           val overridden = ConfigTextPatch.appendOverrides(patched.text, stuck)
-          if unmet(overridden, changes).contains(Nil) then Edit.Patched(overridden, patched.replacedKeys)
+          if unmet(overridden, settingChanges).contains(Nil) then Edit.Patched(overridden, patched.replacedKeys)
           else Edit.Whole
         case None => Edit.Whole
 
@@ -261,47 +265,27 @@ object ConfigManager:
     case Unparseable(problem: String)
     case Readable(text: String, source: Config, loaded: ConfigLoadResult)
 
-  private def existingConfig(path: Path): ExistingConfig =
+  private def existingConfig(path: Path, plan: ConfigMigrations.Plan): ExistingConfig =
     if !Files.exists(path) then ExistingConfig.Absent
     else
       try
         val raw = parseHoconFile(path)
         ExistingConfig.Readable(
           Files.readString(path, StandardCharsets.UTF_8),
-          ConfigMigrations.migrate(raw).config,
-          parseConfigResult(raw)
+          ConfigMigrations.migrate(raw, plan).config,
+          parseConfigResult(raw, plan)
         )
       catch case NonFatal(error) => ExistingConfig.Unparseable(error.getMessage)
-
-  /** The rendered settings followed by every setting in the file this version does not recognise, as found.
-    *
-    * Without this a key from a newer build, a typo the user means to fix, or a setting for a plugin is silently dropped
-    * by the first save. Comments the user wrote are not kept; the backup is where they survive.
-    */
-  private def withPreservedSettings(rendered: String, existing: Config): Either[String, String] =
-    val kept = existing
-      .entrySet()
-      .asScala
-      .toList
-      .filter { entry =>
-        val key = entry.getKey.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
-        !isKnownConfigKey(key) && !RemovedConfigKeys.isRemoved(key)
-      }
-      .sortBy(_.getKey)
-      .map(entry => s"${entry.getKey} = ${entry.getValue.render(ConfigRenderOptions.concise())}")
-    if kept.isEmpty then Right(rendered)
-    else
-      val text =
-        (rendered :: "# Settings this version of Serenity does not recognise, kept exactly as found." :: kept)
-          .mkString("\n") + "\n"
-      Try(ConfigFactory.parseString(text)).toEither.map(_ => text).left.map { error =>
-        s"The settings in the existing file that Serenity does not recognise would not survive the save: ${error.getMessage}"
-      }
 
   def saveConfigIO(config: AppConfig, configPath: String): IO[Either[ConfigError, Unit]] =
     saveConfigIO(config, Paths.get(configPath))
 
-  private def inspectConfig(source: Config): ConfigMigrationReport =
+  private def inspectConfig(
+    source: Config,
+    found: ConfigVersion,
+    status: ConfigVersionStatus,
+    supported: ConfigVersion
+  ): ConfigMigrationReport =
     val entries = hoconEntries(source)
     val deprecatedEntries = entries
       .flatMap(entry =>
@@ -319,7 +303,9 @@ object ConfigManager:
     val invalidEntries = entries.flatMap(entry => invalidEntry(entry.key, entry.value, entry.valueType))
 
     ConfigMigrationReport(
-      version = ConfigVersion.Current,
+      version = found,
+      versionStatus = status,
+      supportedVersion = supported,
       deprecatedEntries = deprecatedEntries,
       unknownKeys = unknownKeys,
       invalidEntries = invalidEntries,

@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import java.io.File
 import java.nio.file.Paths
 
 import com.serenity.DockedPanelFixtures
@@ -57,20 +58,22 @@ class WorkflowTransitionsSpec extends AnyFlatSpec with Matchers:
 
   "An Open target" should "browse into a directory" in {
     val (state, id) = withDialog(openDialog)
+    val directory   = Paths.get("/a")
 
     val browsed =
-      FileWorkflowTransitions.withTargetResolved(state, id, openDialog, FileWorkflowTarget.Directory(Paths.get("/a")))
+      FileWorkflowTransitions.withTargetResolved(state, id, openDialog, FileWorkflowTarget.Directory(directory))
 
-    FileWorkflowTransitions.fileDialog(browsed, id).map(_.path) shouldBe Some("/a" + java.io.File.separator)
+    FileWorkflowTransitions.fileDialog(browsed, id).map(_.path) shouldBe Some(s"$directory${File.separator}")
   }
 
   it should "report a missing file and keep the dialog open" in {
     val (state, id) = withDialog(openDialog)
+    val missing     = Paths.get("/a")
 
     val reported =
-      FileWorkflowTransitions.withTargetResolved(state, id, openDialog, FileWorkflowTarget.Missing(Paths.get("/a")))
+      FileWorkflowTransitions.withTargetResolved(state, id, openDialog, FileWorkflowTarget.Missing(missing))
 
-    FileWorkflowTransitions.fileDialog(reported, id).flatMap(_.statusMessage) shouldBe Some("File not found: /a")
+    FileWorkflowTransitions.fileDialog(reported, id).flatMap(_.statusMessage) shouldBe Some(s"File not found: $missing")
   }
 
   it should "close the dialog once its file has loaded" in {

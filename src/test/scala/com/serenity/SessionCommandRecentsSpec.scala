@@ -8,6 +8,7 @@ import com.serenity.command.{Command, CommandId, CommandRegistry}
 import com.serenity.keystroke.events.{Enter, InsertChar, TabKey, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -40,7 +41,11 @@ class SessionCommandRecentsSpec extends AnyFlatSpec with Matchers with StateMana
     (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
   private def stateManagerAt(root: Path): StateManager =
-    StateManager(testLogger("SessionCommandRecentsSpec"), sessionRootOverride = Some(root)).unsafeRunSync()
+    StateManager(
+      testLogger("SessionCommandRecentsSpec"),
+      sessionRootOverride = Some(root),
+      dictionaryCache = SharedDictionary.default
+    ).unsafeRunSync()
 
   private def currentSessionFile(root: Path): Path =
     root.resolve("sessions").resolve("session.json")

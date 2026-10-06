@@ -11,25 +11,23 @@ class RopeSummaryLazinessSpec extends AnyFlatSpec with Matchers:
   private val megabyte = "lorem ipsum dolor sit amet\n" * 40000
 
   "Rope" should "segment no text while it is built, edited, searched or measured" in {
-    val before = TextCounts.segmentationCount
+    val (_, segmentations) = TextCounts.countSegmentations {
+      val rope   = Rope(megabyte)
+      val edited = rope.insert(500000, "word ").flatMap(_.delete(10, 20)).getOrElse(rope)
+      edited.weight should be > 0
+      edited.newlineCount should be > 0
+    }
 
-    val rope   = Rope(megabyte)
-    val edited = rope.insert(500000, "word ").flatMap(_.delete(10, 20)).getOrElse(rope)
-    edited.weight should be > 0
-    edited.newlineCount should be > 0
-
-    TextCounts.segmentationCount shouldBe before
+    segmentations shouldBe 0L
   }
 
   it should "segment only on demand, and reuse the summary until the rope is edited" in {
-    val rope            = Rope(megabyte)
-    val words           = rope.wordCount
-    val afterFirstQuery = TextCounts.segmentationCount
+    val rope                 = Rope(megabyte)
+    val (words, _)           = TextCounts.countSegmentations(rope.wordCount)
+    val (_, reused)          = TextCounts.countSegmentations(rope.wordCount shouldBe words)
+    val (editedWords, extra) = TextCounts.countSegmentations(rope.insert(500000, "extra ").getOrElse(rope).wordCount)
 
-    rope.wordCount shouldBe words
-    TextCounts.segmentationCount shouldBe afterFirstQuery
-
-    val edited = rope.insert(500000, "extra ").getOrElse(rope)
-    edited.wordCount shouldBe words + 1
-    TextCounts.segmentationCount - afterFirstQuery should be < 200L
+    reused shouldBe 0L
+    editedWords shouldBe words + 1
+    extra should be < 200L
   }

@@ -15,6 +15,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
@@ -175,7 +176,8 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       closeRequested       <- Deferred[IO, Unit]
       stateManager <- StateManager.apply(
         LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeStartupInputSpec")),
-        policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+        policy = SessionManager.SessionPolicy(saveOnAppClose = false),
+        dictionaryCache = SharedDictionary.default
       )
       inputHandler = new InputHandler[IO]:
         override def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] = Stream.never
@@ -226,7 +228,8 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       inputCancelled <- Deferred[IO, Unit]
       stateManager <- StateManager.apply(
         LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeStartupFailureSpec")),
-        policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+        policy = SessionManager.SessionPolicy(saveOnAppClose = false),
+        dictionaryCache = SharedDictionary.default
       )
       inputHandler = new InputHandler[IO]:
         override def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] = Stream.never
