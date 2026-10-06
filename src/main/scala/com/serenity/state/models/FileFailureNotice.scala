@@ -52,6 +52,14 @@ object FileFailureNotice:
   def reloadFailed(path: Path, error: Throwable): Notice =
     Notice(NoticeLevel.Error, s"Couldn't reload ${fileName(path)}: ${cause(error)}.", hint = Some(Dismiss))
 
+  val stayedInEditor: Notice =
+    Notice(
+      NoticeLevel.Warning,
+      "Stayed in the editor because it changed while the session was saving.",
+      hint = Some(Dismiss),
+      topic = Some(NoticeTopic.SessionSave)
+    )
+
   def sessionSaveFailed(error: Throwable): Notice =
     Notice(
       NoticeLevel.Error,

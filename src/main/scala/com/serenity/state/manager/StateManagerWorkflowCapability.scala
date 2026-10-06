@@ -102,22 +102,28 @@ final private[manager] class StateManagerWorkflowCapability(
         IO.unit
 
   /** Persist the current session (unsaved buffers included, so [Tab] Quick-resume restores them) and replace the editor
-    * with a start page that offers to resume it. The write runs on the Session lane; the page replaces the editor when
-    * it lands, if the editor is still what was written (see [[StartPageTransitions]]).
+    * with a start page that offers to resume it. The write runs on the Session lane. If the editor changed while it was
+    * being written, the changed editor is written once more; if it changes again, it stays, with a notice saying why.
     */
   private def snapshotAndShowStartPage(committed: AppState): IO[Unit] =
-    lanes.submitEffect(
-      SessionLane,
-      // On failure the editor stays: the start page would offer to resume a session that was never written.
-      sessionManager.saveSession(committed, persistUnsavedBuffers = true).attempt.flatMap {
-        case Right(_) =>
-          readableRecentFiles(committed)
-            .flatMap(recent => lanes.dispatchEffectResult(EffectResult.StartPageReady(committed, recent), _ => IO.unit))
-        case Left(error) =>
-          logger.error(error)("[SESSION] Saving the session before the start page failed") >>
-            operations.showNotice(FileFailureNotice.sessionSaveFailed(error))
-      }
-    )
+    lanes.submitEffect(SessionLane, saveThenShowStartPage(committed, rewritesLeft = 1))
+
+  private def saveThenShowStartPage(snapshot: AppState, rewritesLeft: Int): IO[Unit] =
+    // On failure the editor stays: the start page would offer to resume a session that was never written.
+    sessionManager.saveSession(snapshot, persistUnsavedBuffers = true).attempt.flatMap {
+      case Right(_) =>
+        modelCommit.currentState.flatMap { live =>
+          if StartPageTransitions.sameBuffers(live, snapshot) then
+            readableRecentFiles(snapshot).flatMap(recent =>
+              lanes.dispatchEffectResult(EffectResult.StartPageReady(snapshot, recent), _ => IO.unit)
+            )
+          else if rewritesLeft > 0 then saveThenShowStartPage(live, rewritesLeft - 1)
+          else operations.showNotice(FileFailureNotice.stayedInEditor)
+        }
+      case Left(error) =>
+        logger.error(error)("[SESSION] Saving the session before the start page failed") >>
+          operations.showNotice(FileFailureNotice.sessionSaveFailed(error))
+    }
 
   private def readableRecentFiles(committed: AppState): IO[List[Path]] =
     IO.blocking(committed.persisted.recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path)))

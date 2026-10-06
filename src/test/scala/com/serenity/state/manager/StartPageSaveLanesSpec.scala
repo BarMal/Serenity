@@ -31,14 +31,30 @@ class StartPageSaveLanesSpec extends AnyFlatSpec with Matchers:
 
   private val quiet = NoOpLogger.impl[IO]
 
-  /** `saveSession` returns once `outcome` has completed, as a write to a slow disk would. */
-  final private class GatedSessionManager(root: Path, outcome: Deferred[IO, Either[Throwable, Unit]])
-      extends SessionManager(root, AppThemeManager.create, quiet):
-    override def saveSession(appState: AppState, persistUnsavedBuffers: Boolean): IO[Unit] =
-      outcome.get.rethrow
+  /** Each `saveSession` returns once the next of `outcomes` has completed, as a write to a slow disk would; once they
+    * are used up a save succeeds at once. `started` counts the saves begun.
+    */
+  final private class GatedSessionManager(
+      root: Path,
+      outcomes: Ref[IO, List[Deferred[IO, Either[Throwable, Unit]]]],
+      val started: Ref[IO, Int]
+  ) extends SessionManager(root, AppThemeManager.create, quiet):
 
-  private def stateManagerSaving(outcome: Deferred[IO, Either[Throwable, Unit]]): IO[StateManager] =
+    override def saveSession(appState: AppState, persistUnsavedBuffers: Boolean): IO[Unit] =
+      started.update(_ + 1) >>
+        outcomes
+          .modify {
+            case next :: rest => (rest, Some(next))
+            case Nil          => (Nil, None)
+          }
+          .flatMap(_.fold(IO.unit)(_.get.rethrow))
+
+  private def stateManagerSaving(
+    outcomes: List[Deferred[IO, Either[Throwable, Unit]]]
+  ): IO[(StateManager, Ref[IO, Int])] =
     for
+      queued              <- Ref.of[IO, List[Deferred[IO, Either[Throwable, Unit]]]](outcomes)
+      started             <- Ref.of[IO, Int](0)
       directory           <- IO.blocking(Files.createTempDirectory("start-page-save-lanes"))
       modelRef            <- Ref.of[IO, Model](Model(AppState.initial, com.serenity.state.undo.UndoState()))
       themeNamesRef       <- Ref.of[IO, List[String]](Nil)
@@ -64,11 +80,11 @@ class StartPageSaveLanesSpec extends AnyFlatSpec with Matchers:
         fileDialog = None,
         dictionaryCache = SharedDictionary.default
       )
-      gated = new GatedSessionManager(directory.resolve("gated-session"), outcome)
+      gated = new GatedSessionManager(directory.resolve("gated-session"), queued, started)
       stateManager <- StateManager.fromRuntime(
         runtime.copy(sessionManager = gated, sessionPersistence = new SessionPersistence(gated, runtime.policy))
       )
-    yield stateManager
+    yield (stateManager, started)
 
   private def returnCommand =
     CommandRegistry.withToggleUI
@@ -91,21 +107,39 @@ class StartPageSaveLanesSpec extends AnyFlatSpec with Matchers:
     }
 
   /** Closes the prompt the command opens with Close Anyway, with the session write still waiting on its disk. */
-  private def discardingWhileSaving(outcome: Deferred[IO, Either[Throwable, Unit]]): IO[StateManager] =
+  private def discardingWhileSaving(
+    outcomes: List[Deferred[IO, Either[Throwable, Unit]]]
+  ): IO[(StateManager, Ref[IO, Int])] =
     for
-      stateManager <- stateManagerSaving(outcome)
-      _            <- markBufferDirty(stateManager, "draft")
-      _            <- stateManager.executeCommand(returnCommand)
-      _            <- stateManager.applyEvent(TabKey)
-      _            <- stateManager.applyEvent(Enter).timeout(5.seconds)
-    yield stateManager
+      (stateManager, started) <- stateManagerSaving(outcomes)
+      _                       <- markBufferDirty(stateManager, "draft")
+      _                       <- stateManager.executeCommand(returnCommand)
+      _                       <- stateManager.applyEvent(TabKey)
+      _                       <- stateManager.applyEvent(Enter).timeout(5.seconds)
+    yield (stateManager, started)
+
+  private def savesStarted(started: Ref[IO, Int], count: Int): IO[Unit] =
+    started.get
+      .flatMap(n => if n >= count then IO.unit else IO.sleep(10.millis) >> savesStarted(started, count))
+      .timeout(5.seconds)
+
+  // A warning sweeps itself away after a few seconds, which `awaitEffects` would wait out: watch for it instead.
+  private def noticeShown(stateManager: StateManager): IO[Unit] =
+    stateManager.getCurrentState
+      .flatMap(state =>
+        if noticeMessages(state).nonEmpty then IO.unit else IO.sleep(10.millis) >> noticeShown(stateManager)
+      )
+      .timeout(5.seconds)
+
+  private def noticeMessages(state: AppState): List[String] =
+    state.runtime.uiSurfaces.collect { case UiSurface(_, SurfaceContent.Notice(notice, _), _, _) => notice.message }
 
   "Returning to the start page" should "not hold the dispatcher while the session is written" in {
     val program =
       for
-        outcome      <- Deferred[IO, Either[Throwable, Unit]]
-        stateManager <- discardingWhileSaving(outcome)
-        saving       <- stateManager.getCurrentState
+        outcome           <- Deferred[IO, Either[Throwable, Unit]]
+        (stateManager, _) <- discardingWhileSaving(List(outcome))
+        saving            <- stateManager.getCurrentState
       yield saving
 
     val saving = program.unsafeRunSync()
@@ -117,11 +151,11 @@ class StartPageSaveLanesSpec extends AnyFlatSpec with Matchers:
   it should "show the start page once the session has been written" in {
     val program =
       for
-        outcome      <- Deferred[IO, Either[Throwable, Unit]]
-        stateManager <- discardingWhileSaving(outcome)
-        _            <- outcome.complete(Right(()))
-        _            <- stateManager.runtimeLifecycle.awaitEffects
-        shown        <- stateManager.getCurrentState
+        outcome           <- Deferred[IO, Either[Throwable, Unit]]
+        (stateManager, _) <- discardingWhileSaving(List(outcome))
+        _                 <- outcome.complete(Right(()))
+        _                 <- stateManager.runtimeLifecycle.awaitEffects
+        shown             <- stateManager.getCurrentState
       yield shown
 
     program.unsafeRunSync().startPageSurface.isDefined shouldBe true
@@ -130,11 +164,11 @@ class StartPageSaveLanesSpec extends AnyFlatSpec with Matchers:
   it should "keep the editor when the session could not be written" in {
     val program =
       for
-        outcome      <- Deferred[IO, Either[Throwable, Unit]]
-        stateManager <- discardingWhileSaving(outcome)
-        _            <- outcome.complete(Left(new java.io.IOException("disk full")))
-        _            <- stateManager.runtimeLifecycle.awaitEffects
-        kept         <- stateManager.getCurrentState
+        outcome           <- Deferred[IO, Either[Throwable, Unit]]
+        (stateManager, _) <- discardingWhileSaving(List(outcome))
+        _                 <- outcome.complete(Left(new java.io.IOException("disk full")))
+        _                 <- stateManager.runtimeLifecycle.awaitEffects
+        kept              <- stateManager.getCurrentState
       yield kept
 
     val kept = program.unsafeRunSync()
@@ -143,19 +177,41 @@ class StartPageSaveLanesSpec extends AnyFlatSpec with Matchers:
     kept.persisted.buffers.get(BufferId(0)).exists(_.document.isDirty) shouldBe true
   }
 
-  it should "keep the editor when it changed while the session was being written" in {
+  it should "write the session again and show the start page when the editor changed while it was being written" in {
     val program =
       for
-        outcome      <- Deferred[IO, Either[Throwable, Unit]]
-        stateManager <- discardingWhileSaving(outcome)
-        _            <- markBufferDirty(stateManager, "draft, then more")
-        _            <- outcome.complete(Right(()))
-        _            <- stateManager.runtimeLifecycle.awaitEffects
-        kept         <- stateManager.getCurrentState
+        outcome               <- Deferred[IO, Either[Throwable, Unit]]
+        (stateManager, saves) <- discardingWhileSaving(List(outcome))
+        _                     <- markBufferDirty(stateManager, "draft, then more")
+        _                     <- outcome.complete(Right(()))
+        _                     <- stateManager.runtimeLifecycle.awaitEffects
+        shown                 <- stateManager.getCurrentState
+        written               <- saves.get
+      yield (shown, written)
+
+    val (shown, written) = program.unsafeRunSync()
+
+    shown.startPageSurface.isDefined shouldBe true
+    written shouldBe 2
+  }
+
+  it should "stay in the editor and say why when it changed again while the session was written a second time" in {
+    val program =
+      for
+        first                 <- Deferred[IO, Either[Throwable, Unit]]
+        second                <- Deferred[IO, Either[Throwable, Unit]]
+        (stateManager, saves) <- discardingWhileSaving(List(first, second))
+        _                     <- markBufferDirty(stateManager, "draft, then more")
+        _                     <- first.complete(Right(()))
+        _                     <- savesStarted(saves, 2)
+        _                     <- markBufferDirty(stateManager, "draft, then more, and more")
+        _                     <- second.complete(Right(()))
+        _                     <- noticeShown(stateManager)
+        kept                  <- stateManager.getCurrentState
       yield kept
 
     val kept = program.unsafeRunSync()
 
     kept.startPageSurface shouldBe None
-    kept.persisted.buffers.get(BufferId(0)).map(_.document.content.toString) shouldBe Some("draft, then more")
+    noticeMessages(kept) should contain("Stayed in the editor because it changed while the session was saving.")
   }

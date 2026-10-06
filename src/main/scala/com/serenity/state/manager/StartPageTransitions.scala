@@ -23,7 +23,7 @@ private[manager] object StartPageTransitions:
         )
       )
 
-  private def sameBuffers(live: AppState, saved: AppState): Boolean =
+  def sameBuffers(live: AppState, saved: AppState): Boolean =
     live.persisted.bufferOrder == saved.persisted.bufferOrder &&
       live.persisted.buffers.view.mapValues(_.document.contentVersion).toMap ==
       saved.persisted.buffers.view.mapValues(_.document.contentVersion).toMap
