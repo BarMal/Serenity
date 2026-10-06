@@ -2,9 +2,10 @@ package com.serenity.lsp.client
 
 import io.circe.Json
 
-/** Replies to the requests a server sends this client. Every request gets exactly one reply -- some servers hold back
-  * features until theirs arrives -- so a method this client does not serve is refused with `MethodNotFound` rather than
-  * left unanswered.
+/** Replies to the requests a server sends this client that need nothing from the application. Every request gets
+  * exactly one reply -- some servers hold back features until theirs arrives -- so a method this client does not serve
+  * is refused with `MethodNotFound` rather than left unanswered. The requests that wait on the application,
+  * `workspace/applyEdit` and `window/showMessageRequest`, are answered by `LspConnection` once it has answered them.
   */
 object LspServerRequests:
 
@@ -21,8 +22,7 @@ object LspServerRequests:
     "workspace/configuration"        -> noConfiguration,
     "client/registerCapability"      -> acknowledge,
     "client/unregisterCapability"    -> acknowledge,
-    "window/workDoneProgress/create" -> acknowledge,
-    "window/showMessageRequest"      -> defaultAction
+    "window/workDoneProgress/create" -> acknowledge
   )
 
   /** Serenity has no per-server settings to hand out, so every requested section is answered with `null`, which the
@@ -30,9 +30,3 @@ object LspServerRequests:
     */
   private def noConfiguration(params: Json): Json =
     Json.fromValues(params.hcursor.downField("items").values.toList.flatten.map(_ => Json.Null))
-
-  /** There is no prompt to ask the question in, so the first offered action is taken, as a dialog's default button
-    * would be; with no actions on offer the reply is `null`, meaning nothing was chosen.
-    */
-  private def defaultAction(params: Json): Json =
-    params.hcursor.downField("actions").values.flatMap(_.headOption).getOrElse(Json.Null)

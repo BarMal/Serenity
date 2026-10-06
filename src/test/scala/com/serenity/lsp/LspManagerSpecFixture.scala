@@ -54,7 +54,10 @@ private[lsp] trait LspManagerSpecFixture extends Matchers:
     * error, or cancellation) rather than only the happy path `manager.stop` covered; cancelling a fiber that already
     * finished via `manager.stop` is a no-op, so this changes nothing on that path.
     */
-  protected def harness(serverAvailable: Boolean = true): Resource[IO, Harness] =
+  protected def harness(
+    serverAvailable: Boolean = true,
+    notices: LspNotices = LspNotices.ignoring
+  ): Resource[IO, Harness] =
     for
       effects      <- Resource.eval(Queue.unbounded[IO, Option[LspEffect]])
       events       <- Resource.eval(Ref.of[IO, List[Event]](Nil))
@@ -78,7 +81,8 @@ private[lsp] trait LspManagerSpecFixture extends Matchers:
             Stream.fromQueueNoneTerminated(effects),
             event => events.update(_ :+ event) >> eventApplied.complete(()).void,
             logger,
-            provider
+            provider,
+            notices = notices
           )
           .start
       )(_.cancel)

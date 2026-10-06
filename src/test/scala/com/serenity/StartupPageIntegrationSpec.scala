@@ -11,6 +11,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -87,7 +88,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       // ---- First launch: fresh start, close everything without opening anything, save session. ----
       firstManager <- StateManager.apply(
         testLogger("StartupPageIntegrationSpec-empty-session-first"),
-        sessionRootOverride = Some(sessionRoot)
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
       )
       firstInitial <- AppStartup.initializeState(
         firstManager,
@@ -108,7 +110,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       // ---- Open again: a brand-new StateManager over the same session root, exactly like a fresh process launch. ----
       secondManager <- StateManager.apply(
         testLogger("StartupPageIntegrationSpec-empty-session-second"),
-        sessionRootOverride = Some(sessionRoot)
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
       )
       secondInitial <- AppStartup.initializeState(
         secondManager,
@@ -150,7 +153,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       // ---- First launch: open the file so it is tracked as a recent file, then save the session. ----
       firstManager <- StateManager.apply(
         testLogger("StartupPageIntegrationSpec-open-recent-first"),
-        sessionRootOverride = Some(sessionRoot)
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
       )
       _ <- AppStartup.initializeState(
         firstManager,
@@ -174,7 +178,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       // offered as a "recent" entry on the startup page (the same entry the user selects). ----
       secondManager <- StateManager.apply(
         testLogger("StartupPageIntegrationSpec-open-recent-second"),
-        sessionRootOverride = Some(sessionRoot)
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
       )
       secondInitial <- AppStartup.initializeState(
         secondManager,

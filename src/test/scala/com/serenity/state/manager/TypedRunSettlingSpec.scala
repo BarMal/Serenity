@@ -13,6 +13,7 @@ import com.serenity.keystroke.events.{DeleteBackward, Enter, Event, InsertChar, 
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{ViewportSize, WrappedLineCache}
 import com.serenity.{setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -39,10 +40,14 @@ class TypedRunSettlingSpec extends AnyFlatSpec with Matchers:
 
   private def editor(config: AppConfig): IO[(StateManager, BufferId)] =
     for
-      stateManager <- StateManager(NoOpLogger[IO], sessionRootOverride = Some(Files.createTempDirectory("typed-run")))
-      _            <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))
-      bufferId     <- stateManager.createBuffer(proseDocument, None)
-      state        <- stateManager.getCurrentState
+      stateManager <- StateManager(
+        NoOpLogger[IO],
+        sessionRootOverride = Some(Files.createTempDirectory("typed-run")),
+        dictionaryCache = SharedDictionary.default
+      )
+      _        <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))
+      bufferId <- stateManager.createBuffer(proseDocument, None)
+      state    <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
       _ <- stateManager.applyEvent(ResizeEvent(ViewportSize(110, 36)))

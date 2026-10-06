@@ -12,6 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -37,7 +38,8 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
         uiPresetStore = store,
         windowSizeProvider = windowSize,
         onPreferredWindowSizeChanged = onWindowSizeChanged,
-        sessionRootOverride = sessionRoot
+        sessionRootOverride = sessionRoot,
+        dictionaryCache = SharedDictionary.default
       )
       .unsafeRunSync()
 

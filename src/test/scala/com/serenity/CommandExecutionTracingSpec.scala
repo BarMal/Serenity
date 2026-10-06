@@ -7,6 +7,7 @@ import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.SurfaceContent
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.{LoggerFactory, SelfAwareStructuredLogger}
@@ -60,7 +61,7 @@ class CommandExecutionTracingSpec extends AnyFlatSpec with Matchers:
     val recorded            = Ref.unsafe[IO, List[String]](Nil)
     val logger              = RecordingLogger(recorded)
     given LoggerFactory[IO] = RecordingLoggerFactory(logger)
-    (StateManager.apply(logger).unsafeRunSync(), recorded)
+    (StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync(), recorded)
 
   private def commandLines(recorded: Ref[IO, List[String]]): List[String] =
     recorded.get.unsafeRunSync().filter(_.startsWith("[COMMAND]"))

@@ -12,6 +12,7 @@ import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Damage, TypingActivity}
+import com.serenity.testkit.SharedDictionary
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.{Chunk, Stream}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -92,22 +93,24 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
 
   it should "end a real typing burst through the state manager once the window has passed" in {
     val burstEnded =
-      Supervisor[IO](await = false)
-        .use { supervisor =>
-          for
-            sm <- StateManager(
-              LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
-              initialConfig = noBackgroundAnalysis
-            )
-            timer  <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
-            _      <- sm.runtimeLifecycle.observeCommits(timer.onCommit(_, _))
-            _      <- sm.applyEvent(InsertChar('a'))
-            during <- sm.getCurrentState.map(_.runtime.typingActivity.isActive)
-            _      <- IO.sleep(TypingActivity.QuietWindow + 500.millis)
-            after  <- sm.getCurrentState.map(_.runtime.typingActivity.isActive)
-          yield (during, after)
-        }
-        .unsafeRunSync()
+      runVirtual(
+        Supervisor[IO](await = false)
+          .use { supervisor =>
+            for
+              sm <- StateManager(
+                LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
+                initialConfig = noBackgroundAnalysis,
+                dictionaryCache = SharedDictionary.cacheFor(noBackgroundAnalysis)
+              )
+              timer  <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
+              _      <- sm.runtimeLifecycle.observeCommits(timer.onCommit(_, _))
+              _      <- sm.applyEvent(InsertChar('a'))
+              during <- sm.getCurrentState.map(_.runtime.typingActivity.isActive)
+              _      <- IO.sleep(TypingActivity.QuietWindow + 500.millis)
+              after  <- sm.getCurrentState.map(_.runtime.typingActivity.isActive)
+            yield (during, after)
+          }
+      )
 
     burstEnded shouldBe (true, false)
   }
@@ -136,26 +139,28 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
 
   it should "emit that repaint damage when a real typing burst expires through the state manager" in {
     val emitted =
-      Supervisor[IO](await = false)
-        .use { supervisor =>
-          for
-            sm <- StateManager(
-              LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
-              initialConfig = floatingStatusLine.persisted.config
-            )
-            seen  <- Ref.of[IO, Vector[Damage]](Vector.empty)
-            timer <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
-            wake = AppRuntime.wakeRenderLoopOnCommit(damage => seen.update(_ :+ damage))
-            _ <- sm.runtimeLifecycle
-              .observeCommits((before, after) => wake(before, after) >> timer.onCommit(before, after))
-            _      <- sm.applyEvent(InsertChar('a'))
-            during <- seen.get.map(_.size)
-            _      <- IO.sleep(TypingActivity.QuietWindow + 500.millis)
-            after  <- seen.get.map(_.size)
-            hidden <- sm.getCurrentState.map(_.floatingStatusLineSurface.isEmpty)
-          yield (during, after, hidden)
-        }
-        .unsafeRunSync()
+      runVirtual(
+        Supervisor[IO](await = false)
+          .use { supervisor =>
+            for
+              sm <- StateManager(
+                LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
+                initialConfig = floatingStatusLine.persisted.config,
+                dictionaryCache = SharedDictionary.cacheFor(floatingStatusLine.persisted.config)
+              )
+              seen  <- Ref.of[IO, Vector[Damage]](Vector.empty)
+              timer <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
+              wake = AppRuntime.wakeRenderLoopOnCommit(damage => seen.update(_ :+ damage))
+              _ <- sm.runtimeLifecycle
+                .observeCommits((before, after) => wake(before, after) >> timer.onCommit(before, after))
+              _      <- sm.applyEvent(InsertChar('a'))
+              during <- seen.get.map(_.size)
+              _      <- IO.sleep(TypingActivity.QuietWindow + 500.millis)
+              after  <- seen.get.map(_.size)
+              hidden <- sm.getCurrentState.map(_.floatingStatusLineSurface.isEmpty)
+            yield (during, after, hidden)
+          }
+      )
 
     val (during, after, _) = emitted
     after should be > during
@@ -163,42 +168,44 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
 
   it should "end a typing burst applied as an input batch, whose commits the commit observer never sees" in {
     val (during, after, observed) =
-      Supervisor[IO](await = false)
-        .use { supervisor =>
-          for
-            sm <- StateManager(
-              LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
-              initialConfig = noBackgroundAnalysis
-            )
-            timer          <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
-            observedByWake <- Ref.of[IO, Int](0)
-            _              <- sm.runtimeLifecycle.observeCommits((_, _) => observedByWake.update(_ + 1))
-            router         <- InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default))
-            cursorVisible  <- Ref.of[IO, Boolean](true)
-            cache          <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
-            context = AppRuntimeRenderLoops.InputBatchContext(
-              sm,
-              router,
-              SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit),
-              IO.unit,
-              cursorVisible,
-              _ => IO.unit,
-              cache,
-              com.serenity.diagnostics.FrameTimings(),
-              observeBatch = timer.onCommit
-            )
-            _ <- Stream
-              .emit(Chunk.from(List('a', 'b', 'c').map(char => PendingInput.Ready(InsertChar(char)))))
-              .through(AppRuntimeRenderLoops.inputBatchPhase(context))
-              .compile
-              .drain
-            during <- sm.getCurrentState.map(_.runtime.typingActivity.isActive)
-            _      <- IO.sleep(TypingActivity.QuietWindow + 500.millis)
-            after  <- sm.getCurrentState.map(_.runtime.typingActivity.isActive)
-            seen   <- observedByWake.get
-          yield (during, after, seen)
-        }
-        .unsafeRunSync()
+      runVirtual(
+        Supervisor[IO](await = false)
+          .use { supervisor =>
+            for
+              sm <- StateManager(
+                LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
+                initialConfig = noBackgroundAnalysis,
+                dictionaryCache = SharedDictionary.cacheFor(noBackgroundAnalysis)
+              )
+              timer          <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
+              observedByWake <- Ref.of[IO, Int](0)
+              _              <- sm.runtimeLifecycle.observeCommits((_, _) => observedByWake.update(_ + 1))
+              router         <- InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default))
+              cursorVisible  <- Ref.of[IO, Boolean](true)
+              cache          <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
+              context = AppRuntimeRenderLoops.InputBatchContext(
+                sm,
+                router,
+                SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit),
+                IO.unit,
+                cursorVisible,
+                _ => IO.unit,
+                cache,
+                com.serenity.diagnostics.FrameTimings(),
+                observeBatch = timer.onCommit
+              )
+              _ <- Stream
+                .emit(Chunk.from(List('a', 'b', 'c').map(char => PendingInput.Ready(InsertChar(char)))))
+                .through(AppRuntimeRenderLoops.inputBatchPhase(context))
+                .compile
+                .drain
+              during <- sm.getCurrentState.map(_.runtime.typingActivity.isActive)
+              _      <- IO.sleep(TypingActivity.QuietWindow + 500.millis)
+              after  <- sm.getCurrentState.map(_.runtime.typingActivity.isActive)
+              seen   <- observedByWake.get
+            yield (during, after, seen)
+          }
+      )
 
     (during, after, observed) shouldBe (true, false, 1)
   }

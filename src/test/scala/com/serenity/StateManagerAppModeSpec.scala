@@ -7,6 +7,7 @@ import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -20,7 +21,7 @@ class StateManagerAppModeSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerAppModeSpec"))
-    StateManager(logger).unsafeRunSync()
+    StateManager(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   "StateManager" should "start in code mode" in {
     val stateManager = createStateManager()
