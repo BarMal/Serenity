@@ -13,7 +13,7 @@ import cats.effect.unsafe.{IORuntime, IORuntimeConfig}
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
 import com.serenity.app.AppRuntime
-import com.serenity.io.{FileChangeWatcher, FileManager}
+import com.serenity.io.{AtomicFileWriter, FileChangeWatcher, FileManager}
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.ui.theme.config.AppThemeManager
@@ -118,6 +118,27 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
 
   private val DirtyBytes = 10 * 1024
 
+  // What the file API itself charges for the operations a save cannot avoid. A path is resolved to a native string and
+  // a stat result is built on every call, and Windows allocates several times what Linux does for both, so a budget
+  // fixed in bytes on one platform fails on the other without any encoding having crept back in. Budgets are the
+  // encoding allowance plus this, measured where the test runs.
+  private val StatsPerSave = 16
+
+  private def fileApiAllocation(atomicWrites: Int): Long =
+    val directory = Files.createTempDirectory("io-budget-file-api")
+    val file      = Files.writeString(directory.resolve("probe.txt"), "probe")
+    val payload   = Array.fill[Byte](DirtyBytes)('d')
+    val stats = IO.blocking {
+      (1 to StatsPerSave).foreach { _ =>
+        Files.isSymbolicLink(file)
+        Files.isRegularFile(file)
+        Files.exists(file)
+      }
+    }
+    val writes =
+      (1 to atomicWrites).toList.traverse_(n => AtomicFileWriter.writeBytes(directory.resolve(s"w$n"), payload))
+    allocationPerOp(20)(stats >> writes)
+
   // One dirty buffer of `DirtyBytes` among `cleanBuffers` saved 1 MB files that are merely open.
   private def editIdleSessionState(
     cleanBuffers: Int,
@@ -216,9 +237,12 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
     val steady =
       val session = newSession()
       allocationPerOp(20)(session.saveSession(state))
-    info(f"[ALLOC-BUDGET] session save with nothing to write: $steady%,d B/op")
+    val fileApi = fileApiAllocation(atomicWrites = 0)
+    info(
+      f"[ALLOC-BUDGET] session save with nothing to write: $steady%,d B/op, of which file API allowance $fileApi%,d B"
+    )
     withClue("re-encoding the whole session state is what a no-change save used to cost: ")(
-      steady should be < 32L * 1024
+      steady should be < 32L * 1024 + fileApi
     )
   }
 
@@ -227,11 +251,12 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
     val session = newSession()
     val edits   = Ref.unsafe[IO, Int](0)
     // Built up front, so the measurement holds the save and not the building of the state it saves.
-    val states = Vector.tabulate(22)(n => editIdleSessionState(9, s"$n" * DirtyBytes, cleanText = "x\n"))
-    val typing = allocationPerOp(20)(edits.getAndUpdate(_ + 1).flatMap(n => session.saveSession(states(n))))
-    info(f"[ALLOC-BUDGET] edit-idle save after an edit: $typing%,d B/op")
+    val states  = Vector.tabulate(22)(n => editIdleSessionState(9, s"$n" * DirtyBytes, cleanText = "x\n"))
+    val typing  = allocationPerOp(20)(edits.getAndUpdate(_ + 1).flatMap(n => session.saveSession(states(n))))
+    val fileApi = fileApiAllocation(atomicWrites = 4)
+    info(f"[ALLOC-BUDGET] edit-idle save after an edit: $typing%,d B/op, of which file API allowance $fileApi%,d B")
     withClue("the session's settings are encoded again on every edit unless they are unchanged: ")(
-      typing should be < 384L * 1024
+      typing should be < 384L * 1024 + fileApi
     )
   }
 
