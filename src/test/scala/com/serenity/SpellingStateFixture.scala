@@ -38,6 +38,13 @@ object SpellingStateFixture:
     )
     SpellChecker.refreshDiagnostics(state, DictionarySnapshot(dictionary, Nil))
 
+  def spellCheckDisabled: AppState =
+    AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(config =
+        AppConfig.default.withSpellCheck(AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = false))
+      )
+    )
+
   def textOf(state: AppState): String =
     state.persisted.buffers(bufferId).document.content.collect()
 

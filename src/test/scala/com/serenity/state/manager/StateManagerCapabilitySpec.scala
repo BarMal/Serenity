@@ -253,13 +253,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "skip document analysis scheduling when spell checking is disabled" in {
-    val disabled = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(config =
-        AppConfig.default.withSpellCheck(AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = false))
-      )
-    )
     val program = for
-      modelRef <- ModelViews.modelOf(disabled)
+      modelRef <- ModelViews.modelOf(com.serenity.SpellingStateFixture.spellCheckDisabled)
       starts   <- Ref.of[IO, Int](0)
       operations <- StateManagerOperationBoundary.create(
         modelRef,
