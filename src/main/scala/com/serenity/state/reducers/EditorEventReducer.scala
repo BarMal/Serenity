@@ -67,7 +67,7 @@ object EditorEventReducer:
             val totalLines    = countLines(buffer.document.content)
             val maxTopLine    = math.max(0, totalLines - buffer.viewport.visibleLines)
             val newTopLine    = math.min(buffer.viewport.topLine + lines, maxTopLine)
-            val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
+            val newViewport   = buffer.viewport.scrolledTo(newTopLine, buffer.viewport.leftColumn, 0)
             val updatedBuffer = buffer.copy(viewport = newViewport)
             ReducerResult.noEffects(
               currentState.copy(persisted =
@@ -80,7 +80,7 @@ object EditorEventReducer:
         pane.bufferId.flatMap(currentState.persisted.buffers.get) match
           case Some(buffer) =>
             val newTopLine    = math.max(0, buffer.viewport.topLine - lines)
-            val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
+            val newViewport   = buffer.viewport.scrolledTo(newTopLine, buffer.viewport.leftColumn, 0)
             val updatedBuffer = buffer.copy(viewport = newViewport)
             ReducerResult.noEffects(
               currentState.copy(persisted =
@@ -137,7 +137,8 @@ object EditorEventReducer:
           }
           val maxLeftColumn = math.max(0, maxLineLength - viewport.visibleColumns + 1)
           val newLeftColumn = math.max(0, math.min(viewport.leftColumn + columns * direction, maxLeftColumn))
-          val updatedBuffer = buffer.copy(viewport = viewport.copy(leftColumn = newLeftColumn))
+          val updatedBuffer =
+            buffer.copy(viewport = viewport.scrolledTo(viewport.topLine, newLeftColumn, viewport.topVisualLine))
           ReducerResult.noEffects(
             currentState.copy(persisted =
               currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))

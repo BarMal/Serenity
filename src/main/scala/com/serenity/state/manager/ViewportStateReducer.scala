@@ -30,7 +30,7 @@ object ViewportStateReducer:
         state,
         buffer.copy(
           editing = EditingState(List(CursorPosition(clampedLine, 0))),
-          viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
+          viewport = buffer.viewport.scrolledTo(newTopLine, buffer.viewport.leftColumn, 0)
         )
       )
     }
