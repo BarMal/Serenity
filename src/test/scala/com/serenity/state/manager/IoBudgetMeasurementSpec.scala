@@ -210,6 +210,31 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
     withClue("a clean buffer costs its session entry, not its text: ")((large - absent) / 9 should be < 16L * 1024)
   }
 
+  it should "allocate next to nothing on a session save that has nothing to write" in {
+    assume(threadMemory.exists(_.isThreadAllocatedMemorySupported))
+    val state = editIdleSessionState(cleanBuffers = 9)
+    val steady =
+      val session = newSession()
+      allocationPerOp(20)(session.saveSession(state))
+    info(f"[ALLOC-BUDGET] session save with nothing to write: $steady%,d B/op")
+    withClue("re-encoding the whole session state is what a no-change save used to cost: ")(
+      steady should be < 32L * 1024
+    )
+  }
+
+  it should "allocate a bounded amount on an edit-idle session save that has something to write" in {
+    assume(threadMemory.exists(_.isThreadAllocatedMemorySupported))
+    val session = newSession()
+    val edits   = Ref.unsafe[IO, Int](0)
+    // Built up front, so the measurement holds the save and not the building of the state it saves.
+    val states = Vector.tabulate(22)(n => editIdleSessionState(9, s"$n" * DirtyBytes, cleanText = "x\n"))
+    val typing = allocationPerOp(20)(edits.getAndUpdate(_ + 1).flatMap(n => session.saveSession(states(n))))
+    info(f"[ALLOC-BUDGET] edit-idle save after an edit: $typing%,d B/op")
+    withClue("the session's settings are encoded again on every edit unless they are unchanged: ")(
+      typing should be < 384L * 1024
+    )
+  }
+
   it should "count external-change watcher wakeups" in {
     // Its own directory, so only this spec's activity reaches the watcher.
     val file   = Files.createFile(Files.createTempDirectory("io-budget-watch").resolve("notes.txt"))
