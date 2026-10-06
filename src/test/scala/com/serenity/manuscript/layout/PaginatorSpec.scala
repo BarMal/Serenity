@@ -318,3 +318,35 @@ class PaginatorSpec extends AnyFlatSpec with Matchers with EitherValues with Opt
 
     result.left.value shouldBe PaginationError.UnsupportedAlignment(LineAlignment.Justified)
   }
+
+  "the section a page opens" should "number parts and chapters in document order, and mark only the page each opens" in {
+    val part = Section.Part(
+      Some(SectionHeading.of("Part One")),
+      Vector(chapter("Arrival", paragraphOf('a', 40)), chapter("Departure", prose("b")))
+    )
+    val doc = paginate(manuscript(Vector(part, chapter("Epilogue", prose("c")))))
+
+    doc.pages.flatMap(_.opens).map(_.index) shouldBe Vector(0, 1, 2, 3)
+    doc.pages.count(_.opens.isEmpty) should be > 0
+    doc.pages.filter(_.opens.isDefined).foreach(_.kind shouldBe PageKind.SectionStart)
+  }
+
+  it should "give an untitled chapter's first page its own reference, and an untitled part none" in {
+    val untitledPart = Section.Part(None, Vector(Section.Chapter(None, Vector(prose("Text.")))))
+    val doc          = paginate(manuscript(Vector(untitledPart, chapter("Next", prose("b")))))
+
+    doc.pages.map(_.opens.map(_.index)) shouldBe Vector(Some(1), Some(2))
+  }
+
+  it should "leave front matter and a section's continuation pages without one" in {
+    val doc = paginate(
+      manuscript(
+        Vector(chapter("H", paragraphOf('a', 60))),
+        front = List(FrontMatter.TitlePage, FrontMatter.Dedication("For Ada"))
+      )
+    )
+
+    doc.pages.take(2).map(_.opens) shouldBe Vector(None, None)
+    doc.pages.lift(2).flatMap(_.opens).map(_.index) shouldBe Some(0)
+    doc.pages.drop(3).foreach(_.opens shouldBe None)
+  }

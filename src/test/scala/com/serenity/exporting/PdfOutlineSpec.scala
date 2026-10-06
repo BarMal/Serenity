@@ -64,6 +64,27 @@ class PdfOutlineSpec extends AnyFlatSpec with Matchers:
     paged.pages.map(_.kind) shouldBe Vector.fill(3)(PageKind.SectionStart)
   }
 
+  it should "bookmark a heading that cleaning changes, on the page it opens" in {
+    val m       = manuscript(Vector(chapter("First", prose("a")), chapter("Chap\u0000ter\tTwo", prose("b"))))
+    val entries = PdfOutline.entries(m, paginate(m))
+
+    entries.map(_.title) shouldBe Vector("First", "Chapter Two")
+    entries.map(_.pageIndex) shouldBe Vector(0, 1)
+  }
+
+  it should "keep two chapters of the same heading on their own pages" in {
+    val m = manuscript(Vector(chapter("Same", prose("a")), chapter("Same", prose("b"))))
+
+    PdfOutline.entries(m, paginate(m)).map(_.pageIndex) shouldBe Vector(0, 1)
+  }
+
+  it should "not confuse a heading with an untitled chapter whose text begins the same way" in {
+    val untitled = Section.Chapter(None, Vector(prose("A")))
+    val m        = manuscript(Vector(untitled, chapter("A Tale", prose("b"))))
+
+    PdfOutline.entries(m, paginate(m)).map(e => e.title -> e.pageIndex) shouldBe Vector("A Tale" -> 1)
+  }
+
   it should "be empty for a manuscript with no headings" in {
     val m = manuscript(Vector(Section.Chapter(None, Vector(prose("Just text.")))))
 

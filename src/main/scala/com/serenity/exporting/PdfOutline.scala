@@ -1,63 +1,59 @@
 package com.serenity.exporting
 
-import com.serenity.manuscript.layout.{PageKind, PagedDocument}
+import com.serenity.manuscript.layout.PagedDocument
 import com.serenity.manuscript.{Manuscript, Section, SectionHeading}
 
 /** A bookmark: the heading's text, the zero-based page it starts on, and the chapters nested beneath it. */
 final case class OutlineEntry(title: String, pageIndex: Int, children: Vector[OutlineEntry])
 
-/** The PDF's bookmarks, derived from the manuscript's headings and where the paginator put them. A [[PagedDocument]]
-  * does not say which section opened a page, so each heading claims the first section-start page, from where the last
-  * one left off, whose first line is its own. A section without a heading has no bookmark but still owns its page,
-  * which the search steps over.
+/** The PDF's bookmarks, from the manuscript's headings and the pages the paginator says each section opens. Sections
+  * are numbered depth first, as [[com.serenity.manuscript.layout.SectionRef]] is, so no text is compared. A heading
+  * whose section opened no page (an empty chapter) has nothing to point at and gets no bookmark. An untitled part lifts
+  * its chapters to its own level.
   */
 object PdfOutline:
 
-  final private case class Opening(pageIndex: Int, firstLine: String)
+  final private case class Walk(entries: Vector[OutlineEntry], next: Int)
 
   def entries(manuscript: Manuscript, paged: PagedDocument): Vector[OutlineEntry] =
-    val openings = paged.pages.zipWithIndex.collect {
-      case (page, index) if page.kind == PageKind.SectionStart =>
-        Opening(index, page.lines.headOption.fold("")(_.text.trim))
-    }
-    walk(manuscript.body, openings.toList)._1
+    val pageOf = paged.pages.zipWithIndex.flatMap((page, index) => page.opens.map(_.index -> index)).toMap
+    walk(manuscript.body, 0, pageOf).entries
 
-  private def walk(sections: Vector[Section], openings: List[Opening]): (Vector[OutlineEntry], List[Opening]) =
-    sections.foldLeft((Vector.empty[OutlineEntry], openings)) {
-      case ((found, remaining), section) =>
-        val (entries, rest) = visit(section, remaining)
-        (found ++ entries, rest)
+  private def walk(sections: Vector[Section], first: Int, pageOf: Map[Int, Int]): Walk =
+    sections.foldLeft(Walk(Vector.empty, first)) { (found, section) =>
+      val visited = visit(section, found.next, pageOf)
+      Walk(found.entries ++ visited.entries, visited.next)
     }
 
-  private def visit(section: Section, openings: List[Opening]): (Vector[OutlineEntry], List[Opening]) =
+  private def visit(section: Section, index: Int, pageOf: Map[Int, Int]): Walk =
     section match
       case Section.Chapter(heading, _) =>
-        val (claimed, rest) = claim(heading, openings)
-        (claimed.map(entry(_, Vector.empty)).toVector, rest)
+        Walk(entryFor(heading, index, pageOf, Vector.empty).toVector, index + 1)
       case Section.Part(heading, nested) =>
-        val (claimed, afterHeading) = claim(heading, openings)
-        val (children, rest)        = walk(nested, afterHeading)
-        (claimed.fold(children)(opening => Vector(entry(opening, children))), rest)
+        val inside = walk(nested, index + 1, pageOf)
+        val entry  = entryFor(heading, index, pageOf, inside.entries)
+        Walk(entry.fold(inside.entries)(Vector(_)), inside.next)
 
-  final private case class Claim(title: String, opening: Opening)
+  private def entryFor(
+    heading: Option[SectionHeading],
+    index: Int,
+    pageOf: Map[Int, Int],
+    children: Vector[OutlineEntry]
+  ): Option[OutlineEntry] =
+    for
+      head <- heading
+      title = titleOf(head)
+      if title.nonEmpty
+      page <- pageOf.get(index)
+    yield OutlineEntry(title, page, children)
 
-  private def entry(claim: Claim, children: Vector[OutlineEntry]): OutlineEntry =
-    OutlineEntry(claim.title, claim.opening.pageIndex, children)
-
-  /** The heading's claim on its page, and the pages that remain after it. A heading too long for one line wraps, so its
-    * first line is matched whole before it is matched as a prefix.
+  /** Lines joined by a space; a tab or break becomes a space and other control characters are dropped, as the page's
+    * own text is.
     */
-  private def claim(heading: Option[SectionHeading], openings: List[Opening]): (Option[Claim], List[Opening]) =
-    val titled = heading.filter(_.title.trim.nonEmpty)
-    val found = titled.flatMap { head =>
-      val lead  = head.lines.headOption.fold("")(_.trim)
-      val whole = openings.indexWhere(_.firstLine == lead)
-      val index = if whole >= 0 then whole else openings.indexWhere(wrapsInto(lead, _))
-      Option.when(index >= 0)(head -> index)
-    }
-    found.fold((None, openings)) { (head, index) =>
-      (Some(Claim(head.title.trim, openings(index))), openings.drop(index + 1))
-    }
-
-  private def wrapsInto(lead: String, opening: Opening): Boolean =
-    opening.firstLine.nonEmpty && lead.startsWith(s"${opening.firstLine} ")
+  private def titleOf(heading: SectionHeading): String =
+    heading.title.flatMap {
+      case '\t' | '\n' | ' ' | '\u000B' => " "
+      case other =>
+        val kind = Character.getType(other)
+        if kind == Character.CONTROL || kind == Character.FORMAT then "" else other.toString
+    }.trim
