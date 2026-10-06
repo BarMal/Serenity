@@ -29,6 +29,12 @@ enum LaneKey:
   /** The pause after an edit before the session is saved for crash recovery: a newer edit restarts it. */
   case EditIdleSessionSave
 
+  /** The pause after an edit to `id` before auto-save writes its file: a newer edit restarts it (#1992). */
+  case AutoSaveDelay(id: BufferId)
+
+  /** Auto-save's queueing of writes, one after another. */
+  case AutoSave
+
   /** The wait before notices due at `deadlineNanos` are swept away: a lane per deadline, so each runs out on its own.
     */
   case NoticeExpiry(deadlineNanos: Long)

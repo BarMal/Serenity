@@ -148,6 +148,7 @@ object CommandRunnerSettingsInputItems:
         v.lineNumberPaddingValue
       ) ++
       CommandRunnerSettingsInputItemsInputAndFont.inputItems(v.inputConfig.wheelScrollLines) ++
+      CommandRunnerSettingsInputItemsInputAndFont.autoSaveItems(config.autoSaveConfig.delayMillis) ++
       CommandRunnerSettingsInputItemsInputAndFont.fontSizeItems(
         v.codeFontSizeValue,
         v.textFontSizeValue,
