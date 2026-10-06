@@ -12,7 +12,7 @@ import com.serenity.diagnostics.Trace
 import com.serenity.document.CommentRendering
 import com.serenity.io.{FileBrowser, FileEntry}
 import com.serenity.lsp.client.DocumentUri
-import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker, SpellSuggester}
+import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, DictionarySnapshot, SpellChecker, SpellSuggester}
 import com.serenity.state.core.NotesPaneSync
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
@@ -43,6 +43,7 @@ final private[manager] class StateManagerOperationBoundary private (
     fileWriteLedger: FileWriteLedger,
     discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]],
     dictionaryCache: DictionaryCache,
+    loadDictionary: (SpellCheckConfig, DictionaryCache) => DictionarySnapshot,
     listDirectory: Path => IO[List[DirEntry]],
     commitObserver: Ref[IO, (AppState, AppState) => IO[Unit]],
     wrapCache: WrappedLineCache,
@@ -356,13 +357,19 @@ final private[manager] class StateManagerOperationBoundary private (
   private def postResult(result: EffectResult): IO[Unit] =
     dispatcher.post(modelCommit.applyResult(result, _ => IO.unit))
 
+  /** A parse cannot be interrupted, and cancelling a lane job waits for it to settle, so quitting or a newer analysis
+    * would wait out the rest of a dictionary parse (seconds on a loaded machine). The work runs on its own fiber and
+    * only the wait for it is cancelled; the shared cache keeps what it finishes for the next analysis.
+    */
+  private def detachedBlocking[A](work: => A): IO[A] = IO.blocking(work).start.flatMap(_.joinWithNever)
+
   private def documentAnalysisJob: IO[Unit] =
     given Logger[IO] = logger
     (IO.sleep(DocumentAnalysisDebounce) >>
       Trace.timed("analysis.documentAnalysisJob") {
         modelCommit.currentState.flatMap { snapshot =>
           val spellCheckConfig = snapshot.persisted.config.languageToolsConfig.spellCheck
-          IO.blocking(DictionaryLoader.loadSnapshot(spellCheckConfig, dictionaryCache)).flatMap { dictionary =>
+          detachedBlocking(loadDictionary(spellCheckConfig, dictionaryCache)).flatMap { dictionary =>
             val expected = SpellChecker.analysisFingerprints(snapshot, dictionary.fingerprints)
             val analyzed = SpellChecker.refreshDiagnostics(snapshot, dictionary)
             announceMissingDictionary(
@@ -372,7 +379,7 @@ final private[manager] class StateManagerOperationBoundary private (
             ) >>
               postResult(EffectResult.DocumentAnalysisCompleted(analyzed, expected, dictionary.fingerprints)) >>
               // Idle time after the result is published, so the first request for corrections does not pay for it.
-              IO.blocking(dictionary.context.stems.foreach(_.prepareSuggestions()))
+              detachedBlocking(dictionary.context.stems.foreach(_.prepareSuggestions()))
           }
         }
       }).handleErrorWith(error =>
@@ -474,7 +481,8 @@ private[manager] object StateManagerOperationBoundary:
     forgetClosedBuffers: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit,
     // Owned by this boundary unless the caller shares one on purpose (#1677: never a JVM-wide default): a harness that
     // builds many managers in one process hands them the same cache so the dictionary is parsed once between them.
-    dictionaryCache: DictionaryCache = DictionaryCache()
+    dictionaryCache: DictionaryCache = DictionaryCache(),
+    loadDictionary: (SpellCheckConfig, DictionaryCache) => DictionarySnapshot = DictionaryLoader.loadSnapshot(_, _)
   ): IO[StateManagerOperationBoundary] =
     for
       pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)
@@ -510,6 +518,7 @@ private[manager] object StateManagerOperationBoundary:
       fileWriteLedger,
       discoverDictionaryFingerprints,
       dictionaryCache,
+      loadDictionary,
       listDirectory,
       commitObserver,
       wrapCache,
