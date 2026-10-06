@@ -2,7 +2,7 @@ package com.serenity.exporting
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.manuscript.layout.{PagedDocument, Paginator}
+import com.serenity.manuscript.layout.{PagedDocument, PaginationError, Paginator}
 import com.serenity.manuscript.typography.PageTypography
 import com.serenity.manuscript.{
   AuthorName,
@@ -34,23 +34,26 @@ class PaginatorFontBoxSpec extends AnyFlatSpec with Matchers with EitherValues w
     WordCountRounding.Exact
   )
 
-  private def paginated(text: String): PagedDocument =
+  private def paginatedBlocks(blocks: Block*): Either[PaginationError, PagedDocument] =
     val manuscript = Manuscript(
       meta,
       Nil,
-      Vector(
-        Section.Chapter(
-          Some(SectionHeading.of("One")),
-          Vector(Block.Paragraph(List(RichTextRun(text)), ParagraphKind.Body))
-        )
-      ),
+      Vector(Section.Chapter(Some(SectionHeading.of("One")), blocks.toVector)),
       None
     )
     FontBoxTextMeasurer
       .resource()
       .use(measurer => IO(Paginator.paginate(manuscript, typography, measurer)))
       .unsafeRunSync()
-      .value
+
+  private def paginated(text: String): PagedDocument =
+    paginatedBlocks(body(text)).value
+
+  private def body(text: String, kind: ParagraphKind = ParagraphKind.Body): Block =
+    Block.Paragraph(List(RichTextRun(text)), kind)
+
+  private def lineTexts(doc: PagedDocument): Vector[String] =
+    doc.pages.flatMap(_.lines).drop(1).map(_.text)
 
   "paginating with Courier Prime at 12 pt" should "set 7.2 points a character: 60 on the indented first line, then 65" in {
     val words = Vector.fill(40)("abcd").mkString(" ")
@@ -77,4 +80,48 @@ class PaginatorFontBoxSpec extends AnyFlatSpec with Matchers with EitherValues w
     val first = gaps.headOption.value
     gaps.foreach(_ shouldBe (first +- 0.01f))
     first should be > 12f * 2f
+  }
+
+  "text a font has no glyph for" should "end the line at a soft or hard line break" in {
+    val doc = paginatedBlocks(body("alpha\nbeta\u2028gamma\u000Bdelta")).value
+
+    lineTexts(doc) shouldBe Vector("alpha", "beta", "gamma", "delta")
+  }
+
+  it should "indent only the first of the lines a break makes" in {
+    val doc = paginatedBlocks(body("alpha\nbeta")).value
+
+    doc.pages.flatMap(_.lines).drop(1).flatMap(_.runs.headOption).map(_.x) shouldBe Vector(108f, 72f)
+  }
+
+  it should "keep an intentional blank line, and ignore a break that ends the paragraph" in {
+    lineTexts(paginatedBlocks(body("a\n\nb\n")).value) shouldBe Vector("a", "", "b")
+  }
+
+  it should "turn a leading tab into the first-line indent" in {
+    val doc = paginatedBlocks(body("\tquoted", ParagraphKind.BlockQuote), body("\tplain")).value
+
+    val lines = doc.pages.flatMap(_.lines).drop(1)
+    lines.map(_.text) shouldBe Vector("quoted", "plain")
+    lines.flatMap(_.runs.headOption).map(_.x) shouldBe Vector(72f + 36f + 36f, 108f)
+  }
+
+  it should "turn any other tab into a single space" in {
+    lineTexts(paginatedBlocks(body("left\tright")).value) shouldBe Vector("left right")
+  }
+
+  it should "drop control and format characters before measuring" in {
+    val doc = paginatedBlocks(body("a\u0000b\u0007c\r\nd\u200Be\u00ADf\u007F")).value
+
+    lineTexts(doc) shouldBe Vector("abc", "def")
+  }
+
+  it should "not fail an export however the characters are mixed" in {
+    val messy = "Tab\there,\u0001 break\nand\u200D more\u2028done\t"
+
+    paginatedBlocks(body(messy), Block.Preformatted(Vector("\tcode\tline\u0000"))).isRight shouldBe true
+  }
+
+  it should "still report a printable character the face lacks" in {
+    paginatedBlocks(body("a\u4e2d")).isLeft shouldBe true
   }

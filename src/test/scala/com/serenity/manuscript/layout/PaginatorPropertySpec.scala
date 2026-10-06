@@ -1,7 +1,7 @@
 package com.serenity.manuscript.layout
 
 import com.serenity.manuscript.layout.PaginatorFixture.*
-import com.serenity.manuscript.{Block, ManuscriptText, ParagraphKind, Section}
+import com.serenity.manuscript.{Block, FrontMatter, ManuscriptText, ParagraphKind, Section}
 import com.serenity.richtext.RichTextRun
 import org.scalacheck.Gen
 import org.scalatest.matchers.should.Matchers
@@ -96,11 +96,14 @@ class PaginatorPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wi
     }
   }
 
-  property("running heads are on body pages only, numbered with the page") {
+  property("running heads are on every body page, numbered from 1; front matter has none") {
     forAll(sections) { generated =>
-      paginate(manuscript(generated)).pages.foreach { page =>
-        page.head.map(_.text) shouldBe Option.when(page.kind == PageKind.Body)(s"Writer / NIGHT / ${page.number}")
-      }
+      val pages = paginate(manuscript(generated, front = List(FrontMatter.TitlePage))).pages
+      val body  = pages.filterNot(_.kind.isFront)
+
+      pages.filter(_.kind.isFront).map(_.head) shouldBe Vector(None)
+      body.map(_.printedNumber) shouldBe (1 to body.size).map(Some(_))
+      body.map(_.head.map(_.text)) shouldBe (1 to body.size).map(n => Some(s"Writer / NIGHT / $n"))
     }
   }
 

@@ -171,13 +171,14 @@ class PaginatorSpec extends AnyFlatSpec with Matchers with EitherValues with Opt
     doc.pages(2).head.map(_.text) shouldBe Some("Writer / NIGHT / 3")
   }
 
-  it should "be suppressed on chapter-first pages" in {
+  it should "appear on chapter-first pages too, as in the DOCX writer" in {
     val doc = paginate(manuscript(Vector(chapter("One", paragraphOf('a', 40)), chapter("Two", paragraphOf('b', 2)))))
 
-    doc.pages.filter(_.kind == PageKind.SectionStart).map(_.head) shouldBe Vector(None, None)
+    doc.pages.filter(_.kind == PageKind.SectionStart).map(_.head.map(_.text)) shouldBe
+      Vector(Some("Writer / NIGHT / 1"), Some("Writer / NIGHT / 3"))
   }
 
-  it should "be suppressed on the title page and the dedication, which still count as pages" in {
+  it should "be suppressed on the title page and the dedication, and numbering starts at 1 on the body text" in {
     val doc = paginate(
       manuscript(
         Vector(chapter("One", paragraphOf('a', 60))),
@@ -192,8 +193,9 @@ class PaginatorSpec extends AnyFlatSpec with Matchers with EitherValues with Opt
       PageKind.Body,
       PageKind.Body
     )
+    doc.pages.map(_.printedNumber) shouldBe Vector(None, None, Some(1), Some(2), Some(3))
     doc.pages.map(_.head.map(_.text)) shouldBe
-      Vector(None, None, None, Some("Writer / NIGHT / 4"), Some("Writer / NIGHT / 5"))
+      Vector(None, None, Some("Writer / NIGHT / 1"), Some("Writer / NIGHT / 2"), Some("Writer / NIGHT / 3"))
   }
 
   it should "drop an empty segment together with its separator" in {
@@ -212,6 +214,7 @@ class PaginatorSpec extends AnyFlatSpec with Matchers with EitherValues with Opt
     )
 
     doc.pages.map(_.number) shouldBe Vector(1, 2, 3, 4)
+    doc.pages.map(_.printedNumber) shouldBe Vector(None, Some(1), Some(2), Some(3))
   }
 
   "the title page" should "carry the contact block, word count, centred title and byline" in {

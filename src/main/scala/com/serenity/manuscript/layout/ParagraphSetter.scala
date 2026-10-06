@@ -36,13 +36,33 @@ final private[layout] class ParagraphSetter(t: PageTypography, measure: TextMeas
     t.body.copy(style = face)
 
   def width(text: String): Either[PaginationError, Double] =
-    advances(text, t.body).map(_.map(_.toDouble).sum)
+    advances(ProseText.clean(text), t.body).map(_.map(_.toDouble).sum)
 
   def run(text: String, x: Float): PlacedRun =
-    PlacedRun(text, t.body, x, RichTextStyle.empty)
+    PlacedRun(ProseText.clean(text), t.body, x, RichTextStyle.empty)
 
+  /** Sets one paragraph. A line break in the text starts a new line, which takes no first-line indent. */
   def set(runs: List[RichTextRun], placement: Placement): Either[PaginationError, Vector[Vector[PlacedRun]]] =
+    val prepared = ProseText.prepare(runs)
+    val first =
+      if prepared.indented && !placement.centred then
+        placement.copy(firstIndent = placement.firstIndent.max(t.firstLineIndent))
+      else placement
+    prepared.lines.zipWithIndex.flatTraverse { (line, index) =>
+      setLine(line, if index == 0 then first else first.copy(firstIndent = 0f))
+    }
+
+  private def setLine(
+    runs: List[RichTextRun],
+    placement: Placement
+  ): Either[PaginationError, Vector[Vector[PlacedRun]]] =
     val live = runs.filter(_.text.nonEmpty).toVector
+    if live.isEmpty then Right(Vector(Vector.empty)) else setRuns(live, placement)
+
+  private def setRuns(
+    live: Vector[RichTextRun],
+    placement: Placement
+  ): Either[PaginationError, Vector[Vector[PlacedRun]]] =
     live.traverse(run => advances(run.text, font(run.style))).map { measured =>
       val text   = live.map(_.text).mkString
       val widths = LineBreaker.prefixWidths(text, measured.flatten)

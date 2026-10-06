@@ -4,13 +4,14 @@ import java.util.Locale
 
 import cats.syntax.all.*
 import com.serenity.manuscript.typography.{LineAlignment, LineMetrics, PageTypography, TextMeasurer}
-import com.serenity.manuscript.{Manuscript, ManuscriptMeta}
+import com.serenity.manuscript.{Manuscript, ManuscriptMeta, ManuscriptPageNumbering}
 
 /** Lays a [[Manuscript]] out on pages, in points, using nothing but the [[TextMeasurer]] port. The result is plain
   * data: a PDF painter, a print job and a page preview can all draw the same [[PagedDocument]] and so agree on where
   * every line falls.
   *
-  * Pages are numbered from 1 including the title page. Running heads appear on body pages only.
+  * Body text is numbered from 1 and every body page carries the running head; the title page and dedication carry
+  * neither. That rule is [[ManuscriptPageNumbering]], shared with the DOCX writer.
   */
 object Paginator:
 
@@ -35,25 +36,34 @@ object Paginator:
         typography.widows,
         typography.orphans
       )
-      pages <- PageFiller
-        .fill(groups, geometry)
+      filled = PageFiller.fill(groups, geometry)
+      pages <- filled
+        .zip(bodyPagesBefore(filled))
         .zipWithIndex
-        .traverse((page, index) => numbered(page, index + 1, manuscript.meta, typography, setter, metrics))
+        .traverse {
+          case ((page, bodyIndex), index) =>
+            numbered(page, index + 1, bodyIndex, manuscript.meta, typography, setter, metrics)
+        }
     yield PagedDocument(pages)
+
+  /** For each page, how many body pages come before it: front matter is not counted. */
+  private def bodyPagesBefore(pages: Vector[FilledPage]): Vector[Int] =
+    pages.scanLeft(0)((count, page) => if page.kind.isFront then count else count + 1).take(pages.size)
 
   private def numbered(
     page: FilledPage,
     number: Int,
+    bodyIndex: Int,
     meta: ManuscriptMeta,
     typography: PageTypography,
     setter: ParagraphSetter,
     metrics: LineMetrics
   ): Either[PaginationError, Page] =
-    val head =
-      if page.kind.hasRunningHead then
-        runningHead(headText(typography.runningHead, meta, number), typography, setter, metrics)
-      else Right(None)
-    head.map(Page(number, page.kind, _, page.lines))
+    val printed = Option.unless(page.kind.isFront)(ManuscriptPageNumbering.printedNumber(bodyIndex))
+    val head = printed.fold(Right(None))(shown =>
+      runningHead(ManuscriptPageNumbering.runningHead(typography.runningHead, meta, shown), typography, setter, metrics)
+    )
+    head.map(Page(number, printed, page.kind, _, page.lines))
 
   /** Top right, half way up the top margin. */
   private def runningHead(
@@ -68,17 +78,3 @@ object Paginator:
         val x = (typography.margins.left + typography.textWidth - width).toFloat
         Some(PlacedLine(typography.margins.top / 2f + metrics.ascent, Vector(setter.run(text, x))))
       }
-
-  /** A slash-separated segment left empty (a manuscript with no surname) is dropped along with its separator. */
-  private[layout] def headText(template: String, meta: ManuscriptMeta, number: Int): String =
-    template
-      .split(" / ", -1)
-      .toList
-      .map(
-        _.replace("<$surname>", meta.author.surname)
-          .replace("<$keyword>", meta.shortTitle)
-          .replace("<$p>", number.toString)
-          .trim
-      )
-      .filter(_.nonEmpty)
-      .mkString(" / ")
