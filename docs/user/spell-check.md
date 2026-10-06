@@ -47,10 +47,20 @@ Windows has no standard Hunspell folder. If yours is elsewhere, set `spellcheck.
 spellcheck.dictionary_paths = ["C:\\Dictionaries"]
 ```
 
-If no dictionary at all can be found for the languages you configured, Serenity shows one notice per session, when
-there is prose to check. It names the folders searched and suggests installing a package called `hunspell-` followed
-by your first language in lower case (`hunspell-fr`). Nothing is flagged until a dictionary is found. If only some of
-your languages have one, there is no notice, and the others are not checked.
+If any language you configured has no dictionary, Serenity shows a notice when there is prose to check, once per
+session for each distinct wording. It names every language that is missing, lists the folders searched, and suggests a
+package for each one, called `hunspell-` followed by the language in lower case. For example:
+
+```
+Spell check found no dictionary for fr.
+Searched: /usr/share/hunspell, /usr/share/myspell/dicts, ...
+Install a Hunspell dictionary (for example hunspell-fr) or set spellcheck.dictionary_paths.
+```
+
+The folders listed are your `spellcheck.dictionary_paths` when that is set, otherwise the folders in the table above.
+The bundled British English never counts as missing. Languages that do have a dictionary are still checked, so a missing
+language does not switch spell check off for the rest. If no language has a dictionary, nothing is flagged until one is
+found.
 
 ## What is checked
 
