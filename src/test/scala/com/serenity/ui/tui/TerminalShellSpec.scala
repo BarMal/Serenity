@@ -253,12 +253,20 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
   private val replyAwaitingDeadlines =
     TerminalShell.NegotiationDeadlines.Production.copy(modifyOtherKeysMillis = 10000L)
 
+  // The kitty reply is preloaded, but it still reaches the probe through the terminal's reader thread, so the same race
+  // applies: a slow runner (seen on Windows CI) let the 100 ms kitty window close first and fell through to Win32Input.
+  private val kittyReplyDeadlines =
+    TerminalShell.NegotiationDeadlines.Production.copy(kittyMillis = 10000L)
+
   "acquiring the shell against a terminal that answers the kitty query" should
     "push kitty's enhancement flags and report the Kitty tier" in {
       val harness = dumbTerminal(bytes(s"$esc[?1u"))
 
       val tier =
-        TerminalShell.forTerminal(harness.terminal).use(shell => IO(shell.keyboardProtocolTier)).unsafeRunSync()
+        TerminalShell
+          .forTerminal(harness.terminal, deadlines = kittyReplyDeadlines)
+          .use(shell => IO(shell.keyboardProtocolTier))
+          .unsafeRunSync()
 
       tier shouldBe TerminalShell.KeyboardProtocolTier.Kitty
       val written = harness.written
@@ -355,7 +363,7 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
   "releasing a Kitty-tier shell on clean quit" should "pop the kitty enhancement flags" in {
     val harness = dumbTerminal(bytes(s"$esc[?1u"))
 
-    TerminalShell.forTerminal(harness.terminal).use(_ => IO.unit).unsafeRunSync()
+    TerminalShell.forTerminal(harness.terminal, deadlines = kittyReplyDeadlines).use(_ => IO.unit).unsafeRunSync()
 
     harness.written should include(kittyPop)
   }
@@ -368,7 +376,7 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
       val releaseEvent = s"$esc[113;5:3u"
       val harness      = dumbTerminal(bytes(s"$esc[?1u" + releaseEvent))
 
-      TerminalShell.forTerminal(harness.terminal).use(_ => IO.unit).unsafeRunSync()
+      TerminalShell.forTerminal(harness.terminal, deadlines = kittyReplyDeadlines).use(_ => IO.unit).unsafeRunSync()
 
       // Negotiation consumes the kitty response; restore() must consume the trailing release event, leaving nothing
       // meaningful for the returning shell -- the next read is a sentinel (EOF/expired), not the ESC that opens it.
