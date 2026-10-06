@@ -33,6 +33,8 @@ class SessionManager(
 
   private val sessionsRootAbsolute = sessionsDirectory.toAbsolutePath.normalize
 
+  private val stateEncoder = new SessionStateEncoder
+
   private val journal = new SessionWriteJournal(pendingFile, indexFile, safeSessionPath, logger)
 
   private val contentStore = new SessionContentStore(
@@ -100,7 +102,7 @@ class SessionManager(
       updatedIndex       = pruned.copy(currentSessionId = Some(sessionId))
       state <- stagedState(metadata.sessionFileName, appState, policy.persistUnsavedBuffers)
       _ <- commitTransaction(
-        writes = Map(metadata.sessionFileName -> SessionWriteJournal.compact(state)),
+        writes = Map(metadata.sessionFileName -> stateEncoder.compact(state)),
         deletes = toDelete,
         index = updatedIndex
       )
@@ -400,7 +402,7 @@ class SessionManager(
     }
 
   private def commitCurrent(sessionFileName: String, state: SessionState, index: SessionIndex): IO[Unit] =
-    commitTransaction(Map(sessionFileName -> SessionWriteJournal.compact(state)), Nil, index) >>
+    commitTransaction(Map(sessionFileName -> stateEncoder.compact(state)), Nil, index) >>
       IO.realTime.flatMap(now =>
         IO.blocking(safeSessionPath(sessionFileName).flatMap(FileStamp.read)).flatMap { stamp =>
           lastSaved.set(
