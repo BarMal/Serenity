@@ -5,6 +5,9 @@ ThisBuild / version := "0.1.0-SNAPSHOT"
 
 ThisBuild / scalaVersion := "3.9.0"
 
+ThisBuild / licenses := Seq("GPL-3.0-or-later" -> url("https://www.gnu.org/licenses/gpl-3.0.txt"))
+ThisBuild / homepage := Some(url("https://github.com/BarMal/Serenity"))
+
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 
@@ -49,6 +52,12 @@ lazy val writeArchitectureBaseline = taskKey[Unit]("Regenerate the architecture-
 lazy val architectureChecksSelfTest = taskKey[Unit](
   "Regression guard for ArchitectureChecks itself: confirms forbidden fully-qualified references are still caught (#1676)"
 )
+
+// THIRD-PARTY-NOTICES.md is rendered from the resolved runtime classpath plus the registry in third-party/, so a
+// dependency with no licence entry fails the build rather than shipping unattributed (#2019).
+lazy val thirdPartyNotices         = taskKey[String]("Render THIRD-PARTY-NOTICES.md from the runtime classpath and third-party/")
+lazy val generateThirdPartyNotices = taskKey[Unit]("Rewrite THIRD-PARTY-NOTICES.md at the repo root")
+lazy val checkThirdPartyNotices    = taskKey[Unit]("Fail if THIRD-PARTY-NOTICES.md is stale or a runtime module has no licence entry")
 
 lazy val root = (project in file("."))
   .settings(
@@ -156,10 +165,42 @@ lazy val root = (project in file("."))
       )
       Seq(generated)
     }.taskValue,
+    thirdPartyNotices := ThirdPartyNotices
+      .render(baseDirectory.value.toPath, ThirdPartyNotices.runtimeModulesOf((Runtime / managedClasspath).value))
+      .fold(sys.error(_), identity),
+    generateThirdPartyNotices := {
+      val target = baseDirectory.value / "THIRD-PARTY-NOTICES.md"
+      IO.write(target, thirdPartyNotices.value)
+      streams.value.log.info(s"wrote $target")
+    },
+    checkThirdPartyNotices := {
+      val committed = IO.read(baseDirectory.value / "THIRD-PARTY-NOTICES.md")
+      if (committed != thirdPartyNotices.value)
+        sys.error("THIRD-PARTY-NOTICES.md is out of date. Run `sbt generateThirdPartyNotices` and commit the result.")
+      streams.value.log.info("checkThirdPartyNotices: notices cover every runtime module")
+    },
+    // Packaged under META-INF/serenity so the licence reaches the classpath, the assembled JAR and the About
+    // command from one copy; the root files stay the single source.
+    Compile / resourceGenerators += Def.task {
+      val dir = (Compile / resourceManaged).value / "META-INF" / "serenity"
+      IO.copyFile(baseDirectory.value / "LICENSE", dir / "LICENSE")
+      IO.write(dir / "THIRD-PARTY-NOTICES.md", thirdPartyNotices.value)
+      Seq(dir / "LICENSE", dir / "THIRD-PARTY-NOTICES.md")
+    }.taskValue,
+    // The runtime module list the notices spec checks the shipped notices against.
+    Test / resourceGenerators += Def.task {
+      val file = (Test / resourceManaged).value / "licences" / "runtime-modules.txt"
+      IO.write(
+        file,
+        ThirdPartyNotices.runtimeModulesOf((Runtime / managedClasspath).value).map(_.key).distinct.sorted.mkString("\n")
+      )
+      Seq(file)
+    }.taskValue,
     Compile / mainClass := Some("Main"),
     assembly / mainClass := Some("Main"),
     assembly / assemblyJarName := "Serenity.jar",
     assembly / assemblyMergeStrategy := {
+      case PathList("META-INF", "serenity", _*) => MergeStrategy.first
       case PathList("META-INF", "services", _*) => MergeStrategy.concat
       case x @ PathList("META-INF", xs @ _*) =>
         xs.map(_.toLowerCase) match {

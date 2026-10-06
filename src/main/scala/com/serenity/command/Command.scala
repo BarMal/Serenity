@@ -5,7 +5,7 @@ import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.session.SessionId
-import com.serenity.state.models.{BufferId, ClipboardEntry, CloseWorkflowChoice, PanelId, SurfaceId}
+import com.serenity.state.models.{BufferId, ClipboardEntry, CloseWorkflowChoice, PanelId, RestartMode, SurfaceId}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.layout.PanelPosition
 
@@ -19,6 +19,8 @@ enum CommandCategory:
 
 enum LifecycleIntent:
   case QuitApp
+  // Quits like QuitApp (unsaved work is still asked about), then starts again; see SafeModeCommands.
+  case Restart(mode: RestartMode)
   // What the "save changes before closing?" prompt's answers run; see CloseCommands.
   case ResolveClose(choice: CloseWorkflowChoice)
 
@@ -283,6 +285,8 @@ enum SpellCheckIntent:
 enum GeneralSettingsIntent:
   case OpenSettings
   case SaveConfig
+  // Moves config.conf aside to a timestamped backup, then restores every setting to its default.
+  case ResetSettings
   case SetRenderFpsTarget(target: RenderFpsTarget)
   case SetRenderDamageGranularity(granularity: RenderDamageGranularity)
   case SetCommandRunnerVisibleRows(rows: Option[Int])

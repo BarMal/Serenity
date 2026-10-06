@@ -16,7 +16,7 @@ import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker}
 import com.serenity.state.core.NotesPaneSync
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.NoticeReducer
+import com.serenity.state.reducers.{ModalEventReducer, NoticeReducer}
 import com.serenity.ui.layout.{DirEntry, WrappedLineCache}
 import org.typelevel.log4cats.Logger
 
@@ -47,7 +47,8 @@ final private[manager] class StateManagerOperationBoundary private (
     wrapCache: WrappedLineCache,
     commitsUnobserved: Ref[IO, Boolean],
     editIdleSessionSave: Option[EditIdleSessionSave],
-    announceClosedDocuments: (AppState, AppState) => IO[Unit]
+    announceClosedDocuments: (AppState, AppState) => IO[Unit],
+    forgetClosedBuffers: (AppState, AppState) => IO[Unit]
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
@@ -104,10 +105,11 @@ final private[manager] class StateManagerOperationBoundary private (
   /** The follow-up work of every `ModelCommit` app-state commit. */
   private[manager] def afterCommit(fallbackState: AppState, committedState: AppState): IO[Unit] =
     logModalTransition(fallbackState, committedState) >> scheduleDocumentAnalysis() >>
+      ModalEventReducer.findRefreshDue(fallbackState, committedState).traverse_(scheduleFindSearch) >>
       PanelContentSync.outlineRefreshDue(committedState, fallbackState).traverse_(scheduleOutlineRefresh) >>
       PanelContentSync.explorerListingsDue(committedState, fallbackState).traverse_(listExplorerDirectory) >>
       scheduleSessionSaveIfDue(fallbackState, committedState) >>
-      announceClosedDocuments(fallbackState, committedState) >>
+      announceClosedDocuments(fallbackState, committedState) >> forgetClosedBuffers(fallbackState, committedState) >>
       commitsUnobserved.get.ifM(IO.unit, commitObserver.get.flatMap(_(fallbackState, committedState)))
 
   /** Replaces the observer told of every commit `afterCommit` follows up, with the states before and after. */
@@ -257,8 +259,8 @@ final private[manager] class StateManagerOperationBoundary private (
     submit(
       FindSearchLane,
       IO.sleep(FindSearchDebounce) >>
-        IO.delay(FindSearch.results(request.content, request.query))
-          .flatMap(results => postResult(EffectResult.FindSearchCompleted(request, results)))
+        IO.delay(FindSearch.search(request.content, request.query, request.options, request.anchor))
+          .flatMap(matches => postResult(EffectResult.FindSearchCompleted(request, matches)))
     )
 
   /** Supersedes any pending markdown-preview commit for `bufferId` with one that, after
@@ -407,7 +409,10 @@ private[manager] object StateManagerOperationBoundary:
     editIdleSessionSave: Option[EditIdleSessionSave] = None,
     // A commit is the one place every way a buffer leaves `persisted.buffers` passes through -- tab close, close
     // workflows, session replacement -- so the LSP hears of each closed document here rather than per close path.
-    announceClosedDocuments: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit
+    announceClosedDocuments: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit,
+    // The model drops its own record of a closed buffer inside the commit (`ClosedBufferRetention.forgetting`); this is
+    // for the caches that live outside it.
+    forgetClosedBuffers: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit
   ): IO[StateManagerOperationBoundary] =
     for
       pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)
@@ -446,5 +451,6 @@ private[manager] object StateManagerOperationBoundary:
       wrapCache,
       commitsUnobserved,
       editIdleSessionSave,
-      announceClosedDocuments
+      announceClosedDocuments,
+      forgetClosedBuffers
     )

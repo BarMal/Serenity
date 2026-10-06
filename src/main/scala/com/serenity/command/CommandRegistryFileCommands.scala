@@ -39,6 +39,13 @@ private[command] object CommandRegistryFileCommands:
       label = "Save Config"
     ),
     Command.typed(
+      "reset-settings",
+      "Back up config.conf, then restore every setting to its default.",
+      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.ResetSettings)),
+      CommandCategory.Settings,
+      label = "Reset Settings"
+    ),
+    Command.typed(
       "save-session",
       "Save the current editor session.",
       CommandIntent.Session(SessionIntent.SaveSession),
@@ -112,12 +119,21 @@ private[command] object CommandRegistryFileCommands:
       CommandCategory.File,
       label = "Quit"
     ),
+    SafeModeCommands.restart,
+    SafeModeCommands.restartNormally,
     Command.typed(
       "new",
       "Create a new file.",
       CommandIntent.File(FileIntent.NewFile),
       CommandCategory.File,
       label = "New File"
+    ),
+    Command.typed(
+      "show-licence-and-notices",
+      "Open the Serenity licence (GPL-3.0-or-later) and the third-party notices, read-only.",
+      CommandIntent.File(FileIntent.ShowLicenceAndNotices),
+      CommandCategory.File,
+      label = "Show Licence and Notices"
     ),
     Command.typed(
       "next-tab",

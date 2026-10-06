@@ -4,73 +4,13 @@
 # Growth must be justified: CI fails a PR that grows this file's entry count or total measured
 # lines/hits unless the same diff adds a '# paydown: <why, issue link>' comment line (see #1413).
 # Columns: path <TAB> detail <TAB> measured
-# paydown: +1 line each on LineWrappingSpec and ReplaceWorkflowStateManagerSpec for the StateManagerTestFacade
-# import after moving test-only facade members out of production (#1692); offset by StateManagerCapabilitySpec
-# shrinking 642 -> 636 as its test doubles lost those members, so the baseline total drops.
-# paydown: LspManager.scala grew by 5 lines fixing #1507 -- replacing the placeholder `anchor: CursorPosition` on
-# `startRequest`/`RequestContext` with a `RequestAnchor` ADT distinguishing cursor-anchored from whole-document
-# requests, which needed a small enum plus accessor.
-# paydown: LspManager.scala grew by another 36 lines adding textDocument/references and textDocument/rename (#1467)
-# -- two more RequestKind cases dispatched through the file's existing startRequest/isCurrent/noServerEvent pattern.
-# The request-building logic itself (the bulk of what these two methods needed) was extracted to a new file,
-# LspManagerReferenceRenameSupport.scala, rather than left inline; what's left in LspManager.scala is the same
-# per-RequestKind wiring every other kind already has here (RequestKind case, handleEffect dispatch case,
-# noServerEvent case), which isn't reasonably splittable without breaking that existing pattern.
-# paydown: GutterAndLineNumbersSpec.scala grew by another 1 line (636 -> 637) for the same reason as the #1692 entry
-# above -- its bufferManager.createBuffer call sites move onto StateManagerTestFacade's createBuffer extension
-# (#1724), needing the facade's import alongside the existing StateManager one.
-# paydown: StateManagerCapabilitySpec.scala grew by 1 line (636 -> 637) resolving this PR's merge conflict with
-# #1729's commandExecutor deletion -- both PRs edited the same capability-composition assertion, and the merged
-# version names every capability retired by #1724 (paneManager/panelManager and commandExecutor) in one comment
-# rather than two overlapping ones.
-# paydown: issue #1669's remaining follow-up (this PR) moves `MarkdownPreviewWindowAvailability` out of
-# `com.serenity.ui.tui` into `com.serenity.frontend` and onto `Frontend.markdownPreviewWindow`, exactly the fix this
-# file's own comment (removed here) said was the way to close the 8 entries #1739 grandfathered for
-# `StateManager`/`StateManagerComposition`/`StateManagerCapabilityPorts`/`StateManagerRuntime`/
-# `StateManagerPanelEffects` threading that TUI-only type in directly. All 8 are gone: those files now hold a
-# frontend-neutral type, so the `com/serenity/state` ForbiddenImports rule no longer fires on them at all.
-# paydown: issue #1677 (steps 1-2, #1732/78fb6fa8c/61dc64278) threaded an explicit `RenderCaches` bundle (and
-# instance-scoped `MarkdownPreviewCache`/`DictionaryCache`) through the whole render, mouse-hit-testing, and
-# markdown-preview call graphs, replacing several JVM-wide singleton caches. That threading is an added parameter (or
-# an added `caches: RenderCaches` construction) at nearly every call site it touches, which is why `CharacterRenderer`,
-# several renderer/markdown specs, `PerformanceBenchmarks`, `RendererPaneContent`, `SpellCheckerSpec` and
-# `TerminalRenderSurfaceSpec` all grew: the two `StateManager`/`StateManagerRuntime` line-number shifts below (185/186
-# -> 191/192, 144 -> 146) are the same threading moving the existing `#1669` forbidden-reference hits down a few lines,
-# not new instances of that violation. This step (step 3) only reconciles the baseline for that already-landed growth;
-# it does not itself add any of this threading.
-# paydown: issue #1677 step 3 adds an `ArchitectureChecks` rule forbidding `AtomicReference`/`AtomicInteger`/
-# `synchronized`/`mutable.` inside a top-level `object` (anywhere in `src/main`) or anywhere under `state/models`
-# (`state/models` itself has zero violations under this rule, so no baseline entries are needed for it -- steps 1-2
-# already made it clean). The 13 entries below are every top-level-object hit the rule finds elsewhere, and every one
-# is contained, per-call or per-constructed-instance mutation, not a JVM-wide singleton this issue asks to remove:
-# `RendererCursorOverlay`/`RendererEntryPoints`/`RendererFramePlanner`/`SwingFileDialog` each create a fresh
-# `AtomicReference` local to one render/dialog call, used only to carry a value out of a synchronous Swing/AWT
-# callback within that same call, and discarded once the call returns -- the same "contained, local mutation ...
-# StringBuilder during rendering" exception docs/coding-standards.md already grants, just holding a box instead of a
-# builder. `RuntimeDisplayState`/`TerminalInputHandler`/`TuiRuntime`/`MarkdownPreviewWindow` each construct exactly
-# one `AtomicReference` inside an `object`'s factory method (`apply`/`resource`/`run`) to seed the one new instance
-# (or one bootstrap invocation) being built there -- the field ends up owned by that single instance/invocation, not
-# shared JVM-wide, textually inside the `object` only because Scala's `object`-based smart-constructor idiom puts
-# factory methods there. `HunspellFreeCompoundMatcher`'s `mutable.Map` is already documented in place as "Local,
-# contained mutation ... matching this project's Mutation Policy". None of these was a cache issue #1677 asked to
-# scope to an owning instance -- the one hit that was (`MouseTargetLayoutKey`'s single-slot `AtomicReference` memo,
-# `state/manager/MouseTargetCache.scala`) has been moved onto a new instance-scoped `MouseTargetLayoutKeyCache` owned
-# by `AuthoritativeUiScene` as part of this same step, and is not baselined here.
-# paydown: StateManagerCapabilitySpec.scala grew by 1 line (638 -> 639): `CommandEffectInterpreter.Dependencies` gained
-# `unrecordedCommand` (the `AppEffect.ExecuteCommandUnrecorded` route picker previews and dismiss commands take), and
-# this spec's effect-order test builds every dependency by name.
-# paydown: PerformanceBenchmarks.scala grew by 1 line (764 -> 765): `main` opens a second, laptop-sized window for
-# LaptopFrameBenchmarks' present benchmark (#1798 follow-up). The benchmarks themselves live in their own file and the
-# name-prefix selection in BenchmarkRunner.runMatching; what's left here is the one extra resource acquisition.
-# paydown: LspManager.scala grew by 2 lines (673 -> 675): FileChanged with no server reports
-# LspSemanticTokensUnavailable only on a document's first sight instead of on every edit (#1834), which needs the
-# text-mirror update to report whether the document was already known, plus a one-line note on why.
-# paydown: MarkdownDocumentPreviewSpec.scala grew by 1 line (773 -> 774): its theme fixtures now build RenderColor
-# instead of java.awt.Color (#1812 step 3 theme slice), which needs the com.serenity.ui.color.RenderColor import.
+# paydown: StateManagerEffectHandlers.scala was at exactly 600 lines on master; safe mode (#2021) adds the one
+# `LifecycleIntent.Restart` case to its lifecycle interpreter, the same one-line-per-intent shape as QuitApp/ResolveClose.
+# The same regeneration also corrects Rope, PerformanceBenchmarks and StateManagerCapabilitySpec, whose recorded sizes
+# had drifted above what the tree measures.
 main/scala/com/serenity/app/RuntimeDisplayState.scala	forbidden mutable state at line 78: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/io/SwingFileDialog.scala	forbidden mutable state at line 35: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/lsp/LspManager.scala	file length	675
-main/scala/com/serenity/rope/Rope.scala	file length	631
+main/scala/com/serenity/rope/Rope.scala	file length	615
 main/scala/com/serenity/spellcheck/HunspellFreeCompoundMatcher.scala	forbidden mutable state at line 106: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 272: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 346: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
@@ -81,7 +21,7 @@ main/scala/com/serenity/ui/renderer/RendererFramePlanner.scala	forbidden mutable
 main/scala/com/serenity/ui/tui/MarkdownPreviewWindow.scala	forbidden mutable state at line 71: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/tui/TerminalInputHandler.scala	forbidden mutable state at line 196: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/tui/TerminalInputHandler.scala	forbidden mutable state at line 326: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/ui/tui/TuiRuntime.scala	forbidden mutable state at line 80: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/tui/TuiRuntime.scala	forbidden mutable state at line 85: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	639
 test/scala/com/serenity/GutterAndLineNumbersSpec.scala	file length	693
 test/scala/com/serenity/LayoutEngineSpec.scala	file length	669
@@ -92,7 +32,5 @@ test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	722
 test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	713
 test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	646
 test/scala/com/serenity/SpellCheckerSpec.scala	file length	602
-test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	765
-test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	316
-test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	639
+test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	619
 test/scala/com/serenity/ui/tui/TerminalEmulator.scala	method interpret	84

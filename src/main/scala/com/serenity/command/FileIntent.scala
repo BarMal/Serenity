@@ -19,6 +19,8 @@ enum FileIntent:
   case CloseOthers
   case CloseCurrentFile
   case NewFile
+  // #2019: the GPL-3.0-or-later licence and third-party notices bundled in the jar, opened read-only.
+  case ShowLicenceAndNotices
   case SetBufferLanguage(language: Option[LanguageId])
   // #1623: the ways out of a file changed on disk under unsaved edits -- see ExternalChangeCommands.
   case ReloadFromDisk(bufferId: BufferId)

@@ -100,7 +100,8 @@ final private[terminal] class ChromeTitleBar(
     spacerSize: () => Dimension,
     titleBarSize: () => Dimension,
     onToggleMaximize: () => Unit,
-    onActivate: SwingWindow.ChromeControlKind => Unit
+    onActivate: SwingWindow.ChromeControlKind => Unit,
+    title: String
 ):
   private def makeCtrlBtn(kind: SwingWindow.ChromeControlKind): ChromeControlButton =
     new ChromeControlButton(kind, chromePaletteRef, buttonSize, onActivate)
@@ -120,8 +121,8 @@ final private[terminal] class ChromeTitleBar(
     setBackground(chromePaletteRef.get().titleBackground)
     setPreferredSize(spacerSize())
 
-  val titleLabel: JLabel = new JLabel(SwingWindow.WindowTitle, SwingConstants.CENTER)
-  SwingWindow.setAccessibleNameIfAvailable(titleLabel, SwingWindow.WindowTitle)
+  val titleLabel: JLabel = new JLabel(title, SwingConstants.CENTER)
+  SwingWindow.setAccessibleNameIfAvailable(titleLabel, title)
   titleLabel.setForeground(chromePaletteRef.get().titleForeground)
   titleLabel.setFont(controlFont())
 

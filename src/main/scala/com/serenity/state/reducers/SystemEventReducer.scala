@@ -2,6 +2,8 @@ package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.client.DocumentUri
+import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.model.LspProgressTask
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.*
 
@@ -63,6 +65,13 @@ object SystemEventReducer:
       case LspEvent.LspRenameReceived(edits, anchor) =>
         RenameEditReducer.apply(edits, anchor, state)
 
+      case LspEvent.LspProgressReceived(languageId, token, progress) =>
+        withProgress(state, languageId, LspProgressTask.advance(_, token, progress))
+
+      case LspEvent.LspServerStopped(languageId) => withProgress(state, languageId, _ => Nil)
+
+      case LspEvent.LspWorkspaceEditRequested(edits) => WorkspaceEditReducer(edits, state)
+
       case LspEvent.LspSemanticTokensReceived(rawUri, tokens) =>
         val uri = DocumentUri(rawUri)
         ReducerResult.noEffects(
@@ -92,3 +101,17 @@ object SystemEventReducer:
             )
           )
         )
+
+  private def withProgress(
+    state: AppState,
+    languageId: LanguageId,
+    update: List[LspProgressTask] => List[LspProgressTask]
+  ): ReducerResult =
+    val languageService = state.runtime.languageService
+    val tasks           = update(languageService.progress.getOrElse(languageId, Nil))
+    val progress =
+      if tasks.isEmpty then languageService.progress - languageId
+      else languageService.progress.updated(languageId, tasks)
+    ReducerResult.noEffects(
+      state.copy(runtime = state.runtime.copy(languageService = languageService.copy(progress = progress)))
+    )

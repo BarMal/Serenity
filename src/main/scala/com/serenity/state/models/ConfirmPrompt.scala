@@ -1,12 +1,17 @@
 package com.serenity.state.models
 
+import java.nio.file.Path
+
 import com.serenity.command.{
   CloseCommands,
   Command,
+  CommandIntent,
   ExternalChangeCommands,
+  FileIntent,
   ReopenWithEncodingCommands,
   RichTextCommands,
-  RichTextIntent
+  RichTextIntent,
+  SafeModeCommands
 }
 import com.serenity.text.TextEncoding
 import com.serenity.ui.widget.{ButtonEmphasis, EndBehaviour, SelectableList}
@@ -40,6 +45,25 @@ object ConfirmPrompt:
 
   def of(title: String, message: List[String], choices: Seq[ConfirmChoice], blocking: Boolean): ConfirmPrompt =
     ConfirmPrompt(title, message, SelectableList.of(choices, EndBehaviour.Wrap), blocking)
+
+  /** The last starts did not reach a first frame, so this one began in safe mode (#2021). Staying put is the safe
+    * answer, so it is what Escape does.
+    */
+  def startedInSafeMode(unfinishedStarts: Int): ConfirmPrompt =
+    of(
+      title = "Started in Safe Mode",
+      message = List(
+        s"Serenity didn't finish starting $unfinishedStarts times in a row; started in safe mode.",
+        "Safe mode uses default settings, without your session, language servers or project tasks, and changes " +
+          "nothing on disk.",
+        "Restart normally?"
+      ),
+      choices = List(
+        ConfirmChoice("Restart normally", ConfirmAction.Run(SafeModeCommands.restartNormally), ButtonEmphasis.Primary),
+        ConfirmChoice("Stay in safe mode", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
 
   /** "Save changes before closing?" for the buffer a close is waiting on. Escape cancels the close, as Cancel does. */
   def closeUnsaved(bufferLabel: String): ConfirmPrompt =
@@ -99,6 +123,34 @@ object ConfirmPrompt:
           ButtonEmphasis.Danger
         )
       ),
+      blocking = true
+    )
+
+  /** A session that could not be restored (#2022). Every copy is already safe on disk, so it only informs, and offers
+    * to open the first few texts exported from it.
+    */
+  def sessionNotRestored(message: List[String], recoveredTexts: List[Path]): ConfirmPrompt =
+    val openRecovered = recoveredTexts.take(3).map { path =>
+      val name = Option(path.getFileName).fold(path.toString)(_.toString)
+      val open = CommandIntent.File(FileIntent.OpenRecentFile(path))
+      ConfirmChoice(
+        s"Open $name",
+        ConfirmAction.Run(Command.typed(s"session.open-recovered.$name", s"Open $path", open))
+      )
+    }
+    of(
+      title = "Session not restored",
+      message = message,
+      choices = ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary) :: openRecovered,
+      blocking = true
+    )
+
+  /** A startup notice with no start page to carry it, such as when Serenity was launched to open a file. */
+  def startupNotice(message: String): ConfirmPrompt =
+    of(
+      title = "Serenity",
+      message = List(message),
+      choices = List(ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary)),
       blocking = true
     )
 

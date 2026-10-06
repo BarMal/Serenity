@@ -1,8 +1,9 @@
 # Offline spell checking
 
 Serenity's spell checker (`com.serenity.spellcheck.SpellChecker`) reads standard Hunspell `.aff`/`.dic` dictionary
-pairs. It ships with no dictionary of its own; getting real, offline-capable spell checking working means either an
-already-installed OS dictionary is found automatically, or a dictionary is configured by hand. This page covers both.
+pairs. British English (`en-gb`) works out of the box with the dictionary bundled in the application; any other
+language needs an already-installed OS dictionary, which is found automatically, or one configured by hand. This page
+covers all three.
 
 ## Config keys
 
@@ -11,13 +12,13 @@ All spell-check settings live under `spellcheck.*` (`SpellCheckConfig`, `com.ser
 | Key                          | Default | Meaning                                                                 |
 | ----------------------------- | ------- | ------------------------------------------------------------------------ |
 | `spellcheck.enabled`          | `false` | Turns spell-check diagnostics on.                                       |
-| `spellcheck.languages`        | `["en"]`| Language codes to check against; also used to pick dictionary filenames (`en.dic`, `en_gb.dic`, `fr.dic`, ...). |
+| `spellcheck.languages`        | `["en"]`| Language codes to check against; also used to pick dictionary filenames (`en.dic`, `en_GB.dic`, `fr.dic`, ...; case is ignored). |
 | `spellcheck.dictionary_paths` | `[]`    | Explicit `.dic`/`.aff` file or directory paths to load dictionaries from. |
 | `spellcheck.words`            | `[]`    | Extra accepted words, on top of whatever dictionary is loaded.          |
 
 `spellcheck.dictionary_paths` accepts either a direct path to a `.dic` (or `.aff`) file, or a directory; a directory
 is searched for a file named after each configured language (`<language>.dic`, with `-`/`_` both tried, e.g.
-`en-gb.dic` and `en_gb.dic`), falling back to the directory itself if no match is found there.
+`en-gb.dic` and `en_gb.dic`, in any letter case), falling back to the directory itself if no match is found there.
 
 ## Zero-config discovery of an installed OS dictionary
 
@@ -38,13 +39,36 @@ configured yourself is always used as configured and never silently second-guess
 
 Note the default `spellcheck.languages` is `["en"]`, not `["en-gb"]`. A generic `en` dictionary (e.g. from
 `hunspell-en-us`) satisfies it; British English specifically requires either an OS dictionary literally named `en.dic`
-(some distributions symlink their configured default there) or adding `"en-gb"` to `spellcheck.languages` explicitly.
+(some distributions symlink their configured default there) or adding `"en-gb"` to `spellcheck.languages`, which uses
+the bundled dictionary (below) when no installed one is found.
 
-## Setting up British English (`en-GB`) for offline use, manually
+## Bundled British English dictionary
+
+Adding `"en-gb"` to `spellcheck.languages` and turning `spellcheck.enabled` on is all British English needs:
+
+```
+spellcheck.enabled = true
+spellcheck.languages = ["en-gb"]
+```
+
+Serenity ships LibreOffice's `en_GB` Hunspell dictionary (Marco A.G.Pinto's British English, version 4.0.1, from
+<https://github.com/LibreOffice/dictionaries/tree/master/en>) under `src/main/resources/spellcheck/`, together with its
+upstream README. Its licence terms (LGPL) and attribution are in `THIRD-PARTY-NOTICES.md`, and the files are
+unmodified copies of upstream.
+
+- **A dictionary you supply wins.** The bundled one is used only when no dictionary named for the language (`en_GB.dic`
+  or `en-gb.dic`, in any letter case) comes from `spellcheck.dictionary_paths` or an OS directory. Removing yours brings
+  the bundled one back.
+- **It is loaded on demand.** Nothing is parsed at startup, and nothing at all while `spellcheck.enabled` is `false` or
+  no `en-gb` language is configured; the first analysis after both hold parses it once and keeps it for the session.
+- **`en` is not `en-gb`.** The default `["en"]` keeps its small built-in word list, so an American-English
+  dictionary installed for `en` is never second-guessed.
+
+## Setting up another language (or British English by hand)
 
 Prepare this *before* going offline, since it requires downloading a dictionary:
 
-1. Obtain an `en_GB.aff` / `en_GB.dic` pair. Common sources:
+1. Obtain a `.aff` / `.dic` pair, e.g. `en_GB.aff` / `en_GB.dic`. Common sources:
    - Your OS package manager, e.g. `apt install hunspell-en-gb` on Debian/Ubuntu (installs into
      `/usr/share/hunspell`, where the zero-config discovery above will find it automatically), or the equivalent
      `myspell-en-gb` / `hunspell-en-GB` package on other distributions.
@@ -59,12 +83,3 @@ Prepare this *before* going offline, since it requires downloading a dictionary:
    spellcheck.dictionary_paths = ["/home/you/.serenity/dictionaries"]
    ```
    (A path to the `.dic` file directly also works; the `.aff` beside it is picked up automatically.)
-
-## Bundling a dictionary with Serenity
-
-Shipping an `en_GB.aff`/`.dic` pair inside `src/main/resources` (alongside the existing `fonts/`, `icons/`, `sprites/`
-and `themes/` bundled assets) would remove the need for step 1 above entirely for the common case. This has not been
-done yet: real Hunspell dictionaries are third-party, typically LGPL/MPL/BSD-family licensed depending on the
-specific dictionary, and picking one and bundling it correctly (attribution, license file, verifying redistribution
-terms permit shipping inside Serenity's own distributable) needs a deliberate choice of source and review, not an
-automated one. See the discussion on issue #1175 for the current state of that decision.

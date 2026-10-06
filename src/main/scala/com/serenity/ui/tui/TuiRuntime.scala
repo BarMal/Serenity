@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
-import com.serenity.app.AppRuntime
+import com.serenity.app.{AppRuntime, StartupRecovery}
 import com.serenity.config.AppConfig
 import com.serenity.frontend.{FrontendRuntime, MarkdownPreviewWindowAvailability, TuiFrontend}
 import com.serenity.input.{
@@ -20,11 +20,12 @@ import com.serenity.input.{
 import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{AppState, Buffer, BufferId, Damage}
+import com.serenity.state.models.{AppState, Buffer, BufferId, Damage, RestartMode}
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync, TuiAccessibilityBridge}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererCursorOverlay, RendererEntryPoints}
+import fs2.Stream
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 /** The TUI capability bundle for `AppRuntime.run` (issue #1112): the terminal-mode counterpart to `Main`'s Swing
@@ -54,7 +55,11 @@ object TuiRuntime:
     configPersistencePath: Option[Path],
     hasDisplay: Boolean,
     sessionRootOverride: Option[Path] = None,
-    configNotice: Option[String] = None
+    configNotice: Option[String] = None,
+    recovery: StartupRecovery.Plan = StartupRecovery.Plan.normal,
+    restarter: Option[RestartMode => IO[Unit]] = None,
+    onFirstFrame: IO[Unit] = IO.unit,
+    forwardedOpens: Stream[IO, List[Path]] = Stream.empty
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     // #1213: a real terminal cannot deliver Cmd/Meta as an ordinary keystroke the way AWT does for a focused Swing
     // window, so any hotkey still at its macOS/Cmd-conditioned platform default (Quit, Save, ...) is rewritten here
@@ -138,7 +143,10 @@ object TuiRuntime:
                 terminalConfig,
                 sessionRootOverride,
                 configPersistencePath,
-                frontend.markdownPreviewWindow
+                frontend.markdownPreviewWindow,
+                projectTasksEnabled = !recovery.safeMode,
+                restarter = restarter,
+                uiPresetStore = recovery.uiPresetStore(sessionRootOverride)
               )
             ),
             awaitExternalQuit = terminalShell.awaitExternalQuit,
@@ -147,7 +155,10 @@ object TuiRuntime:
             openPath = openPath,
             systemClipboard = systemClipboard,
             frontend = frontend,
-            configNotice = configNotice
+            configNotice = configNotice,
+            recovery = recovery,
+            onFirstFrame = onFirstFrame,
+            forwardedOpens = forwardedOpens
           )
         yield ()
     }
@@ -161,7 +172,10 @@ object TuiRuntime:
     terminalConfig: AppConfig,
     sessionRootOverride: Option[Path],
     configPersistencePath: Option[Path],
-    previewWindowAvailability: MarkdownPreviewWindowAvailability
+    previewWindowAvailability: MarkdownPreviewWindowAvailability,
+    projectTasksEnabled: Boolean = true,
+    restarter: Option[RestartMode => IO[Unit]] = None,
+    uiPresetStore: com.serenity.ui.presets.UiPresetStore = com.serenity.ui.presets.UiPresetStore.default
   )(using LoggerFactory[IO], com.serenity.rope.Balance): Logger[IO] => IO[StateManager] =
     logger =>
       StateManager.apply(
@@ -177,7 +191,10 @@ object TuiRuntime:
         // None: no native dialog exists in a terminal. StateManager's save-as/open workflow already falls back to the
         // in-app form (#1110) whenever fileDialog is None, distinct from a dialog being shown and cancelled.
         fileDialog = None,
-        markdownPreviewWindow = previewWindowAvailability
+        markdownPreviewWindow = previewWindowAvailability,
+        projectTasksEnabled = projectTasksEnabled,
+        restarter = restarter,
+        uiPresetStore = uiPresetStore
       )
 
   /** Maps #1109's negotiated wire-protocol tier onto the state layer's fidelity concept (issue #1194) --

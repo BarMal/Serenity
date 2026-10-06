@@ -1,6 +1,5 @@
 package com.serenity.spellcheck
 
-import java.nio.file.Path
 import java.util.Locale
 
 import scala.util.control.NonFatal
@@ -197,13 +196,17 @@ private[spellcheck] object HunspellFormat:
       onlyInCompoundFlag
     )
 
-  def unsupportedAffixDirectives(lines: List[String], affixPath: Path): List[String] =
+  def unsupportedAffixDirectives(
+    lines: List[String],
+    affixSource: String,
+    inertDirectives: Set[String] = Set.empty
+  ): List[String] =
     lines
       .flatMap(_.split("\\s+").toList.headOption)
-      .filter(UnsupportedAffixDirectives.contains)
+      .filter(directive => UnsupportedAffixDirectives.contains(directive) && !inertDirectives.contains(directive))
       .distinct
       .map(directive =>
-        s"Unsupported Hunspell affix directive '$directive' in $affixPath is not applied " +
+        s"Unsupported Hunspell affix directive '$directive' in $affixSource is not applied " +
           "(words relying on it may be mis-flagged)"
       )
 

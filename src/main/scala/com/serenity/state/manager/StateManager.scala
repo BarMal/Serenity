@@ -11,7 +11,7 @@ import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
-import com.serenity.session.{SessionManager, SessionSaveTrigger}
+import com.serenity.session.{SessionManager, SessionSaveTrigger, UnreadableSession}
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -94,7 +94,8 @@ final case class LspEffectSource(lspEffectStream: Stream[IO, LspEffect])
   */
 final case class SessionStartupInfo(
     currentSessionThemeName: IO[Option[String]],
-    sessionExists: IO[Boolean]
+    sessionExists: IO[Boolean],
+    setAsideUnreadableSession: IO[Option[UnreadableSession]] = IO.none
 )
 
 /** Opens a file into editor state.
@@ -195,7 +196,9 @@ object StateManager:
     onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit] = _ => IO.unit,
     fileDialog: Option[FileDialog] = None,
     markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability =
-      com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable
+      com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable,
+    projectTasksEnabled: Boolean = true,
+    restarter: Option[RestartMode => IO[Unit]] = None
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     val renderCaches = RenderCaches.create(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity)
@@ -234,7 +237,9 @@ object StateManager:
         onPreferredWindowSizeChanged = onPreferredWindowSizeChanged,
         fileDialog = fileDialog,
         markdownPreviewWindow = markdownPreviewWindow,
-        renderCaches = renderCaches
+        renderCaches = renderCaches,
+        projectTasksEnabled = projectTasksEnabled,
+        restarter = restarter
       )
       stateManager <- fromRuntime(runtime)
     yield stateManager
@@ -252,7 +257,8 @@ object StateManager:
         editIdleSessionSave = runtime.policy.saveOnEditIdle.map(idle =>
           EditIdleSessionSave(idle, runtime.sessionPersistence.maybeSaveSession(_, SessionSaveTrigger.EditIdle))
         ),
-        announceClosedDocuments = LspDocumentSync.announceClosed(runtime.lspQueue)
+        announceClosedDocuments = LspDocumentSync.announceClosed(runtime.lspQueue),
+        forgetClosedBuffers = ClosedBufferRetention.forgetRenderCaches(runtime.renderCaches)
       )
       .map(operations => new StateManagerImpl(runtime, operations))
 
@@ -315,7 +321,8 @@ object StateManager:
       runtime.sessionManager,
       runtime.sessionPersistence,
       runtime.renderCaches,
-      operations
+      operations,
+      runtime.restarter
     )
 
     export composition.*

@@ -36,7 +36,7 @@ class SessionManager(
   private val journal = new SessionWriteJournal(pendingFile, indexFile, safeSessionPath, logger)
 
   private val contentStore = new SessionContentStore(
-    sessionFileName => safeSessionPath(s"${sessionFileName.stripSuffix(".json")}.content"),
+    sessionFileName => safeSessionPath(SessionContentStore.directoryName(sessionFileName)),
     logger
   )
 
@@ -76,7 +76,7 @@ class SessionManager(
         index = updatedIndex
       )
       _ <- contentStore.prune(canonicalMetadata.sessionFileName, state)
-      _ <- logger.info(s"[SESSION] Session saved successfully (${updatedMetadata.displayName})")
+      _ <- logger.debug(s"[SESSION] Session saved successfully (${updatedMetadata.displayName})")
     yield ()
 
   /** Save the current app state as a named session and make it current.
@@ -243,29 +243,34 @@ class SessionManager(
     }
 
   private def recoverFailedSessionFile(sessionFile: Path, error: Throwable): IO[Option[AppState]] =
-    quarantineSessionFile(sessionFile).attempt.flatMap {
-      case Right(Some(quarantineFile)) =>
-        logger.error(error)(s"[SESSION] Failed to load session file at $sessionFile; copied to $quarantineFile") >>
-          IO.pure(None)
-      case Right(None) =>
-        logger.error(error)(s"[SESSION] Failed to load session file at $sessionFile; no file was available to copy") >>
-          IO.pure(None)
-      case Left(quarantineError) =>
-        logger.error(quarantineError)(s"[SESSION] Failed to copy corrupt session file at $sessionFile") >>
-          logger.error(error)(s"[SESSION] Failed to load session file at $sessionFile") >>
-          IO.pure(None)
+    setAside(sessionFile, error).as(None)
+
+  /** Moves the current session aside, unchanged, when it can no longer be decoded -- before anything can save over it
+    * -- and reports where it went so startup can tell the user (#2022).
+    */
+  def setAsideUnreadableCurrentSession(): IO[Option[UnreadableSession]] =
+    readIndex().flatMap { index =>
+      val sessionFileName = index.currentSessionId.flatMap(id => index.sessions.find(_.id == id)).map(_.sessionFileName)
+      IO.blocking(sessionFileName.flatMap(safeSessionPath).filter(Files.exists(_))).flatMap {
+        case None => IO.none
+        case Some(path) =>
+          readUtf8(path)
+            .flatMap(json => IO.fromEither(_root_.io.circe.parser.decode[SessionState](json)))
+            .as(Option.empty[UnreadableSession])
+            .handleErrorWith(setAside(path, _))
+      }
     }
 
-  private def quarantineSessionFile(sessionFile: Path): IO[Option[Path]] =
-    IO.blocking(Files.exists(sessionFile)).flatMap {
-      case false => IO.pure(None)
-      case true =>
-        currentTimeMillis().flatMap { now =>
-          val quarantineFile = sessionFile.resolveSibling(s"${sessionFile.getFileName}.corrupt-$now")
-          IO.blocking(Files.copy(sessionFile, quarantineFile, StandardCopyOption.REPLACE_EXISTING))
-            .as(Some(quarantineFile))
-        }
-    }
+  private def setAside(sessionFile: Path, error: Throwable): IO[Option[UnreadableSession]] =
+    currentTimeMillis()
+      .flatMap(SessionSetAside.setAside(sessionFile, _, logger))
+      .flatTap(kept =>
+        logger.error(error)(s"[SESSION] Could not restore $sessionFile; ${kept.fold("it was gone")(_.summary)}")
+      )
+      .handleErrorWith(moveError =>
+        logger.error(moveError)(s"[SESSION] Could not move unreadable session file $sessionFile aside") >>
+          logger.error(error)(s"[SESSION] Could not restore $sessionFile").as(None)
+      )
 
   /** Served from memory while the index file's stamp is the one this manager last saw (#1912). */
   private def readIndex(): IO[SessionIndex] =
@@ -382,10 +387,7 @@ class SessionManager(
     appState: AppState,
     persistUnsavedBuffers: Boolean
   ): IO[SessionState] =
-    contentStore.externalise(
-      sessionFileName,
-      SessionState.fromAppState(appState, persistUnsaved = persistUnsavedBuffers)
-    )
+    contentStore.externalise(sessionFileName, SessionState.snapshot(appState, persistUnsavedBuffers))
 
   private def commitTransaction(writes: Map[String, String], deletes: List[String], index: SessionIndex): IO[Unit] =
     journal.commit(writes, deletes, SessionWriteJournal.compact(index)) >> remember(index)

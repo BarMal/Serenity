@@ -279,6 +279,7 @@ final private[manager] class StateManagerEffectHandlers(
   private def interpretLifecycleIntent(intent: LifecycleIntent, state: AppState): IO[Unit] =
     intent match
       case LifecycleIntent.QuitApp              => beginCloseAction(CloseScope.Quit, state)
+      case LifecycleIntent.Restart(mode)        => beginCloseAction(CloseScope.Restart(mode), state)
       case LifecycleIntent.ResolveClose(choice) => resolveClose(choice)
 
   private def interpretFileIntent(intent: FileIntent, state: AppState): IO[Unit] =
@@ -312,6 +313,7 @@ final private[manager] class StateManagerEffectHandlers(
             current
           )
         )
+      case FileIntent.ShowLicenceAndNotices => com.serenity.io.LicenceNotices.open(loadFile)
       case FileIntent.SetBufferLanguage(language) =>
         setBufferLanguage(state, language)
       case FileIntent.ReloadFromDisk(bufferId) =>
@@ -557,26 +559,22 @@ final private[manager] class StateManagerEffectHandlers(
     activeEditorBufferId(state)
       .flatMap(state.persisted.buffers.get)
       .flatMap { buffer =>
-        buffer.findState match
-          case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
-            val resultSet =
-              FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult).toVector, currentIndex)
-            Some(Modal.Find(TextField.of(resultSet.query), resultSet.results, resultSet.currentIndex))
-          case _ =>
-            None
+        buffer.findState.filter(_.query.nonEmpty).map { found =>
+          val caret     = buffer.editing.cursors.head.position
+          val content   = buffer.document.content
+          val anchor    = content.lineColumnToOffset(caret.line, caret.column)
+          val matches   = FindSearch.search(content, found.query, found.options, anchor)
+          val resultSet = FindResultSet.normalized(found.query, matches.results, found.currentIndex, matches.capped)
+          Modal.Find(
+            TextField.of(resultSet.query),
+            resultSet.results,
+            resultSet.currentIndex,
+            found.options,
+            resultSet.capped
+          )
+        }
       }
       .getOrElse(Modal.Find(TextField(), Vector.empty, 0))
-
-  private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
-    if query.isEmpty then Nil
-    else
-      buffer.document.content
-        .searchAll(query)
-        .filter(offset => buffer.document.content.isWholeGraphemeRange(offset, offset + query.length))
-        .map(offset => buffer.document.content.offsetToCursorPosition(offset))
-
-  private def toFindResult(cursor: CursorPosition): FindResult =
-    FindResult(cursor.line, cursor.column)
 
   private[manager] def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig

@@ -8,10 +8,8 @@ import com.serenity.state.undo.UndoState
 import com.serenity.ui.layout.WrappedLineCache
 
 /** The one holder of the model `Ref` (#1697): capabilities read the model through it and change it only through its
-  * writes. Every app-state write is validated by `StateManagerOperationBoundary.prepareCommit`; [[advanceTick]], the
-  * render tick's animation advance, is the one write that skips the boundary's `afterCommit` follow-up work (see its
-  * doc), but it is validated the same as everything else. A write that leaves the app state the very instance already
-  * committed runs neither (#1845).
+  * writes. Every app-state write is validated by `StateManagerOperationBoundary.prepareCommit`, and a write that leaves
+  * the app state the very instance already committed runs neither validation nor follow-up work (#1845).
   *
   * Transitions run inside `Ref.modify`, which may retry them, so they must be pure.
   */
@@ -58,7 +56,10 @@ final private[manager] class ModelCommit(
       val reduced = EffectResult.reduce(current.app, result, wrapCache = wrapCache)
       if (reduced.state eq current.app) && reduced.effects.isEmpty then (current, IO.unit)
       else
-        val next = ModelCommit.applyModelEffects(current.copy(app = reduced.state), reduced.effects)
+        val next = ClosedBufferRetention.forgetting(
+          current.app,
+          ModelCommit.applyModelEffects(current.copy(app = reduced.state), reduced.effects)
+        )
         StateManagerOperationBoundary.prepareCommit(next.app, current.app) match
           case Right(committed) =>
             (
@@ -78,7 +79,8 @@ final private[manager] class ModelCommit(
       transition(current) match
         case None                                       => (current, IO.unit)
         case Some((next, _)) if next.app eq current.app => (next, IO.unit)
-        case Some((next, fallbackState)) =>
+        case Some((transitioned, fallbackState)) =>
+          val next = ClosedBufferRetention.forgetting(current.app, transitioned)
           StateManagerOperationBoundary.prepareCommit(next.app, fallbackState) match
             case Right(committedState) =>
               (next.copy(app = committedState), operations.afterCommit(fallbackState, committedState))
