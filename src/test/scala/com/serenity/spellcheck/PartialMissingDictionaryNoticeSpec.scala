@@ -84,3 +84,45 @@ class PartialMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
 
     snapshot(List("en-GB", "fr"), osDirectory).context.missingDictionary shouldBe None
   }
+
+  "A language with only a built-in fallback word list and no dictionary" should "still be named in the notice" in {
+    val notice = snapshot(List("fr"), Files.createTempDirectory("serenity-fallback-fr")).context.missingDictionary
+      .getOrElse(fail("expected a notice for fr"))
+
+    notice should (include("fr") and include("hunspell-fr"))
+  }
+
+  it should "name English when only the generic en is configured" in {
+    val notice = snapshot(List("en"), Files.createTempDirectory("serenity-fallback-en")).context.missingDictionary
+      .getOrElse(fail("expected a notice for en"))
+
+    notice should (include("hunspell-en") and not include "hunspell-en-gb")
+  }
+
+  it should "name every configured language that has a fallback list" in {
+    val notice =
+      snapshot(List("en", "fr"), Files.createTempDirectory("serenity-fallback-both")).context.missingDictionary
+        .getOrElse(fail("expected a notice"))
+
+    notice should (include("hunspell-en") and include("hunspell-fr"))
+  }
+
+  it should "not check any word against the tiny fallback list" in {
+    val config  = SpellCheckConfig(languages = List("fr"))
+    val context = snapshot(config.languages, Files.createTempDirectory("serenity-fallback-check")).context
+
+    SpellChecker.analyzeText("bonjour monde wurld", config, context) shouldBe Nil
+  }
+
+  it should "give no notice when spell check is disabled" in {
+    val config = SpellCheckConfig(enabled = false, languages = List("fr"))
+
+    DictionaryLoader
+      .loadSnapshot(config, DictionaryCache(), List(Files.createTempDirectory("serenity-fallback-off").toString))
+      .context
+      .missingDictionary shouldBe None
+  }
+
+  "The bundled British English dictionary" should "serve en-GB, so no notice names it with an empty system" in {
+    snapshot(List("en-GB"), Files.createTempDirectory("serenity-bundled-only")).context.missingDictionary shouldBe None
+  }

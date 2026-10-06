@@ -279,7 +279,7 @@ object DictionaryLoader:
       compoundWordMax = compoundWordMax,
       compoundFlagTrie = compoundFlagTrie,
       compoundCheckRules = compoundCheckRules,
-      missingDictionary = languagesToAnnounce(normalized, stems.nonEmpty, fallbackWords.nonEmpty, unresolved).map(
+      missingDictionary = languagesToAnnounce(normalized, stems.nonEmpty, unresolved).map(
         missingDictionaryNotice(normalized, _, osDictionaryDirectories)
       )
     )
@@ -305,18 +305,18 @@ object DictionaryLoader:
       config.languages.filterNot(language => served.contains(BundledDictionary.languageKey(language)))
     }
 
-  /** Every configured language when nothing at all resolved; otherwise only the unserved ones, and only while some
-    * dictionary did load (a built-in fallback list is too small to count as serving a language).
+  /** Every configured language when no dictionary loaded; otherwise only the unserved ones. A built-in fallback list is
+    * too small to count as serving a language, so it never suppresses the notice. Nothing is announced while spell
+    * check is disabled.
     */
   private def languagesToAnnounce(
     config: SpellCheckConfig,
     hasStems: Boolean,
-    hasFallbackWords: Boolean,
     unresolved: Option[List[String]]
   ): Option[List[String]] =
-    if !hasStems && !hasFallbackWords then Some(config.languages)
-    else if hasStems && config.enabled then unresolved.filter(_.nonEmpty)
-    else None
+    if !config.enabled then None
+    else if !hasStems then Some(config.languages)
+    else unresolved.filter(_.nonEmpty)
 
   private def missingDictionaryNotice(
     config: SpellCheckConfig,
