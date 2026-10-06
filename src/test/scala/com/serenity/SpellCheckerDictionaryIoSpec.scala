@@ -91,7 +91,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     // dodge cross-suite interference on a shared process-wide map.
     val cache      = DictionaryCache()
     val dictionary = writeDic("serenity-bounded-cache", List("hello"))
-    val config     = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     cache.entryCount(dictionary) shouldBe 0
     DictionaryLoader.loadSnapshot(config, cache)
@@ -110,9 +110,9 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     val cache       = DictionaryCache()
     val dictionaryA = writeDic("serenity-evict-a", List("hello"))
     val dictionaryB = writeDic("serenity-evict-b", List("world"))
-    val bothConfig =
-      SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionaryA.toString, dictionaryB.toString))
-    val onlyAConfig = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionaryA.toString))
+    val english     = SpellCheckConfig(enabled = true, languages = List("en"))
+    val bothConfig  = english.copy(dictionaryPaths = List(dictionaryA.toString, dictionaryB.toString))
+    val onlyAConfig = english.copy(dictionaryPaths = List(dictionaryA.toString))
 
     DictionaryLoader.loadSnapshot(bothConfig, cache)
     cache.entryCount(dictionaryA) shouldBe 1
@@ -127,9 +127,9 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
 
   it should "never let two independently constructed DictionaryCache instances share cache entries" in {
     val dictionary = writeDic("serenity-cache-isolation", List("hello"))
-    val config     = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
-    val cacheA     = DictionaryCache()
-    val cacheB     = DictionaryCache()
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
+    val cacheA = DictionaryCache()
+    val cacheB = DictionaryCache()
 
     DictionaryLoader.loadSnapshot(config, cacheA)
 
@@ -140,7 +140,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   it should "pick up a dictionary's latest content after repeated edits despite the bounded cache" in {
     val cache      = DictionaryCache()
     val dictionary = writeDic("serenity-bounded-cache-content", List("hello"))
-    val config     = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     DictionaryLoader.loadSnapshot(config, cache)
 

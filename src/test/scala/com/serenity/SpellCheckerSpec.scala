@@ -494,8 +494,8 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     // (issue #1677's instance-scoped cache with a fingerprint mismatch), not just correctness with no caching at all.
     val cache      = DictionaryCache()
     val dictionary = writeDic("serenity-cache", List("hello"))
-    val config     = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
-    val bufferId   = BufferId(0)
+    val config   = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
+    val bufferId = BufferId(0)
     val baseBuffer = AppState.initial.persisted.buffers(bufferId)
     val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(content = Rope("hello added")))
     val uri        = SpellChecker.diagnosticsUri(buffer)
@@ -524,8 +524,8 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
       List("draft/G"),
       List("SET UTF-8")
     )
-    val config     = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
-    val bufferId   = BufferId(0)
+    val config   = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
+    val bufferId = BufferId(0)
     val baseBuffer = AppState.initial.persisted.buffers(bufferId)
     val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(content = Rope("drafting")))
     val uri        = SpellChecker.diagnosticsUri(buffer)
