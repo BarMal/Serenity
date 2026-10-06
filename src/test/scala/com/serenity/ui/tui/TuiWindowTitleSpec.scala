@@ -50,9 +50,8 @@ class TuiWindowTitleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fall back to the application name when no buffer is active" in {
-    val noBuffers = stateShowing(document("alpha")).copy(persisted =
-      stateShowing(document("alpha")).persisted.copy(buffers = Map.empty, bufferOrder = Nil)
-    )
+    val noBuffers = stateShowing(document("alpha"))
+      .copy(persisted = stateShowing(document("alpha")).persisted.copy(buffers = Map.empty, bufferOrder = Nil))
     TuiWindowTitle.from(noBuffers) shouldBe "Serenity"
   }
 
