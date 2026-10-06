@@ -58,10 +58,10 @@ class ClosedBufferRetentionSpec extends AnyFlatSpec with Matchers:
       ()
 
     def editsFor(id: BufferId): List[HistoryEntry.BufferEdit] =
-      val undo = model.undo
-      (undo.undoStack ++ undo.redoStack ++ undo.pendingGroup).collect {
+      val stacks = model.undo.buffers.get(id).map(_.stacks).toList
+      stacks.flatMap(history => history.undo ++ history.redo).map(_.entry).collect {
         case edit: HistoryEntry.BufferEdit if edit.bufferId == id => edit
-      }.toList
+      }
 
     def publishDiagnostics(id: BufferId): Unit =
       val range = LspRange(LspPosition(0, 0), LspPosition(0, 1))
@@ -127,13 +127,13 @@ class ClosedBufferRetentionSpec extends AnyFlatSpec with Matchers:
     f.editsFor(b) shouldBe bEdits
   }
 
-  it should "leave no pending undo group for it" in {
+  it should "leave no undo history for it, open typing run included" in {
     val (f, a, _) = sessionWithEditedBuffers()
-    f.model.undo.pendingGroup.map(_.bufferId) shouldBe Some(a)
+    f.model.undo.buffers.keySet should contain(a)
 
     f.closeActiveBufferSaving(a)
 
-    f.model.undo.pendingGroup shouldBe empty
+    f.model.undo.buffers.keySet should not contain a
   }
 
   it should "drop its chapter-ghost cache entry and keep the other buffers'" in {
