@@ -17,6 +17,9 @@ final private[richtext] case class OdtNaming(
 private[richtext] object OdtParagraphWriter:
 
   def paragraphXml(paragraph: RichTextParagraph, naming: OdtNaming): String =
+    paragraph.opaqueBlock.fold(textParagraphXml(paragraph, naming))(block => if naming.native then block.raw else "")
+
+  private def textParagraphXml(paragraph: RichTextParagraph, naming: OdtNaming): String =
     val (tag, level) = paragraph.role match
       case ParagraphRole.Heading(headingLevel) => ("text:h", s""" text:outline-level="${headingLevel.max(1)}"""")
       case _                                   => ("text:p", "")
@@ -62,6 +65,7 @@ private[richtext] object OdtParagraphWriter:
     run.atom match
       case Some(InlineAtom.Opaque(raw, _)) => if naming.native then raw else ""
       case Some(InlineAtom.SoftBreak)      => styled(run, "<text:line-break/>", naming)
+      case Some(InlineAtom.Block(_, _))    => ""
       case None                            => styled(run, textXml(run.text, context.before, context.after), naming)
 
   private def styled(run: RichTextRun, content: String, naming: OdtNaming): String =

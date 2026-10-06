@@ -6,7 +6,7 @@ import cats.Order
 import cats.data.NonEmptyList
 import com.serenity.io.{DocumentFormat, DocumentRevision, FileType}
 import com.serenity.lsp.config.LanguageId
-import com.serenity.richtext.{InlineAtom, RichTextDocument, RichTextFidelity, RichTextRun, RichTextStyle}
+import com.serenity.richtext.{FidelityReport, InlineAtom, RichTextDocument, RichTextRun, RichTextStyle}
 import com.serenity.rope.Rope
 import com.serenity.text.{LineEnding, TextEncoding}
 
@@ -137,7 +137,7 @@ final case class Annotations(
 /** Rich-text authoring state layered on top of the buffer's plain-text `Rope` content. */
 final case class RichTextState(
     richTextDocument: Option[RichTextDocument] = None,
-    richTextFidelity: Option[RichTextFidelity] = None,
+    richTextFidelity: Option[FidelityReport] = None,
     insertionRichTextStyle: Option[RichTextStyle] = None,
     // The `Document.contentVersion` `richTextDocument` is known to match, or `None` if it either isn't set or
     // wasn't stamped as verified against the buffer's current content (#1663). `None` is always the safe default:
@@ -295,7 +295,7 @@ final case class Buffer(
     */
   def plainTextExport(text: String): String =
     if richText.richTextDocument.isDefined then
-      text.replace(RichTextRun.AtomCharacter, '\n').filterNot(_ == InlineAtom.OpaqueCharacter)
+      text.replace(RichTextRun.AtomCharacter, '\n').filterNot(InlineAtom.isExportedAsNothing)
     else text
 
 object Buffer:

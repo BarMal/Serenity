@@ -3,7 +3,7 @@ package com.serenity.session
 import java.nio.file.Paths
 
 import cats.effect.IO
-import com.serenity.io.{DocumentRevision, FileManager}
+import com.serenity.io.{DocumentRevision, FileManager, FileType}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.state.models.*
@@ -20,7 +20,7 @@ final case class SessionBuffer(
     // Persist buffer text so restore does not depend on disk reads
     unsavedContent: Option[String] = None,
     richTextDocument: Option[RichTextDocument] = None,
-    richTextFidelity: Option[RichTextFidelity] = None,
+    richTextFidelity: Option[FidelityReport] = None,
     findState: Option[SessionFindState] = None,
     bookmarks: List[SessionCursorPosition] = Nil,
     documentComments: List[SessionDocumentComment] = Nil,
@@ -164,10 +164,38 @@ object SessionBuffer:
     */
   def toBufferIO(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): IO[Buffer] =
     val recorded = recordedBuffer(sessionBuffer)
-    sessionBuffer.filePath.map(Paths.get(_)) match
+    val restored = sessionBuffer.filePath.map(Paths.get(_)) match
       case Some(path) if !(sessionBuffer.isDirty && sessionBuffer.unsavedContent.isDefined) =>
         FileManager().loadFile(path, recorded.id).map(fromDisk(recorded, _)).handleError(_ => recorded)
       case _ => IO.pure(recorded)
+    restored.flatMap(withSourcePackage)
+
+  /** A restored rich document keeps no package bytes, so a DOCX or ODT one is linked to its file read again. The file
+    * counts only when it is still at the revision the buffer was read or written at (the stat check): a file changed
+    * since has other body blocks than the ones the document remembers. A document that cannot be linked is saved with a
+    * warning that the rest of the original package would be lost, never silently.
+    */
+  private def withSourcePackage(buffer: Buffer)(using balance: com.serenity.rope.Balance): IO[Buffer] =
+    (buffer.richText.richTextDocument, buffer.document.filePath) match
+      case (Some(document), Some(path)) if document.source.isEmpty && keepsPackage(path) =>
+        FileManager()
+          .importPackage(path, buffer.document.revision)
+          .map(_.fold(detached(buffer, document, path))(imported => linked(buffer, document.relinkedTo(imported))))
+          .handleError(_ => detached(buffer, document, path))
+      case _ => IO.pure(buffer)
+
+  private def keepsPackage(path: java.nio.file.Path): Boolean =
+    FileType.saveTarget(FileType.fromPath(path)).packageFormat.isDefined
+
+  private def linked(buffer: Buffer, document: RichTextDocument): Buffer =
+    buffer.copy(richText = buffer.richText.copy(richTextDocument = Some(document)))
+
+  private def detached(buffer: Buffer, document: RichTextDocument, path: java.nio.file.Path): Buffer =
+    buffer.copy(richText =
+      buffer.richText.copy(richTextFidelity =
+        Some(FidelityReport.forDetached(document, FileType.saveTarget(FileType.fromPath(path))))
+      )
+    )
 
   private def recordedBuffer(sessionBuffer: SessionBuffer)(using com.serenity.rope.Balance): Buffer =
     val buffer = toBuffer(sessionBuffer)
@@ -177,7 +205,14 @@ object SessionBuffer:
 
   private def fromDisk(recorded: Buffer, disk: Buffer): Buffer =
     if disk.document.content.collect() == recorded.document.content.collect() then
-      recorded.copy(document = recorded.document.copy(revision = disk.document.revision, isDirty = false))
+      recorded.copy(
+        document = recorded.document.copy(revision = disk.document.revision, isDirty = false),
+        // The file just read is the package the unchanged document came from, with every paragraph's source.
+        richText =
+          if recorded.richText.richTextDocument == disk.richText.richTextDocument then
+            recorded.richText.copy(richTextDocument = disk.richText.richTextDocument)
+          else recorded.richText
+      )
     else
       recorded
         .copy(

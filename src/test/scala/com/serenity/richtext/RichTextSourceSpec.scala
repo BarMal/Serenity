@@ -87,7 +87,7 @@ class RichTextSourceSpec extends AnyFlatSpec with Matchers with EitherValues:
     val decoded = decode[RichTextDocument](json).value
 
     decoded shouldBe document
-    decoded.paragraphAt(0).flatMap(_.source) shouldBe None
+    decoded.paragraphAt(0).flatMap(_.source) shouldBe Some(ParagraphSource(3, "", Nil, None))
     json should not include "keepNext"
   }
 

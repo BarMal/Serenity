@@ -2,6 +2,8 @@ package com.serenity.io
 
 import java.nio.file.Path
 
+import com.serenity.richtext.SaveTarget
+
 enum FileType:
   case Scala
   case Java
@@ -67,6 +69,15 @@ object FileType:
       case "sql"                => FileType.Sql
       case "sh" | "bash"        => FileType.Shell
       case _                    => FileType.Unknown
+
+  /** The format a rich document is written in when saved as `fileType`; every other type is saved as plain text. */
+  def saveTarget(fileType: FileType): SaveTarget =
+    fileType match
+      case FileType.WordOpenXmlDocument => SaveTarget.Docx
+      case FileType.OpenDocumentText    => SaveTarget.Odt
+      case FileType.RichText            => SaveTarget.Rtf
+      case FileType.Markdown            => SaveTarget.Markdown
+      case _                            => SaveTarget.PlainText
 
   def displayName(fileType: FileType): String = fileType match
     case FileType.Scala      => "Scala"

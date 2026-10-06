@@ -169,7 +169,8 @@ object EditorEventReducer:
   ): ReducerResult =
     val result = reduceCursorsTextEvent(event, buffer, paneId, currentState, geometry)
 
-    if refreshesFindResults(event) then result.copy(state = invalidateFindState(result.state, buffer.id))
+    if OpaqueBlockGuard.refuses(event, buffer, result.state) then ReducerResult.noEffects(currentState)
+    else if refreshesFindResults(event) then result.copy(state = invalidateFindState(result.state, buffer.id))
     else result
 
   private def refreshesFindResults(event: TextEntryEvent): Boolean =

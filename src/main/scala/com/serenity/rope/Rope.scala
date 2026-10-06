@@ -544,11 +544,11 @@ object Rope:
 
   def empty(using balance: Balance): Rope = Leaf("")
 
-  /** What word and character counts treat as space: whitespace, and U+FFFC, the placeholder for a rich document's
-    * inline atoms (a soft break), which separates words but is not a character of prose.
+  /** What word and character counts treat as space: whitespace, U+FFFC (a rich document's soft break) and U+2064 (its
+    * block placeholder), which separate words but are not characters of prose.
     */
   def isSeparator(char: Char): Boolean =
-    char.isWhitespace || char == '\uFFFC'
+    char.isWhitespace || char == '\uFFFC' || char == '\u2064'
 
   /** Counts maximal runs of non-whitespace characters in a single string -- the same definition `wc -w` uses, and the
     * leaf-level building block `Node.wordCount` combines across the tree. Exposed so callers with a bounded,

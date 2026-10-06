@@ -67,16 +67,16 @@ class OdtPassthroughSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "write a text style for newly bold text" in {
-    val document = opened.applyMark(RichTextRange(RichTextPosition(4, 0), RichTextPosition(4, 5)), InlineMark.Bold)
+    val document = opened.applyMark(RichTextRange(RichTextPosition(5, 0), RichTextPosition(5, 5)), InlineMark.Bold)
     val saved    = OdtDocumentCodec.writeBytes(document)
 
     contentXml(saved) should include("""<text:span text:style-name="SerenityText1">Final</text:span> paragraph.""")
-    OdtDocumentCodec.readBytes(saved).value.paragraphAt(4).flatMap(_.runs.headOption).map(_.style.marks) shouldBe
+    OdtDocumentCodec.readBytes(saved).value.paragraphAt(5).flatMap(_.runs.headOption).map(_.style.marks) shouldBe
       Some(Set(InlineMark.Bold))
   }
 
   it should "model the image and the bookmark as opaque atoms" in {
-    opened.paragraphAt(3).map(_.runs.flatMap(_.atom)) match
+    opened.paragraphAt(4).map(_.runs.flatMap(_.atom)) match
       case Some(List(InlineAtom.Opaque(raw, true))) => raw should include("draw:frame")
       case other                                    => fail(s"Expected one visible opaque atom, got $other")
     opened.paragraphAt(1).map(_.runs.flatMap(_.atom).collect { case InlineAtom.Opaque(_, visible) => visible }) shouldBe

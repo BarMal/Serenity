@@ -107,7 +107,8 @@ class RichTextGoldenSpec extends AnyFlatSpec with Matchers with EitherValues:
       val edited = golden.applyEdits(golden.read(golden.source))
       val poi    = XWPFDocument(ByteArrayInputStream(golden.write(edited)))
       try
-        poi.getParagraphs.asScala.map(_.getText).toList shouldBe edited.paragraphs.map(_.exportText)
+        poi.getParagraphs.asScala.map(_.getText).toList shouldBe
+          edited.paragraphs.filterNot(_.isOpaqueBlock).map(_.exportText)
         poi.getTables.asScala.flatMap(_.getRows.asScala).flatMap(_.getTableCells.asScala).map(_.getText).toList shouldBe
           List("Region", "Revenue", "North", "1,200")
         poi.getAllPictures.asScala.size shouldBe 1

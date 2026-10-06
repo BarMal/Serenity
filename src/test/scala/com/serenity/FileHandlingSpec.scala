@@ -1,7 +1,6 @@
 package com.serenity
 
 import java.nio.file.{Files, Path}
-import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -329,28 +328,59 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
     finally Files.deleteIfExists(docxFile)
   }
 
-  it should "require Save As before replacing a DOCX import with unsupported content" in {
+  it should "save a DOCX import with a table over its file, keeping the table and the other parts" in {
     val fileManager = new FileManager()
-    val sourceFile  = Files.createTempFile("serenity-lossy-source", ".docx")
-    val savedFile   = Files.createTempFile("serenity-lossy-copy", ".docx")
+    val sourceFile  = Files.createTempFile("serenity-table-source", ".docx")
 
     try
-      Files.write(sourceFile, docxBytesFromFixture("docx-unsupported-table.xml"))
-      val sourceBytes = Files.readAllBytes(sourceFile)
+      val original = GoldenFixtures.zip(GoldenFixtures.wordReport.entries)
+      Files.write(sourceFile, original)
 
       val buffer = fileManager.loadFile(sourceFile, BufferId(108)).unsafeRunSync()
 
-      buffer.richText.richTextFidelity.exists(!_.isLossless) shouldBe true
+      buffer.richText.richTextFidelity.map(_.summary) shouldBe Some("1 table preserved read-only")
+      val document = buffer.richText.richTextDocument.getOrElse(fail("no rich document"))
+      val edited   = RichTextTestPackages.replaceText(document, 1, "first", "edited")
+      val dirty    = buffer.withEditedDocument(com.serenity.rope.Rope(edited.plainText), Some(edited))
+
+      fileManager.saveBuffer(dirty).unsafeRunSync()
+
+      val saved = Files.readAllBytes(sourceFile)
+      val xml   = RichTextTestPackages.entry(saved, "word/document.xml").text
+      xml should include("<w:tbl>")
+      xml should include("edited body paragraph")
+      RichTextTestPackages.entry(saved, "word/styles.xml") shouldBe
+        RichTextTestPackages.entry(original, "word/styles.xml")
+    finally Files.deleteIfExists(sourceFile)
+  }
+
+  it should "require Save As before replacing a file with a document that would drop its table" in {
+    val fileManager = new FileManager()
+    val sourceFile  = Files.createTempFile("serenity-lossy-source", ".docx")
+    val savedFile   = Files.createTempFile("serenity-lossy-copy", ".rtf")
+
+    try
+      Files.write(sourceFile, GoldenFixtures.zip(GoldenFixtures.wordReport.entries))
+      val sourceBytes = Files.readAllBytes(sourceFile)
+
+      val loaded   = fileManager.loadFile(sourceFile, BufferId(109)).unsafeRunSync()
+      val document = loaded.richText.richTextDocument.getOrElse(fail("no rich document")).withSource(None)
+      val buffer = loaded.copy(richText =
+        loaded.richText
+          .withSyncedDocument(Some(document), loaded.document.contentVersion)
+          .copy(richTextFidelity = Some(FidelityReport.forSave(document, SaveTarget.Docx)))
+      )
+
       fileManager.saveBuffer(buffer).attempt.unsafeRunSync().left.map(_.getMessage) shouldBe Left(
-        s"Saving $sourceFile would discard unsupported rich document content. Use Save As to write a new file."
+        s"Saving $sourceFile would drop 1 table and 1 image. Use Save As to write a new file."
       )
       Files.readAllBytes(sourceFile) shouldBe sourceBytes
 
       val saved = fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
 
-      Files.exists(savedFile) shouldBe true
       saved.document.filePath shouldBe Some(savedFile)
       saved.richText.richTextFidelity shouldBe None
+      String(Files.readAllBytes(savedFile), "ISO-8859-1") should not include "Region"
     finally
       Files.deleteIfExists(sourceFile)
       Files.deleteIfExists(savedFile)
@@ -441,20 +471,6 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
       .find(_.text.contains(text))
       .map(_.style.marks)
       .getOrElse(Set.empty)
-
-  private def docxBytesFromFixture(name: String): Array[Byte] =
-    val source = scala.io.Source.fromResource(s"richtext/$name")
-    val xml =
-      try source.mkString
-      finally source.close()
-    val output = java.io.ByteArrayOutputStream()
-    val zip    = ZipOutputStream(output)
-    try
-      zip.putNextEntry(ZipEntry("word/document.xml"))
-      zip.write(xml.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-      zip.closeEntry()
-    finally zip.close()
-    output.toByteArray
 
   it should "raise a clear error when reading a missing file" in {
     val missingFile = Files.createTempDirectory("serenity-missing-file").resolve("missing.txt")

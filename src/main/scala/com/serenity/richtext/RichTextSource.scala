@@ -26,23 +26,30 @@ object RawProperty:
 
 /** What a paragraph decoded from a package remembers about where it came from.
   *
-  * `blockIndex` is the body block it came from (or [[ParagraphSource.NoBlock]] for a paragraph derived from one).
-  * `imported` is what the model made of it at import: a paragraph still equal to it is untouched and is copied from the
-  * source bytes. `openTagAttributes` and `properties` are the unmodelled parts a touched paragraph is rewritten with.
+  * `blockIndex` is the body block it came from (or [[ParagraphSource.NoBlock]] for a paragraph derived from one, which
+  * remembers that block as `derivedFrom`). `imported` is what the model made of it at import: a paragraph still equal
+  * to it is untouched and is copied from the source bytes. `openTagAttributes` and `properties` are the unmodelled
+  * parts a touched paragraph is rewritten with.
   */
 final case class ParagraphSource(
     blockIndex: Int,
     openTagAttributes: String,
     properties: List[RawProperty],
-    imported: Option[RichTextParagraph]
+    imported: Option[RichTextParagraph],
+    derivedFrom: Option[Int] = None
 ):
+
+  /** The block this paragraph's formatting came from, whether it is that block's paragraph or was derived from it. */
+  def originBlock: Option[Int] =
+    Option.when(blockIndex != ParagraphSource.NoBlock)(blockIndex).orElse(derivedFrom)
 
   /** The same formatting, minus the claim to be the imported paragraph and the identifiers that must stay unique. */
   def asDerived: ParagraphSource =
     copy(
       blockIndex = ParagraphSource.NoBlock,
       openTagAttributes = ParagraphSource.UniqueIdentifiers.replaceAllIn(openTagAttributes, ""),
-      imported = None
+      imported = None,
+      derivedFrom = originBlock
     )
 
 object ParagraphSource:
@@ -50,12 +57,26 @@ object ParagraphSource:
 
   private val UniqueIdentifiers = """\s+w14:(paraId|textId)="[^"]*"""".r
 
+/** What a child of the document body becomes in the model. */
+enum BodyKind:
+  /** A paragraph, modelled. */
+  case Paragraph
+
+  /** A construct the model does not hold, shown as a read-only line and written back as it was. */
+  case Block(feature: DocumentFeature)
+
+  /** Markup with no content of its own (section properties, range markers): kept in place and never shown. */
+  case Structural
+
 /** One child of the document body, verbatim, with the whitespace that followed it. `elementLength` is where the element
   * ends inside `markup`.
   */
-final case class BodyBlock(markup: String, elementLength: Int, isParagraph: Boolean):
+final case class BodyBlock(markup: String, elementLength: Int, kind: BodyKind):
   def element: String = markup.take(elementLength)
   def gap: String     = markup.drop(elementLength)
+
+  /** Whether the model has a paragraph for this child, which then decides what is written in its place. */
+  def isModelled: Boolean = kind != BodyKind.Structural
 
 /** The main XML part cut at its body children: `head` up to the first, `tail` from the body's end tag. */
 final case class BodySource(head: String, blocks: Vector[BodyBlock], tail: String)
@@ -90,5 +111,6 @@ final case class DocumentSource(
     mainEntry: String,
     main: Option[MainPart],
     body: Option[BodySource],
-    relationships: Option[String]
+    relationships: Option[String],
+    entryNames: Set[String] = Set.empty
 )

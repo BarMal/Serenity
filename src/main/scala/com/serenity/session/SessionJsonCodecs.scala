@@ -50,9 +50,6 @@ given Decoder[SessionFocus] = deriveDecoder
 
 given Encoder[SessionBuffer] = deriveEncoder
 
-given Encoder[RichTextFidelity] = deriveEncoder
-given Decoder[RichTextFidelity] = deriveDecoder
-
 given Encoder[SessionCursorPosition] = deriveEncoder
 given Decoder[SessionCursorPosition] = deriveDecoder
 
@@ -109,7 +106,8 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     viewport         <- cursor.get[SessionViewport]("viewport")
     unsavedContent   <- cursor.getOrElse[Option[String]]("unsavedContent")(None)
     richTextDocument <- cursor.getOrElse[Option[RichTextDocument]]("richTextDocument")(None)
-    richTextFidelity <- cursor.getOrElse[Option[RichTextFidelity]]("richTextFidelity")(None)
+    // A session written before the per-feature report holds the old two-set shape; it is read as no report.
+    richTextFidelity = cursor.get[Option[FidelityReport]]("richTextFidelity").toOption.flatten
     findState        <- cursor.getOrElse[Option[SessionFindState]]("findState")(None)
     bookmarks        <- cursor.getOrElse[List[SessionCursorPosition]]("bookmarks")(Nil)
     documentComments <- cursor.getOrElse[List[SessionDocumentComment]]("documentComments")(Nil)

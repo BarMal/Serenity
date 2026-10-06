@@ -71,7 +71,7 @@ class DocxPassthroughSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "keep a hyperlink's URL when another paragraph is edited" in {
-    val saved = DocxDocumentCodec.writeBytes(replaceText(opened, 4, "Closing", "Final"))
+    val saved = DocxDocumentCodec.writeBytes(replaceText(opened, 5, "Closing", "Final"))
 
     entry(saved, "word/_rels/document.xml.rels") shouldBe entry(source, "word/_rels/document.xml.rels")
     val link = DocxDocumentCodec.readBytes(saved).value.paragraphAt(2).flatMap(_.runs.flatMap(_.style.link).headOption)
@@ -88,7 +88,7 @@ class DocxPassthroughSpec extends AnyFlatSpec with Matchers with EitherValues:
 
   it should "add a relationship with a fresh id for a link made in an edited paragraph" in {
     val document = opened.updateInlineStyle(
-      RichTextRange(RichTextPosition(4, 0), RichTextPosition(4, 7))
+      RichTextRange(RichTextPosition(5, 0), RichTextPosition(5, 7))
     )(_.withLink("https://new.example/page"))
     val saved = DocxDocumentCodec.writeBytes(document)
 
@@ -124,7 +124,7 @@ class DocxPassthroughSpec extends AnyFlatSpec with Matchers with EitherValues:
     val xml = documentXml(
       DocxDocumentCodec.writeBytes(
         opened.replaceRange(
-          RichTextRange(RichTextPosition(3, 1), RichTextPosition(3, 1)),
+          RichTextRange(RichTextPosition(4, 1), RichTextPosition(4, 1)),
           " caption"
         )
       )
@@ -138,7 +138,7 @@ class DocxPassthroughSpec extends AnyFlatSpec with Matchers with EitherValues:
   it should "write a changed role over the one it was imported with" in {
     val document = opened
       .setParagraphRole(RichTextRange(RichTextPosition(0, 0), RichTextPosition(0, 0)), ParagraphRole.Body)
-      .setParagraphRole(RichTextRange(RichTextPosition(4, 0), RichTextPosition(4, 0)), ParagraphRole.Heading(2))
+      .setParagraphRole(RichTextRange(RichTextPosition(5, 0), RichTextPosition(5, 0)), ParagraphRole.Heading(2))
     val xml = documentXml(DocxDocumentCodec.writeBytes(document))
 
     xml should not include """<w:pStyle w:val="Heading1"/>"""
@@ -169,7 +169,7 @@ class DocxPassthroughSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "end with the original section properties" in {
-    val xml = documentXml(DocxDocumentCodec.writeBytes(replaceText(opened, 4, "Closing", "Final")))
+    val xml = documentXml(DocxDocumentCodec.writeBytes(replaceText(opened, 5, "Closing", "Final")))
 
     xml should endWith(
       """<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>"""
@@ -188,9 +188,9 @@ class DocxPassthroughSpec extends AnyFlatSpec with Matchers with EitherValues:
   "Non-text inline content" should "be opaque atoms that keep a paragraph's text and line shape" in {
     val document = opened
 
-    document.paragraphs.map(_.plainTextLength) shouldBe List(18, 74, 35, 1, 14)
+    document.paragraphs.map(_.plainTextLength) shouldBe List(18, 74, 35, 1, 1, 14)
     document.paragraphAt(0).map(_.exportText) shouldBe Some("Quarterly report")
-    document.paragraphAt(3).map(_.runs.flatMap(_.atom)) match
+    document.paragraphAt(4).map(_.runs.flatMap(_.atom)) match
       case Some(List(InlineAtom.Opaque(raw, true))) => raw should include("<w:drawing>")
       case other                                    => fail(s"Expected one visible opaque atom, got $other")
     document

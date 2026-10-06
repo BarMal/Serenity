@@ -54,7 +54,7 @@ class RichTextOpenPassesSpec extends AnyFlatSpec with Matchers with EitherValues
     val docx = DocxDocumentCodec.writeBytes(source)
 
     DocxDocumentCodec.readBytes(docx).value shouldBe source
-    DocxDocumentCodec.readBytesWithFidelity(docx).value.fidelity.isLossless shouldBe true
+    DocxDocumentCodec.readBytesWithFidelity(docx).value.fidelity.wouldDrop shouldBe empty
   }
 
   "The archive reader" should "return every entry name and only the wanted entries' bytes" in {

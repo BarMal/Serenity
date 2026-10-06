@@ -1,40 +1,5 @@
 package com.serenity.richtext
 
-/** Inline text formatting that can be applied to rich text runs. */
-enum InlineMark:
-  case Bold
-  case Italic
-  case Underline
-
-/** Content that occupies one character of paragraph text without being text. The character in the rope is
-  * [[RichTextRun.AtomCharacter]]; the payload lives on the run, so undo and copy carry it with the text.
-  */
-enum InlineAtom:
-  /** A line break inside a paragraph (`w:br`, `text:line-break`, RTF `\line`). It must not be a rope `'\n'`: rope lines
-    * are paragraphs, and every rich-text layer reads paragraph i as rope line i.
-    */
-  case SoftBreak
-
-  /** Source XML the model cannot edit but must put back where it was: an image, a bookmark, a comment anchor, a field
-    * code. `visible` objects are drawn as a placeholder glyph; markers are invisible.
-    */
-  case Opaque(raw: String, visible: Boolean)
-
-  /** The one rope character standing for this atom. Opaque atoms use a different one from soft breaks so that plain
-    * text exports can turn a soft break into a newline and drop an opaque atom.
-    */
-  def character: Char =
-    this match
-      case SoftBreak    => InlineAtom.SoftBreakCharacter
-      case Opaque(_, _) => InlineAtom.OpaqueCharacter
-
-object InlineAtom:
-  /** U+FFFC OBJECT REPLACEMENT CHARACTER. */
-  val SoftBreakCharacter: Char = '\uFFFC'
-
-  /** U+2060 WORD JOINER: zero width, so an invisible marker takes no room even where it is drawn as-is. */
-  val OpaqueCharacter: Char = '\u2060'
-
 enum ParagraphAlignment:
   case Left
   case Center
@@ -117,6 +82,7 @@ final case class RichTextRun(
     atom.fold(text) {
       case InlineAtom.SoftBreak    => "\n"
       case InlineAtom.Opaque(_, _) => ""
+      case InlineAtom.Block(_, _)  => ""
     }
 
 object RichTextRun:
@@ -128,6 +94,9 @@ object RichTextRun:
 
   def opaque(raw: String, visible: Boolean, style: RichTextStyle = RichTextStyle.empty): RichTextRun =
     atom(InlineAtom.Opaque(raw, visible), style)
+
+  def block(raw: String, feature: DocumentFeature): RichTextRun =
+    atom(InlineAtom.Block(raw, feature), RichTextStyle.empty)
 
   private def atom(atom: InlineAtom, style: RichTextStyle): RichTextRun =
     RichTextRun(atom.character.toString, style, Some(atom))
@@ -166,6 +135,18 @@ final case class RichTextParagraph(
     */
   def derivedWith(newRuns: List[RichTextRun]): RichTextParagraph =
     copy(runs = newRuns, source = source.map(_.asDerived))
+
+  /** The block this paragraph stands for, when it is a read-only block line. */
+  def opaqueBlock: Option[InlineAtom.Block] =
+    runs match
+      case List(RichTextRun(_, _, Some(block: InlineAtom.Block))) => Some(block)
+      case _                                                      => None
+
+  def isOpaqueBlock: Boolean = opaqueBlock.isDefined
+
+  /** True when a block atom shares its paragraph with other content, which an edit must never produce. */
+  def hasMixedBlock: Boolean =
+    runs.sizeIs > 1 && runs.exists(_.atom.exists(_.isInstanceOf[InlineAtom.Block]))
 
   lazy val plainText: String =
     runs.map(_.text).mkString
@@ -327,6 +308,10 @@ final case class RichTextParagraph(
 
 object RichTextParagraph:
 
+  /** The read-only line for a block of `feature`, which `source` says where it came from. */
+  def block(raw: String, feature: DocumentFeature, source: Option[ParagraphSource] = None): RichTextParagraph =
+    RichTextParagraph(List(RichTextRun.block(raw, feature)), source = source)
+
   def plain(
     text: String,
     alignment: ParagraphAlignment = ParagraphAlignment.Left,
@@ -369,6 +354,14 @@ final class RichTextDocument private (
       paragraph.runs.exists(run => run.style != RichTextStyle.empty || run.atom.nonEmpty)
     }
 
+  /** Whether a block line is among the paragraphs `from` to `to` inclusive. `O(log n + k)` for `k` paragraphs. */
+  def hasOpaqueBlockBetween(from: Int, to: Int): Boolean =
+    !tree.forallInRange(from, to)((paragraph, _) => !paragraph.isOpaqueBlock)
+
+  /** Whether an edit has put other content beside a block atom. */
+  def hasMixedBlock: Boolean =
+    tree.existsAny(_.hasMixedBlock)
+
   /** Returns a paragraph by line index via `O(log n)` tree descent instead of a full-document index build. */
   def paragraphAt(index: Int): Option[RichTextParagraph] =
     tree.paragraphAt(index)
@@ -389,6 +382,34 @@ final class RichTextDocument private (
   /** This document attributed to `origin`, the package a save should write the unmodelled parts back from. */
   def withSource(origin: Option[DocumentSource]): RichTextDocument =
     new RichTextDocument(tree, everyParagraphNormalized, origin)
+
+  /** This document with `written`, the package a save of it just produced and read back, as its source. Each paragraph
+    * takes the provenance of the one at its position, which is where the save put it; when the save wrote a different
+    * number of paragraphs, none can be linked and each is written afresh from the model next time.
+    */
+  def rebasedOn(written: RichTextDocument): RichTextDocument =
+    val saved = written.paragraphs
+    val linked =
+      if saved.sizeIs == tree.paragraphCount then
+        paragraphs.zip(saved).map((own, onDisk) => own.copy(source = onDisk.source))
+      else paragraphs.map(_.copy(source = None))
+    new RichTextDocument(ParagraphTree.fromParagraphs(linked), everyParagraphNormalized, written.source)
+
+  /** This document, restored from a session that kept only which body block each paragraph came from, linked to
+    * `imported`, the same package read again: each paragraph takes the source of the block it remembers.
+    */
+  def relinkedTo(imported: RichTextDocument): RichTextDocument =
+    val sources = imported.paragraphs.flatMap(_.source).filter(_.blockIndex != ParagraphSource.NoBlock)
+    val byBlock = sources.map(source => source.blockIndex -> source).toMap
+    val linked = tree.mapAll { paragraph =>
+      paragraph.source.fold(paragraph) { remembered =>
+        remembered.originBlock.flatMap(byBlock.get).fold(paragraph) { origin =>
+          paragraph
+            .copy(source = Some(if remembered.blockIndex == ParagraphSource.NoBlock then origin.asDerived else origin))
+        }
+      }
+    }
+    new RichTextDocument(linked, everyParagraphNormalized, imported.source)
 
   def normalized: RichTextDocument =
     if everyParagraphNormalized then this

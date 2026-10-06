@@ -4,10 +4,9 @@ import java.io.ByteArrayInputStream
 import javax.xml.XMLConstants
 import javax.xml.parsers.{DocumentBuilder, DocumentBuilderFactory}
 
-import scala.annotation.tailrec
 import scala.util.control.NonFatal
 
-import org.w3c.dom.{Document as XmlDocument, Element, NodeList}
+import org.w3c.dom.Document as XmlDocument
 import org.xml.sax.SAXException
 
 /** Parses rich-text XML with the protections required for untrusted document content. */
@@ -20,21 +19,6 @@ private[richtext] object RichTextXmlParser:
     val input = ByteArrayInputStream(bytes)
     try secureBuilder().parse(input)
     finally input.close()
-
-  /** Local names of every element at or below `root` (restricted to `namespace` when given), from one linear walk. */
-  def elementNames(root: Element, namespace: Option[String]): Set[String] =
-    @tailrec
-    def walk(pending: List[Element], names: Set[String]): Set[String] =
-      pending match
-        case Nil => names
-        case element :: rest =>
-          val next =
-            if namespace.forall(_ == element.getNamespaceURI) then names + element.getLocalName else names
-          walk(childElements(element.getChildNodes) ::: rest, next)
-    walk(List(root), Set.empty)
-
-  private def childElements(nodes: NodeList): List[Element] =
-    (0 until nodes.getLength).toList.map(nodes.item).collect { case element: Element => element }
 
   private def secureBuilder(): DocumentBuilder =
     try

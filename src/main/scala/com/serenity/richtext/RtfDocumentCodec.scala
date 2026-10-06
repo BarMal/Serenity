@@ -111,7 +111,7 @@ object RtfDocumentCodec:
       runsForWriting(paragraph).foreach { (text, style) =>
         styledDocument.insertString(
           styledDocument.getLength,
-          text.replace(RichTextRun.AtomCharacter, InlineLineBreakMarker).filterNot(_ == InlineAtom.OpaqueCharacter),
+          text.replace(RichTextRun.AtomCharacter, InlineLineBreakMarker).filterNot(InlineAtom.isExportedAsNothing),
           attributesFromStyle(style)
         )
       }

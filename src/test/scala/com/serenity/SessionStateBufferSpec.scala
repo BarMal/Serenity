@@ -217,9 +217,11 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve rich document fidelity through JSON round trip" in {
-    val fidelity = RichTextFidelity(
-      unsupportedElements = Set("tbl"),
-      unsupportedArchiveEntries = Set("word/media/image1.png")
+    val fidelity = FidelityReport(
+      List(
+        FidelityItem(DocumentFeature.Tables, Treatment.Dropped, 1),
+        FidelityItem(DocumentFeature.Other("settings part"), Treatment.Preserved, 2)
+      )
     )
     val baseBuffer = Buffer.fromString(BufferId(23), "kept text")
     val buffer = baseBuffer.copy(richText =
