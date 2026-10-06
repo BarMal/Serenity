@@ -170,7 +170,8 @@ final private[manager] class StateManagerEffectHandlers(
       interpretExplorerEffect,
       interpretWorkflowEffect,
       interpretLspQueueEffect,
-      scheduleCommandRunnerBindingExpiry
+      scheduleCommandRunnerBindingExpiry,
+      { case SettingsEffect.ReapplyConfig => configEffects.reapplyConfig }
     )
   )
 

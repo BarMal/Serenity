@@ -63,7 +63,9 @@ final case class Runtime(
     // them. See `AppState.withBufferIndexesRefreshed`.
     bufferIndexMemos: BufferIndexMemos = BufferIndexMemos.empty,
     // Never persisted: the notes pane's source headings as of its last retarget (#1848). See `NotesPaneSync`.
-    chapterHeadingMemo: ChapterHeadingMemo = ChapterHeadingMemo.empty
+    chapterHeadingMemo: ChapterHeadingMemo = ChapterHeadingMemo.empty,
+    // Never persisted: the settings value the command runner is previewing, with the config and theme to save instead.
+    pendingSetting: Option[PendingSetting] = None
 ):
 
   /** A typed character restarts the quiet window for cursor-adjacent surfaces. */

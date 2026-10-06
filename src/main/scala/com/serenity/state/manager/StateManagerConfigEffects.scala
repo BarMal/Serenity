@@ -60,14 +60,36 @@ final private[manager] class StateManagerConfigEffects(
         .flatTap(config =>
           IO(renderCaches.frameState.configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity))
         )
-        .flatTap(config =>
-          editor.submitEffect(
-            PersistenceLanes.Config,
-            writeConfigFile(config) >>
-              currentState
-                .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
-                .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after config change failed"))
-          )
+        .flatTap(persistUnlessPreviewing)
+
+  // A previewed value stays in memory: the config file and the session keep the committed one until it is committed.
+  private def persistUnlessPreviewing(config: AppConfig): IO[Unit] =
+    currentState.flatMap(live =>
+      editor
+        .submitEffect(
+          PersistenceLanes.Config,
+          writeConfigFile(config) >>
+            currentState
+              .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
+              .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after config change failed"))
+        )
+        .unlessA(live.runtime.pendingSetting.isDefined)
+    )
+
+  /** Pushes the live config into the parts of the runtime that learn of a change only when told, after the state's own
+    * config was put back without going through an update.
+    */
+  private[manager] def reapplyConfig: IO[Unit] =
+    editor.updateModelValidated(model =>
+      Some(
+        model.copy(app = StateManagerConfigEffects.withUpdatedRunnerConfig(model.app, model.app.persisted.config))
+      )
+    ) >>
+      currentState
+        .map(_.persisted.config)
+        .flatMap(config =>
+          IO(renderCaches.frameState.configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity)) >>
+            onFontConfigChanged(config.editorConfig.fontConfig)
         )
 
   private[manager] def updateFontConfig(
@@ -332,7 +354,7 @@ final private[manager] class StateManagerConfigEffects(
           editor.commitState(newState, current)
         }
       case GeneralSettingsIntent.SaveConfig =>
-        persistConfigFile(state.persisted.config)
+        persistConfigFile(state.committedConfig)
       case GeneralSettingsIntent.ResetSettings =>
         resetSettings
       case GeneralSettingsIntent.SetRenderFpsTarget(target) =>

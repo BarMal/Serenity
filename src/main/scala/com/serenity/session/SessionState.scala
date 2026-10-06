@@ -74,8 +74,8 @@ object SessionState:
       layout = SessionLayout.fromAppState(appState),
       focus = SessionFocus.fromFocus(appState.persisted.focus),
       bufferOrder = appState.persisted.bufferOrder.map(_.value),
-      config = appState.persisted.config,
-      themeName = appState.persisted.theme.name,
+      config = appState.committedConfig,
+      themeName = appState.committedTheme.name,
       recentFiles = appState.persisted.recentFiles.map(_.toString),
       recentFilesByMode = appState.persisted.recentFilesByMode.map {
         case (mode, paths) => mode.configKey -> paths.map(_.toString)
