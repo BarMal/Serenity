@@ -72,8 +72,9 @@ object ConfirmPrompt:
     of(
       title = "Serenity closed unexpectedly",
       message = List(
-        "The last session did not end cleanly. Files you saved are untouched, and unsaved text is restored where " +
-          "Serenity could keep it.",
+        "The last session did not end cleanly. Files you had saved are untouched.",
+        "Serenity keeps unsaved edits in its session about a second after you stop typing and restores them when " +
+          "it starts normally, so the last moments before the crash may be missing.",
         "The log folder holds what happened; copy the report to include it when asking for help."
       ),
       choices = List(
