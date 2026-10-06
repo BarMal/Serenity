@@ -217,6 +217,14 @@ object TerminalShell:
     */
   private val NegotiationDeadlineMillis: Long = 100L
 
+  /** Per-phase probe deadlines. Injectable so a spec that delivers a reply from another thread can widen the phase that
+    * expects one without also stalling the phase that is meant to see silence.
+    */
+  final private[tui] case class NegotiationDeadlines(kittyMillis: Long, modifyOtherKeysMillis: Long)
+
+  private[tui] object NegotiationDeadlines:
+    val Production: NegotiationDeadlines = NegotiationDeadlines(NegotiationDeadlineMillis, NegotiationDeadlineMillis)
+
   /** Acquire a real system terminal in raw mode with the alternate screen active and the hardware cursor hidden;
     * unconditionally restore it -- attributes, screen buffer, cursor visibility, and any pushed keyboard-protocol
     * enhancement -- on release.
@@ -231,17 +239,26 @@ object TerminalShell:
   /** Build a shell over an already-constructed [[Terminal]] -- the real system terminal in production, or a
     * streams-backed test terminal in specs -- entering raw mode / alternate screen / hidden cursor / negotiated
     * keyboard protocol on acquire and restoring them unconditionally on release. Does not close `terminal`; the caller
-    * owns that (see [[resource]]).
+    * owns that (see [[resource]]). `deadlines` bounds each keyboard-protocol probe; specs that deliver a reply from
+    * another thread widen it so a loaded runner cannot make the reply miss the window.
     */
   private[tui] def forTerminal(
     terminal: Terminal,
-    osName: String = System.getProperty("os.name", "")
+    osName: String = System.getProperty("os.name", ""),
+    deadlines: NegotiationDeadlines = NegotiationDeadlines.Production
   ): Resource[IO, TerminalShell] =
     Dispatcher.parallel[IO].flatMap { dispatcher =>
-      Resource.make(acquire(terminal, dispatcher, osName))(shell => IO.blocking(shell.restore()).attempt.void)
+      Resource.make(acquire(terminal, dispatcher, osName, deadlines))(shell =>
+        IO.blocking(shell.restore()).attempt.void
+      )
     }
 
-  private def acquire(terminal: Terminal, dispatcher: Dispatcher[IO], osName: String): IO[TerminalShell] =
+  private def acquire(
+    terminal: Terminal,
+    dispatcher: Dispatcher[IO],
+    osName: String,
+    deadlines: NegotiationDeadlines
+  ): IO[TerminalShell] =
     for
       quitDeferred <- Deferred[IO, Unit]
       shell <- IO.blocking {
@@ -250,7 +267,7 @@ object TerminalShell:
         val _                  = terminal.puts(Capability.cursor_invisible)
         terminal.writer().write(FocusReportingEnable)
         terminal.flush()
-        val (tier, prefix) = negotiateKeyboardProtocol(terminal, osName)
+        val (tier, prefix) = negotiateKeyboardProtocol(terminal, osName, deadlines)
         val shell          = new TerminalShell(terminal, originalAttributes, quitDeferred, dispatcher, tier, prefix)
         val _              = terminal.handle(Signal.WINCH, _ => shell.handleWinch())
         val _              = terminal.handle(Signal.INT, _ => shell.handleInt())
@@ -292,11 +309,15 @@ object TerminalShell:
     *   and always empty for a phase whose probe matched, since a matched response's bytes are legitimately consumed
     *   protocol traffic, not stray input.
     */
-  private def negotiateKeyboardProtocol(terminal: Terminal, osName: String): (KeyboardProtocolTier, Array[Byte]) =
+  private def negotiateKeyboardProtocol(
+    terminal: Terminal,
+    osName: String,
+    deadlines: NegotiationDeadlines
+  ): (KeyboardProtocolTier, Array[Byte]) =
     val writer = terminal.writer()
     writer.write(KittyQuery)
     writer.flush()
-    val (kittyMatched, kittyStray) = awaitKittyResponse(terminal.reader(), NegotiationDeadlineMillis)
+    val (kittyMatched, kittyStray) = awaitKittyResponse(terminal.reader(), deadlines.kittyMillis)
     if kittyMatched then
       writer.write(KittyPushFlags)
       writer.flush()
@@ -308,7 +329,7 @@ object TerminalShell:
       writer.write(XtqFmtKeysQuery)
       writer.flush()
       val (confirmed, confirmStray) =
-        awaitModifyOtherKeysConfirmation(terminal.reader(), NegotiationDeadlineMillis)
+        awaitModifyOtherKeysConfirmation(terminal.reader(), deadlines.modifyOtherKeysMillis)
       val strayBytes = kittyStray ++ confirmStray
       if confirmed then (KeyboardProtocolTier.ModifyOtherKeys, strayBytes)
       else
