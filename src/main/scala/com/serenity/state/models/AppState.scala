@@ -119,10 +119,15 @@ final case class AppState(
 
   def editingContext: EditingContext = EditingContext.of(this)
 
-  /** The status text both placements show, or `None` when the status line is off or nothing is open. */
+  /** The status text both placements show, or `None` when the status line is off or nothing is open. In safe mode it
+    * always leads with the safe-mode label, even with nothing open.
+    */
   def statusLineText: Option[String] =
     if !persisted.config.statusLine.isShown then None
-    else StatusLineText.render(this, persisted.config.statusLine.segments)
+    else
+      val text = StatusLineText.render(this, persisted.config.statusLine.segments)
+      if runtime.safeMode then Some((StatusLineText.SafeModeLabel :: text.toList).mkString(StatusLineText.Separator))
+      else text
 
   /** Whether a typing burst is holding the floating status row hidden -- the only thing `runtime.typingActivity`
     * changes on screen, so with any other placement it needs no frames at all.

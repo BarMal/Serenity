@@ -41,7 +41,8 @@ private[manager] class StateManagerComposition(
     val sessionManager: SessionManager,
     val sessionPersistence: SessionPersistence,
     val renderCaches: RenderCaches,
-    operations: StateManagerOperationBoundary
+    operations: StateManagerOperationBoundary,
+    val restarter: Option[RestartMode => IO[Unit]] = None
 )(using providedBalance: Balance):
 
   private val modelCommit = operations.modelCommit
@@ -140,7 +141,8 @@ private[manager] class StateManagerComposition(
     sessionManager,
     operations,
     effectEditorPort,
-    filePersistence
+    filePersistence,
+    restarter
   )
 
   private val effectSurfacePort: EffectSurfacePort = new EffectSurfacePort:
