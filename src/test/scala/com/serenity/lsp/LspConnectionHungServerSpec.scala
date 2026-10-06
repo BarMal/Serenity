@@ -42,17 +42,24 @@ class LspConnectionHungServerSpec extends AnyFlatSpec with Matchers:
       .filter(_.nonEmpty)
       .flatMap(pid => Option(ProcessHandle.of(pid.toLong).orElse(null)))
 
-  /** Runs one connect-and-release against the hung server. The fixture is killed afterwards whatever happened, so a
-    * release that hangs fails this spec instead of hanging it.
+  /** Runs one connect-and-release against the hung server, timing only the release: a real subprocess's start-up (a
+    * source-launched JVM, slow on Windows runners) is not what the bound is about. The fixture is killed afterwards
+    * whatever happened, so a release that hangs fails this spec instead of hanging it.
     */
   private def releaseOutcome(mode: String): (Boolean, Boolean) =
     val pidFile = Files.createTempFile("hung-lsp-server", ".pid")
     try
-      val release =
-        LspConnection(serverConfig(mode, pidFile), WorkspaceRootUri("file:///workspace"), logger, 20.seconds)
-          .use(_ => IO.unit)
-          .start
-          .flatMap(fiber => fiber.joinWithUnit.as(true).timeoutTo(releaseBound, IO.pure(false)))
+      val release = for
+        connected <- LspConnection(
+          serverConfig(mode, pidFile),
+          WorkspaceRootUri("file:///workspace"),
+          logger,
+          20.seconds
+        ).allocated
+        (_, close) = connected
+        fiber    <- close.start
+        finished <- fiber.joinWithUnit.as(true).timeoutTo(releaseBound, IO.pure(false))
+      yield finished
       val finished = release.unsafeRunSync()
       val alive    = handle(pidFile).exists(_.isAlive)
       (finished, alive)
