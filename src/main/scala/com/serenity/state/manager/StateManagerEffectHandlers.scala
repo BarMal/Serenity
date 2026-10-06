@@ -156,7 +156,8 @@ final private[manager] class StateManagerEffectHandlers(
     fileDialog,
     commitState,
     editor,
-    interpretEffect
+    interpretEffect,
+    configEffects.updateConfig
   )
 
   private[manager] val behavior = new CommandEffectInterpreter(

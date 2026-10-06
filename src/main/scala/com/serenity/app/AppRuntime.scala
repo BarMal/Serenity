@@ -163,6 +163,7 @@ object AppRuntime:
           configNotice,
           recovery
         )
+        _            <- stateManager.followSystemAppearance
         inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
         inputHandler <- runtime.inputHandler(inputRouter)
         _            <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
@@ -206,7 +207,7 @@ object AppRuntime:
               cursorVisible,
               requestFastRender,
               resizeCallbackDispatcher,
-              stateManager.fileService.checkExternalChangesOnFocus
+              stateManager.fileService.checkExternalChangesOnFocus >> stateManager.followSystemAppearance
             )
           )
         )

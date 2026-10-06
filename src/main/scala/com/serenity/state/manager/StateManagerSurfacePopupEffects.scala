@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
 import com.serenity.command.ThemeIntent
+import com.serenity.config.AppConfig
 import com.serenity.io.FileUtils
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
@@ -29,7 +30,8 @@ final private[manager] class StateManagerSurfacePopupEffects(
     fileDialog: Option[com.serenity.io.FileDialog],
     commitState: (AppState, AppState) => IO[Unit],
     lanes: EffectLanePort,
-    interpretEffect: AppEffect => IO[Unit]
+    interpretEffect: AppEffect => IO[Unit],
+    updateConfig: (AppConfig => AppConfig) => IO[AppConfig]
 ):
 
   private val ThemeLoadLane: Lane.Keyed = Lane.Keyed(LaneKey.Theme, LanePolicy.SwitchLatest)
@@ -47,9 +49,10 @@ final private[manager] class StateManagerSurfacePopupEffects(
   private[manager] def interpretThemeIntent(intent: ThemeIntent, state: AppState): IO[Unit] =
     intent match
       case ThemeIntent.ToggleTheme =>
-        interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(ThemeStateReducer.toggleTarget(state))))
+        stopFollowingSystem(state) >>
+          interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(ThemeStateReducer.toggleTarget(state))))
       case ThemeIntent.ApplyTheme(name) =>
-        interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(name)))
+        stopFollowingSystem(state) >> interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(name)))
       case ThemeIntent.ReloadTheme =>
         interpretEffect(AppEffect.Theme(ThemeEffect.ReloadTheme(state.persisted.theme.name)))
       case ThemeIntent.OpenThemeChooser =>
@@ -60,6 +63,12 @@ final private[manager] class StateManagerSurfacePopupEffects(
         interpretEffect(AppEffect.Theme(ThemeEffect.ExportCurrentTheme))
       case ThemeIntent.ReloadThemes =>
         interpretEffect(AppEffect.Theme(ThemeEffect.RefreshThemeNames))
+
+  /** A theme chosen by hand would be undone by the next window focus regain, so choosing one ends following. */
+  private def stopFollowingSystem(state: AppState): IO[Unit] =
+    IO.whenA(state.persisted.config.themeFollowConfig.followSystem)(
+      updateConfig(config => config.withThemeFollowConfig(config.themeFollowConfig.copy(followSystem = false))).void
+    )
 
   private[manager] def interpretThemeEffect(effect: ThemeEffect): IO[Unit] =
     effect match

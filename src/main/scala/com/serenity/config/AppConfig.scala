@@ -17,6 +17,7 @@ final case class AppConfig(
     windowConfig: WindowConfig = WindowConfig(),
     documentConfig: DocumentConfig = DocumentConfig(),
     interfaceConfig: InterfaceConfig = InterfaceConfig(),
+    themeFollowConfig: ThemeFollowConfig = ThemeFollowConfig(),
     languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig(),
     appModeConfig: AppModeConfig = AppModeConfig(),
     statusLine: StatusLineConfig = StatusLineConfig.default
@@ -308,6 +309,9 @@ final case class AppConfig(
 
   def withUiOutlineThicknessPx(thickness: Int): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(outlineThicknessPx = thickness))
+
+  def withThemeFollowConfig(config: ThemeFollowConfig): AppConfig =
+    copy(themeFollowConfig = config)
 
   def withTextAreaInsets(insets: TextAreaInsets): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(textAreaInsets = insets))

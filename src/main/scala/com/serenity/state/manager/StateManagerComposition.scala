@@ -12,10 +12,12 @@ import com.serenity.rope.Balance
 import com.serenity.session.{SessionId, SessionManager, SessionPersistence}
 import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
+import com.serenity.state.reducers.{AppEffect, ThemeEffect}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent}
 import com.serenity.ui.presets.UiPresetStore
+import com.serenity.ui.theme.appearance.OsAppearanceDetector
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.Logger
@@ -42,7 +44,8 @@ private[manager] class StateManagerComposition(
     val sessionPersistence: SessionPersistence,
     val renderCaches: RenderCaches,
     operations: StateManagerOperationBoundary,
-    val restarter: Option[RestartMode => IO[Unit]] = None
+    val restarter: Option[RestartMode => IO[Unit]] = None,
+    appearanceDetector: OsAppearanceDetector = OsAppearanceDetector.system
 )(using providedBalance: Balance):
 
   private val modelCommit = operations.modelCommit
@@ -361,6 +364,15 @@ private[manager] class StateManagerComposition(
   def createStartupSession(): IO[Unit]                        = workflow.createStartupSession()
   def restoreStartupSession(): IO[Unit]                       = workflow.restoreStartupSession()
   def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
+
+  private val appearanceFollower = new SystemAppearanceFollower(
+    appearanceDetector,
+    modelCommit.currentState,
+    themeName => interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(themeName))) >> operations.awaitEffects,
+    logger
+  )
+
+  def followSystemAppearance: IO[Unit] = appearanceFollower.follow
 
   val sessionService: SessionService = SessionService(loadSession = loadSession)
 
