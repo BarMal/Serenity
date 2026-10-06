@@ -63,9 +63,9 @@
 
 ## 2026-10-03
 
-- Removed all animations, the animation ticker and motion configuration; config files and sessions that still name the removed settings load, with each key reported once as removed and ignored (#1815, #1807).
+- Removed all animations, the animation ticker and motion configuration, which takes out the panel, caret glide, selection and column-sweep motion added from 2026-09-18 to 2026-09-19; config files and sessions that still name the removed settings load, with each key reported once as removed and ignored (#1815, #1807).
 - Removed window translucency, rounded window corners and the Transparent theme (#1814).
-- Removed the companion sprite, its panel and its `ui.companion_sprite.*` and `ui.visual_flair` settings (#1813).
+- Removed the companion sprite pane added on 2026-09-06, its panel and its `ui.companion_sprite.*` and `ui.visual_flair` settings (#1813).
 - Removed panel shadows, sheen, rounded corners, glass and blur: panels now draw as opaque `theme.panel.background` with square corners and a plain border at `ui.outline_thickness` (#1811).
 - Removed the scanline and glow post-processing pass and its `ui.post_processing` setting (#1807).
 - Fixed a GUI layer-cache leak that pinned another full-window image every frame, about 400 MB at 1500x1000, and kept the garbage collector thrashing (#1799).
@@ -142,6 +142,10 @@
 - Kept theme chooser, theme creator and file search from dropping out of the command palette's recents when run from it (#1715).
 - Closed background tabs by id from the close affordance, with mouse hit-testing made a pure function of the event and state (#1703).
 
+## 2026-09-23
+
+- Failed fast when the terminal shell cannot build a real system terminal, instead of silently falling back to an unusable dumb terminal that left a blank screen and echoed keystrokes as control characters, as happened on Termux with OpenJDK 25 (#1668).
+
 ## 2026-09-21
 
 - Added LSP Find References and Rename Symbol (#1620).
@@ -205,7 +209,6 @@
 - Added a win32-input-mode fallback for Ctrl+Backspace in Windows Terminal (#1504).
 - Made `UndoState.boundedPush` O(1) amortised at steady state, and scoped terminal diff scans to the rows that changed (#1538, #1509).
 - Preserved DOS attributes on Windows when saving (#1519).
-- Fixed editor-pane render accumulation by blitting whole-surface layer buffers 1:1 (#1352).
 
 ## 2026-09-12
 
@@ -225,6 +228,12 @@
 
 - Made pane splitting and closing reachable as user features, closing a pane undoable, and panel pin and unpin undoable (#1393, #1394, #1395, #1396).
 - Added an explicit modal dialog layer outside the UI surfaces (#1397).
+
+## 2026-09-07
+
+- Fixed the editor pane zooming out and shedding ghost glyphs a little more on every Up or Down keystroke in the command runner, by blitting whole-surface layer buffers 1:1 instead of through the cell grid and device-scale transform (#1352).
+- Fixed arrows and kitty-style Backspace splitting into Escape plus literal characters on non-tty input such as git bash on Windows without winpty, by timing the lone-ESC decision with a Cats Effect timer rather than JLine's timed read, and translated JLine's Windows `0xFFFF` Backspace quirk at the read boundary (#1352).
+- Fixed the GUI hanging after the in-app Quit, which exited only through the window's close control, and stopped late resize and focus callbacks during shutdown being logged as crashes (#1352).
 
 ## 2026-09-06
 
