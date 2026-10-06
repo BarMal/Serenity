@@ -45,6 +45,7 @@ private[manager] object FileResults:
             revision = saved.document.revision,
             encoding = saved.document.encoding,
             hasBom = saved.document.hasBom,
+            mixedLineEndings = None,
             isDirty = current.document.isDirty && !unchanged
           )
           val richText =
@@ -79,9 +80,14 @@ private[manager] object FileResults:
             current.document.content,
             disk.document.content
           )
-        withBuffer(
-          state,
-          current.copy(document = disk.document, richText = disk.richText, annotations = annotations).clampedToContent
+        LineEndingChoice.withMixedNoticeIfNeeded(
+          withBuffer(
+            state,
+            current
+              .copy(document = disk.document, richText = disk.richText, annotations = annotations)
+              .clampedToContent
+          ),
+          bufferId
         )
       )
 
@@ -112,7 +118,7 @@ private[manager] object FileResults:
       focused.runtime.viewportSize.fold(focused)(viewportSize =>
         LayoutEngine.syncViewportDimensions(focused, viewportSize)
       )
-    withRecentFile(resized, path)
+    LineEndingChoice.withMixedNoticeIfNeeded(withRecentFile(resized, path), bufferId)
 
   private def withBuffer(state: AppState, buffer: Buffer): AppState =
     state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(buffer.id, buffer)))

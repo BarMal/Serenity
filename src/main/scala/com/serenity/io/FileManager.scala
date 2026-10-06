@@ -13,7 +13,7 @@ import com.serenity.richtext.{
 }
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
-import com.serenity.text.{LineEnding, TextEncoding}
+import com.serenity.text.{LineEndingCounts, TextEncoding}
 
 /** Failures `FileManager` raises for its own file-open/save workflow, distinct from [[LossyRichTextOverwriteException]]
   * (a richtext-package concern about a specific re-import losing content, not about format support in general).
@@ -202,13 +202,15 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
     decoded: DecodedText,
     revision: Option[DocumentRevision]
   ): Buffer =
+    val lineEndings = LineEndingCounts.of(decoded.content)
     Buffer(
       id = bufferId,
       document = com.serenity.state.models.Document(
         content = com.serenity.rope.Rope(decoded.content),
         filePath = Some(path),
         language = languageFromPath(path),
-        lineEnding = LineEnding.detect(decoded.content),
+        lineEnding = lineEndings.dominant,
+        mixedLineEndings = Option.when(lineEndings.isMixed)(lineEndings),
         encoding = decoded.encoding,
         hasBom = decoded.hasBom,
         revision = revision
@@ -249,7 +251,8 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
         filePath = Some(path),
         isDirty = false,
         language = languageFromPath(path),
-        revision = revision
+        revision = revision,
+        mixedLineEndings = None
       ),
       // `richTextDocument` (when present) is `richTextDocumentForSave(buffer)`'s result, already proven to match
       // `buffer.document.content` -- which this save doesn't change -- so it's synced at `buffer`'s current version

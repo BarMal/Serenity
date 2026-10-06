@@ -8,7 +8,7 @@ import com.serenity.io.{DocumentFormat, DocumentRevision, FileType}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
 import com.serenity.rope.Rope
-import com.serenity.text.{LineEnding, TextEncoding}
+import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
 
 opaque type BufferId = Int
 
@@ -89,8 +89,19 @@ final case class Document(
     // Bumped on every `content` change (`withContent`, #1663). Paired with `RichTextState.richTextSyncedVersion`
     // so `Buffer.richTextInSync` can tell in O(1) whether a stored `richTextDocument` still describes this
     // `content`, instead of re-deriving and comparing the whole plain text on every check.
-    contentVersion: Long = 0L
+    contentVersion: Long = 0L,
+    // Set on load when the file mixed terminators and cleared once a save has made it uniform or the user has chosen
+    // `lineEnding` (#1964): until then a save rewrites lines the user never touched, which the editor has to say.
+    mixedLineEndings: Option[LineEndingCounts] = None
 ):
+
+  /** The line ending saved from now on. Marks the document dirty whenever that changes the bytes a save writes, which
+    * includes picking the detected ending for a mixed file: that save rewrites the minority lines.
+    */
+  def withLineEnding(ending: LineEnding): Document =
+    if ending == lineEnding && mixedLineEndings.isEmpty then this
+    else copy(lineEnding = ending, mixedLineEndings = None, isDirty = true)
+
   /** The only sanctioned way to change `content`: keeps `contentVersion` monotonically increasing so a
     * `richTextDocument` stamped against the old version is correctly seen as stale by `Buffer.richTextInSync`, without
     * re-comparing any text.

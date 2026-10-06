@@ -8,12 +8,13 @@ import com.serenity.command.{
   CommandIntent,
   ExternalChangeCommands,
   FileIntent,
+  LineEndingCommands,
   ReopenWithEncodingCommands,
   RichTextCommands,
   RichTextIntent,
   SafeModeCommands
 }
-import com.serenity.text.TextEncoding
+import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
 import com.serenity.ui.widget.{ButtonEmphasis, EndBehaviour, SelectableList}
 
 /** What choosing an option in a [[ConfirmPrompt]] does once the prompt closes. */
@@ -218,5 +219,29 @@ object ConfirmPrompt:
         ConfirmChoice("Save without formatting", ConfirmAction.Run(RichTextCommands.saveWithoutFormatting(bufferId))),
         ConfirmChoice("Cancel", ConfirmAction.Dismiss)
       ),
+      blocking = false
+    )
+
+  /** A file whose line endings are mixed, which saving makes uniform (#1964). Not blocking: nothing has changed yet,
+    * and the answer is also available as a command until the file is saved.
+    */
+  def mixedLineEndings(bufferId: BufferId, bufferLabel: String, counts: LineEndingCounts): ConfirmPrompt =
+    val breakdown =
+      LineEnding.values.toList
+        .filter(ending => counts.count(ending) > 0)
+        .map(ending => s"${counts.count(ending)} ${ending.label}")
+    of(
+      title = "Mixed line endings",
+      message = List(
+        bufferLabel,
+        s"This file has ${breakdown.mkString(", ")} line endings.",
+        s"Saving will write every line ending as ${counts.dominant.label}."
+      ),
+      choices = ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary) ::
+        LineEnding.values.toList
+          .filter(_ != counts.dominant)
+          .map(ending =>
+            ConfirmChoice(s"Use ${ending.label} instead", ConfirmAction.Run(LineEndingCommands.set(bufferId, ending)))
+          ),
       blocking = false
     )
