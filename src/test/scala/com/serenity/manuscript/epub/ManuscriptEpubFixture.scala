@@ -40,6 +40,25 @@ object ManuscriptEpubFixture:
       .flatMap(ManuscriptCompiler.compile(_, List(SourceDocument.Markdown(ManuscriptDocxFixture.markdown))))
       .fold(error => sys.error(error.message), identity)
 
+  /** Raw HTML in the source: marks, breaks, a block, and tags that must never reach the output as markup. */
+  def withHtml: Manuscript =
+    val markdown =
+      """# Markup
+        |
+        |A <b>bold</b>, <i>italic</i> and <u>underlined</u> word,<br>then H<sub>2</sub>O and x<sup>2</sup>.
+        |
+        |<div class="note" onclick="steal()">Block <em>text</em> &amp; more &lt;3</div>
+        |
+        |<script>alert("x")</script>
+        |
+        |An <img src="x.png" onerror="steal()"> unclosed <b>tag and a stray < sign & ampersand.""".stripMargin
+    ManuscriptCompiler
+      .compile(
+        CompileSpec.forTitle("Markup").copy(transforms = Nil),
+        List(SourceDocument.Markdown(markdown))
+      )
+      .fold(error => sys.error(error.message), identity)
+
   /** Two parts, a part-less chapter's worth of awkward characters, preformatted text and an underlined run. */
   def withParts: Manuscript =
     val spec = CompileSpec

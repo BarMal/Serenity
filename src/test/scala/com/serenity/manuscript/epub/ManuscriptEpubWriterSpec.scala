@@ -166,6 +166,29 @@ class ManuscriptEpubWriterSpec extends AnyFlatSpec with Matchers:
     elements(prose, XhtmlNs, "h2").map(_.getTextContent) shouldBe List("One & Two")
   }
 
+  it should "turn the writer's HTML into marks and never write it out as markup" in {
+    val book  = ManuscriptEpubWriter.write(ManuscriptEpubFixture.withHtml, ManuscriptEpubFixture.modified)
+    val prose = xml(part("OEBPS/text/chapter-001.xhtml", book))
+    val texts = elements(prose, XhtmlNs, "p").map(_.getTextContent)
+
+    texts.take(3) shouldBe List(
+      "A bold, italic and underlined word,then H2O and x2.",
+      "Block text & more <3",
+      "An  unclosed tag and a stray < sign & ampersand."
+    )
+    elements(prose, XhtmlNs, "strong").map(_.getTextContent) shouldBe List(
+      "bold",
+      "tag and a stray < sign & ampersand."
+    )
+    elements(prose, XhtmlNs, "em").map(_.getTextContent) shouldBe List("italic", "text")
+    elements(prose, XhtmlNs, "span").map(_.getAttribute("class")) shouldBe List("underline")
+    List("script", "img", "div", "sub", "sup", "b", "i", "u").foreach(name =>
+      withClue(name)(elements(prose, XhtmlNs, name) shouldBe empty)
+    )
+    part("OEBPS/text/chapter-001.xhtml", book) should not include "onerror"
+    part("OEBPS/text/chapter-001.xhtml", book) should not include "alert("
+  }
+
   it should "nest chapters under their part in the table of contents, and keep part pages in the spine" in {
     val book = ManuscriptEpubWriter.write(ManuscriptEpubFixture.withParts, ManuscriptEpubFixture.modified)
 
