@@ -161,7 +161,7 @@ class AccessibilityLazyTextSpec extends AnyFlatSpec with Matchers:
     proxy.asInstanceOf[JTextComponent].getText shouldBe "hello, world"
   }
 
-  "TuiAccessibilityBridge" should "read the document text once for the title however often the snapshot is published" in {
+  "TuiAccessibilityBridge" should "not read the document text when a snapshot is published" in {
     val collected = new AtomicInteger(0)
     val written   = ListBuffer.empty[String]
     val bridge    = new TuiAccessibilityBridge(text => written += text)
@@ -170,6 +170,6 @@ class AccessibilityLazyTextSpec extends AnyFlatSpec with Matchers:
     bridge.publish(snapshot)
     bridge.publish(snapshot)
 
-    written.mkString should include("document Untitled document: hello")
-    collected.get shouldBe 1
+    written.mkString should not include "hello"
+    collected.get shouldBe 0
   }

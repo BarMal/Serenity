@@ -320,7 +320,12 @@ object TuiRuntime:
   ): IO[Unit] =
     accessibilitySync
       .sync(state)(previous => IO(AccessibilitySnapshot.from(state, size, previous, accessibilitySync.previewCache)))
-      .flatMap(snapshot => IO(accessibilityBridge.publish(snapshot)))
+      .flatMap(snapshot =>
+        IO {
+          accessibilityBridge.publishTitle(TuiWindowTitle.from(state))
+          accessibilityBridge.publish(snapshot)
+        }
+      )
 
   private def renderFullFn(
     surfaceHolder: SurfaceHolder,

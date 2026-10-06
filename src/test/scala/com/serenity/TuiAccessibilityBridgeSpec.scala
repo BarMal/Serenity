@@ -44,46 +44,31 @@ class TuiAccessibilityBridgeSpec extends AnyFlatSpec with Matchers:
       LayoutRect(0, 0, 10, 1)
     )
 
-  "TuiAccessibilityBridge" should "retitle the terminal with the focused node's role and name" in {
+  "TuiAccessibilityBridge" should "retitle the terminal with the title it is given" in {
+    val (written, write) = writer()
+    val bridge           = new TuiAccessibilityBridge(write)
+
+    bridge.publishTitle("notes.md* — Serenity")
+
+    written.toList shouldBe List(s"$esc]0;notes.md* — Serenity$bel")
+  }
+
+  it should "not rewrite the title when it has not changed" in {
+    val (written, write) = writer()
+    val bridge           = new TuiAccessibilityBridge(write)
+
+    bridge.publishTitle("notes.md — Serenity")
+    written.clear()
+    bridge.publishTitle("notes.md — Serenity")
+
+    written shouldBe empty
+  }
+
+  it should "leave the title alone when a snapshot is published, whatever is focused" in {
     val (written, write) = writer()
     val bridge           = new TuiAccessibilityBridge(write)
 
     bridge.publish(AccessibilitySnapshot(List(node(AccessibilityRole.Button, "Save")), Nil))
-
-    written should contain(s"$esc]0;button Save$bel")
-  }
-
-  it should "include the node's value and selection state in the title" in {
-    val (written, write) = writer()
-    val bridge           = new TuiAccessibilityBridge(write)
-
-    bridge.publish(
-      AccessibilitySnapshot(
-        List(node(AccessibilityRole.TextField, "Find", value = Some("needle"), selected = true)),
-        Nil
-      )
-    )
-
-    written should contain(s"$esc]0;textfield Find: needle, selected$bel")
-  }
-
-  it should "fall back to a generic title when nothing is focused" in {
-    val (written, write) = writer()
-    val bridge           = new TuiAccessibilityBridge(write)
-
-    bridge.publish(AccessibilitySnapshot(Nil, Nil))
-
-    written should contain(s"$esc]0;Serenity editor$bel")
-  }
-
-  it should "not rewrite the title when the focused description has not changed" in {
-    val (written, write) = writer()
-    val bridge           = new TuiAccessibilityBridge(write)
-    val snapshot         = AccessibilitySnapshot(List(node(AccessibilityRole.Button, "Save")), Nil)
-
-    bridge.publish(snapshot)
-    written.clear()
-    bridge.publish(snapshot)
 
     written shouldBe empty
   }
@@ -91,11 +76,6 @@ class TuiAccessibilityBridgeSpec extends AnyFlatSpec with Matchers:
   it should "send one OSC 9 desktop notification per announcement, verbatim" in {
     val (written, write) = writer()
     val bridge           = new TuiAccessibilityBridge(write)
-
-    // A fresh bridge's `previousTitle` starts unset, so its very first `publish` always (re)writes the title even
-    // when nothing is focused -- establish that baseline first so this test measures only the notifications.
-    bridge.publish(AccessibilitySnapshot(Nil, Nil))
-    written.clear()
 
     bridge.publish(
       AccessibilitySnapshot(Nil, List(AccessibilityAnnouncement("Saved"), AccessibilityAnnouncement("2 matches")))
@@ -108,12 +88,8 @@ class TuiAccessibilityBridgeSpec extends AnyFlatSpec with Matchers:
     val (written, write) = writer()
     val bridge           = new TuiAccessibilityBridge(write)
 
-    bridge.publish(
-      AccessibilitySnapshot(
-        List(node(AccessibilityRole.Button, s"evil$esc]0;hijack$bel")),
-        List(AccessibilityAnnouncement(s"msg$esc]9;hijack$bel"))
-      )
-    )
+    bridge.publishTitle(s"evil$esc]0;hijack$bel")
+    bridge.publish(AccessibilitySnapshot(Nil, List(AccessibilityAnnouncement(s"msg$esc]9;hijack$bel"))))
 
-    written.toList shouldBe List(s"$esc]0;button evil]0;hijack$bel", s"$esc]9;msg]9;hijack$bel")
+    written.toList shouldBe List(s"$esc]0;evil]0;hijack$bel", s"$esc]9;msg]9;hijack$bel")
   }
