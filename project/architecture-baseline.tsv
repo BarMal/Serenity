@@ -31,6 +31,5 @@ test/scala/com/serenity/RendererSnapshotReuseSpec.scala	file length	629
 test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	722
 test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	713
 test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	646
-test/scala/com/serenity/SpellCheckerSpec.scala	file length	602
 test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	619
 test/scala/com/serenity/ui/tui/TerminalEmulator.scala	method interpret	84
