@@ -46,7 +46,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
 
   "Document analysis with no dictionary to check against" should "show one notice naming where it looked" in {
     val emptyDirectory = Files.createTempDirectory("serenity-no-dictionary")
-    val spellCheck     = SpellCheckConfig(enabled = true, dictionaryPaths = List(emptyDirectory.toString))
+    val spellCheck     = SpellCheckConfig(enabled = true, languages = List("en-US"), dictionaryPaths = List(emptyDirectory.toString))
     val first          = stateWith(spellCheck, "hello")
     val second         = stateWith(spellCheck, "hello again")
 
@@ -64,7 +64,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
 
     val (shown, later) = program.unsafeRunSync()
 
-    shown.getOrElse(fail("expected a notice")) should (include("en-GB") and include(emptyDirectory.toString))
+    shown.getOrElse(fail("expected a notice")) should (include("en-US") and include(emptyDirectory.toString))
     later shouldBe None
   }
 
@@ -86,7 +86,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
 
   it should "show no notice while there is nothing to check" in {
     val emptyDirectory = Files.createTempDirectory("serenity-no-dictionary")
-    val state = stateWith(SpellCheckConfig(enabled = true, dictionaryPaths = List(emptyDirectory.toString)), "")
+    val state = stateWith(SpellCheckConfig(enabled = true, languages = List("en-US"), dictionaryPaths = List(emptyDirectory.toString)), "")
 
     val program = for
       modelRef   <- ModelViews.modelOf(state)
@@ -102,7 +102,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
 
   it should "leave a peek that is already showing alone, and announce once that is gone" in {
     val emptyDirectory = Files.createTempDirectory("serenity-no-dictionary")
-    val spellCheck     = SpellCheckConfig(enabled = true, dictionaryPaths = List(emptyDirectory.toString))
+    val spellCheck     = SpellCheckConfig(enabled = true, languages = List("en-US"), dictionaryPaths = List(emptyDirectory.toString))
     val plain          = stateWith(spellCheck, "hello")
     val withPeek =
       PeekStateReducer.show(PeekContent.QuickInfo("something the writer just did"), CursorPosition(0, 0), plain).state
@@ -122,5 +122,5 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
     val (during, after) = program.unsafeRunSync()
 
     during shouldBe Some("something the writer just did")
-    after.getOrElse(fail("expected the notice once the peek was gone")) should include("en-GB")
+    after.getOrElse(fail("expected the notice once the peek was gone")) should include("en-US")
   }

@@ -282,8 +282,11 @@ object DictionaryLoader:
     List(
       s"Spell check found no dictionary for ${config.languages.mkString(", ")}.",
       s"Searched: ${if searched.isEmpty then "nowhere" else searched.mkString(", ")}",
-      "Install a Hunspell dictionary (for example hunspell-en-gb) or set spellcheck.dictionary_paths."
+      s"Install a Hunspell dictionary (for example ${suggestedPackage(config)}) or set spellcheck.dictionary_paths."
     ).mkString("\n")
+
+  private def suggestedPackage(config: SpellCheckConfig): String =
+    config.languages.headOption.fold("hunspell-en-gb")(language => s"hunspell-${language.toLowerCase(Locale.ROOT)}")
 
   private def loadDictionary(path: Path, cache: DictionaryCache): DictionaryLoadResult =
     val dependencyPaths = SpellCheckConfig.dictionaryDependencyPaths(List(path))

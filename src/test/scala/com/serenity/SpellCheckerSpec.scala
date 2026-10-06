@@ -233,7 +233,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
         "SFX S y ies [^aeiou]y"
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("draft drafting city cities citie wurld", config)
 
@@ -253,7 +253,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
         "PFX U 0 un ."
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("kind unkind clear unclear unklear", config)
 
@@ -272,7 +272,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
         "SFX S 0 ness ."
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("kind unkind kindness unkindness unkindish", config)
 
@@ -289,7 +289,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
         "SFX G 0 ing ."
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(affix.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(affix.toString))
 
     val diagnostics = SpellChecker.check("draft drafting drafter", config)
 
@@ -340,7 +340,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
         "SFX S 0 ness ."
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("kind unkind kindness unkindness clear unclear clearness", config)
 
@@ -358,7 +358,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
         "REP wurld world"
       )
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("teh wurld wrld", config)
 
@@ -376,7 +376,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
       List("SET ISO-8859-1"),
       StandardCharsets.ISO_8859_1
     )
-    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("caf\u00e9 wurld", config)
 
@@ -494,7 +494,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     // (issue #1677's instance-scoped cache with a fingerprint mismatch), not just correctness with no caching at all.
     val cache      = DictionaryCache()
     val dictionary = writeDic("serenity-cache", List("hello"))
-    val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config     = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
     val bufferId   = BufferId(0)
     val baseBuffer = AppState.initial.persisted.buffers(bufferId)
     val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(content = Rope("hello added")))
@@ -524,7 +524,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
       List("draft/G"),
       List("SET UTF-8")
     )
-    val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val config     = SpellCheckConfig(enabled = true, languages = List("en"), dictionaryPaths = List(dictionary.toString))
     val bufferId   = BufferId(0)
     val baseBuffer = AppState.initial.persisted.buffers(bufferId)
     val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(content = Rope("drafting")))

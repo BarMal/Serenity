@@ -12,6 +12,8 @@ import org.scalatest.matchers.should.Matchers
   */
 class SpellCheckZeroConfigSpec extends AnyFlatSpec with Matchers:
 
+  private val AmericanEnglish = SpellCheckConfig(languages = List("en-US"))
+
   private def dictionaryDirectory(prefix: String, names: String*): Path =
     val directory = Files.createTempDirectory(prefix)
     names.foreach { name =>
@@ -70,20 +72,29 @@ class SpellCheckZeroConfigSpec extends AnyFlatSpec with Matchers:
   "Spell check with no dictionary installed" should "have a notice naming the searched directories" in {
     val emptyOsDirectory = Files.createTempDirectory("serenity-no-dictionary")
     val snapshot =
-      DictionaryLoader.loadSnapshot(SpellCheckConfig(), DictionaryCache(), List(emptyOsDirectory.toString))
+      DictionaryLoader.loadSnapshot(AmericanEnglish, DictionaryCache(), List(emptyOsDirectory.toString))
 
     snapshot.context.missingDictionary.getOrElse(fail("expected a notice")) should
-      (include("en-GB") and include(emptyOsDirectory.toString) and include("hunspell-en-gb"))
+      (include("en-US") and include(emptyOsDirectory.toString) and include("hunspell-en-us"))
   }
 
   it should "not flag ordinary words against an empty word list" in {
     val snapshot = DictionaryLoader.loadSnapshot(
-      SpellCheckConfig(),
+      AmericanEnglish,
       DictionaryCache(),
       List(Files.createTempDirectory("serenity-no-dictionary").toString)
     )
 
-    SpellChecker.analyzeText("Colour me unconvinced.", SpellCheckConfig(), snapshot.context) shouldBe Nil
+    SpellChecker.analyzeText("Colour me unconvinced.", AmericanEnglish, snapshot.context) shouldBe Nil
+  }
+
+  it should "have no notice for the default British English, which ships a dictionary" in {
+    val emptyOsDirectory = Files.createTempDirectory("serenity-no-dictionary")
+
+    DictionaryLoader
+      .loadSnapshot(SpellCheckConfig(), DictionaryCache(), List(emptyOsDirectory.toString))
+      .context
+      .missingDictionary shouldBe None
   }
 
   it should "have no notice when a dictionary was found" in {
