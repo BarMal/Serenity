@@ -584,20 +584,14 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
 
     "wurld".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
-    val immediateState = stateManager.getCurrentState.unsafeRunSync()
-    immediateState.runtime.languageService.diagnosticsState.diagnostics
-      .getOrElse(SpellChecker.bufferDiagnosticsUri(BufferId(0)), Nil) shouldBe Nil
+    def bufferDiagnostics(state: AppState) =
+      state.runtime.languageService.diagnosticsState.diagnostics
+        .getOrElse(SpellChecker.bufferDiagnosticsUri(BufferId(0)), Nil)
 
-    // Polled rather than slept: the debounced analysis also loads the dictionary, which can outlast a fixed wait on a
-    // loaded CI runner.
-    val diagnostics = AwaitCondition
-      .awaitValue(
-        stateManager.getCurrentState.map(
-          _.runtime.languageService.diagnosticsState.diagnostics
-            .getOrElse(SpellChecker.bufferDiagnosticsUri(BufferId(0)), Nil)
-        )
-      )(_.nonEmpty)
-      .unsafeRunSync()
+    bufferDiagnostics(stateManager.getCurrentState.unsafeRunSync()) shouldBe Nil
+
+    val diagnostics =
+      AwaitCondition.awaitValue(stateManager.getCurrentState.map(bufferDiagnostics))(_.nonEmpty).unsafeRunSync()
 
     diagnostics.map(_.source) shouldBe List(Some("spell-check"))
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: wurld")
