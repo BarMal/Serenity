@@ -162,4 +162,23 @@ class OpaqueBlockEditGuardSpec extends AnyFlatSpec with Matchers with OptionValu
     richText.value.paragraphs.exists(_.isOpaqueBlock) shouldBe false
   }
 
+  it should "move cursors, bookmarks and the undo record by the edits it applied and not by the ones it skipped" in {
+    val content   = buffer0.document.content
+    val joinStart = content.lineColumnToOffset(1, 6)
+    val inAfter   = content.lineColumnToOffset(3, 2)
+    val edits = List(
+      EditorEditSupport.MultiCursorEdit(0, joinStart, joinStart + 1, ""),
+      EditorEditSupport.MultiCursorEdit(1, 0, 1, "BB")
+    )
+    val withBookmark =
+      buffer0.copy(annotations = buffer0.annotations.copy(bookmarks = List(CursorPosition(3, 2))))
+
+    val (updated, recorded) = EditorEditSupport.applyTrackedEdits(withBookmark, List(inAfter), edits)
+
+    updated.document.content.getLine(0) shouldBe Some("BBefore")
+    updated.editing.cursorPositions shouldBe List(CursorPosition(3, 2))
+    updated.annotations.bookmarks shouldBe List(CursorPosition(3, 2))
+    recorded.map(edit => (edit.start, edit.end, edit.insertedText)) shouldBe List((0, 1, "BB"))
+  }
+
   private def buffer0: Buffer = bufferAt(CursorPosition(0, 0))

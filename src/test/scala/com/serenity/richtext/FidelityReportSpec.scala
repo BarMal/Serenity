@@ -138,3 +138,17 @@ class FidelityReportSpec extends AnyFlatSpec with Matchers with EitherValues:
     report.summary shouldBe
       "1 table preserved read-only; 2 headings converted; 1 image dropped; 1 equation removed"
   }
+
+  "A document whose package cannot be found again" should "name the settings, style and note parts it would lose" in {
+    val withNotes = GoldenFixtures.zip(
+      GoldenFixtures.wordReport.entries :+ ("word/footnotes.xml" -> "<w:footnotes/>".getBytes(StandardCharsets.UTF_8))
+    )
+    val imported = DocxDocumentCodec.readBytesWithFidelity(withNotes).value
+
+    val report = FidelityReport.forDetached(imported.document, SaveTarget.Docx, Some(imported.fidelity))
+
+    report.dropSummary should include("1 style sheet")
+    report.dropSummary should include("1 notes part")
+    report.dropSummary should include("1 table")
+    report.dropSummary should not include "document part"
+  }

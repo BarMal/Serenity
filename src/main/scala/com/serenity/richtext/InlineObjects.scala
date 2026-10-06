@@ -3,6 +3,7 @@ package com.serenity.richtext
 /** Names what a piece of content kept without modelling is, for the fidelity report. */
 private[richtext] object InlineObjects:
   private val SettingsPart = "settings part"
+  private val NotesPart    = "notes part"
 
   private val DocxFeatures: List[(List[String], DocumentFeature)] = List(
     List("<w:drawing", "<w:pict", "<mc:AlternateContent")  -> DocumentFeature.Images,
@@ -44,7 +45,7 @@ private[richtext] object InlineObjects:
     feature match
       case DocumentFeature.Styles | DocumentFeature.Lists | DocumentFeature.HeadersFooters | DocumentFeature.Comments =>
         true
-      case DocumentFeature.Other(name) => name == SettingsPart
+      case DocumentFeature.Other(name) => name == SettingsPart || name == NotesPart
       case _                           => false
 
   /** What a package entry holds that the model does not, or `None` for the entries every save writes or that belong to
@@ -64,7 +65,7 @@ private[richtext] object InlineObjects:
     else if name == "word/styles.xml" || name == "word/stylesWithEffects.xml" then Some(DocumentFeature.Styles)
     else if name == "word/numbering.xml" then Some(DocumentFeature.Lists)
     else if name.startsWith("word/header") || name.startsWith("word/footer") then Some(DocumentFeature.HeadersFooters)
-    else if name == "word/footnotes.xml" || name == "word/endnotes.xml" then Some(DocumentFeature.Notes)
+    else if name == "word/footnotes.xml" || name == "word/endnotes.xml" then Some(DocumentFeature.Other(NotesPart))
     else if name.startsWith("word/comments") then Some(DocumentFeature.Comments)
     else Some(DocumentFeature.Other(SettingsPart))
 

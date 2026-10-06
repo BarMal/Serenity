@@ -47,9 +47,10 @@ private[reducers] object MarkdownFormattingReducer:
   private def applied(state: AppState, paneId: PaneId, buffer: Buffer, reformatted: Reformatted): ReducerResult =
     // Applied last to first so each edit's offsets still describe the text it was computed against.
     val edits = reformatted.edits.reverse.map(edit => MultiCursorEdit(0, edit.start, edit.end, edit.text))
-    val (content, richTextDocument) = foldEditsWithRichText(buffer, edits) { (current, edit) =>
+    val folded = foldEditsTracked(buffer, edits) { (current, edit) =>
       insertOrUnchanged(deleteOrUnchanged(current, edit.start, edit.end), edit.start, edit.insertedText)
     }
+    val (content, richTextDocument) = (folded.content, folded.richText)
     val cursors = reformatted.ranges.map { range =>
       val focus = content.offsetToCursorPosition(range.focus)
       Cursor(focus, Option.when(range.anchor != range.focus)(content.offsetToCursorPosition(range.anchor)))
@@ -62,12 +63,12 @@ private[reducers] object MarkdownFormattingReducer:
           buffer.annotations,
           buffer.document.content,
           content,
-          edits
+          folded.applied
         ),
         richTextDocument = richTextDocument
       )
       .copy(editing = EditingState.fromCursors(cursors))
     ReducerResult(
       state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(buffer.id, edited))),
-      undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+      undoBoundaryEffects(buffer.id, paneId, buffer, folded.applied, groupable = false)
     )

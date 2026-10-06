@@ -70,17 +70,43 @@ private[state] object EditorEditSupport:
     buffer: Buffer,
     edits: List[MultiCursorEdit]
   )(applyContentEdit: (Rope, MultiCursorEdit) => Rope): (Rope, Option[RichTextDocument]) =
-    // Seeded with the document only while it still describes the content, since each step re-stamps it as matching.
-    edits.foldLeft((buffer.document.content, buffer.richText.richTextDocument.filter(_ => buffer.richTextInSync))) {
-      case ((content, document), edit) =>
-        val nextDocument = richTextDocumentAfterEdit(
-          buffer.withEditedDocument(content, document),
-          edit.start,
-          edit.end,
-          edit.insertedText
+    val folded = foldEditsTracked(buffer, edits)(applyContentEdit)
+    (folded.content, folded.richText)
+
+  /** What a fold of edits left: the text, the remapped rich-text document and the edits that were applied, which are
+    * all of them unless one would have joined a block (see [[joinsBlock]]).
+    */
+  final case class FoldedEdits(content: Rope, richText: Option[RichTextDocument], applied: List[MultiCursorEdit]):
+
+    /** The members of `edits` that were applied, for the adjustments (annotations, cursors, undo) that follow the text:
+      * a skipped edit changed nothing, so it must not move anything.
+      */
+    def appliedAmong(edits: List[MultiCursorEdit]): List[MultiCursorEdit] =
+      edits.filter(edit =>
+        applied.exists(done =>
+          done.start == edit.start && done.end == edit.end && done.insertedText == edit.insertedText
         )
-        if joinsBlock(content, document, nextDocument, edit) then (content, document)
-        else (applyContentEdit(content, edit), nextDocument)
+      )
+
+  def foldEditsTracked(
+    buffer: Buffer,
+    edits: List[MultiCursorEdit]
+  )(applyContentEdit: (Rope, MultiCursorEdit) => Rope): FoldedEdits =
+    // Seeded with the document only while it still describes the content, since each step re-stamps it as matching.
+    val seed = FoldedEdits(
+      buffer.document.content,
+      buffer.richText.richTextDocument.filter(_ => buffer.richTextInSync),
+      Nil
+    )
+    edits.foldLeft(seed) { (folded, edit) =>
+      val nextDocument = richTextDocumentAfterEdit(
+        buffer.withEditedDocument(folded.content, folded.richText),
+        edit.start,
+        edit.end,
+        edit.insertedText
+      )
+      if joinsBlock(folded.content, folded.richText, nextDocument, edit) then folded
+      else FoldedEdits(applyContentEdit(folded.content, edit), nextDocument, folded.applied :+ edit)
     }
 
   /** Whether `edit` would leave other content beside a block atom. A block line takes no text, so every path that edits
@@ -109,11 +135,12 @@ private[state] object EditorEditSupport:
     else
       val trackedOffsets = initialOffsets.toArray
       val sortedEdits    = edits.sortBy(edit => (-edit.start, -edit.end))
-      val (updatedContent, updatedRichTextDocument) =
-        foldEditsWithRichText(buffer, sortedEdits) { (content, edit) =>
-          insertOrUnchanged(deleteOrUnchanged(content, edit.start, edit.end), edit.start, edit.insertedText)
-        }
-      val finalOffsets = sortedEdits.foldLeft(trackedOffsets) { (offsets, edit) =>
+      val folded = foldEditsTracked(buffer, sortedEdits) { (content, edit) =>
+        insertOrUnchanged(deleteOrUnchanged(content, edit.start, edit.end), edit.start, edit.insertedText)
+      }
+      val (updatedContent, updatedRichTextDocument) = (folded.content, folded.richText)
+      val appliedEdits                              = folded.appliedAmong(edits)
+      val finalOffsets = folded.applied.foldLeft(trackedOffsets) { (offsets, edit) =>
         val delta = edit.insertedText.length - (edit.end - edit.start)
         offsets.indices.foreach { i =>
           val offset = offsets(i)
@@ -135,11 +162,11 @@ private[state] object EditorEditSupport:
           buffer.annotations,
           buffer.document.content,
           updatedContent,
-          edits
+          appliedEdits
         ),
         richTextDocument = updatedRichTextDocument
       )
-      (baseBuffer, edits)
+      (baseBuffer, appliedEdits)
 
   /** Merged-range sibling of [[applyTrackedEdits]] -- deletion-only, so no `insertedText` bookkeeping, but the content
     * and `richTextDocument` folds mirror it exactly: both need each range applied against the content (and rich-text
@@ -158,15 +185,16 @@ private[state] object EditorEditSupport:
       val sortedMergedEdits = mergedRanges
         .sortBy { case (start, end) => (-start, -end) }
         .map { case (start, end) => MultiCursorEdit(0, start, end, "") }
-      val (updatedContent, updatedRichTextDocument) =
-        foldEditsWithRichText(buffer, sortedMergedEdits)((content, edit) =>
-          deleteOrUnchanged(content, edit.start, edit.end)
-        )
-      val mergedEdits = mergedRanges.zipWithIndex.map {
+      val folded =
+        foldEditsTracked(buffer, sortedMergedEdits)((content, edit) => deleteOrUnchanged(content, edit.start, edit.end))
+      val (updatedContent, updatedRichTextDocument) = (folded.content, folded.richText)
+      val appliedRanges =
+        mergedRanges.filter((start, end) => folded.applied.exists(done => done.start == start && done.end == end))
+      val mergedEdits = appliedRanges.zipWithIndex.map {
         case ((start, end), index) =>
           MultiCursorEdit(index, start, end, "")
       }
-      val finalOffsets = initialOffsets.map(offset => remapOffsetAfterDeletions(offset, mergedRanges))
+      val finalOffsets = initialOffsets.map(offset => remapOffsetAfterDeletions(offset, appliedRanges))
       val finalCursors = finalOffsets
         .map(offset => updatedContent.offsetToCursorPosition(offset))
         .distinct
