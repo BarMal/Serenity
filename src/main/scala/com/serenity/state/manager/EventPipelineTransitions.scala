@@ -2,10 +2,9 @@ package com.serenity.state.manager
 
 import com.serenity.keystroke.events.{Event, InsertChar, ResizeEvent}
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, BufferId, Focus, SurfaceContent, replacedWhere}
+import com.serenity.state.models.{AppState, BufferId, Focus}
 import com.serenity.state.reducers.{AppEventReducer, ReducerResult, SystemEventReducer}
 import com.serenity.ui.layout.{SplitAxis, WrappedLineCache}
-import com.serenity.ui.presets.UiPreset
 
 /** The event pipeline's own steps around a reducer, as pure functions, so each lands in the event's single validated
   * commit instead of a write of its own after it (#1183, #1697).
@@ -47,18 +46,6 @@ private[manager] object EventPipelineTransitions:
     event match
       case _: InsertChar => state.copy(runtime = state.runtime.observeTyping(nowNanos))
       case _             => state
-
-  def withCommandRunnerUiPresetPreviews(model: Model, previews: List[UiPreset.Preview]): Model =
-    val state = model.app
-    state.commandRunnerSurface.fold(model) { surface =>
-      surface.content match
-        case SurfaceContent.CommandPalette(runner) =>
-          val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
-            _.copy(content = SurfaceContent.CommandPalette(runner.withUiPresetPreviews(previews)))
-          )
-          model.copy(app = state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces)))
-        case _ => model
-    }
 
   /** Advances each buffer's `markdownPreviewEditGeneration`, marking an edit burst the preview has not caught up with.
     */

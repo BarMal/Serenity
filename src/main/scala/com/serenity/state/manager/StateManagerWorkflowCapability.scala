@@ -102,51 +102,25 @@ final private[manager] class StateManagerWorkflowCapability(
         IO.unit
 
   /** Persist the current session (unsaved buffers included, so [Tab] Quick-resume restores them) and replace the editor
-    * with a start page that offers to resume it. Runtime chrome (theme, viewport, terminal/GUI mode, keyboard tier)
-    * carries over from the committed editor state so the splash matches the environment it came from.
+    * with a start page that offers to resume it. The write runs on the Session lane; the page replaces the editor when
+    * it lands, if the editor is still what was written (see [[StartPageTransitions]]).
     */
   private def snapshotAndShowStartPage(committed: AppState): IO[Unit] =
-    // On failure the editor stays: the start page would offer to resume a session that was never written.
-    sessionManager.saveSession(committed, persistUnsavedBuffers = true).attempt.flatMap {
-      case Right(_) => showStartPage(committed)
-      case Left(error) =>
-        logger.error(error)("[SESSION] Saving the session before the start page failed") >>
-          operations.showNotice(FileFailureNotice.sessionSaveFailed(error))
-    }
-
-  private def showStartPage(committed: AppState): IO[Unit] =
-    IO.blocking(
-      committed.persisted.recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
-    ).flatMap { readableRecentFiles =>
-      val page = StartupPageContent.createStartPage(
-        sessionExists = true,
-        recentFiles = readableRecentFiles,
-        resumeIdentifier = Some(StartupPageContent.sessionResumeIdentifier(committed))
-      )
-      modelCommit.commitState(startPageStateFrom(committed, page), committed)
-    }
-
-  private def startPageStateFrom(committed: AppState, page: StartupPage): AppState =
-    val startPageSurfaceId = SurfaceId("surface-0")
-    val base               = AppState.empty(committed.persisted.config)
-    base.copy(
-      persisted = base.persisted.copy(
-        focus = Focus.Surface(startPageSurfaceId),
-        theme = committed.persisted.theme
-      ),
-      runtime = base.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            id = startPageSurfaceId,
-            content = SurfaceContent.StartPage(page),
-            presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          )
-        ),
-        viewportSize = committed.runtime.viewportSize,
-        nextSurfaceId = SurfaceIdSupply(1),
-        capabilities = committed.runtime.capabilities
-      )
+    lanes.submitEffect(
+      SessionLane,
+      // On failure the editor stays: the start page would offer to resume a session that was never written.
+      sessionManager.saveSession(committed, persistUnsavedBuffers = true).attempt.flatMap {
+        case Right(_) =>
+          readableRecentFiles(committed)
+            .flatMap(recent => lanes.dispatchEffectResult(EffectResult.StartPageReady(committed, recent), _ => IO.unit))
+        case Left(error) =>
+          logger.error(error)("[SESSION] Saving the session before the start page failed") >>
+            operations.showNotice(FileFailureNotice.sessionSaveFailed(error))
+      }
     )
+
+  private def readableRecentFiles(committed: AppState): IO[List[Path]] =
+    IO.blocking(committed.persisted.recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path)))
 
   /** Answers the close waiting on the action stack -- what the close prompt's choices run. */
   private[manager] def resolveClose(choice: CloseWorkflowChoice): IO[Unit] =
