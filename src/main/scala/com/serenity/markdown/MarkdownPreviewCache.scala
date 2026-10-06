@@ -29,18 +29,25 @@ import com.serenity.ui.theme.Theme
   * [[MarkdownDocumentPreview]]'s own entry points to every caller) rather than a JVM-wide singleton `object`, so two
   * independently constructed instances share no cache state.
   */
-final class MarkdownPreviewCache:
+final class MarkdownPreviewCache private[markdown] (
+    maxImageBytes: Long,
+    private[markdown] val decodedImages: DecodedImageCache
+):
   import MarkdownPreviewCache.*
 
+  /** One byte-bounded store serves both exact-key hits and edit-slot reuse (the newest entry of a slot), so a rendered
+    * image is counted once. A render at a new size supersedes the slot's entries at the old size.
+    */
   private val imageCache =
-    new LinkedHashMap[ImageCacheKey, BufferedImage](MaxCachedImages, 0.75f, true):
-      override def removeEldestEntry(eldest: java.util.Map.Entry[ImageCacheKey, BufferedImage]): Boolean =
-        size() > MaxCachedImages
+    new ByteBoundedLru[ImageCacheKey, BufferedImage](
+      maxImageBytes,
+      ImageBytes.of,
+      (newKey, existing) => ImageSlotKey.sameSlotDifferentSize(newKey, existing)
+    )
 
-  private val editSlotCache =
-    new LinkedHashMap[ImageSlotKey, SlotRender](MaxEditSlotCacheEntries, 0.75f, true):
-      override def removeEldestEntry(eldest: java.util.Map.Entry[ImageSlotKey, SlotRender]): Boolean =
-        size() > MaxEditSlotCacheEntries
+  private[markdown] def retainedImageBytes: Long = imageCache.retainedBytes
+
+  private[markdown] def cachedImageCount: Int = imageCache.size
 
   private val htmlFragmentCache =
     new LinkedHashMap[HtmlFragmentCacheKey, String](MaxCachedHtmlFragments, 0.75f, true):
@@ -67,18 +74,23 @@ final class MarkdownPreviewCache:
       rendered
     }
 
-  /** Exact-key image cache first, falling back to [[renderOrReuseCommitted]]'s edit-slot reuse on a miss -- the same
-    * two-level lookup `renderImage`/`renderInlineRowsImage` always performed against the (formerly singleton) caches.
+  /** Exact-key hit first. On a miss while `reuseLastRenderWhileEditing` is true, reuses the newest image of the same
+    * slot (same title/size/theme/font/etc, only the markdown differing) instead of paying for a fresh layout pass.
+    * Callers set that flag from an explicit, event-driven signal decided upstream, never from wall-clock proximity;
+    * `false` always renders fresh.
     */
   private[markdown] def cachedImage(key: ImageCacheKey, reuseLastRenderWhileEditing: Boolean)(
     render: => BufferedImage
   ): BufferedImage =
-    imageCache.synchronized(Option(imageCache.get(key))).getOrElse {
-      renderOrReuseCommitted(key, reuseLastRenderWhileEditing) {
+    imageCache.get(key).getOrElse {
+      val reused =
+        if reuseLastRenderWhileEditing then
+          val slotKey = ImageSlotKey.from(key)
+          imageCache.findNewest(ImageSlotKey.from(_) == slotKey)
+        else None
+      reused.getOrElse {
         val rendered = render
-        imageCache.synchronized {
-          val _ = imageCache.put(key, rendered)
-        }
+        imageCache.put(key, rendered)
         rendered
       }
     }
@@ -94,36 +106,22 @@ final class MarkdownPreviewCache:
       index
     }
 
-  /** While `reuseLastRenderWhileEditing` is true, reuses the last image rendered for this preview slot (same
-    * title/size/theme/font/etc, only the markdown content differing) instead of paying for a fresh flying-saucer layout
-    * pass. Callers set this from an explicit, event-driven signal decided upstream -- e.g. "an edit landed for this
-    * buffer more recently than the last settled render" -- never from wall-clock proximity, so the result is fully
-    * deterministic given the caller's inputs. `false` (every direct caller's default) always renders fresh, exactly as
-    * if this cache didn't exist.
-    */
-  private def renderOrReuseCommitted(key: ImageCacheKey, reuseLastRenderWhileEditing: Boolean)(
-    render: => BufferedImage
-  ): BufferedImage =
-    val slotKey = ImageSlotKey.from(key)
-    val reused =
-      if reuseLastRenderWhileEditing then editSlotCache.synchronized(Option(editSlotCache.get(slotKey))) else None
-    reused match
-      case Some(entry) => entry.image
-      case None =>
-        val rendered = render
-        editSlotCache.synchronized {
-          val _ = editSlotCache.put(slotKey, SlotRender(rendered))
-        }
-        rendered
-
 object MarkdownPreviewCache:
 
-  def apply(): MarkdownPreviewCache = new MarkdownPreviewCache
+  /** 96 MiB: a full-panel ARGB image at 1600x1200 logical, 2x device scale is ~30 MiB, so this keeps about three panels
+    * (two visible plus one mid-edit) or many small inline images, versus the former 48 count-bounded images that could
+    * reach over 1 GiB.
+    */
+  val DefaultMaxImageBytes: Long = 96L * 1024L * 1024L
 
-  private val MaxCachedImages          = 24
+  def apply(
+    maxImageBytes: Long = DefaultMaxImageBytes,
+    decodedImages: DecodedImageCache = DecodedImageCache()
+  ): MarkdownPreviewCache =
+    new MarkdownPreviewCache(maxImageBytes, decodedImages)
+
   private val MaxCachedHtmlFragments   = 48
   private val MaxCachedInlineDocuments = 32
-  private val MaxEditSlotCacheEntries  = 24
 
   final case class SourceFingerprint(length: Int, hash: Int)
 
@@ -162,6 +160,10 @@ object MarkdownPreviewCache:
 
   object ImageSlotKey:
 
+    def sameSlotDifferentSize(newKey: ImageCacheKey, existing: ImageCacheKey): Boolean =
+      (newKey.widthPx != existing.widthPx || newKey.heightPx != existing.heightPx) &&
+        from(newKey).copy(widthPx = 0, heightPx = 0) == from(existing).copy(widthPx = 0, heightPx = 0)
+
     def from(key: ImageCacheKey): ImageSlotKey =
       ImageSlotKey(
         key.title,
@@ -174,8 +176,6 @@ object MarkdownPreviewCache:
         key.inlineLineHeightPx,
         key.inlineRows
       )
-
-  final case class SlotRender(image: BufferedImage)
 
   final case class HtmlFragmentCacheKey(source: SourceFingerprint, title: String, baseUri: Option[String])
 
