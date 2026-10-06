@@ -71,7 +71,10 @@ object ThirdPartyNotices {
     id.substring(id.lastIndexOf('/') + 1).stripSuffix(".txt")
 
   private def readText(root: Path, id: String): String =
-    new String(Files.readAllBytes(textFile(root, id)), StandardCharsets.UTF_8).replace("\r\n", "\n").trim
+    new String(Files.readAllBytes(textFile(root, id)), StandardCharsets.UTF_8)
+      .stripPrefix("\uFEFF")
+      .replace("\r\n", "\n")
+      .trim
 
   private def document(root: Path, modules: List[Entry], assets: List[Entry]): String = {
     val textIdsUsed = (modules ++ assets).flatMap(_.texts).distinct.sortBy(textTitle)
