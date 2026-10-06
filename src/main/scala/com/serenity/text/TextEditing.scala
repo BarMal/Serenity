@@ -3,7 +3,9 @@ package com.serenity.text
 import java.text.CharacterIterator
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
+import com.ibm.icu.lang.{UCharacter, UProperty}
 import com.ibm.icu.text.BreakIterator
+import com.ibm.icu.util.ULocale
 
 object TextEditing:
 
@@ -21,8 +23,9 @@ object TextEditing:
       */
     def identityAnchor: AnyRef = this
 
-  private enum CharacterClass:
-    case Whitespace, Word, Punctuation
+  /** `Pictograph` runs are never merged: each emoji sequence or flag is its own stop. */
+  private[text] enum CharacterClass:
+    case Whitespace, Word, Punctuation, Pictograph
 
   def deleteWordBackward(text: String): String =
     val boundary = previousWordBoundary(text, text.length)
@@ -40,33 +43,48 @@ object TextEditing:
   def previousWordBoundary(text: String, cursor: Int): Int =
     previousWordBoundary(StringCharacterSource(text), cursor)
 
+  /** Word motion keeps the stops of a class scan (letters and digits, punctuation, whitespace) and lets UAX#29 word
+    * boundaries split a run of word characters further, which is what finds the dictionary words inside a spaceless CJK
+    * run. Latin text has no boundary inside such a run, so its stops are the class scan's own.
+    */
   def previousWordBoundary(source: CharacterSource, cursor: Int): Int =
-    val idx = clamp(cursor, source.length)
-    val segmentEnd =
-      if idx > 0 && characterClass(source.charAt(idx - 1)) == CharacterClass.Whitespace then
-        scanBackwardClassStart(source, idx, CharacterClass.Whitespace)
-      else idx
-
-    if segmentEnd <= 0 then 0
-    else scanBackwardClassStart(source, segmentEnd, characterClass(source.charAt(segmentEnd - 1)))
+    val runEnd = scanBackwardWhitespaceStart(source, clamp(cursor, source.length))
+    if runEnd <= 0 then 0
+    else
+      val segmentStart = wordBreakIterator(source).preceding(runEnd)
+      val runClass     = characterClassBefore(source, runEnd)
+      val runStart     = scanBackwardClassStart(source, runEnd, runClass)
+      if characterClassAt(source, segmentStart) == CharacterClass.Pictograph then segmentStart
+      else if runClass == CharacterClass.Word then math.max(runStart, segmentStart)
+      else runStart
 
   def nextWordBoundary(text: String, cursor: Int): Int =
     nextWordBoundary(StringCharacterSource(text), cursor)
 
   def nextWordBoundary(source: CharacterSource, cursor: Int): Int =
-    val length = source.length
-    val idx    = clamp(cursor, length)
-    val segmentStart =
-      if idx < length && characterClass(source.charAt(idx)) == CharacterClass.Whitespace then
-        scanForwardClassEnd(source, idx, CharacterClass.Whitespace)
-      else idx
+    val start = scanForwardWhitespaceEnd(source, clamp(cursor, source.length))
+    if start >= source.length then source.length
+    else scanForwardWhitespaceEnd(source, runEndAfter(source, start))
 
-    if segmentStart >= length then length
-    else
-      val segmentEnd = scanForwardClassEnd(source, segmentStart, characterClass(source.charAt(segmentStart)))
-      if segmentEnd < length && characterClass(source.charAt(segmentEnd)) == CharacterClass.Whitespace then
-        scanForwardClassEnd(source, segmentEnd, CharacterClass.Whitespace)
-      else segmentEnd
+  /** Where the run of one class starting at `start` ends, ignoring the whitespace that follows it. */
+  private[text] def runEndAfter(source: CharacterSource, start: Int): Int =
+    val segmentEnd = wordBreakIterator(source).following(start)
+    characterClassAt(source, start) match
+      case CharacterClass.Pictograph | CharacterClass.Whitespace => segmentEnd
+      case CharacterClass.Word        => math.min(segmentEnd, scanForwardClassEnd(source, start, CharacterClass.Word))
+      case CharacterClass.Punctuation => scanForwardClassEnd(source, start, CharacterClass.Punctuation)
+
+  def previousSubWordBoundary(text: String, cursor: Int): Int =
+    previousSubWordBoundary(StringCharacterSource(text), cursor)
+
+  def previousSubWordBoundary(source: CharacterSource, cursor: Int): Int =
+    SubWordMotion.previous(source, cursor)
+
+  def nextSubWordBoundary(text: String, cursor: Int): Int =
+    nextSubWordBoundary(StringCharacterSource(text), cursor)
+
+  def nextSubWordBoundary(source: CharacterSource, cursor: Int): Int =
+    SubWordMotion.next(source, cursor)
 
   def previousGraphemeBoundary(text: String, cursor: Int): Int =
     previousGraphemeBoundary(StringCharacterSource(text), cursor)
@@ -133,10 +151,17 @@ object TextEditing:
   private def clamp(cursor: Int, length: Int): Int =
     math.max(0, math.min(cursor, length))
 
-  private def characterClass(char: Char): CharacterClass =
-    if char.isWhitespace then CharacterClass.Whitespace
+  private[text] def characterClassAt(source: CharacterSource, index: Int): CharacterClass =
+    characterClass(codePointAt(source, index))
+
+  private[text] def characterClassBefore(source: CharacterSource, index: Int): CharacterClass =
+    characterClass(codePointBefore(source, index))
+
+  private def characterClass(codePoint: Int): CharacterClass =
+    if Character.isWhitespace(codePoint) then CharacterClass.Whitespace
+    else if isPictograph(codePoint) then CharacterClass.Pictograph
     else
-      Character.getType(char) match
+      Character.getType(codePoint) match
         case Character.UPPERCASE_LETTER | Character.LOWERCASE_LETTER | Character.TITLECASE_LETTER |
             Character.MODIFIER_LETTER | Character.OTHER_LETTER | Character.DECIMAL_DIGIT_NUMBER |
             Character.LETTER_NUMBER | Character.OTHER_NUMBER | Character.NON_SPACING_MARK |
@@ -145,7 +170,25 @@ object TextEditing:
         case _ =>
           CharacterClass.Punctuation
 
-  /** One `BreakIterator.getCharacterInstance` per thread, paired with the identity anchor
+  private def isPictograph(codePoint: Int): Boolean =
+    UCharacter.hasBinaryProperty(codePoint, UProperty.EXTENDED_PICTOGRAPHIC) ||
+      UCharacter.hasBinaryProperty(codePoint, UProperty.REGIONAL_INDICATOR)
+
+  private[text] def codePointAt(source: CharacterSource, index: Int): Int =
+    val high = source.charAt(index)
+    if Character.isHighSurrogate(high) && index + 1 < source.length && Character.isLowSurrogate(
+          source.charAt(index + 1)
+        )
+    then Character.toCodePoint(high, source.charAt(index + 1))
+    else high.toInt
+
+  private[text] def codePointBefore(source: CharacterSource, index: Int): Int =
+    val low = source.charAt(index - 1)
+    if Character.isLowSurrogate(low) && index >= 2 && Character.isHighSurrogate(source.charAt(index - 2)) then
+      Character.toCodePoint(source.charAt(index - 2), low)
+    else low.toInt
+
+  /** One `BreakIterator` (grapheme unless told otherwise) per thread, paired with the identity anchor
     * ([[CharacterSource.identityAnchor]]) of the `CharacterSource` it was last `setText` onto. `BreakIterator` is
     * stateful and not thread-safe, so a single shared instance isn't safe -- hence `ThreadLocal` -- but constructing
     * `getCharacterInstance()` itself is expensive enough (cloning the rule engine) that doing it on every
@@ -160,9 +203,7 @@ object TextEditing:
     */
   // `private[text]`, not fully `private`: `CharacterSourceIdentityAnchorSpec` (same package) instantiates this
   // directly to whitebox-test the setText-skip decision against the real ICU4J `BreakIterator`.
-  final private[text] class BreakIteratorCache(words: Boolean = false):
-    val iterator: BreakIterator =
-      if words then BreakIterator.getWordInstance() else BreakIterator.getCharacterInstance()
+  final private[text] class BreakIteratorCache(val iterator: BreakIterator = BreakIterator.getCharacterInstance()):
     private val lastAnchor: AtomicReference[Option[AnyRef]] = new AtomicReference(None)
 
     def forSource(source: CharacterSource): BreakIterator =
@@ -174,27 +215,38 @@ object TextEditing:
   private val threadLocalBreakIterator: ThreadLocal[BreakIteratorCache] =
     ThreadLocal.withInitial(() => BreakIteratorCache())
 
+  // Its own cache, not a shared one: word motion asks grapheme questions in between, and sharing would re-set the text
+  // on every switch.
   private val threadLocalWordBreakIterator: ThreadLocal[BreakIteratorCache] =
-    ThreadLocal.withInitial(() => BreakIteratorCache(words = true))
+    ThreadLocal.withInitial(() => BreakIteratorCache(BreakIterator.getWordInstance(ULocale.ROOT)))
 
   /** `source` adapted through [[CharacterSourceIterator]] rather than a materialised `String` -- confirmed against
     * `RopeCharacterSource` (#1277 step 3 spike) to work directly against a rope-backed source, so a large line's
     * grapheme scan never copies the whole line into a `String`.
     */
-  private def graphemeBreakIterator(source: CharacterSource): BreakIterator =
+  private[text] def graphemeBreakIterator(source: CharacterSource): BreakIterator =
     threadLocalBreakIterator.get().forSource(source)
 
-  @annotation.tailrec
-  private def scanBackwardClassStart(source: CharacterSource, idx: Int, targetClass: CharacterClass): Int =
-    if idx > 0 && characterClass(source.charAt(idx - 1)) == targetClass then
-      scanBackwardClassStart(source, idx - 1, targetClass)
-    else idx
+  private[text] def wordBreakIterator(source: CharacterSource): BreakIterator =
+    threadLocalWordBreakIterator.get().forSource(source)
 
   @annotation.tailrec
-  private def scanForwardClassEnd(source: CharacterSource, idx: Int, targetClass: CharacterClass): Int =
-    if idx < source.length && characterClass(source.charAt(idx)) == targetClass then
-      scanForwardClassEnd(source, idx + 1, targetClass)
-    else idx
+  private[text] def scanBackwardClassStart(source: CharacterSource, index: Int, targetClass: CharacterClass): Int =
+    if index > 0 && characterClassBefore(source, index) == targetClass then
+      scanBackwardClassStart(source, index - Character.charCount(codePointBefore(source, index)), targetClass)
+    else index
+
+  @annotation.tailrec
+  private[text] def scanForwardClassEnd(source: CharacterSource, index: Int, targetClass: CharacterClass): Int =
+    if index < source.length && characterClassAt(source, index) == targetClass then
+      scanForwardClassEnd(source, index + Character.charCount(codePointAt(source, index)), targetClass)
+    else index
+
+  private[text] def scanBackwardWhitespaceStart(source: CharacterSource, index: Int): Int =
+    scanBackwardClassStart(source, index, CharacterClass.Whitespace)
+
+  private[text] def scanForwardWhitespaceEnd(source: CharacterSource, index: Int): Int =
+    scanForwardClassEnd(source, index, CharacterClass.Whitespace)
 
   // `private[text]`, not fully `private`: `CharacterSourceIdentityAnchorSpec` (same package) instantiates this
   // directly to whitebox-test the identity-anchor cache-skip mechanism against the real ICU4J `BreakIterator`.

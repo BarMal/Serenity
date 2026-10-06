@@ -21,6 +21,8 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
+  private val openBufferUri = "buffer:0" // AppState.initial's sole buffer (BufferId(0)) has no file path.
+
   private def diag(line: Int, severity: DiagnosticSeverity): Diagnostic =
     Diagnostic(
       range = LspRange(LspPosition(line, 0), LspPosition(line, 10)),
@@ -32,7 +34,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     given Balance = Balance.default
     val state     = AppState.initial
 
-    val uri   = "file:///foo/Bar.scala"
+    val uri   = openBufferUri
     val diags = List(diag(0, DiagnosticSeverity.Error), diag(5, DiagnosticSeverity.Warning))
 
     val result = SystemEventReducer.reduce(LspEvent.LspDiagnosticsReceived(uri, diags), state)
@@ -44,7 +46,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "replace diagnostics for the same URI" in {
     given Balance = Balance.default
-    val uri       = "file:///foo/Bar.scala"
+    val uri       = openBufferUri
     val initial   = AppState.initial
     val state = initial.copy(
       runtime = initial.runtime.copy(
@@ -64,7 +66,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "clear diagnostics when an empty list is received" in {
     given Balance = Balance.default
-    val uri       = "file:///foo/Bar.scala"
+    val uri       = openBufferUri
     val initial   = AppState.initial
     val state = initial.copy(
       runtime = initial.runtime.copy(
@@ -144,7 +146,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     val logger = LoggerFactory[IO].getLogger(using LoggerName("DiagnosticRenderingSpec"))
     val sm     = StateManager.apply(logger).unsafeRunSync()
 
-    val uri   = "file:///foo/Bar.scala"
+    val uri   = openBufferUri
     val diags = List(diag(0, DiagnosticSeverity.Error))
     sm.applyEvent(LspEvent.LspDiagnosticsReceived(uri, diags)).unsafeRunSync()
 

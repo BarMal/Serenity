@@ -49,6 +49,10 @@ private[reducers] object EditorNavigationEventReducer:
         navigate(cursor => wordBoundaryFrom(buffer, cursor, (rope, offset) => rope.previousWordBoundary(offset)))
       case MoveWordRight =>
         navigate(cursor => wordBoundaryFrom(buffer, cursor, (rope, offset) => rope.nextWordBoundary(offset)))
+      case MoveSubWordLeft =>
+        navigate(cursor => wordBoundaryFrom(buffer, cursor, (rope, offset) => rope.previousSubWordBoundary(offset)))
+      case MoveSubWordRight =>
+        navigate(cursor => wordBoundaryFrom(buffer, cursor, (rope, offset) => rope.nextSubWordBoundary(offset)))
       case MoveToStart       => navigate(cursor => homeTarget(currentState, geometry, cursor))
       case MoveToEnd         => navigateWithAffinity(cursor => endTarget(currentState, geometry, buffer, cursor))
       case MoveToStartOfFile => navigate(_ => OriginCursor)
