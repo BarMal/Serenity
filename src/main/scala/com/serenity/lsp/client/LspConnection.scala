@@ -336,15 +336,23 @@ object LspConnection:
         case ConnectionFibers(writerFiber, readerFiber) =>
           askServerToExit(conn) >>
             conn.closeQueues >>
-            writerFiber.join.void.timeoutTo(OutgoingFlushTimeout, IO.unit) >>
-            closeQuietly(out) >>
-            endServer >>
+            writerFiber.join.void
+              .as(true)
+              .timeoutTo(OutgoingFlushTimeout, IO.pure(false))
+              .flatMap(closeStreamsAndEnd(out, endServer)) >>
             closeQuietly(in) >>
             writerFiber.cancel >>
             readerFiber.cancel
       }
       _ <- Resource.eval(initHandshake(conn, rootUri, logger))
     yield conn
+
+  /** A writer still running after the flush wait is stuck in a write to a full pipe, and holds the stream's lock, so
+    * closing `out` would wait on it. Only the server dying frees it, so the server is ended first in that case.
+    */
+  private def closeStreamsAndEnd(out: AutoCloseable, endServer: IO[Unit])(writerFlushed: Boolean): IO[Unit] =
+    if writerFlushed then closeQuietly(out) >> endServer
+    else endServer >> closeQuietly(out)
 
   def apply(
     config: LspServerConfig,
