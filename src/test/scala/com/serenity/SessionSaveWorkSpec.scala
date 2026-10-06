@@ -135,7 +135,7 @@ class SessionSaveWorkSpec extends AnyFlatSpec with Matchers:
     val id      = AppState.initial.persisted.bufferOrder.head
     val state   = withBuffers(untitledBuffer(id, new CountingLeaf("draft")))
     val files   = List(root.resolve("session-index.json"), root.resolve("sessions").resolve("session.json"))
-    def stamps  = files.map(FileStamp.read)
+    def stamps  = files.map(path => FileStamp.read(path))
 
     manager.saveSession(state).unsafeRunSync()
     val afterFirst = stamps
