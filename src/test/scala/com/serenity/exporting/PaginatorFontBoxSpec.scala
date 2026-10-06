@@ -125,3 +125,19 @@ class PaginatorFontBoxSpec extends AnyFlatSpec with Matchers with EitherValues w
   it should "still report a printable character the face lacks" in {
     paginatedBlocks(body("a\u4e2d")).isLeft shouldBe true
   }
+
+  "tabs in code" should "expand to the next multiple-of-4 column, so two levels of indentation survive" in {
+    val code = Block.Preformatted(Vector("top", "\tone", "\t\ttwo\tx", "\t\treturn\ty"))
+
+    val lines = paginatedBlocks(code).value.pages.flatMap(_.lines).drop(1)
+
+    lines.map(_.text) shouldBe Vector("top", "    one", "        two x", "        return  y")
+    lines.flatMap(_.runs.headOption).map(_.x).distinct shouldBe Vector(72f)
+  }
+
+  it should "keep the indentation width in points: eight columns at 7.2 points a character" in {
+    val line = paginatedBlocks(Block.Preformatted(Vector("\t\tx"))).value.pages.flatMap(_.lines).drop(1)
+
+    line.map(_.text.length) shouldBe Vector(9)
+    line.flatMap(_.runs).map(_.text) shouldBe Vector("        x")
+  }

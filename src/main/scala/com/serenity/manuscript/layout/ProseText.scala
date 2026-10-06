@@ -31,6 +31,13 @@ private[layout] object ProseText:
     val lines = if rest.isEmpty then Vector.empty else trimmedEnd
     Prepared(leadingTabs.nonEmpty, lines.map(regroup))
 
+  /** Replaces each tab with the spaces that reach the next multiple of `width` columns, so code keeps its indentation.
+    * Neither the manuscript nor the typography carries a tab width, so callers pass the editor's default of 4.
+    */
+  def expandTabs(line: String, width: Int): String =
+    val step = width.max(1)
+    line.foldLeft("")((out, char) => if char == '\t' then out + " " * (step - out.length % step) else out + char)
+
   /** A single line of text with no layout meaning for its breaks or tabs, such as a title or a name. */
   def clean(text: String): String =
     text.toVector

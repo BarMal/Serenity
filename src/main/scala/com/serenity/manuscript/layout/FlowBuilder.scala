@@ -103,7 +103,9 @@ final private[layout] class FlowBuilder(t: PageTypography, setter: ParagraphSett
         lines(t.sceneBreak, Placement.centre, pitch, firstSpace = gap).map(flow.hold)
       case Block.Preformatted(code) =>
         code
-          .flatTraverse(line => setter.set(List(RichTextRun(line)), codePlacement).map(blankIfEmpty))
+          .flatTraverse(line =>
+            setter.set(List(RichTextRun(ProseText.expandTabs(line, CodeTabWidth))), codePlacement).map(blankIfEmpty)
+          )
           .map(spaced(_, pitch, gap))
           .map(attached(flow, _))
 
@@ -115,6 +117,8 @@ final private[layout] class FlowBuilder(t: PageTypography, setter: ParagraphSett
       case ParagraphKind.Body       => Placement(t.firstLineIndent, 0f, centred = false)
       case ParagraphKind.BlockQuote => Placement(0f, t.firstLineIndent, centred = false)
       case ParagraphKind.Centered   => Placement.centre
+
+  private val CodeTabWidth = 4
 
   private val codePlacement: Placement = Placement(0f, 0f, centred = false, anywhere = true)
 
