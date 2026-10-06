@@ -18,7 +18,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
 import com.serenity.state.manager.*
-import com.serenity.state.models.{AppState, BufferId, BufferMapChanges, Damage}
+import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import fs2.Stream
@@ -26,6 +26,11 @@ import fs2.concurrent.{Signal, SignallingRef}
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 object AppRuntime:
+
+  export AppRuntimeExternalChanges.{externalChangeWatchLoop, watchInputsChanged}
+  export AppRuntimeSettingFollowers.{followFrameTimingSetting, followLatencyTraceSetting}
+  export AppRuntimeCallbacks.{closeMarkdownPreviewWindowInState, markdownPreviewCloseCallbackBridge}
+  export AppRuntimeDiagnostics.describeStateForDiagnostics
 
   /** Issue #1669's remaining scope moved this onto [[FrontendRuntime]], the frontend-owned render/input bundle; kept as
     * an alias so callers outside this file (`AppRuntimeRenderLoops`, `TuiRuntime`) don't need to know it moved.
@@ -374,106 +379,6 @@ object AppRuntime:
         .handleErrorWith(error => logger.error(error)(s"[INSTANCE] Could not open forwarded file $path"))
     }
 
-  /** Publishes `ui.render.frame_timing` only when a commit changes it, so the report stream sleeps through ordinary
-    * edits.
-    */
-  private[serenity] def followFrameTimingSetting(
-    frameTimingEnabled: SignallingRef[IO, Boolean]
-  )(before: AppState, after: AppState): IO[Unit] =
-    val enabled = after.persisted.config.surfaceConfig.frameTimingEnabled
-    IO.whenA(enabled != before.persisted.config.surfaceConfig.frameTimingEnabled)(frameTimingEnabled.set(enabled))
-
-  /** Publishes `ui.render.latency_trace` only when a commit changes it. */
-  private[serenity] def followLatencyTraceSetting(
-    latencyTraceEnabled: SignallingRef[IO, Boolean]
-  )(before: AppState, after: AppState): IO[Unit] =
-    val enabled = after.persisted.config.surfaceConfig.latencyTraceEnabled
-    IO.whenA(enabled != before.persisted.config.surfaceConfig.latencyTraceEnabled)(latencyTraceEnabled.set(enabled))
-
-  /** Whether a commit may have changed what [[externalChangeWatchLoop]] watches: the open files, the spell-check
-    * dictionaries, or the docked explorers. Errs towards yes; the loop re-derives the set and a no-op resync is free.
-    */
-  private[serenity] def watchInputsChanged(before: AppState, after: AppState): Boolean =
-    (before.runtime.uiSurfaces ne after.runtime.uiSurfaces) ||
-      before.persisted.config.languageToolsConfig.spellCheck != after.persisted.config.languageToolsConfig.spellCheck ||
-      before.persisted.buffers.size != after.persisted.buffers.size ||
-      BufferMapChanges.anyChanged(before.persisted.buffers, after.persisted.buffers)(
-        added = _ => true,
-        changed = _.document.filePath != _.document.filePath
-      )
-
-  private enum WatchResync:
-    case SetChanged, FocusLost, FocusRegained
-
-  /** Background half of external-change detection (#1623), complementing the focus-in re-check. Watches the parent
-    * directories of open local buffers, `dictionaryWatchDirectories` (#1691) and `explorerWatchDirectories`, re-derived
-    * on each `watchedSetChanges` element. A changed buffer file gets the same reload-or-prompt check the focus-in path
-    * runs; a change under a dictionary directory refreshes the dictionary fingerprints; a changed explorer directory is
-    * marked stale.
-    *
-    * Event-driven (#1938): with something watched the loop blocks in the watcher until a change arrives, and with
-    * nothing watched it never calls the watcher at all, waiting for the set to change. Either way it does not wake on a
-    * timer. Never calling the genuinely blocking watcher while nothing is watched also keeps a buffer-less startup
-    * compatible with virtual-time tests (`VirtualTime.runVirtual`'s `TestControl` treats `IO.blocking` as
-    * non-terminating). Changes are gathered for `settle` after the first, so a burst checks each file once (#1885).
-    * Spell check is on by default, but `dictionaryWatchDirectories` names only the directories a discovered dictionary
-    * lives in, so a machine (or test) with none installed has nothing to watch for it.
-    *
-    * While `windowFocused` is false nothing is watched, so a polling backend stops listing directories and a window in
-    * the background costs nothing. Regaining focus re-registers the watched set and checks every open buffer, the
-    * dictionaries and the explorers once, since changes made meanwhile were never observed.
-    */
-  private[serenity] def externalChangeWatchLoop(
-    watcher: com.serenity.io.FileChangeWatcher,
-    openBufferPaths: IO[Map[Path, BufferId]],
-    checkBufferForExternalChanges: BufferId => IO[Unit],
-    dictionaryWatchDirectories: IO[Set[Path]] = IO.pure(Set.empty),
-    refreshDictionaryFingerprints: IO[Unit] = IO.unit,
-    explorerWatchDirectories: IO[Set[Path]] = IO.pure(Set.empty),
-    markExplorerDirectoriesStale: Set[Path] => IO[Unit] = _ => IO.unit,
-    watchedSetChanges: Stream[IO, Unit] = Stream.emit(()),
-    settle: FiniteDuration = 200.millis,
-    windowFocused: Signal[IO, Boolean] = Signal.constant[IO, Boolean](true)
-  ): Stream[IO, Unit] =
-    val watched = (openBufferPaths, dictionaryWatchDirectories, explorerWatchDirectories).mapN {
-      (paths, dictionaryDirectories, explorerDirectories) =>
-        paths.keySet.flatMap(path => Option(path.getParent)) ++ dictionaryDirectories ++ explorerDirectories
-    }
-    val react = (changed: Set[Path]) =>
-      (openBufferPaths, dictionaryWatchDirectories, explorerWatchDirectories).mapN {
-        (paths, dictionaryDirectories, explorerDirectories) =>
-          val changedDirectories = changed.flatMap(path => Option(path.getParent))
-          val staleExplorers     = changedDirectories.intersect(explorerDirectories)
-          changed.flatMap(paths.get).toList.traverse_(checkBufferForExternalChanges) >>
-            IO.whenA(changedDirectories.exists(dictionaryDirectories.contains))(refreshDictionaryFingerprints) >>
-            IO.whenA(staleExplorers.nonEmpty)(markExplorerDirectoriesStale(staleExplorers))
-      }.flatten
-    def syncWatched(watching: SignallingRef[IO, Boolean]) =
-      watched.flatMap(directories => watcher.sync(directories) >> watching.set(directories.nonEmpty))
-    val recheckEverything = (openBufferPaths, dictionaryWatchDirectories, explorerWatchDirectories).mapN {
-      (paths, dictionaryDirectories, explorerDirectories) =>
-        paths.values.toList.traverse_(checkBufferForExternalChanges) >>
-          IO.whenA(dictionaryDirectories.nonEmpty)(refreshDictionaryFingerprints) >>
-          IO.whenA(explorerDirectories.nonEmpty)(markExplorerDirectoriesStale(explorerDirectories))
-    }.flatten
-    val focusChanges = windowFocused.discrete.changes.zipWithPrevious.collect {
-      case (_, false)          => WatchResync.FocusLost
-      case (Some(false), true) => WatchResync.FocusRegained
-    }
-    Stream.eval(SignallingRef.of[IO, Boolean](false)).flatMap { watching =>
-      val resync = watchedSetChanges.as(WatchResync.SetChanged).merge(focusChanges).evalMap {
-        case WatchResync.SetChanged =>
-          windowFocused.get.flatMap(focused => IO.whenA(focused)(syncWatched(watching)))
-        case WatchResync.FocusLost     => watcher.sync(Set.empty) >> watching.set(false)
-        case WatchResync.FocusRegained => syncWatched(watching) >> recheckEverything
-      }
-      watching.discrete.changes
-        .switchMap(active =>
-          if active then Stream.repeatEval(watcher.awaitChangedFiles(settle)).evalMap(react) else Stream.empty
-        )
-        .concurrently(resync)
-    }
-
   /** Runs [[StartupWarmUp]] in the background for as long as the main loop does, if the frontend can draw off-screen
     * and `startup.warm_up` is on.
     */
@@ -545,52 +450,3 @@ object AppRuntime:
         onWindowFocusChanged(focused, windowFocused, cursorVisible, requestFastRender, onFocusGained)
           .handleErrorWith(error => logger.error(error)("[RUNTIME] focus callback failed"))
       )
-
-  /** Bridges the TUI's spawned Markdown preview window (issue #1113) closing via its own native close control back into
-    * application state: the window only hides itself (see `MarkdownPreviewWindow.resource`), so this callback's sole
-    * job is toggling `markdownPreviewWindowBuffer` back off rather than orphaning a dead window reference.
-    */
-  private[serenity] def markdownPreviewCloseCallbackBridge(
-    stateManager: StateUpdater,
-    dispatcher: Dispatcher[IO]
-  )(using logger: Logger[IO]): () => Unit =
-    () =>
-      dispatcher.unsafeRunAndForget(
-        stateManager
-          .updateStateValidated(closeMarkdownPreviewWindowInState)
-          .handleErrorWith(error => logger.error(error)("[RUNTIME] markdown preview close callback failed"))
-      )
-
-  private[serenity] def closeMarkdownPreviewWindowInState(state: AppState): AppState =
-    state.copy(runtime = state.runtime.copy(markdownPreviewWindowBuffer = None))
-
-  private[serenity] def describeStateForDiagnostics(state: AppState): String =
-    val viewport   = state.runtime.viewportSize.map(size => s"${size.width}x${size.height}").getOrElse("unknown")
-    val activePane = state.persisted.layout.activeEditorPaneId
-    val activeBuffer =
-      activePane.flatMap(paneId =>
-        state.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.persisted.buffers.get)
-      )
-    val activeBufferSummary = activeBuffer match
-      case Some(buffer) =>
-        val language = buffer.document.language.map(_.id).getOrElse("plaintext")
-        val cursor   = buffer.editing.cursorPositions.headOption.map(c => s"${c.line}:${c.column}").getOrElse("none")
-        List(
-          s"activeBuffer=${buffer.id}",
-          s"chars=${buffer.document.content.weight}",
-          s"lines=${buffer.document.content.lineCount}",
-          s"dirty=${buffer.document.isDirty}",
-          s"language=$language",
-          s"cursor=$cursor"
-        ).mkString(" ")
-      case None =>
-        "activeBuffer=none"
-    List(
-      s"focus=${state.persisted.focus}",
-      s"viewport=$viewport",
-      s"buffers=${state.persisted.buffers.size}",
-      s"panes=${state.persisted.layout.editorPanes.size}",
-      s"surfaces=${state.runtime.uiSurfaces.size}",
-      s"activePane=${activePane.map(_.toString).getOrElse("none")}",
-      activeBufferSummary
-    ).mkString(" ")
