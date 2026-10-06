@@ -103,7 +103,8 @@ final case class CompileSpec(
     endMarker: Option[String],
     format: ManuscriptFormat,
     language: String = "en",
-    identifier: Option[String] = None
+    identifier: Option[String] = None,
+    labels: Map[LabelKey, String] = Map.empty
 ):
   def includedSourcePaths: List[String] =
     sources.filter(_.include).map(_.path)

@@ -9,6 +9,7 @@ import com.serenity.manuscript.{
   HeadingTemplate,
   Manuscript,
   ManuscriptCompiler,
+  ManuscriptConf,
   SectionRules,
   SourceDocument
 }
@@ -19,6 +20,25 @@ object ManuscriptEpubFixture:
 
   /** Chapters only: a title page, a dedication, a scene break, a block quote and an end marker. */
   def plain: Manuscript = ManuscriptDocxFixture.manuscript()
+
+  /** The plain book, in French: the navigation document takes its headings from the language. */
+  def french: Manuscript =
+    plain.copy(meta = plain.meta.copy(language = "fr"))
+
+  val labelConf: String =
+    """language = "de"
+      |labels.contents = "Inhaltsverzeichnis"
+      |labels.start-of-content = "Zum Textbeginn"
+      |""".stripMargin
+
+  /** The plain book, in German, with two of the navigation headings overridden by its `manuscript.conf`. */
+  def labelled: Manuscript = fromConf(labelConf)
+
+  def fromConf(conf: String): Manuscript =
+    ManuscriptConf
+      .decode(conf, ManuscriptDocxFixture.spec)
+      .flatMap(ManuscriptCompiler.compile(_, List(SourceDocument.Markdown(ManuscriptDocxFixture.markdown))))
+      .fold(error => sys.error(error.message), identity)
 
   /** Two parts, a part-less chapter's worth of awkward characters, preformatted text and an underlined run. */
   def withParts: Manuscript =

@@ -5,7 +5,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 
-import com.serenity.manuscript.ManuscriptMeta
+import com.serenity.manuscript.{ManuscriptMeta, NavigationLabels}
 
 /** The package-level parts of an EPUB 3: container, package document, navigation document, stylesheet and the XHTML
   * wrapper around each content document.
@@ -49,21 +49,22 @@ private[epub] object EpubPackage:
     )
 
   def navigation(meta: ManuscriptMeta, content: EpubContent): String =
-    val landmarks = (content.front.find(_.epubType == "titlepage").map(("titlepage", "Title Page", _)) ++
-      content.body.headOption.map(("bodymatter", "Start of Content", _))).map { (kind, label, document) =>
-      s"""      <li><a epub:type="$kind" href="${document.path}">$label</a></li>"""
+    val labels = NavigationLabels.resolve(meta.language, meta.labels)
+    val landmarks = (content.front.find(_.epubType == "titlepage").map(("titlepage", labels.titlePage, _)) ++
+      content.body.headOption.map(("bodymatter", labels.startOfContent, _))).map { (kind, label, document) =>
+      s"""      <li><a epub:type="$kind" href="${document.path}">${EpubXml.line(label)}</a></li>"""
     }
     xhtml(
       language(meta),
-      "Contents",
+      labels.contents,
       "css/style.css",
       List(
         """  <nav epub:type="toc" id="toc">""",
-        "    <h1>Contents</h1>",
+        s"    <h1>${EpubXml.line(labels.contents)}</h1>",
         tocList(content.toc, "    "),
         "  </nav>",
         """  <nav epub:type="landmarks" hidden="hidden">""",
-        "    <h2>Guide</h2>",
+        s"    <h2>${EpubXml.line(labels.guide)}</h2>",
         "    <ol>"
       ) ++ landmarks ++ List("    </ol>", "  </nav>")
     )

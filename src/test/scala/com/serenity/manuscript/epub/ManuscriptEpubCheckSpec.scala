@@ -44,3 +44,11 @@ class ManuscriptEpubCheckSpec extends AnyFlatSpec with Matchers:
   it should "report no errors and no warnings for parts, awkward characters, preformatted text and an identifier" in {
     problemsIn(ManuscriptEpubFixture.withParts) shouldBe (Nil, 0, 0, 0)
   }
+
+  it should "report no errors and no warnings for a book whose navigation is in French" in {
+    problemsIn(ManuscriptEpubFixture.french) shouldBe (Nil, 0, 0, 0)
+  }
+
+  it should "report no errors and no warnings for a book whose navigation labels come from manuscript.conf" in {
+    problemsIn(ManuscriptEpubFixture.labelled) shouldBe (Nil, 0, 0, 0)
+  }
