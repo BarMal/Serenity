@@ -273,7 +273,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     finalScreen.cursor.visible shouldBe true
   }
 
-  it should "retitle the terminal with the focused document so a screen reader's title announcement fires (#1447)" in {
+  it should "retitle the terminal with the file name only, never the document text (#1447)" in {
     val file = Files.createTempFile("tui-runtime-accessibility-spec", ".md")
     Files.writeString(file, "alpha")
     val sessionRoot = Files.createTempDirectory("tui-runtime-accessibility-spec-session")
@@ -291,7 +291,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     val fiber = program.start.unsafeRunSync()
 
     eventually {
-      screenOf(harness).title should contain(s"document ${file.getFileName}: alpha")
+      screenOf(harness).title should contain(s"${file.getFileName} — Serenity")
     }
 
     harness.send(Array(ctrl('q')))
