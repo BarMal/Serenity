@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same PR supersedes the older run. Auto Squash Merge only acts on a successful run for the PR's
+# current head, so cancelling a stale one loses nothing. Master pushes are never cancelled.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   style:
     name: Scalafmt and Scalafix
