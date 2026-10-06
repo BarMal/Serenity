@@ -349,7 +349,7 @@ final private[manager] class StateManagerEffectHandlers(
           buffer.document.filePath match
             case Some(path) if buffer.document.language != language =>
               val uri  = path.toUri.toString
-              val text = buffer.document.content.collect()
+              val text = buffer.document.content
               val closeOld =
                 buffer.document.language.fold(IO.unit)(previous =>
                   lspQueue.enqueue(LspEffect.FileClosed(uri, previous))

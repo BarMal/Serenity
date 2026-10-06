@@ -2,6 +2,8 @@ package com.serenity.lsp.model
 
 import scala.annotation.tailrec
 
+import com.serenity.rope.{Balance, Rope, RopeDiff}
+
 /** Computes the minimal single-range edit between two full document snapshots, for LSP incremental sync
   * (`TextDocumentContentChangeEvent`). Only the before/after text is available at the call site (the buffer layer hands
   * `LspManager` a full new snapshot, not the edit operation itself), so the change is inferred as the smallest span
@@ -13,6 +15,53 @@ object TextChangeDiff:
   final case class Change(range: LspRange, rangeLength: Int, text: String)
 
   def diff(oldText: String, newText: String): Change =
+    val (prefixLen, suffixLen) = commonAffixes(oldText, newText)
+    val oldEnd                 = oldText.length - suffixLen
+    val newEnd                 = newText.length - suffixLen
+
+    Change(
+      range = LspRange(positionAt(oldText, prefixLen), positionAt(oldText, oldEnd)),
+      rangeLength = oldEnd - prefixLen,
+      text = newText.substring(prefixLen, newEnd)
+    )
+
+  /** The same change as [[diff]] over the texts of `before` and `after`, without building either text. [[RopeDiff]]
+    * finds a window of `after` that contains every difference by walking the subtrees the edit left shared, so only the
+    * window is read; the exact prefix and suffix are then settled inside it, and positions come from the rope's own
+    * line index. A window can be wider than the edit but never narrower (see [[RopeDiff]]), so the result is what
+    * [[diff]] reports for the whole texts.
+    */
+  def diff(before: Rope, after: Rope)(using Balance): Change =
+    val (changedStart, changedEnd) = RopeDiff.changedOffsetRange(before, after).getOrElse((after.weight, after.weight))
+    val start                      = keepingPairsTogetherBefore(after, changedStart)
+    val end                        = keepingPairsTogetherAfter(after, changedEnd)
+    val beforeEnd                  = end + before.weight - after.weight
+    val (prefixLen, suffixLen) =
+      commonAffixes(before.sliceString(start, beforeEnd), after.sliceString(start, end))
+    val oldStart = start + prefixLen
+    val oldEnd   = beforeEnd - suffixLen
+
+    Change(
+      range = LspRange(positionIn(before, oldStart), positionIn(before, oldEnd)),
+      rangeLength = oldEnd - oldStart,
+      text = after.sliceString(oldStart, end - suffixLen)
+    )
+
+  /** The window starts after the last high surrogate it would otherwise split from its low half. */
+  @tailrec
+  private def keepingPairsTogetherBefore(text: Rope, offset: Int): Int =
+    if offset > 0 && text.index(offset - 1).exists(char => Character.isHighSurrogate(char)) then
+      keepingPairsTogetherBefore(text, offset - 1)
+    else offset
+
+  @tailrec
+  private def keepingPairsTogetherAfter(text: Rope, offset: Int): Int =
+    if text.index(offset).exists(char => Character.isLowSurrogate(char)) then
+      keepingPairsTogetherAfter(text, offset + 1)
+    else offset
+
+  /** The lengths of the common prefix and suffix of the two texts, the suffix taken from what the prefix leaves. */
+  private def commonAffixes(oldText: String, newText: String): (Int, Int) =
     val maxCommon = math.min(oldText.length, newText.length)
 
     @tailrec def commonPrefixLength(len: Int): Int =
@@ -38,16 +87,11 @@ object TextChangeDiff:
       if len > 0 && Character.isLowSurrogate(oldText(oldText.length - len)) then dropLeadingLowSurrogate(len - 1)
       else len
 
-    val suffixLen = dropLeadingLowSurrogate(commonSuffixLength(0))
+    (prefixLen, dropLeadingLowSurrogate(commonSuffixLength(0)))
 
-    val oldEnd = oldText.length - suffixLen
-    val newEnd = newText.length - suffixLen
-
-    Change(
-      range = LspRange(positionAt(oldText, prefixLen), positionAt(oldText, oldEnd)),
-      rangeLength = oldEnd - prefixLen,
-      text = newText.substring(prefixLen, newEnd)
-    )
+  private def positionIn(text: Rope, offset: Int): LspPosition =
+    val (line, character) = text.offsetToLineColumn(offset)
+    LspPosition(line, character)
 
   /** LSP positions are 0-based line/character pairs; `character` counts UTF-16 code units into the line, which is
     * exactly what indexing a Scala `String` (UTF-16 `Char`s) by offset already gives.

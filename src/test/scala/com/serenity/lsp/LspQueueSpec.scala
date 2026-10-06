@@ -12,6 +12,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.testkit.RopeText
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -57,7 +58,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
         case LspEffect.FileOpened(uri, lang, text) =>
           uri should include("test-lsp")
           lang shouldBe LanguageId.Scala
-          text shouldBe "object Foo"
+          text.collect() shouldBe "object Foo"
         case other => fail(s"Expected FileOpened, got $other")
     finally
       Files.deleteIfExists(tempFile)
@@ -124,7 +125,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
       effects should have size 2
       effects.head shouldBe LspEffect.FileClosed(tempFile.toUri.toString, LanguageId.Scala)
-      effects(1) shouldBe LspEffect.FileOpened(tempFile.toUri.toString, LanguageId.Markdown, "object Baz")
+      effects(1) shouldBe LspEffect.FileOpened(tempFile.toUri.toString, LanguageId.Markdown, RopeText("object Baz"))
     finally
       Files.deleteIfExists(tempFile)
       sm.applyEvent(Quit).unsafeRunSync()
@@ -151,10 +152,10 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
           .buffers
           .values
           .find(_.document.filePath.contains(tempFile))
-          .map(_.document.content.collect())
+          .map(_.document.content)
 
       currentText shouldBe defined
-      effects.head shouldBe LspEffect.FileOpened(tempFile.toUri.toString, LanguageId.Scala, "object Change")
+      effects.head shouldBe LspEffect.FileOpened(tempFile.toUri.toString, LanguageId.Scala, RopeText("object Change"))
       effects(1) shouldBe LspEffect.FileChanged(tempFile.toUri.toString, LanguageId.Scala, currentText.get, 2)
     finally
       Files.deleteIfExists(tempFile)
@@ -196,7 +197,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
           .buffers
           .values
           .find(_.document.filePath.contains(tempFile))
-          .map(_.document.content.collect())
+          .map(_.document.content)
 
       effects should have size 2
       currentText shouldBe defined
@@ -222,7 +223,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
       sm.lspEffectSource.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync() shouldBe List(
         LspEffect.FileClosed(source.toUri.toString, LanguageId.Scala),
-        LspEffect.FileOpened(target.toUri.toString, LanguageId.Markdown, "object Saved")
+        LspEffect.FileOpened(target.toUri.toString, LanguageId.Markdown, RopeText("object Saved"))
       )
     finally
       Files.deleteIfExists(source)
