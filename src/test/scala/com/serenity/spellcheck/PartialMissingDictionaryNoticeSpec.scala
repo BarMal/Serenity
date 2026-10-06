@@ -92,19 +92,16 @@ class PartialMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
     notice should (include("fr") and include("hunspell-fr"))
   }
 
-  it should "name English when only the generic en is configured" in {
-    val notice = snapshot(List("en"), Files.createTempDirectory("serenity-fallback-en")).context.missingDictionary
-      .getOrElse(fail("expected a notice for en"))
-
-    notice should (include("hunspell-en") and not include "hunspell-en-gb")
+  it should "not name English when only the generic en is configured, as the bundled dictionary stands in" in {
+    snapshot(List("en"), Files.createTempDirectory("serenity-fallback-en")).context.missingDictionary shouldBe None
   }
 
-  it should "name every configured language that has a fallback list" in {
+  it should "name only the language that has no dictionary when en is configured beside it" in {
     val notice =
       snapshot(List("en", "fr"), Files.createTempDirectory("serenity-fallback-both")).context.missingDictionary
         .getOrElse(fail("expected a notice"))
 
-    notice should (include("hunspell-en") and include("hunspell-fr"))
+    notice should (include("hunspell-fr") and not include "hunspell-en")
   }
 
   it should "not check any word against the tiny fallback list" in {

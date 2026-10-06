@@ -199,7 +199,10 @@ object DictionaryLoader:
   ): DictionarySnapshot =
     val normalized  = config.normalized
     val sourcePaths = SpellCheckConfig.discoverDictionarySourcePaths(normalized, osDictionaryDirectories)
-    val bundled = if normalized.enabled then BundledDictionary.defaultsFor(normalized.languages, sourcePaths) else Nil
+    // Every bundled dictionary that could apply, whether or not a supplied dictionary turns out to load: the cache
+    // must keep an entry for each, and `loadedBundled` narrows them once the supplied dictionaries have loaded.
+    val bundled =
+      if normalized.enabled then BundledDictionary.defaultsFor(normalized.languages, sourcePaths, _ => false) else Nil
     // #860: a dictionary that left the config must not linger in the cache forever -- every load re-derives the
     // currently configured dictionaries and prunes anything else before (re)loading them.
     cache.retainOnly(sourcePaths.map(DictionaryCache.keyOf).toSet ++ bundled.map(DictionaryCache.keyOf))
@@ -209,15 +212,26 @@ object DictionaryLoader:
       DictionaryMergeInputs(normalized, fingerprints, bundled.map(_.name)),
       () =>
         val sourceResults  = sourcePaths.map(loadDictionary(_, cache))
-        val bundledResults = bundled.map(loadBundled(_, cache))
+        val loadedBundled  = loadedBundledDictionaries(normalized, sourcePaths.zip(sourceResults), bundled)
+        val bundledResults = loadedBundled.map(loadBundled(_, cache))
         mergeSnapshot(
           normalized,
           sourceResults ++ bundledResults,
           fingerprints,
           osDictionaryDirectories,
-          unresolvedLanguages(normalized, sourcePaths.zip(sourceResults), bundled.zip(bundledResults))
+          unresolvedLanguages(normalized, sourcePaths.zip(sourceResults), loadedBundled.zip(bundledResults))
         )
     )
+
+  private def loadedBundledDictionaries(
+    config: SpellCheckConfig,
+    sources: List[(Path, DictionaryLoadResult)],
+    candidates: List[BundledDictionary]
+  ): List[BundledDictionary] =
+    val loaded = sources.collect { case (path, result) if !result.wordList.isEmpty => path }.toSet
+    val needed =
+      BundledDictionary.defaultsFor(config.languages, sources.map(_._1), loaded.contains).toSet
+    candidates.filter(needed.contains)
 
   private def mergeSnapshot(
     normalized: SpellCheckConfig,
@@ -298,7 +312,7 @@ object DictionaryLoader:
       .collect { case (path, result) if !result.wordList.isEmpty => path }
       .map(BundledDictionary.dictionaryLanguage)
     val servedByBundled = bundled.collect {
-      case (dictionary, result) if !result.wordList.isEmpty => dictionary.languages
+      case (dictionary, result) if !result.wordList.isEmpty => dictionary.servedLanguages
     }.flatten
     Option.when(loadedNames.forall(_.exists(requested.contains))) {
       val served = loadedNames.flatten.toSet ++ servedByBundled
