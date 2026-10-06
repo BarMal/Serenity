@@ -45,9 +45,9 @@ import com.serenity.config.SpellCheckDictionaryFingerprint
   * `breaksAtHyphens` is false only for a dictionary that says `BREAK 0`: otherwise a hyphenated word is right when each
   * of its parts is.
   *
-  * `missingDictionary` (#1680) is the notice to show, once, when no word list at all resolved for the configured
-  * languages: checking prose against an empty list would flag every word, so analysis flags none and this is shown
-  * instead.
+  * `missingDictionary` (#1680) is the notice to show, once, naming each configured language with no dictionary. When no
+  * word list at all resolved, checking prose against an empty list would flag every word, so analysis flags none and
+  * this is shown instead; when some language resolved, the others are named but the resolved ones are still checked.
   */
 final case class DictionaryContext(
     words: Set[String],
