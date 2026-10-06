@@ -263,6 +263,31 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
     burstChecks(FileChangeWatcher.polling(100.millis)).unsafeRunTimed(30.seconds) shouldBe Some(List(BufferId(1)))
   }
 
+  // A native watcher can report a write after the settle window that covered it (Windows delivers last-write
+  // notifications lazily). The listing here changes twice while the real file does not, which is that late report.
+  it should "not check a file again for a late report of a write it already checked (#1885)" in {
+    val file     = ownFile("external-change-watch-late")
+    val bufferId = BufferId(1)
+    val program = for
+      listings <- Ref.of[IO, Map[Path, (Long, Long)]](Map(file -> (1L, 1L)))
+      checked  <- Ref.of[IO, List[BufferId]](Nil)
+      result <- FileChangeWatcher.pollingListings(50.millis, _ => listings.get).use { watcher =>
+        val loop = AppRuntime.externalChangeWatchLoop(
+          watcher,
+          openBufferPaths = IO.pure(Map(file -> bufferId)),
+          checkBufferForExternalChanges = id => checked.update(_ :+ id)
+        )
+        loop.compile.drain.background.surround(
+          IO.sleep(300.millis) >> listings.set(Map(file -> (2L, 2L))) >> IO.sleep(1.second) >>
+            listings.set(Map(file -> (3L, 3L))) >> IO.sleep(1.second) >> checked.get
+        )
+      }
+    yield result
+
+    try program.unsafeRunTimed(30.seconds) shouldBe Some(List(bufferId))
+    finally removeOwn(file)
+  }
+
   it should "not wake while there is nothing to watch (#1938)" in {
     val wakeups = FileChangeWatcher.create.use { watcher =>
       for
