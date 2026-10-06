@@ -17,6 +17,9 @@ jobs:
   build:
     name: Build ${{ matrix.artifact_suffix }}
     runs-on: ${{ matrix.os }}
+    # Tests plus packaging take about 25 minutes on macOS. A hung test must free the runner rather than hold it for the
+    # 6-hour default.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
