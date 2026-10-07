@@ -65,13 +65,9 @@ final case class FrontendRuntime(
     renderCursorOnly: FrontendRuntime.RenderFn,
     frameTimings: FrameTimings = FrameTimings(),
     offscreenFrames: Option[Resource[IO, FrontendRuntime.OffscreenFrames]] = None,
-<<<<<<< HEAD
+    menus: Option[FrontendRuntime.MenuHost => Resource[IO, Unit]] = None,
     applyPointerShape: PointerShape => IO[Unit] = _ => IO.unit
-)
-=======
-    menus: Option[FrontendRuntime.MenuHost => Resource[IO, Unit]] = None
 ):
 
   def menuResource(readModel: IO[Model], runAsync: IO[Unit] => Unit): Resource[IO, Unit] =
     menus.fold(Resource.unit[IO])(_(FrontendRuntime.MenuHost(readModel, runAsync)))
->>>>>>> origin/master
