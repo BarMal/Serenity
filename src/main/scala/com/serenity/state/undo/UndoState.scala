@@ -146,6 +146,10 @@ final case class UndoState(
     maxUndoDepth: Int = UndoState.DefaultMaxUndoDepth
 ):
 
+  def canUndo: Boolean = pendingGroup.isDefined || undoStack.nonEmpty
+
+  def canRedo: Boolean = redoStack.nonEmpty
+
   def flushPendingGroup: UndoState =
     pendingGroup match
       case None        => this

@@ -1,6 +1,8 @@
 # Changelog
 
-## 2026-10-06
+## [Unreleased]
+
+### 2026-10-06
 
 - Turned spell check on by default with British English (`en-GB`) as the language, bundled the LibreOffice en_GB Hunspell dictionary so it works with nothing installed, and read language codes in any casing (#2070, #2060).
 - Drew a misspelling as a red squiggle in the theme's error colour instead of the shared diagnostic background, which read as a warning or search highlight; a terminal underlines the word in the error colour (#2070).
@@ -32,7 +34,7 @@
 - Stopped silent project tasks scheduling timers and gated frame-timing recording behind its report (#2059).
 - Licensed Serenity under GPL-3.0-or-later and shipped the licence, the Monaspace font's OFL text and a generated `THIRD-PARTY-NOTICES.md` in the jar and all three app images, opened read-only by a new "Show Licence and Notices" palette command; CI fails when a runtime dependency has no notice or the file is stale (#2041).
 
-## 2026-10-05
+### 2026-10-05
 
 - Showed failed saves, save-as, session saves, opens and reloads as non-modal corner notices naming the file and the cause; errors stay until dismissed, other notices dismiss themselves, and Escape closes them (#2035).
 - Scrolled the explorer, outline, comments and diagnostics panels independently of their selection, so the wheel scrolls without moving the highlight and PageUp, PageDown, Home and End work in every list panel (#2036).
@@ -47,7 +49,7 @@
 - Advanced a buffer's content version on every edit, so a debounced outline parse of earlier text is no longer accepted after newer typing (#2011).
 - Repainted a few disjoint rects instead of one rect from the caret row to the status row (77 to 98 percent of the window), let pane headers and status chrome join the bounded repaint, and translated damage into screen rows rather than whole wrapped paragraphs (#2033, #2013).
 
-## 2026-10-04
+### 2026-10-04
 
 - Protected user writing on save: fsynced the temporary file and directory, wrote through symlinks and hardlinks instead of replacing them, and decoded non-UTF-8 text losslessly so saving writes back the original bytes and BOM (#1969).
 - Stopped the comment lens losing drafts: source-code comments stay read-only, an emptied draft deletes the comment rather than saving the word "Comment", edits are grapheme-aware, and duplicate comments resolve by index (#1969).
@@ -61,7 +63,7 @@
 - Centred a typing burst's run of keys once rather than once per key, so a fast batch no longer drains slower than it queues (#1988).
 - Re-wrapped an edited paragraph incrementally, equal to a cold wrap, and followed an edit between two ropes in O(depth + changed region) (#1972, #1968).
 
-## 2026-10-03
+### 2026-10-03
 
 - Removed all animations, the animation ticker and motion configuration, which takes out the panel, caret glide, selection and column-sweep motion added from 2026-09-18 to 2026-09-19; config files and sessions that still name the removed settings load, with each key reported once as removed and ignored (#1815, #1807).
 - Removed window translucency, rounded window corners and the Transparent theme (#1814).
@@ -74,7 +76,7 @@
 - Stopped docked panels adding about 60 ms to every 2x frame and cached panel layers repainting on unrelated edits (#1805).
 - Added AppCDS launch flags to the desktop packages, a startup warm-up after the first frame, and native Wayland toolkit selection (#1818).
 
-## 2026-10-02
+### 2026-10-02
 
 - Kept placeholders anchored as edits land around them, instead of drifting onto unrelated text (#1776).
 - Added chapter notes: hidden buffers, note keys, a ghost outline and a following notes pane (#1789).
@@ -87,7 +89,7 @@
 - Grouped Settings > Keys by where each binding applies: Global, Editor, Command Runner, Dialog, Panel and Peek (#1785).
 - Removed the panel pin selections left behind by the old per-panel Settings rows (#1794).
 
-## 2026-10-01
+### 2026-10-01
 
 - Added a fuzzy "Go to File" finder on Ctrl+E (Cmd+E on macOS) over the files under the docked explorer's root, skipping hidden directories and build output and capped at 20,000 files (#1783).
 - Added a generic list picker with a query, filtering, previews and a dismiss command, and moved the session pickers, the theme chooser (live preview, Escape restores) and file search, now "Search in Open Files", onto it (#1768, #1779, #1781, #1782).
@@ -109,16 +111,16 @@
 - Kept docked panels when restoring a session, which previously dropped them and fell back to the pre-restore state (#1753).
 - Added a shared set of widget interaction models and drove the context menu from the keyboard with them (#1757).
 
-## 2026-09-30
+### 2026-09-30
 
 - Added count-driven columns for the e-reader layout, with live stepper settings (`columnCount` unset means Auto, as before) (#1752).
 - Wrapped vertical navigation at the column width in multi-column layout, where Up and Down had wrapped at the full editor width and moved the cursor incorrectly (#1750).
 
-## 2026-09-29
+### 2026-09-29
 
 - Added multi-line drop cap paragraphs, rendering a paragraph's first character as a large glyph spanning several lines, with a `paragraph-drop-cap` command (#1749).
 
-## 2026-09-28
+### 2026-09-28
 
 - Added word goals: a target word count for the active document, shown as progress in the status line, for example "342 / 1000 words (34%)" (#1748).
 - Added darlings: cut a passage to a parking area instead of deleting it, and restore it later (#1747).
@@ -126,27 +128,27 @@
 - Added live chapter-heading renumbering for Markdown prose: a heading shaped like "Chapter <number>", optionally followed by ": Title", keeps its number in sequence as chapters are added, removed or reordered (#1745).
 - Added smart punctuation autoformatting while typing (`editor.smart_punctuation`, default off): straight quotes become curly quotes, `--` an em dash and `...` an ellipsis (#1744).
 
-## 2026-09-27
+### 2026-09-27
 
 - Stopped the spell checker stat-ing every candidate dictionary file on each keystroke, caching dictionary fingerprints and invalidating them through the file watcher (#1736).
 - Stored rich-text documents as a balanced tree keyed by paragraph boundaries, so a range edit rebuilds only the paragraphs it changes instead of the whole list (#1735).
 
-## 2026-09-25
+### 2026-09-25
 
 - Saved command runner recents with each session, so commands used in one session no longer leak into another (#1720).
 - Kept a buffer open when its close-save fails, where choosing Save in the close prompt closed it whatever the outcome and lost the edits on a failed write or an external-change conflict (#1718).
 
-## 2026-09-24
+### 2026-09-24
 
 - Ran file saves, save-as, force-save, reloads and opens on a per-file lane with versioned results, and fixed the save, open and restore data-loss bugs it exposed (#1711).
 - Kept theme chooser, theme creator and file search from dropping out of the command palette's recents when run from it (#1715).
 - Closed background tabs by id from the close affordance, with mouse hit-testing made a pure function of the event and state (#1703).
 
-## 2026-09-23
+### 2026-09-23
 
 - Failed fast when the terminal shell cannot build a real system terminal, instead of silently falling back to an unusable dumb terminal that left a blank screen and echoed keystrokes as control characters, as happened on Termux with OpenJDK 25 (#1668).
 
-## 2026-09-21
+### 2026-09-21
 
 - Added LSP Find References and Rename Symbol (#1620).
 - Added a keyboard equivalent for tab drag-to-reorder, bound to Ctrl+Shift+PageUp and Ctrl+Shift+PageDown (#1618).
@@ -157,7 +159,7 @@
 - Added a typographic spacing scale for UI chrome, gave GUI chrome spacing a surface-aware default so content no longer sits flush against every edge, and insetted overlay and docked-panel glyphs from their borders (#1614, #1621, #1615, #1617).
 - Added a preset diff-toggle review surface with a reusable checkbox row for settings, and made the command-runner cursor gap and settings rows surface-aware (#1629, #1630, #1628).
 
-## 2026-09-20
+### 2026-09-20
 
 - Added tabs: click to switch buffer, a close affordance per tab, drag to reorder, overflow handling and a new-tab affordance (#1601, #1602, #1608, #1607, #1609).
 - Rendered N columns side by side for the e-reader layout, with text flowing from column to column and the cursor and selection in the column that holds them (#1599).
@@ -167,34 +169,34 @@
 - Discovered OS-installed Hunspell dictionaries, such as `hunspell-en-gb`, for zero-config spell check when `dictionary_paths` is empty (#1600).
 - Added an "add to dictionary" action for the word flagged at the cursor, so one false positive no longer needs hand-editing the Accepted Words setting (#1596).
 
-## 2026-09-19
+### 2026-09-19
 
 - Added caret glide motion and a selection grow and settle animation (#1580, #1581).
 
-## 2026-09-18
+### 2026-09-18
 
 - Added panel scale-in and scale-out motion, with an easing and spring library and general tween infrastructure behind it (#1578, #1575).
 - Added column mode (e-reader layout): a global toggle with target width and gap settings, viewport math, cursor placement, navigation, column rendering and a sweep animation (#1572, #1573).
 
-## 2026-09-17
+### 2026-09-17
 
 - Added the tab strip: geometry, composition, painting and hit-testing (#1558).
 - Fixed comment lens, diagnostic highlighting, spell check, LSP cache, scroll, accessibility, command-runner and TUI mouse bugs; scrolling had assumed every pane fits the same number of rows regardless of its font (#1555).
 - Retired the title-bar window sitter decoration in favour of docking its typing-reactive behaviour onto the companion sprite panel (#1556).
 
-## 2026-09-16
+### 2026-09-16
 
 - Made line numbers configurable by side (left, right or both) with margins and padding in cells, independent of interface density, and scaled prose font size (#1544).
 - Made the interaction model cohesive: one context, one status line, settings grouped by task and the palette aware of context (#1546).
 - Fixed the terminal read loop discarding end-of-input and expiry results while draining buffered bytes, which could drop characters typed in a burst on kitty (#1554).
 
-## 2026-09-14
+### 2026-09-14
 
 - Added Alt+Backspace as an alternate for delete word backward (#1320).
 - Added a return-to-start-page command (#6).
 - Made the paint worker thread a daemon (#1543).
 
-## 2026-09-13
+### 2026-09-13
 
 - Added fuzzy subsequence search and most-recently-used ranking to the command palette, opened it to recents, and gave it an explicit no-results state (#1492, #1493).
 - Made semantic tokens the only syntax highlighting, on a new semantic tokens protocol layer (#1505, #1520).
@@ -210,32 +212,32 @@
 - Made `UndoState.boundedPush` O(1) amortised at steady state, and scoped terminal diff scans to the rows that changed (#1538, #1509).
 - Preserved DOS attributes on Windows when saving (#1519).
 
-## 2026-09-12
+### 2026-09-12
 
 - Copied only POSIX permissions in the atomic file writer rather than the whole file's attributes (#1502).
 - Reported DOCX and ODT decode failures through the return type instead of throwing (#1495).
 
-## 2026-09-11
+### 2026-09-11
 
 - Implemented free-form `COMPOUNDFLAG` compounding and `CHECKCOMPOUND*`, `CHECKCOMPOUNDPATTERN` and `ONLYINCOMPOUND` validation in the spell checker (#1437, #1438).
 - Dropped legacy config-key compatibility (#1479).
 
-## 2026-09-10
+### 2026-09-10
 
 - Docked pinned panels in the workspace tree as the sole source of truth, and persisted the workspace tree and dock topology in UI presets (#1399, #1398).
 
-## 2026-09-09
+### 2026-09-09
 
 - Made pane splitting and closing reachable as user features, closing a pane undoable, and panel pin and unpin undoable (#1393, #1394, #1395, #1396).
 - Added an explicit modal dialog layer outside the UI surfaces (#1397).
 
-## 2026-09-07
+### 2026-09-07
 
 - Fixed the editor pane zooming out and shedding ghost glyphs a little more on every Up or Down keystroke in the command runner, by blitting whole-surface layer buffers 1:1 instead of through the cell grid and device-scale transform (#1352).
 - Fixed arrows and kitty-style Backspace splitting into Escape plus literal characters on non-tty input such as git bash on Windows without winpty, by timing the lone-ESC decision with a Cats Effect timer rather than JLine's timed read, and translated JLine's Windows `0xFFFF` Backspace quirk at the read boundary (#1352).
 - Fixed the GUI hanging after the in-app Quit, which exited only through the window's close control, and stopped late resize and focus callbacks during shutdown being logged as crashes (#1352).
 
-## 2026-09-06
+### 2026-09-06
 
 - Added the panel framework: registration, a palette toggle, corner-stack layout, and command and keyboard resize (#1317).
 - Added a mode and tab-list corner widget with a glyph indicator and tab switcher (#1312).
@@ -245,7 +247,7 @@
 - Fixed the TUI open-file dialog hanging and being invisible when opened from the start page (#1321).
 - Told the LSP server to stop when we stop waiting for it (#1315).
 
-## 2026-09-05
+### 2026-09-05
 
 - Added a Typewriter Scrolling setting (`display.typewriter_scrolling`, default off, plus a Text Display settings row and command-palette toggle): turning it on keeps the cursor's line at its centred row even while typing at the document's actual end, padding past it with blank rows, instead of falling back to the existing "show as much real content as fits" clamp. The clamp was silently overriding vertical centring during ordinary end-of-document typing -- the case #1204 was meant to cover -- and the mode had no config, command, or settings entry at all (#1293).
 - Stopped a click on the floating cursor info bar from placing the caret in the hidden text behind it: the bar is derived per frame rather than stored, so the guard that keeps clicks out of a floating surface never saw it, and the bar sits exactly where the reader is working.
@@ -254,7 +256,7 @@
 - Kept screen cells and buffer columns apart when grouping an animated run by colour, so a colour group after a wide glyph starts on the right cell and a surrogate pair is never split across two groups.
 - Kept the terminal's cursor on the editing position in breathe mode, instead of parking it at the bottom of the screen on every frame that was not an idle cursor tick.
 
-## 2026-09-04
+### 2026-09-04
 
 - Property-tested the config format over generated settings, and fixed what it found: an explicit text-scale mode of "off" being overridden to "manual" by the multiplier, blur radius and background style never being written at all, and percentage settings coming back a floating-point hair away from what was saved.
 - Applied broader config settings before the narrower ones that refine them, rather than in whatever order the key names happened to sort, which is what kept a motion preset from wiping the per-family settings saved alongside it.
@@ -277,7 +279,7 @@
 - Added a cell-level TUI behaviour suite driving real terminal sessions end to end (startup, editing, files, settings, unicode width, redraw, wrapped navigation, typing latency).
 - Ran test suites serially, since the renderer's previous-frame state is keyed by pane id alone and concurrent painting suites overwrote each other's frame history.
 
-## 2026-07-06
+### 2026-07-06
 
 - Added a storage-location classifier that recognizes local paths, local `file:` URIs, and remote URI-backed document locations.
 - Documented that remote storage is discoverable but not yet openable or saveable through the current local file IO.
