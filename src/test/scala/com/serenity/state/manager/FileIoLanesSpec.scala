@@ -8,7 +8,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.command.{Command, CommandCategory, CommandIntent, FileIntent, SessionIntent}
 import com.serenity.config.PreferredWindowSize
-import com.serenity.io.{AtomicFileWriteException, FileDialog, FileManager}
+import com.serenity.io.{AtomicFileWriteException, FileDialog, FileManager, LocalDocumentStorageProvider, SettledClock}
 import com.serenity.keystroke.events.{InsertChar, SaveFile}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
@@ -68,7 +68,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
       gates: Ref[IO, List[Deferred[IO, Unit]]],
       log: Ref[IO, Vector[String]],
       refusedPath: Path
-  ) extends FileManager:
+  ) extends FileManager(LocalDocumentStorageProvider(clock = SettledClock.aMinuteAhead)):
 
     override def saveBuffer(buffer: Buffer): IO[Buffer] =
       if buffer.document.filePath.contains(refusedPath) then
@@ -169,7 +169,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
   private def file(directory: Path, name: String, content: String): Path =
     Files.writeString(directory.resolve(name), content)
 
-  private def diskRevision(path: Path) = new FileManager().currentRevision(path).unsafeRunSync()
+  private def diskRevision(path: Path) = SettledClock.fileManager.currentRevision(path).unsafeRunSync()
 
   "A save" should "keep text typed while it is writing, and leave the buffer dirty (#1671)" in {
     val f  = fixture()
