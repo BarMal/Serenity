@@ -1,21 +1,30 @@
 name: Cross-OS Tests
 
-# Runs the test suite on Windows and macOS for every pull request and master push. Kept out of the CI workflow while
-# known Windows/macOS failures remain (#2016), because Auto Squash Merge merges on CI's overall conclusion; it moves
-# into CI once both entries are green.
+# Runs the test suite on Windows and macOS for master pushes, nightly, and on demand. It does not run on pull requests:
+# macOS runners are scarce, and Auto Squash Merge waits on every check, so a queued or hung macOS job stalled every PR
+# for hours. A Windows/macOS regression shows up on the next master push or nightly run and is fixed forward. Kept out
+# of the CI workflow while known Windows/macOS failures remain (#2016).
 on:
   push:
     branches:
       - master
-  pull_request:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+# Only the newest master commit matters here; a newer push cancels the older run so runs don't queue behind each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-cross-os:
     name: Test (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -41,7 +50,8 @@ jobs:
 
       - name: Run tests
         shell: bash
-        run: sbt -v clean test
+        # Fails with a thread dump after 40 minutes instead of holding the runner for 6 hours on a hang.
+        run: bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test
 
       # The console log of a Windows/macOS run can drop the assertion text (see build.sbt's Test/testOptions), so the
       # JUnit XML reports are printed and uploaded as well, as Desktop Publish does.

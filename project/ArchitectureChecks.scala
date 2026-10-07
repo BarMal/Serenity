@@ -76,9 +76,18 @@ object ArchitectureChecks {
     // shell, and the future paginator must not measure through AWT.
     ImportRule(
       "com/serenity/manuscript",
-      Seq("java.awt", "org.apache.pdfbox", "cats.effect", "com.serenity.state"),
-      "the manuscript package is the pure export core: take sources and settings as values, and leave IO, AWT and " +
-        "the editor state to the shell",
+      Seq("java.awt", "org.apache.pdfbox", "org.apache.fontbox", "cats.effect", "com.serenity.state"),
+      "the manuscript package is the pure export core: take sources and settings as values, and leave IO, AWT, " +
+        "font parsing and the editor state to the shell",
+      mainOnly = true
+    ),
+    // S5: the exporting package is the effectful edge of that core (font loading, later the PDF painter); it reads the
+    // manuscript model but never the editor state, and never AWT, so measurement and painting stay on one font file.
+    ImportRule(
+      "com/serenity/exporting/",
+      Seq("java.awt", "com.serenity.state"),
+      "the exporting package measures and paints from the bundled font files through FontBox/PDFBox: no AWT, and the " +
+        "editor state reaches it only as values",
       mainOnly = true
     ),
     ImportRule(
