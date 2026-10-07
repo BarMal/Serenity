@@ -5,7 +5,7 @@ import cats.effect.{Deferred, Fiber, IO, Ref, Resource}
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
-import com.serenity.lsp.model.{SemanticToken, SemanticTokensLegend}
+import com.serenity.lsp.model.{SemanticToken, SemanticTokenData, SemanticTokensLegend}
 import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.Stream
@@ -184,13 +184,15 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
             _ = eventsOnAnswer shouldBe List(
               LspEvent.LspSemanticTokensReceived(
                 uri,
-                List(
-                  SemanticToken(
-                    line = 0,
-                    startCharacter = 0,
-                    length = 3,
-                    tokenType = "keyword",
-                    tokenModifiers = Set.empty
+                SemanticTokenData.from(
+                  List(
+                    SemanticToken(
+                      line = 0,
+                      startCharacter = 0,
+                      length = 3,
+                      tokenType = "keyword",
+                      tokenModifiers = Set.empty
+                    )
                   )
                 )
               )
