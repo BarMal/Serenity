@@ -80,6 +80,17 @@ object StateManagerTestFacade:
       )
     yield stateManager
 
+  /** A fixture sets a buffer's `content` directly; this stamps the new text with the next `contentVersion`, as an edit
+    * would, so the commit's content-version invariant still guards every real write.
+    */
+  private def withVersionsAdvancedOver(before: AppState)(after: AppState): AppState =
+    after.copy(persisted = after.persisted.copy(buffers = after.persisted.buffers.map { (id, buffer) =>
+      id -> before.persisted.buffers
+        .get(id)
+        .filter(_.document.content ne buffer.document.content)
+        .fold(buffer)(buffer.succeeding)
+    }))
+
   extension (stateManager: StateManager)
 
     /** Commits through validation like any other write, but fails instead of silently keeping the previous state, so a
@@ -88,8 +99,9 @@ object StateManagerTestFacade:
       */
     def updateState(update: AppState => AppState): IO[Unit] =
       stateManager.getCurrentState.flatMap { current =>
-        AppStateValidation.validationErrors(update(current)) match
-          case Nil => stateManager.updateStateValidated(update)
+        val seed = update.andThen(withVersionsAdvancedOver(current))
+        AppStateValidation.validationErrors(seed(current)) match
+          case Nil => stateManager.updateStateValidated(seed)
           case errors =>
             IO.raiseError(new IllegalArgumentException(s"updateState would commit an invalid state: $errors"))
       }
@@ -216,7 +228,9 @@ object StateManagerTestFacade:
     def createNewEmptyBuffer(using Balance): IO[BufferId] =
       stateManager.getCurrentState.flatMap { state =>
         val (newState, bufferId) = EditorState.createNewEmptyBuffer(state)
-        stateManager.updateStateValidated(_ => newState).as(bufferId)
+        val idAdvanced           = state.copy(runtime = newState.runtime)
+        stateManager.updateStateValidated(_ => idAdvanced) >>
+          stateManager.updateStateValidated(_ => newState).as(bufferId)
       }
 
     /** Replaces `bufferId`'s content wholesale, for specs that need arbitrary starting content rather than driving it
