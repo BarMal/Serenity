@@ -248,7 +248,8 @@ lazy val root = (project in file("."))
       // Master CI's Test job has hung for 50+ minutes with no output and no way to tell which test was stuck: the
       // console reporter prints nothing per test, and nothing at all for a run that never ends. The slowpoke
       // detector raises an alert naming any test still running after 120 s, then every 60 s; HangReporter prints
-      // those alerts straight to stdout together with the stacks of the threads running suites.
+      // those alerts straight to stdout together with the stacks of the threads running suites, the IO runtime's
+      // compute and blocker threads, and any thread blocked, holding a lock or waiting on a class/lazy-val initialiser.
       Tests.Argument(TestFrameworks.ScalaTest, "-W", "120", "60"),
       Tests.Argument(TestFrameworks.ScalaTest, "-C", "com.serenity.testkit.HangReporter")
     ),
