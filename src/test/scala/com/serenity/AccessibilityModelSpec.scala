@@ -512,5 +512,5 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
 
     tabBar.map(_.role) shouldBe Some(AccessibilityRole.Panel)
     tabBar.map(_.name) shouldBe Some("Tab bar")
-    tabBar.flatMap(_.value) shouldBe Some("Buffer 0 (1 of 3)")
+    tabBar.flatMap(_.value).map(_.text) shouldBe Some("Buffer 0 (1 of 3)")
   }

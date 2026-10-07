@@ -90,6 +90,14 @@ object AppEventReducer:
         val command = CommandKeyBindings.runnable(registry, commandId, state.commandRunnerContext)
         ReducerResult(state, command.map(AppEffect.ExecuteCommand(_)).toList)
 
+      case ActivateBuffer(bufferId) =>
+        ReducerResult.noEffects(
+          if state.persisted.buffers.contains(bufferId) then EditorState.switchToBuffer(state, bufferId) else state
+        )
+
+      case OpenRecentPath(path) =>
+        ReducerResult.withEffect(state, AppEffect.ExecuteCommand(FileFinderCommands.openFile(path)))
+
       case FocusInDirection(direction) =>
         ReducerResult.noEffects(DirectionalFocus.moved(state, direction))
 

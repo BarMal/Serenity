@@ -208,6 +208,11 @@ final case class UndoState(
 
   def redoStack: Vector[HistoryEntry] = merged(_.redo)
 
+  /** An edit still coalescing into an open run already has its step on the stack, so this covers it. */
+  def canUndo: Boolean = layout.undo.nonEmpty || buffers.values.exists(_.stacks.undo.nonEmpty)
+
+  def canRedo: Boolean = layout.redo.nonEmpty || buffers.values.exists(_.stacks.redo.nonEmpty)
+
   def pushUndo(entry: HistoryEntry, clearRedo: Boolean = true): UndoState =
     val step = HistoryStep(recordedSteps, entry)
     withStacksFor(entry)(stacks => (if clearRedo then stacks.withoutRedo else stacks).pushedUndo(step, maxUndoDepth))

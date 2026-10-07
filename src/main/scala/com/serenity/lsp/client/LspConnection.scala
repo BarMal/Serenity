@@ -125,8 +125,10 @@ class LspConnection private (
         LspProtocol.parseDiagnostics(json) match
           case Some((uri, diags)) => onDiagnostics(uri, diags)
           case None               => logger.warn("[LSP] Could not parse publishDiagnostics")
-      case Some("window/showMessage" | "window/logMessage") =>
+      case Some("window/showMessage") =>
         LspClientHooks.parseMessage(params).traverse_(hooks.onMessage)
+      case Some("window/logMessage") =>
+        LspClientHooks.parseMessage(params).map(_.copy(shownToUser = false)).traverse_(hooks.onMessage)
       case Some("$/progress") =>
         LspClientHooks.parseProgress(params).traverse_(hooks.onProgress)
       case Some(method) =>
@@ -154,10 +156,20 @@ class LspConnection private (
         // Applying an edit waits on the application, so it must not hold up the reader that delivers every response.
         applyEdit(id, params).start.void
       case "window/showMessageRequest" =>
-        hooksRef.get.flatMap(hooks => LspClientHooks.parseMessage(params).traverse_(hooks.onMessage).attempt.void) >>
-          answerServerRequest(LspServerRequests.reply(id, method, params))
+        // The user may take a while to answer, and every response is read by the same reader.
+        showMessageRequest(id, params).start.void
       case _ =>
         answerServerRequest(LspServerRequests.reply(id, method, params))
+
+  private def showMessageRequest(id: ServerRequestId, params: Json): IO[Unit] =
+    val chosen = LspClientHooks.parseMessageRequest(params).fold(IO.pure(Option.empty[Json])) { question =>
+      hooksRef.get
+        .flatMap(_.onMessageRequest(question))
+        .timeoutTo(requestTimeout, IO.pure(None))
+        .handleError(_ => None)
+        .map(_.flatMap(question.actions.lift).map(_.item))
+    }
+    chosen.flatMap(item => answerServerRequest(LspProtocol.response(id, item.getOrElse(Json.Null))))
 
   private def applyEdit(id: ServerRequestId, params: Json): IO[Unit] =
     val outcome = LspClientHooks.parseApplyEdit(params) match
@@ -336,15 +348,23 @@ object LspConnection:
         case ConnectionFibers(writerFiber, readerFiber) =>
           askServerToExit(conn) >>
             conn.closeQueues >>
-            writerFiber.join.void.timeoutTo(OutgoingFlushTimeout, IO.unit) >>
-            closeQuietly(out) >>
-            endServer >>
+            writerFiber.join.void
+              .as(true)
+              .timeoutTo(OutgoingFlushTimeout, IO.pure(false))
+              .flatMap(closeStreamsAndEnd(out, endServer)) >>
             closeQuietly(in) >>
             writerFiber.cancel >>
             readerFiber.cancel
       }
       _ <- Resource.eval(initHandshake(conn, rootUri, logger))
     yield conn
+
+  /** A writer still running after the flush wait is stuck in a write to a full pipe, and holds the stream's lock, so
+    * closing `out` would wait on it. Only the server dying frees it, so the server is ended first in that case.
+    */
+  private def closeStreamsAndEnd(out: AutoCloseable, endServer: IO[Unit])(writerFlushed: Boolean): IO[Unit] =
+    if writerFlushed then closeQuietly(out) >> endServer
+    else endServer >> closeQuietly(out)
 
   def apply(
     config: LspServerConfig,
