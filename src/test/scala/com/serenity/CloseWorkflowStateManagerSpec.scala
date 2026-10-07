@@ -9,10 +9,10 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.state.manager.{QuitOutcome, StateManager}
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{AwaitCondition, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -477,5 +477,52 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     updatedState.topModal shouldBe None
     updatedState.persisted.buffers should not contain key(bufferId)
     stateManager.runtimeLifecycle.awaitQuit.timeout(1.second).unsafeRunSync()
+  }
+
+  private def dirtyFirstBuffer(stateManager: StateManager): Unit =
+    val bufferId = BufferId(0)
+    stateManager
+      .updateState { state =>
+        val buffer = state.persisted
+          .buffers(bufferId)
+          .copy(document = state.persisted.buffers(bufferId).document.copy(isDirty = true))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
+      }
+      .unsafeRunSync()
+
+  private def awaitClosePrompt(stateManager: StateManager): IO[Unit] =
+    AwaitCondition
+      .awaitValue(stateManager.getCurrentState)(state => ClosePromptFixtures.closePromptShown(state).isDefined)
+      .void
+
+  "An orderly quit request" should "complete at once when nothing is unsaved" in {
+    val stateManager = createStateManager()
+
+    stateManager.runtimeLifecycle.requestQuit.timeout(5.seconds).unsafeRunSync() shouldBe QuitOutcome.Completed
+    stateManager.runtimeLifecycle.awaitQuit.timeout(10.seconds).unsafeRunSync()
+  }
+
+  it should "complete once the unsaved-changes prompt is answered with Close Anyway" in {
+    val stateManager = createStateManager()
+    dirtyFirstBuffer(stateManager)
+
+    val outcome = stateManager.runtimeLifecycle.requestQuit.start.flatMap { fiber =>
+      awaitClosePrompt(stateManager) >>
+        stateManager.applyEvent(TabKey) >> stateManager.applyEvent(Enter) >> fiber.joinWithNever
+    }
+
+    outcome.timeout(10.seconds).unsafeRunSync() shouldBe QuitOutcome.Completed
+  }
+
+  it should "be abandoned when the unsaved-changes prompt is cancelled" in {
+    val stateManager = createStateManager()
+    dirtyFirstBuffer(stateManager)
+
+    val outcome = stateManager.runtimeLifecycle.requestQuit.start.flatMap { fiber =>
+      awaitClosePrompt(stateManager) >> stateManager.applyEvent(Escape) >> fiber.joinWithNever
+    }
+
+    outcome.timeout(10.seconds).unsafeRunSync() shouldBe QuitOutcome.Abandoned
+    stateManager.runtimeLifecycle.awaitQuit.timeout(300.millis).attempt.unsafeRunSync().isLeft shouldBe true
   }
 end CloseWorkflowStateManagerSpec

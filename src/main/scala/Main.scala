@@ -2,7 +2,7 @@ import java.nio.file.Path
 import java.time.Instant
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, DurationInt}
 
 import cats.effect.*
 import cats.effect.unsafe.IORuntimeConfig
@@ -59,20 +59,25 @@ object Main extends IOApp:
           IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
         case Right(options) if options.showVersion =>
           IO(println(s"Serenity ${BuildInfo.version} (${BuildInfo.commit})")).as(ExitCode.Success)
-        case Right(options) => launchUntilSettled(options, toolkit)
+        case Right(options) => launchUntilSettled(options, toolkit, MacDesktopIntegration())
     }
 
   /** A restart ends the running editor and starts the next one in this same JVM, so the terminal and the toolkit choice
     * carry straight over; the single-instance lock is released and taken again by the next launch. It drops the
     * one-shot resets.
     */
-  private def launchUntilSettled(options: LaunchOptions, toolkit: ToolkitSelection.Decision): IO[ExitCode] =
+  private def launchUntilSettled(
+    options: LaunchOptions,
+    toolkit: ToolkitSelection.Decision,
+    desktop: DesktopEvents
+  ): IO[ExitCode] =
     Ref.of[IO, Option[RestartMode]](None).flatMap { restartRequested =>
-      launch(options, toolkit, mode => restartRequested.set(Some(mode))) >> restartRequested.get.flatMap {
+      launch(options, toolkit, desktop, mode => restartRequested.set(Some(mode))) >> restartRequested.get.flatMap {
         case Some(mode) =>
           launchUntilSettled(
             options.copy(safeMode = mode == RestartMode.InSafeMode, resetConfig = false, resetSession = false),
-            toolkit
+            toolkit,
+            desktop
           )
         case None => IO.pure(ExitCode.Success)
       }
@@ -81,6 +86,7 @@ object Main extends IOApp:
   private def launch(
     launchOptionsForLogging: LaunchOptions,
     toolkit: ToolkitSelection.Decision,
+    desktop: DesktopEvents,
     requestRestart: RestartMode => IO[Unit]
   ): IO[ExitCode] =
     // #1215/#1669: must run before the `given logger` below, which triggers logback's one-time console-appender setup
@@ -99,14 +105,24 @@ object Main extends IOApp:
       _         <- logger.info(s"[TOOLKIT] ${toolkit.choice} (${toolkit.reason})")
       _         <- Java2DPipeline.installSafeDefaults()
       _         <- IO(CrashReporter.install())
-      requested <- IO(launchOptionsForLogging.openPath.map(_.toAbsolutePath.normalize).toList)
+      requested <- IO(launchOptionsForLogging.openPaths.map(_.toAbsolutePath.normalize))
       // #2023: settled before anything reads or writes the session, which only one process may own.
       instances = SingleInstance.forConfigDirectory(SessionManager.defaultSessionRoot(), logger)
-      _ <- SingleInstance.claim(instances, requested, logger).use {
-        case LaunchRole.Forwarded => reportForwarded(requested)
-        case role                 => runAs(role, launchOptionsForLogging, requestRestart)
+      // macOS hands Finder opens and Cmd-Q to the desktop rather than argv, and the handlers must be in place before
+      // the claim so an open that launched this process is not lost. A terminal launch never touches the desktop.
+      gui = !LaunchOptions.resolveTuiMode(launchOptionsForLogging)
+      _ <- (for
+        hooks <- DesktopHooks.install(desktop, gui)
+        role  <- SingleInstance.claim(instances, requested, logger)
+      yield (hooks, role)).use {
+        case (hooks, LaunchRole.Forwarded) =>
+          DesktopHooks.forwardQueued(hooks, instances.forward, DesktopGrace) >> reportForwarded(requested)
+        case (hooks, role) => runAs(role, launchOptionsForLogging, requestRestart, hooks)
       }
     yield ExitCode.Success
+
+  /** How long a launch that stepped aside waits for the desktop to deliver the file it was launched for. */
+  private val DesktopGrace = 500.millis
 
   private def reportForwarded(paths: List[Path])(using logger: Logger[IO]): IO[Unit] =
     val message =
@@ -117,7 +133,12 @@ object Main extends IOApp:
   /** Everything here follows the instance claim: a launch that handed its files to the running one has already
     * returned, so it records no start attempt and moves no file.
     */
-  private def runAs(role: LaunchRole, launchOptions: LaunchOptions, requestRestart: RestartMode => IO[Unit])(using
+  private def runAs(
+    role: LaunchRole,
+    launchOptions: LaunchOptions,
+    requestRestart: RestartMode => IO[Unit],
+    hooks: DesktopHooks
+  )(using
     logger: Logger[IO]
   ): IO[Unit] =
     for
@@ -156,7 +177,11 @@ object Main extends IOApp:
       instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten
       notice         = plan.noticeWith(Option((configNotice.toList ++ instanceNotice).mkString(" ")).filter(_.nonEmpty))
       _ <- safeModeSessionRoot(plan).use { scratchRoot =>
-        val session = SessionChoice(scratchRoot.orElse(role.sessionRootOverride), forwardedOpensOf(role))
+        val session = SessionChoice(
+          scratchRoot.orElse(role.sessionRootOverride),
+          launchOpens(launchOptions, hooks.opensFor(role)),
+          hooks.quitRequests
+        )
         if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, launchOptions, notice, startup, session)
         else runGui(appConfig, launchOptions, notice, startup, session)
       }
@@ -194,12 +219,15 @@ object Main extends IOApp:
     yield (config, session)
 
   /** Which session this process may write, and the files later launches hand it. */
-  final private case class SessionChoice(rootOverride: Option[Path], forwardedOpens: Stream[IO, List[Path]])
+  final private case class SessionChoice(
+      rootOverride: Option[Path],
+      forwardedOpens: Stream[IO, List[Path]],
+      quitRequests: Stream[IO, QuitResponse]
+  )
 
-  private def forwardedOpensOf(role: LaunchRole): Stream[IO, List[Path]] =
-    role match
-      case LaunchRole.Primary(forwardedOpens) => forwardedOpens
-      case _                                  => Stream.empty
+  /** Only the first path is opened as part of startup; the others are opened as the editor would a forwarded launch. */
+  private def launchOpens(options: LaunchOptions, later: Stream[IO, List[Path]]): Stream[IO, List[Path]] =
+    Stream.emit(options.extraOpenPaths).filter(_.nonEmpty) ++ later
 
   /** The TUI launch path (issue #1112): a real system terminal via [[TerminalShell.resource]], restored on every exit
     * path by that `Resource`'s release. This branch never references `SwingWindow` -- the terminal capability bundle
@@ -396,7 +424,8 @@ object Main extends IOApp:
                 registerFocusCallback = cb => swingWin.setOnFocusChange(cb),
                 openPath = launchOptions.openPath,
                 frontend = GuiFrontend,
-                forwardedOpens = session.forwardedOpens.evalTap(_ => IO(swingWin.bringToFront()))
+                forwardedOpens = session.forwardedOpens.evalTap(_ => IO(swingWin.bringToFront())),
+                quitRequests = session.quitRequests
               )
             }
         }

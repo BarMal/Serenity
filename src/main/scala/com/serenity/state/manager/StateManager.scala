@@ -58,6 +58,9 @@ trait StateEngine extends StateReader, StateUpdater, EventApplier:
   def applyEventBatch[A](inputs: List[A], steps: EventBatchSteps[A]): IO[EventBatch[A]] =
     EventBatch.applying(inputs, steps, getModel, applyEvent)
 
+enum QuitOutcome:
+  case Completed, Abandoned
+
 /** Owns application shutdown and periodic session persistence.
   *
   * A capability record per #1017 -- see `FileService` below for the shape rationale. `StateManager` holds one of these
@@ -68,6 +71,10 @@ trait StateEngine extends StateReader, StateUpdater, EventApplier:
   */
 final case class RuntimeLifecycle(
     awaitQuit: IO[Unit],
+    /** Runs the same orderly quit as the quit hotkey -- unsaved-changes prompt included -- and answers once it has
+      * either finished or been called off, so a caller outside the editor knows which.
+      */
+    requestQuit: IO[QuitOutcome],
     forceQuit: IO[Unit],
     intervalSaveStream: Stream[IO, Unit],
     /** Completes once lane work accepted so far (config/preset writes, searches) and the results it hands back have

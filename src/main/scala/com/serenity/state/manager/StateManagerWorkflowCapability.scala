@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import java.nio.file.{Files, Path}
 
-import cats.effect.{Deferred, IO}
+import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
 import com.serenity.command.SessionCommands
 import com.serenity.io.{FileManager, FileUtils, ProjectFileWalker}
@@ -76,6 +76,21 @@ final private[manager] class StateManagerWorkflowCapability(
       filePersistence.settlePendingSaves(close.closeTargets(scope, state)) >>
         modelCommit.currentState.flatMap(current => commitClose(current, close.begun(scope, current)))
 
+  /** The quit a request from outside the editor waits on; completed by whichever close step calls the quit off. */
+  private val quitWatch = Ref.unsafe[IO, Option[Deferred[IO, Unit]]](None)
+
+  private[manager] def requestQuit: IO[QuitOutcome] =
+    Deferred[IO, Unit]
+      .flatMap { abandoned =>
+        quitWatch.set(Some(abandoned)) >>
+          modelCommit.currentState.flatMap(beginCloseAction(CloseScope.Quit, _)) >>
+          IO.race(quitSignal.get, abandoned.get).map(_.fold(_ => QuitOutcome.Completed, _ => QuitOutcome.Abandoned))
+      }
+      .guarantee(quitWatch.set(None))
+
+  private def closeAbandoned: IO[Unit] =
+    quitWatch.getAndSet(None).flatMap(_.traverse_(_.complete(()).void))
+
   private def restartRequestedWithoutLauncher(scope: CloseScope): Boolean =
     scope match
       case CloseScope.Restart(_) => restarter.isEmpty
@@ -134,7 +149,7 @@ final private[manager] class StateManagerWorkflowCapability(
       close.pending(state).fold(IO.unit) { workflow =>
         choice match
           case CloseWorkflowChoice.Cancel =>
-            modelCommit.commitState(close.abandoned(workflow, state), state)
+            modelCommit.commitState(close.abandoned(workflow, state), state) >> closeAbandoned
           case CloseWorkflowChoice.Discard =>
             commitClose(state, close.resolved(workflow, state))
           case CloseWorkflowChoice.Save =>
@@ -159,16 +174,16 @@ final private[manager] class StateManagerWorkflowCapability(
         modelCommit.currentState.flatMap { saved =>
           if saved.persisted.buffers.get(bufferId).exists(!_.hasUnsavedChanges) then
             commitClose(saved, close.resolved(workflow, saved))
-          else modelCommit.commitState(close.abandoned(workflow, saved), saved)
+          else modelCommit.commitState(close.abandoned(workflow, saved), saved) >> closeAbandoned
         }
       case Left(error: com.serenity.richtext.LossyRichTextOverwriteException) =>
         // The Save-As form resumes this close once it saves (continueCloseAfterFormSaveAs); dismissing it asks again.
         modelCommit.currentState.flatMap(current => showSaveAsWorkflow(current, bufferId, error.getMessage))
       case Left(_: com.serenity.io.FileManagerError.ExternalConflict) =>
-        commit(close.conflicted(workflow, _))
+        commit(close.conflicted(workflow, _)) >> closeAbandoned
       case Left(error) =>
         logger.error(error)(s"[FILE] Failed to save buffer $bufferId before closing it") >>
-          commit(close.abandoned(workflow, _)) >>
+          commit(close.abandoned(workflow, _)) >> closeAbandoned >>
           modelCommit.currentState
             .flatMap(state => operations.showNotice(FileFailureNotice.forBuffer(state, bufferId, error)))
     }

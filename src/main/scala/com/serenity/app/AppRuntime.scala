@@ -34,9 +34,8 @@ object AppRuntime:
 
   /** Issue #1669's remaining scope moved this onto [[FrontendRuntime]], the frontend-owned render/input bundle; kept as
     * an alias so callers outside this file (`AppRuntimeRenderLoops`, `TuiRuntime`) don't need to know it moved.
-    * `FrontendRuntime.RenderFn` itself still carries the `RenderCaches` instance as its final argument (#1677's
-    * remaining scope), supplied by callers from `stateManager.renderCaches` rather than closed over when the
-    * `FrontendRuntime` bundle is built.
+    * `FrontendRuntime.RenderFn` still carries the `RenderCaches` as its final argument (#1677's remaining scope),
+    * supplied by callers from `stateManager.renderCaches`.
     */
   private[serenity] type RenderFn = FrontendRuntime.RenderFn
 
@@ -149,7 +148,8 @@ object AppRuntime:
     configNotice: Option[String] = None,
     recovery: StartupRecovery.Plan = StartupRecovery.Plan.normal,
     onFirstFrame: IO[Unit] = IO.unit,
-    forwardedOpens: Stream[IO, List[Path]] = Stream.empty
+    forwardedOpens: Stream[IO, List[Path]] = Stream.empty,
+    quitRequests: Stream[IO, QuitResponse] = Stream.empty
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     (Dispatcher.parallel[IO], Supervisor[IO](await = false)).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
       for
@@ -292,7 +292,8 @@ object AppRuntime:
                       latencyTraceEnabled,
                       watchInputs.discrete.as(()),
                       windowFocused,
-                      forwardedOpens
+                      forwardedOpens,
+                      quitRequests
                     )
                   )
                 }
@@ -314,7 +315,8 @@ object AppRuntime:
     latencyTraceEnabled: SignallingRef[IO, Boolean],
     watchInputsChanges: Stream[IO, Unit],
     windowFocused: Signal[IO, Boolean],
-    forwardedOpens: Stream[IO, List[Path]]
+    forwardedOpens: Stream[IO, List[Path]],
+    quitRequests: Stream[IO, QuitResponse]
   )(using logger: Logger[IO]): IO[Unit] =
     val (lifecycle, quitSignal) = (stateManager.runtimeLifecycle, stateManager.runtimeLifecycle.awaitQuit.attempt)
     (
@@ -370,8 +372,11 @@ object AppRuntime:
       ),
       AppRuntimeRenderLoops.superviseLoop("forwarded open loop", lifecycle.forceQuit)(
         forwardedOpens.evalMap(openForwarded(stateManager.fileOpener)).interruptWhen(quitSignal).compile.drain
+      ),
+      AppRuntimeRenderLoops.superviseLoop("desktop quit request loop", lifecycle.forceQuit)(
+        DesktopHooks.serveQuitRequests(quitRequests.interruptWhen(quitSignal), lifecycle.requestQuit)
       )
-    ).parMapN((_, _, _, _, _, _, _, _, _, _, _) => ())
+    ).parMapN((_, _, _, _, _, _, _, _, _, _, _, _) => ())
 
   /** Opens what a later launch handed over (#2023). A file that fails to open must not take the editor down with it. */
   private[serenity] def openForwarded(fileOpener: FileOpener)(paths: List[Path])(using logger: Logger[IO]): IO[Unit] =

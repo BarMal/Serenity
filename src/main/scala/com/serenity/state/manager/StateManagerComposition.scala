@@ -388,6 +388,7 @@ private[manager] class StateManagerComposition(
   val runtimeLifecycle: RuntimeLifecycle = RuntimeLifecycle(
     // Quitting lets queued persistence finish before the runtime tears down (see `shutdownEffects`).
     awaitQuit = quitSignal.get >> operations.shutdownEffects(),
+    requestQuit = workflow.requestQuit,
     awaitEffects = operations.awaitEffects,
     forceQuit = forceQuit,
     intervalSaveStream = intervalSaveStream,
