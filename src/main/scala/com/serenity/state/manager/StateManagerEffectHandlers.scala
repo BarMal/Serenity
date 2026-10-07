@@ -322,6 +322,7 @@ final private[manager] class StateManagerEffectHandlers(
           )
         )
       case FileIntent.ShowLicenceAndNotices       => com.serenity.io.LicenceNotices.open(loadFile)
+      case FileIntent.ShowPrivacyStatement        => com.serenity.io.PrivacyStatement.open(loadFile)
       case FileIntent.SetBufferLanguage(language) => setBufferLanguage(state, language)
       case FileIntent.ReloadFromDisk(bufferId) =>
         reloadBuffer(bufferId)
