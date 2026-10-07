@@ -102,6 +102,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
     .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
     .withWordGoal(Some(50000))
+    .withCommentAuthor(Some("Ada Lovelace"))
     .withDropCapsEnabled(false)
     .withAppMode(AppMode.Prose)
     .withShowAllSettingsRegardlessOfMode(true)
