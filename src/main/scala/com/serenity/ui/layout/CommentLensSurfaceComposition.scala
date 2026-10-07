@@ -15,8 +15,6 @@ import com.serenity.state.models.{CommentLensState, SurfaceContent}
   */
 object CommentLensSurfaceComposition extends RowCompositionSupport:
 
-  private val Title = "comment"
-
   /** The comment lens's frame height: one header row plus one row per draft line, with the pre-migration [4, 8] clamp
     * preserved exactly (`FloatingSurfaceLayout`'s `CommentLens` case used to compute this same value inline).
     */
@@ -49,7 +47,7 @@ object CommentLensSurfaceComposition extends RowCompositionSupport:
 
     val headerBoxes = slots.collect {
       case SurfaceContentRowSlot(SurfaceContentRowKind.Header, y) =>
-        textBox(Title, rowRect(bounds, y - contentRect.y))
+        textBox(lens.headline, rowRect(bounds, y - contentRect.y))
     }
 
     val rowBoxes = slots.collect {

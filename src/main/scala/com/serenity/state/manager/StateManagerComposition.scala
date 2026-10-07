@@ -80,6 +80,14 @@ private[manager] class StateManagerComposition(
       wrapCache = runtimeRenderCaches.wrappedLines
     )
 
+  private[manager] val autoSave = new StateManagerAutoSave(
+    modelCommit.currentState,
+    filePersistence.isSaving,
+    filePersistence.submitSave,
+    operations.showNotice,
+    runtimeLogger
+  )
+
   // Built here, before `effects` and `events`, `StateManagerPanelEffects`
   // (owned by `effects`) and `StateManagerSurfaceCapability` (`surfaces`, below) both need to record undo boundaries
   // for panel pin/unpin (#1016 PR4), and `events` already needed `UndoRecording` for Undo/Redo dispatch -- a single
@@ -281,7 +289,8 @@ private[manager] class StateManagerComposition(
     operations.dictionaryWatchDirectories,
     operations.explorerWatchDirectories,
     operations.markExplorerDirectoriesStale,
-    effects.configWatch
+    effects.configWatch,
+    autoSave
   )
 
   // PaneManager's/PanelManager's methods are excluded from the facade export (#1017/#1724): they have no real

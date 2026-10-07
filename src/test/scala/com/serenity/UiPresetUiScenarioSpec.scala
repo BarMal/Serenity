@@ -127,7 +127,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
       .create("ui-preset-dirty-restart", uiPresetStore = Some(store), sessionRoot = Some(sessionRoot))
       .unsafeRunSync()
 
-    driver.dispatch(ToggleCommandRunner).unsafeRunSync()
+    (driver.dispatch(ToggleCommandRunner) >> driver.stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
     execute(
       driver,
       CommandIntent.Settings(
@@ -148,7 +148,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
     execute(restarted, CommandIntent.Session(SessionIntent.StartupRestoreSession))
-    restarted.dispatch(ToggleCommandRunner).unsafeRunSync()
+    (restarted.dispatch(ToggleCommandRunner) >> restarted.stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
     val reopened      = restarted.state.unsafeRunSync()
     val reopenedFrame = restarted.renderFrame("changed-after-restart").unsafeRunSync()
     val runner = reopened.commandRunnerSurface

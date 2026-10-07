@@ -140,7 +140,10 @@ final case class FileService(
     explorerWatchDirectories: IO[Set[Path]],
     markExplorerDirectoriesStale: Set[Path] => IO[Unit],
     // #1934: the config file the same loop watches, absent when this session keeps no config file.
-    configWatch: Option[ConfigFileWatch]
+    configWatch: Option[ConfigFileWatch],
+    // #1992: AppRuntime's focus callback calls this when the window loses focus, for the auto-save modes that write
+    // then; it does nothing under the others.
+    autoSaveOnWindowFocusLost: IO[Unit]
 )
 
 trait StateManager extends StateEngine:
@@ -267,7 +270,10 @@ object StateManager:
         forgetClosedBuffers = ClosedBufferRetention.forgetRenderCaches(runtime.renderCaches),
         dictionaryCache = runtime.dictionaryCache
       )
-      .map(operations => new StateManagerImpl(runtime, operations))
+      .flatMap { operations =>
+        val manager = new StateManagerImpl(runtime, operations)
+        operations.installAutoSave(manager.composition.autoSave.saveBuffer).as(manager)
+      }
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
     // issue #931: category tabs (and the `activeCategory` field they drove) are retired, so this no longer names a
