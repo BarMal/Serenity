@@ -79,8 +79,15 @@ class HangReportSpec extends AnyFlatSpec with Matchers:
   }
 
   "The hang reporter" should "emit a report for an alert and ignore every other event" in {
-    val emitted  = new java.util.concurrent.atomic.AtomicReference(List.empty[String])
-    val reporter = new HangReporter(text => emitted.updateAndGet(_ :+ text), () => List(blocked), () => Nil)
+    val emitted = new java.util.concurrent.atomic.AtomicReference(List.empty[String])
+    val reporter = new HangReporter(
+      text => emitted.updateAndGet(_ :+ text),
+      () => List(blocked),
+      () => Nil,
+      () => RuntimeWatch.Liveness.Responsive,
+      identity,
+      _ => ()
+    )
 
     reporter(NoteProvided(new Ordinal(0), "just a note", None, None, None, None, None, "t", 0L))
     reporter(alert("Test running for 60 seconds: S: t"))

@@ -17,6 +17,12 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request supersedes its older runs; cancelling them frees runners (macOS especially) for current
+# heads. Master pushes are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     name: Build ${{ matrix.artifact_suffix }}
