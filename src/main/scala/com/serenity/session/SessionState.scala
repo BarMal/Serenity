@@ -55,8 +55,12 @@ object SessionState:
     *
     * Schema version 4 moves a buffer's unsaved text out of the session file into a content file it names by
     * `contentRef` (#1912); an older build would restore those buffers empty, so it refuses the session instead.
+    *
+    * Schema version 5 gives comments an id, an author, times, replies and a resolved flag (#1903). Every one decodes
+    * with a default, and a comment without an id is given one on restore; the bump is so an older build refuses the
+    * session rather than silently dropping its threads the next time it saves.
     */
-  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(4)
+  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(5)
 
   def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
     assemble(appState, orderedBuffers(appState).map(SessionBuffer.fromBuffer(_, persistUnsaved)))

@@ -1,7 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.lsp.client.DocumentUri
-import com.serenity.lsp.model.SemanticToken
+import com.serenity.lsp.model.{SemanticToken, SemanticTokenData}
 
 /** The most recent `textDocument/semanticTokens/full` result per document, keyed the same way as
   * [[DiagnosticsState.diagnostics]] (a document's real file [[DocumentUri]], since only buffers with an active LSP
@@ -12,7 +12,7 @@ import com.serenity.lsp.model.SemanticToken
   * three-way distinction is read back out as [[SemanticTokensAvailability]].
   */
 final case class SemanticTokensState(
-    byUri: Map[DocumentUri, List[SemanticToken]] = Map.empty,
+    byUri: Map[DocumentUri, SemanticTokenData] = Map.empty,
     unavailableUris: Set[DocumentUri] = Set.empty
 )
 

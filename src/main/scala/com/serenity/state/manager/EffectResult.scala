@@ -7,7 +7,7 @@ import com.serenity.config.SpellCheckDictionaryFingerprint
 import com.serenity.io.ProjectFileListing
 import com.serenity.keystroke.events.RunnerBindingRecordingExpired
 import com.serenity.lsp.client.DocumentUri
-import com.serenity.project.ProjectTaskResult
+import com.serenity.project.{ProjectPresence, ProjectTaskResult}
 import com.serenity.rope.Rope
 import com.serenity.session.SessionMetadata
 import com.serenity.spellcheck.SpellChecker
@@ -101,6 +101,16 @@ private[manager] enum EffectResult:
     */
   case FilesListed(pickerId: SurfaceId, root: Path, listing: Either[String, ProjectFileListing])
 
+  // What opening the command palette loads (#1911): each result is for the palette `surfaceId` it was started by, and
+  // is dropped once that palette has closed. See CommandRunnerOpening.
+  case CommandRunnerPresetsListed(surfaceId: SurfaceId, previews: List[UiPreset.Preview])
+  case ProjectPresenceDetected(surfaceId: SurfaceId, presence: ProjectPresence)
+
+  /** The session as `saved` has been written; the start page replaces the editor if it is still what was saved. See
+    * StartPageTransitions.
+    */
+  case StartPageReady(saved: AppState, readableRecentFiles: List[Path])
+
   // Project tasks (#1697 Wave 3): posted by `LaneKey.Project` jobs; see ProjectTaskTransitions.
   /** Output the task wrote since its previous batch. */
   case ProjectTaskOutput(taskId: Long, chunk: String)
@@ -182,6 +192,13 @@ private[manager] object EffectResult:
         SessionWorkflowTransitions.withNamedSessionLoaded(state, pickerId, restored)
       case FilesListed(pickerId, root, listing) =>
         FileFinderTransitions.withFilesListed(state, pickerId, root, listing)
+
+      case CommandRunnerPresetsListed(surfaceId, previews) =>
+        CommandRunnerOpening.withPresetsListed(state, surfaceId, previews)
+      case ProjectPresenceDetected(surfaceId, presence) =>
+        CommandRunnerOpening.withPresenceDetected(state, surfaceId, presence)
+      case StartPageReady(saved, readableRecentFiles) =>
+        StartPageTransitions.withStartPageShown(state, saved, readableRecentFiles)
 
       case projectTask @ (ProjectTaskOutput(_, _) | ProjectTaskFinished(_, _)) =>
         reduce(state, projectTask, wrapCache).state

@@ -314,4 +314,4 @@ private[manager] object MouseHitTesting:
   ): Boolean =
     click.clickCount <= 1 && !click.shiftDown &&
       state.persisted.config.surfaceConfig.commentDisplayMode == CommentDisplayMode.Floating &&
-      buffer.annotations.documentComments.exists(_.contains(clickedCursor))
+      buffer.annotations.shownComments(state.runtime.resolvedCommentsVisible).exists(_.contains(clickedCursor))

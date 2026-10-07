@@ -139,7 +139,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   private def paletteOpenedOn(bufferPath: Path): AppState =
     val stateManager = createStateManager()
     stateManager.setBufferFilePath(BufferId(0), bufferPath).unsafeRunSync()
-    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (stateManager.applyEvent(ToggleCommandRunner) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync()
 
   private def projectBuildItem(state: AppState): CommandSurfaceItem.CommandItem =
