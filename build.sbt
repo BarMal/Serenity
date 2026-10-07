@@ -185,7 +185,8 @@ lazy val root = (project in file("."))
       val dir = (Compile / resourceManaged).value / "META-INF" / "serenity"
       IO.copyFile(baseDirectory.value / "LICENSE", dir / "LICENSE")
       IO.write(dir / "THIRD-PARTY-NOTICES.md", thirdPartyNotices.value)
-      Seq(dir / "LICENSE", dir / "THIRD-PARTY-NOTICES.md")
+      IO.copyFile(baseDirectory.value / "docs" / "PRIVACY.md", dir / "PRIVACY.md")
+      Seq(dir / "LICENSE", dir / "THIRD-PARTY-NOTICES.md", dir / "PRIVACY.md")
     }.taskValue,
     // The runtime module list the notices spec checks the shipped notices against.
     Test / resourceGenerators += Def.task {
