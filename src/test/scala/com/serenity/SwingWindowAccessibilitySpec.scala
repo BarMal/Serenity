@@ -13,6 +13,7 @@ import com.serenity.ui.accessibility.{
   AccessibilityRole,
   AccessibilitySnapshot,
   AccessibleNode,
+  AccessibleValue,
   SwingAccessibilityBridge
 }
 import com.serenity.ui.layout.{CellMetrics, LayoutRect}
@@ -59,7 +60,7 @@ class SwingWindowAccessibilitySpec extends AnyFlatSpec with Matchers:
           "pane:0",
           AccessibilityRole.Document,
           "Untitled document",
-          Some("content"),
+          Some(AccessibleValue.Plain("content")),
           selected = false,
           focused = true,
           LayoutRect(0, 0, 80, 24)
@@ -96,7 +97,7 @@ class SwingWindowAccessibilitySpec extends AnyFlatSpec with Matchers:
             "surface:runner/status",
             AccessibilityRole.Status,
             "Status",
-            Some(message),
+            Some(AccessibleValue.Plain(message)),
             false,
             false,
             LayoutRect(0, 0, 20, 1)
@@ -121,7 +122,7 @@ class SwingWindowAccessibilitySpec extends AnyFlatSpec with Matchers:
           "pane:0",
           AccessibilityRole.Document,
           "Untitled document",
-          Some(text),
+          Some(AccessibleValue.Plain(text)),
           selected = false,
           focused = true,
           LayoutRect(0, 0, 80, 24)
