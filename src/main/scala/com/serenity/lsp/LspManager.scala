@@ -68,10 +68,17 @@ object LspManager:
     effects: Stream[IO, LspEffect],
     applyEvent: Event => IO[Unit],
     logger: Logger[IO],
-    userConfig: LspUserConfig = LspUserConfig.empty
+    userConfig: LspUserConfig = LspUserConfig.empty,
+    notices: LspNotices = LspNotices.ignoring
   ): IO[Unit] =
     LspResolutionCache.empty.flatMap { resolutionCache =>
-      runWithProvider(effects, applyEvent, logger, connectionProvider(userConfig, logger, resolutionCache))
+      runWithProvider(
+        effects,
+        applyEvent,
+        logger,
+        connectionProvider(userConfig, logger, resolutionCache),
+        notices = notices
+      )
     }
 
   private[lsp] def runWithProvider(
@@ -79,17 +86,28 @@ object LspManager:
     applyEvent: Event => IO[Unit],
     logger: Logger[IO],
     connectionProvider: ConnectionProvider,
-    policy: LspSupervisionPolicy = LspSupervisionPolicy.Default
+    policy: LspSupervisionPolicy = LspSupervisionPolicy.Default,
+    notices: LspNotices = LspNotices.ignoring
   ): IO[Unit] =
     Supervisor[IO].allocated.flatMap {
       case (supervisor, releaseRequests) =>
         for
+          serverNotices    <- LspServerNotices.create(notices)
           documentVersions <- Ref.of[IO, Map[DocumentUri, Int]](Map.empty)
           openDocuments    <- Ref.of[IO, OpenDocument.Registry](Map.empty)
           requestContexts  <- Ref.of[IO, Map[RequestKey, RequestContext]](Map.empty)
           requestFibers    <- Ref.of[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]](Map.empty)
           pool <- LspConnectionPool
-            .create(documentVersions, openDocuments, supervisor, connectionProvider, policy, applyEvent, logger)
+            .create(
+              documentVersions,
+              openDocuments,
+              supervisor,
+              connectionProvider,
+              policy,
+              serverNotices,
+              applyEvent,
+              logger
+            )
           runEffects = effects
             .evalMap(effect =>
               pool.serialized(
@@ -325,6 +343,9 @@ object LspManager:
           applyEvent,
           logger
         )
+
+      case LspEffect.MessageRequestAnswered(prompt, choice) =>
+        pool.notices.answer(prompt, choice)
 
       case LspEffect.SemanticTokensRequested(rawUri, languageId) =>
         requestSemanticTokens(

@@ -82,6 +82,23 @@ class CommandKeyBindingsSpec extends AnyFlatSpec with Matchers:
     CommandKeyBindings.displayed(taken).get("bold") shouldBe None
   }
 
+  it should "show the keys of the shortcuts help and the contextual toolbar" in {
+    val displayed = CommandKeyBindings.displayed(HotkeyConfig.forOs("Linux"))
+
+    CommandKeyBindings.commandFor(HotkeyAction.ToggleShortcutsHelp) shouldBe Some(CommandId("toggle-shortcuts-help"))
+    CommandKeyBindings.commandFor(HotkeyAction.ToggleContextualToolbar) shouldBe
+      Some(CommandId("toggle-contextual-toolbar"))
+    displayed.get("toggle-shortcuts-help") shouldBe
+      Some(HotkeyConfig.forOs("Linux").bindingsFor(HotkeyAction.ToggleShortcutsHelp).head.render)
+    displayed.get("toggle-contextual-toolbar") should not be empty
+  }
+
+  it should "map every action to a command the registry has" in {
+    val mapped = HotkeyAction.values.toList.flatMap(CommandKeyBindings.commandFor)
+
+    mapped.filterNot(id => CommandRegistry.withToggleUI.isRegistered(id)) shouldBe Nil
+  }
+
   "A trigger bound to an action and a command" should "be reported as a conflict" in {
     val clashing = HotkeyConfig.forOs("Linux").copy(commandBindings = Map(lineNumbers -> List(ctrlS)))
 

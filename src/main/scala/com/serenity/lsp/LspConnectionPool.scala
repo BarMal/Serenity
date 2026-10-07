@@ -47,6 +47,7 @@ final private[lsp] class LspConnectionPool private (
     supervisor: Supervisor[IO],
     provider: ConnectionProvider,
     policy: LspSupervisionPolicy,
+    val notices: LspServerNotices,
     applyEvent: Event => IO[Unit],
     logger: Logger[IO]
 ):
@@ -97,9 +98,16 @@ final private[lsp] class LspConnectionPool private (
   private def hooksFor(identity: ConnectionIdentity): LspClientHooks =
     val languageId = identity.serverConfig.languageId
     LspClientHooks(
-      onMessage = logServerMessage(identity, _),
+      onMessage = message =>
+        logServerMessage(identity, message) >>
+          notices
+            .message(serverName(identity), message)
+            .handleErrorWith(ex => logger.error(ex)("[LSP] could not show a server message")),
       onProgress = update => applyEvent(LspEvent.LspProgressReceived(languageId, update.token, update.progress)),
-      onApplyEdit = applyServerEdit
+      onApplyEdit = applyServerEdit,
+      onMessageRequest = request =>
+        logServerMessage(identity, LspServerMessage(request.level, request.text)) >>
+          notices.ask(serverName(identity), request)
     )
 
   private def logServerMessage(identity: ConnectionIdentity, message: LspServerMessage): IO[Unit] =
@@ -171,7 +179,9 @@ final private[lsp] class LspConnectionPool private (
         .flatMap { recent =>
           policy.afterCrash(recent, now) match
             case LspRestartDecision.RestartAfter(delay) =>
-              supervisor.supervise(IO.sleep(delay) >> serialized(restart(resolved))).void
+              // Only the first crash of a streak is news: the restarts that follow are the same story.
+              notices.stopped(serverName(resolved.identity)).whenA(recent.size == 1) >>
+                supervisor.supervise(IO.sleep(delay) >> serialized(restart(resolved))).void
             case LspRestartDecision.GiveUp(crashCount) =>
               warnDocuments(resolved.identity, crashCount)
         }
@@ -216,6 +226,7 @@ final private[lsp] class LspConnectionPool private (
       source = Some("Serenity")
     )
     logger.warn(s"[LSP] $message") >>
+      notices.gaveUp(serverName(identity), message) >>
       documentsOf(identity).flatMap(
         _.traverse_(uri => applyEvent(LspEvent.LspDiagnosticsReceived(uri.value, List(warning))))
       )
@@ -278,6 +289,7 @@ private[lsp] object LspConnectionPool:
     supervisor: Supervisor[IO],
     provider: ConnectionProvider,
     policy: LspSupervisionPolicy,
+    notices: LspServerNotices,
     applyEvent: Event => IO[Unit],
     logger: Logger[IO]
   ): IO[LspConnectionPool] =
@@ -298,6 +310,7 @@ private[lsp] object LspConnectionPool:
       supervisor,
       provider,
       policy,
+      notices,
       applyEvent,
       logger
     )
