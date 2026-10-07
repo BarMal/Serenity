@@ -125,8 +125,10 @@ class LspConnection private (
         LspProtocol.parseDiagnostics(json) match
           case Some((uri, diags)) => onDiagnostics(uri, diags)
           case None               => logger.warn("[LSP] Could not parse publishDiagnostics")
-      case Some("window/showMessage" | "window/logMessage") =>
+      case Some("window/showMessage") =>
         LspClientHooks.parseMessage(params).traverse_(hooks.onMessage)
+      case Some("window/logMessage") =>
+        LspClientHooks.parseMessage(params).map(_.copy(shownToUser = false)).traverse_(hooks.onMessage)
       case Some("$/progress") =>
         LspClientHooks.parseProgress(params).traverse_(hooks.onProgress)
       case Some(method) =>
@@ -154,10 +156,20 @@ class LspConnection private (
         // Applying an edit waits on the application, so it must not hold up the reader that delivers every response.
         applyEdit(id, params).start.void
       case "window/showMessageRequest" =>
-        hooksRef.get.flatMap(hooks => LspClientHooks.parseMessage(params).traverse_(hooks.onMessage).attempt.void) >>
-          answerServerRequest(LspServerRequests.reply(id, method, params))
+        // The user may take a while to answer, and every response is read by the same reader.
+        showMessageRequest(id, params).start.void
       case _ =>
         answerServerRequest(LspServerRequests.reply(id, method, params))
+
+  private def showMessageRequest(id: ServerRequestId, params: Json): IO[Unit] =
+    val chosen = LspClientHooks.parseMessageRequest(params).fold(IO.pure(Option.empty[Json])) { question =>
+      hooksRef.get
+        .flatMap(_.onMessageRequest(question))
+        .timeoutTo(requestTimeout, IO.pure(None))
+        .handleError(_ => None)
+        .map(_.flatMap(question.actions.lift).map(_.item))
+    }
+    chosen.flatMap(item => answerServerRequest(LspProtocol.response(id, item.getOrElse(Json.Null))))
 
   private def applyEdit(id: ServerRequestId, params: Json): IO[Unit] =
     val outcome = LspClientHooks.parseApplyEdit(params) match

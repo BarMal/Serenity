@@ -72,7 +72,7 @@ class FileFinderSpec extends AnyFlatSpec with Matchers:
 
   it should "say so when nothing matches, or when there are no files at all" in {
     listed(listing("a.txt"), "zzz").items shouldBe Loadable.Empty(ListPicker.NoMatches)
-    listed(listing()).items shouldBe Loadable.Empty("No files under /work/project")
+    listed(listing()).items shouldBe Loadable.Empty(s"No files under $root")
   }
 
   it should "list recently opened files under the root first for an empty query, then the rest by path" in {

@@ -119,11 +119,8 @@ object PinnedPanelViewModel:
     val resolved =
       surface.content match
         case SurfaceContent.MarkdownPreview(bufferId, title) =>
-          val content = state
-            .flatMap(_.persisted.buffers.get(bufferId))
-            .map(_.document.content.collect())
-            .getOrElse("")
-          SurfaceContentResolver.resolveMarkdownPreview(title, content, rect, SurfaceRenderMode.Pinned, cache)
+          val content = state.flatMap(_.persisted.buffers.get(bufferId)).map(_.document.content)
+          SurfaceContentResolver.resolveBufferMarkdownPreview(title, content, rect, SurfaceRenderMode.Pinned, cache)
         case SurfaceContent.Outline(symbols, activeLocation, scroll) =>
           SurfaceContentResolver.resolve(
             SurfaceContent.Outline(symbols, activeSymbolLocation(symbols, activeLocation, state), scroll),

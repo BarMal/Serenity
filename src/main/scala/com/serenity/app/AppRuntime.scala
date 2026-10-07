@@ -333,7 +333,8 @@ object AppRuntime:
           stateManager.lspEffectSource.lspEffectStream,
           stateManager.applyEvent,
           logger,
-          appConfig.languageToolsConfig.lspUserConfig
+          appConfig.languageToolsConfig.lspUserConfig,
+          stateManager.lspEffectSource.notices
         )
       ),
       AppRuntimeRenderLoops.superviseLoop("external change watch loop", lifecycle.forceQuit, recordCrash)(
