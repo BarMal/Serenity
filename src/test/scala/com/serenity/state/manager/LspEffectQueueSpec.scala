@@ -5,7 +5,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
-import com.serenity.state.models.CursorPosition
+import com.serenity.state.models.{CursorPosition, NoticePromptId}
 import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
 import org.scalatest.flatspec.AnyFlatSpec
@@ -111,4 +111,19 @@ class LspEffectQueueSpec extends AnyFlatSpec with Matchers:
     }
 
     nextTexts shouldBe cancelPoints.map(_ => Right(List("abc")))
+  }
+
+  it should "carry the answer to a server's question without cutting short the edits to any document" in {
+    drained(
+      queue =>
+        queue.enqueue(LspEffect.FileOpened(scalaUri, LanguageId.Scala, RopeText("a"))) >>
+          queue.enqueueDocumentChange(scalaUri, LanguageId.Scala, RopeText("ab")) >>
+          queue.enqueue(LspEffect.MessageRequestAnswered(NoticePromptId(1), Some(0))) >>
+          queue.enqueueDocumentChange(scalaUri, LanguageId.Scala, RopeText("abc")),
+      3
+    ) shouldBe List(
+      LspEffect.FileOpened(scalaUri, LanguageId.Scala, RopeText("a")),
+      LspEffect.FileChanged(scalaUri, LanguageId.Scala, RopeText("abc"), 2),
+      LspEffect.MessageRequestAnswered(NoticePromptId(1), Some(0))
+    )
   }
