@@ -41,8 +41,8 @@ class ProjectFileWalkerSpec extends AnyFlatSpec with Matchers:
       "src/targets.txt"
     )
 
-    ProjectFileWalker.list(root, limit = 100).unsafeRunSync().files.map(_.toString) shouldBe
-      Vector(".scalafmt.conf", "kept.txt", "src/targets.txt")
+    ProjectFileWalker.list(root, limit = 100).unsafeRunSync().files shouldBe
+      Vector(".scalafmt.conf", "kept.txt", "src/targets.txt").map(Path.of(_))
   }
 
   it should "stop at the limit, keeping the shallowest files, and say the listing was cut short" in {
@@ -50,7 +50,7 @@ class ProjectFileWalkerSpec extends AnyFlatSpec with Matchers:
     val listing = ProjectFileWalker.list(root, limit = 3).unsafeRunSync()
 
     listing.truncated shouldBe true
-    listing.files.map(_.toString) shouldBe Vector("deep/a/d.txt", "top-1.txt", "top-2.txt")
+    listing.files shouldBe Vector("deep/a/d.txt", "top-1.txt", "top-2.txt").map(Path.of(_))
   }
 
   it should "not call a listing that exactly fills the limit truncated" in {

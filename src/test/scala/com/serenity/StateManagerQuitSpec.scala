@@ -14,6 +14,12 @@ import org.scalatest.matchers.should.Matchers
 class StateManagerQuitSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   "Quitting" should "release awaitQuit well inside the persistence grace period when nothing is pending" in {
+    // The first quit in a JVM pays class loading and cold-disk costs of the session save (2.7 s on a Windows runner,
+    // 0.16 s for the identical quit once warm, #2016); a quit that really waited would take the full grace period every
+    // time, so the measured quit runs warm.
+    val warmUp = createStateManager("StateManagerQuitSpec-warm-up").runtimeLifecycle
+    (warmUp.forceQuit >> warmUp.awaitQuit).timeout(30.seconds).unsafeRunSync()
+
     val stateManager = createStateManager("StateManagerQuitSpec")
     val lifecycle    = stateManager.runtimeLifecycle
 

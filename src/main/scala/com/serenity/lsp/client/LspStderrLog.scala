@@ -5,10 +5,12 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardCopyOption, StandardOpenOption}
 import java.time.Instant
 
+import scala.annotation.tailrec
+
 import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
 import com.serenity.lsp.config.LanguageId
-import fs2.io.readInputStream
+import fs2.Stream
 import org.typelevel.log4cats.Logger
 
 /** Where a language server's stderr goes. Servers such as metals, rust-analyzer and pyright log there continuously, and
@@ -24,7 +26,30 @@ private[lsp] object LspStderrLog:
 
   val DefaultMaxBytes: Long = 512L * 1024
 
-  private val ReadChunkBytes = 8192
+  /** Upper bound of one write. A server's stderr arrives in whatever sizes it writes (often one line at a time), and a
+    * write per line is a file-system operation per line, which is slow enough on some platforms to stall the server on
+    * a full pipe. Whatever has already arrived is written together instead.
+    */
+  private[lsp] val BatchBytes = 64 * 1024
+
+  /** The file operations the log needs, so that their number can be observed. */
+  private[lsp] trait Storage:
+    def size(path: Path): Long
+    def open(path: Path): OutputStream
+    def replace(from: Path, to: Path): Unit
+    def delete(path: Path): Unit
+
+  private[lsp] object FileStorage extends Storage:
+    def size(path: Path): Long = if Files.exists(path) then Files.size(path) else 0L
+
+    def open(path: Path): OutputStream =
+      Files.createDirectories(path.getParent)
+      Files.newOutputStream(path, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
+
+    def replace(from: Path, to: Path): Unit =
+      Files.move(from, to, StandardCopyOption.REPLACE_EXISTING): Unit
+
+    def delete(path: Path): Unit = Files.deleteIfExists(path): Unit
 
   def defaultDirectory: Path = Paths.get(System.getProperty("user.home"), ".serenity", "logs")
 
@@ -45,7 +70,8 @@ private[lsp] object LspStderrLog:
     languageId: LanguageId,
     directory: Path,
     maxBytes: Long,
-    logger: Logger[IO]
+    logger: Logger[IO],
+    storage: Storage = FileStorage
   ): IO[Unit] =
     val live    = pathFor(directory, languageId)
     val rotated = rotatedPathFor(directory, languageId)
@@ -53,9 +79,8 @@ private[lsp] object LspStderrLog:
 
     def open: IO[Segment] =
       IO.blocking {
-        Files.createDirectories(directory)
-        val existing = if Files.exists(live) then Files.size(live) else 0L
-        Segment(Some(Files.newOutputStream(live, StandardOpenOption.CREATE, StandardOpenOption.APPEND)), existing)
+        val existing = storage.size(live)
+        Segment(Some(storage.open(live)), existing)
       }.handleErrorWith(error =>
         logger
           .warn(error)(s"[LSP] ${languageId.id} stderr is not being logged: cannot open $live")
@@ -69,8 +94,8 @@ private[lsp] object LspStderrLog:
 
     def rotate(segment: Segment): IO[Segment] =
       close(segment) >>
-        IO.blocking(Files.move(live, rotated, StandardCopyOption.REPLACE_EXISTING)).attempt >>
-        IO.blocking(Files.deleteIfExists(live)).attempt >>
+        IO.blocking(storage.replace(live, rotated)).attempt >>
+        IO.blocking(storage.delete(live)).attempt >>
       open
 
     def append(segment: Segment, bytes: Array[Byte]): IO[Segment] =
@@ -84,7 +109,6 @@ private[lsp] object LspStderrLog:
       segment.output.fold(IO.pure(segment)) { output =>
         IO.blocking {
           output.write(bytes)
-          output.flush()
           segment.copy(written = segment.written + bytes.length)
         }.handleErrorWith(error =>
           logger.warn(error)(s"[LSP] ${languageId.id} stderr log write failed; the rest is discarded") >>
@@ -95,8 +119,25 @@ private[lsp] object LspStderrLog:
     val started = open.flatMap(append(_, header.getBytes(StandardCharsets.UTF_8))).flatMap(Ref.of[IO, Segment])
 
     Resource.make(started)(_.get.flatMap(close)).use { current =>
-      readInputStream(IO.pure(stderr), ReadChunkBytes, closeAfterUse = false).chunks
-        .evalMap(chunk => current.get.flatMap(append(_, chunk.toArray)).flatMap(current.set))
+      Stream
+        .repeatEval(IO.blocking(readBatch(stderr)))
+        .unNoneTerminate
+        .evalMap(batch => current.get.flatMap(append(_, batch)).flatMap(current.set))
         .compile
         .drain
     }
+
+  /** Blocks for the first bytes, then takes whatever else is already buffered without waiting for more. */
+  private def readBatch(stderr: InputStream): Option[Array[Byte]] =
+    val buffer = new Array[Byte](BatchBytes)
+
+    @tailrec def fill(filled: Int): Int =
+      if filled < buffer.length && stderr.available() > 0 then
+        stderr.read(buffer, filled, buffer.length - filled) match
+          case -1   => filled
+          case read => fill(filled + read)
+      else filled
+
+    stderr.read(buffer) match
+      case -1   => None
+      case read => Some(java.util.Arrays.copyOf(buffer, fill(read)))
