@@ -3,7 +3,7 @@ package com.serenity.state.models
 import java.nio.file.Paths
 
 import com.serenity.lsp.client.DocumentUri
-import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange, SemanticToken}
+import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange, SemanticToken, SemanticTokenData}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.spellcheck.SpellChecker
 import org.scalatest.flatspec.AnyFlatSpec
@@ -38,8 +38,9 @@ class AppStateBufferIndexesSpec extends AnyFlatSpec with Matchers:
       runtime = initial.runtime.copy(languageService =
         LanguageServiceState(
           diagnosticsState = DiagnosticsState(diagnostics = Map(uri -> List(diagnostic(0)))),
-          semanticTokensState =
-            SemanticTokensState(byUri = Map(uri -> List(SemanticToken(0, 0, 3, "keyword", Set.empty))))
+          semanticTokensState = SemanticTokensState(byUri =
+            Map(uri -> SemanticTokenData.from(List(SemanticToken(0, 0, 3, "keyword", Set.empty))))
+          )
         )
       )
     )
@@ -104,7 +105,8 @@ class AppStateBufferIndexesSpec extends AnyFlatSpec with Matchers:
             language.diagnosticsState.diagnostics.updated(otherUri, List(diagnostic(1)))
           ),
           semanticTokensState = language.semanticTokensState.copy(byUri =
-            language.semanticTokensState.byUri.updated(otherUri, List(SemanticToken(1, 0, 2, "type", Set.empty)))
+            language.semanticTokensState.byUri
+              .updated(otherUri, SemanticTokenData.from(List(SemanticToken(1, 0, 2, "type", Set.empty))))
           )
         )
     ).withBufferIndexesRefreshed
@@ -132,7 +134,10 @@ class AppStateBufferIndexesSpec extends AnyFlatSpec with Matchers:
   it should "tell a pending, an empty and a confirmed-absent token response apart across refreshes" in {
     val uri     = SpellChecker.diagnosticsUri(stateWithLanguageData.persisted.buffers(bufferId))
     val pending = withSemanticTokens(stateWithLanguageData, SemanticTokensState()).withBufferIndexesRefreshed
-    val empty   = withSemanticTokens(pending, SemanticTokensState(byUri = Map(uri -> Nil))).withBufferIndexesRefreshed
+    val empty = withSemanticTokens(
+      pending,
+      SemanticTokensState(byUri = Map(uri -> SemanticTokenData.empty))
+    ).withBufferIndexesRefreshed
     val absent =
       withSemanticTokens(empty, SemanticTokensState(unavailableUris = Set(uri))).withBufferIndexesRefreshed
 

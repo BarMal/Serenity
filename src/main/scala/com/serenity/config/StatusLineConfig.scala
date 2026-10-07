@@ -12,6 +12,7 @@ enum StatusSegment(val configKey: String):
   case CharCount   extends StatusSegment("char_count")
   case ReadingTime extends StatusSegment("reading_time")
   case WordGoal    extends StatusSegment("word_goal")
+  case LineEnding  extends StatusSegment("line_ending")
 
 object StatusSegment:
 

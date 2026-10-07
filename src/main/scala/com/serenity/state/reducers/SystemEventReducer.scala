@@ -73,6 +73,24 @@ object SystemEventReducer:
           )
         }
 
+      case LspEvent.LspSemanticTokensRangeReceived(rawUri, firstLine, lastLine, tokens) =>
+        withOpenDocumentData(rawUri, state) { (uri, languageService) =>
+          val held = languageService.semanticTokensState
+          val merged =
+            held.byUri.get(uri).fold(tokens)(_.replaceLines(firstLine, lastLine, tokens))
+          languageService.copy(semanticTokensState =
+            held.copy(byUri = held.byUri + (uri -> merged), unavailableUris = held.unavailableUris - uri)
+          )
+        }
+
+      case LspEvent.LspSemanticTokensEdited(rawUri, change) =>
+        withOpenDocumentData(rawUri, state) { (uri, languageService) =>
+          val held = languageService.semanticTokensState
+          languageService.copy(semanticTokensState =
+            held.copy(byUri = held.byUri.updatedWith(uri)(_.map(_.acceptEdit(change))))
+          )
+        }
+
       case LspEvent.LspSemanticTokensUnavailable(rawUri) =>
         withOpenDocumentData(rawUri, state) { (uri, languageService) =>
           val held = languageService.semanticTokensState

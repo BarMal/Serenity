@@ -39,6 +39,10 @@ private[config] object ConfigFieldsDocumentsAndCommandRunner:
       _.documentConfig.wordGoal,
       (config, value) => config.withWordGoal(value)
     ),
+    field("document.comment_author")(string.filtered(_.nonEmpty).orAuto)(
+      _.documentConfig.commentAuthor,
+      (config, value) => config.withCommentAuthor(value)
+    ),
     field("document.drop_caps_enabled", "drop_caps_enabled")(boolean)(
       _.documentConfig.dropCapsEnabled,
       (config, value) => config.withDropCapsEnabled(value)

@@ -46,6 +46,11 @@ object StatusLineText:
             val total   = TextStatistics.of(buffer.document.content).wordCount
             val percent = if goal <= 0 then 0 else math.min(100, total * 100 / goal)
             s"$total / $goal words ($percent%)"
+      case StatusSegment.LineEnding => lineEnding(buffer.document)
+
+  private def lineEnding(document: Document): String =
+    val label = document.lineEnding.label
+    if document.mixedLineEndings.isDefined then s"$label (file was mixed)" else label
 
   /** The language name followed by what its server is doing right now, such as `Scala (Indexing workspace 40%)`. */
   private def withServerWork(state: AppState, language: LanguageId): String =
