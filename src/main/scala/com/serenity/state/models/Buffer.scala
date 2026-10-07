@@ -1,6 +1,7 @@
 package com.serenity.state.models
 
 import java.nio.file.Path
+import java.time.Instant
 
 import cats.Order
 import cats.data.NonEmptyList
@@ -53,7 +54,29 @@ trait DirectedRange:
 
 final case class Selection(anchor: CursorPosition, focus: CursorPosition) extends DirectedRange
 
-final case class DocumentComment(anchor: CursorPosition, focus: CursorPosition, text: String) extends DirectedRange
+/** A comment on a range of the document, with the thread that grew under it. `id` is stable for the comment's life (see
+  * [[CommentId]]). `author` and `createdAt` are `None` for a comment that predates them being recorded.
+  */
+final case class DocumentComment(
+    anchor: CursorPosition,
+    focus: CursorPosition,
+    text: String,
+    id: CommentId = CommentId.Unassigned,
+    author: Option[String] = None,
+    createdAt: Option[Instant] = None,
+    editedAt: Option[Instant] = None,
+    replies: List[CommentReply] = Nil,
+    resolved: Boolean = false
+) extends DirectedRange:
+
+  def withText(newText: String, at: Instant): DocumentComment =
+    if newText == text then this else copy(text = newText, editedAt = Some(at))
+
+  def withReply(reply: CommentReply): DocumentComment = copy(replies = replies :+ reply)
+
+  def resolve: DocumentComment = copy(resolved = true)
+
+  def reopen: DocumentComment = copy(resolved = false)
 
 /** A to-do marker at a single buffer position, carrying a short note about what still needs writing there -- Neo's
   * "placeholder" QoL feature: drop a mark and a sticky note, keep writing, come back and resolve it later.
@@ -131,8 +154,44 @@ final case class Annotations(
     documentComments: List[DocumentComment] = Nil,
     placeholders: List[Placeholder] = Nil,
     darlings: List[Darling] = Nil,
-    notes: Map[NoteKey, Notes] = Map.empty
-)
+    notes: Map[NoteKey, Notes] = Map.empty,
+    // The next id to hand out, kept apart from the comments themselves so deleting the newest comment never lets its id
+    // be given to a different one.
+    nextCommentId: CommentId = CommentId(1)
+):
+
+  def comment(id: CommentId): Option[DocumentComment] =
+    documentComments.find(_.id == id)
+
+  /** The comments a lens, a comment navigation command or the highlights show: resolved ones only on request. */
+  def shownComments(showResolved: Boolean): List[DocumentComment] =
+    if showResolved then documentComments else documentComments.filterNot(_.resolved)
+
+  /** `added` with the next free id, appended to the list. */
+  def withNewComment(added: DocumentComment): Annotations =
+    val id = freshCommentId
+    copy(documentComments = documentComments :+ added.copy(id = id), nextCommentId = id.next)
+
+  def withUpdatedComment(id: CommentId)(change: DocumentComment => DocumentComment): Annotations =
+    copy(documentComments = documentComments.map(existing => if existing.id == id then change(existing) else existing))
+
+  def withoutComment(id: CommentId): Annotations =
+    copy(documentComments = documentComments.filterNot(_.id == id))
+
+  /** Gives every comment without a usable id -- one from a session that predates ids, or one repeating an earlier
+    * comment's -- a fresh one, and leaves the rest alone.
+    */
+  def withCommentIdsAssigned: Annotations =
+    val (assigned, _, next) =
+      documentComments.foldLeft((List.empty[DocumentComment], Set.empty[CommentId], freshCommentId)) {
+        case ((done, taken, nextFree), comment) =>
+          if comment.id.isAssigned && !taken.contains(comment.id) then (comment :: done, taken + comment.id, nextFree)
+          else (comment.copy(id = nextFree) :: done, taken + nextFree, nextFree.next)
+      }
+    copy(documentComments = assigned.reverse, nextCommentId = next)
+
+  private def freshCommentId: CommentId =
+    documentComments.foldLeft(nextCommentId)((highest, comment) => highest.max(comment.id.next))
 
 /** Rich-text authoring state layered on top of the buffer's plain-text `Rope` content. */
 final case class RichTextState(

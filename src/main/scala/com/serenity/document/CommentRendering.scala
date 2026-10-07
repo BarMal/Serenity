@@ -13,10 +13,11 @@ final case class RenderedComment(
 
 object CommentRendering:
 
-  def atCursor(buffer: Buffer): Option[RenderedComment] =
+  /** The comment under the cursor; a resolved authored comment counts only when `showResolved`. */
+  def atCursor(buffer: Buffer, showResolved: Boolean = true): Option[RenderedComment] =
     for
       cursor  <- buffer.editing.cursorPositions.headOption
-      comment <- authoredCommentAt(buffer, cursor).orElse(commentAtLine(buffer, cursor.line))
+      comment <- authoredCommentAt(buffer, cursor, showResolved).orElse(commentAtLine(buffer, cursor.line))
     yield comment
 
   /** Opens the above-cursor Comment Lens for the comment at the active editor's cursor, replacing any existing one,
@@ -97,7 +98,7 @@ object CommentRendering:
     for
       buffer  <- paneBuffer(state, paneId)
       cursor  <- buffer.editing.cursorPositions.headOption
-      comment <- buffer.annotations.documentComments.find(_.contains(cursor))
+      comment <- buffer.annotations.shownComments(state.runtime.resolvedCommentsVisible).find(_.contains(cursor))
     yield comment
 
   private def dismissFloatingLens(state: AppState): AppState =
@@ -111,11 +112,12 @@ object CommentRendering:
       bufferId <- pane.bufferId
       buffer   <- state.persisted.buffers.get(bufferId)
       cursor   <- buffer.editing.cursorPositions.headOption
-      comment  <- atCursor(buffer)
+      comment  <- atCursor(buffer, state.runtime.resolvedCommentsVisible)
     yield
-      val target = buffer.annotations.documentComments.zipWithIndex.collectFirst {
-        case (authored, index) if authored.contains(cursor) => CommentLensTarget(index, authored)
-      }
+      val target = buffer.annotations
+        .shownComments(state.runtime.resolvedCommentsVisible)
+        .find(_.contains(cursor))
+        .map(authored => CommentLensTarget(authored.id, authored))
       val draft = target.map(_.comment.text).getOrElse(comment.raw)
       (cursor, CommentLensState(comment = comment, draft = draft, cursor = draft.length, target = target))
 
@@ -126,9 +128,11 @@ object CommentRendering:
 
   private def authoredCommentAt(
     buffer: Buffer,
-    cursor: com.serenity.state.models.CursorPosition
+    cursor: com.serenity.state.models.CursorPosition,
+    showResolved: Boolean
   ): Option[RenderedComment] =
-    buffer.annotations.documentComments
+    buffer.annotations
+      .shownComments(showResolved)
       .find(_.contains(cursor))
       .map { comment =>
         val lines = comment.text.linesIterator.toVector

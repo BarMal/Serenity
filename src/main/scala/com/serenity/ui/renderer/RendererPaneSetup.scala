@@ -111,6 +111,7 @@ object RendererPaneSetup:
       state.runtime.bufferIndexMemos,
       state.runtime.languageService,
       java.lang.Boolean.valueOf(state.runtime.chapterGhostsVisible),
+      java.lang.Boolean.valueOf(state.runtime.resolvedCommentsVisible),
       state.persisted.config.markdownViewMode
     )
     context.caches.frameState.annotationsFor(context.surface, inputs)(visibleAnnotations(state, context, snapshots))
@@ -139,9 +140,10 @@ object RendererPaneSetup:
       .distinct
       .flatMap { bufferId =>
         state.persisted.buffers.get(bufferId).map { buffer =>
-          val visibleLines   = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
-          val cached         = state.annotationIndex(bufferId).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
-          val commentsByLine = cached.commentsByLine(visibleLines)
+          val visibleLines = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
+          val cached       = state.annotationIndex(bufferId).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
+          val commentsByLine =
+            shownComments(cached.commentsByLine(visibleLines), state.runtime.resolvedCommentsVisible)
           val diagnosticsByLine = visibleAnnotationLines(visibleLines, cached.diagnosticsByLine)
           val semanticTokensAvailability =
             state.semanticTokensAvailability(bufferId).getOrElse(SemanticTokensAvailability.Pending)
@@ -159,6 +161,13 @@ object RendererPaneSetup:
       }
       .toMap
     annotations
+
+  private def shownComments(
+    byLine: Map[Int, List[DocumentComment]],
+    showResolved: Boolean
+  ): Map[Int, List[DocumentComment]] =
+    if showResolved then byLine
+    else byLine.view.mapValues(_.filterNot(_.resolved)).filter((_, comments) => comments.nonEmpty).toMap
 
   def visibleAnnotationLines[A](
     visibleLines: Set[Int],
