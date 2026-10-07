@@ -359,6 +359,8 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
     SwingMenuBar.viaAcceleratorKey(Some(ctrlS), null) shouldBe false
   }
 
+  private def absolute(path: String): String = Paths.get(path).toAbsolutePath.normalize.toString
+
   private def withRecent(model: Model, paths: List[Path]): Model =
     model.copy(app = model.app.copy(persisted = model.app.persisted.copy(recentFiles = paths)))
 
@@ -379,8 +381,8 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
     val recent  = items(openRecent(fixture))
 
     recent.take(2).map(_.getText) shouldBe List("new.md", "old.txt")
-    recent.take(2).map(_.getAccessibleContext.getAccessibleDescription) shouldBe List("/w", "/h")
-    recent.take(2).map(_.getToolTipText) shouldBe List("/w", "/h")
+    recent.take(2).map(_.getAccessibleContext.getAccessibleDescription) shouldBe List(absolute("/w"), absolute("/h"))
+    recent.take(2).map(_.getToolTipText) shouldBe List(absolute("/w"), absolute("/h"))
     items(openRecent(fixture)).last.getText shouldBe label("clear-recent-files")
   }
 
@@ -417,7 +419,7 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
 
     items(openRecent(fixture)).find(_.getText == "old.txt").foreach(_.doClick(0))
 
-    fixture.sent.asScala.toList shouldBe List(OpenRecentPath(Paths.get("/h/old.txt")))
+    fixture.sent.asScala.toList shouldBe List(OpenRecentPath(Paths.get(absolute("/h/old.txt"))))
   }
 
   it should "send RunCommand for Clear Recent Files" in {
@@ -436,7 +438,7 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
     buffers.map(_.getText.drop(2)) shouldBe List("Buffer 0", "seven.md ●")
     buffers.map(_.getMnemonic) shouldBe List(KeyEvent.VK_1, KeyEvent.VK_2)
     buffers.map(_.isSelected) shouldBe List(true, false)
-    buffers.map(_.getToolTipText) shouldBe List(null, "/p/seven.md (unsaved changes)")
+    buffers.map(_.getToolTipText) shouldBe List(null, s"${Paths.get("/p/seven.md")} (unsaved changes)")
   }
 
   it should "rebuild its buffers each time it opens, as the model changes" in {
