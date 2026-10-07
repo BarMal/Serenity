@@ -345,6 +345,10 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withCommandRunnerItemGapRows(rows)).void
       case GeneralSettingsIntent.SetCommandRunnerCursorGapRows(rows) =>
         updateAppearanceConfig(_.withCommandRunnerCursorGapRows(rows)).void
+      case GeneralSettingsIntent.SetAutoSaveMode(mode) =>
+        applyConfigUpdate(_.withAutoSaveMode(mode)).void
+      case GeneralSettingsIntent.SetAutoSaveDelayMillis(millis) =>
+        applyConfigUpdate(_.withAutoSaveDelayMillis(millis)).void
 
   /** Queues a write of `config` to the config file, behind any config write already queued. */
   private[manager] def persistConfigFile(config: AppConfig): IO[Unit] =

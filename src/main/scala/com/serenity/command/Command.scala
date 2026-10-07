@@ -319,6 +319,8 @@ enum GeneralSettingsIntent:
   case SetCommandRunnerVisibleRows(rows: Option[Int])
   case SetCommandRunnerItemGapRows(rows: Option[Double])
   case SetCommandRunnerCursorGapRows(rows: Option[Double])
+  case SetAutoSaveMode(mode: AutoSaveMode)
+  case SetAutoSaveDelayMillis(millis: Long)
 
 /** The `Settings` family of [[CommandIntent]], split one level deeper than the other groups because it is by far the
   * largest (~85 cases) — mirrors the domain split already established on `AppConfig`.

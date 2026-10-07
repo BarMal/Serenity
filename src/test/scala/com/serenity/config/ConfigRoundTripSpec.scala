@@ -104,6 +104,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withWordGoal(Some(50000))
     .withCommentAuthor(Some("Ada Lovelace"))
     .withDropCapsEnabled(false)
+    .withAutoSaveMode(AutoSaveMode.OnFocusChange)
+    .withAutoSaveDelayMillis(2500L)
     .withAppMode(AppMode.Prose)
     .withShowAllSettingsRegardlessOfMode(true)
     .withInterfaceDensity(InterfaceDensity.Compact)
