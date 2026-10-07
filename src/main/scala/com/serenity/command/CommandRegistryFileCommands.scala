@@ -150,6 +150,13 @@ private[command] object CommandRegistryFileCommands:
       label = "Open Releases Page"
     ),
     Command.typed(
+      "show-privacy-statement",
+      "Open the privacy statement: what Serenity stores locally and that it makes no network connections, read-only.",
+      CommandIntent.File(FileIntent.ShowPrivacyStatement),
+      CommandCategory.File,
+      label = "Show Privacy Statement"
+    ),
+    Command.typed(
       "next-tab",
       "Switch to the next open file.",
       CommandIntent.View(ViewIntent.NextTab),

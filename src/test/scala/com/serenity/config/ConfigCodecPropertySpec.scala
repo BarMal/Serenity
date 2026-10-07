@@ -64,6 +64,8 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
     // `CursorMode` has a single value, so there is nothing to move it to. Older files naming `breathe` still load, as
     // blink (CursorConfigSpec).
     "cursorConfig.mode",
+    // `TypographyPreset` has a single value until a serif face is bundled.
+    "exportTypographyConfig.preset",
     // Keyed maps with their own codecs, dynamic key prefixes and specs (see `ConfigGenerators`).
     "languageToolsConfig.lspUserConfig.servers",
     "inputConfig.hotkeyConfig.bindings",

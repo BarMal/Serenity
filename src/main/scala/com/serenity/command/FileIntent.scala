@@ -25,6 +25,8 @@ enum FileIntent:
   case ShowAbout
   // Option B of the update notice: the browser makes the request, Serenity opens no socket.
   case OpenReleasesPage
+  // The privacy statement (docs/PRIVACY.md) bundled in the jar, opened read-only.
+  case ShowPrivacyStatement
   case SetBufferLanguage(language: Option[LanguageId])
   // #1623: the ways out of a file changed on disk under unsaved edits -- see ExternalChangeCommands.
   case ReloadFromDisk(bufferId: BufferId)

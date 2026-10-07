@@ -9,7 +9,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.AppMode
-import com.serenity.io.{AboutDocument, FileDialog, ReleasesPage}
+import com.serenity.io.{AboutDocument, FileDialog, PrivacyStatement, ReleasesPage}
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.LossyRichTextOverwriteException
@@ -196,6 +196,17 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
       .unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() shouldBe List(s"openExternalUrl:${ReleasesPage.url}")
+  }
+
+  it should "open the bundled privacy statement for ShowPrivacyStatement" in {
+    val fixture = harness()
+
+    fixture.handlers
+      .interpretCommand(command(CommandIntent.File(FileIntent.ShowPrivacyStatement)), AppState.initial)
+      .unsafeRunSync()
+
+    val opened = fixture.currentState.persisted.buffers.values.flatMap(_.document.filePath).toList
+    opened.map(_.getFileName.toString) should contain(PrivacyStatement.documentName)
   }
 
   it should "update the buffer language and open the LSP document when app mode is Code" in {

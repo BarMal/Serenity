@@ -4,12 +4,13 @@ import scala.concurrent.duration.*
 
 import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
-import cats.effect.{IO, Resource}
+import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity}
+import com.serenity.state.models.{Notice, NoticeLevel, NoticeTopic}
 import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.Stream
@@ -37,7 +38,9 @@ class LspManagerSupervisionSpec extends AnyFlatSpec with Matchers with LspManage
     def nextServer: IO[MockLspServer] = servers.take.timeout(testTimeout)
 
   /** Every connection the manager starts gets a fresh in-memory server over pipes, handed to the test as it starts. */
-  private def supervised(policy: LspSupervisionPolicy)(test: Supervised => IO[Assertion]): Assertion =
+  private def supervised(policy: LspSupervisionPolicy, notices: LspNotices = LspNotices.ignoring)(
+    test: Supervised => IO[Assertion]
+  ): Assertion =
     val program =
       for
         effects <- Queue.unbounded[IO, Option[LspEffect]]
@@ -62,7 +65,7 @@ class LspManagerSupervisionSpec extends AnyFlatSpec with Matchers with LspManage
         result <- Resource
           .make(
             LspManager
-              .runWithProvider(Stream.fromQueueNoneTerminated(effects), events.offer, logger, provider, policy)
+              .runWithProvider(Stream.fromQueueNoneTerminated(effects), events.offer, logger, provider, policy, notices)
               .start
           )(_.cancel)
           .use(_ => test(Supervised(effects, servers, events)))
@@ -117,6 +120,52 @@ class LspManagerSupervisionSpec extends AnyFlatSpec with Matchers with LspManage
         warning.message should include("stopped after crashing 3 times")
         anotherStart.isLeft shouldBe true
     }
+
+  it should "tell the user once that a server stopped, however many times it is restarted" in {
+    val shown = Ref.unsafe[IO, List[Notice]](Nil)
+    supervised(fastRestarts.copy(maxRestarts = 5), LspNotices(notice => shown.update(_ :+ notice), _ => IO.unit)) {
+      manager =>
+        val crashOnce = manager.nextServer.flatMap(server => server.drainReceived(3) >> server.shutdown())
+        for
+          _       <- manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo"))))
+          _       <- crashOnce
+          _       <- crashOnce
+          _       <- manager.nextServer.timeout(testTimeout)
+          _       <- IO.sleep(500.millis)
+          notices <- shown.get
+        yield notices shouldBe List(
+          Notice(
+            NoticeLevel.Warning,
+            "The Scala language server stopped. Restarting it.",
+            topic = Some(NoticeTopic.ServerStatus("Scala"))
+          )
+        )
+    }
+  }
+
+  it should "warn the user when it gives up on a server that keeps dying" in {
+    val shown = Ref.unsafe[IO, List[Notice]](Nil)
+    supervised(fastRestarts.copy(maxRestarts = 2), LspNotices(notice => shown.update(_ :+ notice), _ => IO.unit)) {
+      manager =>
+        val crashOnce = manager.nextServer.flatMap(server => server.drainReceived(3) >> server.shutdown())
+        for
+          _ <- manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo"))))
+          _ <- crashOnce
+          _ <- crashOnce
+          _ <- crashOnce
+          _ <- Stream
+            .fromQueueUnterminated(manager.events)
+            .collectFirst { case LspEvent.LspDiagnosticsReceived(`uri`, _) => () }
+            .compile
+            .lastOrError
+            .timeout(testTimeout)
+          notices <- shown.get
+        yield
+          notices.map(_.level) shouldBe List(NoticeLevel.Warning, NoticeLevel.Warning)
+          notices.map(_.topic) shouldBe List.fill(2)(Some(NoticeTopic.ServerStatus("Scala")))
+          notices.lastOption.map(_.message).getOrElse("") should include("stopped after crashing 3 times")
+    }
+  }
 
   it should "shut an idle server down and exit it once its last document has stayed closed for the grace period" in
     runVirtual(
