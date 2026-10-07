@@ -33,8 +33,9 @@ final private[manager] class FocusHandlerRouting(wrapCache: WrappedLineCache):
     * actually reaches this table in practice. All are routed here to match this codebase's prior behaviour, where every
     * one of them fell through a wildcard to `PeekOverlayComponent`.
     */
-  private val peekOverlay: LocalEventHandler = new PeekOverlayComponent()
-  private val contextMenu: LocalEventHandler = new ContextMenuComponent()
+  private val peekOverlay: LocalEventHandler  = new PeekOverlayComponent()
+  private val contextMenu: LocalEventHandler  = new ContextMenuComponent()
+  private val noticePrompt: LocalEventHandler = new NoticePromptComponent()
 
   private val modalTextPrompt: LocalEventHandler   = new ModalComponent(ModalType.TextPrompt, wrapCache = wrapCache)
   private val modalFind: LocalEventHandler         = new ModalComponent(ModalType.Find, wrapCache = wrapCache)
@@ -110,5 +111,5 @@ final private[manager] class FocusHandlerRouting(wrapCache: WrappedLineCache):
       // dispatch. Close/reorder (#1078/#1079/#1081) remain out of scope. Routed here only so this table stays
       // exhaustive, same "look but don't touch" pattern as TabList.
       case SurfaceContent.TabBar(_, _) => peekOverlay
-      // A notice (#1717) never takes focus either; routed here only so this table stays exhaustive.
-      case SurfaceContent.Notice(_, _) => peekOverlay
+      // A notice (#1717) never takes focus, unless it asks a question: then its actions answer to the keyboard.
+      case SurfaceContent.Notice(notice, _) => if notice.prompt.isDefined then noticePrompt else peekOverlay
