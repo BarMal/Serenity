@@ -43,8 +43,11 @@ class LspManagerSemanticTokensRequestsSpec extends AnyFlatSpec with SemanticToke
     runVirtual(
       fakeServer.use { server =>
         for
-          _       <- server.open()
           _       <- server.announce(fullOnly)
+          _       <- server.open()
+          opening <- server.nextRequest
+          _       <- server.replyWithTokens(opening, threeTokens)
+          _       <- server.awaitEvents(1)
           _       <- server.edit("object Foo1", 2)
           _       <- IO.sleep(50.millis)
           _       <- server.edit("object Foo12", 3)
