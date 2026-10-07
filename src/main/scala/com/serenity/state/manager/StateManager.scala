@@ -9,7 +9,7 @@ import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.Event
-import com.serenity.lsp.LspEffect
+import com.serenity.lsp.{LspEffect, LspNotices}
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionSaveTrigger, UnreadableSession}
 import com.serenity.spellcheck.DictionaryCache
@@ -86,7 +86,7 @@ final case class RuntimeLifecycle(
   * A `StateManager` capability-record slice (see #1017): a case class holding the stream description directly instead
   * of a trait mixed into `StateManager`.
   */
-final case class LspEffectSource(lspEffectStream: Stream[IO, LspEffect])
+final case class LspEffectSource(lspEffectStream: Stream[IO, LspEffect], notices: LspNotices)
 
 /** Reads persisted session metadata needed before startup restoration.
   *

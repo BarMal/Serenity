@@ -103,6 +103,26 @@ object ConfigGenerators:
       timeout  <- Gen.chooseNum(0L, 60000L)
     yield CursorConfig(mode, CursorColorConfig(active, inactive), timeout)
 
+  private def genPoints(range: (Float, Float)): Gen[Option[Float]] =
+    Gen.option(Gen.choose((range._1 * 2).toInt, (range._2 * 2).toInt).map(_ / 2f))
+
+  val genExportTypographyConfig: Gen[ExportTypographyConfig] =
+    for
+      paper    <- oneOfEnum(com.serenity.manuscript.PaperSize.values)
+      fontSize <- genPoints(ExportTypographyConfig.FontSizeRange)
+      lineSpacing <- Gen.option(
+        double(ExportTypographyConfig.LineSpacingRange._1, ExportTypographyConfig.LineSpacingRange._2)
+      )
+      margin          <- genPoints(ExportTypographyConfig.MarginRange)
+      firstLineIndent <- genPoints(ExportTypographyConfig.FirstLineIndentRange)
+    yield ExportTypographyConfig(
+      paper = paper,
+      fontSize = fontSize,
+      lineSpacing = lineSpacing,
+      margin = margin,
+      firstLineIndent = firstLineIndent
+    )
+
   val genStatusLineConfig: Gen[StatusLineConfig] =
     for
       segments   <- Gen.someOf(StatusSegment.values.toIndexedSeq).map(_.toList)
@@ -283,6 +303,7 @@ object ConfigGenerators:
       spell            <- genSpellCheckConfig
       appMode          <- genAppModeConfig
       status           <- genStatusLineConfig
+      exportTypography <- genExportTypographyConfig
     yield AppConfig(
       editorConfig = editor,
       inputConfig = input,
@@ -298,5 +319,6 @@ object ConfigGenerators:
         smartPunctuationEnabled = smartPunctuation
       ),
       appModeConfig = appMode,
-      statusLine = status
+      statusLine = status,
+      exportTypographyConfig = exportTypography
     )

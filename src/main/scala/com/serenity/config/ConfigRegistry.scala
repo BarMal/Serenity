@@ -23,7 +23,8 @@ object ConfigRegistry:
       ConfigFieldsDocumentsAndCommandRunner.fields ++
       ConfigFieldsDisplay.fields ++
       ConfigFieldsTheme.fields ++
-      ConfigFieldsSurface.fields
+      ConfigFieldsSurface.fields ++
+      ConfigFieldsExport.fields
 
   private val byKey: Map[String, ConfigField[?]] =
     fields.flatMap(configField => configField.spellings.map(_ -> configField)).toMap

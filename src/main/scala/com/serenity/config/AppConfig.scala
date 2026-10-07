@@ -20,7 +20,8 @@ final case class AppConfig(
     themeFollowConfig: ThemeFollowConfig = ThemeFollowConfig(),
     languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig(),
     appModeConfig: AppModeConfig = AppModeConfig(),
-    statusLine: StatusLineConfig = StatusLineConfig.default
+    statusLine: StatusLineConfig = StatusLineConfig.default,
+    exportTypographyConfig: ExportTypographyConfig = ExportTypographyConfig()
 ):
 
   def withEditorConfig(config: EditorConfig): AppConfig =
@@ -28,6 +29,9 @@ final case class AppConfig(
 
   def withLanguageToolsConfig(config: LanguageToolsConfig): AppConfig =
     copy(languageToolsConfig = config.normalized)
+
+  def withExportTypography(config: ExportTypographyConfig): AppConfig =
+    copy(exportTypographyConfig = config)
 
   def withInputConfig(config: InputConfig): AppConfig =
     copy(inputConfig = config)

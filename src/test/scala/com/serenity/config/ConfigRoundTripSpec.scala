@@ -158,6 +158,24 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withPanelEscapeTarget(AppMode.Code, PanelEscapeTarget.Previous)
     .withPanelEscapeTarget(AppMode.Prose, PanelEscapeTarget.Previous)
     .withHotkeyConfig(HotkeyConfig().withCommandBinding("toggle-line-numbers", "ctrl+alt+l"))
+    .withExportTypography(
+      ExportTypographyConfig(
+        paper = com.serenity.manuscript.PaperSize.A4,
+        fontSize = Some(11.5f),
+        lineSpacing = Some(1.5),
+        margin = Some(54f),
+        firstLineIndent = Some(18f)
+      )
+    )
+    .withExportTypography(
+      ExportTypographyConfig(
+        paper = com.serenity.manuscript.PaperSize.A4,
+        fontSize = Some(11.5f),
+        lineSpacing = Some(1.5),
+        margin = Some(54f),
+        firstLineIndent = Some(18f)
+      )
+    )
 
   private def differences(path: String, before: Any, after: Any): List[String] =
     (before, after) match
@@ -182,6 +200,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     // `CursorMode` has a single value, so there is nothing to move it to. Older files naming `breathe` still load, as
     // blink (CursorConfigSpec).
     "cursorConfig.mode",
+    // `TypographyPreset` has a single value until a serif face is bundled.
+    "exportTypographyConfig.preset",
     // Keyed maps with their own dedicated specs (LspUserConfigSpec, HotkeyConfigSpec, FocusedKeymapConfigSpec) and
     // their own dynamic key prefixes in the schema.
     "languageToolsConfig.lspUserConfig.servers",

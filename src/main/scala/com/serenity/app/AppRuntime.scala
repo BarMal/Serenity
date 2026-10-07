@@ -14,6 +14,7 @@ import com.serenity.config.{AppConfig, RenderFpsTarget}
 import com.serenity.diagnostics.{FrameTimingReport, FrameTimings, KeyLatencyReport}
 import com.serenity.frontend.{Frontend, FrontendRuntime}
 import com.serenity.input.*
+import com.serenity.io.CheckedFileStamps
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
@@ -331,7 +332,8 @@ object AppRuntime:
           stateManager.lspEffectSource.lspEffectStream,
           stateManager.applyEvent,
           logger,
-          appConfig.languageToolsConfig.lspUserConfig
+          appConfig.languageToolsConfig.lspUserConfig,
+          stateManager.lspEffectSource.notices
         )
       ),
       AppRuntimeRenderLoops.superviseLoop("external change watch loop", lifecycle.forceQuit)(
@@ -439,15 +441,17 @@ object AppRuntime:
       (paths, dictionaryDirectories, explorerDirectories) =>
         paths.keySet.flatMap(path => Option(path.getParent)) ++ dictionaryDirectories ++ explorerDirectories
     }
-    val react = (changed: Set[Path]) =>
-      (openBufferPaths, dictionaryWatchDirectories, explorerWatchDirectories).mapN {
-        (paths, dictionaryDirectories, explorerDirectories) =>
-          val changedDirectories = changed.flatMap(path => Option(path.getParent))
-          val staleExplorers     = changedDirectories.intersect(explorerDirectories)
-          changed.flatMap(paths.get).toList.traverse_(checkBufferForExternalChanges) >>
-            IO.whenA(changedDirectories.exists(dictionaryDirectories.contains))(refreshDictionaryFingerprints) >>
-            IO.whenA(staleExplorers.nonEmpty)(markExplorerDirectoriesStale(staleExplorers))
-      }.flatten
+    val react = (checkedStamps: CheckedFileStamps) =>
+      (changed: Set[Path]) =>
+        (openBufferPaths, dictionaryWatchDirectories, explorerWatchDirectories).mapN {
+          (paths, dictionaryDirectories, explorerDirectories) =>
+            val changedDirectories = changed.flatMap(path => Option(path.getParent))
+            val staleExplorers     = changedDirectories.intersect(explorerDirectories)
+            val buffers            = changed.toList.flatMap(path => paths.get(path).map(path -> _))
+            checkedStamps.claimChanged(buffers).flatMap(_.traverse_(checkBufferForExternalChanges)) >>
+              IO.whenA(changedDirectories.exists(dictionaryDirectories.contains))(refreshDictionaryFingerprints) >>
+              IO.whenA(staleExplorers.nonEmpty)(markExplorerDirectoriesStale(staleExplorers))
+        }.flatten
     def syncWatched(watching: SignallingRef[IO, Boolean]) =
       watched.flatMap(directories => watcher.sync(directories) >> watching.set(directories.nonEmpty))
     val recheckEverything = (openBufferPaths, dictionaryWatchDirectories, explorerWatchDirectories).mapN {
@@ -460,7 +464,7 @@ object AppRuntime:
       case (_, false)          => WatchResync.FocusLost
       case (Some(false), true) => WatchResync.FocusRegained
     }
-    Stream.eval(SignallingRef.of[IO, Boolean](false)).flatMap { watching =>
+    Stream.eval((SignallingRef.of[IO, Boolean](false), CheckedFileStamps.create).tupled).flatMap { (watching, stamps) =>
       val resync = watchedSetChanges.as(WatchResync.SetChanged).merge(focusChanges).evalMap {
         case WatchResync.SetChanged =>
           windowFocused.get.flatMap(focused => IO.whenA(focused)(syncWatched(watching)))
@@ -469,7 +473,7 @@ object AppRuntime:
       }
       watching.discrete.changes
         .switchMap(active =>
-          if active then Stream.repeatEval(watcher.awaitChangedFiles(settle)).evalMap(react) else Stream.empty
+          if active then Stream.repeatEval(watcher.awaitChangedFiles(settle)).evalMap(react(stamps)) else Stream.empty
         )
         .concurrently(resync)
     }

@@ -37,7 +37,9 @@ final private[manager] class LspEffectQueue private (
   def enqueue(effect: LspEffect): IO[Unit] =
     effect match
       case LspEffect.FileChanged(uri, languageId, text, _) => enqueueDocumentChange(uri, languageId, text)
-      case other => pendingChanges.update(_.closedFor(other.uri)) >> queue.offer(Entry.Immediate(other))
+      case other =>
+        pendingChanges.update(pending => other.documentUri.fold(pending)(pending.closedFor)) >>
+          queue.offer(Entry.Immediate(other))
 
   def enqueueDocumentChange(uri: String, languageId: com.serenity.lsp.config.LanguageId, text: Rope): IO[Unit] =
     pendingChanges.modify { pending =>

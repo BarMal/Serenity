@@ -7,7 +7,7 @@ import cats.syntax.foldable.*
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
-import com.serenity.lsp.LspEffect
+import com.serenity.lsp.{LspEffect, LspNotices}
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionId, SessionManager, SessionPersistence}
 import com.serenity.state.effects.Lane
@@ -291,7 +291,10 @@ private[manager] class StateManagerComposition(
   export files.*
   export viewport.{handleViewportResize as _, *}
 
-  val lspEffectSource: LspEffectSource = LspEffectSource(lspEffectStream = lspEffectStream)
+  val lspEffectSource: LspEffectSource = LspEffectSource(
+    lspEffectStream = lspEffectStream,
+    notices = LspNotices(operations.showNotice, operations.withdrawPrompt)
+  )
 
   private def lspEffectStream: Stream[IO, LspEffect] =
     lspQueue.stream
