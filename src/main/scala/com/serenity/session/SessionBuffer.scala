@@ -195,11 +195,11 @@ object SessionBuffer:
     * read captures the revision a later save checks against. A dirty one keeps the session's unsaved text and the
     * revision it was edited from. Anything unreadable falls back to what the session recorded.
     */
-  def toBufferIO(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): IO[Buffer] =
+  def toBufferIO(sessionBuffer: SessionBuffer, files: FileManager)(using com.serenity.rope.Balance): IO[Buffer] =
     val recorded = recordedBuffer(sessionBuffer)
     sessionBuffer.filePath.map(Paths.get(_)) match
       case Some(path) if !(sessionBuffer.isDirty && sessionBuffer.unsavedContent.isDefined) =>
-        FileManager().loadFile(path, recorded.id).map(fromDisk(recorded, _)).handleError(_ => recorded)
+        files.loadFile(path, recorded.id).map(fromDisk(recorded, _)).handleError(_ => recorded)
       case _ => IO.pure(recorded)
 
   private def recordedBuffer(sessionBuffer: SessionBuffer)(using com.serenity.rope.Balance): Buffer =
