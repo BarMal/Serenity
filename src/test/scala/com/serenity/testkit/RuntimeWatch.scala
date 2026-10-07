@@ -53,6 +53,15 @@ object RuntimeWatch:
     )
     IORuntime.global
 
+  /** Starts the [[RuntimeShutdownWatch]] once per test JVM. It must not touch the global runtime: the runtime's threads
+    * inherit the context class loader of whoever first asks for it, and only a test thread's loader sees the test
+    * resources.
+    */
+  def watchShutdown(): Unit = shutdownWatch
+
+  private lazy val shutdownWatch: RuntimeShutdownWatch.Watcher =
+    RuntimeShutdownWatch.start(() => RuntimeShutdownWatch.liveSample(), print)
+
   /** Asks `runtime` for a trivial IO from a plain thread, so a runtime that rejects work or never runs it cannot block
     * the caller.
     */
@@ -90,7 +99,11 @@ object RuntimeWatch:
       s"io-compute workers: ${workers.size} ${workerStates.mkString("[", ", ", "]")}",
       s"io-compute-blocker threads: ${blockers.size}",
       s"interrupted runtime threads: ${if interrupted.isEmpty then "none" else interrupted.mkString(", ")}"
-    )
+    ) ::: Option.when(probedIsCurrent && workers.isEmpty)(poolStoppedWithoutShutdownHook).toList
+
+  private val poolStoppedWithoutShutdownHook =
+    "the pool stopped but the runtime's shutdown hook never ran (the global was not reset): Cats Effect does that " +
+      "only when a worker finds its own interrupt flag set; see the [RUNTIME-SHUTDOWN] lines above"
 
   def abortRun(cause: String): Unit =
     print(s"[RUNTIME-DEATH] aborting the test run instead of waiting for the CI guard: $cause")

@@ -124,7 +124,7 @@ final class HangReporter(
 ) extends Reporter:
 
   def this() = this(
-    RuntimeWatch.print,
+    { RuntimeWatch.watchShutdown(); RuntimeWatch.print },
     () => HangReport.threadStacks(),
     () => HangReport.deadlockedThreadNames(),
     () => RuntimeWatch.probe(RuntimeWatch.install(), RuntimeWatch.ProbeDeadline),
