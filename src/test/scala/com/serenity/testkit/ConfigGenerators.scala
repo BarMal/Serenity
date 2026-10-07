@@ -151,6 +151,12 @@ object ConfigGenerators:
       )
     yield DocumentConfig(markdown, default, goal, dropCaps, author)
 
+  val genAutoSaveConfig: Gen[AutoSaveConfig] =
+    for
+      mode  <- oneOfEnum(AutoSaveMode.values)
+      delay <- Gen.choose(AutoSaveConfig.MinDelayMillis, 600000L)
+    yield AutoSaveConfig(mode, delay)
+
   val genAppModeConfig: Gen[AppModeConfig] =
     for
       mode    <- oneOfEnum(AppMode.values)
@@ -298,6 +304,7 @@ object ConfigGenerators:
       appMode          <- genAppModeConfig
       status           <- genStatusLineConfig
       exportTypography <- genExportTypographyConfig
+      autoSave         <- genAutoSaveConfig
     yield AppConfig(
       editorConfig = editor,
       inputConfig = input,
@@ -313,5 +320,6 @@ object ConfigGenerators:
       ),
       appModeConfig = appMode,
       statusLine = status,
-      exportTypographyConfig = exportTypography
+      exportTypographyConfig = exportTypography,
+      autoSaveConfig = autoSave
     )

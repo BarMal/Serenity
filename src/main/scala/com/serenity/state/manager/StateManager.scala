@@ -138,7 +138,10 @@ final case class FileService(
     refreshDictionaryFingerprints: IO[Unit],
     // The directories docked explorers show, and a way to have them re-listed after a change made outside the editor.
     explorerWatchDirectories: IO[Set[Path]],
-    markExplorerDirectoriesStale: Set[Path] => IO[Unit]
+    markExplorerDirectoriesStale: Set[Path] => IO[Unit],
+    // #1992: AppRuntime's focus callback calls this when the window loses focus, for the auto-save modes that write
+    // then; it does nothing under the others.
+    autoSaveOnWindowFocusLost: IO[Unit]
 )
 
 trait StateManager extends StateEngine:
@@ -264,7 +267,10 @@ object StateManager:
         forgetClosedBuffers = ClosedBufferRetention.forgetRenderCaches(runtime.renderCaches),
         dictionaryCache = runtime.dictionaryCache
       )
-      .map(operations => new StateManagerImpl(runtime, operations))
+      .flatMap { operations =>
+        val manager = new StateManagerImpl(runtime, operations)
+        operations.installAutoSave(manager.composition.autoSave.saveBuffer).as(manager)
+      }
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
     // issue #931: category tabs (and the `activeCategory` field they drove) are retired, so this no longer names a

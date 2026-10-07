@@ -134,6 +134,26 @@ object CommandRunnerSettingsItems:
       hint = "Render a flagged paragraph's first letter as a large multi-line glyph"
     )
 
+  private[command] def autoSaveModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    def option(label: String, mode: AutoSaveMode): CommandOption =
+      CommandOption(
+        label,
+        CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAutoSaveMode(mode)))
+      )
+    CommandSurfaceItem.OptionItem(
+      id = "auto-save-mode",
+      label = "Auto Save",
+      options = List(
+        option("Off", AutoSaveMode.Off),
+        option("After Delay", AutoSaveMode.AfterDelay),
+        option("On Focus Change", AutoSaveMode.OnFocusChange),
+        option("On Window Change", AutoSaveMode.OnWindowChange)
+      ),
+      selectedIndex = optionSelections.getOrElse("auto-save-mode", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Write a file's unsaved changes after a pause, or when you leave the buffer or window")
+    )
+
   private[command] def appModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "app-mode",

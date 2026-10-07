@@ -64,17 +64,19 @@ object AppRuntime:
     * loop was in its own cadence. Regaining focus flips the signal the idle loop is waiting on --
     * `awaitFocusedIdleTick` picks that up and resumes the normal cadence on its own -- and runs `onFocusGained` (#1623:
     * re-checking the focused buffer's file for external changes), defaulted to a no-op for callers that don't need it
-    * (most existing tests).
+    * (most existing tests). Losing focus runs `onFocusLost` last (#1992: the auto-save modes that write when the window
+    * is left), after the caret and render are settled.
     */
   private[serenity] def onWindowFocusChanged(
     focused: Boolean,
     windowFocused: SignallingRef[IO, Boolean],
     cursorVisible: Ref[IO, Boolean],
     requestFastRender: IO[Unit],
-    onFocusGained: IO[Unit] = IO.unit
+    onFocusGained: IO[Unit] = IO.unit,
+    onFocusLost: IO[Unit] = IO.unit
   ): IO[Unit] =
     if focused then windowFocused.set(true) >> onFocusGained
-    else windowFocused.set(false) >> resetCursorActivity(cursorVisible) >> requestFastRender
+    else windowFocused.set(false) >> resetCursorActivity(cursorVisible) >> requestFastRender >> onFocusLost
 
   /** The idle loop's per-tick wait: the normal cursor idle cadence while the window is focused, or an indefinite,
     * wakeup-free wait otherwise -- the mechanism that actually stops idle wakeups, rather than merely skipping the
@@ -206,7 +208,8 @@ object AppRuntime:
               cursorVisible,
               requestFastRender,
               resizeCallbackDispatcher,
-              stateManager.fileService.checkExternalChangesOnFocus
+              stateManager.fileService.checkExternalChangesOnFocus,
+              stateManager.fileService.autoSaveOnWindowFocusLost
             )
           )
         )
@@ -442,10 +445,11 @@ object AppRuntime:
     cursorVisible: Ref[IO, Boolean],
     requestFastRender: IO[Unit],
     dispatcher: Dispatcher[IO],
-    onFocusGained: IO[Unit] = IO.unit
+    onFocusGained: IO[Unit] = IO.unit,
+    onFocusLost: IO[Unit] = IO.unit
   )(using logger: Logger[IO]): Boolean => Unit =
     focused =>
       dispatchIfRunning(dispatcher)(
-        onWindowFocusChanged(focused, windowFocused, cursorVisible, requestFastRender, onFocusGained)
+        onWindowFocusChanged(focused, windowFocused, cursorVisible, requestFastRender, onFocusGained, onFocusLost)
           .handleErrorWith(error => logger.error(error)("[RUNTIME] focus callback failed"))
       )
