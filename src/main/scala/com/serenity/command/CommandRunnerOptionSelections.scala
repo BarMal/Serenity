@@ -26,6 +26,8 @@ object CommandRunnerOptionSelections:
       "status-word-count"          -> enabledIndex(config.statusLine.segments.contains(StatusSegment.WordCount)),
       "status-char-count"          -> enabledIndex(config.statusLine.segments.contains(StatusSegment.CharCount)),
       "status-reading-time"        -> enabledIndex(config.statusLine.segments.contains(StatusSegment.ReadingTime)),
+      "status-word-goal"           -> enabledIndex(config.statusLine.segments.contains(StatusSegment.WordGoal)),
+      "status-line-ending"         -> enabledIndex(config.statusLine.segments.contains(StatusSegment.LineEnding)),
       "interface-density"          -> interfaceDensityIndex(interfaceConfig.density),
       "window-chrome"              -> windowChromeModeIndex(config.windowChromeMode),
       "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
