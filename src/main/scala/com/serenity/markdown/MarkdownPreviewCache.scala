@@ -2,10 +2,13 @@ package com.serenity.markdown
 
 import java.awt.Font
 import java.awt.image.BufferedImage
+import java.lang.ref.WeakReference
 import java.util.LinkedHashMap
+import java.util.concurrent.atomic.AtomicReference
 
 import scala.util.hashing.MurmurHash3
 
+import com.serenity.rope.Rope
 import com.serenity.ui.theme.Theme
 
 /** Bounded render caches backing [[MarkdownDocumentPreview]], split out so the rendering logic itself isn't buried
@@ -65,6 +68,25 @@ final class MarkdownPreviewCache private[markdown] (
       ): Boolean =
         size() > MaxCachedInlineDocuments
 
+  private val previewRowsMemo = AtomicReference(List.empty[PreviewRowsEntry])
+
+  /** The preview rows of the few most recently shown documents, found again by the identity of the document's `Rope`
+    * rather than by its text: a `Rope` is persistent, so an unedited document is the same object on every frame and
+    * recognising it costs nothing, where fingerprinting its text means reading all of it. Identity is used instead of
+    * `Document.contentVersion` because undo restores an older document with its older version number, after which a
+    * fresh edit can reach a version that already named different text. The weak reference lets a closed document's
+    * `Rope` be collected.
+    */
+  private[markdown] def cachedPreviewRows(content: Rope, rowCount: Int)(render: => Vector[String]): Vector[String] =
+    previewRowsMemo.get.find(_.matches(content, rowCount)).map(_.rows).getOrElse {
+      val rendered = render
+      val _ = previewRowsMemo.updateAndGet(current =>
+        (PreviewRowsEntry(WeakReference(content), rowCount, rendered) :: current
+          .filter(entry => Option(entry.content.get).isDefined)).take(MaxCachedPreviewRowSets)
+      )
+      rendered
+    }
+
   private[markdown] def cachedHtmlFragment(key: HtmlFragmentCacheKey)(render: => String): String =
     htmlFragmentCache.synchronized(Option(htmlFragmentCache.get(key))).getOrElse {
       val rendered = render
@@ -122,6 +144,11 @@ object MarkdownPreviewCache:
 
   private val MaxCachedHtmlFragments   = 48
   private val MaxCachedInlineDocuments = 32
+  private val MaxCachedPreviewRowSets  = 4
+
+  final private case class PreviewRowsEntry(content: WeakReference[Rope], rowCount: Int, rows: Vector[String]):
+    def matches(candidate: Rope, candidateRowCount: Int): Boolean =
+      rowCount == candidateRowCount && Option(content.get).exists(_ eq candidate)
 
   final case class SourceFingerprint(length: Int, hash: Int)
 

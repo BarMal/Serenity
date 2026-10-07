@@ -199,7 +199,10 @@ object DictionaryLoader:
   ): DictionarySnapshot =
     val normalized  = config.normalized
     val sourcePaths = SpellCheckConfig.discoverDictionarySourcePaths(normalized, osDictionaryDirectories)
-    val bundled = if normalized.enabled then BundledDictionary.defaultsFor(normalized.languages, sourcePaths) else Nil
+    // Every bundled dictionary that could apply, whether or not a supplied dictionary turns out to load: the cache
+    // must keep an entry for each, and `loadedBundled` narrows them once the supplied dictionaries have loaded.
+    val bundled =
+      if normalized.enabled then BundledDictionary.defaultsFor(normalized.languages, sourcePaths, _ => false) else Nil
     // #860: a dictionary that left the config must not linger in the cache forever -- every load re-derives the
     // currently configured dictionaries and prunes anything else before (re)loading them.
     cache.retainOnly(sourcePaths.map(DictionaryCache.keyOf).toSet ++ bundled.map(DictionaryCache.keyOf))
@@ -209,15 +212,26 @@ object DictionaryLoader:
       DictionaryMergeInputs(normalized, fingerprints, bundled.map(_.name)),
       () =>
         val sourceResults  = sourcePaths.map(loadDictionary(_, cache))
-        val bundledResults = bundled.map(loadBundled(_, cache))
+        val loadedBundled  = loadedBundledDictionaries(normalized, sourcePaths.zip(sourceResults), bundled)
+        val bundledResults = loadedBundled.map(loadBundled(_, cache))
         mergeSnapshot(
           normalized,
           sourceResults ++ bundledResults,
           fingerprints,
           osDictionaryDirectories,
-          unresolvedLanguages(normalized, sourcePaths.zip(sourceResults), bundled.zip(bundledResults))
+          unresolvedLanguages(normalized, sourcePaths.zip(sourceResults), loadedBundled.zip(bundledResults))
         )
     )
+
+  private def loadedBundledDictionaries(
+    config: SpellCheckConfig,
+    sources: List[(Path, DictionaryLoadResult)],
+    candidates: List[BundledDictionary]
+  ): List[BundledDictionary] =
+    val loaded = sources.collect { case (path, result) if !result.wordList.isEmpty => path }.toSet
+    val needed =
+      BundledDictionary.defaultsFor(config.languages, sources.map(_._1), loaded.contains).toSet
+    candidates.filter(needed.contains)
 
   private def mergeSnapshot(
     normalized: SpellCheckConfig,
@@ -279,7 +293,7 @@ object DictionaryLoader:
       compoundWordMax = compoundWordMax,
       compoundFlagTrie = compoundFlagTrie,
       compoundCheckRules = compoundCheckRules,
-      missingDictionary = languagesToAnnounce(normalized, stems.nonEmpty, fallbackWords.nonEmpty, unresolved).map(
+      missingDictionary = languagesToAnnounce(normalized, stems.nonEmpty, unresolved).map(
         missingDictionaryNotice(normalized, _, osDictionaryDirectories)
       )
     )
@@ -298,25 +312,25 @@ object DictionaryLoader:
       .collect { case (path, result) if !result.wordList.isEmpty => path }
       .map(BundledDictionary.dictionaryLanguage)
     val servedByBundled = bundled.collect {
-      case (dictionary, result) if !result.wordList.isEmpty => dictionary.languages
+      case (dictionary, result) if !result.wordList.isEmpty => dictionary.servedLanguages
     }.flatten
     Option.when(loadedNames.forall(_.exists(requested.contains))) {
       val served = loadedNames.flatten.toSet ++ servedByBundled
       config.languages.filterNot(language => served.contains(BundledDictionary.languageKey(language)))
     }
 
-  /** Every configured language when nothing at all resolved; otherwise only the unserved ones, and only while some
-    * dictionary did load (a built-in fallback list is too small to count as serving a language).
+  /** Every configured language when no dictionary loaded; otherwise only the unserved ones. A built-in fallback list is
+    * too small to count as serving a language, so it never suppresses the notice. Nothing is announced while spell
+    * check is disabled.
     */
   private def languagesToAnnounce(
     config: SpellCheckConfig,
     hasStems: Boolean,
-    hasFallbackWords: Boolean,
     unresolved: Option[List[String]]
   ): Option[List[String]] =
-    if !hasStems && !hasFallbackWords then Some(config.languages)
-    else if hasStems && config.enabled then unresolved.filter(_.nonEmpty)
-    else None
+    if !config.enabled then None
+    else if !hasStems then Some(config.languages)
+    else unresolved.filter(_.nonEmpty)
 
   private def missingDictionaryNotice(
     config: SpellCheckConfig,
