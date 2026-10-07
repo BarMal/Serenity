@@ -25,6 +25,8 @@ class DynamicMenuSpec extends AnyFlatSpec with Matchers:
     val base = Buffer.fromString(BufferId(id), "text")
     base.copy(document = base.document.copy(filePath = file.map(Paths.get(_)), isDirty = dirty))
 
+  private def absolute(path: String): Path = Paths.get(path).toAbsolutePath.normalize
+
   private def withBuffers(buffers: List[Buffer], active: Int): AppState =
     val pane = EditorPane.withBuffer(PaneId(0), BufferId(active))
     AppState(persisted =
@@ -54,7 +56,7 @@ class DynamicMenuSpec extends AnyFlatSpec with Matchers:
     val section = recent(withRecent(List(Paths.get("/work/notes/new.md"), Paths.get("/home/me/old.txt"))))
 
     chosen(section).map(c => (c.label, c.description)) shouldBe
-      List(("new.md", Some("/work/notes")), ("old.txt", Some("/home/me")))
+      List(("new.md", Some(absolute("/work/notes").toString)), ("old.txt", Some(absolute("/home/me").toString)))
     chosen(section).map(_.choice) shouldBe
       List(Choice.RecentFile(Paths.get("/work/notes/new.md")), Choice.RecentFile(Paths.get("/home/me/old.txt")))
   }
@@ -119,7 +121,7 @@ class DynamicMenuSpec extends AnyFlatSpec with Matchers:
       withBuffers(List(buffer(0, Some("/p/a.md")), buffer(1, Some("/p/b.md"), dirty = true), buffer(2, None)), 0)
 
     chosen(windows(app)).map(_.description) shouldBe
-      List(Some("/p/a.md"), Some("/p/b.md (unsaved changes)"), None)
+      List(Some(Paths.get("/p/a.md").toString), Some(s"${Paths.get("/p/b.md")} (unsaved changes)"), None)
   }
 
   it should "number the first nine buffers as mnemonics 1 to 9 and leave the rest without" in {
@@ -149,5 +151,5 @@ class DynamicMenuSpec extends AnyFlatSpec with Matchers:
     chosen(windows(app)).map(c => List(MenuDispatch.eventFor(c.choice))) shouldBe
       List(List(ActivateBuffer(BufferId(0))), List(ActivateBuffer(BufferId(1))))
     chosen(oneFile).map(c => List(MenuDispatch.eventFor(c.choice))) shouldBe
-      List(List(OpenRecentPath(Paths.get("/a/one.md"))))
+      List(List(OpenRecentPath(absolute("/a/one.md"))))
   }
