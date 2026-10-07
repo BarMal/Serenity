@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.frontend.FrontendCapabilities
+import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.LineRange
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -107,7 +108,8 @@ class VisibleBufferLinesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "count the rows the viewport says for a buffer drawn in the code font" in {
-    val buffer = bufferOf(shortLines, viewport(topLine = 10, visibleLines = 8))
+    val plain  = bufferOf(shortLines, viewport(topLine = 10, visibleLines = 8))
+    val buffer = plain.copy(document = plain.document.copy(language = Some(LanguageId.Scala)))
 
     VisibleBufferLines.of(buffer, AppState.initial) shouldBe LineRange(10, 17)
   }
