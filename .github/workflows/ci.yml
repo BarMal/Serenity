@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request supersedes its older runs; cancelling them frees runners (macOS especially) for current
+# heads. Master pushes are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   style:
     name: Scalafmt and Scalafix
@@ -131,6 +137,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 50
 
     steps:
       - name: Check out repository
@@ -147,7 +154,8 @@ jobs:
         uses: sbt/setup-sbt@v1
 
       - name: Run tests
-        run: sbt -v clean test
+        # Fails with a thread dump after 40 minutes instead of holding the runner for 6 hours on a hang.
+        run: bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test
 
   real-boundary:
     name: Real-OS-boundary specs
