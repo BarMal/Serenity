@@ -134,7 +134,7 @@ object RendererPaneContent:
 
     buffer match
       case Some(buf) if buf.document.content.weight == 0 && buf.document.isNewEmpty =>
-        RendererStartPage.renderWelcomeText(contentRect, state.persisted.theme, context)
+        RendererStartPage.renderWelcomeText(contentRect, state.persisted.theme, context, state.persisted.config)
       case Some(buf) if buf.document.content.weight == 0 =>
         RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)
       case Some(buf) if paintsColumns =>
