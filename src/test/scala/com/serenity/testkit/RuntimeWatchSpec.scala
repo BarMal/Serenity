@@ -109,6 +109,21 @@ class RuntimeWatchSpec extends AnyFlatSpec with Matchers:
     RuntimeWatch.describePool(probedIsCurrent = false, Nil).mkString should include("shut down and the global replaced")
   }
 
+  it should "explain a pool that is gone while the runtime still looks alive" in {
+    val text = RuntimeWatch.describePool(probedIsCurrent = true, Nil).mkString("\n")
+
+    text should include("shutdown hook never ran")
+    text should include("[RUNTIME-SHUTDOWN]")
+  }
+
+  it should "not blame the interrupt flag when the global runtime was replaced or still has workers" in {
+    RuntimeWatch.describePool(probedIsCurrent = false, Nil).mkString should not include "shutdown hook never ran"
+    val worker = HangReport.ThreadStack("io-compute-0", Nil, "WAITING")
+    RuntimeWatch
+      .describePool(probedIsCurrent = true, List(worker))
+      .mkString should not include "shutdown hook never ran"
+  }
+
   "The unresponsive report" should "name the runtime, describe its pool, and dump every thread including io-* ones" in
     withRuntime { runtime =>
       val report = RuntimeWatch.unresponsiveReport("no answer", runtime, runtime)
