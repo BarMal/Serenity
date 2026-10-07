@@ -11,6 +11,9 @@ import com.monovore.decline.{Command, Help, Opts}
   * @param safeMode
   *   `--safe-mode`: default settings, no session, no language servers, spell check or project tasks, and nothing on
   *   disk touched. See [[SafeMode]].
+  * @param smokeTest
+  *   `--smoke-test`: open the window, print [[SmokeTest.readyLine]] once the first frame is painted, then quit as if
+  *   the window had been closed. Used by CI to prove a packaged app image starts. Always the windowed interface.
   * @param resetConfig
   *   `--reset-config`: move `config.conf` aside to a timestamped backup before starting. See [[LaunchReset]].
   * @param resetSession
@@ -24,6 +27,7 @@ final case class LaunchOptions(
     alpha: Boolean = false,
     showVersion: Boolean = false,
     safeMode: Boolean = false,
+    smokeTest: Boolean = false,
     resetConfig: Boolean = false,
     resetSession: Boolean = false
 ):
@@ -71,6 +75,14 @@ object LaunchOptions:
       Opts.flag("safe", "Alias for --safe-mode.").orFalse
     ).mapN(_ || _)
 
+  private val smokeTest: Opts[Boolean] =
+    Opts
+      .flag(
+        "smoke-test",
+        "Open the window, print a ready line once the first frame is painted, then quit. Used to check a packaged build."
+      )
+      .orFalse
+
   private val resetConfig: Opts[Boolean] =
     Opts
       .flag(
@@ -89,7 +101,7 @@ object LaunchOptions:
 
   val command: Command[LaunchOptions] =
     Command("serenity", "A calm text editor.")(
-      (open, eco, tui, gui, alpha, version, safeMode, resetConfig, resetSession).mapN(LaunchOptions.apply)
+      (open, eco, tui, gui, alpha, version, safeMode, smokeTest, resetConfig, resetSession).mapN(LaunchOptions.apply)
     )
 
   /** `Left` carries the text to print. `Help.errors` distinguishes the two reasons: empty for a `--help` request,
@@ -105,12 +117,13 @@ object LaunchOptions:
 
   /** Whether this launch should use the terminal shell rather than Swing.
     *
-    * `--gui` always wins when both flags are given -- it exists specifically to force the Swing path even when
-    * auto-detection would otherwise pick the terminal (see issue #1112). Absent an explicit flag, the terminal is used
-    * only when there is no display to put a window on (`$DISPLAY` and `$WAYLAND_DISPLAY` both unset/empty) *and* stdout
-    * is actually a terminal a person can interact with -- a display-less, non-interactive invocation (e.g. a script
-    * piping stdout, or a CI job with neither a display nor a pty) falls through to the GUI path rather than silently
-    * entering raw terminal mode against a stream that can never supply keystrokes.
+    * `--smoke-test` always uses the window, as `--gui` does. `--gui` always wins when both flags are given -- it exists
+    * specifically to force the Swing path even when auto-detection would otherwise pick the terminal (see issue #1112).
+    * Absent an explicit flag, the terminal is used only when there is no display to put a window on (`$DISPLAY` and
+    * `$WAYLAND_DISPLAY` both unset/empty) *and* stdout is actually a terminal a person can interact with -- a
+    * display-less, non-interactive invocation (e.g. a script piping stdout, or a CI job with neither a display nor a
+    * pty) falls through to the GUI path rather than silently entering raw terminal mode against a stream that can never
+    * supply keystrokes.
     */
   def resolveTuiMode(
     options: LaunchOptions,
@@ -118,7 +131,7 @@ object LaunchOptions:
     stdoutIsTty: Boolean = System.console() != null,
     osName: String = osNameProperty
   ): Boolean =
-    if options.gui then false
+    if options.gui || options.smokeTest then false
     else if options.tui then true
     else detectTuiByDefault(env, stdoutIsTty, osName)
 

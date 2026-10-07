@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
@@ -13,6 +14,7 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalStateReducer, PeekStateReducer}
 import com.serenity.testkit.AwaitCondition.awaitValue
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import com.serenity.ui.widget.TextField
 import org.scalatest.concurrent.Eventually
@@ -30,9 +32,15 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-  private def createStateManager(): StateManager =
+  private def createStateManager(config: AppConfig = AppConfig.default): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerReducerRoutingSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager
+      .apply(logger, initialConfig = config, dictionaryCache = SharedDictionary.cacheFor(config))
+      .unsafeRunSync()
+
+  // The edits below start a background spell-check analysis whose result commits a diagnostics entry whenever it lands,
+  // which would change the state this spec compares against. Analysis is not what the modal gate is about.
+  private val noBackgroundAnalysis: AppConfig = AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = false))
 
   "StateManager.applyEvent" should "toggle the command runner through the application event path" in {
     val stateManager = createStateManager()
@@ -69,7 +77,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
     val tempFile = Files.createTempFile("state-manager-modal-gate", ".scala")
 
     try
-      val stateManager = createStateManager()
+      val stateManager = createStateManager(noBackgroundAnalysis)
       val bufferId     = stateManager.createBuffer("unsaved", None).unsafeRunSync()
 
       stateManager

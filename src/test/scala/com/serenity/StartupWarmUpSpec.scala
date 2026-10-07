@@ -16,6 +16,7 @@ import com.serenity.lsp.model.SemanticToken
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, AppStateValidation, Damage, Focus}
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -41,9 +42,8 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  private def warmUpDirectories: Set[Path] =
-    val tmp = Path.of(System.getProperty("java.io.tmpdir"))
-    Files.list(tmp).iterator().asScala.filter(_.getFileName.toString.startsWith("serenity-warm-up")).toSet
+  private def warmUpDirectories(scratchRoot: Path): Set[Path] =
+    Files.list(scratchRoot).iterator().asScala.filter(_.getFileName.toString.startsWith("serenity-warm-up")).toSet
 
   "StartupWarmUp.document" should "be deterministic prose, one paragraph per line with blank lines between" in {
     val document = StartupWarmUp.document(paragraphs = 5)
@@ -101,12 +101,17 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
 
   it should "leave the session it starts from untouched, and clean up after itself" in {
     val sessionRoot = Files.createTempDirectory("serenity-warm-up-spec-session")
+    val scratchRoot = Files.createTempDirectory("serenity-warm-up-spec-scratch")
     val program = for
-      user <- StateManager.apply(NoOpLogger[IO], sessionRootOverride = Some(sessionRoot))
-      _    <- user.applyEvent(ResizeEvent(viewport))
-      _    <- "draft".toList.traverse_(char => user.applyEvent(InsertChar(char)))
-      _    <- user.runtimeLifecycle.awaitEffects
-      before      = warmUpDirectories
+      user <- StateManager.apply(
+        NoOpLogger[IO],
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
+      )
+      _ <- user.applyEvent(ResizeEvent(viewport))
+      _ <- "draft".toList.traverse_(char => user.applyEvent(InsertChar(char)))
+      _ <- user.runtimeLifecycle.awaitEffects
+      before      = warmUpDirectories(scratchRoot)
       filesBefore = sessionFiles(sessionRoot)
       modelBefore <- user.getModel
       drawn       <- Ref.of[IO, Drawn](Drawn(Vector.empty, 0))
@@ -117,10 +122,11 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
         viewport,
         recordingFrames(drawn),
         noInput,
-        smallPlan
+        smallPlan,
+        scratchRoot
       )
       modelAfter <- user.getModel
-    yield (modelBefore, modelAfter, filesBefore, sessionFiles(sessionRoot), before, warmUpDirectories)
+    yield (modelBefore, modelAfter, filesBefore, sessionFiles(sessionRoot), before, warmUpDirectories(scratchRoot))
 
     val (modelBefore, modelAfter, filesBefore, filesAfter, directoriesBefore, directoriesAfter) =
       program.unsafeRunTimed(60.seconds).getOrElse(fail("the warm-up did not finish"))
@@ -128,6 +134,31 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
     modelAfter shouldBe modelBefore
     filesAfter shouldBe filesBefore
     directoriesAfter shouldBe directoriesBefore
+  }
+
+  it should "keep its session directory inside the scratch root it is given, removing it when done" in {
+    val scratchRoot = Files.createTempDirectory("serenity-warm-up-spec-scratch")
+    val program = for
+      seen    <- Ref.of[IO, Set[Path]](Set.empty)
+      drawn   <- Ref.of[IO, Drawn](Drawn(Vector.empty, 0))
+      noInput <- Deferred[IO, Unit]
+      observe = IO.blocking(warmUpDirectories(scratchRoot)).flatMap(found => seen.update(_ ++ found))
+      _ <- StartupWarmUp.run(
+        AppConfig.default,
+        Theme.dark,
+        viewport,
+        recordingFrames(drawn, afterFull = observe),
+        noInput,
+        smallPlan,
+        scratchRoot
+      )
+      during <- seen.get
+    yield during
+
+    val during = program.unsafeRunTimed(60.seconds).getOrElse(fail("the warm-up did not finish"))
+
+    during.size shouldBe 1
+    warmUpDirectories(scratchRoot) shouldBe Set.empty
   }
 
   // The input lands from inside the third frame, so the loop itself must see it before a fourth step starts: waiting on

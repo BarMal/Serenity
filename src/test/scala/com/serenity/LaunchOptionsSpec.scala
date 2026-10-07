@@ -79,6 +79,16 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
     parsed(List("notes.md")).showVersion shouldBe false
   }
 
+  it should "recognise --smoke-test and leave it off by default" in {
+    parsed(List("--smoke-test")).smokeTest shouldBe true
+    parsed(List("notes.md")).smokeTest shouldBe false
+  }
+
+  it should "use the window for --smoke-test even where the terminal would be chosen" in {
+    val options = parsed(List("--smoke-test"))
+    LaunchOptions.resolveTuiMode(options, env = Map.empty, stdoutIsTty = true, osName = "Linux") shouldBe false
+  }
+
   it should "start normally, without safe mode or any reset, when none is asked for" in {
     val options = parsed(List("notes.md"))
     (options.safeMode, options.resetConfig, options.resetSession) shouldBe (false, false, false)

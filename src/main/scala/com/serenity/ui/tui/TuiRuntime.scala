@@ -175,7 +175,8 @@ object TuiRuntime:
     previewWindowAvailability: MarkdownPreviewWindowAvailability,
     projectTasksEnabled: Boolean = true,
     restarter: Option[RestartMode => IO[Unit]] = None,
-    uiPresetStore: com.serenity.ui.presets.UiPresetStore = com.serenity.ui.presets.UiPresetStore.default
+    uiPresetStore: com.serenity.ui.presets.UiPresetStore = com.serenity.ui.presets.UiPresetStore.default,
+    dictionaryCache: com.serenity.spellcheck.DictionaryCache = com.serenity.spellcheck.DictionaryCache()
   )(using LoggerFactory[IO], com.serenity.rope.Balance): Logger[IO] => IO[StateManager] =
     logger =>
       StateManager.apply(
@@ -194,7 +195,8 @@ object TuiRuntime:
         markdownPreviewWindow = previewWindowAvailability,
         projectTasksEnabled = projectTasksEnabled,
         restarter = restarter,
-        uiPresetStore = uiPresetStore
+        uiPresetStore = uiPresetStore,
+        dictionaryCache = dictionaryCache
       )
 
   /** Maps #1109's negotiated wire-protocol tier onto the state layer's fidelity concept (issue #1194) --
@@ -317,8 +319,13 @@ object TuiRuntime:
     accessibilityBridge: TuiAccessibilityBridge
   ): IO[Unit] =
     accessibilitySync
-      .sync(state)(previous => IO(AccessibilitySnapshot.from(state, size, previous)))
-      .flatMap(snapshot => IO(accessibilityBridge.publish(snapshot)))
+      .sync(state)(previous => IO(AccessibilitySnapshot.from(state, size, previous, accessibilitySync.previewCache)))
+      .flatMap(snapshot =>
+        IO {
+          accessibilityBridge.publishTitle(TuiWindowTitle.from(state))
+          accessibilityBridge.publish(snapshot)
+        }
+      )
 
   private def renderFullFn(
     surfaceHolder: SurfaceHolder,

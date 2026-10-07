@@ -11,6 +11,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -30,7 +31,11 @@ class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Mat
     val logger = LoggerFactory[IO].getLogger(using LoggerName("FileWorkflowOpenAsProjectRootStateManagerSpec"))
     // Spell check off: its background analysis commits on its own and these specs compare states across a command.
     StateManager
-      .apply(logger, initialConfig = AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = false)))
+      .apply(
+        logger,
+        initialConfig = AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = false)),
+        dictionaryCache = SharedDictionary.default
+      )
       .unsafeRunSync()
 
   private def currentWorkflow(stateManager: StateManager): Option[FileWorkflowState] =
