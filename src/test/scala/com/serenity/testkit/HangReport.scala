@@ -2,6 +2,9 @@ package com.serenity.testkit
 
 import java.lang.management.{ManagementFactory, ThreadInfo}
 
+import scala.jdk.CollectionConverters.SetHasAsScala
+
+import cats.effect.unsafe.IORuntime
 import org.scalatest.Reporter
 import org.scalatest.events.{AlertProvided, Event}
 
@@ -19,7 +22,8 @@ object HangReport:
       frames: List[String],
       state: String = "",
       waitingOn: Option[LockWait] = None,
-      held: List[String] = Nil
+      held: List[String] = Nil,
+      interrupted: Boolean = false
   )
 
   private val SuiteThreadMarker   = "ScalaTest-running-"
@@ -43,11 +47,14 @@ object HangReport:
     ("[HANG-REPORT] " + alert :: deadlock ::: threads ::: idleLine).mkString("\n")
 
   private def renderThread(stack: ThreadStack): List[String] =
-    val state = if stack.state.isEmpty then "" else s" [${stack.state}]"
+    val state =
+      List(stack.state, if stack.interrupted then "interrupted" else "").filter(_.nonEmpty).map(s => s" [$s]").mkString
     val waiting =
       stack.waitingOn.map(w => s" waiting on ${w.lock}" + w.owner.fold("")(o => s" held by $o")).getOrElse("")
     val holds = if stack.held.isEmpty then Nil else List(s"    holds ${stack.held.mkString(", ")}")
     s"  thread ${stack.name}$state$waiting" :: holds ::: ownFrames(stack).map(f => s"    at $f")
+
+  private def renderHeader(stack: ThreadStack): String = renderThread(stack.copy(frames = Nil)).mkString("\n")
 
   private def ownFrames(stack: ThreadStack): List[String] =
     stack.frames.takeWhile(frame => !PlumbingFrames.exists(frame.contains)).take(MaxFrames)
@@ -71,17 +78,29 @@ object HangReport:
   def suiteThreadStacks(): List[ThreadStack] =
     allThreadStacks().filter(_.name.contains(SuiteThreadMarker)).sortBy(_.name)
 
-  private def allThreadStacks(): List[ThreadStack] =
-    ManagementFactory.getThreadMXBean.dumpAllThreads(true, true).toList.map(fromThreadInfo)
+  /** Every live thread with its complete stack, for the report of a runtime that can no longer run anything. */
+  def allThreadStacks(): List[ThreadStack] =
+    val interrupted = Thread.getAllStackTraces.keySet.asScala.filter(_.isInterrupted).map(_.getName).toSet
+    ManagementFactory.getThreadMXBean
+      .dumpAllThreads(true, true)
+      .toList
+      .map(info => fromThreadInfo(info, interrupted.contains(info.getThreadName)))
 
-  private def fromThreadInfo(info: ThreadInfo): ThreadStack =
+  private def fromThreadInfo(info: ThreadInfo, interrupted: Boolean): ThreadStack =
     ThreadStack(
       info.getThreadName,
       info.getStackTrace.toList.map(_.toString),
       info.getThreadState.toString,
       Option(info.getLockName).map(LockWait(_, Option(info.getLockOwnerName))),
-      info.getLockedMonitors.toList.map(_.toString) ::: info.getLockedSynchronizers.toList.map(_.toString)
+      info.getLockedMonitors.toList.map(_.toString) ::: info.getLockedSynchronizers.toList.map(_.toString),
+      interrupted
     )
+
+  def renderDump(stacks: List[ThreadStack]): String =
+    stacks
+      .sortBy(_.name)
+      .flatMap(stack => renderHeader(stack) :: stack.frames.map(frame => s"    at $frame"))
+      .mkString("\n")
 
   def deadlockedThreadNames(): List[String] =
     Option(ManagementFactory.getThreadMXBean.findDeadlockedThreads())
@@ -91,24 +110,36 @@ object HangReport:
 end HangReport
 
 /** Prints every alert (the slowpoke detector's "test running for N seconds" included) straight to stdout, with the
-  * thread stacks [[HangReport.threadStacks]] chooses. CI's runner shows only the aggregate counts once a run ends, so
-  * the console reporter's alerts never reach the log of a run that hangs; this one does.
+  * thread stacks [[HangReport.threadStacks]] chooses, and checks on each one that the IO runtime can still run a fiber.
+  * CI's runner shows only the aggregate counts once a run ends, so the console reporter's alerts never reach the log of
+  * a run that hangs; this one does.
   */
 final class HangReporter(
     emit: String => Unit,
     stacks: () => List[HangReport.ThreadStack],
-    deadlocked: () => List[String]
+    deadlocked: () => List[String],
+    liveness: () => RuntimeWatch.Liveness,
+    unresponsiveReport: String => String,
+    abort: String => Unit
 ) extends Reporter:
 
   def this() = this(
-    text =>
-      System.out.print(text + System.lineSeparator)
-      System.out.flush()
-    ,
+    RuntimeWatch.print,
     () => HangReport.threadStacks(),
-    () => HangReport.deadlockedThreadNames()
+    () => HangReport.deadlockedThreadNames(),
+    () => RuntimeWatch.probe(RuntimeWatch.install(), RuntimeWatch.ProbeDeadline),
+    cause => RuntimeWatch.unresponsiveReport(cause, RuntimeWatch.install(), IORuntime.global),
+    RuntimeWatch.abortRun
   )
 
   override def apply(event: Event): Unit = event match
-    case alert: AlertProvided => emit(HangReport.render(alert.message, stacks(), deadlocked()))
-    case _                    => ()
+    case alert: AlertProvided =>
+      emit(HangReport.render(alert.message, stacks(), deadlocked()))
+      liveness() match
+        case RuntimeWatch.Liveness.Unresponsive(cause) =>
+          emit(unresponsiveReport(cause))
+          abort(cause)
+        case RuntimeWatch.Liveness.Responsive => ()
+    case _ => ()
+
+end HangReporter

@@ -250,6 +250,8 @@ lazy val root = (project in file("."))
       // detector raises an alert naming any test still running after 120 s, then every 60 s; HangReporter prints
       // those alerts straight to stdout together with the stacks of the threads running suites, the IO runtime's
       // compute and blocker threads, and any thread blocked, holding a lock or waiting on a class/lazy-val initialiser.
+      // Each alert also probes the global IO runtime with a trivial IO and aborts the run, with the thread dump, when it
+      // cannot answer; the reporter's construction installs the JVM-wide uncaught-exception handler (RuntimeWatch).
       Tests.Argument(TestFrameworks.ScalaTest, "-W", "120", "60"),
       Tests.Argument(TestFrameworks.ScalaTest, "-C", "com.serenity.testkit.HangReporter")
     ),
