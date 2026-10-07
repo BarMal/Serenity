@@ -1,11 +1,14 @@
 package com.serenity.app.instance
 
+import java.net.{StandardProtocolFamily, UnixDomainSocketAddress}
+import java.nio.channels.{Channels, SocketChannel}
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 
 import scala.concurrent.duration.DurationInt
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Resource}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -48,6 +51,34 @@ class InstanceMessengerSpec extends AnyFlatSpec with Matchers:
 
     delivered.unsafeRunSync() shouldBe Delivery.Delivered
     Files.exists(socket) shouldBe false
+  }
+
+  // Half-closing an AF_UNIX socket is not something to depend on across operating systems (Windows' AF_UNIX support is
+  // the youngest), so a request has to be complete, and answered, without its sender ever shutting down its output.
+  it should "acknowledge a request that ends at its newline, without waiting for the sender to half-close" in {
+    val socket  = socketPath()
+    val notes   = Paths.get("/work/notes.md")
+    val request = (InstanceMessenger.encode(List(notes)) + "\n").getBytes(StandardCharsets.UTF_8)
+
+    def sendWithoutHalfClose: IO[String] =
+      Resource
+        .fromAutoCloseable(IO.blocking(SocketChannel.open(StandardProtocolFamily.UNIX)))
+        .use { channel =>
+          IO.interruptible {
+            val _ = channel.connect(UnixDomainSocketAddress.of(socket))
+            Channels.newOutputStream(channel).write(request)
+            new String(Channels.newInputStream(channel).readNBytes(2), StandardCharsets.UTF_8)
+          }
+        }
+
+    val program = InstanceMessenger.serve(socket, logger).use { requests =>
+      for
+        reply    <- sendWithoutHalfClose.timeout(5.seconds)
+        received <- requests.take(1).compile.toList.timeout(5.seconds)
+      yield (reply, received)
+    }
+
+    program.unsafeRunSync() shouldBe ("ok", List(List(notes)))
   }
 
   "InstanceMessenger.decode" should "reject anything that is not a request" in {
