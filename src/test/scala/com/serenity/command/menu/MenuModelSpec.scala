@@ -48,6 +48,20 @@ class MenuModelSpec extends AnyFlatSpec with Matchers:
     namesFor(AppMode.Prose) should contain("open-folder")
   }
 
+  it should "offer one Open... in place of Open File and Open Folder where the dialog takes either" in {
+    val combined = MenuSpec.forOs("Mac OS X", fileOrFolderOpen = true)
+    val ids      = specIds(combined).map(_.value)
+
+    ids.indexOf("open-file-or-folder") shouldBe ids.indexOf("new") + 1
+    ids should not contain "open"
+    ids should not contain "open-folder"
+    specIds(combined).foreach(id => registry.isRegistered(id) shouldBe true)
+  }
+
+  it should "not offer Open... where the dialog cannot take either" in {
+    for spec <- List(linux, mac) do specIds(spec).map(_.value) should not contain "open-file-or-folder"
+  }
+
   "The macOS menu bar" should "leave quit and open-settings to the application menu" in {
     specIds(mac).map(_.value).toSet.intersect(Set("quit", "open-settings", "about")) shouldBe empty
     specIds(linux).map(_.value) should contain allOf ("quit", "open-settings")

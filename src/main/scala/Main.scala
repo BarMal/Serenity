@@ -346,6 +346,7 @@ object Main extends IOApp:
         .use { (swingWin, paintEc) =>
           val actualAppConfig =
             resolveAutoTextScale(appConfig, swingWin.detectedDeviceTextScale)
+          val fileDialog = SwingFileDialog(swingWin.canvas)
           val initialScaleSync =
             if actualAppConfig.editorConfig.fontConfig != appConfig.editorConfig.fontConfig then
               displayState.update(actualAppConfig.editorConfig.fontConfig) >>
@@ -468,7 +469,7 @@ object Main extends IOApp:
                     uiPresetStore = startup.plan.uiPresetStore(session.rootOverride),
                     windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
                     onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
-                    fileDialog = Some(SwingFileDialog(swingWin.canvas))
+                    fileDialog = Some(fileDialog)
                   )
                 ),
                 awaitExternalQuit =
@@ -478,7 +479,8 @@ object Main extends IOApp:
                 registerFocusCallback = cb => swingWin.setOnFocusChange(cb),
                 openPath = launchOptions.openPath,
                 frontend = GuiFrontend,
-                forwardedOpens = session.forwardedOpens.evalTap(_ => IO(swingWin.bringToFront()))
+                forwardedOpens = session.forwardedOpens.evalTap(_ => IO(swingWin.bringToFront())),
+                fileOrFolderOpen = fileDialog.supportsFileOrFolder
               )
             }
         }

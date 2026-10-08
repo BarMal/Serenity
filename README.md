@@ -32,7 +32,7 @@ sbt assembly               # build target/scala-*/Serenity.jar
 ## First steps
 
 1. Start Serenity. The start page offers a new document, **Open file** (`2`) and **Open folder** (`3`) as separate actions
-   (a folder opens in the Explorer), your recent files, and the **Writing**, **Code** and **Compact** workflows (press `W`, `C` or `M`). If a session was saved, `Tab` resumes it.
+   (a folder opens in the Explorer; on macOS one **Open...** (`2`) takes either), your recent files, and the **Writing**, **Code** and **Compact** workflows (press `W`, `C` or `M`). If a session was saved, `Tab` resumes it.
 2. Start typing. Press the command palette key (`Cmd+P` on macOS, `Ctrl+P` on Linux and Windows) and type to find any
    command. Every command can be run from the palette.
 3. Run **Toggle Shortcuts Help** from the palette to see the current bindings, or read the [keyboard reference](docs/user/keyboard.md).

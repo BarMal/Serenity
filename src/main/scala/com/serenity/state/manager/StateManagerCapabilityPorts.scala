@@ -84,6 +84,7 @@ private[manager] trait EffectFilePort:
   def loadFile(path: Path): IO[Unit]
   def openFromDialog(dialog: com.serenity.io.FileDialog): IO[Unit]
   def openFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit]
+  def openFileOrFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit]
   def isSaving(path: Path): IO[Boolean]
   // #1623: re-reads the buffer's file from disk in place (same BufferId, cursor/viewport/undo state untouched),
   // replacing only its document/rich-text content and capturing a fresh revision.

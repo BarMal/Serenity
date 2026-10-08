@@ -184,6 +184,8 @@ private[manager] class StateManagerComposition(
     def openFromDialog(dialog: com.serenity.io.FileDialog): IO[Unit] = filePersistence.openFromDialog(dialog)
     def openFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
       filePersistence.openFolderFromDialog(dialog, openFolder)
+    def openFileOrFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
+      filePersistence.openFileOrFolderFromDialog(dialog, openFolder)
     def isSaving(path: Path): IO[Boolean] = filePersistence.isSaving(path)
 
   private val effectSessionPort: EffectSessionPort = new EffectSessionPort:

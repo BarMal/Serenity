@@ -149,7 +149,8 @@ object AppRuntime:
     configNotice: Option[String] = None,
     recovery: StartupRecovery.Plan = StartupRecovery.Plan.normal,
     onFirstFrame: IO[Unit] = IO.unit,
-    forwardedOpens: Stream[IO, List[Path]] = Stream.empty
+    forwardedOpens: Stream[IO, List[Path]] = Stream.empty,
+    fileOrFolderOpen: Boolean = false
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     (Dispatcher.parallel[IO], Supervisor[IO](await = false)).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
       for
@@ -166,7 +167,7 @@ object AppRuntime:
           initialViewportSize,
           appConfig,
           openPath,
-          frontend.capabilities,
+          frontend.capabilities.copy(opensFileOrFolder = fileOrFolderOpen),
           configNotice,
           recovery
         )

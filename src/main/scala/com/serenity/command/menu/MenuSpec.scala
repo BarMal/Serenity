@@ -7,11 +7,11 @@ final case class MenuSpec(menus: List[(MenuTitle, List[MenuEntry])])
 object MenuSpec:
 
   /** On macOS, quit and settings belong to the application menu, which the platform builds. */
-  def forOs(osName: String): MenuSpec =
+  def forOs(osName: String, fileOrFolderOpen: Boolean = false): MenuSpec =
     val isMac = osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
     MenuSpec(
       List(
-        MenuTitle.File   -> file(isMac),
+        MenuTitle.File   -> file(isMac, fileOrFolderOpen),
         MenuTitle.Edit   -> edit,
         MenuTitle.View   -> view,
         MenuTitle.Window -> window(isMac),
@@ -21,8 +21,10 @@ object MenuSpec:
 
   private def items(names: String*): List[MenuEntry] = names.toList.map(name => MenuEntry.Item(CommandId(name)))
 
-  private def file(isMac: Boolean): List[MenuEntry] =
-    items("new", "open", "open-folder") ++ List(MenuEntry.Dynamic(DynamicSource.RecentFiles)) ++ items(
+  private def file(isMac: Boolean, fileOrFolderOpen: Boolean): List[MenuEntry] =
+    (if fileOrFolderOpen then items("new", "open-file-or-folder") else items("new", "open", "open-folder")) ++ List(
+      MenuEntry.Dynamic(DynamicSource.RecentFiles)
+    ) ++ items(
       "go-to-file",
       "file-search"
     ) ++

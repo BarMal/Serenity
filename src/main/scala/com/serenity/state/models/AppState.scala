@@ -172,7 +172,8 @@ final case class AppState(
       themeNames = runtime.themeDiscovery.availableThemeNames,
       currentThemeName = Some(persisted.theme.name),
       editingContext = Some(editingContext),
-      projectPresence = runtime.projectPresence
+      projectPresence = runtime.projectPresence,
+      opensFileOrFolder = runtime.capabilities.opensFileOrFolder
     )
 
   /** The active editor pane's buffer, if any. */

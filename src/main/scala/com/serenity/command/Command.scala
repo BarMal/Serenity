@@ -167,6 +167,7 @@ enum SessionIntent:
   case StartupRestoreSession
   case StartupOpenFile
   case StartupOpenFolder
+  case StartupOpenFileOrFolder
   case ReturnToStartPage
   // Named sessions (issue #1390): `SaveSession`/`RestoreSession`/`ClearSession` above all operate implicitly on the
   // "current" session (`SessionManager`'s own notion of the one on `SessionIndex.currentSessionId`) -- these three

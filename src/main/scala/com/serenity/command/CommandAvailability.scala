@@ -52,7 +52,8 @@ object CommandAvailability:
   val NeedsSelection: String = "Needs a text selection."
 
   def of(command: Command, context: CommandRunnerContext): Availability =
-    if !CommandRelevance.isAvailable(command, context.editingContext) then Availability.Hidden
+    if !CommandRelevance.isAvailable(command, context.editingContext) || !hasDialogFor(command, context) then
+      Availability.Hidden
     else
       val hasSelection = context.editingContext.map(_.hasSelection)
       CommandPrerequisites.unmetReason(command, context) match
@@ -62,6 +63,12 @@ object CommandAvailability:
             case (SelectionUse.Requires, Some(false))                       => Availability.Disabled(NeedsSelection)
             case (SelectionUse.Requires | SelectionUse.Prefers, Some(true)) => Availability.Boosted
             case _                                                          => Availability.Enabled
+
+  /** Open... exists only where the platform's dialog takes a file or a folder; Open File... and Open Folder... stay
+    * everywhere so a keyboard user can always be explicit.
+    */
+  private def hasDialogFor(command: Command, context: CommandRunnerContext): Boolean =
+    command.intent != CommandIntent.File(FileIntent.OpenFileOrFolder) || context.opensFileOrFolder
 
   /** Formatting marks stay [[SelectionUse.Prefers]]: without a selection they set the mark for what is typed next. */
   def selectionUseOf(intent: CommandIntent): SelectionUse =

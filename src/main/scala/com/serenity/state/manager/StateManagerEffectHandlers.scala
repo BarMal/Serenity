@@ -35,7 +35,7 @@ final private[manager] class StateManagerEffectHandlers(
   private val DoubleTapWindow = 200.millis
 
   private val workflowEffects = new WorkflowEffectHandler(new WorkflowEffectPort:
-    def requestOpenFile: IO[Unit] = requestOpenFileDialog
+    def requestOpenFile: IO[Unit] = requestOpenFileOrFolderDialog
     def requestSaveAs: IO[Unit]   = currentState.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
     def refresh(surfaceId: SurfaceId): IO[Unit]           = refreshFileWorkflowEffect(surfaceId)
     def refreshFind(request: FindSearchRequest): IO[Unit] = scheduleFindSearch(request)
@@ -307,6 +307,8 @@ final private[manager] class StateManagerEffectHandlers(
         requestOpenFileDialog
       case FileIntent.OpenFolder =>
         requestOpenFolderDialog
+      case FileIntent.OpenFileOrFolder =>
+        requestOpenFileOrFolderDialog
       case FileIntent.OpenRecentFile(path) =>
         loadFile(path)
       case FileIntent.OpenFileSearch =>
@@ -400,6 +402,8 @@ final private[manager] class StateManagerEffectHandlers(
         requestOpenFileDialog
       case SessionIntent.StartupOpenFolder =>
         requestOpenFolderDialog
+      case SessionIntent.StartupOpenFileOrFolder =>
+        requestOpenFileOrFolderDialog
       case SessionIntent.ReturnToStartPage =>
         beginCloseAction(CloseScope.ReturnToStartPage, state)
       case SessionIntent.OpenSaveSessionAsPrompt =>
@@ -467,6 +471,13 @@ final private[manager] class StateManagerEffectHandlers(
       case None =>
         // No native dialog to show at all -- fall back to the in-app form, same as the save-as path.
         currentState.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))
+
+  // Where the platform's dialog takes a file or a folder in one go (macOS) that is the open the hotkey and the start
+  // page run; anywhere else, and in the terminal, it is the file dialog, as before.
+  protected def requestOpenFileOrFolderDialog: IO[Unit] =
+    fileDialog.filter(_.supportsFileOrFolder) match
+      case Some(dialog) => openFileOrFolderFromDialog(dialog, openFolderAsProjectRoot)
+      case None         => requestOpenFileDialog
 
   /** The one route a chosen folder takes, whether it came from a native dialog or the in-app form's "Open as root":
     * leave the start page, then pin the Explorer on it.
