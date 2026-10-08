@@ -72,14 +72,14 @@ private[manager] object ReplaceWorkflowTransitions:
       replaceMatches(buffer, matches, workflow.findText, workflow.replacementText)
     val cursorOffset =
       finalCursorOffsetAfterReplacements(
-        replaced,
+        replaced.map(_.start),
         workflow.findText.length,
         workflow.replacementText.length
       )
     val newCursor = updatedContent.offsetToCursorPosition(cursorOffset)
     val updatedFindState =
       refreshedFindState(updatedContent, workflow.findText, requestedIndex = 0)
-    val updatedBuffer = withReplacedContent(buffer, updatedContent, updatedRichText).copy(
+    val updatedBuffer = withReplacedContent(buffer, updatedContent, updatedRichText, replaced).copy(
       editing = EditingState(List(newCursor)),
       findState = updatedFindState
     )
@@ -104,11 +104,11 @@ private[manager] object ReplaceWorkflowTransitions:
   )(using Balance): Model =
     val startOffset = nextReplaceMatchOffset(buffer, matches)
     val endOffset   = startOffset + workflow.findText.length
-    val (updatedContent, updatedRichText, replacedMatches) =
+    val (updatedContent, updatedRichText, replacedEdits) =
       replaceMatches(buffer, List(startOffset), workflow.findText, workflow.replacementText)
     // A match that would join a block is left alone, so nothing was replaced and the text stays as long as it was.
     val replacementLength =
-      if replacedMatches.isEmpty then workflow.findText.length else workflow.replacementText.length
+      if replacedEdits.isEmpty then workflow.findText.length else workflow.replacementText.length
     val cursorOffset = startOffset + replacementLength
     val newCursor    = updatedContent.offsetToCursorPosition(cursorOffset)
     val updatedFindState =
@@ -128,7 +128,7 @@ private[manager] object ReplaceWorkflowTransitions:
           )
         case ReplaceWorkflowScope.CurrentBuffer =>
           None
-    val updatedBuffer = withReplacedContent(buffer, updatedContent, updatedRichText).copy(
+    val updatedBuffer = withReplacedContent(buffer, updatedContent, updatedRichText, replacedEdits).copy(
       editing = EditingState.fromCursors(
         List(replacementSelection.fold(Cursor(newCursor))(Cursor(_)))
       ),
@@ -213,15 +213,15 @@ private[manager] object ReplaceWorkflowTransitions:
     refreshedFindState(content, findText, requestedIndex)
 
   /** The buffer's content and rich-text document with every match at `matchOffsets` replaced, the document remapped in
-    * step with the text so its formatting survives the replacement (#1935), and the offsets of the matches that were
-    * replaced: a match that would join a block line is left alone.
+    * step with the text so its formatting survives the replacement (#1935), and the replacements that were made: a
+    * match that would join a block line is left alone.
     */
   private def replaceMatches(
     buffer: Buffer,
     matchOffsets: List[Int],
     findText: String,
     replacementText: String
-  ): (Rope, Option[RichTextDocument], List[Int]) =
+  ): (Rope, Option[RichTextDocument], List[EditorEditSupport.MultiCursorEdit]) =
     val edits = matchOffsets.sorted.reverse.zipWithIndex.map { (offset, index) =>
       EditorEditSupport.MultiCursorEdit(index, offset, offset + findText.length, replacementText)
     }
@@ -234,11 +234,20 @@ private[manager] object ReplaceWorkflowTransitions:
         .flatMap(_.insert(edit.start, edit.insertedText))
         .getOrElse(current)
     }
-    (folded.content, folded.richText, folded.applied.map(_.start))
+    (folded.content, folded.richText, folded.applied)
 
-  private def withReplacedContent(buffer: Buffer, content: Rope, richText: Option[RichTextDocument]): Buffer =
+  private def withReplacedContent(
+    buffer: Buffer,
+    content: Rope,
+    richText: Option[RichTextDocument],
+    replaced: List[EditorEditSupport.MultiCursorEdit]
+  ): Buffer =
     val document = buffer.document.withContent(content)
-    buffer.copy(document = document, richText = buffer.richText.withSyncedDocument(richText, document.contentVersion))
+    buffer.copy(
+      document = document,
+      richText = buffer.richText.withSyncedDocument(richText, document.contentVersion),
+      annotations = EditorEditSupport.adjustAnnotations(buffer.annotations, buffer.document.content, content, replaced)
+    )
 
   private def finalCursorOffsetAfterReplacements(
     matchOffsets: List[Int],

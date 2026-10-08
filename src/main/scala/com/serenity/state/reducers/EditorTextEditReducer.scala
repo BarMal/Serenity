@@ -377,8 +377,9 @@ private[reducers] object EditorTextEditReducer:
       }
       val (updatedContent, updatedRichTextDocument) = (folded.content, folded.richText)
       val appliedEdits                              = folded.appliedAmong(edits)
+      val indentedLines                             = linesOf(buffer, appliedEdits)
       val finalCursors = buffer.editing.cursorPositions.map { cursor =>
-        if targetSet.contains(cursor.line) then cursor.copy(column = cursor.column + TabInsertion.length)
+        if indentedLines.contains(cursor.line) then cursor.copy(column = cursor.column + TabInsertion.length)
         else cursor
       }.distinct
       val indented = buffer.withEditedContent(
@@ -416,8 +417,13 @@ private[reducers] object EditorTextEditReducer:
       }
       val (updatedContent, updatedRichTextDocument) = (folded.content, folded.richText)
       val appliedEdits                              = folded.appliedAmong(edits)
+      val unindentedLines                           = linesOf(buffer, appliedEdits)
       val finalCursors = buffer.editing.cursorPositions
-        .map(cursor => cursor.copy(column = math.max(0, cursor.column - removals.getOrElse(cursor.line, 0))))
+        .map(cursor =>
+          if unindentedLines.contains(cursor.line) then
+            cursor.copy(column = math.max(0, cursor.column - removals.getOrElse(cursor.line, 0)))
+          else cursor
+        )
         .distinct
       val baseBuffer = buffer.withEditedContent(
         content = updatedContent,
@@ -431,6 +437,9 @@ private[reducers] object EditorTextEditReducer:
         richTextDocument = updatedRichTextDocument
       )
       (baseBuffer.clampedToContent, appliedEdits)
+
+  private def linesOf(buffer: Buffer, edits: List[MultiCursorEdit]): Set[Int] =
+    edits.map(edit => buffer.document.content.offsetToLineColumn(edit.start)._1).toSet
 
   private def unindentLine(lineText: String): (String, Int) =
     if lineText.startsWith("\t") then (lineText.drop(1), 1)
