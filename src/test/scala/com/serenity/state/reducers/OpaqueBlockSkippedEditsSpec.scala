@@ -3,7 +3,7 @@ package com.serenity.state.reducers
 import java.nio.file.Paths
 
 import com.serenity.command.RichTextIntent
-import com.serenity.keystroke.events.{DeleteForward, TabKey}
+import com.serenity.keystroke.events.{DeleteForward, DeleteToLineEnd, DeleteToLineStart, TabKey}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{LspPosition, LspRange, LspTextEdit}
 import com.serenity.richtext.{DocumentFeature, ParagraphRole, RichTextDocument, RichTextParagraph}
@@ -83,6 +83,42 @@ class OpaqueBlockSkippedEditsSpec extends AnyFlatSpec with Matchers with OptionV
 
     after.document.content.collect() shouldBe "lpha\nbeta\n⁤\namma"
     after.editing.cursorPositions shouldBe List(CursorPosition(0, 0), CursorPosition(1, 4), CursorPosition(3, 0))
+  }
+
+  "Delete to line end at the end of the line before a block" should "be refused like Delete is" in {
+    val state = editorState(buffer(cursorsAt(CursorPosition(1, 4))))
+
+    val after = EditorEventReducer.reduce(DeleteToLineEnd, paneId, state).state.persisted.buffers(bufferId)
+
+    after.document.content.collect() shouldBe document.plainText
+    after.editing.cursorPositions shouldBe List(CursorPosition(1, 4))
+  }
+
+  "Delete to line start at the start of the line after a block" should "be refused" in {
+    val state = editorState(buffer(cursorsAt(CursorPosition(3, 0))))
+
+    val after = EditorEventReducer.reduce(DeleteToLineStart, paneId, state).state.persisted.buffers(bufferId)
+
+    after.document.content.collect() shouldBe document.plainText
+    after.editing.cursorPositions shouldBe List(CursorPosition(3, 0))
+  }
+
+  "Multi-cursor delete to line end with one cursor at the end of the line before a block" should "delete for the other and leave that cursor where it was" in {
+    val state = editorState(buffer(cursorsAt(CursorPosition(0, 2), CursorPosition(1, 4))))
+
+    val after = EditorEventReducer.reduce(DeleteToLineEnd, paneId, state).state.persisted.buffers(bufferId)
+
+    after.document.content.collect() shouldBe "al\nbeta\n⁤\ngamma"
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 2), CursorPosition(1, 4))
+  }
+
+  "Multi-cursor delete to line start with one cursor at the start of the line after a block" should "delete for the other and leave that cursor where it was" in {
+    val state = editorState(buffer(cursorsAt(CursorPosition(0, 5), CursorPosition(3, 0))))
+
+    val after = EditorEventReducer.reduce(DeleteToLineStart, paneId, state).state.persisted.buffers(bufferId)
+
+    after.document.content.collect() shouldBe "\nbeta\n⁤\ngamma"
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 0), CursorPosition(3, 0))
   }
 
   "Indenting a selection that covers a block line" should "leave a cursor on the block line where it was" in {
