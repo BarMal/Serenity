@@ -17,7 +17,7 @@ final private[manager] class StateManagerNavigationEffects(
 ):
 
   private[manager] def interpretComments(intent: CommentsIntent): IO[Unit] =
-    commit(NavigationTransitions.comments(intent, _, wrapCache = wrapCache))
+    IO.realTimeInstant.flatMap(now => commit(NavigationTransitions.comments(intent, _, now, wrapCache = wrapCache)))
 
   private[manager] def interpretPlaceholders(intent: PlaceholderIntent): IO[Unit] =
     commit(NavigationTransitions.placeholders(intent, _, wrapCache = wrapCache))

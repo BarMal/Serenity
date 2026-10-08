@@ -9,7 +9,7 @@ import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.Event
-import com.serenity.lsp.LspEffect
+import com.serenity.lsp.{LspEffect, LspNotices}
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionSaveTrigger, UnreadableSession}
 import com.serenity.spellcheck.DictionaryCache
@@ -85,7 +85,7 @@ final case class RuntimeLifecycle(
   * A `StateManager` capability-record slice (see #1017): a case class holding the stream description directly instead
   * of a trait mixed into `StateManager`.
   */
-final case class LspEffectSource(lspEffectStream: Stream[IO, LspEffect])
+final case class LspEffectSource(lspEffectStream: Stream[IO, LspEffect], notices: LspNotices)
 
 /** Reads persisted session metadata needed before startup restoration.
   *
@@ -138,7 +138,12 @@ final case class FileService(
     refreshDictionaryFingerprints: IO[Unit],
     // The directories docked explorers show, and a way to have them re-listed after a change made outside the editor.
     explorerWatchDirectories: IO[Set[Path]],
-    markExplorerDirectoriesStale: Set[Path] => IO[Unit]
+    markExplorerDirectoriesStale: Set[Path] => IO[Unit],
+    // #1934: the config file the same loop watches, absent when this session keeps no config file.
+    configWatch: Option[ConfigFileWatch],
+    // #1992: AppRuntime's focus callback calls this when the window loses focus, for the auto-save modes that write
+    // then; it does nothing under the others.
+    autoSaveOnWindowFocusLost: IO[Unit]
 )
 
 trait StateManager extends StateEngine:
@@ -234,6 +239,7 @@ object StateManager:
         onFontConfigChanged = onFontConfigChanged,
         deviceTextScaleProvider = deviceTextScaleProvider,
         configPersistencePath = configPersistencePath,
+        configOnDisk = configPersistencePath.map(_ => initialConfig),
         uiPresetStore = uiPresetStore,
         windowSizeProvider = windowSizeProvider,
         onPreferredWindowSizeChanged = onPreferredWindowSizeChanged,
@@ -264,7 +270,10 @@ object StateManager:
         forgetClosedBuffers = ClosedBufferRetention.forgetRenderCaches(runtime.renderCaches),
         dictionaryCache = runtime.dictionaryCache
       )
-      .map(operations => new StateManagerImpl(runtime, operations))
+      .flatMap { operations =>
+        val manager = new StateManagerImpl(runtime, operations)
+        operations.installAutoSave(manager.composition.autoSave.saveBuffer).as(manager)
+      }
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
     // issue #931: category tabs (and the `activeCategory` field they drove) are retired, so this no longer names a
@@ -326,7 +335,8 @@ object StateManager:
       runtime.sessionPersistence,
       runtime.renderCaches,
       operations,
-      runtime.restarter
+      runtime.restarter,
+      runtime.configOnDisk
     )
 
     export composition.*

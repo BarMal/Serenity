@@ -81,7 +81,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     )
     store.upsert(preset).unsafeRunSync()
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     val runner = sm.getCurrentState
       .map(
@@ -117,7 +117,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "save-drafting-preset",
@@ -165,7 +165,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     )
     store.upsert(preset).unsafeRunSync()
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "duplicate-drafting-preset",
@@ -209,7 +209,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "ui-preset-save-as-new",
@@ -240,7 +240,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "ui-preset-save-as-new",
@@ -276,7 +276,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "ui-preset-save-as-new",
@@ -323,7 +323,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "ui-preset-save-as-new",
@@ -372,7 +372,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "ui-preset-save-as-new",

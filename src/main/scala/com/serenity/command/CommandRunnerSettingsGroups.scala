@@ -105,10 +105,21 @@ object CommandRunnerSettingsGroups:
         CommandRunnerSettingsItems.dropCapsEnabledOptionItem(optionSelections)
       )
     )
+    val savingGroup = group(
+      "settings-saving",
+      "Saving",
+      "Write files automatically after a pause or when you leave them",
+      CommandRunnerSettingsItems.autoSaveModeOptionItem(optionSelections) :: input("auto-save-delay")
+    )
     // issue #1057: the one-shot navigation commands that used to sit here are ordinary palette commands. The one item
     // that stays is authoring a document comment's text, a real input rather than an action.
-    val commentsGroup = group("settings-navigation", "Comments", "Author a document comment", input("document-comment"))
-    val fontHint      = "Family, size, ligatures"
+    val commentsGroup = group(
+      "settings-navigation",
+      "Comments",
+      "Author or reply to a document comment",
+      input("document-comment", "reply-document-comment")
+    )
+    val fontHint = "Family, size, ligatures"
     val proseFontGroup = group(
       "settings-prose-font",
       "Prose Font",
@@ -242,7 +253,7 @@ object CommandRunnerSettingsGroups:
       "settings-editor",
       "Editor",
       "Display, status line, margins, documents, comments",
-      List(textDisplayGroup, statusLineGroup, textAreaGroup, documentDefaultsGroup, commentsGroup)
+      List(textDisplayGroup, statusLineGroup, textAreaGroup, documentDefaultsGroup, savingGroup, commentsGroup)
     )
     val typographyGroup = group(
       "settings-typography",

@@ -196,6 +196,21 @@ object PinnedPanelLayoutEngine:
         .map(PinnedPanelDragResize(position, _))
     }
 
+  /** The docked panel whose inner edge -- the one cell against the workspace that a drag there resizes -- is at
+    * (`cellX`, `cellY`). A drag resizes from anywhere in [[resizeFromDragRegion]], but only this band reads as a
+    * handle, so only it earns a resize pointer.
+    */
+  def pinnedPanelEdgeAt(layout: CalculatedLayout, cellX: Int, cellY: Int): Option[PanelPosition] =
+    resizeFromDragRegion(layout, cellX, cellY).filter { position =>
+      layout.pinnedPanelRects.get(position).exists { rect =>
+        position match
+          case PanelPosition.Left   => cellX >= rect.right - 1
+          case PanelPosition.Right  => cellX <= rect.x
+          case PanelPosition.Top    => cellY >= rect.bottom - 1
+          case PanelPosition.Bottom => cellY <= rect.y
+      }
+    }
+
   private def resizeFromDragRegion(
     layout: CalculatedLayout,
     cellX: Int,

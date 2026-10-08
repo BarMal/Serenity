@@ -31,6 +31,7 @@ private[command] object CommandRegistryFileCommands:
     ),
     saveAs,
     ReopenWithEncodingCommands.chooseEncoding,
+    LineEndingCommands.chooseLineEnding,
     Command.typed(
       "save-config",
       "Write the current settings using the latest config format.",
@@ -134,6 +135,27 @@ private[command] object CommandRegistryFileCommands:
       CommandIntent.File(FileIntent.ShowLicenceAndNotices),
       CommandCategory.File,
       label = "Show Licence and Notices"
+    ),
+    Command.typed(
+      "about",
+      "Open the About Serenity document: version, file locations, privacy statement, licence and notices.",
+      CommandIntent.File(FileIntent.ShowAbout),
+      CommandCategory.File,
+      label = "About Serenity"
+    ),
+    Command.typed(
+      "open-releases-page",
+      "Open the Serenity releases page in the default browser.",
+      CommandIntent.File(FileIntent.OpenReleasesPage),
+      CommandCategory.File,
+      label = "Open Releases Page"
+    ),
+    Command.typed(
+      "show-privacy-statement",
+      "Open the privacy statement: what Serenity stores locally and that it makes no network connections, read-only.",
+      CommandIntent.File(FileIntent.ShowPrivacyStatement),
+      CommandCategory.File,
+      label = "Show Privacy Statement"
     ),
     Command.typed(
       "next-tab",

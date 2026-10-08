@@ -22,6 +22,12 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
 
   private val lines = Vector("alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta")
 
+  private val font = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+
+  // The logical monospaced font differs by OS (15 px rows on Linux, 17 px on Windows), so a whole-canvas height
+  // measured in a fixed 16 px per row would pass or fail depending only on where the spec runs.
+  private val canvasHeightPx = viewport.height * com.serenity.ui.layout.CellMetrics.fromFont(font).lineHeight
+
   private def stateWith(content: Vector[String], cursor: CursorPosition = CursorPosition(0, 0)): AppState =
     val buffer0 = Buffer.fromString(bufferId, content.mkString("\n"))
     val buffer  = buffer0.copy(editing = EditingState(List(cursor)))
@@ -45,7 +51,6 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
     damage: Damage,
     caches: com.serenity.state.manager.RenderCaches
   ): Option[PixelRect] =
-    val font = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
     RendererEntryPoints.renderWithRepaintRegion(
       state,
       cursorVisible = false,
@@ -122,7 +127,7 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
     val region = repaintRegionFor(surface, edited, DamageProducer.forTransition(state, edited), caches)
 
     region.map(_.heightPx).getOrElse(0) should be > 0
-    region.map(_.heightPx).getOrElse(0) should be < viewport.height * 16
+    region.map(_.heightPx).getOrElse(0) should be < canvasHeightPx
   }
 
   it should "stay bounded when a cursor move also changes the status row" in {
@@ -146,5 +151,5 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
     // region as the status row's own rect rather than forcing a whole-canvas repaint (#1835, #1891).
     val region = repaintRegionFor(surface, after, DamageProducer.forTransition(before, after), caches)
     region should not be None
-    region.map(_.heightPx).getOrElse(0) should be < viewport.height * 16
+    region.map(_.heightPx).getOrElse(0) should be < canvasHeightPx
   }

@@ -47,6 +47,24 @@ sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 `third-party/`; `sbt checkThirdPartyNotices` (run in CI) fails if it is stale or a dependency has no registry row. See
 [CONTRIBUTING.md](CONTRIBUTING.md#licensing).
 
+### Changelog
+
+`CHANGELOG.md` has two kinds of level-two heading and no others:
+
+- `## [Unreleased]`, exactly once and first. User-visible changes land here, grouped under `###` date headings.
+- `## X.Y.Z — YYYY-MM-DD` (an em dash; `X.Y.Z-rc.N` is allowed), one per release, newest first.
+
+To cut a release, rename `[Unreleased]` to the version heading and add a fresh empty `## [Unreleased]` above it. The
+release workflow publishes the matching section as the release notes and fails if it is missing or empty.
+
+`ChangelogSectionsSpec` fails when the file has no `[Unreleased]` section or a malformed heading. To write the notes for
+a version, or for the unreleased section, to a file (the release workflow publishes that file):
+
+```bash
+sbt "Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md 1.2.0 notes.md"
+sbt "Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md --unreleased notes.md"
+```
+
 ## Automated standards
 
 Three layers enforce `docs/coding-standards.md` rather than leaving it to review.
@@ -126,6 +144,13 @@ The archive is about 65 MB.
 The desktop packages pass the same flags through jpackage's `--java-options`, with the archive next to the jar in the
 app image (`$APPDIR/serenity.jsa`), and build their runtime with `--generate-cds-archive` because a dynamic archive
 needs the runtime's own base archive. macOS is left out: writing into a signed `.app` would break its signature.
+
+### Heap flags in the desktop packages
+
+The packaged app runs with `-XX:+UseG1GC -XX:MaxRAMPercentage=25 -XX:G1PeriodicGCInterval=60000` on every OS. The heap
+is capped at a quarter of physical memory, and G1 (named explicitly, since the JVM picks Serial on small machines) runs
+a collection after 60 s idle so freed heap goes back to the OS. They are set beside the AppCDS flags in
+`.github/workflows/desktop-publish.yml` and `desktop-release.yml`; `sbt run` is unaffected.
 
 ### Startup warm-up
 

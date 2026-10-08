@@ -224,16 +224,20 @@ private[state] object EditorEditSupport:
       }
       .reverse
 
+  /** Maps an offset in the pre-deletion content to the post-deletion content. `deletions` are in original coordinates,
+    * so each is compared against the unshifted offset; an offset inside (or on the edges of) a deletion collapses to
+    * that deletion's start.
+    */
   def remapOffsetAfterDeletions(
     offset: Int,
     deletions: List[(Int, Int)]
   ): Int =
-    deletions.foldLeft(offset) {
-      case (currentOffset, (start, end)) =>
-        if currentOffset < start then currentOffset
-        else if currentOffset > end then currentOffset - (end - start)
-        else start
-    }
+    def removedUpTo(position: Int): Int =
+      deletions.collect { case (start, end) if end <= position => end - start }.sum
+
+    deletions.find { case (start, end) => start <= offset && offset <= end } match
+      case Some((start, _)) => start - removedUpTo(start)
+      case None             => offset - removedUpTo(offset)
 
   def adjustDocumentComments(
     comments: List[DocumentComment],
@@ -252,10 +256,9 @@ private[state] object EditorEditSupport:
         val (startLine, startColumn) = updatedContent.offsetToLineColumn(nextStart)
         val (endLine, endColumn)     = updatedContent.offsetToLineColumn(nextEnd)
 
-        DocumentComment(
-          CursorPosition(startLine, startColumn),
-          CursorPosition(endLine, endColumn),
-          comment.text
+        comment.copy(
+          anchor = CursorPosition(startLine, startColumn),
+          focus = CursorPosition(endLine, endColumn)
         )
       }
 

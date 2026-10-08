@@ -48,6 +48,12 @@ object InlineAtom:
     */
   val BlockCharacter: Char = '\u2064'
 
+  /** `text` of a rich document's rope as plain text: a soft break becomes a newline and an opaque atom or a block
+    * disappears.
+    */
+  def asPlainText(text: String): String =
+    text.replace(SoftBreakCharacter, '\n').filterNot(isExportedAsNothing)
+
   /** The placeholders a plain text export leaves out rather than turning into text. */
   def isExportedAsNothing(char: Char): Boolean =
     char == OpaqueCharacter || char == BlockCharacter

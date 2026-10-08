@@ -129,9 +129,9 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep words joined by a curly apostrophe in one diagnostic range" in {
-    val diagnostics = SpellChecker.check("l\u2019amour", EnglishSpellCheck)
+    val diagnostics = SpellChecker.check("wurld\u2019s", EnglishSpellCheck)
 
-    diagnostics.map(_.message) shouldBe List("Possible spelling issue: l\u2019amour")
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: wurld\u2019s")
     diagnostics.head.range.start.character shouldBe 0
     diagnostics.head.range.end.character shouldBe 7
   }

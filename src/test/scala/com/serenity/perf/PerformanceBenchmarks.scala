@@ -47,7 +47,7 @@ object PerformanceBenchmarks:
       lspAndProjectBenchmarks(projectRoot) ++
       RenderBenchmarks.markdownBenchmarks()
 
-  private def ropeBenchmarks(): List[BenchmarkRunner.Benchmark] =
+  private[perf] def ropeBenchmarks(): List[BenchmarkRunner.Benchmark] =
     val jsonText          = largeSingleLineJson(entries = 20_000)
     val jsonSearchResults = Rope(jsonText).searchAll("\"k19999\"")
     val jsonCursorOffset  = Rope(jsonText).lineColumnToOffset(0, jsonText.length - 5)
@@ -62,10 +62,11 @@ object PerformanceBenchmarks:
       ),
       BenchmarkRunner.Benchmark(
         "rope.large_json.cursor_offset",
-        3,
+        BenchmarkIterationCounts.RopeCursorOffsetWarmups,
         20,
         () => assert(jsonCursorOffset == jsonText.length - 5),
-        () => Rope(jsonText).lineColumnToOffset(0, jsonText.length - 5)
+        () => Rope(jsonText).lineColumnToOffset(0, jsonText.length - 5),
+        settleJit = true
       )
     )
 

@@ -7,7 +7,7 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.io.FileStamp
+import com.serenity.io.{FileStamp, SettledClock}
 import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.{Balance, Leaf}
 import com.serenity.session.{SessionBuffer, SessionManager}
@@ -41,7 +41,13 @@ class SessionSaveWorkSpec extends AnyFlatSpec with Matchers:
     Buffer(id, Document(leaf))
 
   private def newManager(root: Path): SessionManager =
-    SessionManager.create(root, AppThemeManager.create, NoOpLogger.impl[IO], SessionManager.SessionPolicy())
+    SessionManager(
+      root,
+      AppThemeManager.create,
+      NoOpLogger.impl[IO],
+      SessionManager.SessionPolicy(),
+      clock = SettledClock.aMinuteAhead
+    )
 
   "SessionBuffer.fromBuffer" should "describe a clean buffer without collecting its text" in {
     val leaf    = new CountingLeaf("text that stays on disk")
@@ -135,15 +141,15 @@ class SessionSaveWorkSpec extends AnyFlatSpec with Matchers:
     val id      = AppState.initial.persisted.bufferOrder.head
     val state   = withBuffers(untitledBuffer(id, new CountingLeaf("draft")))
     val files   = List(root.resolve("session-index.json"), root.resolve("sessions").resolve("session.json"))
-    def inodes  = files.map(FileStamp.read(_).flatMap(_.fileKey))
+    def stamps  = files.map(path => FileStamp.read(path))
 
     manager.saveSession(state).unsafeRunSync()
-    val afterFirst = inodes
+    val afterFirst = stamps
     manager.saveSession(state).unsafeRunSync()
     manager.saveSession(state).unsafeRunSync()
 
     afterFirst.flatten should have size 2
-    inodes shouldBe afterFirst
+    stamps shouldBe afterFirst
   }
 
   it should "write the session again when its file was deleted behind the manager's back" in {
@@ -169,11 +175,12 @@ class SessionSaveWorkSpec extends AnyFlatSpec with Matchers:
 
     manager.saveSession(state).unsafeRunSync()
     val before  = Files.readString(session)
-    val renamed = state.copy(persisted = state.persisted.copy(recentFiles = List(Path.of("/notes/new.txt"))))
+    val recent  = Path.of("/notes/new.txt")
+    val renamed = state.copy(persisted = state.persisted.copy(recentFiles = List(recent)))
     manager.saveSession(renamed).unsafeRunSync()
 
     Files.readString(session) should not be before
-    Files.readString(session) should include("/notes/new.txt")
+    manager.loadSession().unsafeRunSync().map(_.persisted.recentFiles) shouldBe Some(List(recent))
   }
 
   private def withBuffers(buffers: Buffer*): AppState =

@@ -48,6 +48,8 @@ private[manager] object FileResults:
             revision = saved.document.revision,
             encoding = saved.document.encoding,
             hasBom = saved.document.hasBom,
+            mixedLineEndings = None,
+            mixedNoticePending = false,
             isDirty = current.document.isDirty && !unchanged
           )
           val richText =
@@ -62,7 +64,13 @@ private[manager] object FileResults:
           val updated = current.copy(document = document, richText = richText)
           withBuffer(state, if converted then updated.clampedToContent else updated)
         }
-    val settled = NoticeReducer.withoutTopic(merged, NoticeTopic.FileSave(save.bufferId))
+    val told =
+      save.snapshot.document.mixedLineEndings
+        .filter(_ => merged ne state)
+        .fold(merged)(counts =>
+          LineEndingChoice.withSavedMixedNotice(merged, save.bufferId, save.snapshot.document.lineEnding, counts)
+        )
+    val settled = NoticeReducer.withoutTopic(told, NoticeTopic.FileSave(save.bufferId))
     if save.kind == SaveKind.SaveAs then withRecentFile(settled, save.target) else settled
 
   /** Replaces the buffer's content with the disk's, unless it was edited after the reload was requested. */

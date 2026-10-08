@@ -1,7 +1,6 @@
 import sbtassembly.AssemblyPlugin.autoImport.*
 import sbtassembly.MergeStrategy
-
-ThisBuild / version := "0.1.0-SNAPSHOT"
+import com.serenity.release.PackageVersion
 
 ThisBuild / scalaVersion := "3.9.0"
 
@@ -49,18 +48,57 @@ Compile / run / fork := true
 lazy val architectureBaselineFile = settingKey[File]("Baseline of known architecture-check violations")
 lazy val architectureCheck        = taskKey[Unit]("Fail if any file or method grew past target, or a layer was crossed")
 lazy val writeArchitectureBaseline = taskKey[Unit]("Regenerate the architecture-check baseline from the current tree")
+
 lazy val architectureChecksSelfTest = taskKey[Unit](
   "Regression guard for ArchitectureChecks itself: confirms forbidden fully-qualified references are still caught (#1676)"
 )
 
 // THIRD-PARTY-NOTICES.md is rendered from the resolved runtime classpath plus the registry in third-party/, so a
 // dependency with no licence entry fails the build rather than shipping unattributed (#2019).
-lazy val thirdPartyNotices         = taskKey[String]("Render THIRD-PARTY-NOTICES.md from the runtime classpath and third-party/")
+lazy val thirdPartyNotices =
+  taskKey[String]("Render THIRD-PARTY-NOTICES.md from the runtime classpath and third-party/")
 lazy val generateThirdPartyNotices = taskKey[Unit]("Rewrite THIRD-PARTY-NOTICES.md at the repo root")
-lazy val checkThirdPartyNotices    = taskKey[Unit]("Fail if THIRD-PARTY-NOTICES.md is stale or a runtime module has no licence entry")
+lazy val checkThirdPartyNotices =
+  taskKey[Unit]("Fail if THIRD-PARTY-NOTICES.md is stale or a runtime module has no licence entry")
+
+// The version comes from the annotated vX.Y.Z tag via sbt-dynver, and the numeric form a packager needs from
+// PackageVersion (project/PackageVersion.scala). Both read git, so a source tarball or a shallow clone with no tag
+// degrades to dynver's untagged version and to 1.0.0/dev rather than failing the build.
+lazy val gitDescribe = taskKey[String]("git describe over vX.Y.Z tags; the bare sha, or empty, when none is reachable")
+lazy val packageVersion =
+  taskKey[Either[String, PackageVersion.Result]]("Numeric package version and channel for this checkout")
+lazy val writePackageVersion =
+  taskKey[File]("Write target/package/app-version.txt, the value jpackage --app-version must receive")
+
+def gitOutput(root: File, args: String*): Option[String] =
+  scala.util
+    .Try(scala.sys.process.Process("git" +: args, root).!!(scala.sys.process.ProcessLogger(_ => ())).trim)
+    .toOption
+    .filter(_.nonEmpty)
 
 lazy val root = (project in file("."))
   .settings(
+    // The package version module is build code under project/; compile it into the tests too so a spec can reach it.
+    Test / unmanagedSources += baseDirectory.value / "project" / "PackageVersion.scala",
+    gitDescribe := gitOutput(
+      baseDirectory.value,
+      "describe",
+      "--tags",
+      "--long",
+      "--abbrev=8",
+      "--match",
+      "v[0-9]*",
+      "--always",
+      "--dirty"
+    ).getOrElse(""),
+    packageVersion := PackageVersion.fromDescribe(gitDescribe.value, sys.env.get("SERENITY_NIGHTLY").contains("true")),
+    writePackageVersion := {
+      val result = packageVersion.value.fold(sys.error(_), identity)
+      val out    = target.value / "package" / "app-version.txt"
+      IO.write(out, result.numeric)
+      streams.value.log.info(s"package version ${result.numeric} (${result.channel.label}) written to $out")
+      out
+    },
     name := "Serenity",
     // WartRemover encodes rules docs/coding-standards.md and CLAUDE.md already state in prose.
     // Main sources only: tests legitimately use throw/null/partial access to build failure fixtures,
@@ -146,21 +184,33 @@ lazy val root = (project in file("."))
         s"architecture baseline written: ${violations.size} entries at ${architectureBaselineFile.value}"
       )
     },
-    // The commit this build was made from, generated into a source file so anything that reports a
-    // build identity -- `--version`, an about surface -- reads one value rather than inventing its own.
-    // Falls back to "unknown" outside a git checkout (a source tarball, say) rather than failing the build.
+    // Build identity, generated into a source file so anything that reports it -- `--version`, an about surface --
+    // reads one value rather than inventing its own. commitTime is the commit's date, not the wall clock, so the
+    // same commit always generates the same file. Outside a git checkout every git-derived field falls back
+    // ("unknown", 1.0.0/dev) rather than failing the build; only writePackageVersion is strict.
     Compile / sourceGenerators += Def.task {
-      val generated = (Compile / sourceManaged).value / "com" / "serenity" / "BuildInfo.scala"
-      val commit =
-        scala.util.Try(scala.sys.process.Process("git rev-parse HEAD").!!.trim).filter(_.nonEmpty).getOrElse("unknown")
+      val generated  = (Compile / sourceManaged).value / "com" / "serenity" / "BuildInfo.scala"
+      val root       = baseDirectory.value
+      val commit     = gitOutput(root, "rev-parse", "HEAD").getOrElse("unknown")
+      val commitTime = gitOutput(root, "log", "-1", "--format=%cI").getOrElse("unknown")
+      val resolved = packageVersion.value.fold(
+        problem => {
+          streams.value.log.warn(s"BuildInfo falls back to ${PackageVersion.FirstVersion}/dev: $problem")
+          PackageVersion.Result(PackageVersion.FirstVersion, PackageVersion.Channel.Dev)
+        },
+        identity
+      )
       IO.write(
         generated,
         s"""package com.serenity
            |
            |/** Generated by build.sbt. Do not edit. */
            |object BuildInfo:
-           |  val commit: String  = "$commit"
-           |  val version: String = "${version.value}"
+           |  val commit: String         = "$commit"
+           |  val commitTime: String     = "$commitTime"
+           |  val version: String        = "${version.value}"
+           |  val packageVersion: String = "${resolved.numeric}"
+           |  val channel: String        = "${resolved.channel.label}"
            |""".stripMargin
       )
       Seq(generated)
@@ -185,7 +235,8 @@ lazy val root = (project in file("."))
       val dir = (Compile / resourceManaged).value / "META-INF" / "serenity"
       IO.copyFile(baseDirectory.value / "LICENSE", dir / "LICENSE")
       IO.write(dir / "THIRD-PARTY-NOTICES.md", thirdPartyNotices.value)
-      Seq(dir / "LICENSE", dir / "THIRD-PARTY-NOTICES.md")
+      IO.copyFile(baseDirectory.value / "docs" / "PRIVACY.md", dir / "PRIVACY.md")
+      Seq(dir / "LICENSE", dir / "THIRD-PARTY-NOTICES.md", dir / "PRIVACY.md")
     }.taskValue,
     // The runtime module list the notices spec checks the shipped notices against.
     Test / resourceGenerators += Def.task {
@@ -204,24 +255,26 @@ lazy val root = (project in file("."))
       IO.write(file, classpath.map(_.getAbsolutePath).mkString(java.io.File.pathSeparator))
       Seq(file)
     }.taskValue,
-    Compile / mainClass := Some("Main"),
-    assembly / mainClass := Some("Main"),
+    Compile / mainClass        := Some("Main"),
+    assembly / mainClass       := Some("Main"),
     assembly / assemblyJarName := "Serenity.jar",
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "serenity", _*) => MergeStrategy.first
       case PathList("META-INF", "services", _*) => MergeStrategy.concat
+      // Multi-release module descriptors (slf4j-api, commons-logging via FontBox): meaningless in a fat jar.
+      case PathList("META-INF", "versions", _, "module-info.class") => MergeStrategy.discard
       case x @ PathList("META-INF", xs @ _*) =>
         xs.map(_.toLowerCase) match {
-          case "manifest.mf" :: Nil   => MergeStrategy.discard
-          case "index.list" :: Nil    => MergeStrategy.discard
-          case "dependencies" :: Nil  => MergeStrategy.discard
+          case "manifest.mf" :: Nil  => MergeStrategy.discard
+          case "index.list" :: Nil   => MergeStrategy.discard
+          case "dependencies" :: Nil => MergeStrategy.discard
           case name :: Nil
               if name.endsWith(".sf") || name.endsWith(".rsa") || name.endsWith(".dsa") || name.endsWith(".ec") =>
             MergeStrategy.discard
           case _ => (assembly / assemblyMergeStrategy).value(x)
         }
       case PathList("module-info.class") => MergeStrategy.discard
-      case x => (assembly / assemblyMergeStrategy).value(x)
+      case x                             => (assembly / assemblyMergeStrategy).value(x)
     },
     Test / testOptions ++= Seq(
       Tests.Setup(() => System.setProperty("serenity.test.ephemeralSessions", "true")),
@@ -245,7 +298,10 @@ lazy val root = (project in file("."))
       // Master CI's Test job has hung for 50+ minutes with no output and no way to tell which test was stuck: the
       // console reporter prints nothing per test, and nothing at all for a run that never ends. The slowpoke
       // detector raises an alert naming any test still running after 120 s, then every 60 s; HangReporter prints
-      // those alerts straight to stdout together with the stacks of the threads running suites.
+      // those alerts straight to stdout together with the stacks of the threads running suites, the IO runtime's
+      // compute and blocker threads, and any thread blocked, holding a lock or waiting on a class/lazy-val initialiser.
+      // Each alert also probes the global IO runtime with a trivial IO and aborts the run, with the thread dump, when it
+      // cannot answer; the reporter's construction installs the JVM-wide uncaught-exception handler (RuntimeWatch).
       Tests.Argument(TestFrameworks.ScalaTest, "-W", "120", "60"),
       Tests.Argument(TestFrameworks.ScalaTest, "-C", "com.serenity.testkit.HangReporter")
     ),
@@ -272,27 +328,27 @@ realBoundaryTest := (Test / testOnly)
   .value
 
 libraryDependencies ++= Seq(
-  "org.typelevel"         %% "cats-effect"     % "3.7.1",
-  "co.fs2"                %% "fs2-core"        % "3.13.0",
-  "co.fs2"                %% "fs2-io"          % "3.13.0",
-  "org.scalatest"         %% "scalatest"       % "3.2.19" % "test",
+  "org.typelevel" %% "cats-effect" % "3.7.1",
+  "co.fs2"        %% "fs2-core"    % "3.13.0",
+  "co.fs2"        %% "fs2-io"      % "3.13.0",
+  "org.scalatest" %% "scalatest"   % "3.2.19" % "test",
   // Drives IO programs on a mocked scheduler/clock for deterministic tests of timing-dependent code (timeouts,
   // intervals, idle cadence) -- see com.serenity.testkit.VirtualTime.
-  "org.typelevel"         %% "cats-effect-testkit" % "3.7.1" % "test",
+  "org.typelevel" %% "cats-effect-testkit" % "3.7.1" % "test",
   // Property and law testing, test scope only -- the assembled JAR is unchanged.
   // scalatestplus is pinned to the release matching ScalaTest 3.2.19 and brings ScalaCheck with it.
   // cats-laws tracks the cats-core 2.13.0 that cats-effect 3.7.1 already resolves, so no eviction.
-  "org.scalatestplus"     %% "scalacheck-1-18" % "3.2.19.0" % "test",
-  "org.typelevel"         %% "cats-laws"       % "2.13.0"   % "test",
-  "org.typelevel"         %% "discipline-scalatest" % "2.3.0" % "test",
+  "org.scalatestplus"     %% "scalacheck-1-18"      % "3.2.19.0" % "test",
+  "org.typelevel"         %% "cats-laws"            % "2.13.0"   % "test",
+  "org.typelevel"         %% "discipline-scalatest" % "2.3.0"    % "test",
   // Independent oracle for the golden rich-document specs (Apache-2.0): every DOCX Serenity writes must open in XWPF.
   // Test scope only, so the assembled JAR and startup are unchanged.
-  "org.apache.poi"         % "poi-ooxml"       % "5.4.1" % "test",
-  "com.github.pureconfig" %% "pureconfig-core" % "0.17.10",
+  "org.apache.poi"         % "poi-ooxml"            % "5.4.1"    % "test",
+  "com.github.pureconfig" %% "pureconfig-core"      % "0.17.10",
   // Launch-argument parsing. decline-effect is only for its cats-effect glue; the command itself is plain decline,
   // so `LaunchOptions.parse` stays a pure function over args that specs can call directly.
-  "com.monovore"          %% "decline"         % "2.6.2",
-  "com.monovore"          %% "decline-effect"  % "2.6.2"
+  "com.monovore" %% "decline"        % "2.6.2",
+  "com.monovore" %% "decline-effect" % "2.6.2"
 )
 
 val circeVersion = "0.14.16"
@@ -306,19 +362,19 @@ libraryDependencies ++= Seq(
 val log4CatsVersion = "2.8.0"
 
 libraryDependencies ++= Seq(
-  "org.typelevel" %% "log4cats-core"   % log4CatsVersion,
-  "org.typelevel" %% "log4cats-slf4j"  % log4CatsVersion,
-  "ch.qos.logback" % "logback-classic" % "1.5.38",
-  "net.java.dev.jna" % "jna-platform"  % "5.19.1"
+  "org.typelevel"   %% "log4cats-core"   % log4CatsVersion,
+  "org.typelevel"   %% "log4cats-slf4j"  % log4CatsVersion,
+  "ch.qos.logback"   % "logback-classic" % "1.5.38",
+  "net.java.dev.jna" % "jna-platform"    % "5.19.1"
 )
 
 val commonMarkVersion = "0.30.0"
 
 libraryDependencies ++= Seq(
-  "org.commonmark"   % "commonmark"                   % commonMarkVersion,
-  "org.commonmark"   % "commonmark-ext-gfm-tables"    % commonMarkVersion,
-  "org.commonmark"   % "commonmark-ext-task-list-items" % commonMarkVersion,
-  "org.xhtmlrenderer" % "flying-saucer-core"          % "10.5.0"
+  "org.commonmark"    % "commonmark"                     % commonMarkVersion,
+  "org.commonmark"    % "commonmark-ext-gfm-tables"      % commonMarkVersion,
+  "org.commonmark"    % "commonmark-ext-task-list-items" % commonMarkVersion,
+  "org.xhtmlrenderer" % "flying-saucer-core"             % "10.5.0"
 )
 
 // EPUBCheck (W3C, BSD-3-Clause, so compatible with this project's GPL) validates the exported EPUB in specs only.
@@ -341,3 +397,11 @@ libraryDependencies ++= Seq(
 // replacing three independent hand-rolled approximations that could (and did, see #1271) disagree with each other.
 // Dependency only in this step -- see #1277 step 1 for the assembled-JAR size measurement that gated this addition.
 libraryDependencies += "com.ibm.icu" % "icu4j" % "78.3"
+
+// FontBox reads the bundled fonts' hmtx/hhea tables, so the paginator measures the very files the PDF will embed and
+// no AWT is involved (#1206, #2006). pdfbox-io and commons-logging come with it. PDFBox paints the PagedDocument into
+// the PDF, embedding those same files.
+libraryDependencies ++= Seq(
+  "org.apache.pdfbox" % "fontbox" % "3.0.8",
+  "org.apache.pdfbox" % "pdfbox"  % "3.0.8"
+)

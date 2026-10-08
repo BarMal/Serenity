@@ -15,7 +15,7 @@ object ManuscriptExportCommands:
   val choose: Command =
     Command.typed(
       "export-manuscript",
-      "Export the current document, or the book its manuscript.conf lists, as a DOCX manuscript or an EPUB e-book.",
+      "Export the current document, or the book its manuscript.conf lists, as a DOCX manuscript, an EPUB e-book or a PDF.",
       CommandIntent.File(FileIntent.ExportManuscript(ManuscriptExportRequest.ChooseFormat)),
       CommandCategory.File,
       label = "Export Manuscript..."

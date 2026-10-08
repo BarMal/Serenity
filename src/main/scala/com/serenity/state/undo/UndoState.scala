@@ -1,8 +1,10 @@
 package com.serenity.state.undo
 
+import com.serenity.io.DocumentRevision
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEditSupport
+import com.serenity.text.{LineEnding, LineEndingCounts}
 import com.serenity.ui.layout.{Layout, WorkspaceNodeId, WorkspaceTree}
 
 /** A buffer as it stood before an undoable change. `richText` travels with `content` because a rich-text document only
@@ -80,6 +82,43 @@ object HistoryEntry:
         (restoredState, inverse)
       }
 
+  /** A buffer's line ending as it stood before it was changed (#1964). Only the document's save settings travel, never
+    * its text, so it composes with [[BufferEdit]] entries in any order. `revision` tells a restore whether a save has
+    * happened since: the file on disk then has the other ending, and the restored buffer differs from it whatever it
+    * was before.
+    */
+  final case class LineEndingChange(
+      bufferId: BufferId,
+      lineEnding: LineEnding,
+      mixedLineEndings: Option[LineEndingCounts],
+      isDirty: Boolean,
+      revision: Option[DocumentRevision]
+  ) extends HistoryEntry:
+
+    def restore(state: AppState): Option[(AppState, HistoryEntry)] =
+      state.persisted.buffers.get(bufferId).map { current =>
+        val document = current.document.copy(
+          lineEnding = lineEnding,
+          mixedLineEndings = mixedLineEndings,
+          isDirty = isDirty || current.document.revision != revision
+        )
+        val restored = state.copy(persisted =
+          state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> current.copy(document = document)))
+        )
+        (restored, LineEndingChange.capture(current))
+      }
+
+  object LineEndingChange:
+
+    def capture(buffer: Buffer): LineEndingChange =
+      LineEndingChange(
+        buffer.id,
+        buffer.document.lineEnding,
+        buffer.document.mixedLineEndings,
+        buffer.document.isDirty,
+        buffer.document.revision
+      )
+
   /** A pane's removal (#1016): captures the whole pre-removal `Layout` rather than just the one pane, since removing a
     * pane can also collapse its parent split and reassign `activeEditorPaneId`/focus -- restoring needs the topology
     * that produces, not just the leaf. Panes reference buffers by id, not content, so this is a topology snapshot, not
@@ -146,6 +185,10 @@ final case class UndoState(
     maxUndoDepth: Int = UndoState.DefaultMaxUndoDepth
 ):
 
+  def canUndo: Boolean = pendingGroup.isDefined || undoStack.nonEmpty
+
+  def canRedo: Boolean = redoStack.nonEmpty
+
   def flushPendingGroup: UndoState =
     pendingGroup match
       case None        => this
@@ -193,5 +236,6 @@ object UndoState:
 
   private def isLive(entry: HistoryEntry, live: BufferId => Boolean): Boolean =
     entry match
-      case edit: HistoryEntry.BufferEdit => live(edit.bufferId)
-      case _                             => true
+      case edit: HistoryEntry.BufferEdit         => live(edit.bufferId)
+      case change: HistoryEntry.LineEndingChange => live(change.bufferId)
+      case _                                     => true

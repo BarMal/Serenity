@@ -59,19 +59,30 @@ package com.serenity.perf
   * samples and a minimum batch of 8 make each sample span eight sequences, so a GC pause or JIT event is averaged into
   * it rather than being the sample. The event sequence measured is unchanged.
   *
+  * `rope.large_json.cursor_offset` (3 -> 10,000 warmups, plus `settleJit`): the timed call is a ~1ms rope build, so
+  * `BenchmarkRunner`'s 500ms warmup budget ran only ~400 invocations, short of the ~5,000 at which HotSpot hands the
+  * whole call to C2. Per-200ms timings over a run show three plateaus -- ~1.8ms, ~1.1ms, ~0.8ms -- with the steps
+  * between them landing at roughly 5,000-6,000 invocations, so the sampled p50 was whichever plateau the run had
+  * reached. Twelve local runs at the old setting: p50 1.06-1.09ms in eight, 1.76-2.68ms in four (2.5x spread). CI
+  * compared the base's slowest run with the head's fastest, so a base on 0.97ms against a head on 1.98ms read as a 2x
+  * regression (#2054). Twelve at the new setting: 0.80-0.88ms in nine, 1.12-1.23ms in three (1.55x spread); the slow
+  * plateau is gone. The 1.1ms outcome that remains is a steady state, not a warmup transient: it held for 14s with the
+  * compile queue empty, so more warmup does not remove it and the gate's 2.0x ratio still clears it.
+  *
   * `laptop.present.*` (8 -> 24) went with fixing what they measured, after `swing_paint_window` failed the gate on an
   * unrelated PR at 2.19x: it timed an X-pixmap cache hit, bimodal within one run. More samples cannot fix a bimodal
   * measurement and were not the fix; at about 3ms (1x) to 11ms (2x) per synced frame they cost under a second, and give
   * the p50 more than eight points to sit among.
   */
 private[perf] object BenchmarkIterationCounts:
-  val Damage                = 60
-  val Reducer               = 60
-  val LspFramer             = 48
-  val RenderMarkdown        = 24
-  val LayoutVisibleViewport = 60
-  val RandomTyping          = 20
-  val Present               = 24
-  val GoToLineWarmups       = 100
-  val GoToLine              = 40
-  val GoToLineBatch         = 8
+  val Damage                  = 60
+  val Reducer                 = 60
+  val LspFramer               = 48
+  val RenderMarkdown          = 24
+  val LayoutVisibleViewport   = 60
+  val RandomTyping            = 20
+  val Present                 = 24
+  val GoToLineWarmups         = 100
+  val GoToLine                = 40
+  val GoToLineBatch           = 8
+  val RopeCursorOffsetWarmups = 10_000

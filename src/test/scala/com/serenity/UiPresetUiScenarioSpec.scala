@@ -127,7 +127,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
       .create("ui-preset-dirty-restart", uiPresetStore = Some(store), sessionRoot = Some(sessionRoot))
       .unsafeRunSync()
 
-    driver.dispatch(ToggleCommandRunner).unsafeRunSync()
+    (driver.dispatch(ToggleCommandRunner) >> driver.stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
     execute(
       driver,
       CommandIntent.Settings(
@@ -136,12 +136,19 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     )
     val changed = driver.renderFrame("changed-before-restart").unsafeRunSync()
     driver.stateManager.saveSession.unsafeRunSync()
+    // Settings live in config.conf, which a restart reads at startup; the session restores the workspace only (#1934).
+    val persistedConfig = driver.state.unsafeRunSync().persisted.config
 
     val restarted = UiScenarioDriver
-      .create("ui-preset-fresh-runtime", uiPresetStore = Some(store), sessionRoot = Some(sessionRoot))
+      .create(
+        "ui-preset-fresh-runtime",
+        initialConfig = persistedConfig,
+        uiPresetStore = Some(store),
+        sessionRoot = Some(sessionRoot)
+      )
       .unsafeRunSync()
     execute(restarted, CommandIntent.Session(SessionIntent.StartupRestoreSession))
-    restarted.dispatch(ToggleCommandRunner).unsafeRunSync()
+    (restarted.dispatch(ToggleCommandRunner) >> restarted.stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
     val reopened      = restarted.state.unsafeRunSync()
     val reopenedFrame = restarted.renderFrame("changed-after-restart").unsafeRunSync()
     val runner = reopened.commandRunnerSurface

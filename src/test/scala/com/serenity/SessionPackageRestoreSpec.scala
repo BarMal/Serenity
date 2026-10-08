@@ -39,7 +39,7 @@ class SessionPackageRestoreSpec extends AnyFlatSpec with Matchers with OptionVal
   private def throughSession(buffer: Buffer): Buffer =
     val json     = SessionBuffer.fromBuffer(buffer).asJson
     val restored = json.as[SessionBuffer].toOption.value
-    SessionBuffer.toBufferIO(restored).unsafeRunSync()
+    SessionBuffer.toBufferIO(restored, new FileManager()).unsafeRunSync()
 
   "A dirty DOCX buffer restored from the session" should "save the table, styles and paragraphs of its package" in
     withDocx { (file, manager) =>

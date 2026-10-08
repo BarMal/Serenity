@@ -8,12 +8,13 @@ import com.serenity.command.{
   CommandIntent,
   ExternalChangeCommands,
   FileIntent,
+  LineEndingCommands,
   ReopenWithEncodingCommands,
   RichTextCommands,
   RichTextIntent,
   SafeModeCommands
 }
-import com.serenity.text.TextEncoding
+import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
 import com.serenity.ui.widget.{ButtonEmphasis, EndBehaviour, SelectableList}
 
 /** What choosing an option in a [[ConfirmPrompt]] does once the prompt closes. */
@@ -218,5 +219,35 @@ object ConfirmPrompt:
         ConfirmChoice("Save without formatting", ConfirmAction.Run(RichTextCommands.saveWithoutFormatting(bufferId))),
         ConfirmChoice("Cancel", ConfirmAction.Dismiss)
       ),
+      blocking = false
+    )
+
+  /** A file whose line endings are mixed, which saving makes uniform (#1964). Not blocking: nothing has changed yet,
+    * and the answer is also available as a command until the file is saved.
+    */
+  def mixedLineEndings(bufferId: BufferId, bufferLabel: String, counts: LineEndingCounts): ConfirmPrompt =
+    of(
+      title = "Mixed line endings",
+      message = List(
+        bufferLabel,
+        s"This file has ${counts.describe} line endings.",
+        s"Saving will write every line ending as ${counts.dominant.label}."
+      ),
+      choices = ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary) ::
+        LineEnding.values.toList
+          .filter(_ != counts.dominant)
+          .map(ending =>
+            ConfirmChoice(s"Use ${ending.label} instead", ConfirmAction.Run(LineEndingCommands.set(bufferId, ending)))
+          ),
+      blocking = false
+    )
+
+  /** A mixed file was saved without the user having chosen an ending (#1964), so the lines that changed are reported.
+    */
+  def savedMixedLineEndings(bufferLabel: String, written: LineEnding, counts: LineEndingCounts): ConfirmPrompt =
+    of(
+      title = "Line endings changed",
+      message = List(bufferLabel, s"Saved with ${written.label} line endings; the file had ${counts.describe}."),
+      choices = List(ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary)),
       blocking = false
     )
