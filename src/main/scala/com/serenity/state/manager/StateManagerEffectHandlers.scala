@@ -478,13 +478,13 @@ final private[manager] class StateManagerEffectHandlers(
       PanelRegistry.registrationFor(PanelId.Explorer).defaultSize(PanelPosition.Left)
     )
 
-  // With no native dialog the in-app Open form is the picker: its "Open as root" action takes the folder it shows.
+  // With no native dialog the in-app Open Folder form is the picker; its confirm action goes through the same sink.
   protected def requestOpenFolderDialog: IO[Unit] =
     fileDialog match
       case Some(dialog) =>
         openFolderFromDialog(dialog, openFolderAsProjectRoot)
       case None =>
-        currentState.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))
+        currentState.flatMap(state => openFileWorkflowModal(FileWorkflowMode.OpenFolder, state))
 
   private[manager] def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
     currentState.flatMap { state =>

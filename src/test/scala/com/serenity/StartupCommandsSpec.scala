@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
 import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
+import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
@@ -205,13 +206,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
     program.unsafeRunSync()
   }
 
-  it should "open the in-app Open form for Open folder when there is no native dialog, and open its folder as the root" in {
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-
-    val folder = java.nio.file.Files.createTempDirectory("serenity-startup-folder-tui")
-
-    val program = for
-      stateManager <- createStateManagerIO("StartupCommandsSpec")
+  private def openFolderFormFromStartPage(stateManager: StateManager): IO[AppState] =
+    for
       _ <- AppStartup.initializeState(
         stateManager,
         stateManager.sessionStartupInfo,
@@ -221,30 +217,92 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
       _     <- stateManager.applyEvent(MoveDown)
       _     <- stateManager.applyEvent(MoveDown)
       _     <- stateManager.applyEvent(Enter)
-      shown <- stateManager.getCurrentState
-      _ = openForm(shown).map(_.mode) shouldBe Some(FileWorkflowMode.Open)
+      shown <- awaitState(stateManager)(openForm(_).isDefined)
+    yield shown
+
+  it should "open the in-app Open Folder form for Open folder when there is no native dialog" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      stateManager <- createStateManagerIO("StartupCommandsSpec")
+      shown        <- openFolderFormFromStartPage(stateManager)
+    yield
+      openForm(shown).map(_.mode) shouldBe Some(FileWorkflowMode.OpenFolder)
+      openForm(shown).map(_.operationLabel) shouldBe Some("Open Folder")
+      openForm(shown).map(_.activeField) shouldBe Some(FileWorkflowField.Path)
+
+    program.unsafeRunSync()
+  }
+
+  it should "browse to a folder in the Open Folder form, confirm it, pin the Explorer and leave the start page" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val parent = java.nio.file.Files.createTempDirectory("serenity-startup-folder-tui")
+    val child  = java.nio.file.Files.createDirectory(parent.resolve("project"))
+
+    val program = for
+      stateManager <- createStateManagerIO("StartupCommandsSpec")
+      _            <- openFolderFormFromStartPage(stateManager)
       _ <- stateManager.updateState(state =>
         state.copy(runtime =
           state.runtime.copy(modalStack =
             state.runtime.modalStack.map(dialog =>
               dialog.modal match
                 case Modal.FileWorkflow(workflow) =>
-                  dialog.copy(modal = Modal.FileWorkflow(workflow.updated(path = folder.toString)))
+                  dialog.copy(modal = Modal.FileWorkflow(workflow.updated(path = parent.toString)))
                 case _ => dialog
             )
           )
         )
       )
-      _          <- stateManager.applyEvent(ModalOpenAsProjectRoot) >> stateManager.runtimeLifecycle.awaitEffects
-      finalState <- stateManager.getCurrentState
+      _ <- stateManager.applyEvent(Enter)
+      listed <- awaitState(stateManager)(state =>
+        openForm(state).exists(workflow =>
+          workflow.path.endsWith(java.io.File.separator) && workflow.suggestions.nonEmpty
+        )
+      )
+      _          <- stateManager.applyEvent(ModalNextField)
+      descended  <- awaitState(stateManager)(openForm(_).exists(_.path == child.toString + java.io.File.separator))
+      _          <- stateManager.applyEvent(ModalOpenAsProjectRoot)
+      finalState <- awaitState(stateManager)(explorerRoots(_).contains(child))
     yield
+      openForm(listed).map(_.suggestions.map(_.value)) shouldBe Some(List(child.toString))
+      openForm(descended).map(_.mode) shouldBe Some(FileWorkflowMode.OpenFolder)
       finalState.topModal shouldBe None
       finalState.startPageSurface shouldBe None
-      explorerRoots(finalState) shouldBe List(folder)
+      explorerRoots(finalState) shouldBe List(child)
       finalState.persisted.focus should matchPattern { case Focus.EditorPane(_) => }
 
     program.unsafeRunSync()
-    java.nio.file.Files.deleteIfExists(folder)
+    java.nio.file.Files.deleteIfExists(child)
+    java.nio.file.Files.deleteIfExists(parent)
+  }
+
+  it should "leave the start page as it was when the Open Folder form is cancelled" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      stateManager <- createStateManagerIO("StartupCommandsSpec")
+      _ <- AppStartup.initializeState(
+        stateManager,
+        stateManager.sessionStartupInfo,
+        Theme.default,
+        ViewportSize(80, 24)
+      )
+      _      <- stateManager.applyEvent(MoveDown)
+      _      <- stateManager.applyEvent(MoveDown)
+      before <- stateManager.getCurrentState
+      _      <- stateManager.applyEvent(Enter)
+      _      <- awaitState(stateManager)(openForm(_).isDefined)
+      _      <- stateManager.applyEvent(ModalDismiss)
+      after  <- awaitState(stateManager)(_.topModal.isEmpty)
+    yield
+      explorerRoots(after) shouldBe Nil
+      startPageOf(after).selectedIndex shouldBe 2
+      // Opening the form drew a surface id; nothing else may differ.
+      after.copy(runtime = after.runtime.copy(nextSurfaceId = before.runtime.nextSurfaceId)) shouldBe before
+
+    program.unsafeRunSync()
   }
 
   it should "ignore an unavailable Restore shortcut when no saved session exists" in {

@@ -1,7 +1,11 @@
 package com.serenity.io
 
+import java.lang.reflect.InvocationTargetException
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicInteger
+import javax.swing.SwingUtilities
 
+import cats.effect.unsafe.implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -82,3 +86,54 @@ class SwingFileDialogSpec extends AnyFlatSpec with Matchers:
     SwingFileDialog
       .normalizeNativeSelection(Path.of("tmp", "projects").toString, "novel")
       .shouldBe(Some(Path.of("tmp", "projects", "novel")))
+
+  "Running on the event thread" should "return the value the body computed" in
+    SwingFileDialog
+      .runOnEventThread(onDispatchThread = false, _.run())(Some(Path.of("a")))
+      .shouldBe(Right(Some(Path.of("a"))))
+
+  it should "hand back the exception the body raised, not the task's wrapper" in {
+    val boom = IllegalStateException("boom")
+
+    SwingFileDialog
+      .runOnEventThread(onDispatchThread = false, _.run())(throw boom)
+      .shouldBe(Left(boom))
+  }
+
+  it should "unwrap the invoker's InvocationTargetException to its cause" in {
+    val boom = IllegalStateException("boom")
+
+    SwingFileDialog
+      .runOnEventThread[Int](onDispatchThread = false, _ => throw InvocationTargetException(boom))(1)
+      .shouldBe(Left(boom))
+  }
+
+  it should "run inline, without the invoker, when already on the dispatch thread" in {
+    val invocations = AtomicInteger(0)
+
+    val result = SwingFileDialog.runOnEventThread(onDispatchThread = true, _ => invocations.incrementAndGet(): Unit)(7)
+
+    (result, invocations.get()).shouldBe((Right(7), 0))
+  }
+
+  it should "use the invoker exactly once when off the dispatch thread" in {
+    val invocations = AtomicInteger(0)
+
+    val result = SwingFileDialog.runOnEventThread(
+      onDispatchThread = false,
+      task =>
+        invocations.incrementAndGet()
+        task.run()
+    )(7)
+
+    (result, invocations.get()).shouldBe((Right(7), 1))
+  }
+
+  it should "run the body on the real dispatch thread and return its value" in
+    SwingFileDialog.onEventThread(SwingUtilities.isEventDispatchThread).unsafeRunSync().shouldBe(true)
+
+  it should "raise the body's own exception from the effect" in {
+    val boom = IllegalStateException("dialog failed")
+
+    SwingFileDialog.onEventThread[Int](throw boom).attempt.unsafeRunSync().shouldBe(Left(boom))
+  }

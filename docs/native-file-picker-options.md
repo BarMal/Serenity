@@ -54,6 +54,8 @@ Serenity routes open/save/save-as through `com.serenity.io.FileDialog`, with wor
 - macOS: the AWT `FileDialog` with `apple.awt.fileDialogForDirectories` set to `true`. The property is JVM-wide, so every macOS AWT dialog sets it explicitly for its own duration (`false` for file dialogs) and restores the previous value in a `finally`. Dialogs run on the event dispatch thread, where a second dialog can only start inside the first one's modal loop, so the changes nest and cannot interleave.
 - Linux, and any system with no usable owner window: `JFileChooser` with `DIRECTORIES_ONLY`. The Linux AWT dialog has no directory mode.
 
+With no native dialog (the terminal), Open folder shows the in-app Open Folder form: the Path field and the folders under it, with files hidden because none is a valid choice (the same rule Save As uses for its location). `Enter` browses into the folder the Path names, `Tab` descends into the highlighted one, and the confirm key (`Ctrl+R`, the same action the generic Open form labels "Open as root") opens the shown folder through the same route as a native dialog's choice.
+
 Start page and palette keep Open file and Open folder separate on every platform. A combined macOS "Open..." through `NSOpenPanel` would add a `chooseFileOrFolder` function beside these three and route its result to `loadFile` or the same folder route by `Files.isDirectory`; nothing here needs to change for it.
 
 ## Decision for this slice

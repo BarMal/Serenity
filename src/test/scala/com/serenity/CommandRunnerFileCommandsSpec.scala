@@ -278,10 +278,26 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
     after.topModal shouldBe None
   }
 
-  it should "open the in-app open form for Open Folder when no native dialog is available" in {
+  it should "open the in-app Open Folder form for Open Folder when no native dialog is available" in {
     val stateManager = createStateManager()
 
     executeCommandThroughRunner(stateManager, "open-folder", "open-folder")
+
+    val workflow = stateManager.getCurrentState
+      .unsafeRunSync()
+      .topModal
+      .flatMap(_.modal match
+        case Modal.FileWorkflow(w) => Some(w)
+        case _                     => None)
+      .getOrElse(fail("Expected active file workflow modal"))
+    workflow.mode shouldBe FileWorkflowMode.OpenFolder
+    workflow.operationLabel shouldBe "Open Folder"
+  }
+
+  it should "keep the generic in-app Open form for Open File when no native dialog is available" in {
+    val stateManager = createStateManager()
+
+    executeCommandThroughRunner(stateManager, "open", "open")
 
     val workflow = stateManager.getCurrentState
       .unsafeRunSync()
