@@ -6,6 +6,7 @@ import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.{CommandId, CommandRegistry, CommandUsageHistory}
 import com.serenity.config.*
+import com.serenity.io.FileManager
 import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
 
@@ -108,9 +109,11 @@ object SessionState:
   /** Convert SessionState back to AppState for restoration, reading file-backed buffers from disk when older or
     * size-conscious session files do not contain persisted text.
     */
-  def toAppStateIO(sessionState: SessionState, theme: Theme)(using balance: com.serenity.rope.Balance): IO[AppState] =
+  def toAppStateIO(sessionState: SessionState, theme: Theme, files: FileManager)(using
+    balance: com.serenity.rope.Balance
+  ): IO[AppState] =
     for buffers <- sessionState.buffers.traverse { sessionBuffer =>
-          SessionBuffer.toBufferIO(sessionBuffer).map(buffer => BufferId(sessionBuffer.id) -> buffer)
+          SessionBuffer.toBufferIO(sessionBuffer, files).map(buffer => BufferId(sessionBuffer.id) -> buffer)
         }
     yield toAppStateWithBuffers(sessionState, theme, buffers.toMap)
 
