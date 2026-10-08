@@ -2,10 +2,12 @@ package com.serenity.io
 
 import java.awt.{FileDialog as AwtFileDialog, *}
 import java.io.File
+import java.lang.reflect.InvocationTargetException
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.{ExecutionException, FutureTask}
 import javax.swing.{JFileChooser, SwingUtilities}
 
+import scala.util.Try
 import scala.util.control.NonFatal
 
 import cats.effect.IO
@@ -28,18 +30,27 @@ object SwingFileDialog:
   // Runs `body` on the event dispatch thread and waits for it. Dialogs, and the global state they read as they
   // open, are only touched there. While one dialog is modal, a second request runs inside its event loop rather
   // than alongside it, so the changes made to that state nest.
-  // `invokeAndWait` returns nothing, so the result crosses back in a reference. The architecture baseline pins that
-  // reference by line number, so a change above it moves it.
-  private def onEventThread(body: => Option[Path]): IO[Option[Path]] =
-    IO.blocking {
-      val selectedPath       = new AtomicReference[Option[Path]](None)
-      val runnable: Runnable = () => selectedPath.set(body)
+  private[io] def onEventThread[A](body: => A): IO[A] =
+    IO.blocking(
+      runOnEventThread(SwingUtilities.isEventDispatchThread, SwingUtilities.invokeAndWait(_))(body)
+    ).flatMap(IO.fromEither)
 
-      if SwingUtilities.isEventDispatchThread then runnable.run()
-      else SwingUtilities.invokeAndWait(runnable)
+  // The task carries the result, or the failure, back from the dispatch thread. Failures are handed back as the
+  // exception `body` raised, not as the wrapper the task or `invokeAndWait` puts around it.
+  private[io] def runOnEventThread[A](onDispatchThread: Boolean, invokeAndWait: Runnable => Unit)(
+    body: => A
+  ): Either[Throwable, A] =
+    val task = new FutureTask[A](() => body)
+    Try {
+      if onDispatchThread then task.run() else invokeAndWait(task)
+      task.get()
+    }.toEither.left.map(originalCause)
 
-      selectedPath.get()
-    }
+  private def originalCause(failure: Throwable): Throwable =
+    failure match
+      case wrapper @ (_: ExecutionException | _: InvocationTargetException) =>
+        Option(wrapper.getCause).getOrElse(wrapper)
+      case other => other
 
   private def choose(
     parent: Component,

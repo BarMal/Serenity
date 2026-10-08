@@ -13,6 +13,7 @@ final case class FileWorkflowSuggestion(
 
 enum FileWorkflowMode:
   case Open
+  case OpenFolder
   case SaveAs
 
 enum FileWorkflowField:
@@ -148,8 +149,12 @@ sealed trait FileWorkflowState:
 
   /** Derived from the concrete subtype rather than stored, so it can never disagree with which subtype this is. */
   def mode: FileWorkflowMode = this match
-    case _: OpenFileWorkflowState   => FileWorkflowMode.Open
-    case _: SaveAsFileWorkflowState => FileWorkflowMode.SaveAs
+    case _: OpenFileWorkflowState       => FileWorkflowMode.Open
+    case _: OpenFolderFileWorkflowState => FileWorkflowMode.OpenFolder
+    case _: SaveAsFileWorkflowState     => FileWorkflowMode.SaveAs
+
+  /** Whether the folder this form shows can be taken as the project root: both ways of opening, not Save As. */
+  def canOpenAsProjectRoot: Boolean = mode != FileWorkflowMode.SaveAs
 
   def filename: String
   def path: String
@@ -348,6 +353,45 @@ final case class OpenFileWorkflowState(
       statusMessage = statusMessage
     )
 
+final case class OpenFolderFileWorkflowState(
+    filename: String = "",
+    path: String = "",
+    activeField: FileWorkflowField = FileWorkflowField.Path,
+    suggestions: List[FileWorkflowSuggestion] = Nil,
+    selectedSuggestionIndex: Int = 0,
+    missingPathSegments: List[String] = Nil,
+    confirmCreateDirectories: Boolean = false,
+    statusMessage: Option[String] = None,
+    bufferHasRichFormatting: Boolean = false,
+    saveReports: Map[SaveTarget, FidelityReport] = Map.empty
+) extends FileWorkflowState:
+  val operationLabel: String               = "Open Folder"
+  val supportsFilenameSuggestions: Boolean = false
+
+  // A folder has no filename to type: the form is the Path field and the directories listed under it.
+  override def cyclableFields: List[FileWorkflowField] = List(FileWorkflowField.Path)
+
+  protected def rebuild(
+    filename: String,
+    path: String,
+    activeField: FileWorkflowField,
+    suggestions: List[FileWorkflowSuggestion],
+    selectedSuggestionIndex: Int,
+    missingPathSegments: List[String],
+    confirmCreateDirectories: Boolean,
+    statusMessage: Option[String]
+  ): FileWorkflowState =
+    copy(
+      filename = filename,
+      path = path,
+      activeField = activeField,
+      suggestions = suggestions,
+      selectedSuggestionIndex = selectedSuggestionIndex,
+      missingPathSegments = missingPathSegments,
+      confirmCreateDirectories = confirmCreateDirectories,
+      statusMessage = statusMessage
+    )
+
 final case class SaveAsFileWorkflowState(
     filename: String = "",
     path: String = "",
@@ -419,6 +463,19 @@ object FileWorkflowState:
     mode match
       case FileWorkflowMode.Open =>
         OpenFileWorkflowState(
+          filename = filename,
+          path = path,
+          activeField = activeField,
+          suggestions = suggestions,
+          selectedSuggestionIndex = selectedSuggestionIndex,
+          missingPathSegments = missingPathSegments,
+          confirmCreateDirectories = confirmCreateDirectories,
+          statusMessage = statusMessage,
+          bufferHasRichFormatting = bufferHasRichFormatting,
+          saveReports = saveReports
+        )
+      case FileWorkflowMode.OpenFolder =>
+        OpenFolderFileWorkflowState(
           filename = filename,
           path = path,
           activeField = activeField,
