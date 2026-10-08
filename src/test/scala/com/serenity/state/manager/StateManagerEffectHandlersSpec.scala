@@ -198,6 +198,17 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
     fixture.calls.get.unsafeRunSync() shouldBe List(s"openExternalUrl:${ReleasesPage.url}")
   }
 
+  it should "show the About prompt for ShowAbout" in {
+    val fixture = harness()
+
+    fixture.handlers
+      .interpretCommand(command(CommandIntent.Diagnostics(DiagnosticsIntent.ShowAbout)), AppState.initial)
+      .unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe
+      List(s"showModal:${Modal.Confirm(ConfirmPrompt.about(com.serenity.diagnostics.RuntimeIdentity.current))}")
+  }
+
   it should "open the bundled privacy statement for ShowPrivacyStatement" in {
     val fixture = harness()
 
