@@ -63,7 +63,7 @@ object Paginator:
     val head = printed.fold(Right(None))(shown =>
       runningHead(ManuscriptPageNumbering.runningHead(typography.runningHead, meta, shown), typography, setter, metrics)
     )
-    head.map(Page(number, printed, page.kind, _, page.lines))
+    head.map(Page(number, printed, page.kind, _, page.lines, page.opens))
 
   /** Top right, half way up the top margin. */
   private def runningHead(

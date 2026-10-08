@@ -9,7 +9,7 @@ final private[layout] case class SetLine(runs: Vector[PlacedRun], spaceBefore: F
 
 private[layout] enum Opening:
   case Continue
-  case NewPage(kind: PageKind, drop: Float)
+  case NewPage(kind: PageKind, drop: Float, section: Option[SectionRef] = None)
 
 /** Lines that are placed together. The first `held` of them belong with whatever follows (a heading, a scene break), so
   * a page may only end after them once the lines after them have at least `orphans` lines on that page.
@@ -25,7 +25,7 @@ final private[layout] case class Geometry(
     orphans: Int
 )
 
-final private[layout] case class FilledPage(kind: PageKind, lines: Vector[PlacedLine])
+final private[layout] case class FilledPage(kind: PageKind, lines: Vector[PlacedLine], opens: Option[SectionRef])
 
 /** Pours groups of lines onto pages. It decides every page break: new-page openings, widows and orphans, and keeping
   * held lines with the text they introduce.
@@ -34,7 +34,12 @@ private[layout] object PageFiller:
 
   private val Slack = 0.01f
 
-  final private case class Open(kind: PageKind, cursor: Float, lines: Vector[PlacedLine]):
+  final private case class Open(
+      kind: PageKind,
+      cursor: Float,
+      lines: Vector[PlacedLine],
+      opens: Option[SectionRef] = None
+  ):
     def isEmpty: Boolean = lines.isEmpty
 
     private def top(line: SetLine): Float = if isEmpty then cursor else cursor + line.spaceBefore
@@ -45,7 +50,7 @@ private[layout] object PageFiller:
     def add(line: SetLine, geometry: Geometry): Open =
       val lineTop  = top(line)
       val baseline = geometry.textTop + lineTop + line.pitch - geometry.descent
-      Open(kind, lineTop + line.pitch, lines :+ PlacedLine(baseline, line.runs))
+      copy(cursor = lineTop + line.pitch, lines = lines :+ PlacedLine(baseline, line.runs))
 
     def addAll(added: Vector[SetLine], geometry: Geometry): Open =
       added.foldLeft(this)(_.add(_, geometry))
@@ -53,9 +58,10 @@ private[layout] object PageFiller:
   final private case class State(done: Vector[FilledPage], current: Open):
 
     def closed: Vector[FilledPage] =
-      if current.isEmpty then done else done :+ FilledPage(current.kind, current.lines)
+      if current.isEmpty then done else done :+ FilledPage(current.kind, current.lines, current.opens)
 
-    def startPage(kind: PageKind, drop: Float): State = State(closed, Open(kind, drop, Vector.empty))
+    def startPage(kind: PageKind, drop: Float, opens: Option[SectionRef] = None): State =
+      State(closed, Open(kind, drop, Vector.empty, opens))
 
     def withLines(lines: Vector[SetLine], geometry: Geometry): State =
       copy(current = current.addAll(lines, geometry))
@@ -69,8 +75,8 @@ private[layout] object PageFiller:
 
   private def place(state: State, group: Group, geometry: Geometry): State =
     val opened = group.opening match
-      case Opening.Continue            => state
-      case Opening.NewPage(kind, drop) => state.startPage(kind, drop)
+      case Opening.Continue                     => state
+      case Opening.NewPage(kind, drop, section) => state.startPage(kind, drop, section)
     pour(opened, group.lines, group.held, geometry)
 
   @tailrec private def pour(state: State, lines: Vector[SetLine], held: Int, geometry: Geometry): State =
