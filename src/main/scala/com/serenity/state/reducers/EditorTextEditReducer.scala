@@ -82,8 +82,35 @@ private[reducers] object EditorTextEditReducer:
         else if isMulti then applyEditedBuffer(groupable = false)(applyMultiCursorWordDeletion(_, backward = false))
         else reduceDeletion(buffer, currentState, paneId, wordForwardDeletion(_, head))
 
+      case DeleteToLineStart => reduceRangeDeletion(ctx, lineStartDeletionRange)
+      case DeleteToLineEnd   => reduceRangeDeletion(ctx, lineEndDeletionRange)
+
       case _ =>
         ReducerResult.noEffects(currentState)
+
+  /** A deletion whose range is a function of each cursor's offset alone; a selection is deleted in its place. */
+  private def reduceRangeDeletion(ctx: CursorEventContext, rangeAt: (Rope, Int) => Option[(Int, Int)]): ReducerResult =
+    import ctx.*
+    def edited(f: Buffer => (Buffer, List[MultiCursorEdit])): ReducerResult =
+      val (updated, edits) = f(buffer)
+      ReducerResult(
+        Focused.replaceBuffer(currentState, updated),
+        undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+      )
+    if hasSelection then edited(deleteSelectedRanges)
+    else if isMulti then edited(applyMultiCursorRangeDeletion(_, rangeAt))
+    else
+      val offset = buffer.document.content.lineColumnToOffset(head.line, head.column)
+      reduceDeletion(
+        buffer,
+        currentState,
+        paneId,
+        current =>
+          rangeAt(current.document.content, offset).map {
+            case (start, end) =>
+              deleteOffsetRange(current, start, end, start)
+          }
+      )
 
   /** All four deletions share a selection arm and differ only in the range they delete when there is none. Deletions
     * are never groupable (#1016) -- only a run of character/tab insertions coalesces into one undo step.
@@ -350,15 +377,23 @@ private[reducers] object EditorTextEditReducer:
     buffer: Buffer,
     backward: Boolean
   ): (Buffer, List[MultiCursorEdit]) =
+    applyMultiCursorRangeDeletion(
+      buffer,
+      (content, offset) =>
+        if backward then Some(content.previousWordBoundary(offset)).filter(_ < offset).map(_ -> offset)
+        else Some(content.nextWordBoundary(offset)).filter(offset < _).map(offset -> _)
+    )
+
+  private def applyMultiCursorRangeDeletion(
+    buffer: Buffer,
+    rangeAt: (Rope, Int) => Option[(Int, Int)]
+  ): (Buffer, List[MultiCursorEdit]) =
     val entries = multiCursorEntries(buffer)
     val edits = entries.zipWithIndex.flatMap {
       case (entry, index) =>
-        if backward then
-          val start = buffer.document.content.previousWordBoundary(entry.offset)
-          Option.when(start < entry.offset)(MultiCursorEdit(index, start, entry.offset, ""))
-        else
-          val end = buffer.document.content.nextWordBoundary(entry.offset)
-          Option.when(entry.offset < end)(MultiCursorEdit(index, entry.offset, end, ""))
+        rangeAt(buffer.document.content, entry.offset).map {
+          case (start, end) => MultiCursorEdit(index, start, end, "")
+        }
     }
     applyMergedDeletionEdits(buffer, entries.map(_.offset), edits)
 

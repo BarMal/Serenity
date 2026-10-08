@@ -13,7 +13,14 @@ final case class Cursor(
     preferredColumn: Option[Int] = None,
     preferredXPx: Option[Float] = None
 ):
-  def selection: Option[Selection] = selectionAnchor.map(Selection(_, position))
+
+  /** A selection that starts where it ends selects nothing, so it is no selection at all. Row affinity is ignored: the
+    * same line and column are the same place in the text.
+    */
+  def selection: Option[Selection] =
+    selectionAnchor
+      .filter(anchor => anchor.line != position.line || anchor.column != position.column)
+      .map(Selection(_, position))
 
 object Cursor:
   def apply(selection: Selection): Cursor = Cursor(selection.focus, Some(selection.anchor))

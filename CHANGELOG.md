@@ -4,6 +4,8 @@
 
 ### 2026-10-08
 
+- Stopped Backspace, Delete and typing doing nothing after a selection collapsed onto its own anchor (Shift+Right then Shift+Left, Shift+Left at the start of the document, Shift+End at the end of a line): a selection that selects nothing is now no selection, so the edit lands, dirties the buffer and is undoable.
+- Bound Cmd+Backspace and Cmd+Delete to delete to the start and the end of the line, and Option+Delete to delete the word forward, each deleting the selection instead when there is one and working at every cursor; Shift+Backspace and Shift+Delete now act as Backspace and Delete instead of being dropped.
 - Made leaving code mode release the language servers: open documents are closed, servers are shut down and exited, and their diagnostics, semantic tokens and progress are cleared, and entering code mode opens every document that has a language and a file again, whether the mode changes by command, workflow preset or an outside edit of the config file.
 - Asked before leaving code mode while a build, test or run task is running, offering to stay or stop the task and switch; a mode change nobody was asked about, such as a config file edit, stops the task and says so.
 
