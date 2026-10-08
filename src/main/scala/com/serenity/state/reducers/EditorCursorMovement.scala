@@ -104,7 +104,14 @@ private[reducers] object EditorCursorMovement:
   ): Buffer =
     val selectionAnchor = buffer.primarySelection.map(_.anchor).getOrElse(anchor)
     buffer.copy(
-      editing = buffer.editing.withPrimary(Cursor(focus, Some(selectionAnchor), preferredColumn, preferredXPx))
+      editing = buffer.editing.withPrimary(
+        Cursor(
+          focus,
+          Option.when(selectionAnchor.line != focus.line || selectionAnchor.column != focus.column)(selectionAnchor),
+          preferredColumn,
+          preferredXPx
+        )
+      )
     )
 
   def collapseSelectionsToFocus(buffer: Buffer): Buffer =

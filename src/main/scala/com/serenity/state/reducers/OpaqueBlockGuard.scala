@@ -26,7 +26,8 @@ private[reducers] object OpaqueBlockGuard:
   private def editsText(event: TextEntryEvent): Boolean =
     event match
       case InsertChar(_) | TabKey | ReverseTabKey | NewLine | Enter | DeleteBackward | DeleteForward |
-          DeleteWordBackward | DeleteWordForward | Cut | CutToDarlings | RestoreDarling | Paste | PasteFromHistory(_) =>
+          DeleteWordBackward | DeleteWordForward | DeleteToLineStart | DeleteToLineEnd | Cut | CutToDarlings |
+          RestoreDarling | Paste | PasteFromHistory(_) =>
         true
       case _ => false
 

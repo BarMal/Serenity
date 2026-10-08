@@ -243,6 +243,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
     val program = for
       stateManager <- createStateManagerIO("StartupCommandsSpec")
       _            <- openFolderFormFromStartPage(stateManager)
+      _            <- awaitState(stateManager)(openForm(_).exists(_.suggestions.nonEmpty))
       _ <- stateManager.updateState(state =>
         state.copy(runtime =
           state.runtime.copy(modalStack =
@@ -258,7 +259,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
       _ <- stateManager.applyEvent(Enter)
       listed <- awaitState(stateManager)(state =>
         openForm(state).exists(workflow =>
-          workflow.path.endsWith(java.io.File.separator) && workflow.suggestions.nonEmpty
+          workflow.path.endsWith(java.io.File.separator) && workflow.suggestions.map(_.value) == List(child.toString)
         )
       )
       _          <- stateManager.applyEvent(ModalNextField)
