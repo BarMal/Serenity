@@ -46,8 +46,18 @@ Serenity routes open/save/save-as through `com.serenity.io.FileDialog`, with wor
 - Windows-only, so macOS and Linux retain AWT `FileDialog`
 - needs a JNA bridge and COM lifecycle handling
 
+## Choosing a folder
+
+`FileDialog.chooseFolder` asks for a directory, and the backend is picked per platform because the AWT dialog only picks directories on macOS:
+
+- Windows: the Common Item Dialog with `FOS_PICKFOLDERS`. If COM fails it falls back to `JFileChooser`, not to the AWT dialog, which cannot pick a folder there.
+- macOS: the AWT `FileDialog` with `apple.awt.fileDialogForDirectories` set to `true`. The property is JVM-wide, so every macOS AWT dialog sets it explicitly for its own duration (`false` for file dialogs) and restores the previous value in a `finally`. Dialogs run on the event dispatch thread, where a second dialog can only start inside the first one's modal loop, so the changes nest and cannot interleave.
+- Linux, and any system with no usable owner window: `JFileChooser` with `DIRECTORIES_ONLY`. The Linux AWT dialog has no directory mode.
+
+Start page and palette keep Open file and Open folder separate on every platform. A combined macOS "Open..." through `NSOpenPanel` would add a `chooseFileOrFolder` function beside these three and route its result to `loadFile` or the same folder route by `Files.isDirectory`; nothing here needs to change for it.
+
 ## Decision for this slice
 
-On Windows, prefer the Common Item Dialog when Serenity has a native-capable owner window. If COM initialization, dialog creation, or selection retrieval fails, fall back to AWT `FileDialog`. On macOS and Linux, prefer AWT `FileDialog`; fall back to `JFileChooser` when no owner is available.
+On Windows, prefer the Common Item Dialog when Serenity has a native-capable owner window. If COM initialization, dialog creation, or selection retrieval fails, fall back to AWT `FileDialog`. On macOS and Linux, prefer AWT `FileDialog` for files; fall back to `JFileChooser` when no owner is available. Folders follow the table above.
 
 This provides Windows 11-style file management while retaining native locations, permissions, keyboard behavior, and cancellation semantics. It preserves the existing open/save/save-as/cancel workflow tests at the abstraction boundary.

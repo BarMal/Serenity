@@ -143,11 +143,13 @@ private[manager] trait StateManagerEffectHandlersHarness:
       val fileManager = new FileManager()
       def submitSave(id: BufferId, onFailure: Throwable => IO[Unit]): IO[Unit] =
         callsVar.update(_ :+ s"saveExistingBuffer:$id") >> saveExistingBufferHook(id).handleErrorWith(onFailure)
-      def saveBufferAs(id: BufferId, path: Path): IO[Unit]      = callsVar.update(_ :+ s"saveBufferAs:$id:$path")
-      def reloadBuffer(id: BufferId): IO[Unit]                  = callsVar.update(_ :+ s"reloadBuffer:$id")
-      def forceSaveExistingBuffer(id: BufferId): IO[Unit]       = callsVar.update(_ :+ s"forceSaveExistingBuffer:$id")
-      def loadFile(path: Path): IO[Unit]                        = filePersistence.loadFile(path)
-      def openFromDialog(dialog: FileDialog): IO[Unit]          = filePersistence.openFromDialog(dialog)
+      def saveBufferAs(id: BufferId, path: Path): IO[Unit] = callsVar.update(_ :+ s"saveBufferAs:$id:$path")
+      def reloadBuffer(id: BufferId): IO[Unit]             = callsVar.update(_ :+ s"reloadBuffer:$id")
+      def forceSaveExistingBuffer(id: BufferId): IO[Unit]  = callsVar.update(_ :+ s"forceSaveExistingBuffer:$id")
+      def loadFile(path: Path): IO[Unit]                   = filePersistence.loadFile(path)
+      def openFromDialog(dialog: FileDialog): IO[Unit]     = filePersistence.openFromDialog(dialog)
+      def openFolderFromDialog(dialog: FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
+        filePersistence.openFolderFromDialog(dialog, openFolder)
       def isSaving(path: Path): IO[Boolean]                     = filePersistence.isSaving(path)
       override def openExternalUrl(uri: java.net.URI): IO[Unit] = callsVar.update(_ :+ s"openExternalUrl:$uri")
 
@@ -184,6 +186,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
         restoredState
       def createStartupSession(): IO[Unit]                        = callsVar.update(_ :+ "createStartupSession")
+      def leaveStartPage(): IO[Unit]                              = callsVar.update(_ :+ "leaveStartPage")
       def restoreStartupSession(): IO[Unit]                       = callsVar.update(_ :+ "restoreStartupSession")
       def activeEditorBufferId(state: AppState): Option[BufferId] = state.focusedBufferId
       def openSaveSessionAsPrompt(state: AppState): IO[Unit]      = callsVar.update(_ :+ "openSaveSessionAsPrompt")

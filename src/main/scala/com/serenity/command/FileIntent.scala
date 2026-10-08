@@ -12,6 +12,7 @@ enum FileIntent:
   // #1206: compile the focused document, or the book its manuscript.conf lists, to a manuscript file.
   case ExportManuscript(request: ManuscriptExportRequest)
   case OpenFile
+  case OpenFolder
   case OpenRecentFile(path: Path)
   case OpenFileSearch
   case GoToFile

@@ -21,8 +21,25 @@ object SwingFileDialog:
       chooseOpenFile =
         initialDirectory => choose(parent, AwtFileDialog.LOAD, initialDirectory, None, _.showOpenDialog(parent)),
       chooseSaveFile = (initialDirectory, suggestedFileName) =>
-        choose(parent, AwtFileDialog.SAVE, initialDirectory, suggestedFileName, _.showSaveDialog(parent))
+        choose(parent, AwtFileDialog.SAVE, initialDirectory, suggestedFileName, _.showSaveDialog(parent)),
+      chooseFolder = initialDirectory => chooseFolder(parent, initialDirectory)
     )
+
+  // Runs `body` on the event dispatch thread and waits for it. Dialogs, and the global state they read as they
+  // open, are only touched there. While one dialog is modal, a second request runs inside its event loop rather
+  // than alongside it, so the changes made to that state nest.
+  // `invokeAndWait` returns nothing, so the result crosses back in a reference. The architecture baseline pins that
+  // reference by line number, so a change above it moves it.
+  private def onEventThread(body: => Option[Path]): IO[Option[Path]] =
+    IO.blocking {
+      val selectedPath       = new AtomicReference[Option[Path]](None)
+      val runnable: Runnable = () => selectedPath.set(body)
+
+      if SwingUtilities.isEventDispatchThread then runnable.run()
+      else SwingUtilities.invokeAndWait(runnable)
+
+      selectedPath.get()
+    }
 
   private def choose(
     parent: Component,
@@ -31,29 +48,41 @@ object SwingFileDialog:
     suggestedFileName: Option[String],
     showDialog: JFileChooser => Int
   ): IO[Option[Path]] =
-    IO.blocking {
-      val selectedPath = new AtomicReference[Option[Path]](None)
-      val runnable: Runnable = () =>
-        val nativeOwner = SwingFileDialog.nativeDialogOwner(parent)
-        val result =
-          SwingFileDialog.preferredBackend(nativeOwner.isDefined) match
-            case SwingFileDialog.Backend.WindowsModern =>
-              nativeOwner match
-                case Some(owner) =>
-                  SwingFileDialog.chooseWithModernWindowsDialog(owner, mode, initialDirectory, suggestedFileName)
-                case None => SwingFileDialog.chooseWithSwingChooser(initialDirectory, suggestedFileName, showDialog)
-            case SwingFileDialog.Backend.Native =>
-              nativeOwner.flatMap(owner =>
-                SwingFileDialog.chooseWithNativeDialog(owner, mode, initialDirectory, suggestedFileName)
-              )
-            case SwingFileDialog.Backend.SwingChooser =>
-              SwingFileDialog.chooseWithSwingChooser(initialDirectory, suggestedFileName, showDialog)
-        selectedPath.set(result)
+    onEventThread {
+      val nativeOwner = SwingFileDialog.nativeDialogOwner(parent)
+      SwingFileDialog.preferredBackend(nativeOwner.isDefined) match
+        case SwingFileDialog.Backend.WindowsModern =>
+          nativeOwner match
+            case Some(owner) =>
+              SwingFileDialog.chooseWithModernWindowsDialog(owner, mode, initialDirectory, suggestedFileName)
+            case None => SwingFileDialog.chooseWithSwingChooser(initialDirectory, suggestedFileName, showDialog)
+        case SwingFileDialog.Backend.Native =>
+          nativeOwner.flatMap(owner =>
+            SwingFileDialog.chooseWithNativeDialog(owner, mode, initialDirectory, suggestedFileName)
+          )
+        case SwingFileDialog.Backend.SwingChooser =>
+          SwingFileDialog.chooseWithSwingChooser(initialDirectory, suggestedFileName, showDialog)
+    }
 
-      if SwingUtilities.isEventDispatchThread then runnable.run()
-      else SwingUtilities.invokeAndWait(runnable)
-
-      selectedPath.get()
+  /** Folders are picked where the platform can: the Windows Common Item Dialog and the macOS AWT dialog. Linux's AWT
+    * dialog has no directory mode, so it takes the Swing chooser, which does.
+    */
+  private def chooseFolder(parent: Component, initialDirectory: Option[Path]): IO[Option[Path]] =
+    onEventThread {
+      val nativeOwner = SwingFileDialog.nativeDialogOwner(parent)
+      SwingFileDialog.preferredFolderBackend(nativeOwner.isDefined) match
+        case SwingFileDialog.Backend.WindowsModern =>
+          nativeOwner.flatMap(owner =>
+            WindowsCommonFileDialog
+              .choose(nativePointer(owner), AwtFileDialog.LOAD, initialDirectory, None, pickFolders = true)
+              .fold(_ => chooseFolderWithSwingChooser(parent, initialDirectory), identity)
+          )
+        case SwingFileDialog.Backend.Native =>
+          nativeOwner.flatMap(owner =>
+            chooseWithNativeDialog(owner, AwtFileDialog.LOAD, initialDirectory, None, directories = true)
+          )
+        case SwingFileDialog.Backend.SwingChooser =>
+          chooseFolderWithSwingChooser(parent, initialDirectory)
     }
 
   enum Backend:
@@ -72,6 +101,22 @@ object SwingFileDialog:
     if !hasNativeOwner then Backend.SwingChooser
     else if WindowsCommonFileDialog.isSupported(osName) then Backend.WindowsModern
     else Backend.Native
+
+  private[io] val ForceFileSystem = 0x40
+  private[io] val PickFolders     = 0x20
+  private val FolderDialogTitle   = "Open Folder"
+
+  private[io] def preferredFolderBackend(
+    hasNativeOwner: Boolean,
+    osName: String = System.getProperty("os.name", "")
+  ): Backend =
+    if !hasNativeOwner then Backend.SwingChooser
+    else if WindowsCommonFileDialog.isSupported(osName) then Backend.WindowsModern
+    else if AppleDirectoryMode.appliesTo(osName) then Backend.Native
+    else Backend.SwingChooser
+
+  private[io] def windowsDialogOptions(current: Int, pickFolders: Boolean): Int =
+    current | ForceFileSystem | (if pickFolders then PickFolders else 0)
 
   private[io] def normalizeNativeSelection(directory: String | Null, file: String | Null): Option[Path] =
     Option(file).map { selectedFile =>
@@ -96,16 +141,20 @@ object SwingFileDialog:
     owner: NativeDialogOwner,
     mode: Int,
     initialDirectory: Option[Path],
-    suggestedFileName: Option[String]
+    suggestedFileName: Option[String],
+    directories: Boolean = false
   ): Option[Path] =
+    val title = if directories then FolderDialogTitle else dialogTitle(mode)
     val dialog = owner match
-      case NativeDialogOwner.FrameOwner(frame)   => AwtFileDialog(frame, dialogTitle(mode), mode)
-      case NativeDialogOwner.DialogOwner(dialog) => AwtFileDialog(dialog, dialogTitle(mode), mode)
+      case NativeDialogOwner.FrameOwner(frame)   => AwtFileDialog(frame, title, mode)
+      case NativeDialogOwner.DialogOwner(dialog) => AwtFileDialog(dialog, title, mode)
 
     try
       initialDirectory.foreach(path => dialog.setDirectory(path.normalize().toAbsolutePath.toString))
       suggestedFileName.foreach(dialog.setFile)
-      dialog.setVisible(true)
+      if AppleDirectoryMode.appliesTo(System.getProperty("os.name", "")) then
+        AppleDirectoryMode.around(directories)(dialog.setVisible(true))
+      else dialog.setVisible(true)
       normalizeNativeSelection(dialog.getDirectory, dialog.getFile)
     finally dialog.dispose()
 
@@ -144,6 +193,15 @@ object SwingFileDialog:
     if result == JFileChooser.APPROVE_OPTION then normalizeSwingSelection(chooser.getSelectedFile)
     else None
 
+  private def chooseFolderWithSwingChooser(parent: Component, initialDirectory: Option[Path]): Option[Path] =
+    val chooser = new JFileChooser()
+    chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY)
+    chooser.setDialogTitle(FolderDialogTitle)
+    initialDirectory.foreach(path => chooser.setCurrentDirectory(path.toFile))
+    if chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION then
+      normalizeSwingSelection(chooser.getSelectedFile)
+    else None
+
   private def dialogTitle(mode: Int): String =
     if mode == AwtFileDialog.SAVE then "Save File"
     else "Open File"
@@ -152,7 +210,6 @@ object SwingFileDialog:
   private object WindowsCommonFileDialog:
 
     private val ClassContextInprocServer = 1
-    private val ForceFileSystem          = 0x40
     private val SigdnFileSystemPath      = 0x80058000
     private val ErrorCancelled           = 0x800704c7
 
@@ -169,13 +226,14 @@ object SwingFileDialog:
       owner: Pointer,
       mode: Int,
       initialDirectory: Option[Path],
-      suggestedFileName: Option[String]
+      suggestedFileName: Option[String],
+      pickFolders: Boolean = false
     ): Either[Unit, Option[Path]] =
       try
         val initialization = Ole32.INSTANCE.CoInitializeEx(Pointer.NULL, Ole32.COINIT_APARTMENTTHREADED).intValue()
         if failed(initialization) then Left(())
         else
-          try chooseInitialized(owner, mode, initialDirectory, suggestedFileName)
+          try chooseInitialized(owner, mode, initialDirectory, suggestedFileName, pickFolders)
           finally Ole32.INSTANCE.CoUninitialize()
       catch case NonFatal(_) => Left(())
 
@@ -183,7 +241,8 @@ object SwingFileDialog:
       owner: Pointer,
       mode: Int,
       initialDirectory: Option[Path],
-      suggestedFileName: Option[String]
+      suggestedFileName: Option[String],
+      pickFolders: Boolean
     ): Either[Unit, Option[Path]] =
       val dialogReference = new PointerByReference()
       val createResult = Ole32.INSTANCE
@@ -199,7 +258,7 @@ object SwingFileDialog:
       else
         val dialog = new CommonFileDialog(dialogReference.getValue)
         try
-          val configured = forceFileSystem(dialog) &&
+          val configured = configureOptions(dialog, pickFolders) &&
             suggestedFileName.forall(name => succeeded(dialog.setFileName(name))) &&
             initialDirectory.forall(directory => setInitialDirectory(dialog, directory))
           if !configured then Left(())
@@ -211,9 +270,10 @@ object SwingFileDialog:
         finally
           val _ = dialog.Release()
 
-    private def forceFileSystem(dialog: CommonFileDialog): Boolean =
+    private def configureOptions(dialog: CommonFileDialog, pickFolders: Boolean): Boolean =
       val options = new IntByReference()
-      succeeded(dialog.getOptions(options)) && succeeded(dialog.setOptions(options.getValue | ForceFileSystem))
+      succeeded(dialog.getOptions(options)) &&
+      succeeded(dialog.setOptions(windowsDialogOptions(options.getValue, pickFolders)))
 
     private def setInitialDirectory(dialog: CommonFileDialog, directory: Path): Boolean =
       val itemReference = new PointerByReference()

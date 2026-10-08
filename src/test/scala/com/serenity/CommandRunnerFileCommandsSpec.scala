@@ -27,12 +27,17 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
 
   private def testFileDialog(
     openSelection: Option[Path] = None,
-    saveSelection: Option[Path] = None
+    saveSelection: Option[Path] = None,
+    folderSelection: Option[Path] = None
   ): FileDialog =
     FileDialog(
       chooseOpenFile = _ => IO.pure(openSelection),
-      chooseSaveFile = (_, _) => IO.pure(saveSelection)
+      chooseSaveFile = (_, _) => IO.pure(saveSelection),
+      chooseFolder = _ => IO.pure(folderSelection)
     )
+
+  private def explorerRoots(state: AppState): List[Path] =
+    state.pinnedSurfaces.map(_.content).collect { case SurfaceContent.DirectoryTree(tree, _, _) => tree.rootPath }
 
   private def createStateManager(
     sessionRootOverride: Option[Path] = None,
@@ -235,6 +240,57 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
       .contentRect
     openedBuffer.map(_.viewport.visibleColumns) shouldBe Some(contentRect.width)
     openedBuffer.map(_.viewport.visibleLines) shouldBe Some(contentRect.height)
+  }
+
+  private def openFolderThroughPalette(mode: com.serenity.config.AppMode): Unit =
+    val folder       = Files.createTempDirectory("serenity-open-folder")
+    val stateManager = createStateManager(fileDialog = Some(testFileDialog(folderSelection = Some(folder))))
+    stateManager.updateState(TestAppModes.inMode(mode)).unsafeRunSync()
+    val buffersBefore = stateManager.getCurrentState.unsafeRunSync().persisted.buffers
+
+    executeCommandThroughRunner(stateManager, "open-folder", "open-folder")
+
+    val updatedState = (IO.sleep(20.millis) >> stateManager.getCurrentState)
+      .iterateUntil(explorerRoots(_).contains(folder))
+      .timeout(20.seconds)
+      .unsafeRunSync()
+    updatedState.commandRunnerSurface shouldBe None
+    updatedState.topModal shouldBe None
+    explorerRoots(updatedState) shouldBe List(folder)
+    updatedState.persisted.buffers shouldBe buffersBefore
+
+  it should "open a selected folder as the Explorer root through the palette in Code mode" in
+    openFolderThroughPalette(com.serenity.config.AppMode.Code)
+
+  it should "open a selected folder as the Explorer root through the palette in Prose mode" in
+    openFolderThroughPalette(com.serenity.config.AppMode.Prose)
+
+  it should "leave the session unchanged when the native folder dialog is cancelled" in {
+    val stateManager = createStateManager(fileDialog = Some(testFileDialog()))
+    val before       = stateManager.getCurrentState.unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "open-folder", "open-folder")
+    stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    explorerRoots(after) shouldBe Nil
+    after.persisted.buffers shouldBe before.persisted.buffers
+    after.topModal shouldBe None
+  }
+
+  it should "open the in-app open form for Open Folder when no native dialog is available" in {
+    val stateManager = createStateManager()
+
+    executeCommandThroughRunner(stateManager, "open-folder", "open-folder")
+
+    val workflow = stateManager.getCurrentState
+      .unsafeRunSync()
+      .topModal
+      .flatMap(_.modal match
+        case Modal.FileWorkflow(w) => Some(w)
+        case _                     => None)
+      .getOrElse(fail("Expected active file workflow modal"))
+    workflow.mode shouldBe FileWorkflowMode.Open
   }
 
   it should "open the in-app save-as form when no native dialog is available" in {

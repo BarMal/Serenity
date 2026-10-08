@@ -32,13 +32,24 @@ object StartupPageContent:
       ),
       StartupAction(
         "open-file",
-        "Open file or folder",
+        "Open file",
         Command.typed(
           "startup.open-file",
-          "Open an existing file or directory",
+          "Open an existing file",
           CommandIntent.Session(SessionIntent.StartupOpenFile)
         ),
         Some('2'),
+        Some("Enter")
+      ),
+      StartupAction(
+        "open-folder",
+        "Open folder",
+        Command.typed(
+          "startup.open-folder",
+          "Open a folder and show it in the Explorer",
+          CommandIntent.Session(SessionIntent.StartupOpenFolder)
+        ),
+        Some('3'),
         Some("Enter")
       )
     )
