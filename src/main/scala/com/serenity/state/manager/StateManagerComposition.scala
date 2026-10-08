@@ -7,7 +7,7 @@ import cats.syntax.foldable.*
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
-import com.serenity.lsp.LspEffect
+import com.serenity.lsp.{LspEffect, LspNotices}
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionId, SessionManager, SessionPersistence}
 import com.serenity.state.effects.Lane
@@ -77,6 +77,14 @@ private[manager] class StateManagerComposition(
       operations.showNotice,
       wrapCache = runtimeRenderCaches.wrappedLines
     )
+
+  private[manager] val autoSave = new StateManagerAutoSave(
+    modelCommit.currentState,
+    filePersistence.isSaving,
+    filePersistence.submitSave,
+    operations.showNotice,
+    runtimeLogger
+  )
 
   // Built here, before `effects` and `events`, `StateManagerPanelEffects`
   // (owned by `effects`) and `StateManagerSurfaceCapability` (`surfaces`, below) both need to record undo boundaries
@@ -277,7 +285,8 @@ private[manager] class StateManagerComposition(
     operations.refreshDictionaryFingerprints(),
     operations.dictionaryWatchDirectories,
     operations.explorerWatchDirectories,
-    operations.markExplorerDirectoriesStale
+    operations.markExplorerDirectoriesStale,
+    autoSave
   )
 
   // PaneManager's/PanelManager's methods are excluded from the facade export (#1017/#1724): they have no real
@@ -288,7 +297,10 @@ private[manager] class StateManagerComposition(
   export files.*
   export viewport.{handleViewportResize as _, *}
 
-  val lspEffectSource: LspEffectSource = LspEffectSource(lspEffectStream = lspEffectStream)
+  val lspEffectSource: LspEffectSource = LspEffectSource(
+    lspEffectStream = lspEffectStream,
+    notices = LspNotices(operations.showNotice, operations.withdrawPrompt)
+  )
 
   private def lspEffectStream: Stream[IO, LspEffect] =
     lspQueue.stream

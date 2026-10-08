@@ -205,6 +205,19 @@ jobs:
             }
           }
 
+      # Launches the packaged image itself (not the jar) so a broken jlink runtime, launcher or missing resource fails
+      # here rather than on a user's machine (#2030). The script starts it with --smoke-test, which prints a ready line
+      # after the first painted frame and quits; it fails on a non-zero exit, crash log or timeout.
+      - name: Smoke-test Linux app image
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          xvfb-run -a -s "-screen 0 1280x800x24" scripts/smoke-test-app-image.sh dist/Serenity/bin/Serenity 120
+
       - name: Import macOS Developer ID certificate
         if: runner.os == 'macOS'
         env:
@@ -265,6 +278,12 @@ jobs:
 
           codesign --force --deep --options runtime --timestamp --sign "$IDENTITY" dist/Serenity.app
           codesign --verify --deep --strict --verbose=2 dist/Serenity.app
+
+      - name: Smoke-test macOS app image
+        if: runner.os == 'macOS'
+        timeout-minutes: 5
+        shell: bash
+        run: scripts/smoke-test-app-image.sh dist/Serenity.app/Contents/MacOS/Serenity 120
 
       - name: Archive Windows app image
         if: runner.os == 'Windows'

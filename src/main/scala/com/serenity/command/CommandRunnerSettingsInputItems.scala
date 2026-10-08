@@ -95,6 +95,18 @@ object CommandRunnerSettingsInputItems:
         category = CommandCategory.Edit
       ),
       CommandSurfaceItem.InputItem(
+        id = "reply-document-comment",
+        label = "Reply to Document Comment",
+        hint = "Reply text",
+        currentValue = "",
+        kind = CommandSurfaceItem.InputKind.FreeText,
+        parse = text =>
+          CommandRunnerSettingsTextParsing
+            .nonEmptyText(text)
+            .map(commandIntentArg => CommandIntent.Comments(CommentsIntent.ReplyToDocumentComment(commandIntentArg))),
+        category = CommandCategory.Edit
+      ),
+      CommandSurfaceItem.InputItem(
         id = "add-placeholder",
         label = "Add Placeholder",
         hint = "Note for the placeholder",
@@ -148,6 +160,7 @@ object CommandRunnerSettingsInputItems:
         v.lineNumberPaddingValue
       ) ++
       CommandRunnerSettingsInputItemsInputAndFont.inputItems(v.inputConfig.wheelScrollLines) ++
+      CommandRunnerSettingsInputItemsInputAndFont.autoSaveItems(config.autoSaveConfig.delayMillis) ++
       CommandRunnerSettingsInputItemsInputAndFont.fontSizeItems(
         v.codeFontSizeValue,
         v.textFontSizeValue,

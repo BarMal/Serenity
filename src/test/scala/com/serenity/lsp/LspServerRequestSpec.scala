@@ -10,7 +10,9 @@ import com.serenity.lsp.client.{
   LspApplyEditResult,
   LspClientHooks,
   LspConnection,
+  LspMessageAction,
   LspMessageLevel,
+  LspMessageRequest,
   LspProgressUpdate,
   LspServerMessage,
   WorkspaceRootUri
@@ -219,4 +221,91 @@ class LspServerRequestSpec extends AnyFlatSpec with Matchers:
       LspServerMessage(LspMessageLevel.Warning, "Heads up"),
       LspProgressUpdate("index", com.serenity.lsp.model.LspProgress.Begin("Indexing", None, None))
     )
+  }
+
+  it should "pass a window/logMessage on as a log line, never as something to show the user" in {
+    val messages = new java.util.concurrent.LinkedBlockingQueue[LspServerMessage]()
+    val hooks    = LspClientHooks.ignoring.copy(onMessage = message => IO(messages.put(message)))
+
+    withHooks(hooks) { (server, _) =>
+      server.push(
+        Json.obj(
+          "jsonrpc" -> "2.0".asJson,
+          "method"  -> "window/logMessage".asJson,
+          "params"  -> Json.obj("type" -> 1.asJson, "message" -> "indexing failed".asJson)
+        )
+      ) >> IO.blocking(messages.take()).timeout(testTimeout)
+    } shouldBe LspServerMessage(LspMessageLevel.Error, "indexing failed", shownToUser = false)
+  }
+
+  private val importBuild = Json.obj("title" -> "Import build".asJson, "kind" -> "import".asJson)
+  private val notNow      = Json.obj("title" -> "Not now".asJson)
+
+  private def messageRequest(id: Long): Json =
+    Json.obj(
+      "jsonrpc" -> "2.0".asJson,
+      "id"      -> id.asJson,
+      "method"  -> "window/showMessageRequest".asJson,
+      "params" -> Json.obj(
+        "type"    -> 3.asJson,
+        "message" -> "New build detected".asJson,
+        "actions" -> Json.arr(importBuild, notNow)
+      )
+    )
+
+  it should "ask the client which action to take for window/showMessageRequest and answer with that item" in {
+    val seen  = new java.util.concurrent.atomic.AtomicReference[Option[LspMessageRequest]](None)
+    val hooks = LspClientHooks.ignoring.copy(onMessageRequest = request => IO(seen.set(Some(request))).as(Some(1)))
+
+    val reply = withHooks(hooks)((server, _) => server.push(messageRequest(41)) >> server.takeReceived)
+
+    result(reply) shouldBe Some(notNow)
+    reply.hcursor.downField("id").as[Long].toOption shouldBe Some(41L)
+    seen.get shouldBe Some(
+      LspMessageRequest(
+        LspMessageLevel.Info,
+        "New build detected",
+        List(LspMessageAction("Import build", importBuild), LspMessageAction("Not now", notNow))
+      )
+    )
+  }
+
+  it should "answer window/showMessageRequest with null when the client dismisses the question" in {
+    val hooks = LspClientHooks.ignoring.copy(onMessageRequest = _ => IO.pure(None))
+
+    val reply = withHooks(hooks)((server, _) => server.push(messageRequest(42)) >> server.takeReceived)
+
+    result(reply) shouldBe Some(Json.Null)
+  }
+
+  it should "answer window/showMessageRequest with null for an action the client never offered" in {
+    val hooks = LspClientHooks.ignoring.copy(onMessageRequest = _ => IO.pure(Some(7)))
+
+    val reply = withHooks(hooks)((server, _) => server.push(messageRequest(43)) >> server.takeReceived)
+
+    result(reply) shouldBe Some(Json.Null)
+  }
+
+  it should "give up on a window/showMessageRequest nobody answers, telling the client it is no longer wanted" in {
+    val cancelled = new java.util.concurrent.atomic.AtomicBoolean(false)
+    val hooks =
+      LspClientHooks.ignoring.copy(onMessageRequest = _ => IO.never[Option[Int]].onCancel(IO(cancelled.set(true))))
+
+    val reply = withHooks(hooks)((server, _) => server.push(messageRequest(44)) >> server.takeReceived)
+
+    result(reply) shouldBe Some(Json.Null)
+    cancelled.get shouldBe true
+  }
+
+  it should "send exactly one reply to a window/showMessageRequest, however the client ends" in {
+    val hooks = LspClientHooks.ignoring.copy(onMessageRequest = _ => IO.raiseError(new RuntimeException("boom")))
+
+    val replies = withHooks(hooks) { (server, _) =>
+      server.push(messageRequest(45)) >> server.takeReceived.flatMap { first =>
+        server.takeReceived.timeout(600.millis).attempt.map(second => (first, second.toOption))
+      }
+    }
+
+    result(replies._1) shouldBe Some(Json.Null)
+    replies._2 shouldBe None
   }

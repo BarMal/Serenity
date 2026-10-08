@@ -13,6 +13,7 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
 import com.serenity.diagnostics.FrameTimings
+import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
@@ -55,6 +56,8 @@ class SwingWindow(
   private val chromePaletteRef         = new AtomicReference(SwingWindow.ChromePalette.fromTheme(Theme.default))
   private val nativeChromeThemeCache   = new SwingWindow.ChromePaletteCache
   private val customChromePaletteCache = new SwingWindow.ChromePaletteCache
+  private val menuBarRef               = new AtomicReference[Option[JMenuBar]](None)
+  private val menuBarPaletteRef        = new AtomicReference[Option[MenuBarPalette]](None)
   private val pendingResize            = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch               = new CountDownLatch(1)
   private val baseImageRef             = new AtomicReference[Option[BufferedImage]](None)
@@ -109,6 +112,14 @@ class SwingWindow(
       val publish: Runnable = () => accessibilityBridge.publish(snapshot, currentMetrics)
       if SwingUtilities.isEventDispatchThread then publish.run()
       else SwingUtilities.invokeLater(publish)
+
+  private val pointerCursorSync = new PointerCursorSync(shape =>
+    val apply: Runnable = () => canvas.setCursor(Cursor.getPredefinedCursor(PointerCursorSync.awtCursorType(shape)))
+    if SwingUtilities.isEventDispatchThread then apply.run()
+    else SwingUtilities.invokeLater(apply)
+  )
+
+  def updatePointerShape(shape: PointerShape): Unit = pointerCursorSync.sync(shape)
 
   def onImageReady(image: BufferedImage): Unit =
     onImageReady(image, None)
@@ -205,6 +216,8 @@ class SwingWindow(
   titleLabelRef.set(Some(chromeTitleBar.titleLabel))
   titleBarRef.set(Some(chromeTitleBar.panel))
 
+  private val chromeNorth = new JPanel(new BorderLayout)
+
   private val frame: JFrame =
     val f = new JFrame(windowTitle)
     f.setIconImages(SwingWindow.applicationIconImages.asJava)
@@ -233,7 +246,9 @@ class SwingWindow(
     )
     val content = new JPanel(new BorderLayout):
       setBackground(Color.BLACK)
-    if usesCustomChrome then content.add(chromeTitleBar.panel, BorderLayout.NORTH)
+    if usesCustomChrome then
+      chromeNorth.add(chromeTitleBar.panel, BorderLayout.NORTH)
+      content.add(chromeNorth, BorderLayout.NORTH)
     content.add(canvas, BorderLayout.CENTER)
     f.setContentPane(content)
     if usesCustomChrome then
@@ -249,6 +264,24 @@ class SwingWindow(
     f
 
   def awaitClose: IO[Unit] = SwingWindow.awaitCloseLatch(closeLatch)
+
+  /** Puts `bar` where [[SwingWindow.menuBarPlacement]] says, on the event-dispatch thread, and makes room for it so the
+    * canvas keeps its size: before the window is shown by packing, afterwards by growing the frame.
+    */
+  def installMenuBar(bar: JMenuBar): Unit =
+    val install: Runnable = () =>
+      menuBarRef.set(Some(bar))
+      menuBarPaletteRef.get().foreach(MenuBarTheming.apply(bar, _))
+      SwingWindow.menuBarPlacement(System.getProperty("os.name", ""), usesCustomChrome) match
+        case MenuBarPlacement.UnderCustomTitleBar                           => chromeNorth.add(bar, BorderLayout.SOUTH)
+        case MenuBarPlacement.ScreenMenuBar | MenuBarPlacement.FrameMenuBar => frame.setJMenuBar(bar)
+      if frame.isShowing then
+        if (frame.getExtendedState & Frame.MAXIMIZED_BOTH) == 0 then
+          frame.setSize(frame.getWidth, frame.getHeight + bar.getPreferredSize.height)
+        frame.validate()
+      else frame.pack()
+    if SwingUtilities.isEventDispatchThread then install.run()
+    else SwingUtilities.invokeAndWait(install)
 
   /** Raises the window for a later launch that handed its files over to this one (#2023). */
   def bringToFront(): Unit =
@@ -315,6 +348,20 @@ class SwingWindow(
     onResizeCallbackRef.get().foreach(_.apply())
 
   def updateChromeTheme(theme: Theme): Unit =
+    updateTitleBarTheme(theme)
+    updateMenuBarTheme(MenuBarPalette.fromTheme(theme))
+
+  /** The bar follows the editor theme in every chrome mode, so it is restyled only when the palette changed. */
+  private def updateMenuBarTheme(palette: MenuBarPalette): Unit =
+    if !menuBarPaletteRef.get().contains(palette) then
+      menuBarPaletteRef.set(Some(palette))
+      menuBarRef
+        .get()
+        .foreach: bar =>
+          val restyle: Runnable = () => MenuBarTheming.apply(bar, palette)
+          if SwingUtilities.isEventDispatchThread then restyle.run() else SwingUtilities.invokeLater(restyle)
+
+  private def updateTitleBarTheme(theme: Theme): Unit =
     if usesCustomChrome then
       val palette = SwingWindow.ChromePalette.fromTheme(theme)
       if customChromePaletteCache.recordIfChanged(palette, supported = true) then

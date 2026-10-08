@@ -1,5 +1,6 @@
 package com.serenity.app.instance
 
+import java.io.{BufferedInputStream, ByteArrayOutputStream}
 import java.net.{StandardProtocolFamily, UnixDomainSocketAddress}
 import java.nio.channels.{Channels, ServerSocketChannel, SocketChannel}
 import java.nio.charset.StandardCharsets
@@ -23,11 +24,19 @@ enum Delivery:
   case Failed
 
 /** A second launch hands the running instance the files it was asked to open over a Unix-domain socket in the config
-  * directory (#2023). One JSON request per connection, answered with an acknowledgement once it is queued.
+  * directory (#2023). One JSON request line per connection, answered with an acknowledgement once it is queued.
+  *
+  * The request ends at its newline rather than at the sender's half-close: a half-closed AF_UNIX stream is not reliably
+  * seen as end-of-input by its peer on Windows, which left the listener reading until its timeout.
+  *
+  * Channel calls use `interruptibleMany`, not `interruptible`: cancelling a blocked channel call leaves
+  * `ClosedByInterruptException`'s interrupt flag on the thread, only `interruptibleMany` clears it, and Cats Effect can
+  * recycle that thread as a compute worker that then shuts the whole pool down when it parks.
   */
 object InstanceMessenger:
 
   private val Acknowledgement   = "ok"
+  private val RequestTerminator = '\n'
   private val MaxRequestBytes   = 1 << 20
   private val ConnectionTimeout = 2.seconds
 
@@ -46,10 +55,10 @@ object InstanceMessenger:
     Resource
       .fromAutoCloseable(IO.blocking(SocketChannel.open(StandardProtocolFamily.UNIX)))
       .use { channel =>
-        IO.interruptible(channel.connect(UnixDomainSocketAddress.of(socketPath))).attempt.flatMap {
+        IO.interruptibleMany(channel.connect(UnixDomainSocketAddress.of(socketPath))).attempt.flatMap {
           case Left(_) => IO.pure(Delivery.Unreachable)
           case Right(_) =>
-            IO.interruptible(exchange(channel, encode(paths)))
+            IO.interruptibleMany(exchange(channel, encode(paths)))
               .map(acknowledged => if acknowledged then Delivery.Delivered else Delivery.Failed)
         }
       }
@@ -57,7 +66,7 @@ object InstanceMessenger:
       .handleError(_ => Delivery.Failed)
 
   private[instance] def encode(paths: List[Path]): String =
-    Json.obj("open" -> Json.arr(paths.map(path => Json.fromString(path.toString))*)).noSpaces
+    Json.obj("open" -> Json.arr(paths.map(path => Json.fromString(path.toString))*)).noSpaces + RequestTerminator
 
   private[instance] def decode(request: String): Option[List[Path]] =
     _root_.io.circe.parser
@@ -73,7 +82,7 @@ object InstanceMessenger:
     * `Resource` because a resource's acquire is uncancelable, which would leave shutdown waiting for the next client.
     */
   private def acceptOne(server: ServerSocketChannel, requests: Queue[IO, List[Path]], logger: Logger[IO]): IO[Unit] =
-    IO.interruptible(server.accept()).flatMap { connection =>
+    IO.interruptibleMany(server.accept()).flatMap { connection =>
       Resource.fromAutoCloseable(IO.pure(connection)).use(serveConnection(_, requests, logger))
     }
 
@@ -82,22 +91,29 @@ object InstanceMessenger:
     requests: Queue[IO, List[Path]],
     logger: Logger[IO]
   ): IO[Unit] =
-    IO.interruptible(readRequest(connection))
+    IO.interruptibleMany(readRequest(connection))
       .timeout(ConnectionTimeout)
       .flatMap {
-        case Some(paths) => requests.offer(paths) >> IO.interruptible(acknowledge(connection))
+        case Some(paths) => requests.offer(paths) >> IO.interruptibleMany(acknowledge(connection))
         case None        => logger.warn("[INSTANCE] Ignored a malformed request on the instance socket")
       }
       .handleErrorWith(error => logger.warn(error)("[INSTANCE] Could not read a request from another launch"))
 
   private def readRequest(connection: SocketChannel): Option[List[Path]] =
-    decode(new String(Channels.newInputStream(connection).readNBytes(MaxRequestBytes), StandardCharsets.UTF_8))
+    decode(readLine(new BufferedInputStream(Channels.newInputStream(connection))))
+
+  private def readLine(input: BufferedInputStream): String =
+    val line = new ByteArrayOutputStream()
+    Iterator
+      .continually(input.read())
+      .takeWhile(byte => byte != -1 && byte != RequestTerminator.toInt && line.size < MaxRequestBytes)
+      .foreach(byte => line.write(byte))
+    line.toString(StandardCharsets.UTF_8)
 
   private def acknowledge(connection: SocketChannel): Unit =
     Channels.newOutputStream(connection).write(Acknowledgement.getBytes(StandardCharsets.UTF_8))
 
   private def exchange(channel: SocketChannel, request: String): Boolean =
     Channels.newOutputStream(channel).write(request.getBytes(StandardCharsets.UTF_8))
-    val _     = channel.shutdownOutput()
     val reply = Channels.newInputStream(channel).readNBytes(Acknowledgement.length)
     new String(reply, StandardCharsets.UTF_8) == Acknowledgement

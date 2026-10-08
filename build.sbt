@@ -185,7 +185,8 @@ lazy val root = (project in file("."))
       val dir = (Compile / resourceManaged).value / "META-INF" / "serenity"
       IO.copyFile(baseDirectory.value / "LICENSE", dir / "LICENSE")
       IO.write(dir / "THIRD-PARTY-NOTICES.md", thirdPartyNotices.value)
-      Seq(dir / "LICENSE", dir / "THIRD-PARTY-NOTICES.md")
+      IO.copyFile(baseDirectory.value / "docs" / "PRIVACY.md", dir / "PRIVACY.md")
+      Seq(dir / "LICENSE", dir / "THIRD-PARTY-NOTICES.md", dir / "PRIVACY.md")
     }.taskValue,
     // The runtime module list the notices spec checks the shipped notices against.
     Test / resourceGenerators += Def.task {
@@ -247,7 +248,10 @@ lazy val root = (project in file("."))
       // Master CI's Test job has hung for 50+ minutes with no output and no way to tell which test was stuck: the
       // console reporter prints nothing per test, and nothing at all for a run that never ends. The slowpoke
       // detector raises an alert naming any test still running after 120 s, then every 60 s; HangReporter prints
-      // those alerts straight to stdout together with the stacks of the threads running suites.
+      // those alerts straight to stdout together with the stacks of the threads running suites, the IO runtime's
+      // compute and blocker threads, and any thread blocked, holding a lock or waiting on a class/lazy-val initialiser.
+      // Each alert also probes the global IO runtime with a trivial IO and aborts the run, with the thread dump, when it
+      // cannot answer; the reporter's construction installs the JVM-wide uncaught-exception handler (RuntimeWatch).
       Tests.Argument(TestFrameworks.ScalaTest, "-W", "120", "60"),
       Tests.Argument(TestFrameworks.ScalaTest, "-C", "com.serenity.testkit.HangReporter")
     ),
