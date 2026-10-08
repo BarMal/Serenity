@@ -56,7 +56,7 @@ final private[richtext] class SourceMap private (spans: XmlSpans, indexes: Map[E
     index(element).flatMap(spans.spans.lift).map(_.qualifiedName)
 
   /** The body children cut into slices covering the whole text between the body's start and end tags. */
-  def bodySource(body: Element, isParagraph: Element => Boolean): Option[BodySource] =
+  def bodySource(body: Element, kindOf: Element => BodyKind): Option[BodySource] =
     index(body).filterNot(spans.spans(_).selfClosing).map { bodyIndex =>
       val tailStart = spans.spans(bodyIndex).closeStart(spans.text)
       val children  = XmlDom.childElements(body).flatMap(child => index(child).map(child -> _))
@@ -64,7 +64,7 @@ final private[richtext] class SourceMap private (spans: XmlSpans, indexes: Map[E
       val blocks = children.zip(starts.drop(1)).map {
         case ((child, childIndex), blockEnd) =>
           val span = spans.spans(childIndex)
-          BodyBlock(spans.text.substring(span.start, blockEnd), span.end - span.start, isParagraph(child))
+          BodyBlock(spans.text.substring(span.start, blockEnd), span.end - span.start, kindOf(child))
       }
       BodySource(
         spans.text.substring(0, starts.headOption.getOrElse(tailStart)),

@@ -144,7 +144,7 @@ private[richtext] object RtfReader:
     val paragraphs =
       if closed.paragraphs.nonEmpty then closed.paragraphs.toList
       else List(RichTextParagraph.plain(""))
-    RichTextImport(RichTextDocument(paragraphs).normalized, RichTextFidelity(closed.unsupported))
+    RichTextImport(RichTextDocument(paragraphs).normalized, FidelityReport.unsupported(closed.unsupported))
 
   private def walk(
     nodes: Vector[RtfNode],

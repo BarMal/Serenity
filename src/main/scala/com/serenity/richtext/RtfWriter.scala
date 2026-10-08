@@ -86,6 +86,7 @@ private[richtext] object RtfWriter:
     val text = run.atom.fold(escape(run.text)) {
       case InlineAtom.SoftBreak    => "\\line "
       case InlineAtom.Opaque(_, _) => ""
+      case InlineAtom.Block(_, _)  => ""
     }
     if words.isEmpty || text.isEmpty then text else s"{$words $text}"
 

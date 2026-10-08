@@ -9,7 +9,7 @@ import scala.util.control.NonFatal
 
 import cats.effect.IO
 import com.serenity.io.AtomicFileWriter
-import com.serenity.richtext.XmlDom.{childElements, elements, isElement}
+import com.serenity.richtext.XmlDom.{childElements, elements}
 import org.w3c.dom.Element
 
 /** Reads and writes Word Open XML documents through Serenity's native rich text model.
@@ -23,36 +23,6 @@ object DocxDocumentCodec:
 
   private[richtext] val DocumentEntry              = "word/document.xml"
   private[richtext] val DocumentRelationshipsEntry = "word/_rels/document.xml.rels"
-
-  private val SupportedArchiveEntries = Set(
-    "[Content_Types].xml",
-    "_rels/.rels",
-    "word/document.xml",
-    DocumentRelationshipsEntry
-  )
-
-  private val SupportedElements = Set(
-    "document",
-    "body",
-    "p",
-    "pPr",
-    "jc",
-    "pStyle",
-    "framePr",
-    "r",
-    "rPr",
-    "b",
-    "i",
-    "u",
-    "rFonts",
-    "sz",
-    "color",
-    "t",
-    "tab",
-    "br",
-    "hyperlink",
-    "sectPr"
-  )
 
   def read(path: Path): IO[RichTextDocument] =
     IO.blocking(RichTextArchive.readFile(path, "DOCX")).flatMap(bytes => IO.fromEither(readBytes(bytes)))
@@ -93,29 +63,30 @@ object DocxDocumentCodec:
       val paragraphs = body.toList
         .flatMap(childElements)
         .zipWithIndex
-        .collect { case (element, index) if isParagraph(element) => DocxParagraphReader.read(element, index, context) }
+        .flatMap((element, index) => bodyParagraph(element, index, context))
       val source = DocumentSource(
         PackageFormat.Docx,
         bytes,
         DocumentEntry,
         main,
-        body.flatMap(element => sources.flatMap(_.bodySource(element, isParagraph))),
-        relationships.flatMap(MainPart.decode).map(_.text)
+        body.flatMap(element => sources.flatMap(_.bodySource(element, BodyBlocks.docx))),
+        relationships.flatMap(MainPart.decode).map(_.text),
+        archive.entryNames
       )
       val document = RichTextDocument(
         if paragraphs.nonEmpty then paragraphs
         else List(RichTextParagraph.plain(""))
       ).normalized.withSource(Some(source))
-      val unsupportedElements =
-        RichTextXmlParser.elementNames(xml.getDocumentElement, Some(WNs)) -- SupportedElements
-      val unsupportedEntries = archive.entryNames -- SupportedArchiveEntries
-      Right(RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries)))
+      Right(RichTextImport(document, FidelityReport.forSave(document, SaveTarget.Docx)))
     catch
       case error: RichTextCodecException => Left(error)
       case NonFatal(error)               => Left(RichTextCodecException("DOCX document could not be decoded", error))
 
-  private def isParagraph(element: Element): Boolean =
-    isElement(element, WNs, "p")
+  private def bodyParagraph(element: Element, index: Int, context: DocxReadContext): Option[RichTextParagraph] =
+    BodyBlocks.docx(element) match
+      case BodyKind.Paragraph      => Some(DocxParagraphReader.read(element, index, context))
+      case BodyKind.Block(feature) => Some(BodyBlocks.line(context.raw(element), feature, index))
+      case BodyKind.Structural     => None
 
   /** The package bytes for `document`: its source package with the edits applied when it has one, else a new package.
     */

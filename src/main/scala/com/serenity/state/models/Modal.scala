@@ -1,6 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.io.{DocumentFormat, FileType, SaveFormat}
+import com.serenity.richtext.{FidelityReport, SaveTarget}
 import com.serenity.session.SessionId
 import com.serenity.text.TextEditing
 import com.serenity.ui.widget.TextField
@@ -166,6 +167,17 @@ sealed trait FileWorkflowState:
     */
   def bufferHasRichFormatting: Boolean
 
+  /** What saving the buffer as each format would do with each feature of a rich document, captured with
+    * [[bufferHasRichFormatting]] when the workflow opens.
+    */
+  def saveReports: Map[SaveTarget, FidelityReport]
+
+  /** One line on what saving at the currently-typed extension keeps read-only, converts, drops or removes (for example
+    * "1 table preserved read-only"), when that is anything.
+    */
+  def fidelityNote: Option[String] =
+    saveReports.get(FileType.saveTarget(detectedFileType)).map(_.summary).filter(_.nonEmpty)
+
   /** The format the currently-typed `filename` would save as, detected from its extension exactly like a completed save
     * would (`FileType.fromExtension`). A filename with no extension -- notably a brand-new buffer's first Save As,
     * which has no existing extension to inherit -- defaults to [[FileType.Text]] rather than `Unknown`, per issue
@@ -305,7 +317,8 @@ final case class OpenFileWorkflowState(
     missingPathSegments: List[String] = Nil,
     confirmCreateDirectories: Boolean = false,
     statusMessage: Option[String] = None,
-    bufferHasRichFormatting: Boolean = false
+    bufferHasRichFormatting: Boolean = false,
+    saveReports: Map[SaveTarget, FidelityReport] = Map.empty
 ) extends FileWorkflowState:
   val operationLabel: String               = "Open"
   val supportsFilenameSuggestions: Boolean = true
@@ -344,7 +357,8 @@ final case class SaveAsFileWorkflowState(
     missingPathSegments: List[String] = Nil,
     confirmCreateDirectories: Boolean = false,
     statusMessage: Option[String] = None,
-    bufferHasRichFormatting: Boolean = false
+    bufferHasRichFormatting: Boolean = false,
+    saveReports: Map[SaveTarget, FidelityReport] = Map.empty
 ) extends FileWorkflowState:
   val operationLabel: String               = "Save As"
   val supportsFilenameSuggestions: Boolean = false
@@ -399,7 +413,8 @@ object FileWorkflowState:
     missingPathSegments: List[String] = Nil,
     confirmCreateDirectories: Boolean = false,
     statusMessage: Option[String] = None,
-    bufferHasRichFormatting: Boolean = false
+    bufferHasRichFormatting: Boolean = false,
+    saveReports: Map[SaveTarget, FidelityReport] = Map.empty
   ): FileWorkflowState =
     mode match
       case FileWorkflowMode.Open =>
@@ -412,7 +427,8 @@ object FileWorkflowState:
           missingPathSegments = missingPathSegments,
           confirmCreateDirectories = confirmCreateDirectories,
           statusMessage = statusMessage,
-          bufferHasRichFormatting = bufferHasRichFormatting
+          bufferHasRichFormatting = bufferHasRichFormatting,
+          saveReports = saveReports
         )
       case FileWorkflowMode.SaveAs =>
         SaveAsFileWorkflowState(
@@ -424,7 +440,8 @@ object FileWorkflowState:
           missingPathSegments = missingPathSegments,
           confirmCreateDirectories = confirmCreateDirectories,
           statusMessage = statusMessage,
-          bufferHasRichFormatting = bufferHasRichFormatting
+          bufferHasRichFormatting = bufferHasRichFormatting,
+          saveReports = saveReports
         )
 
 /** What a session-name [[TextPrompt]] is collecting a name for -- naming a brand-new session (issue #1390's

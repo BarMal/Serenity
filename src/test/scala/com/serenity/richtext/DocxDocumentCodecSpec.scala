@@ -148,14 +148,15 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
     decoded.exportText shouldBe "alpha\tbeta\ngamma"
   }
 
-  it should "report unsupported DOCX structures before a lossy save" in {
+  it should "keep a table as a read-only line and report it as preserved" in {
     val xml = fixture("docx-unsupported-table.xml")
 
     val imported = DocxDocumentCodec.readBytesWithFidelity(docxBytes(xml)).value
 
-    imported.document.plainText shouldBe "kept text"
-    imported.fidelity.isLossless shouldBe false
-    imported.fidelity.unsupportedElements should contain("tbl")
+    imported.document.exportText shouldBe "kept text\n"
+    imported.document.paragraphAt(1).exists(_.isOpaqueBlock) shouldBe true
+    imported.fidelity.wouldDrop shouldBe empty
+    imported.fidelity.summary shouldBe "1 table preserved read-only"
   }
 
   it should "read and write DOCX files through IO" in {
@@ -304,7 +305,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
     val decoded = DocxDocumentCodec.readBytesWithFidelity(bytes).value
 
     decoded.document shouldBe source
-    decoded.fidelity.isLossless shouldBe true
+    decoded.fidelity.wouldDrop shouldBe empty
     val relationships = zipEntryText(bytes, "word/_rels/document.xml.rels")
     relationships.split("<Relationship ").count(_.contains("TargetMode=\"External\"")) shouldBe 1
     zipEntryText(bytes, "word/document.xml") should include("""w:anchor="chapter-1"""")

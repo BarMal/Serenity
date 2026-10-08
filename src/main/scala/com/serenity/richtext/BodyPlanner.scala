@@ -6,7 +6,7 @@ private[richtext] enum PlannedBlock:
   case Rewrite(paragraph: RichTextParagraph, gap: String)
 
 /** Decides, for each paragraph of an edited document, whether its source slice can be copied or it must be rewritten,
-  * and where the body children the model does not hold (tables, section properties) go among them.
+  * and where the body children that have no paragraph (section properties, range markers) go among them.
   */
 private[richtext] object BodyPlanner:
 
@@ -26,7 +26,7 @@ private[richtext] object BodyPlanner:
     val leading = block.fold(Vector.empty[PlannedBlock])(verbatimBlocks(body, progress.nextBlock, _))
     val reusable = block
       .filterNot(progress.usedBlocks.contains)
-      .filter(index => paragraph.source.exists(_.imported.contains(paragraph)) && body.blocks(index).isParagraph)
+      .filter(index => paragraph.source.exists(_.imported.contains(paragraph)) && body.blocks(index).isModelled)
     val planned = reusable.fold(
       PlannedBlock.Rewrite(paragraph, block.fold("")(body.blocks(_).gap))
     )(index => PlannedBlock.Verbatim(body.blocks(index).markup))
@@ -37,4 +37,4 @@ private[richtext] object BodyPlanner:
     )
 
   private def verbatimBlocks(body: BodySource, from: Int, until: Int): Vector[PlannedBlock] =
-    body.blocks.slice(from, until).filterNot(_.isParagraph).map(block => PlannedBlock.Verbatim(block.markup))
+    body.blocks.slice(from, until).filterNot(_.isModelled).map(block => PlannedBlock.Verbatim(block.markup))

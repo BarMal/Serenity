@@ -244,8 +244,10 @@ object ModalSurfaceComposition:
       layout = SurfacePaintLayout.Inline
     )
     val formatLabel = workflow.detectedFileType.displayName
+    val formatNotes =
+      Option.when(workflow.wouldLoseFormatting)("will lose rich formatting").toList ++ workflow.fidelityNote
     val formatValue =
-      if workflow.wouldLoseFormatting then s"$formatLabel (will lose rich formatting)" else formatLabel
+      if formatNotes.isEmpty then formatLabel else s"$formatLabel (${formatNotes.mkString("; ")})"
     // Open has no format to choose, so it renders no Format row at all (#1527); only Save As shows it. Dropping the
     // row (rather than a dead "Format:" label) also lets the suggestion list start one row higher on Open.
     val formatRow = workflow match

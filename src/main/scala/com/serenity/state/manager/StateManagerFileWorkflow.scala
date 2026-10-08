@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.IO
 import com.serenity.io.{FileManager, FileUtils, StorageLocation}
+import com.serenity.richtext.{FidelityReport, SaveTarget}
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
@@ -56,6 +57,15 @@ final private[manager] class StateManagerFileWorkflow(
     val bufferHasRichFormatting =
       mode == FileWorkflowMode.SaveAs && targetBuffer.flatMap(_.richText.richTextDocument).exists(_.hasFormatting)
 
+    val saveReports =
+      if mode == FileWorkflowMode.SaveAs then
+        targetBuffer
+          .flatMap(_.richText.richTextDocument)
+          .fold(Map.empty[SaveTarget, FidelityReport])(document =>
+            SaveTarget.values.map(target => target -> FidelityReport.forSave(document, target)).toMap
+          )
+      else Map.empty[SaveTarget, FidelityReport]
+
     val pathIO =
       mode match
         case FileWorkflowMode.SaveAs =>
@@ -73,7 +83,8 @@ final private[manager] class StateManagerFileWorkflow(
         path = basePath.toString,
         activeField = if mode == FileWorkflowMode.Open then FileWorkflowField.Path else FileWorkflowField.Filename,
         statusMessage = statusMessage,
-        bufferHasRichFormatting = bufferHasRichFormatting
+        bufferHasRichFormatting = bufferHasRichFormatting,
+        saveReports = saveReports
       )
       currentState.flatMap { current =>
         val shown = ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state

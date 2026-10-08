@@ -214,14 +214,15 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
     singleParagraph(OdtDocumentCodec.readBytes(bytes).value).plainText shouldBe "alpha  beta"
   }
 
-  it should "report unsupported ODT structures before a lossy save" in {
+  it should "keep a table as a read-only line and report it as preserved" in {
     val xml = fixture("odt-unsupported-table.xml")
 
     val imported = OdtDocumentCodec.readBytesWithFidelity(odtBytes(xml)).value
 
-    imported.document.plainText shouldBe "kept text"
-    imported.fidelity.isLossless shouldBe false
-    imported.fidelity.unsupportedElements should contain("table")
+    imported.document.exportText shouldBe "kept text\n"
+    imported.document.paragraphAt(1).exists(_.isOpaqueBlock) shouldBe true
+    imported.fidelity.wouldDrop shouldBe empty
+    imported.fidelity.summary shouldBe "1 table preserved read-only"
   }
 
   it should "read and write ODT files through IO" in {
@@ -377,7 +378,7 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
     val decoded = OdtDocumentCodec.readBytesWithFidelity(bytes).value
 
     decoded.document shouldBe source
-    decoded.fidelity.isLossless shouldBe true
+    decoded.fidelity.wouldDrop shouldBe empty
     zipEntryText(bytes, "content.xml") should include("""xlink:href="https://example.com/a?x=1&amp;y=2"""")
   }
 

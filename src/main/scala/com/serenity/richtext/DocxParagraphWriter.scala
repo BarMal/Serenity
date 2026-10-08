@@ -17,6 +17,11 @@ private[richtext] object DocxParagraphWriter:
   private val RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
   def paragraphXml(paragraph: RichTextParagraph, context: DocxWriteContext): String =
+    paragraph.opaqueBlock.fold(textParagraphXml(paragraph, context))(block =>
+      if context.native then block.raw else "<w:p/>"
+    )
+
+  private def textParagraphXml(paragraph: RichTextParagraph, context: DocxWriteContext): String =
     val attributes = paragraph.source.filter(_ => context.native).fold("")(_.openTagAttributes)
     val content    = paragraph.linkSpans.map(linkSpanXml(_, context)).mkString
     s"<w:p$attributes>${DocxProperties.paragraphPropertiesXml(paragraph, context.native)}$content</w:p>"
@@ -38,6 +43,7 @@ private[richtext] object DocxParagraphWriter:
     run.atom match
       case Some(InlineAtom.Opaque(raw, _)) => if context.native then raw else ""
       case Some(InlineAtom.SoftBreak)      => wrapped(run, "<w:br/>", context)
+      case Some(InlineAtom.Block(_, _))    => ""
       case None                            => wrapped(run, textXml(run.text), context)
 
   private def wrapped(run: RichTextRun, content: String, context: DocxWriteContext): String =

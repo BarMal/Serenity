@@ -10,7 +10,7 @@ import scala.util.control.NonFatal
 import cats.effect.IO
 import com.serenity.io.AtomicFileWriter
 import com.serenity.richtext.OdtStyles.{OfficeNs, TextNs}
-import com.serenity.richtext.XmlDom.{childElements, elements, isElement}
+import com.serenity.richtext.XmlDom.{childElements, elements}
 import org.w3c.dom.Element
 
 /** Reads and writes OpenDocument Text files through Serenity's native rich text model.
@@ -19,26 +19,7 @@ import org.w3c.dom.Element
   * own and every body paragraph that was not edited byte for byte, and writes again only the paragraphs that changed.
   */
 object OdtDocumentCodec:
-  private val ContentEntry            = "content.xml"
-  private val SupportedArchiveEntries = Set("mimetype", "META-INF/manifest.xml", ContentEntry)
-
-  private val SupportedElements = Set(
-    "document-content",
-    "automatic-styles",
-    "style",
-    "text-properties",
-    "paragraph-properties",
-    "drop-cap",
-    "body",
-    "text",
-    "p",
-    "h",
-    "span",
-    "s",
-    "a",
-    "tab",
-    "line-break"
-  )
+  private val ContentEntry = "content.xml"
 
   def read(path: Path): IO[RichTextDocument] =
     IO.blocking(RichTextArchive.readFile(path, "ODT")).flatMap(bytes => IO.fromEither(readBytes(bytes)))
@@ -78,28 +59,30 @@ object OdtDocumentCodec:
       val paragraphs = textElement.toList
         .flatMap(childElements)
         .zipWithIndex
-        .collect { case (element, index) if isParagraph(element) => OdtParagraphReader.read(element, index, context) }
+        .flatMap((element, index) => bodyParagraph(element, index, context))
       val source = DocumentSource(
         PackageFormat.Odt,
         bytes,
         ContentEntry,
         main,
-        textElement.flatMap(element => sources.flatMap(_.bodySource(element, isParagraph))),
-        None
+        textElement.flatMap(element => sources.flatMap(_.bodySource(element, BodyBlocks.odt))),
+        None,
+        archive.entryNames
       )
       val document = RichTextDocument(
         if paragraphs.nonEmpty then paragraphs
         else List(RichTextParagraph.plain(""))
       ).normalized.withSource(Some(source))
-      val unsupportedElements = RichTextXmlParser.elementNames(xml.getDocumentElement, None) -- SupportedElements
-      val unsupportedEntries  = archive.entryNames -- SupportedArchiveEntries
-      Right(RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries)))
+      Right(RichTextImport(document, FidelityReport.forSave(document, SaveTarget.Odt)))
     catch
       case error: RichTextCodecException => Left(error)
       case NonFatal(error)               => Left(RichTextCodecException("ODT document could not be decoded", error))
 
-  private def isParagraph(element: Element): Boolean =
-    isElement(element, TextNs, "p") || isElement(element, TextNs, "h")
+  private def bodyParagraph(element: Element, index: Int, context: OdtReadContext): Option[RichTextParagraph] =
+    BodyBlocks.odt(element) match
+      case BodyKind.Paragraph      => Some(OdtParagraphReader.read(element, index, context))
+      case BodyKind.Block(feature) => Some(BodyBlocks.line(context.raw(element), feature, index))
+      case BodyKind.Structural     => None
 
   /** The package bytes for `document`: its source package with the edits applied when it has one, else a new package.
     */

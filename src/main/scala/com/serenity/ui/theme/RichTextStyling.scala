@@ -16,6 +16,9 @@ object RichTextStyling:
   /** Stands in for a visible opaque object (an image, a footnote reference) that cannot be drawn in text yet. */
   val OpaqueObjectGlyph: String = "\u25a3"
 
+  /** Stands in for a read-only block (a table, a content control) on its line. */
+  val BlockGlyph: String = "\u25a6"
+
   /** The zoom factor a base prose font size implies, anchored so the default (12pt) is 1x. */
   def proseZoom(baseProseFontSizePx: Float): Float =
     if baseProseFontSizePx > 0.0f then baseProseFontSizePx / ProseZoomBaselinePx else 1.0f
@@ -95,6 +98,7 @@ object RichTextStyling:
     run.atom match
       case Some(InlineAtom.SoftBreak)       => SoftBreakGlyph
       case Some(InlineAtom.Opaque(_, true)) => OpaqueObjectGlyph
+      case Some(InlineAtom.Block(_, _))     => BlockGlyph
       case _                                => content
 
   private def scaledTextStyle(
