@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.config.PreferredWindowSize
+import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.session.{SessionId, SessionPersistence}
@@ -26,6 +26,9 @@ private[manager] trait EffectRuntimePort:
   def onFontConfigChanged: FontConfig => IO[Unit]
   def deviceTextScaleProvider: IO[Double]
   def configPersistencePath: Option[Path]
+
+  /** The config the config file is believed to hold, when this session keeps one and it was just read. */
+  def configOnDisk: Option[AppConfig] = None
   def uiPresetStore: UiPresetStore
   def windowSizeProvider: IO[Option[PreferredWindowSize]]
   def markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability
@@ -86,6 +89,9 @@ private[manager] trait EffectFilePort:
   def reloadBuffer(bufferId: BufferId): IO[Unit]
   // #1623: saves over a file that changed on disk since it was read, skipping the stale-save check.
   def forceSaveExistingBuffer(bufferId: BufferId): IO[Unit]
+
+  /** Hands a URL to the desktop browser; fails where there is no browser to hand it to. */
+  def openExternalUrl(uri: java.net.URI): IO[Unit] = com.serenity.io.ExternalBrowser.browse(uri)
 
 private[manager] trait EffectSessionPort:
   def sessionPersistence: SessionPersistence

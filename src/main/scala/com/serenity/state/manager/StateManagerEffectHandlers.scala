@@ -71,12 +71,15 @@ final private[manager] class StateManagerEffectHandlers(
     currentState,
     logger,
     configPersistencePath,
-    sessionPersistence,
     onFontConfigChanged,
     deviceTextScaleProvider,
     editor,
-    runtime.renderCaches
+    runtime.renderCaches,
+    showNotice = showNotice,
+    configOnDisk = configOnDisk
   )
+
+  private[manager] val configWatch: Option[ConfigFileWatch] = configEffects.watch
 
   private def commitAppValidated(transition: AppState => AppState): IO[Unit] =
     updateModelValidated(model => Some(model.copy(app = transition(model.app))))
@@ -332,7 +335,8 @@ final private[manager] class StateManagerEffectHandlers(
             current
           )
         )
-      case FileIntent.ShowLicenceAndNotices       => com.serenity.io.LicenceNotices.open(loadFile)
+      case FileIntent.ShowLicenceAndNotices | FileIntent.ShowAbout => com.serenity.io.AboutDocument.open(loadFile)
+      case FileIntent.OpenReleasesPage            => ReleasesPageEffect.open(openExternalUrl, showNotice)
       case FileIntent.ShowPrivacyStatement        => com.serenity.io.PrivacyStatement.open(loadFile)
       case FileIntent.SetBufferLanguage(language) => setBufferLanguage(state, language)
       case FileIntent.ReloadFromDisk(bufferId) =>

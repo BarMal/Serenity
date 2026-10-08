@@ -185,6 +185,30 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
     String(entry.readAllBytes(), "UTF-8") shouldBe "application/epub+zip"
   }
 
+  it should "export the focused buffer as a PDF through the native save dialog" in {
+    val targetPath   = Files.createTempDirectory("serenity-export-pdf").resolve("novel-manuscript.pdf")
+    val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val document = state.persisted.buffers(bufferId).document
+        val buffer = state.persisted
+          .buffers(bufferId)
+          .copy(document = document.copy(content = com.serenity.rope.Rope("# Arrival\n\nThe train was late.")))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "export-manuscript-pdf", "export-manuscript-pdf")
+
+    eventually(timeout(Span(20, Seconds)))(Files.exists(targetPath) shouldBe true)
+    val text = scala.util.Using.resource(org.apache.pdfbox.Loader.loadPDF(Files.readAllBytes(targetPath)))(doc =>
+      org.apache.pdfbox.text.PDFTextStripper().getText(doc)
+    )
+    text should include("The train was late.")
+  }
+
   it should "open a selected file through the native open-file dialog" in {
     val sourcePath = Files.createTempDirectory("serenity-open").resolve("notes.md")
     Files.writeString(sourcePath, "# Notes")

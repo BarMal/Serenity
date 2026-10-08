@@ -6,9 +6,12 @@ import java.time.Instant
 
 import cats.effect.{Clock, IO}
 import cats.syntax.all.*
+import com.serenity.exporting.{FontBoxTextMeasurer, PdfPainter}
 import com.serenity.io.{AtomicFileWriter, FileType}
 import com.serenity.manuscript.docx.ManuscriptDocxWriter
 import com.serenity.manuscript.epub.ManuscriptEpubWriter
+import com.serenity.manuscript.layout.{PaginationError, Paginator}
+import com.serenity.manuscript.typography.{FontFamily, PageTypography}
 import com.serenity.manuscript.{
   CompileError,
   CompileSpec,
@@ -22,11 +25,15 @@ import com.serenity.richtext.{DocxDocumentCodec, OdtDocumentCodec, RtfDocumentCo
 
 final class ManuscriptExportException(val error: CompileError) extends RuntimeException(error.message)
 
+/** The manuscript compiled but could not be laid out on pages, for instance because a character has no glyph. */
+final class ManuscriptLayoutException(val error: PaginationError) extends RuntimeException(error.message)
+
 /** The document an export starts from: a snapshot of the focused buffer, and the file it was read from, if any. */
 final case class ExportOrigin(path: Option[Path], snapshot: SourceDocument)
 
 /** The shell around the pure compiler and writer: finds `manuscript.conf`, reads the sources it names, and writes the
-  * DOCX or EPUB. Nothing here touches the editor's buffers; the origin is a snapshot taken before the export starts.
+  * DOCX, EPUB or PDF. Nothing here touches the editor's buffers; the origin is a snapshot taken before the export
+  * starts.
   */
 object ManuscriptExport:
 
@@ -41,11 +48,26 @@ object ManuscriptExport:
   def writeEpub(origin: ExportOrigin, target: Path): IO[Unit] =
     Clock[IO].realTimeInstant.flatMap(compiledEpub(origin, _)).flatMap(AtomicFileWriter.writeBytes(target, _))
 
+  /** The PDF's creation date is the time of this export. */
+  def writePdf(origin: ExportOrigin, target: Path): IO[Unit] =
+    Clock[IO].realTimeInstant.flatMap(compiledPdf(origin, _)).flatMap(AtomicFileWriter.writeBytes(target, _))
+
   def compiledDocx(origin: ExportOrigin): IO[Array[Byte]] =
     compiled(origin).map((spec, manuscript) => ManuscriptDocxWriter.write(manuscript, spec.format))
 
   def compiledEpub(origin: ExportOrigin, modified: Instant): IO[Array[Byte]] =
     compiled(origin).map((_, manuscript) => ManuscriptEpubWriter.write(manuscript, modified))
+
+  /** Pages are laid out with Courier Prime metrics read from the font files the PDF then embeds. */
+  def compiledPdf(origin: ExportOrigin, created: Instant): IO[Array[Byte]] =
+    compiled(origin).flatMap { (spec, manuscript) =>
+      val typography = PageTypography.fromFormat(spec.format, FontFamily.CourierPrime)
+      FontBoxTextMeasurer
+        .resource(List(typography.body.family))
+        .use(measurer => IO.pure(Paginator.paginate(manuscript, typography, measurer)))
+        .flatMap(layout => IO.fromEither(layout.leftMap(ManuscriptLayoutException(_))))
+        .flatMap(PdfPainter.paint(manuscript, _, typography, created))
+    }
 
   /** With a `manuscript.conf` beside the origin that lists sources, those are the book, read in order -- the origin's
     * own entry from the snapshot, so unsaved edits are exported. Otherwise the book is the origin alone.

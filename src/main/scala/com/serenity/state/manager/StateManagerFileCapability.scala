@@ -75,6 +75,7 @@ final private[manager] class StateManagerFileCapability(
     dictionaryWatchDirectories: IO[Set[Path]],
     explorerWatchDirectories: IO[Set[Path]],
     markExplorerDirectoriesStale: Set[Path] => IO[Unit],
+    configWatch: Option[ConfigFileWatch],
     autoSave: StateManagerAutoSave
 ):
 
@@ -113,5 +114,6 @@ final private[manager] class StateManagerFileCapability(
     refreshDictionaryFingerprints = refreshDictionaryFingerprints,
     explorerWatchDirectories = explorerWatchDirectories,
     markExplorerDirectoriesStale = markExplorerDirectoriesStale,
+    configWatch = configWatch,
     autoSaveOnWindowFocusLost = autoSave.saveOnWindowFocusLost
   )

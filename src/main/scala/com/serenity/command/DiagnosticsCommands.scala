@@ -5,11 +5,11 @@ object DiagnosticsCommands:
 
   val about: Command =
     Command.typed(
-      "about-serenity",
-      "Show the version, commit, operating system, JVM and toolkit this Serenity is running on.",
+      "show-build-details",
+      "Show the build, operating system, JVM and toolkit this Serenity is running on, with a way to copy them or open the logs.",
       CommandIntent.Diagnostics(DiagnosticsIntent.ShowAbout),
       CommandCategory.File,
-      label = "About Serenity"
+      label = "Show Build Details"
     )
 
   val openLogsFolder: Command =

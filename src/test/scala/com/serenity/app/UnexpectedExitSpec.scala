@@ -63,10 +63,10 @@ class UnexpectedExitSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  "The command palette" should "offer About Serenity and Open Logs Folder" in {
-    CommandRegistry.default.findCommand("about-serenity").map(_.label) shouldBe Some("About Serenity")
+  "The command palette" should "offer Show Build Details and Open Logs Folder" in {
+    CommandRegistry.default.findCommand("show-build-details").map(_.label) shouldBe Some("Show Build Details")
     CommandRegistry.default.findCommand("open-logs-folder").map(_.label) shouldBe Some("Open Logs Folder")
-    CommandRegistry.default.findCommand("about-serenity").map(_.intent) shouldBe
+    CommandRegistry.default.findCommand("show-build-details").map(_.intent) shouldBe
       Some(CommandIntent.Diagnostics(DiagnosticsIntent.ShowAbout))
     CommandRegistry.default.findCommand("open-logs-folder").map(_.intent) shouldBe
       Some(CommandIntent.Diagnostics(DiagnosticsIntent.OpenLogsFolder))

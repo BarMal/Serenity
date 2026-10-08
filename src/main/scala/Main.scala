@@ -8,7 +8,6 @@ import scala.concurrent.duration.Duration
 import cats.effect.*
 import cats.effect.unsafe.IORuntimeConfig
 import cats.syntax.all.*
-import com.serenity.BuildInfo
 import com.serenity.app.*
 import com.serenity.app.LaunchReset.Moved
 import com.serenity.app.instance.{LaunchRole, SingleInstance}
@@ -77,7 +76,7 @@ object Main extends IOApp:
           case Left(help) =>
             IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
           case Right(options) if options.showVersion =>
-            IO(println(s"Serenity ${BuildInfo.version} (${BuildInfo.commit})")).as(ExitCode.Success)
+            IO(println(VersionBanner.current)).as(ExitCode.Success)
           case Right(options) =>
             launchUntilSettled(options, toolkit).handleErrorWith(reportStartupFailure(options, console))
       }
@@ -136,8 +135,8 @@ object Main extends IOApp:
 
     val build = RuntimeIdentity.current
     for
+      _         <- BuildLogLines.announce
       _         <- logger.info(s"[TOOLKIT] ${toolkit.choice} (${toolkit.reason})")
-      _         <- logger.info(s"[BUILD] ${build.summary}")
       _         <- logger.info(s"[LOGS] Writing to ${LogLocation.current}")
       _         <- migrateEarlierLogs
       _         <- Java2DPipeline.installSafeDefaults()

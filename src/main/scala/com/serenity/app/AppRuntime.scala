@@ -355,6 +355,7 @@ object AppRuntime:
           stateManager.fileService.refreshDictionaryFingerprints,
           stateManager.fileService.explorerWatchDirectories,
           stateManager.fileService.markExplorerDirectoriesStale,
+          stateManager.fileService.configWatch,
           watchInputsChanges,
           windowFocused = windowFocused
         ).interruptWhen(quitSignal).compile.drain

@@ -143,12 +143,13 @@ private[manager] trait StateManagerEffectHandlersHarness:
       val fileManager = new FileManager()
       def submitSave(id: BufferId, onFailure: Throwable => IO[Unit]): IO[Unit] =
         callsVar.update(_ :+ s"saveExistingBuffer:$id") >> saveExistingBufferHook(id).handleErrorWith(onFailure)
-      def saveBufferAs(id: BufferId, path: Path): IO[Unit] = callsVar.update(_ :+ s"saveBufferAs:$id:$path")
-      def reloadBuffer(id: BufferId): IO[Unit]             = callsVar.update(_ :+ s"reloadBuffer:$id")
-      def forceSaveExistingBuffer(id: BufferId): IO[Unit]  = callsVar.update(_ :+ s"forceSaveExistingBuffer:$id")
-      def loadFile(path: Path): IO[Unit]                   = filePersistence.loadFile(path)
-      def openFromDialog(dialog: FileDialog): IO[Unit]     = filePersistence.openFromDialog(dialog)
-      def isSaving(path: Path): IO[Boolean]                = filePersistence.isSaving(path)
+      def saveBufferAs(id: BufferId, path: Path): IO[Unit]      = callsVar.update(_ :+ s"saveBufferAs:$id:$path")
+      def reloadBuffer(id: BufferId): IO[Unit]                  = callsVar.update(_ :+ s"reloadBuffer:$id")
+      def forceSaveExistingBuffer(id: BufferId): IO[Unit]       = callsVar.update(_ :+ s"forceSaveExistingBuffer:$id")
+      def loadFile(path: Path): IO[Unit]                        = filePersistence.loadFile(path)
+      def openFromDialog(dialog: FileDialog): IO[Unit]          = filePersistence.openFromDialog(dialog)
+      def isSaving(path: Path): IO[Boolean]                     = filePersistence.isSaving(path)
+      override def openExternalUrl(uri: java.net.URI): IO[Unit] = callsVar.update(_ :+ s"openExternalUrl:$uri")
 
     val sessions = new EffectSessionPort:
       val sessionPersistence                  = sessionPersistenceVar
