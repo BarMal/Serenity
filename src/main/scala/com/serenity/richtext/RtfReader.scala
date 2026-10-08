@@ -119,7 +119,6 @@ private[richtext] object RtfReader:
 
   private val SpecialCharacters: Map[String, String] = Map(
     "tab"       -> "\t",
-    "line"      -> "\n",
     "emdash"    -> "\u2014",
     "endash"    -> "\u2013",
     "emspace"   -> "\u2003",
@@ -207,6 +206,10 @@ private[richtext] object RtfReader:
     val flushed = flushBytes(progress)
     flushed.copy(runs = flushed.runs :+ RichTextRun(text, runStyle(state, header)))
 
+  private def emitSoftBreak(state: RtfState, progress: RtfProgress, header: RtfHeader): RtfProgress =
+    val flushed = flushBytes(progress)
+    flushed.copy(runs = flushed.runs :+ RichTextRun.softBreak(runStyle(state, header)))
+
   private def control(
     name: String,
     parameter: Option[Int],
@@ -216,6 +219,7 @@ private[richtext] object RtfReader:
   ): (RtfState, RtfProgress) =
     if ParagraphBreakWords.contains(name) then (state, endParagraph(progress, state, header))
     else if name == "u" then unicodeEscape(parameter, state, progress, header)
+    else if name == "line" then (state, emitSoftBreak(state, progress, header))
     else
       SpecialCharacters.get(name) match
         case Some(text) => (state, emit(text, state, progress, header))

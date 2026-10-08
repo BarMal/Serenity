@@ -229,5 +229,5 @@ private[reducers] object EditorCursorMovement:
   def selectedTexts(buffer: Buffer): List[String] =
     mergedActiveSelectionRanges(buffer, buffer.document.content).map {
       case (start, end) =>
-        buffer.document.content.sliceString(start, end)
+        buffer.plainTextExport(buffer.document.content.sliceString(start, end))
     }

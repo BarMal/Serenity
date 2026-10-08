@@ -28,8 +28,9 @@ private[richtext] object RtfWriter:
       fonts = styles.flatMap(_.fontFamily).map(sanitizedFontName).distinct.toVector,
       colors = styles.flatMap(_.color).flatMap(parseColor).distinct.toVector,
       headingLevels = paragraphs
+        .map(_.role)
         .collect {
-          case RichTextParagraph(_, _, ParagraphRole.Heading(level)) =>
+          case ParagraphRole.Heading(level) =>
             level.max(1)
         }
         .distinct
@@ -82,7 +83,11 @@ private[richtext] object RtfWriter:
 
   private def runText(run: RichTextRun, tables: Tables): String =
     val words = styleWords(run.style, tables)
-    if words.isEmpty then escape(run.text) else s"{$words ${escape(run.text)}}"
+    val text = run.atom.fold(escape(run.text)) {
+      case InlineAtom.SoftBreak    => "\\line "
+      case InlineAtom.Opaque(_, _) => ""
+    }
+    if words.isEmpty || text.isEmpty then text else s"{$words $text}"
 
   private def styleWords(style: RichTextStyle, tables: Tables): String =
     List(

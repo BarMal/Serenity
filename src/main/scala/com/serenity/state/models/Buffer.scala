@@ -7,7 +7,7 @@ import cats.Order
 import cats.data.NonEmptyList
 import com.serenity.io.{DocumentFormat, DocumentRevision, FileType}
 import com.serenity.lsp.config.LanguageId
-import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
+import com.serenity.richtext.{InlineAtom, RichTextDocument, RichTextFidelity, RichTextStyle}
 import com.serenity.rope.Rope
 import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
 
@@ -361,6 +361,14 @@ final case class Buffer(
     */
   def richTextInSync: Boolean =
     richText.richTextDocument.isDefined && richText.richTextSyncedVersion.contains(document.contentVersion)
+
+  /** `text` taken from this buffer's content, as plain text outside the editor: a rich document's inline atoms (its
+    * rope placeholder) become the text they stand for, so a soft break is a newline.
+    */
+  def plainTextExport(text: String): String =
+    if holdsRichText then InlineAtom.asPlainText(text) else text
+
+  def holdsRichText: Boolean = richText.richTextDocument.isDefined
 
 object Buffer:
   def empty(id: BufferId)(using com.serenity.rope.Balance): Buffer =

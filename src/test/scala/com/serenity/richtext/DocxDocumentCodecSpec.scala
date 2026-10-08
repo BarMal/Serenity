@@ -133,7 +133,9 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "write tabs and line breaks as native DOCX run elements" in {
-    val source = RichTextDocument.oneParagraph("alpha\tbeta\ngamma")
+    val source = RichTextDocument(
+      List(RichTextParagraph(List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))))
+    )
 
     val bytes       = DocxDocumentCodec.writeBytes(source)
     val documentXml = zipEntryText(bytes, "word/document.xml")
@@ -141,7 +143,9 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
 
     documentXml should include("<w:tab/>")
     documentXml should include("<w:br/>")
-    singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
+    singleParagraph(decoded).runs shouldBe
+      List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))
+    decoded.exportText shouldBe "alpha\tbeta\ngamma"
   }
 
   it should "report unsupported DOCX structures before a lossy save" in {
@@ -285,6 +289,26 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
     server.start()
     try test(s"http://127.0.0.1:${server.getAddress.getPort}/resource", requests)
     finally server.stop(0)
+
+  it should "round-trip hyperlink targets through document relationships and anchors" in {
+    val link   = RichTextStyle.empty.withLink("https://example.com/a?x=1&y=2")
+    val anchor = RichTextStyle.empty.withLink("#chapter-1")
+    val source = RichTextDocument(
+      List(
+        RichTextParagraph(List(RichTextRun("see "), RichTextRun("the guide", link), RichTextRun(" and "))),
+        RichTextParagraph(List(RichTextRun("again", link), RichTextRun("up", anchor)))
+      )
+    )
+
+    val bytes   = DocxDocumentCodec.writeBytes(source)
+    val decoded = DocxDocumentCodec.readBytesWithFidelity(bytes).value
+
+    decoded.document shouldBe source
+    decoded.fidelity.isLossless shouldBe true
+    val relationships = zipEntryText(bytes, "word/_rels/document.xml.rels")
+    relationships.split("<Relationship ").count(_.contains("TargetMode=\"External\"")) shouldBe 1
+    zipEntryText(bytes, "word/document.xml") should include("""w:anchor="chapter-1"""")
+  }
 
   private def zipEntryText(bytes: Array[Byte], name: String): String =
     val input = ZipInputStream(java.io.ByteArrayInputStream(bytes))
