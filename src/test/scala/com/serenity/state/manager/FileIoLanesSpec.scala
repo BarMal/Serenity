@@ -373,8 +373,12 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
   "Opening a file through the native dialog" should "keep docked panels and commit a valid state (#1672)" in {
     val directory = Files.createTempDirectory("file-io-lanes-dialog")
     val target    = file(directory, "picked.txt", "picked")
-    val dialog    = FileDialog(chooseOpenFile = _ => IO.pure(Some(target)), chooseSaveFile = (_, _) => IO.pure(None))
-    val f         = fixture(fileDialog = Some(dialog))
+    val dialog = FileDialog(
+      chooseOpenFile = _ => IO.pure(Some(target)),
+      chooseSaveFile = (_, _) => IO.pure(None),
+      chooseFolder = _ => IO.pure(None)
+    )
+    val f = fixture(fileDialog = Some(dialog))
     f.stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 20).unsafeRunSync()
     val docked = f.state.runtime.uiSurfaces.map(_.id)
     docked should not be empty

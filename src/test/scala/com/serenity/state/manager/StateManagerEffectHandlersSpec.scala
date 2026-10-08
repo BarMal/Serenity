@@ -81,7 +81,8 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
     try
       val dialog = FileDialog(
         chooseOpenFile = _ => IO.pure(Some(target)),
-        chooseSaveFile = (_, _) => IO.pure(None)
+        chooseSaveFile = (_, _) => IO.pure(None),
+        chooseFolder = _ => IO.pure(None)
       )
       val fixture = harness(fileDialogOpt = Some(dialog))
 

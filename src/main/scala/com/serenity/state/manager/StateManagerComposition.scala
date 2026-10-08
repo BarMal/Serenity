@@ -182,7 +182,9 @@ private[manager] class StateManagerComposition(
     def forceSaveExistingBuffer(bufferId: BufferId): IO[Unit]        = filePersistence.forceSaveExistingBuffer(bufferId)
     def loadFile(path: Path): IO[Unit]                               = filePersistence.loadFile(path)
     def openFromDialog(dialog: com.serenity.io.FileDialog): IO[Unit] = filePersistence.openFromDialog(dialog)
-    def isSaving(path: Path): IO[Boolean]                            = filePersistence.isSaving(path)
+    def openFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
+      filePersistence.openFolderFromDialog(dialog, openFolder)
+    def isSaving(path: Path): IO[Boolean] = filePersistence.isSaving(path)
 
   private val effectSessionPort: EffectSessionPort = new EffectSessionPort:
     val sessionPersistence = runtimeSessionPersistence
@@ -226,6 +228,7 @@ private[manager] class StateManagerComposition(
     def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
       workflow.restoreSessionIntoCurrentViewport(restoredState, currentState)
     def createStartupSession(): IO[Unit]                        = workflow.createStartupSession()
+    def leaveStartPage(): IO[Unit]                              = workflow.leaveStartPage()
     def restoreStartupSession(): IO[Unit]                       = workflow.restoreStartupSession()
     def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
     def openSaveSessionAsPrompt(state: AppState): IO[Unit]      = workflow.openSaveSessionAsPrompt()

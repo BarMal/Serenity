@@ -40,19 +40,8 @@ final private[manager] class StateManagerEffectHandlers(
     def refresh(surfaceId: SurfaceId): IO[Unit]           = refreshFileWorkflowEffect(surfaceId)
     def refreshFind(request: FindSearchRequest): IO[Unit] = scheduleFindSearch(request)
     def submitFile(surfaceId: SurfaceId): IO[Unit]        = submitFileWorkflowEffect(surfaceId)
-    // `panelEffects` is declared further down this same class (below), not on `workflow` -- referencing it here is
-    // safe (no construction-time cycle: `panelEffects` doesn't depend on `workflowEffects`) because this method body
-    // only runs once the whole object is fully constructed, long after both `val`s are assigned.
     def openAsProjectRoot(surfaceId: SurfaceId): IO[Unit] =
-      openFileWorkflowAsProjectRootEffect(
-        surfaceId,
-        path =>
-          panelEffects.pinExplorerPanelEffect(
-            PanelPosition.Left,
-            path,
-            PanelRegistry.registrationFor(PanelId.Explorer).defaultSize(PanelPosition.Left)
-          )
-      )
+      openFileWorkflowAsProjectRootEffect(surfaceId, openFolderAsProjectRoot)
     def submitReplace(surfaceId: SurfaceId): IO[Unit]           = submitReplaceWorkflowEffect(surfaceId)
     def beginClose(scope: CloseScope): IO[Unit]                 = currentState.flatMap(beginCloseAction(scope, _))
     def createDirectories(surfaceId: SurfaceId): IO[Unit]       = createFileWorkflowDirectoriesEffect(surfaceId)
@@ -316,6 +305,8 @@ final private[manager] class StateManagerEffectHandlers(
       case FileIntent.ExportManuscript(request) => manuscriptExport.run(request, state)
       case FileIntent.OpenFile =>
         requestOpenFileDialog
+      case FileIntent.OpenFolder =>
+        requestOpenFolderDialog
       case FileIntent.OpenRecentFile(path) =>
         loadFile(path)
       case FileIntent.OpenFileSearch =>
@@ -407,6 +398,8 @@ final private[manager] class StateManagerEffectHandlers(
         restoreStartupSession()
       case SessionIntent.StartupOpenFile =>
         requestOpenFileDialog
+      case SessionIntent.StartupOpenFolder =>
+        requestOpenFolderDialog
       case SessionIntent.ReturnToStartPage =>
         beginCloseAction(CloseScope.ReturnToStartPage, state)
       case SessionIntent.OpenSaveSessionAsPrompt =>
@@ -473,6 +466,24 @@ final private[manager] class StateManagerEffectHandlers(
         openFromDialog(dialog)
       case None =>
         // No native dialog to show at all -- fall back to the in-app form, same as the save-as path.
+        currentState.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))
+
+  /** The one route a chosen folder takes, whether it came from a native dialog or the in-app form's "Open as root":
+    * leave the start page, then pin the Explorer on it.
+    */
+  private def openFolderAsProjectRoot(folder: Path): IO[Unit] =
+    leaveStartPage() >> panelEffects.pinExplorerPanelEffect(
+      PanelPosition.Left,
+      folder,
+      PanelRegistry.registrationFor(PanelId.Explorer).defaultSize(PanelPosition.Left)
+    )
+
+  // With no native dialog the in-app Open form is the picker: its "Open as root" action takes the folder it shows.
+  protected def requestOpenFolderDialog: IO[Unit] =
+    fileDialog match
+      case Some(dialog) =>
+        openFolderFromDialog(dialog, openFolderAsProjectRoot)
+      case None =>
         currentState.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))
 
   private[manager] def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
