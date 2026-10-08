@@ -50,7 +50,8 @@ object BenchmarkRunner:
       iterations: Int,
       verify: () => Unit,
       run: () => Any,
-      minBatch: Int = 1
+      minBatch: Int = 1,
+      settleJit: Boolean = false
   )
 
   final private[perf] case class BenchmarkResult(
@@ -82,6 +83,15 @@ object BenchmarkRunner:
   private val TargetSampleNanos = 2_000_000L
   private val MaxBatch          = 100_000
 
+  /** C2 compiles on its own thread, so the swap from profiled to optimised code can land seconds after the invocation
+    * counters trip, and a fixed count leaves the timed samples straddling it. Past the warmup floor, a benchmark that
+    * opts in keeps running until the median per-call time of the older and newer halves of a two-second window agree.
+    */
+  private val SettleRoundNanos   = 100_000_000L
+  private val SettleWindowRounds = 20
+  private val SettleTolerance    = 1.05
+  private val MaxSettleNanos     = 30_000_000_000L
+
   private val sink = new java.util.concurrent.atomic.AtomicLong(0L)
 
   /** `identityHashCode` rather than `hashCode`: it reads the object header instead of traversing the value, so it does
@@ -95,6 +105,33 @@ object BenchmarkRunner:
   private def warmUp(run: () => Any, deadline: Long, done: Int, minimum: Int, acc: Long): (Int, Long) =
     if done >= MaxWarmupInvocations || (done >= minimum && System.nanoTime() >= deadline) then (done, acc)
     else warmUp(run, deadline, done + 1, minimum, acc + System.identityHashCode(run()))
+
+  @annotation.tailrec
+  private def settle(run: () => Any, deadline: Long, recent: Vector[Double], acc: Long): Long =
+    val (nanosPerCall, observed) = timedRound(run)
+    val window                   = (recent :+ nanosPerCall).takeRight(SettleWindowRounds)
+    if isSteady(window) || System.nanoTime() >= deadline then acc + observed
+    else settle(run, deadline, window, acc + observed)
+
+  private def timedRound(run: () => Any): (Double, Long) =
+    val started = System.nanoTime()
+
+    @annotation.tailrec
+    def loop(calls: Int, acc: Long): (Int, Long) =
+      val observed = acc + System.identityHashCode(run())
+      if System.nanoTime() - started >= SettleRoundNanos then (calls + 1, observed) else loop(calls + 1, observed)
+
+    val (calls, observed) = loop(0, 0L)
+    ((System.nanoTime() - started).toDouble / calls, observed)
+
+  private[perf] def isSteady(window: Vector[Double]): Boolean =
+    window.length >= SettleWindowRounds && {
+      val (earlier, later) = window.splitAt(window.length / 2)
+      val (before, after)  = (median(earlier), median(later))
+      before.max(after) <= before.min(after) * SettleTolerance
+    }
+
+  private def median(values: Vector[Double]): Double = values.sorted.apply(values.length / 2)
 
   @annotation.tailrec
   private def calibrate(run: () => Any, batch: Int): Int =
@@ -120,6 +157,8 @@ object BenchmarkRunner:
     val (warmupInvocations, warmupAcc) =
       warmUp(benchmark.run, System.nanoTime() + WarmupBudgetNanos, 0, benchmark.warmups, 0L)
     sink.addAndGet(warmupAcc)
+    if benchmark.settleJit then
+      sink.addAndGet(settle(benchmark.run, System.nanoTime() + MaxSettleNanos, Vector.empty, 0L))
     val batch = calibrate(benchmark.run, 1).max(benchmark.minBatch)
     val samples = (0 until benchmark.iterations).map { _ =>
       val started  = System.nanoTime()

@@ -48,6 +48,13 @@ class BenchmarkIterationsSpec extends AnyFlatSpec with Matchers:
     all(benchmarks.map(_.minBatch)) shouldBe BenchmarkIterationCounts.GoToLineBatch
   }
 
+  "rope.large_json.cursor_offset" should "warm up past the C2 compilation threshold" in {
+    val benchmark = PerformanceBenchmarks.ropeBenchmarks().find(_.name == "rope.large_json.cursor_offset")
+    benchmark.map(_.warmups) shouldBe Some(BenchmarkIterationCounts.RopeCursorOffsetWarmups)
+    BenchmarkIterationCounts.RopeCursorOffsetWarmups should be >= 10_000
+    benchmark.map(_.settleJit) shouldBe Some(true)
+  }
+
   "the chosen iteration counts" should "actually be larger than the previous, false-positive-prone counts" in {
     // Regression guard on the audit's conclusion itself: these must stay well above the old 8-30 range, not just be
     // internally consistent with each other.
