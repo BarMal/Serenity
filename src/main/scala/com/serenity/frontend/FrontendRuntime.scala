@@ -4,8 +4,8 @@ import cats.effect.{IO, Resource}
 import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.{InputHandler, InputRouter}
 import com.serenity.keystroke.events.Event
-import com.serenity.state.manager.RenderCaches
-import com.serenity.state.models.{AppState, Damage}
+import com.serenity.state.manager.{Model, RenderCaches}
+import com.serenity.state.models.{AppState, Damage, PointerShape}
 import com.serenity.ui.color.RenderColor
 
 object FrontendRuntime:
@@ -36,6 +36,11 @@ object FrontendRuntime:
       cursorOnly: (AppState, RenderCaches) => IO[Unit]
   )
 
+  /** What a frontend's menus need of the running application: the model to read when one opens, and a way to run an
+    * effect from a UI callback that is not itself inside the runtime.
+    */
+  final case class MenuHost(readModel: IO[Model], runAsync: IO[Unit] => Unit)
+
 /** The rendering/input bundle a concrete launch builds once its real Swing or terminal resource is acquired
   * (`Main.runGui`/`TuiRuntime.run`), and `AppRuntime.run` takes to get its rendering and input behaviour from -- issue
   * #1669's remaining scope: `AppRuntime.run` used to take `makeInputHandler`/`renderFull`/`renderCursorOnly` as three
@@ -59,5 +64,10 @@ final case class FrontendRuntime(
     renderFull: FrontendRuntime.RenderFn,
     renderCursorOnly: FrontendRuntime.RenderFn,
     frameTimings: FrameTimings = FrameTimings(),
-    offscreenFrames: Option[Resource[IO, FrontendRuntime.OffscreenFrames]] = None
-)
+    offscreenFrames: Option[Resource[IO, FrontendRuntime.OffscreenFrames]] = None,
+    menus: Option[FrontendRuntime.MenuHost => Resource[IO, Unit]] = None,
+    applyPointerShape: PointerShape => IO[Unit] = _ => IO.unit
+):
+
+  def menuResource(readModel: IO[Model], runAsync: IO[Unit] => Unit): Resource[IO, Unit] =
+    menus.fold(Resource.unit[IO])(_(FrontendRuntime.MenuHost(readModel, runAsync)))

@@ -1,5 +1,6 @@
 package com.serenity.ui.renderer
 
+import com.serenity.config.{AppConfig, HotkeyAction, HotkeyConfig, label}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
@@ -26,14 +27,21 @@ object RendererStartPage:
       textMetrics = textMetrics
     )
 
-  def renderWelcomeText(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
-    val lines = List(
-      "Welcome to Serenity!",
-      "",
-      "Start typing to edit text.",
-      "",
-      "Press Ctrl+P for command palette"
-    )
+  def welcomeLines(hotkeys: HotkeyConfig, osName: String): List[String] =
+    val paletteHint = hotkeys
+      .bindingsFor(HotkeyAction.ToggleCommandRunner)
+      .headOption
+      .map(trigger => s"Press ${trigger.label(osName)} for command palette")
+    List("Welcome to Serenity!", "", "Start typing to edit text.") ++ paletteHint.toList.flatMap(List("", _))
+
+  def renderWelcomeText(
+    rect: LayoutRect,
+    theme: Theme,
+    context: RenderContext,
+    config: AppConfig,
+    osName: String = System.getProperty("os.name", "")
+  ): Unit =
+    val lines = welcomeLines(config.inputConfig.hotkeyConfig, osName)
 
     val textMetrics  = CellMetrics.fromFont(context.textFont)
     val lineHeightPx = math.max(context.cellMetrics.lineHeight, textMetrics.lineHeight)

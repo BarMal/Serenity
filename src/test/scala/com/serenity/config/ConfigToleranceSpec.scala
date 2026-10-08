@@ -32,6 +32,8 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
     .withColumnTargetWidth(60)
     .withCursorBlinkTimeoutMillis(4000L)
     .withWordGoal(Some(50000))
+    .withAutoSaveMode(AutoSaveMode.AfterDelay)
+    .withAutoSaveDelayMillis(2500L)
     .withMinimumPaneWidth(24)
     .withWheelScrollLines(5)
     .withPreferredWindowSize(PreferredWindowSize(1280, 800))
