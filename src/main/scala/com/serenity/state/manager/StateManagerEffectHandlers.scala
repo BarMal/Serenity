@@ -125,7 +125,8 @@ final private[manager] class StateManagerEffectHandlers(
     expandPinnedPanel,
     () => collapseExpandedPanel(),
     switchToPinnedPanel,
-    resizePinnedPanel
+    resizePinnedPanel,
+    showModal
   )
 
   private val externalChangeEffects = new StateManagerExternalChangeEffects(
@@ -268,13 +269,14 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def dispatchCommand(command: Command, state: AppState, recordUsage: Boolean): IO[Unit] =
     val dispatch = command.intent match
-      case CommandIntent.Lifecycle(intent)                      => interpretLifecycleIntent(intent, state)
-      case CommandIntent.File(intent)                           => interpretFileIntent(intent, state)
-      case CommandIntent.Edit(intent)                           => interpretEditIntent(intent)
-      case CommandIntent.RichText(intent)                       => richTextEffects.interpret(intent)
-      case CommandIntent.Comments(intent)                       => navigationEffects.interpretComments(intent)
-      case CommandIntent.Placeholders(intent)                   => navigationEffects.interpretPlaceholders(intent)
-      case CommandIntent.Darlings(DarlingIntent.CutToDarlings)  => enqueueEvent(CutToDarlings)
+      case CommandIntent.Lifecycle(intent)                     => interpretLifecycleIntent(intent, state)
+      case CommandIntent.Diagnostics(intent)                   => DiagnosticsEffects.system(showModal).interpret(intent)
+      case CommandIntent.File(intent)                          => interpretFileIntent(intent, state)
+      case CommandIntent.Edit(intent)                          => interpretEditIntent(intent)
+      case CommandIntent.RichText(intent)                      => richTextEffects.interpret(intent)
+      case CommandIntent.Comments(intent)                      => navigationEffects.interpretComments(intent)
+      case CommandIntent.Placeholders(intent)                  => navigationEffects.interpretPlaceholders(intent)
+      case CommandIntent.Darlings(DarlingIntent.CutToDarlings) => enqueueEvent(CutToDarlings)
       case CommandIntent.Darlings(DarlingIntent.RestoreDarling) => enqueueEvent(RestoreDarling)
       case CommandIntent.Spelling(intent)                       => spellingEffects.interpret(intent)
       case CommandIntent.Navigation(intent)                     => navigationEffects.interpretNavigation(intent)

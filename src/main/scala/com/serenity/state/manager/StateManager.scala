@@ -268,6 +268,7 @@ object StateManager:
         ),
         announceClosedDocuments = LspDocumentSync.announceClosed(runtime.lspQueue),
         forgetClosedBuffers = ClosedBufferRetention.forgetRenderCaches(runtime.renderCaches),
+        announceModeChange = ModeTransition.announceLsp(runtime.lspQueue),
         dictionaryCache = runtime.dictionaryCache
       )
       .flatMap { operations =>

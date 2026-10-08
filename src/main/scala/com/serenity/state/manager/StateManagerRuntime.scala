@@ -36,6 +36,8 @@ final private[manager] class LspEffectQueue private (
   def enqueue(effect: LspEffect): IO[Unit] =
     effect match
       case LspEffect.FileChanged(uri, languageId, text, _) => enqueueDocumentChange(uri, languageId, text)
+      case LspEffect.ReleaseAll =>
+        pendingChanges.update(_.closedForAll) >> queue.offer(Entry.Immediate(LspEffect.ReleaseAll))
       case other =>
         pendingChanges.update(pending => other.documentUri.fold(pending)(pending.closedFor)) >>
           queue.offer(Entry.Immediate(other))
@@ -70,6 +72,8 @@ final private[manager] class LspEffectQueue private (
           documentVersions.update(_ + (uri -> 1)).as(Some(opened))
         case Entry.Immediate(closed @ LspEffect.FileClosed(uri, _)) =>
           documentVersions.update(_ - uri).as(Some(closed))
+        case Entry.Immediate(LspEffect.ReleaseAll) =>
+          documentVersions.set(Map.empty).as(Some(LspEffect.ReleaseAll))
         case Entry.Immediate(effect) =>
           IO.pure(Some(effect))
         case Entry.Change(uri, token) =>
@@ -98,6 +102,8 @@ private[manager] object LspEffectQueue:
   /** Queued changes' latest text by token; `open` names, per document, the queued change a new edit may still join. */
   final private case class PendingChanges(nextToken: Long, open: Map[String, Long], texts: Map[Long, PendingChange]):
     def closedFor(uri: String): PendingChanges = copy(open = open - uri)
+
+    def closedForAll: PendingChanges = copy(open = Map.empty)
 
     def taken(uri: String, token: Long): PendingChanges =
       copy(open = if open.get(uri).contains(token) then open - uri else open, texts = texts - token)

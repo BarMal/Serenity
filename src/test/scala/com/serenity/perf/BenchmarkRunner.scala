@@ -51,7 +51,8 @@ object BenchmarkRunner:
       verify: () => Unit,
       run: () => Any,
       minBatch: Int = 1,
-      settleJit: Boolean = false
+      settleJit: Boolean = false,
+      fixedSampleCount: Boolean = false
   )
 
   final private[perf] case class BenchmarkResult(
@@ -91,6 +92,15 @@ object BenchmarkRunner:
   private val SettleWindowRounds = 20
   private val SettleTolerance    = 1.05
   private val MaxSettleNanos     = 30_000_000_000L
+
+  /** A benchmark of a few milliseconds per sample finishes its 8 to 60 samples inside 20 to 200 ms, so one stall that
+    * long -- a GC pause, a noisy neighbour on a shared runner -- moves every sample and with them the median. Sampling
+    * on past the configured count until the samples span this window lets the median ride out a stall shorter than half
+    * of it. A benchmark that types without deleting opts out with `fixedSampleCount`: each extra sample would grow its
+    * document and so change what the median measures.
+    */
+  private[perf] val MinSamplingWindowNanos = 400_000_000L
+  private[perf] val MaxSamples             = 1_000
 
   private val sink = new java.util.concurrent.atomic.AtomicLong(0L)
 
@@ -133,6 +143,28 @@ object BenchmarkRunner:
 
   private def median(values: Vector[Double]): Double = values.sorted.apply(values.length / 2)
 
+  private[perf] def enoughSamples(
+    collected: Int,
+    minimum: Int,
+    elapsedNanos: Long,
+    extendToWindow: Boolean = true
+  ): Boolean =
+    collected >= MaxSamples || (collected >= minimum && (!extendToWindow || elapsedNanos >= MinSamplingWindowNanos))
+
+  private def sample(run: () => Any, batch: Int, minimum: Int, extendToWindow: Boolean): Vector[Double] =
+    @annotation.tailrec
+    def loop(collected: Vector[Double], elapsedNanos: Long, observed: Long): (Vector[Double], Long) =
+      if enoughSamples(collected.length, minimum, elapsedNanos, extendToWindow) then (collected, observed)
+      else
+        val started = System.nanoTime()
+        val seen    = repeat(batch, run)
+        val elapsed = System.nanoTime() - started
+        loop(collected :+ elapsed.toDouble / 1_000_000.0 / batch, elapsedNanos + elapsed, observed + seen)
+
+    val (samples, observed) = loop(Vector.empty, 0L, 0L)
+    sink.addAndGet(observed)
+    samples.sorted
+
   @annotation.tailrec
   private def calibrate(run: () => Any, batch: Int): Int =
     if batch >= MaxBatch then batch
@@ -157,16 +189,10 @@ object BenchmarkRunner:
     val (warmupInvocations, warmupAcc) =
       warmUp(benchmark.run, System.nanoTime() + WarmupBudgetNanos, 0, benchmark.warmups, 0L)
     sink.addAndGet(warmupAcc)
-    if benchmark.settleJit then
+    if benchmark.settleJit || BenchmarkIterationCounts.JitSettled.contains(benchmark.name) then
       sink.addAndGet(settle(benchmark.run, System.nanoTime() + MaxSettleNanos, Vector.empty, 0L))
-    val batch = calibrate(benchmark.run, 1).max(benchmark.minBatch)
-    val samples = (0 until benchmark.iterations).map { _ =>
-      val started  = System.nanoTime()
-      val observed = repeat(batch, benchmark.run)
-      val elapsed  = System.nanoTime() - started
-      sink.addAndGet(observed)
-      elapsed.toDouble / 1_000_000.0 / batch
-    }.sorted
+    val batch   = calibrate(benchmark.run, 1).max(benchmark.minBatch)
+    val samples = sample(benchmark.run, batch, benchmark.iterations, !benchmark.fixedSampleCount)
     val allocationSamples =
       if AllocationTracked.contains(benchmark.name) then
         allocationBean
@@ -185,7 +211,7 @@ object BenchmarkRunner:
       else Vector.empty[Long]
     BenchmarkResult(
       name = benchmark.name,
-      iterations = benchmark.iterations,
+      iterations = samples.length,
       warmupInvocations = warmupInvocations,
       batch = batch,
       minMs = samples.headOption.getOrElse(0.0),
@@ -217,11 +243,10 @@ object BenchmarkRunner:
     println(
       "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,allocation_p95_bytes"
     )
-    results.foreach { result =>
-      val allocationP50 = result.allocationP50Bytes.fold("")(_.toString)
-      val allocationP95 = result.allocationP95Bytes.fold("")(_.toString)
-      println(
-        f"${result.name},${result.iterations},${result.warmupInvocations},${result.batch}," +
-          f"${result.minMs}%.5f,${result.p50Ms}%.5f,${result.p95Ms}%.5f,${result.maxMs}%.5f,$allocationP50,$allocationP95"
-      )
-    }
+    results.foreach(result => println(csvRow(result)))
+
+  private[perf] def csvRow(result: BenchmarkResult): String =
+    val allocationP50 = result.allocationP50Bytes.fold("")(_.toString)
+    val allocationP95 = result.allocationP95Bytes.fold("")(_.toString)
+    f"${result.name},${result.iterations},${result.warmupInvocations},${result.batch}," +
+      f"${result.minMs}%.7f,${result.p50Ms}%.7f,${result.p95Ms}%.7f,${result.maxMs}%.7f,$allocationP50,$allocationP95"

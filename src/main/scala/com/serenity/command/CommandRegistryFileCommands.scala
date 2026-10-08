@@ -122,6 +122,8 @@ private[command] object CommandRegistryFileCommands:
     ),
     SafeModeCommands.restart,
     SafeModeCommands.restartNormally,
+    DiagnosticsCommands.about,
+    DiagnosticsCommands.openLogsFolder,
     Command.typed(
       "new",
       "Create a new file.",

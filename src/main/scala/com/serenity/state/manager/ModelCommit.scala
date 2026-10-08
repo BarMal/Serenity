@@ -56,7 +56,7 @@ final private[manager] class ModelCommit(
       val reduced = EffectResult.reduce(current.app, result, wrapCache = wrapCache)
       if (reduced.state eq current.app) && reduced.effects.isEmpty then (current, IO.unit)
       else
-        val next = ClosedBufferRetention.forgetting(
+        val next = ModelCommit.settled(
           current.app,
           ModelCommit.applyModelEffects(current.copy(app = reduced.state), reduced.effects)
         )
@@ -64,7 +64,8 @@ final private[manager] class ModelCommit(
           case Right(committed) =>
             (
               next.copy(app = committed),
-              operations.afterCommit(current.app, committed) >> onApplied(committed) >>
+              operations.afterCommit(current.app, committed) >> operations.afterModeChange(current.app, committed) >>
+                onApplied(committed) >>
                 reduced.effects.filterNot(ModelCommit.isModelEffect).traverse_(interpretEffect)
             )
           case Left(errors) => (current, operations.logRejectedCommit(errors))
@@ -80,15 +81,25 @@ final private[manager] class ModelCommit(
         case None                                       => (current, IO.unit)
         case Some((next, _)) if next.app eq current.app => (next, IO.unit)
         case Some((transitioned, fallbackState)) =>
-          val next = ClosedBufferRetention.forgetting(current.app, transitioned)
+          val next = ModelCommit.settled(current.app, transitioned)
           StateManagerOperationBoundary.prepareCommit(next.app, fallbackState) match
             case Right(committedState) =>
-              (next.copy(app = committedState), operations.afterCommit(fallbackState, committedState))
+              (
+                next.copy(app = committedState),
+                operations.afterCommit(fallbackState, committedState) >>
+                  operations.afterModeChange(current.app, committedState)
+              )
             case Left(errors) =>
               (current.copy(app = fallbackState), operations.logRejectedCommit(errors))
     }
 
 private[manager] object ModelCommit:
+
+  /** What every commit lets go of in the state itself: the buffers it closes, and the code tooling a mode change
+    * leaves.
+    */
+  def settled(previous: AppState, next: Model): Model =
+    ModeTransition.settled(previous, ClosedBufferRetention.forgetting(previous, next))
 
   /** Folds the reducer effects that only change the model itself -- undo bookkeeping -- into `model`, so they commit in
     * the same write as the state they came with. Every other effect is left to the effect interpreter, in order.
