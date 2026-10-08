@@ -13,11 +13,11 @@ final private case class Pending(opening: Opening, lines: Vector[SetLine], gapAf
 private object Pending:
   val none: Pending = Pending(Opening.Continue, Vector.empty, None)
 
-final private case class Flow(groups: Vector[Group], pending: Pending):
+final private case class Flow(groups: Vector[Group], pending: Pending, sections: Int):
 
   def flush: Flow =
     if pending.lines.isEmpty then copy(pending = Pending.none)
-    else Flow(groups :+ Group(pending.opening, pending.lines, pending.lines.size), Pending.none)
+    else copy(groups = groups :+ Group(pending.opening, pending.lines, pending.lines.size), pending = Pending.none)
 
   def open(opening: Opening, lines: Vector[SetLine], gapAfter: Option[Float]): Flow =
     flush.copy(pending = Pending(opening, lines, gapAfter))
@@ -26,10 +26,10 @@ final private case class Flow(groups: Vector[Group], pending: Pending):
     copy(pending = pending.copy(lines = pending.lines ++ lines, gapAfter = None))
 
   def attach(lines: Vector[SetLine]): Flow =
-    Flow(groups :+ Group(pending.opening, pending.lines ++ lines, pending.lines.size), Pending.none)
+    copy(groups = groups :+ Group(pending.opening, pending.lines ++ lines, pending.lines.size), pending = Pending.none)
 
 private object Flow:
-  val empty: Flow = Flow(Vector.empty, Pending.none)
+  val empty: Flow = Flow(Vector.empty, Pending.none, 0)
 
 /** Turns a [[Manuscript]] into groups of set lines, ready for the [[PageFiller]]. It knows the manuscript conventions:
   * sections start pages a third of the way down, headings and scene breaks hold with the text that follows, and the
@@ -89,9 +89,9 @@ final private[layout] class FlowBuilder(t: PageTypography, setter: ParagraphSett
         opening(flow, heading).flatMap(blocks.foldM(_)(block))
 
   private def opening(flow: Flow, heading: Option[SectionHeading]): Either[PaginationError, Flow] =
-    val page = Opening.NewPage(PageKind.SectionStart, drop)
+    val page = Opening.NewPage(PageKind.SectionStart, drop, Some(SectionRef(flow.sections)))
     heading.fold(Vector.empty[String])(_.lines).flatTraverse(lines(_, Placement.centre, pitch)).map { headingLines =>
-      flow.open(page, headingLines, Option.when(headingLines.nonEmpty)(pitch))
+      flow.open(page, headingLines, Option.when(headingLines.nonEmpty)(pitch)).copy(sections = flow.sections + 1)
     }
 
   private def block(flow: Flow, block: Block): Either[PaginationError, Flow] =

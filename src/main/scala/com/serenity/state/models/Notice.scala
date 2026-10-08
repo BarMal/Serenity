@@ -15,6 +15,9 @@ enum NoticeTopic:
   case FileSave(bufferId: BufferId)
   case SessionSave
 
+  /** What reloading the config file after an outside edit had to say. */
+  case ConfigFile
+
   /** A language server's message, so the same words repeated while still on screen show once. */
   case ServerMessage(server: String, text: String)
 

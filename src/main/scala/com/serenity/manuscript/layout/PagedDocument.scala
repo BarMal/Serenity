@@ -22,15 +22,22 @@ final case class PlacedRun(text: String, font: FontSpec, x: Float, style: RichTe
 final case class PlacedLine(baselineY: Float, runs: Vector[PlacedRun]):
   def text: String = runs.map(_.text).mkString
 
+/** A part or chapter of a manuscript: its zero-based position when the sections are walked depth first, parts before
+  * the chapters they hold, headed or not.
+  */
+final case class SectionRef(index: Int)
+
 /** `number` is the page's position in the document from 1, title page included. `printedNumber` is what the page shows:
-  * none on front matter, and 1 on the first page of body text.
+  * none on front matter, and 1 on the first page of body text. `opens` names the section whose text begins the page, so
+  * a consumer such as the PDF outline need not guess from the text.
   */
 final case class Page(
     number: Int,
     printedNumber: Option[Int],
     kind: PageKind,
     head: Option[PlacedLine],
-    lines: Vector[PlacedLine]
+    lines: Vector[PlacedLine],
+    opens: Option[SectionRef] = None
 )
 
 final case class PagedDocument(pages: Vector[Page])

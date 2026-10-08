@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.*
 import cats.effect.std.Queue
-import com.serenity.config.PreferredWindowSize
+import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.lsp.LspEffect
 import com.serenity.project.{ProjectTaskCommand, ProjectTaskResult, ProjectTaskRunner}
@@ -135,7 +135,8 @@ final private[manager] case class StateManagerRuntime(
     sessionPersistence: SessionPersistence,
     renderCaches: RenderCaches,
     restarter: Option[RestartMode => IO[Unit]] = None,
-    dictionaryCache: DictionaryCache = DictionaryCache()
+    dictionaryCache: DictionaryCache = DictionaryCache(),
+    configOnDisk: Option[AppConfig] = None
 )
 
 private[manager] object StateManagerRuntime:
@@ -164,7 +165,8 @@ private[manager] object StateManagerRuntime:
     renderCaches: RenderCaches = RenderCaches.create(),
     projectTasksEnabled: Boolean = true,
     restarter: Option[RestartMode => IO[Unit]] = None,
-    dictionaryCache: DictionaryCache = DictionaryCache()
+    dictionaryCache: DictionaryCache = DictionaryCache(),
+    configOnDisk: Option[AppConfig] = None
   )(using Balance): StateManagerRuntime =
     val sessionManager = sessionRootOverride
       .map(root => SessionManager.create(root, themeManager, logger, policy))
@@ -194,5 +196,6 @@ private[manager] object StateManagerRuntime:
       sessionPersistence = new SessionPersistence(sessionManager, policy),
       renderCaches = renderCaches,
       restarter = restarter,
-      dictionaryCache = dictionaryCache
+      dictionaryCache = dictionaryCache,
+      configOnDisk = configOnDisk
     )
