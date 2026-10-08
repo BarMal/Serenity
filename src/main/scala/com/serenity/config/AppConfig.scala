@@ -19,7 +19,9 @@ final case class AppConfig(
     interfaceConfig: InterfaceConfig = InterfaceConfig(),
     languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig(),
     appModeConfig: AppModeConfig = AppModeConfig(),
-    statusLine: StatusLineConfig = StatusLineConfig.default
+    statusLine: StatusLineConfig = StatusLineConfig.default,
+    exportTypographyConfig: ExportTypographyConfig = ExportTypographyConfig(),
+    autoSaveConfig: AutoSaveConfig = AutoSaveConfig()
 ):
 
   def withEditorConfig(config: EditorConfig): AppConfig =
@@ -27,6 +29,9 @@ final case class AppConfig(
 
   def withLanguageToolsConfig(config: LanguageToolsConfig): AppConfig =
     copy(languageToolsConfig = config.normalized)
+
+  def withExportTypography(config: ExportTypographyConfig): AppConfig =
+    copy(exportTypographyConfig = config)
 
   def withInputConfig(config: InputConfig): AppConfig =
     copy(inputConfig = config)
@@ -281,9 +286,26 @@ final case class AppConfig(
   def withWordGoal(goal: Option[Int]): AppConfig =
     withDocumentConfig(documentConfig.copy(wordGoal = goal))
 
+  /** Create a new config with the name comments are written under set (or cleared, via `None`). */
+  def withCommentAuthor(author: Option[String]): AppConfig =
+    withDocumentConfig(documentConfig.copy(commentAuthor = author))
+
+  /** The name a new comment or reply is written under: the configured one, else the operating system's user name. */
+  def commentAuthor: String =
+    documentConfig.commentAuthor.getOrElse(CommentAuthor.osUserName)
+
   /** Create a new config with the multi-line drop cap paragraph role's rendering enabled or disabled. */
   def withDropCapsEnabled(enabled: Boolean): AppConfig =
     withDocumentConfig(documentConfig.copy(dropCapsEnabled = enabled))
+
+  def withAutoSaveConfig(config: AutoSaveConfig): AppConfig =
+    copy(autoSaveConfig = config)
+
+  def withAutoSaveMode(mode: AutoSaveMode): AppConfig =
+    withAutoSaveConfig(autoSaveConfig.copy(mode = mode))
+
+  def withAutoSaveDelayMillis(delayMillis: Long): AppConfig =
+    withAutoSaveConfig(autoSaveConfig.copy(delayMillis = delayMillis))
 
   def withAppModeConfig(config: AppModeConfig): AppConfig =
     copy(appModeConfig = config)

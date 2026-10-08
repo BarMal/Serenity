@@ -118,6 +118,31 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
 
+  it should "run onFocusLost when focus is lost, but not when focus is regained (#1992)" in {
+    val program = for
+      windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
+      cursorVisible <- Ref.of[IO, Boolean](true)
+      lostCount     <- Ref.of[IO, Int](0)
+      _ <- AppRuntime.onWindowFocusChanged(
+        focused = false,
+        windowFocused = windowFocused,
+        cursorVisible = cursorVisible,
+        requestFastRender = IO.unit,
+        onFocusLost = lostCount.update(_ + 1)
+      )
+      _ <- AppRuntime.onWindowFocusChanged(
+        focused = true,
+        windowFocused = windowFocused,
+        cursorVisible = cursorVisible,
+        requestFastRender = IO.unit,
+        onFocusLost = lostCount.update(_ + 1)
+      )
+      count <- lostCount.get
+    yield count shouldBe 1
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
   it should "default onFocusGained to a no-op for callers that don't supply one" in {
     val program = for
       windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)

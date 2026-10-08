@@ -3,6 +3,7 @@ package com.serenity.ui.layout
 import scala.annotation.unused
 
 import com.serenity.markdown.{MarkdownDocumentPreview, MarkdownPreviewCache}
+import com.serenity.rope.Rope
 import com.serenity.state.models.*
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
@@ -171,7 +172,7 @@ object SurfaceContentResolver:
       case SurfaceContent.CommentLens(lens) =>
         ResolvedSurfaceContent(
           title = titleFor(mode, "comment"),
-          header = Some(OverlayRow("comment")),
+          header = Some(OverlayRow(lens.headline)),
           rows = commentLensRows(lens)
         )
       case SurfaceContent.MarkdownPreview(_, title) =>
@@ -190,13 +191,14 @@ object SurfaceContentResolver:
     */
   private[layout] def commentLensRows(lens: CommentLensState): List[OverlayRow] =
     val (cursorLine, cursorColumn) = lineAndColumnAt(lens.draft, lens.clampedCursor)
-    splitLines(lens.draft).zipWithIndex.map { (line, index) =>
+    val draftRows = splitLines(lens.draft).zipWithIndex.map { (line, index) =>
       OverlayRow(
         plainText = line,
         selected = index == cursorLine,
         cursorColumn = Option.when(index == cursorLine)(cursorColumn)
       )
     }
+    draftRows ++ lens.threadLines.map(OverlayRow(_))
 
   private def splitLines(text: String): List[String] =
     text.split("\n", -1).toList match
@@ -243,4 +245,24 @@ object SurfaceContentResolver:
     ResolvedSurfaceContent(
       title = titleFor(mode, s"Preview: $title"),
       rows = rows
+    )
+
+  /** [[resolveMarkdownPreview]] for a buffer's `Rope`: the same rows, but the text is read only when this document has
+    * not been resolved at this panel height before, so resolving an unchanged document on every frame and for every
+    * layout contract costs no pass over it. A missing buffer resolves to an empty preview.
+    */
+  def resolveBufferMarkdownPreview(
+    title: String,
+    content: Option[Rope],
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    cache: MarkdownPreviewCache = MarkdownPreviewCache()
+  ): ResolvedSurfaceContent =
+    val contentRows = SurfaceFrameLayout(rect).contentRect.height.max(0)
+    ResolvedSurfaceContent(
+      title = titleFor(mode, s"Preview: $title"),
+      rows = content
+        .fold(Vector.empty[String])(MarkdownDocumentPreview.panelPreviewRows(_, contentRows, cache))
+        .map(OverlayRow(_))
+        .toList
     )

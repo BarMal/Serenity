@@ -35,6 +35,10 @@ object InlineAtom:
   /** U+2060 WORD JOINER: zero width, so an invisible marker takes no room even where it is drawn as-is. */
   val OpaqueCharacter: Char = '\u2060'
 
+  /** `text` of a rich document's rope as plain text: a soft break becomes a newline and an opaque atom disappears. */
+  def asPlainText(text: String): String =
+    text.replace(SoftBreakCharacter, '\n').filterNot(_ == OpaqueCharacter)
+
 enum ParagraphAlignment:
   case Left
   case Center

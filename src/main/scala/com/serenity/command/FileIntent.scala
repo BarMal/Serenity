@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.BufferId
-import com.serenity.text.TextEncoding
+import com.serenity.text.{LineEnding, TextEncoding}
 
 enum FileIntent:
   case SaveCurrentFile
@@ -21,6 +21,8 @@ enum FileIntent:
   case NewFile
   // #2019: the GPL-3.0-or-later licence and third-party notices bundled in the jar, opened read-only.
   case ShowLicenceAndNotices
+  // The privacy statement (docs/PRIVACY.md) bundled in the jar, opened read-only.
+  case ShowPrivacyStatement
   case SetBufferLanguage(language: Option[LanguageId])
   // #1623: the ways out of a file changed on disk under unsaved edits -- see ExternalChangeCommands.
   case ReloadFromDisk(bufferId: BufferId)
@@ -29,3 +31,6 @@ enum FileIntent:
   // #1627: read the file again in an encoding the user picks -- see ReopenWithEncodingCommands.
   case ChooseReopenEncoding
   case ReopenWithEncoding(bufferId: BufferId, encoding: TextEncoding, discardEdits: Boolean)
+  // #1964: change the line ending a buffer saves with -- see LineEndingCommands.
+  case ChooseLineEnding
+  case SetLineEnding(bufferId: BufferId, ending: LineEnding)

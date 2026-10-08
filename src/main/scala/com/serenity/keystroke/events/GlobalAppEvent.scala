@@ -1,5 +1,7 @@
 package com.serenity.keystroke.events
 
+import java.nio.file.Path
+
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.{BufferId, PanelId}
 
@@ -39,6 +41,12 @@ case object GoToFile                      extends GlobalAppEvent // Ctrl+E
   * a command rather than to a `HotkeyAction` (issue #1922).
   */
 final case class RunCommand(commandId: String) extends GlobalAppEvent
+
+/** Brings a buffer forward from the Window menu, as a tab-bar click does. */
+final case class ActivateBuffer(bufferId: BufferId) extends GlobalAppEvent
+
+/** Opens a file chosen from the Open Recent menu, as choosing it on the start page does. */
+final case class OpenRecentPath(path: Path) extends GlobalAppEvent
 
 /** Moves focus to the editor pane or docked panel next to the focused one on screen (Alt+Arrow by default). */
 final case class FocusInDirection(direction: Direction) extends GlobalAppEvent

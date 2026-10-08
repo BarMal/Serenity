@@ -76,9 +76,18 @@ object ArchitectureChecks {
     // shell, and the future paginator must not measure through AWT.
     ImportRule(
       "com/serenity/manuscript",
-      Seq("java.awt", "org.apache.pdfbox", "cats.effect", "com.serenity.state"),
-      "the manuscript package is the pure export core: take sources and settings as values, and leave IO, AWT and " +
-        "the editor state to the shell",
+      Seq("java.awt", "org.apache.pdfbox", "org.apache.fontbox", "cats.effect", "com.serenity.state"),
+      "the manuscript package is the pure export core: take sources and settings as values, and leave IO, AWT, " +
+        "font parsing and the editor state to the shell",
+      mainOnly = true
+    ),
+    // S5: the exporting package is the effectful edge of that core (font loading, later the PDF painter); it reads the
+    // manuscript model but never the editor state, and never AWT, so measurement and painting stay on one font file.
+    ImportRule(
+      "com/serenity/exporting/",
+      Seq("java.awt", "com.serenity.state"),
+      "the exporting package measures and paints from the bundled font files through FontBox/PDFBox: no AWT, and the " +
+        "editor state reaches it only as values",
       mainOnly = true
     ),
     ImportRule(
@@ -89,6 +98,19 @@ object ArchitectureChecks {
       mainOnly = true
     )
   )
+
+  /** #1911: the files that decide an event on the state dispatcher do no I/O. Disk work goes to a lane job in a file of
+    * its own and comes back as an `EffectResult`, so a key never waits behind a read or a write.
+    */
+  val DispatcherPathFiles: Seq[String] = Seq(
+    "main/scala/com/serenity/state/manager/StateManagerEventPipeline.scala",
+    "main/scala/com/serenity/state/manager/EventPipelineTransitions.scala"
+  )
+
+  val DispatcherBlockingCalls: Seq[String] = Seq("IO.blocking", "IO.interruptible", "Files.", "FileUtils.")
+
+  val DispatcherBlockingReason: String =
+    "the dispatcher path does no I/O (#1911): hand disk work to a lane job and take its answer as an EffectResult"
 
   /** Blocking/synchronous escape hatches out of `IO` that #1434 removed from src/main. Test code legitimately
     * calls these to drive `IO` synchronously in specs, so this is scoped to `main/` only -- the same split
@@ -104,7 +126,7 @@ object ArchitectureChecks {
       "runs an IO synchronously outside the Cats Effect runtime (#1434) -- use IOApp, a Resource/Dispatcher " +
         "boundary, or push the IO to the edge instead"
     )
-  )
+  ) ++ DispatcherPathFiles.map(file => (file, DispatcherBlockingCalls, DispatcherBlockingReason))
 
   /** State ownership (#1697): only the dispatcher/ModelCommit layer holds the model `Ref`. Capabilities read state
     * through an `IO[AppState]` and write it only through `ModelCommit`'s validated commits, so a raw `Ref` -- or a
@@ -511,6 +533,36 @@ object ArchitectureChecks {
         "import com.serenity.ui.fonts.FontLoader"
       ),
       expectCaught = true
+    )
+
+    def checkDispatcherPath(description: String, line: String, path: String, expectCaught: Boolean): Unit = {
+      val violations = callViolations(path, Vector(line))
+      require(
+        violations.nonEmpty == expectCaught,
+        s"ArchitectureChecks self-test failed ($description): expected a blocking call to be " +
+          s"${if (expectCaught) "caught" else "ignored"}, got ${violations.size} violation(s)"
+      )
+    }
+
+    checkDispatcherPath(
+      "a blocking effect in the event pipeline",
+      "    cats.effect.IO.blocking(readIndex())",
+      DispatcherPathFiles.head,
+      expectCaught = true
+    )
+
+    checkDispatcherPath(
+      "a java.nio Files call in the event pipeline",
+      "    val present = Files.exists(path)",
+      DispatcherPathFiles.head,
+      expectCaught = true
+    )
+
+    checkDispatcherPath(
+      "a blocking effect in a lane job's own file",
+      "    IO.blocking(readIndex())",
+      "main/scala/com/serenity/state/manager/CommandRunnerOpening.scala",
+      expectCaught = false
     )
 
     def checkMutability(

@@ -246,11 +246,11 @@ enum CommentLensMode:
   case ReadOnly
   case Editable
 
-/** The authored comment a lens writes back to. `index` (its position in the buffer's `documentComments`) is what
-  * identifies it: two comments can be structurally equal, and an edit elsewhere shifts a comment's range without moving
-  * its position in the list. `comment` is the snapshot the draft was opened from.
+/** The authored comment a lens writes back to. `id` is what identifies it: two comments can be structurally equal, an
+  * edit elsewhere shifts a comment's range, and a deletion shifts its position in the list, but nothing changes its id.
+  * `comment` is the snapshot the draft was opened from.
   */
-final case class CommentLensTarget(index: Int, comment: DocumentComment)
+final case class CommentLensTarget(id: CommentId, comment: DocumentComment)
 
 /** Focused draft state for editing an authored document comment from the above-cursor lens. */
 final case class CommentLensState(
@@ -268,6 +268,24 @@ final case class CommentLensState(
     */
   def withMode(requested: CommentLensMode): CommentLensState =
     copy(mode = if target.isDefined then requested else CommentLensMode.ReadOnly)
+
+  /** The lens's title row: who wrote the comment and whether it is resolved, when the lens has an authored comment. */
+  def headline: String =
+    val details = target.toList.flatMap { authored =>
+      authored.comment.author.toList ++ Option.when(authored.comment.resolved)("resolved")
+    }
+    (CommentLensState.Title :: details).mkString(" · ")
+
+  /** The replies under the comment, one line each, for display beneath the draft. */
+  def threadLines: List[String] =
+    target.toList.flatMap(_.comment.replies).flatMap { reply =>
+      reply.text.split("\n", -1).toList.zipWithIndex.map { (line, index) =>
+        if index == 0 then s"${reply.author}: $line" else s"  $line"
+      }
+    }
+
+object CommentLensState:
+  val Title: String = "comment"
 
 enum SurfaceContent:
   case StartPage(page: StartupPage)
@@ -326,7 +344,7 @@ enum SurfaceContent:
   case RecentFilesInMode(mode: AppMode, paths: List[java.nio.file.Path])
 
   /** A corner notice (#1717); `expiresAtNanos` is when it leaves by itself, on the monotonic clock -- never, for an
-    * error. See `NoticeReducer`.
+    * error or a question. See `NoticeReducer`.
     */
   case Notice(notice: com.serenity.state.models.Notice, expiresAtNanos: Option[Long])
 
@@ -355,6 +373,7 @@ final case class UiSurface(
   def focusPolicy: SurfaceFocusPolicy =
     content match
       case SurfaceContent.CommentLens(lens) if lens.mode == CommentLensMode.ReadOnly => SurfaceFocusPolicy.Peek
+      case SurfaceContent.Notice(notice, _) if notice.prompt.isDefined               => SurfaceFocusPolicy.Focusable
       case SurfaceContent.Notice(_, _)                                               => SurfaceFocusPolicy.Peek
       case SurfaceContent.CommandPalette(_) | SurfaceContent.ModalWorkflow(_) | SurfaceContent.ThemeCreator(_) =>
         SurfaceFocusPolicy.Modal
