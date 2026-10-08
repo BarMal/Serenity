@@ -26,12 +26,19 @@ private[manager] object ModeTransition:
   def enteredCodeTooling(before: AppState, after: AppState): Boolean =
     changed(before, after) && !before.editingContext.hasCodeTooling && after.editingContext.hasCodeTooling
 
-  /** `next` with what only code tooling produces dropped, when the commit leaves code mode: the server diagnostics,
-    * semantic tokens and progress, and the project task record. The very `next` comes back otherwise, which is every
-    * commit but a mode change. Spell-check marks stay: they belong to prose.
+  /** `next` with what the mode it leaves behind owned dropped, in the one write that changes the mode: the docked
+    * panels the new mode does not offer and, on leaving code mode, what only code tooling produces -- the server
+    * diagnostics, semantic tokens and progress, and the project task record. The very `next` comes back when nothing is
+    * left to drop, which is every commit but a mode change. Spell-check marks stay: they belong to prose.
+    *
+    * The hidden panels are not recorded as an undo step: undoing one would dock a code panel in a prose workspace.
     */
   def settled(previous: AppState, next: Model): Model =
-    if leftCodeTooling(previous, next.app) then next.copy(app = withoutCodeTooling(next.app)) else next
+    val panelsOutside = if changed(previous, next.app) then panelsOutsideMode(next.app) else Nil
+    if panelsOutside.isEmpty && !leftCodeTooling(previous, next.app) then next
+    else
+      val withoutPanels = panelsOutside.foldLeft(next.app)((state, id) => PanelTransitions.removePanel(id)(state))
+      next.copy(app = if leftCodeTooling(previous, next.app) then withoutCodeTooling(withoutPanels) else withoutPanels)
 
   /** The documents a server is told about, or told to forget, for a mode change: those with a language and a file, one
     * per file, in buffer order.
@@ -71,6 +78,13 @@ private[manager] object ModeTransition:
         yield (path.toUri.toString, language, buffer.document.content)
       }
       .distinctBy((uri, _, _) => uri)
+
+  private def panelsOutsideMode(state: AppState): List[PanelId] =
+    val mode = state.persisted.config.appMode
+    PanelId.values.toList.filter { id =>
+      !PanelRegistry.registrationFor(id).family.modes.contains(mode) &&
+      state.runtime.uiSurfaces.exists(surface => PanelId.forContent(surface.content).contains(id))
+    }
 
   private def withoutCodeTooling(state: AppState): AppState =
     ProjectTaskTransitions.stoppedOnLeavingCode(withoutServerData(state))
