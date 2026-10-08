@@ -308,6 +308,10 @@ final private[manager] class StateManagerWorkflowCapability(
       opened.copy(runtime = opened.runtime.copy(uiSurfaces = List.empty))
     }
 
+  /** Replaces the start page with a fresh editor tab, keeping every other surface; a no-op once it has gone. */
+  private[manager] def leaveStartPage(): IO[Unit] =
+    commit(UiPresetTransitions.seedEditorFromSplash)
+
   /** Opens the "Save Session As..." name prompt (issue #1390), pre-filled empty -- `ModalSessionReducer` routes its
     * Enter into `submitSessionNamePromptEffect` below. Shown on the current state, so the palette's record of the
     * command that opened it is kept.

@@ -94,7 +94,8 @@ class TuiStartupSpec extends TuiSpec:
       _ <- verify("start page") { screen =>
         screen.containsText("Welcome to Serenity") shouldBe true
         screen.containsText("[1] New document") shouldBe true
-        screen.containsText("[2] Open file or folder") shouldBe true
+        screen.containsText("[2] Open file") shouldBe true
+        screen.containsText("[3] Open folder") shouldBe true
         screen.caretVisible shouldBe false
       }
       _ <- verifyState("focus")(current => current.persisted.focus should not be a[Focus.EditorPane])

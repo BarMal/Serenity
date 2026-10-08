@@ -83,6 +83,7 @@ private[manager] trait EffectFilePort:
   def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit]
   def loadFile(path: Path): IO[Unit]
   def openFromDialog(dialog: com.serenity.io.FileDialog): IO[Unit]
+  def openFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit]
   def isSaving(path: Path): IO[Boolean]
   // #1623: re-reads the buffer's file from disk in place (same BufferId, cursor/viewport/undo state untouched),
   // replacing only its document/rich-text content and capturing a fresh revision.
@@ -116,6 +117,7 @@ private[manager] trait EffectModalWorkflowPort:
   def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit]
   def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState
   def createStartupSession(): IO[Unit]
+  def leaveStartPage(): IO[Unit]
   def restoreStartupSession(): IO[Unit]
   def activeEditorBufferId(state: AppState): Option[BufferId]
   // Named sessions (issue #1390): `openSaveSessionAsPrompt`/`openSessionPicker` show the modal, called directly from

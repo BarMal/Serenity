@@ -51,19 +51,25 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       startPage1 = state1.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       _          = startPage1.selectedIndex shouldBe 1
 
-      // Navigate down again wraps to the first option (only New/Open are navigable now; workflows and resume are hints)
+      // Navigate down to the last of the three fixed actions (New, Open file, Open folder)
       _      <- stateManager.applyEvent(MoveDown)
       state2 <- stateManager.getCurrentState
       startPage2 = state2.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage2.selectedIndex shouldBe 0
+      _          = startPage2.selectedIndex shouldBe 2
+
+      // Down again wraps to the first option (only the three actions are navigable; workflows and resume are hints)
+      _      <- stateManager.applyEvent(MoveDown)
+      state3 <- stateManager.getCurrentState
+      startPage3 = state3.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+      _          = startPage3.selectedIndex shouldBe 0
 
       // Navigate up wraps to the last option
       _      <- stateManager.applyEvent(MoveUp)
-      state3 <- stateManager.getCurrentState
-      startPage3 = state3.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage3.selectedIndex shouldBe 1
+      state4 <- stateManager.getCurrentState
+      startPage4 = state4.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+      _          = startPage4.selectedIndex shouldBe 2
 
-      // Back to the first option and select it (new session)
+      // Wrap back to the first option and select it (new session)
       _          <- stateManager.applyEvent(MoveDown)
       _          <- stateManager.applyEvent(Enter)
       finalState <- stateManager.getCurrentState
@@ -265,7 +271,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       )
       _ = initialState.startPageSurface should be(defined)
 
-      // "Open file or folder" is at index 1; navigate to it and confirm.
+      // "Open file" is at index 1; navigate to it and confirm.
       _     <- stateManager.applyEvent(MoveDown)
       _     <- stateManager.applyEvent(Enter)
       state <- stateManager.getCurrentState

@@ -129,7 +129,7 @@ private[manager] object UiPresetTransitions:
     * splash has no editor pane, buffer, or workspace tree, so a preset applied onto it directly produced a buffer-less
     * pane, or a tree with no editor leaf that failed validation. A no-op at runtime (no splash).
     */
-  private def seedEditorFromSplash(state: AppState)(using com.serenity.rope.Balance): AppState =
+  private[manager] def seedEditorFromSplash(state: AppState)(using com.serenity.rope.Balance): AppState =
     if state.startPageSurface.isEmpty then state
     else
       val withoutStartPage =

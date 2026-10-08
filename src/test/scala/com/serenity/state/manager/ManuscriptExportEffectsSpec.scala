@@ -25,7 +25,8 @@ class ManuscriptExportEffectsSpec extends AnyFlatSpec with Matchers:
   private def dialog(choice: Option[Path], asked: Ref[IO, List[(Option[Path], Option[String])]]): FileDialog =
     FileDialog(
       chooseOpenFile = _ => IO.pure(None),
-      chooseSaveFile = (directory, name) => asked.update(_ :+ (directory -> name)).as(choice)
+      chooseSaveFile = (directory, name) => asked.update(_ :+ (directory -> name)).as(choice),
+      chooseFolder = _ => IO.pure(None)
     )
 
   private def stateWith(buffer: Buffer): AppState =

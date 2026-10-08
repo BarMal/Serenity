@@ -49,6 +49,12 @@ object FileFailureNotice:
       hint = Some(Dismiss)
     )
 
+  def isFolder(path: Path): Notice =
+    Notice(NoticeLevel.Error, s"${fileName(path)} is a folder. Use Open Folder to open it.", hint = Some(Dismiss))
+
+  def dialogFailed(error: Throwable): Notice =
+    Notice(NoticeLevel.Error, s"Couldn't show the file dialog: ${cause(error)}.", hint = Some(Dismiss))
+
   def reloadFailed(path: Path, error: Throwable): Notice =
     Notice(NoticeLevel.Error, s"Couldn't reload ${fileName(path)}: ${cause(error)}.", hint = Some(Dismiss))
 

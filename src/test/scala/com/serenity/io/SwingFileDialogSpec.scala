@@ -39,3 +39,46 @@ class SwingFileDialogSpec extends AnyFlatSpec with Matchers:
 
   it should "treat a missing JFileChooser selection as cancellation" in
     SwingFileDialog.normalizeSwingSelection(null).shouldBe(None)
+
+  "Choosing a folder" should "use the modern Windows dialog with a native owner" in
+    SwingFileDialog
+      .preferredFolderBackend(hasNativeOwner = true, osName = "Windows 11")
+      .shouldBe(SwingFileDialog.Backend.WindowsModern)
+
+  it should "use the AWT dialog on macOS, which can switch to directories" in
+    SwingFileDialog
+      .preferredFolderBackend(hasNativeOwner = true, osName = "Mac OS X")
+      .shouldBe(SwingFileDialog.Backend.Native)
+
+  it should "use JFileChooser on Linux, where the AWT dialog cannot pick a directory" in
+    SwingFileDialog
+      .preferredFolderBackend(hasNativeOwner = true, osName = "Linux")
+      .shouldBe(SwingFileDialog.Backend.SwingChooser)
+
+  it should "use JFileChooser on any system without a native owner" in
+    List("Windows 11", "Mac OS X", "Linux").foreach { osName =>
+      SwingFileDialog
+        .preferredFolderBackend(hasNativeOwner = false, osName = osName)
+        .shouldBe(SwingFileDialog.Backend.SwingChooser)
+    }
+
+  it should "ask the Windows Common Item Dialog for folders with FOS_PICKFOLDERS and keep its other options" in {
+    SwingFileDialog.PickFolders shouldBe 0x20
+    val options = SwingFileDialog.windowsDialogOptions(current = 0x2, pickFolders = true)
+
+    (options & SwingFileDialog.PickFolders) shouldBe SwingFileDialog.PickFolders
+    (options & SwingFileDialog.ForceFileSystem) shouldBe SwingFileDialog.ForceFileSystem
+    (options & 0x2) shouldBe 0x2
+  }
+
+  it should "leave FOS_PICKFOLDERS off when picking a file" in {
+    val options = SwingFileDialog.windowsDialogOptions(current = 0x2, pickFolders = false)
+
+    (options & SwingFileDialog.PickFolders) shouldBe 0
+    (options & SwingFileDialog.ForceFileSystem) shouldBe SwingFileDialog.ForceFileSystem
+  }
+
+  it should "read a folder picked in the macOS AWT dialog as its parent directory and name" in
+    SwingFileDialog
+      .normalizeNativeSelection(Path.of("tmp", "projects").toString, "novel")
+      .shouldBe(Some(Path.of("tmp", "projects", "novel")))

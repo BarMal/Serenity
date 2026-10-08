@@ -22,7 +22,10 @@ object MenuSpec:
   private def items(names: String*): List[MenuEntry] = names.toList.map(name => MenuEntry.Item(CommandId(name)))
 
   private def file(isMac: Boolean): List[MenuEntry] =
-    items("new", "open") ++ List(MenuEntry.Dynamic(DynamicSource.RecentFiles)) ++ items("go-to-file", "file-search") ++
+    items("new", "open", "open-folder") ++ List(MenuEntry.Dynamic(DynamicSource.RecentFiles)) ++ items(
+      "go-to-file",
+      "file-search"
+    ) ++
       List(MenuEntry.Separator) ++ items("save", "save-as") ++
       List(MenuEntry.Separator) ++ items("close", "close-others", "close-all") ++
       List(MenuEntry.Separator, session) ++ items("return-to-start-page") ++

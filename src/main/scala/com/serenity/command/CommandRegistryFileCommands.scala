@@ -102,6 +102,13 @@ private[command] object CommandRegistryFileCommands:
       CommandCategory.File,
       label = "Open File"
     ),
+    Command.typed(
+      "open-folder",
+      "Open a folder and show it in the Explorer.",
+      CommandIntent.File(FileIntent.OpenFolder),
+      CommandCategory.File,
+      label = "Open Folder..."
+    ),
     FileFinderCommands.goToFile
   )
 

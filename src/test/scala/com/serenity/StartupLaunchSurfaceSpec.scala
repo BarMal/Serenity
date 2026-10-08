@@ -33,8 +33,9 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
   "Startup launch surface" should "omit Restore when no session is available and keep its visible shortcuts executable" in {
     val page = AppStartup.createStartPage(sessionExists = false, recentFiles = Nil)
 
-    page.actions.map(_.id) shouldBe List("new-session", "open-file")
-    page.actions.flatMap(_.shortcut) shouldBe List('1', '2')
+    page.actions.map(_.id) shouldBe List("new-session", "open-file", "open-folder")
+    page.actions.map(_.label) shouldBe List("New document", "Open file", "Open folder")
+    page.actions.flatMap(_.shortcut) shouldBe List('1', '2', '3')
     page.workflows.map(_.id) shouldBe List("workflow-writing", "workflow-code", "workflow-compact")
     page.workflows.flatMap(_.shortcut) shouldBe List('W', 'C', 'M')
 
@@ -43,6 +44,33 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
     result should matchPattern {
       case ComponentResult.ExecuteCommand(command)
           if command.intent == CommandIntent.Session(SessionIntent.StartupOpenFile) =>
+    }
+  }
+
+  it should "run Open folder from its own digit key, not Open file's" in {
+    val page = AppStartup.createStartPage(sessionExists = false, recentFiles = Nil)
+
+    val result = StartupPageComponent().processEvent(InsertChar('3'), stateFor(page))
+
+    result should matchPattern {
+      case ComponentResult.ExecuteCommand(command)
+          if command.intent == CommandIntent.Session(SessionIntent.StartupOpenFolder) =>
+    }
+  }
+
+  it should "number recent files after the three fixed actions" in {
+    val recent = Files.createTempFile("serenity-recent-digit", ".md")
+    val page   = AppStartup.createStartPage(sessionExists = false, recentFiles = List(recent))
+
+    page.actions.map(_.id).take(4) shouldBe List(
+      "new-session",
+      "open-file",
+      "open-folder",
+      s"recent:${recent.toString}"
+    )
+    StartupPageComponent().processEvent(InsertChar('4'), stateFor(page)) should matchPattern {
+      case ComponentResult.ExecuteCommand(command)
+          if command.intent == CommandIntent.File(FileIntent.OpenRecentFile(recent.toAbsolutePath.normalize())) =>
     }
   }
 
@@ -80,11 +108,11 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
   it should "keep workflow presets and quick-resume out of the navigable list, as bottom shortcut hints" in {
     val page = AppStartup.createStartPage(sessionExists = true, recentFiles = Nil, resumeIdentifier = Some("notes.md"))
 
-    page.launchActions.map(_.id) shouldBe List("new-session", "open-file")
+    page.launchActions.map(_.id) shouldBe List("new-session", "open-file", "open-folder")
     page.renderLines should not contain "Workflows"
     page.workflows.map(_.id) shouldBe List("workflow-writing", "workflow-code", "workflow-compact")
     page.resume.map(_.identifier) shouldBe Some("notes.md")
-    page.actionLineIndices shouldBe List(2, 3)
+    page.actionLineIndices shouldBe List(2, 3, 4)
   }
 
   it should "activate a workflow preset by its shortcut letter, case-insensitively" in {
