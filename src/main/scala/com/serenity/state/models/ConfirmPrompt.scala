@@ -3,6 +3,7 @@ package com.serenity.state.models
 import java.nio.file.Path
 
 import com.serenity.command.{
+  AppModeCommands,
   CloseCommands,
   Command,
   CommandIntent,
@@ -15,6 +16,7 @@ import com.serenity.command.{
   RichTextIntent,
   SafeModeCommands
 }
+import com.serenity.config.AppMode
 import com.serenity.diagnostics.RuntimeIdentity
 import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
 import com.serenity.ui.widget.{ButtonEmphasis, EndBehaviour, SelectableList}
@@ -103,6 +105,28 @@ object ConfirmPrompt:
         ),
         ConfirmChoice("Open Logs Folder", ConfirmAction.Run(DiagnosticsCommands.openLogsFolder)),
         ConfirmChoice("Dismiss", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** Switching to `target` would stop the project task that is running, as it has no home outside code mode. Staying
+    * stops nothing, so it is the first choice and what Escape does.
+    */
+  def stopProjectTaskToLeaveCode(task: RunningProjectTask, target: AppMode): ConfirmPrompt =
+    val targetName = target.configKey.capitalize
+    of(
+      title = "Project task running",
+      message = List(
+        s"A ${task.command.kind.lowerLabel} task for ${task.command.ecosystemLabel} is still running.",
+        s"$targetName mode has no project tools, so switching stops it."
+      ),
+      choices = List(
+        ConfirmChoice("Stay in Code mode", ConfirmAction.Dismiss, ButtonEmphasis.Primary),
+        ConfirmChoice(
+          s"Stop task and switch to $targetName",
+          ConfirmAction.Run(AppModeCommands.switchStoppingProjectTask(target)),
+          ButtonEmphasis.Danger
+        )
       ),
       blocking = true
     )

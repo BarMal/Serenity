@@ -141,6 +141,10 @@ enum ViewIntent:
   case SetMarkdownViewMode(mode: MarkdownViewMode)
   case SetDefaultDocumentMode(mode: DefaultDocumentMode)
   case SetAppMode(mode: AppMode)
+
+  /** [[SetAppMode]] once the writer has agreed to the project task it would stop: the answer to the prompt that asks.
+    */
+  case SetAppModeStoppingProjectTask(mode: AppMode)
   case SetShowAllSettingsRegardlessOfMode(value: Boolean)
   case ToggleShortcutsHelp
   case ToggleTabList

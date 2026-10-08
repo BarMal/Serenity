@@ -99,8 +99,9 @@ object CommandScope:
           ViewIntent.ToggleChapterGhosts | ViewIntent.ToggleNotesPin | ViewIntent.FocusInDirection(_) |
           ViewIntent.ArrangePanels | ViewIntent.OpenMarkdownPreview | ViewIntent.SetMarkdownViewMode(_) |
           ViewIntent.SetDefaultDocumentMode(_) | ViewIntent.SetAppMode(_) |
-          ViewIntent.SetShowAllSettingsRegardlessOfMode(_) | ViewIntent.ToggleShortcutsHelp | ViewIntent.ToggleTabList |
-          ViewIntent.ToggleRecentFilesInMode | ViewIntent.TogglePanel(_) | ViewIntent.SetPanelSize(_, _) =>
+          ViewIntent.SetAppModeStoppingProjectTask(_) | ViewIntent.SetShowAllSettingsRegardlessOfMode(_) |
+          ViewIntent.ToggleShortcutsHelp | ViewIntent.ToggleTabList | ViewIntent.ToggleRecentFilesInMode |
+          ViewIntent.TogglePanel(_) | ViewIntent.SetPanelSize(_, _) =>
         core
 
   private def panelScope(id: PanelId): CommandScope =
