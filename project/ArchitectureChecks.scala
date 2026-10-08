@@ -22,9 +22,10 @@ object ArchitectureChecks {
   val MaxFileLines = 600
 
   /** One forbidden-import rule: `pkg` gates which files it applies to (a substring of the relativised path),
-    * `forbidden` is what a matching file may not reference, and `mainOnly` narrows that further to `src/main` -- for a
-    * rule whose target is reducer/model *production* purity, a `src/test` spec driving the same effect-boundary helpers
-    * to simulate the full post-reduce pipeline in test setup is not the violation the rule exists to catch (#1676).
+    * `forbidden` is what a matching file may not reference, and `mainOnly` narrows that further to `src/main` --
+    * for a rule whose target is reducer/model *production* purity, a `src/test` spec driving the same
+    * effect-boundary helpers to simulate the full post-reduce pipeline in test setup is not the violation the
+    * rule exists to catch (#1676).
     */
   final case class ImportRule(pkg: String, forbidden: Seq[String], reason: String, mainOnly: Boolean = false)
 
@@ -98,12 +99,25 @@ object ArchitectureChecks {
     )
   )
 
-  /** Blocking/synchronous escape hatches out of `IO` that #1434 removed from src/main. Test code legitimately calls
-    * these to drive `IO` synchronously in specs, so this is scoped to `main/` only -- the same split
+  /** #1911: the files that decide an event on the state dispatcher do no I/O. Disk work goes to a lane job in a file of
+    * its own and comes back as an `EffectResult`, so a key never waits behind a read or a write.
+    */
+  val DispatcherPathFiles: Seq[String] = Seq(
+    "main/scala/com/serenity/state/manager/StateManagerEventPipeline.scala",
+    "main/scala/com/serenity/state/manager/EventPipelineTransitions.scala"
+  )
+
+  val DispatcherBlockingCalls: Seq[String] = Seq("IO.blocking", "IO.interruptible", "Files.", "FileUtils.")
+
+  val DispatcherBlockingReason: String =
+    "the dispatcher path does no I/O (#1911): hand disk work to a lane job and take its answer as an EffectResult"
+
+  /** Blocking/synchronous escape hatches out of `IO` that #1434 removed from src/main. Test code legitimately
+    * calls these to drive `IO` synchronously in specs, so this is scoped to `main/` only -- the same split
     * `Test / scalacOptions ~= (_.filterNot(...))` already draws in build.sbt for WartRemover.
     *
-    * `.unsafeRunAndForget` is deliberately not listed: it is asynchronous (fire-and-forget via a `Dispatcher`, as in
-    * AppRuntime and TerminalShell) rather than the blocking anti-pattern #1434 was about.
+    * `.unsafeRunAndForget` is deliberately not listed: it is asynchronous (fire-and-forget via a `Dispatcher`,
+    * as in AppRuntime and TerminalShell) rather than the blocking anti-pattern #1434 was about.
     */
   val ForbiddenCalls: Seq[(String, Seq[String], String)] = Seq(
     (
@@ -112,7 +126,7 @@ object ArchitectureChecks {
       "runs an IO synchronously outside the Cats Effect runtime (#1434) -- use IOApp, a Resource/Dispatcher " +
         "boundary, or push the IO to the edge instead"
     )
-  )
+  ) ++ DispatcherPathFiles.map(file => (file, DispatcherBlockingCalls, DispatcherBlockingReason))
 
   /** State ownership (#1697): only the dispatcher/ModelCommit layer holds the model `Ref`. Capabilities read state
     * through an `IO[AppState]` and write it only through `ModelCommit`'s validated commits, so a raw `Ref` -- or a
@@ -143,21 +157,21 @@ object ArchitectureChecks {
     )
   )
 
-  /** #1935: a document's `content` changes only through `Document.withContent` (directly, or through `Buffer`'s edit
-    * helpers), which advances `contentVersion` -- the stamp `Buffer.richTextInSync` and the debounced outline re-parse
-    * trust instead of re-comparing text. A `document.copy(content = ...)` skips that bump, so it is refused in
+  /** #1935: a document's `content` changes only through `Document.withContent` (directly, or through `Buffer`'s
+    * edit helpers), which advances `contentVersion` -- the stamp `Buffer.richTextInSync` and the debounced outline
+    * re-parse trust instead of re-comparing text. A `document.copy(content = ...)` skips that bump, so it is refused in
     * `src/main` outside the file that defines the sanctioned path. Matched over the whole file rather than per line,
     * since a formatted `copy(` often puts `content =` on a later line.
     */
   val DocumentContentOwner: String = "main/scala/com/serenity/state/models/Buffer.scala"
 
-  private val DocumentCopy    = """\bdocument\s*\.\s*copy\s*\(""".r
+  private val DocumentCopy = """\bdocument\s*\.\s*copy\s*\(""".r
   private val ContentArgument = """(^|[(,\s])content\s*=(?!=)""".r
 
   /** The text between the `(` that ends at `start` and its matching `)`. */
   private def balancedArguments(text: String, start: Int): String = {
     var depth = 1
-    var i     = start
+    var i = start
     while (i < text.length && depth > 0) {
       text.charAt(i) match {
         case '(' => depth += 1
@@ -172,12 +186,10 @@ object ArchitectureChecks {
   private def documentContentViolations(path: String, lines: Vector[String]): Seq[Violation] =
     if (!path.startsWith("main/") || path == DocumentContentOwner) Nil
     else {
-      val text = lines
-        .map { line =>
-          val trimmed = line.trim
-          if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) "" else line
-        }
-        .mkString("\n")
+      val text = lines.map { line =>
+        val trimmed = line.trim
+        if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) "" else line
+      }.mkString("\n")
       DocumentCopy.findAllMatchIn(text).toSeq.flatMap { found =>
         if (ContentArgument.findFirstIn(balancedArguments(text, found.end)).isEmpty) Nil
         else {
@@ -193,20 +205,21 @@ object ArchitectureChecks {
       }
     }
 
-  /** #1677: no `AtomicReference`, `AtomicInteger`, `synchronized`, or `mutable.` may live inside a top-level `object`
-    * declaration, or anywhere under `state/models`, in `src/main`. An `object` compiles to a single JVM-wide instance,
-    * so any of these forms held directly in its body -- not inside a nested `class`/`trait`, which owns a separate
-    * instance per construction -- is exactly the shared, un-scoped mutable state this issue removed from
-    * `RendererFrameState`, `ThemeManager`, `CharacterRenderer`, `MarkdownPreviewCache` and `DictionaryLoader`. The
-    * domain model (`state/models`) is held to the same four patterns regardless of object/class, since a case class
-    * describing data must never carry a hidden mutable field at all (`AppState`'s old `annotationIndexCache` et al.).
+  /** #1677: no `AtomicReference`, `AtomicInteger`, `synchronized`, or `mutable.` may live inside a top-level
+    * `object` declaration, or anywhere under `state/models`, in `src/main`. An `object` compiles to a single
+    * JVM-wide instance, so any of these forms held directly in its body -- not inside a nested `class`/`trait`,
+    * which owns a separate instance per construction -- is exactly the shared, un-scoped mutable state this issue
+    * removed from `RendererFrameState`, `ThemeManager`, `CharacterRenderer`, `MarkdownPreviewCache` and
+    * `DictionaryLoader`. The domain model (`state/models`) is held to the same four patterns regardless of
+    * object/class, since a case class describing data must never carry a hidden mutable field at all (`AppState`'s
+    * old `annotationIndexCache` et al.).
     *
-    * Detection is structural, not a flat per-file text search: a running stack of open `object`/`class`/`trait`/ `enum`
-    * frames (by indentation -- the same technique [[bodyLength]] uses to find where a method ends) tracks what type
-    * textually encloses each line, so a legitimately instance-scoped field of a `class` nested inside an `object` is
-    * not mistaken for a field of the object itself -- only an unbroken chain of enclosing `object`s all the way up
-    * counts as top-level. Block (`/** ... */`) and line (`//`) comments are skipped so a comment that merely explains
-    * why a pattern is or isn't used (as this file's own doc comments do) is never itself flagged.
+    * Detection is structural, not a flat per-file text search: a running stack of open `object`/`class`/`trait`/
+    * `enum` frames (by indentation -- the same technique [[bodyLength]] uses to find where a method ends) tracks
+    * what type textually encloses each line, so a legitimately instance-scoped field of a `class` nested inside an
+    * `object` is not mistaken for a field of the object itself -- only an unbroken chain of enclosing `object`s all
+    * the way up counts as top-level. Block (`/** ... */`) and line (`//`) comments are skipped so a comment that
+    * merely explains why a pattern is or isn't used (as this file's own doc comments do) is never itself flagged.
     */
   private val MutabilityTokens: Seq[String] = Seq("AtomicReference", "AtomicInteger", "synchronized", "mutable.")
 
@@ -222,54 +235,53 @@ object ArchitectureChecks {
       var stack: List[TypeFrame]  = Nil
       var inBlockComment: Boolean = false
 
-      lines.zipWithIndex.flatMap {
-        case (line, index) =>
-          val trimmed = line.trim
-          if (inBlockComment) {
-            if (trimmed.contains("*/")) inBlockComment = false
-            Nil
-          } else if (trimmed.isEmpty || trimmed.startsWith("//") || trimmed.startsWith("*")) {
-            Nil
-          } else if (trimmed.startsWith("/*")) {
-            if (!trimmed.contains("*/")) inBlockComment = true
-            Nil
-          } else {
-            val indent = line.indexWhere(!_.isWhitespace)
-            stack = stack.dropWhile(_.indent >= indent)
+      lines.zipWithIndex.flatMap { case (line, index) =>
+        val trimmed = line.trim
+        if (inBlockComment) {
+          if (trimmed.contains("*/")) inBlockComment = false
+          Nil
+        } else if (trimmed.isEmpty || trimmed.startsWith("//") || trimmed.startsWith("*")) {
+          Nil
+        } else if (trimmed.startsWith("/*")) {
+          if (!trimmed.contains("*/")) inBlockComment = true
+          Nil
+        } else {
+          val indent = line.indexWhere(!_.isWhitespace)
+          stack = stack.dropWhile(_.indent >= indent)
 
-            val violation =
-              if (!MutabilityTokens.exists(trimmed.contains)) None
-              else if (inModels)
-                Some(
-                  Violation(
-                    path,
-                    s"forbidden mutable state at line ${index + 1}: state/models must hold no AtomicReference/" +
-                      "AtomicInteger/synchronized/mutable. state -- describe data, not hidden mutation (#1677)",
-                    1
-                  )
+          val violation =
+            if (!MutabilityTokens.exists(trimmed.contains)) None
+            else if (inModels)
+              Some(
+                Violation(
+                  path,
+                  s"forbidden mutable state at line ${index + 1}: state/models must hold no AtomicReference/" +
+                    "AtomicInteger/synchronized/mutable. state -- describe data, not hidden mutation (#1677)",
+                  1
                 )
-              else if (stack.nonEmpty && stack.forall(_.isObject))
-                Some(
-                  Violation(
-                    path,
-                    s"forbidden mutable state at line ${index + 1}: a top-level object may not hold AtomicReference/" +
-                      "AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)",
-                    1
-                  )
+              )
+            else if (stack.nonEmpty && stack.forall(_.isObject))
+              Some(
+                Violation(
+                  path,
+                  s"forbidden mutable state at line ${index + 1}: a top-level object may not hold AtomicReference/" +
+                    "AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)",
+                  1
                 )
-              else None
+              )
+            else None
 
-            TypeStart.findPrefixMatchOf(line).foreach { m =>
-              stack = TypeFrame(isObject = m.group(3) == "object", indent) :: stack
-            }
-
-            violation.toSeq
+          TypeStart.findPrefixMatchOf(line).foreach { m =>
+            stack = TypeFrame(isObject = m.group(3) == "object", indent) :: stack
           }
+
+          violation.toSeq
+        }
       }
     }
 
   final case class Violation(path: String, detail: String, measured: Int) {
-    def key: String    = s"$path\t$detail"
+    def key: String = s"$path\t$detail"
     def render: String = s"$key\t$measured"
   }
 
@@ -290,11 +302,11 @@ object ArchitectureChecks {
 
   /** Lines from `start` until indentation returns to `indent` or shallower, ignoring blanks and comments. */
   private def bodyLength(lines: Vector[String], start: Int, indent: Int): Int = {
-    var end   = lines.length
-    var i     = start + 1
+    var end = lines.length
+    var i = start + 1
     var found = false
     while (i < lines.length && !found) {
-      val line    = lines(i)
+      val line = lines(i)
       val trimmed = line.trim
       if (trimmed.nonEmpty && !trimmed.startsWith("//")) {
         val current = line.indexWhere(!_.isWhitespace)
@@ -306,24 +318,21 @@ object ArchitectureChecks {
   }
 
   private def methodViolations(path: String, lines: Vector[String]): Seq[Violation] =
-    lines.zipWithIndex
-      .collect {
-        case (line, index) if MethodStart.findPrefixMatchOf(line).isDefined =>
-          val indent = line.indexWhere(!_.isWhitespace)
-          val name   = MethodStart.findPrefixMatchOf(line).map(_.group(3)).getOrElse("?")
-          (index, indent, name)
-      }
-      .flatMap {
-        case (index, indent, name) =>
-          val length = bodyLength(lines, index, indent)
-          if (length > MaxMethodLines) Some(Violation(path, s"method $name", length)) else None
-      }
+    lines.zipWithIndex.collect {
+      case (line, index) if MethodStart.findPrefixMatchOf(line).isDefined =>
+        val indent = line.indexWhere(!_.isWhitespace)
+        val name = MethodStart.findPrefixMatchOf(line).map(_.group(3)).getOrElse("?")
+        (index, indent, name)
+    }.flatMap { case (index, indent, name) =>
+      val length = bodyLength(lines, index, indent)
+      if (length > MaxMethodLines) Some(Violation(path, s"method $name", length)) else None
+    }
 
   /** Matches a forbidden package/class anywhere in a non-comment line, not only on an `import` line -- a
-    * fully-qualified reference (`com.serenity.state.manager.EditorGeometryProducer.forPane(...)`) reaches the same
-    * forbidden code an `import` would, and evades a check that only looks at `import` lines (#1676). Doc comments that
-    * merely mention a forbidden package by name (as this file's own header does) are excluded the same way
-    * [[callViolations]] already excludes them.
+    * fully-qualified reference (`com.serenity.state.manager.EditorGeometryProducer.forPane(...)`) reaches the
+    * same forbidden code an `import` would, and evades a check that only looks at `import` lines (#1676). Doc
+    * comments that merely mention a forbidden package by name (as this file's own header does) are excluded the
+    * same way [[callViolations]] already excludes them.
     */
   private def importViolations(path: String, lines: Vector[String]): Seq[Violation] =
     ForbiddenImports.flatMap { rule =>
@@ -338,36 +347,34 @@ object ArchitectureChecks {
     }
 
   private def callViolations(path: String, lines: Vector[String]): Seq[Violation] =
-    ForbiddenCalls.flatMap {
-      case (scope, forbidden, reason) =>
-        if (!path.contains(scope)) Nil
-        else
-          lines.zipWithIndex.collect {
-            case (line, index)
-                if !line.trim.startsWith("*") && !line.trim.startsWith("//") &&
-                  forbidden.exists(f => line.contains(f)) =>
-              Violation(path, s"forbidden call at line ${index + 1}: $reason", 1)
-          }
+    ForbiddenCalls.flatMap { case (scope, forbidden, reason) =>
+      if (!path.contains(scope)) Nil
+      else
+        lines.zipWithIndex.collect {
+          case (line, index)
+              if !line.trim.startsWith("*") && !line.trim.startsWith("//") &&
+                forbidden.exists(f => line.contains(f)) =>
+            Violation(path, s"forbidden call at line ${index + 1}: $reason", 1)
+        }
     }
 
   private def stateOwnershipViolations(path: String, lines: Vector[String]): Seq[Violation] =
     if (!path.startsWith("main/")) Nil
     else
-      StateOwnership.flatMap {
-        case (pattern, allowed, reason) =>
-          if (allowed.contains(path)) Nil
-          else
-            lines.zipWithIndex.collect {
-              case (line, index)
-                  if !line.trim.startsWith("*") && !line.trim.startsWith("//") &&
-                    pattern.findFirstIn(line).isDefined =>
-                Violation(path, s"state ownership at line ${index + 1}: $reason", 1)
-            }
+      StateOwnership.flatMap { case (pattern, allowed, reason) =>
+        if (allowed.contains(path)) Nil
+        else
+          lines.zipWithIndex.collect {
+            case (line, index)
+                if !line.trim.startsWith("*") && !line.trim.startsWith("//") &&
+                  pattern.findFirstIn(line).isDefined =>
+              Violation(path, s"state ownership at line ${index + 1}: $reason", 1)
+          }
       }
 
   def collect(base: File): Seq[Violation] =
     scalaFiles(base).flatMap { file =>
-      val path  = relativise(base, file)
+      val path = relativise(base, file)
       val lines = readLines(file)
       val fileViolation =
         if (lines.length > MaxFileLines) Seq(Violation(path, "file length", lines.length)) else Nil
@@ -406,13 +413,13 @@ object ArchitectureChecks {
   }
 
   def check(base: File, baselineFile: File): Option[String] = {
-    val baseline     = readBaseline(baselineFile)
-    val current      = collect(base)
+    val baseline = readBaseline(baselineFile)
+    val current = collect(base)
     val currentByKey = current.map(v => v.key -> v.measured).toMap
 
-    val added    = current.filterNot(v => baseline.contains(v.key))
+    val added = current.filterNot(v => baseline.contains(v.key))
     val worsened = current.filter(v => baseline.get(v.key).exists(_ < v.measured))
-    val fixed    = baseline.keySet.diff(currentByKey.keySet)
+    val fixed = baseline.keySet.diff(currentByKey.keySet)
 
     val problems =
       (if (added.isEmpty) Nil
@@ -440,18 +447,18 @@ object ArchitectureChecks {
   }
 
   /** Regression guard for the checks themselves (#1676): a reducer that reaches a forbidden package through a
-    * fully-qualified reference rather than an `import` line must still be caught, a plain `import` violation must still
-    * be caught (widening the match can't be allowed to narrow it), and a comment that merely mentions a forbidden
-    * package must not be. Plain `require` assertions rather than a test framework -- `project/` sources have no test
-    * dependency of their own -- run from the `architectureChecksSelfTest` sbt task, which `architectureCheck` depends
-    * on, so CI fails immediately if `importViolations`'s matching is ever narrowed back.
+    * fully-qualified reference rather than an `import` line must still be caught, a plain `import` violation must
+    * still be caught (widening the match can't be allowed to narrow it), and a comment that merely mentions a
+    * forbidden package must not be. Plain `require` assertions rather than a test framework -- `project/` sources
+    * have no test dependency of their own -- run from the `architectureChecksSelfTest` sbt task, which
+    * `architectureCheck` depends on, so CI fails immediately if `importViolations`'s matching is ever narrowed back.
     */
   def selfTest(): Unit = {
     def check(
-      description: String,
-      lines: Vector[String],
-      expectCaught: Boolean,
-      path: String = "main/scala/com/serenity/state/reducers/Sample.scala"
+        description: String,
+        lines: Vector[String],
+        expectCaught: Boolean,
+        path: String = "main/scala/com/serenity/state/reducers/Sample.scala"
     ): Unit = {
       val violations = importViolations(path, lines)
       require(
@@ -528,11 +535,41 @@ object ArchitectureChecks {
       expectCaught = true
     )
 
+    def checkDispatcherPath(description: String, line: String, path: String, expectCaught: Boolean): Unit = {
+      val violations = callViolations(path, Vector(line))
+      require(
+        violations.nonEmpty == expectCaught,
+        s"ArchitectureChecks self-test failed ($description): expected a blocking call to be " +
+          s"${if (expectCaught) "caught" else "ignored"}, got ${violations.size} violation(s)"
+      )
+    }
+
+    checkDispatcherPath(
+      "a blocking effect in the event pipeline",
+      "    cats.effect.IO.blocking(readIndex())",
+      DispatcherPathFiles.head,
+      expectCaught = true
+    )
+
+    checkDispatcherPath(
+      "a java.nio Files call in the event pipeline",
+      "    val present = Files.exists(path)",
+      DispatcherPathFiles.head,
+      expectCaught = true
+    )
+
+    checkDispatcherPath(
+      "a blocking effect in a lane job's own file",
+      "    IO.blocking(readIndex())",
+      "main/scala/com/serenity/state/manager/CommandRunnerOpening.scala",
+      expectCaught = false
+    )
+
     def checkMutability(
-      description: String,
-      lines: Vector[String],
-      expectCaught: Boolean,
-      path: String = "main/scala/com/serenity/ui/renderer/Sample.scala"
+        description: String,
+        lines: Vector[String],
+        expectCaught: Boolean,
+        path: String = "main/scala/com/serenity/ui/renderer/Sample.scala"
     ): Unit = {
       val violations = mutabilityViolations(path, lines)
       require(
@@ -620,10 +657,10 @@ object ArchitectureChecks {
     )
 
     def checkDocumentContent(
-      description: String,
-      lines: Vector[String],
-      expectCaught: Boolean,
-      path: String = "main/scala/com/serenity/state/reducers/Sample.scala"
+        description: String,
+        lines: Vector[String],
+        expectCaught: Boolean,
+        path: String = "main/scala/com/serenity/state/reducers/Sample.scala"
     ): Unit = {
       val violations = documentContentViolations(path, lines)
       require(
@@ -671,5 +708,4 @@ object ArchitectureChecks {
       path = "test/scala/com/serenity/state/reducers/SampleSpec.scala"
     )
   }
-
 }

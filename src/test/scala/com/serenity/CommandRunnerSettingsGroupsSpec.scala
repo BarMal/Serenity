@@ -84,6 +84,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "settings-status-line",
       "settings-text-area",
       "settings-document-defaults",
+      "settings-saving",
       "settings-navigation"
     )
     nestedGroup("settings-navigation").label shouldBe "Comments"
@@ -198,6 +199,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-keymap-command-runner").children.map(_.id) should contain("keymap-command-runner-submit")
     nestedGroup("settings-keymap-dialogs").children.map(_.id) should contain("keymap-modal-dismiss")
     nestedGroup("settings-keymap-panels").children.map(_.id) should contain("keymap-panel-navigate_up")
+    nestedGroup("settings-saving").label shouldBe "Saving"
+    nestedGroup("settings-saving").children.map(_.id) shouldBe List("auto-save-mode", "auto-save-delay")
     nestedGroup("settings-document-defaults").label shouldBe "Document Defaults"
     nestedGroup("settings-document-defaults").children.map(_.id) should contain allOf (
       "default-document-mode",

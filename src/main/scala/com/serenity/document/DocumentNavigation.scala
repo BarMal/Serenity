@@ -35,7 +35,7 @@ object DocumentNavigation:
       .sortBy(comment => (comment.start.line, comment.start.column, comment.text))
       .map { comment =>
         Symbol(
-          name = s"Comment: ${commentTitle(comment.text)}",
+          name = s"Comment${if comment.resolved then " (resolved)" else ""}: ${commentTitle(comment.text)}",
           kind = SymbolKind.Comment,
           location = Location(comment.start.line, comment.start.column)
         )

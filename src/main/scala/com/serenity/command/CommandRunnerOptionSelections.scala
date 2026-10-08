@@ -26,11 +26,14 @@ object CommandRunnerOptionSelections:
       "status-word-count"          -> enabledIndex(config.statusLine.segments.contains(StatusSegment.WordCount)),
       "status-char-count"          -> enabledIndex(config.statusLine.segments.contains(StatusSegment.CharCount)),
       "status-reading-time"        -> enabledIndex(config.statusLine.segments.contains(StatusSegment.ReadingTime)),
+      "status-word-goal"           -> enabledIndex(config.statusLine.segments.contains(StatusSegment.WordGoal)),
+      "status-line-ending"         -> enabledIndex(config.statusLine.segments.contains(StatusSegment.LineEnding)),
       "interface-density"          -> interfaceDensityIndex(interfaceConfig.density),
       "window-chrome"              -> windowChromeModeIndex(config.windowChromeMode),
       "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
       "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
       "drop-caps-enabled"          -> enabledIndex(documentConfig.dropCapsEnabled),
+      "auto-save-mode"             -> autoSaveModeIndex(config.autoSaveConfig.mode),
       "spellcheck-enabled"         -> enabledIndex(languageToolsConfig.spellCheck.enabled),
       "app-mode"                   -> appModeIndex(config.appMode),
       "settings-show-all"          -> enabledIndex(config.showAllSettingsRegardlessOfMode),
@@ -101,6 +104,13 @@ object CommandRunnerOptionSelections:
       case MarkdownViewMode.Source       => 0
       case MarkdownViewMode.SplitPreview => 1
       case MarkdownViewMode.InlineLens   => 2
+
+  private def autoSaveModeIndex(mode: AutoSaveMode): Int =
+    mode match
+      case AutoSaveMode.Off            => 0
+      case AutoSaveMode.AfterDelay     => 1
+      case AutoSaveMode.OnFocusChange  => 2
+      case AutoSaveMode.OnWindowChange => 3
 
   private def defaultDocumentModeIndex(mode: DefaultDocumentMode): Int =
     mode match

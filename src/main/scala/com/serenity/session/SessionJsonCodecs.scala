@@ -76,8 +76,24 @@ given Decoder[SessionViewport] = Decoder.instance { cursor =>
 given Encoder[SessionFindResult] = deriveEncoder
 given Decoder[SessionFindResult] = deriveDecoder
 
+given Encoder[SessionCommentReply] = deriveEncoder
+given Decoder[SessionCommentReply] = deriveDecoder
+
 given Encoder[SessionDocumentComment] = deriveEncoder
-given Decoder[SessionDocumentComment] = deriveDecoder
+
+given Decoder[SessionDocumentComment] = Decoder.instance { cursor =>
+  for
+    anchor    <- cursor.get[SessionCursorPosition]("anchor")
+    focus     <- cursor.get[SessionCursorPosition]("focus")
+    text      <- cursor.get[String]("text")
+    id        <- cursor.getOrElse[Option[Int]]("id")(None)
+    author    <- cursor.getOrElse[Option[String]]("author")(None)
+    createdAt <- cursor.getOrElse[Option[Long]]("createdAt")(None)
+    editedAt  <- cursor.getOrElse[Option[Long]]("editedAt")(None)
+    replies   <- cursor.getOrElse[List[SessionCommentReply]]("replies")(Nil)
+    resolved  <- cursor.getOrElse[Boolean]("resolved")(false)
+  yield SessionDocumentComment(anchor, focus, text, id, author, createdAt, editedAt, replies, resolved)
+}
 
 given Encoder[SessionNote] = deriveEncoder
 given Decoder[SessionNote] = deriveDecoder
@@ -127,6 +143,7 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     hidden           <- cursor.getOrElse[Boolean]("hidden")(false)
     notes            <- cursor.getOrElse[List[SessionNote]]("notes")(Nil)
     contentRef       <- cursor.getOrElse[Option[String]]("contentRef")(None)
+    nextCommentId    <- cursor.getOrElse[Option[Int]]("nextCommentId")(None)
   yield SessionBuffer(
     id,
     filePath,
@@ -149,7 +166,8 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     revision,
     hidden,
     notes,
-    contentRef
+    contentRef,
+    nextCommentId
   )
 }
 

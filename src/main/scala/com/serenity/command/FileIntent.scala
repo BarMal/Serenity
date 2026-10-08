@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.BufferId
-import com.serenity.text.TextEncoding
+import com.serenity.text.{LineEnding, TextEncoding}
 
 enum FileIntent:
   case SaveCurrentFile
@@ -35,3 +35,6 @@ enum FileIntent:
   // #1627: read the file again in an encoding the user picks -- see ReopenWithEncodingCommands.
   case ChooseReopenEncoding
   case ReopenWithEncoding(bufferId: BufferId, encoding: TextEncoding, discardEdits: Boolean)
+  // #1964: change the line ending a buffer saves with -- see LineEndingCommands.
+  case ChooseLineEnding
+  case SetLineEnding(bufferId: BufferId, ending: LineEnding)
