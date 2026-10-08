@@ -55,6 +55,38 @@ class BenchmarkIterationsSpec extends AnyFlatSpec with Matchers:
     benchmark.map(_.settleJit) shouldBe Some(true)
   }
 
+  "the benchmarks whose p50 flipped between JIT plateaus" should "settle before sampling" in {
+    BenchmarkIterationCounts.JitSettled shouldBe Set(
+      "rope.large_json.search",
+      "lsp.framer.large_batch",
+      "richdoc.open.docx",
+      "command_runner.palette.keystroke",
+      "reducer.multi_cursor_move_down",
+      "damage.caret_move.repaint_region.pinned_status",
+      "render.cursor_only.scene_reuse.java2d_overlay",
+      "render.diagnostics_and_comments.java2d"
+    )
+  }
+
+  they should "each name a benchmark that exists" in {
+    val constructible = PerformanceBenchmarks.ropeBenchmarks() ++ RichDocumentOpenBenchmarks.benchmarks ++
+      CommandRunnerBenchmarks.benchmarks() ++ ReducerBenchmarks.benchmarks() ++ DamageBenchmarks.benchmarks()
+    val needsDisplay = Set(
+      "lsp.framer.large_batch",
+      "render.cursor_only.scene_reuse.java2d_overlay",
+      "render.diagnostics_and_comments.java2d"
+    )
+    (BenchmarkIterationCounts.JitSettled -- needsDisplay -- constructible.map(_.name)) shouldBe empty
+  }
+
+  "every benchmark that types without deleting" should "keep its configured sample count" in {
+    import cats.effect.unsafe.implicits.global
+    val growers = LaptopFrameBenchmarks.typingBenchmarks ++
+      LaptopFrameBenchmarks.inputBenchmarks.filter(_.name == "laptop.input.state_manager.continuous_typing")
+    growers should have size 3
+    all(growers.map(_.fixedSampleCount)) shouldBe true
+  }
+
   "the chosen iteration counts" should "actually be larger than the previous, false-positive-prone counts" in {
     // Regression guard on the audit's conclusion itself: these must stay well above the old 8-30 range, not just be
     // internally consistent with each other.
