@@ -4,6 +4,7 @@
 
 ### 2026-10-08
 
+- Put away the code-only panels, such as the project output, whenever the mode changes to prose, not only for the mode command: a config file edit, a workflow preset and Reset Settings now do the same, in the same write as the mode change.
 - Made leaving code mode release the language servers: open documents are closed, servers are shut down and exited, and their diagnostics, semantic tokens and progress are cleared, and entering code mode opens every document that has a language and a file again, whether the mode changes by command, workflow preset or an outside edit of the config file.
 - Asked before leaving code mode while a build, test or run task is running, offering to stay or stop the task and switch; a mode change nobody was asked about, such as a config file edit, stops the task and says so.
 

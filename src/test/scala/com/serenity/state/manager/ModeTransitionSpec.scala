@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import com.serenity.DockedPanelFixtures
 import com.serenity.config.AppMode
 import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.config.LanguageId
@@ -9,6 +10,7 @@ import com.serenity.rope.Balance
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
+import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -84,4 +86,49 @@ class ModeTransitionSpec extends AnyFlatSpec with Matchers:
     val next  = model(inMode(AppMode.Code)(prose))
 
     ModeTransition.settled(prose, next) should be theSameInstanceAs next
+  }
+
+  private def withDockedPanels(state: AppState): AppState =
+    DockedPanelFixtures.dockAllContent(
+      state,
+      List(
+        (PanelId.Outline.surfaceId, SurfaceContent.Outline(Nil), PanelPosition.Right, 30),
+        (PanelId.Diagnostics.surfaceId, SurfaceContent.Diagnostics(Nil), PanelPosition.Bottom, 10),
+        (PanelId.ProjectOutput.surfaceId, SurfaceContent.Terminal("Project task stopped", 20), PanelPosition.Bottom, 14)
+      )
+    )
+
+  private def dockedIds(state: AppState): List[SurfaceId] = state.pinnedSurfaces.map(_.id)
+
+  "Leaving code mode" should "put away the docked panels that belong to code, keeping the others" in {
+    val code  = withDockedPanels(inMode(AppMode.Code)(AppState.initial))
+    val prose = inMode(AppMode.Prose)(code)
+
+    val settled = ModeTransition.settled(code, model(prose)).app
+
+    dockedIds(settled) shouldBe List(PanelId.Outline.surfaceId)
+    settled.runtime.uiSurfaces.map(_.id) shouldBe List(PanelId.Outline.surfaceId)
+  }
+
+  it should "hand focus back to the editor when it was on a panel put away" in {
+    val code    = withDockedPanels(inMode(AppMode.Code)(AppState.initial))
+    val focused = code.copy(persisted = code.persisted.copy(focus = Focus.Surface(PanelId.ProjectOutput.surfaceId)))
+
+    val settled = ModeTransition.settled(focused, model(inMode(AppMode.Prose)(focused))).app
+
+    settled.persisted.focus should not be Focus.Surface(PanelId.ProjectOutput.surfaceId)
+  }
+
+  "A mode change that leaves the panels of the new mode" should "not touch them when entering code" in {
+    val prose = withDockedPanels(inMode(AppMode.Prose)(AppState.initial))
+    val next  = model(inMode(AppMode.Code)(prose))
+
+    ModeTransition.settled(prose, next) should be theSameInstanceAs next
+  }
+
+  "A commit that keeps the app mode" should "leave a docked code panel where it is" in {
+    val code = withDockedPanels(inMode(AppMode.Code)(AppState.initial))
+    val next = model(code.copy(runtime = code.runtime.copy(clipboard = Some("x"))))
+
+    ModeTransition.settled(code, next) should be theSameInstanceAs next
   }
