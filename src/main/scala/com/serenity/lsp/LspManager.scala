@@ -71,6 +71,9 @@ object LspManager:
       */
     def evictResolution(@unused languageId: LanguageId, @unused fileUri: DocumentUri): IO[Unit] = IO.unit
 
+    /** Drop every cached resolution, for the editor letting every server go. No-op by default, like the above. */
+    def evictAllResolutions: IO[Unit] = IO.unit
+
   def run(
     effects: Stream[IO, LspEffect],
     applyEvent: Event => IO[Unit],
@@ -361,6 +364,9 @@ object LspManager:
       case LspEffect.VisibleRangeChanged(rawUri, languageId, firstLine, lastLine) =>
         semanticTokens.visibleRangeChanged(rawUri, languageId, firstLine, lastLine)
 
+      case LspEffect.ReleaseAll =>
+        releaseAll(pool, documentVersions, openDocuments, requestContexts, requestFibers, semanticTokens)
+
   private[lsp] def startRequest(
     kind: RequestKind,
     uri: DocumentUri,
@@ -446,6 +452,23 @@ object LspManager:
       versions.get(key.uri).contains(context.version) && contexts.get(key).contains(context)
     }
 
+  private def releaseAll(
+    pool: LspConnectionPool,
+    documentVersions: Ref[IO, Map[DocumentUri, Int]],
+    openDocuments: Ref[IO, OpenDocument.Registry],
+    requestContexts: Ref[IO, Map[RequestKey, RequestContext]],
+    requestFibers: Ref[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]],
+    semanticTokens: LspManagerSemanticTokens
+  ): IO[Unit] =
+    for
+      known <- (openDocuments.get.map(_.keySet), documentVersions.get.map(_.keySet)).mapN(_ ++ _)
+      _     <- requestFibers.getAndSet(Map.empty).flatMap(_.values.toList.traverse_(_.cancel))
+      _     <- requestContexts.set(Map.empty)
+      _     <- known.toList.traverse_(semanticTokens.documentClosed)
+      _     <- documentVersions.set(Map.empty) >> openDocuments.set(Map.empty)
+      _     <- pool.releaseEverything
+    yield ()
+
   private def invalidateDocument(
     uri: DocumentUri,
     requestContexts: Ref[IO, Map[RequestKey, RequestContext]],
@@ -491,6 +514,8 @@ object LspManager:
 
       override def evictResolution(languageId: LanguageId, fileUri: DocumentUri): IO[Unit] =
         resolutionCache.evict(languageId, fileUri)
+
+      override def evictAllResolutions: IO[Unit] = resolutionCache.evictAll
 
   private def uriToPath(uri: DocumentUri): String =
     val s = uri.value

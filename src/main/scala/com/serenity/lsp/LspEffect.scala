@@ -20,6 +20,7 @@ enum LspEffect:
       case SemanticTokensRequested(uri, _)         => Some(uri)
       case VisibleRangeChanged(uri, _, _, _)       => Some(uri)
       case MessageRequestAnswered(_, _)            => None
+      case ReleaseAll                              => None
 
   // The text travels as the rope: the characters are only collected when a server is sent them.
   case FileOpened(uri: String, languageId: LanguageId, text: Rope)
@@ -69,3 +70,8 @@ enum LspEffect:
     * dismissed. Nothing to do with any document, so it never closes a pending edit.
     */
   case MessageRequestAnswered(prompt: NoticePromptId, choice: Option[Int])
+
+  /** Every document closed and every server shut down, as when the workspace leaves code mode. Safe, and a no-op, when
+    * nothing is open or running; a document opened afterwards starts a server afresh.
+    */
+  case ReleaseAll

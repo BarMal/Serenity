@@ -125,7 +125,8 @@ final private[manager] class StateManagerEffectHandlers(
     expandPinnedPanel,
     () => collapseExpandedPanel(),
     switchToPinnedPanel,
-    resizePinnedPanel
+    resizePinnedPanel,
+    showModal
   )
 
   private val externalChangeEffects = new StateManagerExternalChangeEffects(

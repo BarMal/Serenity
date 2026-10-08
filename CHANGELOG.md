@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### 2026-10-08
+
+- Made leaving code mode release the language servers: open documents are closed, servers are shut down and exited, and their diagnostics, semantic tokens and progress are cleared, and entering code mode opens every document that has a language and a file again, whether the mode changes by command, workflow preset or an outside edit of the config file.
+- Asked before leaving code mode while a build, test or run task is running, offering to stay or stop the task and switch; a mode change nobody was asked about, such as a config file edit, stops the task and says so.
+
 ### 2026-10-06
 
 - Turned spell check on by default with British English (`en-GB`) as the language, bundled the LibreOffice en_GB Hunspell dictionary so it works with nothing installed, and read language codes in any casing (#2070, #2060).

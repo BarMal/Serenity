@@ -51,6 +51,7 @@ final private[manager] class StateManagerOperationBoundary private (
     editIdleSessionSave: Option[EditIdleSessionSave],
     announceClosedDocuments: (AppState, AppState) => IO[Unit],
     forgetClosedBuffers: (AppState, AppState) => IO[Unit],
+    announceModeChange: (AppState, AppState) => IO[Unit],
     autoSave: Ref[IO, BufferId => IO[Unit]]
 ):
   private val DocumentAnalysisDebounce         = 150.millis
@@ -116,6 +117,21 @@ final private[manager] class StateManagerOperationBoundary private (
       scheduleAutoSaveIfDue(fallbackState, committedState) >>
       announceClosedDocuments(fallbackState, committedState) >> forgetClosedBuffers(fallbackState, committedState) >>
       commitsUnobserved.get.ifM(IO.unit, commitObserver.get.flatMap(_(fallbackState, committedState)))
+
+  /** The IO half of a mode change (see [[ModeTransition]]): tells the language servers, and stops the project task
+    * whose record the commit released. The commit's own state change was settled inside it.
+    */
+  private[manager] def afterModeChange(before: AppState, after: AppState): IO[Unit] =
+    IO.whenA(ModeTransition.changed(before, after))(
+      announceModeChange(before, after) >>
+        ModeTransition
+          .stoppedTask(before, after)
+          .traverse_(task =>
+            submit(StateManagerProjectLspEffects.TaskLane, IO.unit) >> showNotice(
+              ModeTransition.taskStoppedNotice(task)
+            )
+          )
+    )
 
   /** Replaces the observer told of every commit `afterCommit` follows up, with the states before and after. */
   def observeCommits(observer: (AppState, AppState) => IO[Unit]): IO[Unit] =
@@ -517,6 +533,7 @@ private[manager] object StateManagerOperationBoundary:
     // The model drops its own record of a closed buffer inside the commit (`ClosedBufferRetention.forgetting`); this is
     // for the caches that live outside it.
     forgetClosedBuffers: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit,
+    announceModeChange: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit,
     // Owned by this boundary unless the caller shares one on purpose (#1677: never a JVM-wide default): a harness that
     // builds many managers in one process hands them the same cache so the dictionary is parsed once between them.
     dictionaryCache: DictionaryCache = DictionaryCache(),
@@ -565,5 +582,6 @@ private[manager] object StateManagerOperationBoundary:
       editIdleSessionSave,
       announceClosedDocuments,
       forgetClosedBuffers,
+      announceModeChange,
       autoSave
     )

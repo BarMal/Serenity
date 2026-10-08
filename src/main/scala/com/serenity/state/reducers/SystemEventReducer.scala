@@ -23,6 +23,25 @@ object SystemEventReducer:
         ReducerResult.noEffects(state)
 
   private def reduceLspEvent(event: LspEvent, state: AppState): ReducerResult =
+    if isServerReport(event) && !state.editingContext.hasCodeTooling then ReducerResult.noEffects(state)
+    else reduceAcceptedLspEvent(event, state)
+
+  /** What a server volunteers about its documents, as against the answer to a request the editor made. A prose
+    * workspace has no servers, so one arriving there is late from a server let go in the switch, and would only leave
+    * data that nothing clears.
+    */
+  private def isServerReport(event: LspEvent): Boolean =
+    event match
+      case LspEvent.LspDiagnosticsReceived(_, _) | LspEvent.LspSemanticTokensReceived(_, _) |
+          LspEvent.LspSemanticTokensRangeReceived(_, _, _, _) | LspEvent.LspSemanticTokensEdited(_, _) |
+          LspEvent.LspSemanticTokensUnavailable(_) | LspEvent.LspProgressReceived(_, _, _) =>
+        true
+      case LspEvent.LspHoverReceived(_, _) | LspEvent.LspCompletionReceived(_, _) |
+          LspEvent.LspDefinitionReceived(_, _, _, _) | LspEvent.LspReferencesReceived(_, _, _) |
+          LspEvent.LspRenameReceived(_, _) | LspEvent.LspServerStopped(_) | LspEvent.LspWorkspaceEditRequested(_) =>
+        false
+
+  private def reduceAcceptedLspEvent(event: LspEvent, state: AppState): ReducerResult =
     event match
       case LspEvent.LspDiagnosticsReceived(rawUri, diagnostics) =>
         withOpenDocumentData(rawUri, state) { (uri, languageService) =>
