@@ -71,12 +71,15 @@ final private[manager] class StateManagerEffectHandlers(
     currentState,
     logger,
     configPersistencePath,
-    sessionPersistence,
     onFontConfigChanged,
     deviceTextScaleProvider,
     editor,
-    runtime.renderCaches
+    runtime.renderCaches,
+    showNotice = showNotice,
+    configOnDisk = configOnDisk
   )
+
+  private[manager] val configWatch: Option[ConfigFileWatch] = configEffects.watch
 
   private def commitAppValidated(transition: AppState => AppState): IO[Unit] =
     updateModelValidated(model => Some(model.copy(app = transition(model.app))))

@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.config.PreferredWindowSize
+import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.session.{SessionId, SessionPersistence}
@@ -26,6 +26,9 @@ private[manager] trait EffectRuntimePort:
   def onFontConfigChanged: FontConfig => IO[Unit]
   def deviceTextScaleProvider: IO[Double]
   def configPersistencePath: Option[Path]
+
+  /** The config the config file is believed to hold, when this session keeps one and it was just read. */
+  def configOnDisk: Option[AppConfig] = None
   def uiPresetStore: UiPresetStore
   def windowSizeProvider: IO[Option[PreferredWindowSize]]
   def markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability
