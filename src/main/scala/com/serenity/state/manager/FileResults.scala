@@ -92,12 +92,16 @@ private[manager] object FileResults:
             current.document.content,
             disk.document.content
           )
+        val document =
+          disk.document
+            .replacingContentOf(current.document)
+            .copy(savedGeneration = current.document.savedGeneration + 1)
         withBuffer(
           state,
           current
             .copy(
-              document = disk.document.copy(savedGeneration = current.document.savedGeneration + 1),
-              richText = disk.richText,
+              document = document,
+              richText = disk.richText.withSyncedDocument(disk.richText.richTextDocument, document.contentVersion),
               annotations = annotations
             )
             .clampedToContent

@@ -31,8 +31,16 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
           bufferId,
           initial.persisted
             .buffers(bufferId)
-            .copy(document = initial.persisted.buffers(bufferId).document.copy(content = Rope(content)))
+            .copy(document = initial.persisted.buffers(bufferId).document.withContent(Rope(content)))
         )
+      )
+    )
+
+  private def withLaterContent(state: AppState, content: String): AppState =
+    val buffer = state.persisted.buffers(bufferId)
+    state.copy(persisted =
+      state.persisted.copy(buffers =
+        state.persisted.buffers.updated(bufferId, buffer.copy(document = buffer.document.withContent(Rope(content))))
       )
     )
 
@@ -49,7 +57,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
     val spellCheck =
       SpellCheckConfig(enabled = true, languages = List("en-US"), dictionaryPaths = List(emptyDirectory.toString))
     val first  = stateWith(spellCheck, "hello")
-    val second = stateWith(spellCheck, "hello again")
+    val second = withLaterContent(first, "hello again")
 
     val program = for
       modelRef   <- ModelViews.modelOf(first)
@@ -111,7 +119,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
     val plain = stateWith(spellCheck, "hello")
     val withPeek =
       PeekStateReducer.show(PeekContent.QuickInfo("something the writer just did"), CursorPosition(0, 0), plain).state
-    val later = stateWith(spellCheck, "hello again")
+    val later = withLaterContent(plain, "hello again")
 
     val program = for
       modelRef   <- ModelViews.modelOf(withPeek)

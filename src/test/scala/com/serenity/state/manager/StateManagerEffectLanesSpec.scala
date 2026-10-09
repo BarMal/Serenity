@@ -43,7 +43,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
     state.copy(persisted =
       state.persisted.copy(buffers =
         state.persisted.buffers
-          .updated(editorBufferId, buffer.copy(document = buffer.document.copy(content = Rope(content))))
+          .updated(editorBufferId, buffer.copy(document = buffer.document.withContent(Rope(content))))
       )
     )
 
@@ -230,7 +230,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
 
   "Document analysis" should "apply only the analysis of the latest edit when an edit supersedes a running one" in {
     val firstEdit  = spellCheckedState(misspelling)
-    val secondEdit = spellCheckedState(s"hello $misspelling")
+    val secondEdit = withEditorContent(firstEdit, s"hello $misspelling")
     val program =
       for
         (stateRef, operations) <- boundaryOver(firstEdit)
