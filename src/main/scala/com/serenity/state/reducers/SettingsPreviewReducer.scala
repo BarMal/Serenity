@@ -13,7 +13,8 @@ object SettingsPreviewReducer:
   /** Whether `intent` sets one value that can be put back by restoring the config and theme. Everything else is
     * committed as soon as it is chosen: relative changes (a toggle or step would apply again on each highlight),
     * commands that act (moving a status segment, saving, resetting), and settings that also reshape the workspace (app
-    * mode, Markdown view mode, UI presets), which restoring the config would not undo.
+    * mode, Markdown view mode, UI presets), which restoring the config would not undo, and auto-save, which would write
+    * the user's files on the strength of a value that may be put back.
     */
   def isPreviewable(intent: CommandIntent): Boolean =
     intent match
@@ -77,8 +78,8 @@ object SettingsPreviewReducer:
           GeneralSettingsIntent.SetCommandRunnerVisibleRows(_) | GeneralSettingsIntent.SetCommandRunnerItemGapRows(_) |
           GeneralSettingsIntent.SetCommandRunnerCursorGapRows(_) =>
         true
-      case GeneralSettingsIntent.OpenSettings | GeneralSettingsIntent.SaveConfig |
-          GeneralSettingsIntent.ResetSettings =>
+      case GeneralSettingsIntent.OpenSettings | GeneralSettingsIntent.SaveConfig | GeneralSettingsIntent.ResetSettings |
+          GeneralSettingsIntent.SetAutoSaveMode(_) | GeneralSettingsIntent.SetAutoSaveDelayMillis(_) =>
         false
 
   /** Shows `command`'s value without committing it. The first preview of a `scope` records the committed config and

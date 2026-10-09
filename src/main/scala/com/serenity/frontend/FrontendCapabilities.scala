@@ -32,7 +32,8 @@ final case class FrontendCapabilities(
     typography: Boolean,
     // The keyboard wire protocol actually negotiated (issue #1194/#1320) -- `Full` unconditionally in GUI mode, since
     // a focused Swing window decodes AWT key events directly with no protocol to negotiate.
-    keyboardFidelityTier: KeyboardFidelityTier
+    keyboardFidelityTier: KeyboardFidelityTier,
+    opensFileOrFolder: Boolean = false
 ):
   def isCellGrid: Boolean = grid == MetricGrid.Cells
 

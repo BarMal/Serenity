@@ -16,13 +16,13 @@ class ManuscriptExportPickerSpec extends AnyFlatSpec with Matchers:
     state.runtime.modalStack.map(_.modal).collect { case Modal.ListPicker(picker) => picker } ++
       state.runtime.uiSurfaces.map(_.content).collect { case SurfaceContent.ModalWorkflow(Modal.ListPicker(p)) => p }
 
-  "The manuscript export picker" should "offer DOCX and EPUB, each running its own export command" in {
+  "The manuscript export picker" should "offer DOCX, EPUB and PDF, each running its own export command" in {
     val opened = ManuscriptExportPicker.withPickerOpened(AppState.initial).getOrElse(fail("no picker"))
 
     val choices = pickers(opened).flatMap(_.items match
       case Loadable.Ready(list) => list.items.toList
       case _                    => Nil)
-    choices.map(_.detail) shouldBe List(Some(".docx"), Some(".epub"))
+    choices.map(_.detail) shouldBe List(Some(".docx"), Some(".epub"), Some(".pdf"))
     choices.map(_.action) shouldBe ManuscriptFileFormat.values.toList.map(ManuscriptExportCommands.exportAs)
   }
 
@@ -34,5 +34,5 @@ class ManuscriptExportPickerSpec extends AnyFlatSpec with Matchers:
 
   it should "name each direct command after its format" in {
     ManuscriptExportCommands.all.map(_.name) shouldBe
-      List("export-manuscript", "export-manuscript-docx", "export-manuscript-epub")
+      List("export-manuscript", "export-manuscript-docx", "export-manuscript-epub", "export-manuscript-pdf")
   }

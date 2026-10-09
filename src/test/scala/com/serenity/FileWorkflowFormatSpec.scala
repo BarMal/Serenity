@@ -66,6 +66,36 @@ class FileWorkflowFormatSpec extends AnyFlatSpec with Matchers:
     ).wouldLoseFormatting shouldBe false
   }
 
+  "FileWorkflowState.fidelityNote" should "say what saving at the typed extension would do with each feature" in {
+    val reports = Map(
+      com.serenity.richtext.SaveTarget.Docx ->
+        com.serenity.richtext.FidelityReport(
+          List(
+            com.serenity.richtext
+              .FidelityItem(com.serenity.richtext.DocumentFeature.Tables, com.serenity.richtext.Treatment.ReadOnly, 1)
+          )
+        ),
+      com.serenity.richtext.SaveTarget.Rtf ->
+        com.serenity.richtext.FidelityReport(
+          List(
+            com.serenity.richtext
+              .FidelityItem(com.serenity.richtext.DocumentFeature.Tables, com.serenity.richtext.Treatment.Dropped, 1)
+          )
+        )
+    )
+
+    FileWorkflowState(mode = FileWorkflowMode.SaveAs, filename = "a.docx", saveReports = reports).fidelityNote shouldBe
+      Some("1 table preserved read-only")
+    FileWorkflowState(mode = FileWorkflowMode.SaveAs, filename = "a.rtf", saveReports = reports).fidelityNote shouldBe
+      Some("1 table dropped")
+    FileWorkflowState(
+      mode = FileWorkflowMode.SaveAs,
+      filename = "a.odt",
+      saveReports = reports
+    ).fidelityNote shouldBe None
+    FileWorkflowState(mode = FileWorkflowMode.SaveAs, filename = "a.docx").fidelityNote shouldBe None
+  }
+
   "SaveAsFileWorkflowState.cycleFormat" should "step forward through SaveFormat.ordered, rewriting the extension" in {
     val workflow = SaveAsFileWorkflowState(filename = "notes.txt")
 

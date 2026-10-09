@@ -6,23 +6,22 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
 import com.serenity.command.*
-import com.serenity.config.{AppConfig, ConfigError}
+import com.serenity.config.AppConfigOps.*
+import com.serenity.config.{AppConfig, AppMode, ConfigError, ConfigManager}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
-import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer, SettingsEffect}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.noop.NoOpLogger
 
 /** A settings value changed from the command runner is a preview until it is committed: nothing reaches the config file
-  * or the session until Enter, and Escape puts back what was there when the preview began. These specs drive the real
-  * reducer and the real config interpreter side by side, counting what is written.
+  * until Enter, and Escape puts back what was there when the preview began. These specs drive the real reducer and the
+  * real config interpreter side by side, counting what is written.
   */
 class SettingsPreviewSpec extends AnyFlatSpec with Matchers:
 
@@ -32,49 +31,68 @@ class SettingsPreviewSpec extends AnyFlatSpec with Matchers:
   private val catalog =
     FontLoader.FontFamilyCatalog(monospace = List("Mono A", "Mono B", "Mono C"), text = List("Serif A"), ui = Nil)
 
-  final private class Fixture(initial: AppState):
+  final private class Fixture(
+      initial: AppState,
+      configOnDisk: Option[AppConfig] = None,
+      deferConfigJobs: Boolean = false
+  ):
     private val modelRef = Ref.of[IO, Model](Model(initial, UndoState())).unsafeRunSync()
     private val stateRef = ModelViews.appRef(modelRef)
     private val writes   = Ref.of[IO, List[AppConfig]](Nil).unsafeRunSync()
-    private val saves    = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
+    private val notices  = Ref.of[IO, List[Notice]](Nil).unsafeRunSync()
+    private val queued   = Ref.of[IO, List[IO[Unit]]](Nil).unsafeRunSync()
+    private val executed = Ref.of[IO, List[AppEffect]](Nil).unsafeRunSync()
     private val fonts    = Ref.of[IO, List[FontLoader.FontConfig]](Nil).unsafeRunSync()
     private val root     = Files.createTempDirectory("settings-preview-spec")
-
-    final private class RecordingSessionPersistence
-        extends SessionPersistence(
-          SessionManager.create(root, AppThemeManager.create, NoOpLogger.impl[IO], SessionManager.SessionPolicy()),
-          SessionManager.SessionPolicy()
-        ):
-      override def maybeSaveSession(appState: AppState, trigger: SessionSaveTrigger): IO[Unit] =
-        saves.update(_ :+ trigger)
 
     private val editor = new EffectEditorPort:
       def enqueueEvent(event: Event): IO[Unit]                               = IO.unit
       def commitState(newState: AppState, fallbackState: AppState): IO[Unit] = stateRef.set(newState)
       def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
         modelRef.get.flatMap(model => transition(model).fold(IO.unit)(modelRef.set))
-      def scheduleDocumentAnalysis(): IO[Unit]                                               = IO.unit
-      def scheduleFindSearch(request: FindSearchRequest): IO[Unit]                           = IO.unit
-      def submitEffect(lane: com.serenity.state.effects.Lane.Keyed, job: IO[Unit]): IO[Unit] = job
+      def scheduleDocumentAnalysis(): IO[Unit]                     = IO.unit
+      def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = IO.unit
+      def submitEffect(lane: com.serenity.state.effects.Lane.Keyed, job: IO[Unit]): IO[Unit] =
+        if deferConfigJobs then queued.update(_ :+ job) else job
       def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
-        IO.unit
+        stateRef.get.flatMap { current =>
+          val next = EffectResult.applyIfCurrent(current, result)
+          if next eq current then IO.unit else stateRef.set(next) >> onApplied(next)
+        }
 
     private val configEffects = new StateManagerConfigEffects(
       stateRef.get,
       NoOpLogger.impl[IO],
       Some(root.resolve("config.json")),
-      new RecordingSessionPersistence,
       fontConfig => fonts.update(_ :+ fontConfig),
       IO.pure(1.0),
       editor,
       RenderCaches.create(),
-      saveConfig = (config, _) => writes.update(_ :+ config).as(Right(()): Either[ConfigError, Unit])
+      saveConfig = (config, _) => writes.update(_ :+ config).as(Right(()): Either[ConfigError, Unit]),
+      showNotice = notice => notices.update(_ :+ notice),
+      configOnDisk = configOnDisk
     )
 
-    def state: AppState                          = stateRef.get.unsafeRunSync()
-    def config: AppConfig                        = state.persisted.config
-    def configWrites: List[AppConfig]            = writes.get.unsafeRunSync()
-    def sessionSaves: Int                        = saves.get.unsafeRunSync().size
+    def state: AppState                  = stateRef.get.unsafeRunSync()
+    def config: AppConfig                = state.persisted.config
+    def configWrites: List[AppConfig]    = writes.get.unsafeRunSync()
+    def noticeTexts: List[String]        = notices.get.unsafeRunSync().map(_.message)
+    def executedEffects: List[AppEffect] = executed.get.unsafeRunSync()
+    def configFile: java.nio.file.Path   = root.resolve("config.json")
+
+    def queuedConfigJobs: Int = queued.get.unsafeRunSync().size
+
+    def runQueuedConfigJobs(): Unit =
+      queued.getAndSet(Nil).flatMap(_.sequence_).unsafeRunSync()
+
+    def editConfigFile(edited: AppConfig): Fixture =
+      Files.writeString(configFile, ConfigManager.configToString(edited)): Unit
+      this
+
+    def reloadConfigFile(): Fixture =
+      configEffects.watch.foreach(_.reload.unsafeRunSync())
+      this
+
     def loadedFonts: List[FontLoader.FontConfig] = fonts.get.unsafeRunSync()
 
     def runner: CommandRunner =
@@ -99,6 +117,9 @@ class SettingsPreviewSpec extends AnyFlatSpec with Matchers:
     def escape: Fixture = press(RunnerDismiss)
 
     private def interpret(effect: AppEffect): IO[Unit] =
+      executed.update(_ :+ effect) >> run(effect)
+
+    private def run(effect: AppEffect): IO[Unit] =
       effect match
         case AppEffect.ExecuteCommand(command)                => execute(command)
         case AppEffect.ExecuteCommandUnrecorded(command)      => execute(command)
@@ -110,7 +131,12 @@ class SettingsPreviewSpec extends AnyFlatSpec with Matchers:
         case CommandIntent.Settings(intent) => configEffects.interpret(intent, state)
         case _                              => IO.unit
 
-  private def openOn(groupId: String, itemId: String): Fixture =
+  private def openOn(
+    groupId: String,
+    itemId: String,
+    configOnDisk: Option[AppConfig] = None,
+    deferConfigJobs: Boolean = false
+  ): Fixture =
     val opened = CommandRunner.empty.copy(fontFamilies = catalog).activate(registry, AppConfig.default).openSettings
     val index  = opened.submenuItems(groupId).indexWhere(_.id == itemId).max(0)
     val runner = opened.withDrilledSettingsSurface(SettingsSurfaceState(SettingsPage.Group(groupId, index)))
@@ -123,7 +149,9 @@ class SettingsPreviewSpec extends AnyFlatSpec with Matchers:
       AppState(
         persisted = Persisted(layout = Layout.empty, buffers = Map.empty, focus = Focus.Surface(surface.id)),
         runtime = Runtime(uiSurfaces = List(surface))
-      )
+      ),
+      configOnDisk,
+      deferConfigJobs
     )
 
   private def openOnSearchResult(query: String): Fixture =
@@ -144,12 +172,11 @@ class SettingsPreviewSpec extends AnyFlatSpec with Matchers:
 
   private val defaultFontSize = AppConfig.default.editorConfig.fontConfig.fontSize
 
-  "A numeric setting" should "preview a step without writing the config or the session" in {
+  "A numeric setting" should "preview a step without writing the config" in {
     val fixture = openOn("settings-code-font", "code-font-size").right
 
     fixture.config.editorConfig.fontConfig.fontSize should be > defaultFontSize
     fixture.configWrites shouldBe empty
-    fixture.sessionSaves shouldBe 0
   }
 
   it should "restore the original value on Escape without closing the runner or writing" in {
@@ -158,7 +185,6 @@ class SettingsPreviewSpec extends AnyFlatSpec with Matchers:
     fixture.config.editorConfig.fontConfig.fontSize shouldBe defaultFontSize
     fixture.runnerIsOpen shouldBe true
     fixture.configWrites shouldBe empty
-    fixture.sessionSaves shouldBe 0
     fixture.loadedFonts.lastOption.map(_.fontSize) shouldBe Some(defaultFontSize)
   }
 
@@ -170,7 +196,6 @@ class SettingsPreviewSpec extends AnyFlatSpec with Matchers:
 
     fixture.config.editorConfig.fontConfig.fontSize shouldBe previewed
     fixture.configWrites.map(_.editorConfig.fontConfig.fontSize) shouldBe List(previewed)
-    fixture.sessionSaves shouldBe 1
   }
 
   "A boolean setting" should "preview a flip, then put it back on Escape" in {
@@ -183,7 +208,6 @@ class SettingsPreviewSpec extends AnyFlatSpec with Matchers:
 
     fixture.config.surfaceConfig.wordWrapEnabled shouldBe AppConfig.default.surfaceConfig.wordWrapEnabled
     fixture.configWrites shouldBe empty
-    fixture.sessionSaves shouldBe 0
   }
 
   it should "commit a previewed flip once on Enter" in {
@@ -205,7 +229,6 @@ class SettingsPreviewSpec extends AnyFlatSpec with Matchers:
 
     fixture.config.editorConfig.fontConfig.codeFontFamily shouldBe original
     fixture.configWrites shouldBe empty
-    fixture.sessionSaves shouldBe 0
   }
 
   it should "commit the highlighted family on Enter, writing the config once" in {
@@ -262,4 +285,96 @@ class SettingsPreviewSpec extends AnyFlatSpec with Matchers:
     fixture.config.surfaceConfig.wordWrapEnabled shouldBe false
     fixture.configWrites.size shouldBe 1
     fixture.runnerIsOpen shouldBe true
+  }
+
+  "A config write already requested when a preview begins" should "still write the committed value, not the preview" in {
+    val fixture  = openOn("settings-code-font", "code-font-size", deferConfigJobs = true).right.enter
+    val accepted = fixture.config.editorConfig.fontConfig.fontSize
+
+    fixture.right
+
+    fixture.config.editorConfig.fontConfig.fontSize should be > accepted
+    fixture.runQueuedConfigJobs()
+
+    fixture.configWrites.map(_.editorConfig.fontConfig.fontSize) shouldBe List(accepted)
+  }
+
+  "Requesting a config write" should "happen once for an accepted preview and never for the previews before it" in {
+    val fixture = openOn("settings-code-font", "code-font-size", deferConfigJobs = true).right.right.right
+
+    fixture.queuedConfigJobs shouldBe 0
+
+    fixture.enter
+
+    fixture.queuedConfigJobs shouldBe 1
+  }
+
+  "A config file reload while a preview is open" should "become what Escape returns to, not be undone by it" in {
+    val fixture =
+      openOn("settings-code-font", "code-font-size", configOnDisk = Some(AppConfig.default)).right
+    val previewed = fixture.config.editorConfig.fontConfig.fontSize
+
+    previewed should be > defaultFontSize
+
+    fixture.editConfigFile(AppConfig.default.withWheelScrollLines(7)).reloadConfigFile()
+
+    fixture.config.inputConfig.wheelScrollLines shouldBe 7
+    fixture.escape
+
+    fixture.config shouldBe AppConfig.default.withWheelScrollLines(7)
+    fixture.configWrites shouldBe empty
+  }
+
+  it should "end the preview, since the value it was previewed against has changed" in {
+    val fixture =
+      openOn("settings-code-font", "code-font-size", configOnDisk = Some(AppConfig.default)).right
+
+    fixture.editConfigFile(AppConfig.default.withWheelScrollLines(7)).reloadConfigFile()
+
+    fixture.state.runtime.pendingSetting shouldBe None
+    fixture.config.editorConfig.fontConfig.fontSize shouldBe defaultFontSize
+    fixture.loadedFonts.lastOption.map(_.fontSize) shouldBe Some(defaultFontSize)
+    fixture.noticeTexts shouldBe Nil
+  }
+
+  it should "win over the previewed value when it sets the very setting being previewed" in {
+    val fixture =
+      openOn("settings-code-font", "code-font-size", configOnDisk = Some(AppConfig.default)).right
+    val edited = AppConfig.default.withFontConfig(AppConfig.default.editorConfig.fontConfig.copy(fontSize = 20.0f))
+
+    fixture.editConfigFile(edited).reloadConfigFile()
+    fixture.escape
+
+    fixture.config.editorConfig.fontConfig.fontSize shouldBe 20.0f
+    fixture.loadedFonts.lastOption.map(_.fontSize) shouldBe Some(20.0f)
+    fixture.configWrites shouldBe empty
+  }
+
+  it should "leave a preview alone when the file is reloaded to what it already held" in {
+    val fixture =
+      openOn("settings-code-font", "code-font-size", configOnDisk = Some(AppConfig.default)).right
+    val previewed = fixture.config.editorConfig.fontConfig.fontSize
+
+    fixture.editConfigFile(AppConfig.default).reloadConfigFile()
+
+    fixture.state.runtime.pendingSetting.isDefined shouldBe true
+    fixture.config.editorConfig.fontConfig.fontSize shouldBe previewed
+  }
+
+  "A preview of the app mode" should "not exist: the mode is committed at once, because leaving code mode is not undone by Escape" in {
+    val fixture = openOn("settings-workspace", "app-mode").right
+
+    fixture.state.runtime.pendingSetting shouldBe None
+    fixture.executedEffects.collect { case AppEffect.ExecuteCommandUnrecorded(command) => command } shouldBe Nil
+    fixture.executedEffects.collect { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe
+      List(CommandIntent.View(ViewIntent.SetAppMode(AppMode.Prose)))
+  }
+
+  it should "leave nothing for Escape to revert once the mode has been chosen" in {
+    val fixture = openOn("settings-workspace", "app-mode").right
+
+    fixture.escape
+
+    fixture.executedEffects.collect { case AppEffect.Settings(SettingsEffect.ReapplyConfig) => () } shouldBe Nil
+    fixture.configWrites shouldBe empty
   }

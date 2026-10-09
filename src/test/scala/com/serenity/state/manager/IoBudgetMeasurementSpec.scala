@@ -13,7 +13,7 @@ import cats.effect.unsafe.{IORuntime, IORuntimeConfig}
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
 import com.serenity.app.AppRuntime
-import com.serenity.io.{AtomicFileWriter, FileChangeWatcher, FileManager}
+import com.serenity.io.{AtomicFileWriter, FileChangeWatcher, SettledClock}
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.ui.theme.config.AppThemeManager
@@ -165,11 +165,12 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
     )
 
   private def newSession(): SessionManager =
-    SessionManager.create(
+    SessionManager(
       Files.createTempDirectory("io-budget-edit-idle"),
       AppThemeManager.create,
       NoOpLogger.impl[IO],
-      SessionManager.SessionPolicy.interactive
+      SessionManager.SessionPolicy.interactive,
+      clock = SettledClock.aMinuteAhead
     )
 
   "IO budget" should "be measured for file saves and focus-in" in {
@@ -177,7 +178,7 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
     List(1, 10).foreach { megabytes =>
       val path = Files.createTempFile("io-budget", ".txt")
       Files.writeString(path, "0123456789abcde\n" * (megabytes * 65536))
-      val manager = new FileManager()
+      val manager = SettledClock.fileManager
       val opened  = manager.loadFile(path, bufferId).unsafeRunSync()
       val saved   = Ref.of[IO, Buffer](opened).unsafeRunSync()
       val save    = measure(s"file save ${megabytes}MB", 5)(saved.get.flatMap(manager.saveBuffer).flatMap(saved.set))
@@ -194,7 +195,13 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
     List(1, 10).foreach { megabytes =>
       val root = Files.createTempDirectory("io-budget-session")
       val session =
-        SessionManager.create(root, AppThemeManager.create, NoOpLogger.impl[IO], SessionManager.SessionPolicy())
+        SessionManager(
+          root,
+          AppThemeManager.create,
+          NoOpLogger.impl[IO],
+          SessionManager.SessionPolicy(),
+          clock = SettledClock.aMinuteAhead
+        )
       val initial = AppState.initial
       val id      = initial.persisted.bufferOrder.head
       val buffer  = Buffer.fromString(id, "0123456789abcde\n" * (megabytes * 65536))

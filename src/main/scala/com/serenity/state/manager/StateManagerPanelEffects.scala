@@ -30,7 +30,8 @@ final private[manager] class StateManagerPanelEffects(
     expandPinnedPanel: PanelTarget => IO[Unit],
     collapseExpandedPanel: () => IO[Unit],
     switchToPinnedPanel: PanelTarget => IO[Unit],
-    resizePinnedPanel: (PanelTarget, Int) => IO[Unit]
+    resizePinnedPanel: (PanelTarget, Int) => IO[Unit],
+    showModal: Modal => IO[Unit]
 )(using com.serenity.rope.Balance):
 
   /** Floor for command/keyboard panel resize (issue #1310) -- prevents a panel from shrinking to zero or negative
@@ -87,7 +88,12 @@ final private[manager] class StateManagerPanelEffects(
       case ViewIntent.SetDefaultDocumentMode(mode) =>
         updateConfig(_.withDefaultDocumentMode(mode)).void
       case ViewIntent.SetAppMode(mode) =>
-        updateConfig(_.withAppMode(mode)) >> hidePanelsOutside(mode, state)
+        state.runtime.projectTasks.running match
+          case Some(task) if leavesCodeTooling(state, mode) =>
+            showModal(Modal.Confirm(ConfirmPrompt.stopProjectTaskToLeaveCode(task, mode)))
+          case _ => switchAppMode(mode)
+      case ViewIntent.SetAppModeStoppingProjectTask(mode) =>
+        switchAppMode(mode)
       case ViewIntent.SetShowAllSettingsRegardlessOfMode(value) =>
         updateConfig(_.withShowAllSettingsRegardlessOfMode(value)).void
       case ViewIntent.ToggleShortcutsHelp =>
@@ -127,11 +133,11 @@ final private[manager] class StateManagerPanelEffects(
         case _ =>
           showQuickInfo(state, "Focus a panel to maximise it.")
 
-  /** Switching mode puts away the panels that belong to the other mode, as their commands go with it. */
-  private def hidePanelsOutside(mode: AppMode, state: AppState): IO[Unit] =
-    PanelId.values.toList
-      .filter(id => isShown(id, state) && !PanelRegistry.registrationFor(id).family.modes.contains(mode))
-      .traverse_(setPanelPin(_, None))
+  private def leavesCodeTooling(state: AppState, mode: AppMode): Boolean =
+    state.editingContext.hasCodeTooling && mode != AppMode.Code
+
+  private def switchAppMode(mode: AppMode): IO[Unit] =
+    updateConfig(_.withAppMode(mode)).void
 
   private[manager] def openMarkdownPreview: IO[Unit] =
     pinPanel(PanelId.MarkdownPreview, PanelRegistry.registrationFor(PanelId.MarkdownPreview).defaultPosition)

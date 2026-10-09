@@ -16,32 +16,61 @@ object StartupPageContent:
     sessionExists: Boolean,
     recentFiles: List[Path] = Nil,
     configNotice: Option[String] = None,
-    resumeIdentifier: Option[String] = None
+    resumeIdentifier: Option[String] = None,
+    fileOrFolderOpen: Boolean = false
   ): StartupPage =
     val statusMessage =
       configNotice.orElse(Option.when(!sessionExists)("No previous session found"))
 
-    val primaryActions = List(
-      StartupAction(
-        "new-session",
-        "New document",
-        Command
-          .typed("startup.new-session", "Start a new session", CommandIntent.Session(SessionIntent.StartupNewSession)),
-        Some('1'),
-        Some("Enter")
-      ),
-      StartupAction(
-        "open-file",
-        "Open file or folder",
-        Command.typed(
-          "startup.open-file",
-          "Open an existing file or directory",
-          CommandIntent.Session(SessionIntent.StartupOpenFile)
-        ),
-        Some('2'),
-        Some("Enter")
-      )
+    val newSession = StartupAction(
+      "new-session",
+      "New document",
+      Command
+        .typed("startup.new-session", "Start a new session", CommandIntent.Session(SessionIntent.StartupNewSession)),
+      Some('1'),
+      Some("Enter")
     )
+    val openActions =
+      if fileOrFolderOpen then
+        List(
+          StartupAction(
+            "open",
+            "Open...",
+            Command.typed(
+              "startup.open",
+              "Open a file or a folder",
+              CommandIntent.Session(SessionIntent.StartupOpenFileOrFolder)
+            ),
+            Some('2'),
+            Some("Enter")
+          )
+        )
+      else
+        List(
+          StartupAction(
+            "open-file",
+            "Open file",
+            Command.typed(
+              "startup.open-file",
+              "Open an existing file",
+              CommandIntent.Session(SessionIntent.StartupOpenFile)
+            ),
+            Some('2'),
+            Some("Enter")
+          ),
+          StartupAction(
+            "open-folder",
+            "Open folder",
+            Command.typed(
+              "startup.open-folder",
+              "Open a folder and show it in the Explorer",
+              CommandIntent.Session(SessionIntent.StartupOpenFolder)
+            ),
+            Some('3'),
+            Some("Enter")
+          )
+        )
+    val primaryActions = newSession :: openActions
     val resume = Option.when(sessionExists)(
       StartupResumeHint(
         resumeIdentifier.getOrElse("previous session"),

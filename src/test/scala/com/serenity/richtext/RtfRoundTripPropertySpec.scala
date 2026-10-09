@@ -26,7 +26,6 @@ class RtfRoundTripPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks
     "{",
     "}",
     "\t",
-    "\n",
     "?",
     ";",
     "\\line",
@@ -55,11 +54,16 @@ class RtfRoundTripPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks
       color  <- genColor
     yield RichTextStyle(marks, family, size, color)
 
-  private val genRun: Gen[RichTextRun] =
+  private val genTextRun: Gen[RichTextRun] =
     for
       text  <- genText
       style <- genStyle
     yield RichTextRun(text, style)
+
+  private val genSoftBreak: Gen[RichTextRun] =
+    genStyle.map(RichTextRun.softBreak)
+
+  private val genRun: Gen[RichTextRun] = Gen.frequency(8 -> genTextRun, 1 -> genSoftBreak)
 
   private val genAlignment: Gen[ParagraphAlignment] = Gen.oneOf(ParagraphAlignment.values.toList)
 

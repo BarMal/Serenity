@@ -1,7 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.command.*
-import com.serenity.config.{AppConfig, AppMode, MarkdownViewMode, StatusSegment}
+import com.serenity.config.{AppConfig, AppMode, AutoSaveMode, MarkdownViewMode, StatusSegment}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.session.SessionState
@@ -204,4 +204,10 @@ class SettingsPreviewReducerSpec extends AnyFlatSpec with Matchers:
     ) shouldBe false
     isPreviewable(CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.ResetSettings))) shouldBe false
     isPreviewable(CommandIntent.View(ViewIntent.SetAppMode(AppMode.Prose))) shouldBe false
+    isPreviewable(
+      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAutoSaveMode(AutoSaveMode.AfterDelay)))
+    ) shouldBe false
+    isPreviewable(
+      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAutoSaveDelayMillis(500)))
+    ) shouldBe false
   }

@@ -177,7 +177,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync() shouldBe before
 
   it should "do nothing when unpinning a surface that exists but isn't pinned" in new UIFixture:
-    stateManager.applyEvent(FileSearch).unsafeRunSync()
+    (stateManager.applyEvent(FileSearch) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
     val floatingSurfaceId = stateManager.getCurrentState
       .unsafeRunSync()
       .searchInOpenFilesSurface
