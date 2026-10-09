@@ -74,6 +74,37 @@ class UiPresetOptionalThemeSpec extends AnyFlatSpec with Matchers:
     applied.persisted.theme shouldBe Theme.light
   }
 
+  "Naming a theme on a preset" should "set it on a preset that had none" in {
+    themeless.withThemeName(Some("light")).themeName shouldBe Some("light")
+  }
+
+  it should "replace the theme a preset already names" in {
+    withTheme.withThemeName(Some("light")).themeName shouldBe Some("light")
+  }
+
+  it should "clear the theme when given none" in {
+    withTheme.withThemeName(None) shouldBe themeless
+  }
+
+  it should "trim the name, and treat a blank one as none" in {
+    themeless.withThemeName(Some("  light ")).themeName shouldBe Some("light")
+    withTheme.withThemeName(Some("   ")).themeName shouldBe None
+  }
+
+  it should "change nothing but the theme" in {
+    val rich =
+      withTheme.copy(targetEditorPaneCount = Some(2), unknownFields = _root_.io.circe.JsonObject("x" -> Json.True))
+
+    rich.withThemeName(Some("light")) shouldBe rich.copy(themeName = Some("light"))
+  }
+
+  it should "survive a save and load, and a cleared theme be written without the field" in {
+    val named = themeless.withThemeName(Some("light"))
+
+    decode[UiPreset](named.asJson.noSpaces) shouldBe Right(named)
+    named.withThemeName(None).asJson.asObject.map(_.contains("themeName")) shouldBe Some(false)
+  }
+
   "A preset with a theme" should "apply it when not following the OS" in {
     val applied = UiPreset.applyToState(withTheme, state(Theme.light), Some(Theme.dark))
 

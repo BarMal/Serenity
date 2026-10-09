@@ -51,6 +51,12 @@ final private[manager] class StateManagerUiPresetEffects(
         deleteUiPresetEffect(name)
       case UiPresetsIntent.ResetUiPreset(name) =>
         resetUiPresetEffect(name)
+      case UiPresetsIntent.SetUiPresetTheme(name, themeName) =>
+        changeUiPresetTheme(name)(_ => loadableThemeName(themeName))
+      case UiPresetsIntent.UseCurrentThemeForUiPreset(name) =>
+        changeUiPresetTheme(name)(snapshot => IO.pure(Right(Some(snapshot.persisted.theme.name))))
+      case UiPresetsIntent.ClearUiPresetTheme(name) =>
+        changeUiPresetTheme(name)(_ => IO.pure(Right(None)))
 
   /** Captures the workspace as it is when the command runs as a new custom preset, rejecting existing names. */
   private def saveUiPresetAsNewEffect(name: String): IO[Unit] =
@@ -306,6 +312,52 @@ final private[manager] class StateManagerUiPresetEffects(
             logger.warn(s"[PRESET] Built-in UI preset not found: $presetName")
       case None =>
         logger.warn("[PRESET] Ignoring empty UI preset name")
+
+  /** Names the theme `chooseTheme` picks on a custom preset, or none; built-ins are read-only like for overwrite. */
+  private def changeUiPresetTheme(name: String)(
+    chooseTheme: AppState => IO[Either[String, Option[String]]]
+  ): IO[Unit] =
+    normalizedPresetName(name) match
+      case None =>
+        logger.warn("[PRESET] Ignoring empty UI preset name")
+      case Some(presetName) if UiPreset.builtIn(presetName).nonEmpty =>
+        updateCommandRunnerPresetContext(
+          Some(presetName),
+          s"Built-in preset themes cannot be changed. Duplicate $presetName first."
+        )
+      case Some(presetName) =>
+        currentState.flatMap { snapshot =>
+          onPresetsLane(s"change UI preset theme $presetName") {
+            uiPresetStore.find(presetName).flatMap {
+              case None =>
+                report(UiPresetContext.Status(Some(presetName), s"Custom preset '$presetName' was not found."))
+              case Some(existing) =>
+                chooseTheme(snapshot).flatMap {
+                  case Left(reason) =>
+                    report(UiPresetContext.Status(Some(existing.name), reason))
+                  case Right(theme) =>
+                    uiPresetStore.upsert(existing.withThemeName(theme)).attempt.flatMap {
+                      case Left(error) =>
+                        reportPresetFailure(existing.name, s"Could not save ${existing.name}", error)
+                      case Right(_) =>
+                        val outcome = theme.fold("Preset theme cleared")(chosen => s"Preset theme set to $chosen")
+                        reportWithPreviews(
+                          UiPresetContext.Status(Some(existing.name), s"$outcome. Configure ${existing.name}.")
+                        )
+                    }
+                }
+            }
+          }
+        }
+
+  private def loadableThemeName(themeName: String): IO[Either[String, Option[String]]] =
+    val trimmed = themeName.trim
+    themeManager.loadTheme(trimmed).attempt.map {
+      case Right(_) => Right(Some(trimmed))
+      case Left(error) =>
+        val detail = Option(error.getMessage).filter(_.nonEmpty).getOrElse(error.getClass.getSimpleName)
+        Left(s"Theme '$trimmed' could not be loaded: $detail")
+    }
 
   private def normalizedPresetName(name: String): Option[String] =
     Option(UiPreset.normalizedName(name)).filter(_.nonEmpty)

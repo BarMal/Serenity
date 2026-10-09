@@ -27,6 +27,10 @@ final case class UiPreset(
     configUnknownFields: JsonObject = JsonObject.empty
 ):
 
+  /** This preset naming `theme` -- none when blank, as the codec reads a blank name -- or no theme at all. */
+  def withThemeName(theme: Option[String]): UiPreset =
+    copy(themeName = theme.map(_.trim).filter(_.nonEmpty))
+
   /** Flat view of the persisted panel content, independent of workspace-tree topology. */
   def pinnedPanels: List[SessionPinnedPanel] = dockedPanels.map(_.panel)
 

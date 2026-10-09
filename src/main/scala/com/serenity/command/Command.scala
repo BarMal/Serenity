@@ -206,6 +206,9 @@ enum UiPresetsIntent:
   case RenameUiPreset(sourceName: String, targetName: String)
   case DeleteUiPreset(name: String)
   case ResetUiPreset(name: String)
+  case SetUiPresetTheme(name: String, themeName: String)
+  case UseCurrentThemeForUiPreset(name: String)
+  case ClearUiPresetTheme(name: String)
   // `ApplyUiPreset` (the splash's workflow shortcuts, the top-level searchable "Apply <Name> Preset" commands) stays
   // a one-shot, apply-everything action -- ReviewUiPreset is the deliberate alternative reached from a preset's own
   // settings group ("Apply Preset" there), which opens the diff-toggle review instead of applying immediately.
