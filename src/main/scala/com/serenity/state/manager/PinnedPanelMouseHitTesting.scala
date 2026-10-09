@@ -80,6 +80,11 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
       case None =>
         IO.pure(false)
 
+  def resizeHandleAt(event: MouseInputEvent, state: AppState): Option[PointerHitTarget] =
+    state.runtime.viewportSize.flatMap { viewportSize =>
+      PinnedPanelMouseHitTesting.resizeHandleAt(event, authoritativeScene.forState(state, viewportSize))
+    }
+
   def handleTextAreaResizeDrag(drag: MouseDrag, state: AppState): IO[Boolean] =
     PinnedPanelMouseHitTesting.textAreaInsetFromDrag(drag, state) match
       case Some(inset) => updateConfig(inset.applyTo).as(true)
@@ -112,6 +117,13 @@ private[manager] object PinnedPanelMouseHitTesting:
         case Right(value)  => config.withTextAreaRightInset(value)
         case Top(value)    => config.withTextAreaTopInset(value)
         case Bottom(value) => config.withTextAreaBottomInset(value)
+
+    def side: PanelPosition =
+      this match
+        case Left(_)   => PanelPosition.Left
+        case Right(_)  => PanelPosition.Right
+        case Top(_)    => PanelPosition.Top
+        case Bottom(_) => PanelPosition.Bottom
 
   def select(
     event: MouseInputEvent,
@@ -200,6 +212,18 @@ private[manager] object PinnedPanelMouseHitTesting:
                 .modify(PanelLocationNavigation.editorAt(_, location, wrapCache = authoritativeScene.wrappedLines))
                 .as(true)
             case None => Transition.pure(false)
+
+  /** The resize handle under `event`, resolved from the same regions a drag resizes from and in the same precedence
+    * (text-area margin before dock), so the pointer shape promises exactly what a drag would do.
+    */
+  def resizeHandleAt(event: MouseInputEvent, scene: UiSceneSnapshot): Option[PointerHitTarget] =
+    textAreaInsetAt(event, scene.editorContract)
+      .map(inset => PointerHitTarget.TextAreaMargin(inset.side))
+      .orElse(
+        PinnedPanelLayoutEngine
+          .pinnedPanelEdgeAt(scene.calculatedLayout, event.col, event.row)
+          .map(PointerHitTarget.DockEdge(_))
+      )
 
   def panelResizeFromDrag(drag: MouseDrag, state: AppState): Option[LayoutEngine.PinnedPanelDragResize] =
     state.runtime.viewportSize.flatMap(viewportSize =>
@@ -405,32 +429,35 @@ private[manager] object PinnedPanelMouseHitTesting:
 
   def textAreaInsetFromDrag(drag: MouseDrag, state: AppState): Option[TextAreaInsetDrag] =
     state.runtime.viewportSize.flatMap { viewportSize =>
-      val layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      val contract = EditorLayoutContract.from(state, viewportSize, layout)
-      contract.activePaneLayout.flatMap { _ =>
-        val workspaceX     = contract.leftSpacerRect.x
-        val workspaceRight = contract.rightSpacerRect.right
-        val workspaceWidth = (workspaceRight - workspaceX).max(1)
-        val contentTop     = contract.topSpacerRect.y
-        val contentBottom  = contract.workspace.editorPanelRect.bottom
-        val contentHeight  = (contentBottom - contentTop).max(1)
-        val withinWorkspaceY =
-          drag.row >= contract.leftSpacerRect.y && drag.row < contract.leftSpacerRect.bottom
-        val withinWorkspaceX =
-          drag.col >= contract.topSpacerRect.x && drag.col < contract.topSpacerRect.right
+      val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      textAreaInsetAt(drag, EditorLayoutContract.from(state, viewportSize, layout))
+    }
 
-        if withinWorkspaceY && drag.col >= contract.leftSpacerRect.x && drag.col < contract.leftSpacerRect.right then
-          Some(TextAreaInsetDrag.Left((drag.col - workspaceX).toDouble / workspaceWidth.toDouble))
-        else if withinWorkspaceY && drag.col >= contract.rightSpacerRect.x && drag.col < contract.rightSpacerRect.right
-        then Some(TextAreaInsetDrag.Right((workspaceRight - drag.col).toDouble / workspaceWidth.toDouble))
-        else if withinWorkspaceX &&
-            drag.row >= contract.topSpacerRect.y &&
-            drag.row < contract.topSpacerRect.bottom
-        then Some(TextAreaInsetDrag.Top((drag.row - contentTop).toDouble / contentHeight.toDouble))
-        else if withinWorkspaceX &&
-            drag.row >= contract.bottomSpacerRect.y &&
-            drag.row < contract.bottomSpacerRect.bottom
-        then Some(TextAreaInsetDrag.Bottom((contentBottom - drag.row).toDouble / contentHeight.toDouble))
-        else None
-      }
+  /** The text-area margin `event` lands in, and the inset a drag there would set -- the one region test the drag and
+    * the hover pointer shape share.
+    */
+  def textAreaInsetAt(event: MouseInputEvent, contract: EditorLayoutContract): Option[TextAreaInsetDrag] =
+    contract.activePaneLayout.flatMap { _ =>
+      val col            = event.col
+      val row            = event.row
+      val workspaceX     = contract.leftSpacerRect.x
+      val workspaceRight = contract.rightSpacerRect.right
+      val workspaceWidth = (workspaceRight - workspaceX).max(1)
+      val contentTop     = contract.topSpacerRect.y
+      val contentBottom  = contract.workspace.editorPanelRect.bottom
+      val contentHeight  = (contentBottom - contentTop).max(1)
+      val withinWorkspaceY =
+        row >= contract.leftSpacerRect.y && row < contract.leftSpacerRect.bottom
+      val withinWorkspaceX =
+        col >= contract.topSpacerRect.x && col < contract.topSpacerRect.right
+
+      if withinWorkspaceY && col >= contract.leftSpacerRect.x && col < contract.leftSpacerRect.right then
+        Some(TextAreaInsetDrag.Left((col - workspaceX).toDouble / workspaceWidth.toDouble))
+      else if withinWorkspaceY && col >= contract.rightSpacerRect.x && col < contract.rightSpacerRect.right
+      then Some(TextAreaInsetDrag.Right((workspaceRight - col).toDouble / workspaceWidth.toDouble))
+      else if withinWorkspaceX && row >= contract.topSpacerRect.y && row < contract.topSpacerRect.bottom
+      then Some(TextAreaInsetDrag.Top((row - contentTop).toDouble / contentHeight.toDouble))
+      else if withinWorkspaceX && row >= contract.bottomSpacerRect.y && row < contract.bottomSpacerRect.bottom
+      then Some(TextAreaInsetDrag.Bottom((contentBottom - row).toDouble / contentHeight.toDouble))
+      else None
     }

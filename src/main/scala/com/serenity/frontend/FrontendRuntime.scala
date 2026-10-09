@@ -5,7 +5,7 @@ import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.{InputHandler, InputRouter}
 import com.serenity.keystroke.events.Event
 import com.serenity.state.manager.{Model, RenderCaches}
-import com.serenity.state.models.{AppState, Damage}
+import com.serenity.state.models.{AppState, Damage, PointerShape}
 import com.serenity.ui.color.RenderColor
 
 object FrontendRuntime:
@@ -65,7 +65,8 @@ final case class FrontendRuntime(
     renderCursorOnly: FrontendRuntime.RenderFn,
     frameTimings: FrameTimings = FrameTimings(),
     offscreenFrames: Option[Resource[IO, FrontendRuntime.OffscreenFrames]] = None,
-    menus: Option[FrontendRuntime.MenuHost => Resource[IO, Unit]] = None
+    menus: Option[FrontendRuntime.MenuHost => Resource[IO, Unit]] = None,
+    applyPointerShape: PointerShape => IO[Unit] = _ => IO.unit
 ):
 
   def menuResource(readModel: IO[Model], runAsync: IO[Unit] => Unit): Resource[IO, Unit] =

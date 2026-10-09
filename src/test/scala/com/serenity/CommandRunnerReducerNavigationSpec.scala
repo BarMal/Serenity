@@ -161,7 +161,7 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
     val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), state, registry)
 
     movedRight.effects.exists {
-      case AppEffect.ExecuteCommand(command) =>
+      case AppEffect.ExecuteCommandUnrecorded(command) =>
         command.intent == CommandIntent.Settings(
           SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
         )

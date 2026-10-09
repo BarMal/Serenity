@@ -190,8 +190,77 @@ given Decoder[ParagraphAlignment] = Decoder.decodeString.emap {
   case other     => Left(s"Unknown ParagraphAlignment: $other")
 }
 
-given Encoder[RichTextStyle] = deriveEncoder
-given Decoder[RichTextStyle] = deriveDecoder
+given Encoder[InlineAtom] = Encoder.instance {
+  case InlineAtom.SoftBreak => Json.fromString("SoftBreak")
+  case InlineAtom.Opaque(raw, visible) =>
+    Json.obj("opaque" -> Json.fromString(raw), "visible" -> Json.fromBoolean(visible))
+  case InlineAtom.Block(raw, feature) =>
+    Json.obj("block" -> Json.fromString(raw), "feature" -> Json.fromString(DocumentFeature.key(feature)))
+}
+
+given Decoder[InlineAtom] = Decoder.instance { cursor =>
+  cursor.as[String] match
+    case Right("SoftBreak") => Right(InlineAtom.SoftBreak)
+    case Right(other)       => Left(DecodingFailure(s"Unknown InlineAtom: $other", cursor.history))
+    case Left(_) if cursor.downField("block").succeeded =>
+      for
+        raw <- cursor.get[String]("block")
+        feature <- cursor
+          .get[String]("feature")
+          .flatMap(key =>
+            DocumentFeature.fromKey(key).toRight(DecodingFailure(s"Unknown DocumentFeature: $key", cursor.history))
+          )
+      yield InlineAtom.Block(raw, feature)
+    case Left(_) =>
+      for
+        raw     <- cursor.get[String]("opaque")
+        visible <- cursor.getOrElse[Boolean]("visible")(true)
+      yield InlineAtom.Opaque(raw, visible)
+}
+
+given Encoder[FidelityItem] = Encoder.instance(item =>
+  Json.obj(
+    "feature"   -> Json.fromString(DocumentFeature.key(item.feature)),
+    "treatment" -> Json.fromString(Treatment.key(item.treatment)),
+    "count"     -> Json.fromInt(item.count)
+  )
+)
+
+given Decoder[FidelityItem] = Decoder.instance { cursor =>
+  for
+    feature <- cursor
+      .get[String]("feature")
+      .flatMap(key =>
+        DocumentFeature.fromKey(key).toRight(DecodingFailure(s"Unknown DocumentFeature: $key", cursor.history))
+      )
+    treatment <- cursor
+      .get[String]("treatment")
+      .flatMap(key => Treatment.fromKey(key).toRight(DecodingFailure(s"Unknown Treatment: $key", cursor.history)))
+    count <- cursor.get[Int]("count")
+  yield FidelityItem(feature, treatment, count)
+}
+
+given Encoder[FidelityReport] = Encoder.instance(report => Json.obj("items" -> report.items.asJson))
+given Decoder[FidelityReport] = Decoder.instance(_.get[List[FidelityItem]]("items").map(FidelityReport(_)))
+
+given Encoder[RawProperty] = deriveEncoder
+given Decoder[RawProperty] = deriveDecoder
+
+given Encoder[RichTextStyle] =
+  deriveEncoder[RichTextStyle].mapJsonObject(fields =>
+    if fields("extras").exists(_.asArray.exists(_.isEmpty)) then fields.remove("extras") else fields
+  )
+
+given Decoder[RichTextStyle] = Decoder.instance { cursor =>
+  for
+    marks      <- cursor.get[Set[InlineMark]]("marks")
+    fontFamily <- cursor.get[Option[String]]("fontFamily")
+    fontSize   <- cursor.get[Option[Float]]("fontSize")
+    color      <- cursor.get[Option[String]]("color")
+    link       <- cursor.get[Option[String]]("link")
+    extras     <- cursor.getOrElse[List[RawProperty]]("extras")(Nil)
+  yield RichTextStyle(marks, fontFamily, fontSize, color, link, extras)
+}
 
 given Encoder[RichTextRun] = deriveEncoder
 given Decoder[RichTextRun] = deriveDecoder
@@ -227,8 +296,41 @@ given Decoder[ParagraphRole] = Decoder.instance { cursor =>
   }
 }
 
-given Encoder[RichTextParagraph] = deriveEncoder
-given Decoder[RichTextParagraph] = deriveDecoder
+// Manual because a paragraph's provenance is not saved as it is: only which body block it came from (and whether it was
+// split off that block), which is what restoring needs to link it to the package read again from disk.
+given Encoder[RichTextParagraph] = Encoder.instance { paragraph =>
+  val content = Json.obj(
+    "runs"      -> paragraph.runs.asJson,
+    "alignment" -> paragraph.alignment.asJson,
+    "role"      -> paragraph.role.asJson
+  )
+  paragraph.source.flatMap(_.originBlock).fold(content) { block =>
+    val isDerived = paragraph.source.exists(_.blockIndex == ParagraphSource.NoBlock)
+    content.deepMerge(
+      Json
+        .obj("block" -> Json.fromInt(block))
+        .deepMerge(if isDerived then Json.obj("derived" -> Json.True) else Json.obj())
+    )
+  }
+}
+
+given Decoder[RichTextParagraph] = Decoder.instance { cursor =>
+  for
+    runs      <- cursor.get[List[RichTextRun]]("runs")
+    alignment <- cursor.get[ParagraphAlignment]("alignment")
+    role      <- cursor.get[ParagraphRole]("role")
+    block     <- cursor.get[Option[Int]]("block")
+    derived   <- cursor.getOrElse[Boolean]("derived")(false)
+  yield RichTextParagraph(
+    runs,
+    alignment,
+    role,
+    block.map(index =>
+      if derived then ParagraphSource(ParagraphSource.NoBlock, "", Nil, None, Some(index))
+      else ParagraphSource(index, "", Nil, None)
+    )
+  )
+}
 
 // Manual, not derived: RichTextDocument is backed by a ParagraphTree (#1663), not a case class, so
 // deriveEncoder/deriveDecoder no longer apply -- and even if they did, deriving over the tree would leak its

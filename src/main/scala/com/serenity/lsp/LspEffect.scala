@@ -18,7 +18,9 @@ enum LspEffect:
       case ReferencesRequested(uri, _, _, _, _, _) => Some(uri)
       case RenameRequested(uri, _, _, _, _, _)     => Some(uri)
       case SemanticTokensRequested(uri, _)         => Some(uri)
+      case VisibleRangeChanged(uri, _, _, _)       => Some(uri)
       case MessageRequestAnswered(_, _)            => None
+      case ReleaseAll                              => None
 
   // The text travels as the rope: the characters are only collected when a server is sent them.
   case FileOpened(uri: String, languageId: LanguageId, text: Rope)
@@ -59,7 +61,17 @@ enum LspEffect:
     */
   case SemanticTokensRequested(uri: String, languageId: LanguageId)
 
+  /** The lines of the document the editor shows, first to last. Only a server that can answer for a range alone needs
+    * them, and only to colour what is on screen; they are never a reason to re-request for one that sends it all.
+    */
+  case VisibleRangeChanged(uri: String, languageId: LanguageId, firstLine: Int, lastLine: Int)
+
   /** The user's answer to a question a server asked in a notice: the index of the action chosen, or `None` when it was
     * dismissed. Nothing to do with any document, so it never closes a pending edit.
     */
   case MessageRequestAnswered(prompt: NoticePromptId, choice: Option[Int])
+
+  /** Every document closed and every server shut down, as when the workspace leaves code mode. Safe, and a no-op, when
+    * nothing is open or running; a document opened afterwards starts a server afresh.
+    */
+  case ReleaseAll

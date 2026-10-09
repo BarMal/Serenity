@@ -92,6 +92,17 @@ final private[lsp] class LspConnectionPool private (
   def releaseAll: IO[Unit] =
     connections.modify(live => (Map.empty, live.values.toList)).flatMap(_.traverse_(releaseQuietly))
 
+  /** Every server shut down and exited, in parallel, and nothing left to start one again: no document is served, no
+    * crash counts against a later start, and no resolution is kept. Uncancelable because the connections are taken out
+    * of `connections` first, so a release stopped halfway would leave them to no one.
+    */
+  def releaseEverything: IO[Unit] =
+    (documents.set(Map.empty) >> idleSince.set(Map.empty) >> crashes.set(Map.empty) >>
+      connections
+        .getAndSet(Map.empty)
+        .flatMap(_.toList.parTraverse_((identity, managed) => shutDown(identity, managed))) >>
+      provider.evictAllResolutions).uncancelable
+
   private val onDiagnostics: (DocumentUri, List[Diagnostic]) => IO[Unit] =
     (uri, diagnostics) => applyEvent(LspEvent.LspDiagnosticsReceived(uri.value, diagnostics))
 
@@ -256,7 +267,7 @@ final private[lsp] class LspConnectionPool private (
     * `shutdownTimeout` is released regardless.
     */
   private def shutDown(identity: ConnectionIdentity, managed: ManagedConnection): IO[Unit] =
-    logger.info(s"[LSP] Shutting down idle ${serverName(identity)} server") >>
+    logger.info(s"[LSP] Shutting down ${serverName(identity)} server") >>
       clearProgress(identity) >>
       managed.connection.sendRequest(LspMethod("shutdown"), Json.Null, policy.shutdownTimeout).attempt >>
       managed.connection.sendNotification(LspMethod("exit"), Json.Null).attempt >>

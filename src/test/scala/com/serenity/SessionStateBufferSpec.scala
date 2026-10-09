@@ -140,7 +140,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
       annotations = baseBuffer.annotations.copy(
         bookmarks = List(CursorPosition(1, 2), CursorPosition(8, 0)),
         documentComments = List(
-          DocumentComment(CursorPosition(2, 0), CursorPosition(2, 9), "Review this paragraph.")
+          DocumentComment(CursorPosition(2, 0), CursorPosition(2, 9), "Review this paragraph.", id = CommentId(1))
         )
       )
     )
@@ -172,7 +172,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
     restoredBuffer.findState shouldBe Some(FindState("round", Vector(FindResult(0, 5), FindResult(5, 9)), 1))
     restoredBuffer.annotations.bookmarks shouldBe List(CursorPosition(1, 2), CursorPosition(8, 0))
     restoredBuffer.annotations.documentComments shouldBe List(
-      DocumentComment(CursorPosition(2, 0), CursorPosition(2, 9), "Review this paragraph.")
+      DocumentComment(CursorPosition(2, 0), CursorPosition(2, 9), "Review this paragraph.", id = CommentId(1))
     )
   }
 
@@ -217,9 +217,11 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve rich document fidelity through JSON round trip" in {
-    val fidelity = RichTextFidelity(
-      unsupportedElements = Set("tbl"),
-      unsupportedArchiveEntries = Set("word/media/image1.png")
+    val fidelity = FidelityReport(
+      List(
+        FidelityItem(DocumentFeature.Tables, Treatment.Dropped, 1),
+        FidelityItem(DocumentFeature.Other("settings part"), Treatment.Preserved, 2)
+      )
     )
     val baseBuffer = Buffer.fromString(BufferId(23), "kept text")
     val buffer = baseBuffer.copy(richText =

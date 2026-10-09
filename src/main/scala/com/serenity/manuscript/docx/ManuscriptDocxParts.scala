@@ -1,6 +1,6 @@
 package com.serenity.manuscript.docx
 
-import com.serenity.manuscript.{ManuscriptFormat, ManuscriptMeta}
+import com.serenity.manuscript.{ManuscriptFormat, ManuscriptMeta, ManuscriptPageNumbering}
 
 /** The fixed and near-fixed parts of a manuscript DOCX package: everything but `word/document.xml`. */
 private[docx] object ManuscriptDocxParts:
@@ -101,17 +101,12 @@ private[docx] object ManuscriptDocxParts:
     * dropped along with its separator.
     */
   def header(meta: ManuscriptMeta, format: ManuscriptFormat): String =
-    val text = format.runningHeader
-      .split(" / ", -1)
-      .toList
-      .map(_.replace("<$surname>", meta.author.surname).replace("<$keyword>", meta.shortTitle).trim)
-      .filter(_.nonEmpty)
-      .mkString(" / ")
+    val text = ManuscriptPageNumbering.runningHead(format.runningHeader, meta)
     val pageField =
       """<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>""" +
         """<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>"""
     val runs = text
-      .split(java.util.regex.Pattern.quote("<$p>"), -1)
+      .split(java.util.regex.Pattern.quote(ManuscriptPageNumbering.PageToken), -1)
       .toList
       .map(segment => if segment.isEmpty then "" else s"<w:r>${textContent(segment)}</w:r>")
       .mkString(pageField)

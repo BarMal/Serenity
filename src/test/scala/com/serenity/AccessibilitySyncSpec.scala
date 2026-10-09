@@ -152,6 +152,29 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe 2
   }
 
+  it should "not recompute when only a viewport's pending placement changed" in {
+    val bufferId = BufferId(1)
+    val stateA = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "hello")))
+    )
+    val buffer    = stateA.persisted.buffers(bufferId)
+    val following = buffer.viewport.copy(placement = ViewportPlacement.FollowCaret)
+    val stateB =
+      stateA.copy(persisted = stateA.persisted.copy(buffers = Map(bufferId -> buffer.copy(viewport = following))))
+    val program = for
+      sync      <- AccessibilitySync.empty
+      callCount <- IO.ref(0)
+      compute = (state: AppState) =>
+        (previous: Option[AccessibilitySnapshot]) =>
+          callCount.update(_ + 1).as(AccessibilitySnapshot.from(state, viewport, previous))
+      _     <- sync.sync(stateA)(compute(stateA))
+      _     <- sync.sync(stateB)(compute(stateB))
+      calls <- callCount.get
+    yield calls
+
+    program.unsafeRunSync() shouldBe 1
+  }
+
   it should "not recompute when only typing activity changed" in {
     val bufferId = BufferId(1)
     val stateA = AppState.initial.copy(persisted =

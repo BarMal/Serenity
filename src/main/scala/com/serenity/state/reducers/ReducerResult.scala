@@ -19,6 +19,12 @@ enum ThemeEffect:
   case RefreshThemeNames
   case ExportCurrentTheme
 
+enum SettingsEffect:
+  /** Pushes the live config into the parts of the runtime that learn of a change only when told: the font loader, the
+    * render caches, and the command runner and toolbar built from it.
+    */
+  case ReapplyConfig
+
 enum SurfaceEffect:
   case OpenThemePicker
   case OpenThemeCreator
@@ -74,6 +80,7 @@ enum AppEffect:
   case ExecuteCommandUnrecorded(command: Command)
   case ScheduleCommandRunnerBindingExpiry(recordedAtMillis: Long)
   case Theme(effect: ThemeEffect)
+  case Settings(effect: SettingsEffect)
   case Surface(effect: SurfaceEffect)
   case File(effect: FileEffect)
   case Explorer(effect: ExplorerEffect)

@@ -23,7 +23,12 @@ object AppEventReducer:
 
       case ToggleCommandRunner =>
         if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
-        else ReducerResult.noEffects(toggleCommandRunner(state, registry))
+        else
+          val abandoned = SettingsPreviewReducer.revert(state)
+          ReducerResult(toggleCommandRunner(abandoned.state, registry), abandoned.effects)
+
+      case SettingsPreviewAbandoned =>
+        ReducerResult.withEffect(state, AppEffect.Settings(SettingsEffect.ReapplyConfig))
 
       case ToggleContextualToolbar =>
         if state.startPageSurface.isDefined then ReducerResult.noEffects(state)

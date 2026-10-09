@@ -30,6 +30,7 @@ in `third-party/`. Do not edit it by hand: `sbt checkThirdPartyNotices` fails wh
 | net.java.dev.jna:jna | 5.19.1 | Apache-2.0 (used under this option of Apache-2.0 OR LGPL-2.1-or-later) | Timothy Wall, Matthias Bläsing and JNA contributors | <https://github.com/java-native-access/jna> | Apache-2.0 |
 | net.java.dev.jna:jna-platform | 5.19.1 | Apache-2.0 (used under this option of Apache-2.0 OR LGPL-2.1-or-later) | Timothy Wall, Matthias Bläsing and JNA contributors | <https://github.com/java-native-access/jna> | Apache-2.0 |
 | org.apache.pdfbox:fontbox | 3.0.8 | Apache-2.0 | The Apache Software Foundation | <https://pdfbox.apache.org/> | Apache-2.0, NOTICE-pdfbox |
+| org.apache.pdfbox:pdfbox | 3.0.8 | Apache-2.0 | The Apache Software Foundation | <https://pdfbox.apache.org/> | Apache-2.0, NOTICE-pdfbox |
 | org.apache.pdfbox:pdfbox-io | 3.0.8 | Apache-2.0 | The Apache Software Foundation | <https://pdfbox.apache.org/> | Apache-2.0, NOTICE-pdfbox |
 | org.commonmark:commonmark | 0.30.0 | BSD-2-Clause | Atlassian Pty Ltd | <https://github.com/commonmark/commonmark-java> | BSD-2-Clause-commonmark |
 | org.commonmark:commonmark-ext-gfm-tables | 0.30.0 | BSD-2-Clause | Atlassian Pty Ltd | <https://github.com/commonmark/commonmark-java> | BSD-2-Clause-commonmark |

@@ -17,13 +17,13 @@ class TuiStartupReopenSpec extends TuiSpec:
 
   "the startup splash" should "repaint the open-file dialog when it is reopened after Escape" in runTuiStartPage {
     for
-      _             <- arrowDown // "New document" -> "Open file or folder"
+      _             <- arrowDown // "New document" -> "Open file"
       _             <- enter     // open the file dialog
       afterFirst    <- state
       firstRuntime  <- runtimeScreen
       _             <- escape    // dismiss back to the splash
       afterEscape   <- state
-      _             <- enter     // reopen (selection stays on "Open file or folder")
+      _             <- enter     // reopen (selection stays on "Open file")
       afterSecond   <- state
       secondRuntime <- runtimeScreen
     yield

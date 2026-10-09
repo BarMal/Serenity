@@ -19,6 +19,8 @@ case object DeleteBackward              extends DeletionEvent
 case object DeleteForward               extends DeletionEvent
 case object DeleteWordBackward          extends DeletionEvent
 case object DeleteWordForward           extends DeletionEvent
+case object DeleteToLineStart           extends DeletionEvent
+case object DeleteToLineEnd             extends DeletionEvent
 case object MoveLeft                    extends NavigationEvent
 case object MoveRight                   extends NavigationEvent
 case object MoveWordLeft                extends NavigationEvent

@@ -2,6 +2,7 @@ package com.serenity.command
 
 import com.serenity.config.*
 import com.serenity.frontend.FrontendCapabilities
+import com.serenity.project.ProjectPresence
 import com.serenity.ui.presets.UiPreset
 
 /** `CommandRunner` methods for the overlay's lifecycle -- activating and deactivating it, rebuilding its config-
@@ -50,6 +51,9 @@ private[command] trait CommandRunnerLifecycle:
     copy(uiPresetPreviews =
       CommandRunnerSettingsItems.normalizedUiPresetPreviews(previews)
     ).withSearchCacheRefreshed.syncEditMode.normalizeSubmenuEditMode
+
+  def withProjectPresence(presence: ProjectPresence): CommandRunner =
+    copy(context = context.copy(projectPresence = presence)).withSearchCacheRefreshed
 
   def deactivate: CommandRunner =
     copy(

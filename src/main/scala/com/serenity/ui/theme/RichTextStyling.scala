@@ -1,6 +1,6 @@
 package com.serenity.ui.theme
 
-import com.serenity.richtext.{InlineMark, ParagraphRole, RichTextDocument}
+import com.serenity.richtext.{InlineAtom, InlineMark, ParagraphRole, RichTextDocument}
 import com.serenity.ui.color.RenderColor
 
 object RichTextStyling:
@@ -10,6 +10,14 @@ object RichTextStyling:
     * proportionally. See [[proseZoom]].
     */
   val ProseZoomBaselinePx: Float = 12.0f
+
+  val SoftBreakGlyph: String = "\u21b5"
+
+  /** Stands in for a visible opaque object (an image, a footnote reference) that cannot be drawn in text yet. */
+  val OpaqueObjectGlyph: String = "\u25a3"
+
+  /** Stands in for a read-only block (a table, a content control) on its line. */
+  val BlockGlyph: String = "\u25a6"
 
   /** The zoom factor a base prose font size implies, anchored so the default (12pt) is 1x. */
   def proseZoom(baseProseFontSizePx: Float): Float =
@@ -81,7 +89,17 @@ object RichTextStyling:
       val localStart = (startColumn - runStart).max(0).min(run.text.length)
       val localEnd   = (endColumn - runStart).max(localStart).min(run.text.length)
       val content    = run.text.slice(localStart, localEnd)
-      Option.when(content.nonEmpty)((content, run.style, role))
+      Option.when(content.nonEmpty)((visibleText(run, content), run.style, role))
+
+  /** Until layout can break a row at a soft break, the atom is drawn as a visible return glyph in its one-character
+    * slot, so the break can be seen and selected. Paint and measurement both read these spans, so they agree.
+    */
+  private def visibleText(run: com.serenity.richtext.RichTextRun, content: String): String =
+    run.atom match
+      case Some(InlineAtom.SoftBreak)       => SoftBreakGlyph
+      case Some(InlineAtom.Opaque(_, true)) => OpaqueObjectGlyph
+      case Some(InlineAtom.Block(_, _))     => BlockGlyph
+      case _                                => content
 
   private def scaledTextStyle(
     style: com.serenity.richtext.RichTextStyle,

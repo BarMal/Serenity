@@ -19,7 +19,7 @@ class RuntimeWatchSpec extends AnyFlatSpec with Matchers:
   private val oneSecond = 1.second
 
   private def withRuntime[A](test: IORuntime => A): A =
-    val runtime = IORuntime.builder().build()
+    val runtime = OwnedRuntime.build()
     try test(runtime)
     finally runtime.shutdown()
 
@@ -43,7 +43,7 @@ class RuntimeWatchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report a shut-down runtime as unresponsive" in {
-    val dead = IORuntime.builder().build()
+    val dead = OwnedRuntime.build()
     dead.shutdown()
 
     RuntimeWatch.probe(dead, oneSecond) shouldBe a[Liveness.Unresponsive]
@@ -131,7 +131,7 @@ class RuntimeWatchSpec extends AnyFlatSpec with Matchers:
       report should include("GLOBAL IORuntime unresponsive: no answer")
       report should include("io-compute workers:")
       report should include(s"thread ${Thread.currentThread.getName}")
-      report should include("thread io-compute-0")
+      report should include(s"thread ${OwnedRuntime.ThreadPrefix}-0")
       report should include("at ")
     }
 

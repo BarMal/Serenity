@@ -79,7 +79,14 @@ object SwingMenuBar:
           menuHost.readModel.flatMap(seed =>
             IO.blocking(
               SwingUtilities.invokeAndWait(() =>
-                window.installMenuBar(build(host, MenuSpec.forOs(osName), CommandRegistry.withToggleUI, Some(seed)))
+                window.installMenuBar(
+                  build(
+                    host,
+                    MenuSpec.forOs(osName, seed.app.runtime.capabilities.opensFileOrFolder),
+                    CommandRegistry.withToggleUI,
+                    Some(seed)
+                  )
+                )
               )
             )
           )
