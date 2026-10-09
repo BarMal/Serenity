@@ -6,9 +6,9 @@ import com.serenity.ui.layout.Symbol
 /** Keeps the notes pane on the note for what its source pane's cursor is on: a keyword that has a note, else the
   * chapter it is in. Runs on every commit, so no event source has to remember to retarget it, and does nothing unless
   * the cursor changed line or moved onto or off a keyword, the source buffer changed, or the notes pane or the notes
-  * themselves changed -- so a keystroke inside a chapter never re-parses the document, and the headings are re-parsed only
-  * when the text changed since the last retarget (#1848). A heading typed or deleted under the cursor is picked up when
-  * the cursor next changes line.
+  * themselves changed -- so a keystroke inside a chapter never re-parses the document, and the headings are re-parsed
+  * only when the text changed since the last retarget (#1848). A heading typed or deleted under the cursor is picked up
+  * when the cursor next changes line.
   *
   * Only the pane's buffer is swapped. Scroll position and cursor live on each note's own buffer, so a note comes back
   * exactly as it was left.
