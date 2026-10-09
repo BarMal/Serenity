@@ -30,17 +30,21 @@ object ConfigGroups:
           ).flatten
       }
 
-  def hotkeys(config: AppConfig): List[(String, HoconValue)] =
-    HotkeyAction.values.toList.map { action =>
-      ConfigUtil.joinPath("hotkey", action.configKey) ->
-        HoconValue.list(config.inputConfig.hotkeyConfig.bindingsFor(action).map(_.render))
+  def hotkeys(config: AppConfig): List[(String, HoconValue)] = hotkeys(config, HotkeyOverrides.runningOs)
+
+  def hotkeys(config: AppConfig, osName: String): List[(String, HoconValue)] =
+    HotkeyOverrides.actions(config.inputConfig.hotkeyConfig, osName).map { (action, triggers) =>
+      ConfigUtil.joinPath("hotkey", action.configKey) -> HoconValue.list(triggers.map(_.render))
     }
+
+  def commandHotkeys(config: AppConfig): List[(String, HoconValue)] =
+    commandHotkeys(config, HotkeyOverrides.runningOs)
 
   /** Registry command ids are lowercase words joined by hyphens, which HOCON takes unquoted -- so the id read back from
     * a key is the id that was written.
     */
-  def commandHotkeys(config: AppConfig): List[(String, HoconValue)] =
-    config.inputConfig.hotkeyConfig.commandBindings.toList.sortBy(_._1).map { (commandId, triggers) =>
+  def commandHotkeys(config: AppConfig, osName: String): List[(String, HoconValue)] =
+    HotkeyOverrides.commands(config.inputConfig.hotkeyConfig, osName).map { (commandId, triggers) =>
       ConfigUtil.joinPath("hotkey", "command", commandId) -> HoconValue.list(triggers.map(_.render))
     }
 

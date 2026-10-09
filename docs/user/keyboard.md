@@ -71,3 +71,9 @@ hotkey.command.bold = ["ctrl+b"]
 A trigger is modifiers and a key joined with `+`. The modifiers are `ctrl`, `alt`, `shift` and `meta` (`cmd` and
 `command` mean the same as `meta`). Two actions cannot share a trigger. An empty list unbinds a key. You can also
 record a key from the command palette's settings.
+
+The file lists only the bindings you have changed. Anything it does not mention keeps the default of the Serenity you
+are running, so a default added in a later release reaches you without editing the file. Resetting a binding in the
+settings removes its line. A file from before this change is read once with the lists that match the current defaults
+(or hold only some of their triggers) treated as defaults; a trigger you had deliberately removed from such a list
+returns, and removing it again keeps.
