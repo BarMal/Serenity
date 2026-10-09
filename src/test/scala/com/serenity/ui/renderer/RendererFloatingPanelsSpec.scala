@@ -1,6 +1,5 @@
 package com.serenity.ui.renderer
 
-import com.serenity.animation.{EasingCurve, Tween}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -14,11 +13,11 @@ import org.scalatest.matchers.should.Matchers
   * `FileWorkflowModalRenderingSpec` ("dim the workspace behind a blocking modal..."), and every modal/floating
   * overlay's *content* is exercised end-to-end by the many `*ModalRenderingSpec`/`*OverlaySpec` specs -- this spec
   * targets the two things about this object those specs pass through without pinning: the trivial
-  * `pinnedAndExpandedSurfaces` delegation, blur being applied to a docked panel's backdrop when the surface material
-  * calls for it, and floating panels having their *exact* on-screen pixel rect remembered on `RendererFrameState` (the
-  * fact [[RendererFrameState.previousFloatingSurfaceRects]] itself round-trips a map is already covered by
-  * `RendererFrameStateSpec`; what is not covered anywhere else is that `RendererFloatingPanels` computes and hands it
-  * the *right* rect for a real floating overlay).
+  * `pinnedAndExpandedSurfaces` delegation, blur being skipped behind a docked panel even when the surface material
+  * calls for it (its slot holds only cleared background), and floating panels having their *exact* on-screen pixel rect
+  * remembered on `RendererFrameState` (the fact [[RendererFrameState.previousFloatingSurfaceRects]] itself round-trips
+  * a map is already covered by `RendererFrameStateSpec`; what is not covered anywhere else is that
+  * `RendererFloatingPanels` computes and hands it the *right* rect for a real floating overlay).
   */
 class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
 
@@ -56,52 +55,6 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
 
   it should "return an empty list when nothing is docked" in {
     RendererFloatingPanels.pinnedAndExpandedSurfaces(baseState()) shouldBe Nil
-  }
-
-  "renderPinnedPanels" should "blur a docked panel's backdrop when the active surface material calls for a blur" in {
-    // `AppConfig.default`'s surface material (Frosted, blurRadius = 0.18) already yields a positive
-    // `SurfaceMaterials.effectiveBlurRadius` -- no config override needed to exercise this branch.
-    val state = DockedPanelFixtures.dock(
-      baseState(),
-      SurfaceId("diagnostics"),
-      SurfaceContent.Diagnostics(Nil),
-      PanelPosition.Right,
-      22
-    )
-    val surface = new MockRenderSurface(100, 30)
-
-    RendererEntryPoints.render(
-      state,
-      cursorVisible = true,
-      surface,
-      ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
-    )
-
-    surface.blurRegionCalls should not be empty
-  }
-
-  it should "not blur a docked panel's backdrop once visual flair is turned off" in {
-    val config = com.serenity.config.AppConfig.default.withVisualFlairLevel(com.serenity.config.VisualFlairLevel.Off)
-    val docked = DockedPanelFixtures.dock(
-      baseState(),
-      SurfaceId("diagnostics"),
-      SurfaceContent.Diagnostics(Nil),
-      PanelPosition.Right,
-      22
-    )
-    val state   = docked.copy(persisted = docked.persisted.copy(config = config))
-    val surface = new MockRenderSurface(100, 30)
-
-    RendererEntryPoints.render(
-      state,
-      cursorVisible = true,
-      surface,
-      ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
-    )
-
-    surface.blurRegionCalls shouldBe empty
   }
 
   "renderFloatingPanels" should "remember the exact on-screen pixel rect it painted a floating overlay's surface at" in {
@@ -152,41 +105,7 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
       Set(AboveCursorStackFixtures.lensId(state), AboveCursorStackFixtures.peekId(state))
   }
 
-  "renderPinnedPanels" should "clip an opening docked panel to its in-flight scale-in rect" in {
-    val surfaceId = SurfaceId("diagnostics")
-    val docked = DockedPanelFixtures.dock(
-      baseState(),
-      surfaceId,
-      SurfaceContent.Diagnostics(Nil),
-      PanelPosition.Right,
-      22
-    )
-    val geometry = PanelGeometryState(
-      Tween(
-        start = LayoutRect(3, 4, 0, 6),
-        end = LayoutRect(3, 4, 22, 6),
-        curve = EasingCurve.Linear,
-        steps = 4
-      ).advance
-    )
-    val geometryRect = geometry.currentRect
-    val state = docked.copy(runtime =
-      docked.runtime.copy(motion = docked.runtime.motion.copy(panelGeometry = Map(surfaceId -> geometry)))
-    )
-    val surface = new MockRenderSurface(100, 30)
-
-    RendererEntryPoints.render(
-      state,
-      cursorVisible = true,
-      surface,
-      ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
-    )
-
-    surface.roundRectClipCalls.map(c => LayoutRect(c.x, c.y, c.width, c.height)) should contain(geometryRect)
-  }
-
-  it should "not clip a docked panel once it has no in-flight panel geometry" in {
+  "renderPinnedPanels" should "not clip a docked panel to a sub-rect" in {
     val surfaceId = SurfaceId("diagnostics")
     val state = DockedPanelFixtures.dock(
       baseState(),
@@ -205,45 +124,10 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    surface.roundRectClipCalls shouldBe empty
+    surface.rectClipCalls shouldBe empty
   }
 
-  "renderFloatingPanels" should "clip a closing ghost panel to its in-flight scale-out rect" in {
-    val ghostId    = SurfaceId("ghost-outline")
-    val cachedRect = LayoutRect(2, 2, 20, 10)
-    val geometry = PanelGeometryState(
-      Tween(start = cachedRect, end = LayoutRect(2, 2, 0, 10), curve = EasingCurve.Linear, steps = 5, currentFrame = 3)
-    )
-    val geometryRect = geometry.currentRect
-    val state = baseState().copy(
-      runtime = baseState().runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            ghostId,
-            SurfaceContent.GhostOverlay(
-              SurfaceContent.Outline(List(Symbol("example", SymbolKind.Function, Location(0, 0)))),
-              cachedRect
-            ),
-            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          )
-        ),
-        motion = baseState().runtime.motion.copy(panelGeometry = Map(ghostId -> geometry))
-      )
-    )
-    val surface = new MockRenderSurface(100, 30)
-
-    RendererEntryPoints.render(
-      state,
-      cursorVisible = false,
-      surface,
-      ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
-    )
-
-    surface.roundRectClipCalls.map(c => LayoutRect(c.x, c.y, c.width, c.height)) should contain(geometryRect)
-  }
-
-  it should "forget a floating surface's remembered rect once it stops being painted" in {
+  "renderFloatingPanels" should "forget a floating surface's remembered rect once it stops being painted" in {
     val surfaceId = SurfaceId("peek")
     val withPeek = baseState().copy(
       persisted = baseState().persisted.copy(focus = Focus.Surface(surfaceId)),

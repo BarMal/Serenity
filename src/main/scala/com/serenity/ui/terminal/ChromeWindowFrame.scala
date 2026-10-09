@@ -112,27 +112,3 @@ final private[terminal] class ResizeGlassPane(
 
   addMouseListener(adapter)
   addMouseMotionListener(adapter)
-
-/** The window's content pane, rendered with soft rounded corners whenever per-pixel translucency lets the frame
-  * composite them against the desktop. Decoupled from [[SwingWindow]] so it can live in its own file.
-  */
-private[terminal] class RoundedContentPane(
-    layout: LayoutManager,
-    usesCustomChrome: Boolean,
-    maximizedRef: AtomicBoolean,
-    perPixelTranslucencySupported: Boolean,
-    chromeMetricsRef: AtomicReference[SwingWindow.ChromeMetrics],
-    roundedContentBuffers: SwingWindow.RoundedCornerMaskBufferCache
-) extends JPanel(layout):
-  setOpaque(false)
-
-  override def paint(g: Graphics): Unit =
-    if SwingWindow.shouldUsePerPixelRoundedCorners(
-          usesCustomChrome,
-          maximizedRef.get(),
-          perPixelTranslucencySupported
-        ) && getWidth > 0 && getHeight > 0
-    then
-      val buffers = roundedContentBuffers.acquire(getWidth, getHeight, chromeMetricsRef.get().cornerArc)
-      val _       = g.drawImage(buffers.render(contentsGraphics => super.paint(contentsGraphics)), 0, 0, null)
-    else super.paint(g)

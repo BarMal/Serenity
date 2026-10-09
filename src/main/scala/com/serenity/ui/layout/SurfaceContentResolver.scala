@@ -1,11 +1,11 @@
 package com.serenity.ui.layout
 
-import java.awt.Color
-
 import scala.annotation.unused
 
 import com.serenity.markdown.{MarkdownDocumentPreview, MarkdownPreviewCache}
+import com.serenity.rope.Rope
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 enum SurfaceRenderMode:
@@ -29,8 +29,8 @@ final case class OverlaySegment(
     text: String,
     selected: Boolean = false,
     tone: OverlayTone = OverlayTone.Normal,
-    foregroundColor: Option[Color] = None,
-    backgroundColor: Option[Color] = None,
+    foregroundColor: Option[RenderColor] = None,
+    backgroundColor: Option[RenderColor] = None,
     fontFamily: Option[String] = None,
     inlineIcon: Option[String] = None,
     inlineIconFontFamily: Option[String] = None,
@@ -42,8 +42,8 @@ final case class OverlayRow(
     plainText: String,
     selected: Boolean = false,
     cursorColumn: Option[Int] = None,
-    foregroundColor: Option[Color] = None,
-    backgroundColor: Option[Color] = None,
+    foregroundColor: Option[RenderColor] = None,
+    backgroundColor: Option[RenderColor] = None,
     segments: List[OverlaySegment] = Nil,
     layout: OverlayRowLayout = OverlayRowLayout.Plain,
     leadingPadding: Int = 0
@@ -112,8 +112,8 @@ object SurfaceContentResolver:
           entries.map(_.name),
           selectedPath.flatMap(p => Option(p.getFileName).map(_.toString))
         )
-      case SurfaceContent.DirectoryTree(tree, selectedPath) =>
-        PanelContentResolver.resolveDirectoryTree(rect, mode, tree, selectedPath)
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scroll) =>
+        PanelContentResolver.resolveDirectoryTree(rect, mode, tree, selectedPath, scroll)
       case SurfaceContent.CommandPalette(runner) =>
         // `OverlayViewModel.contentView` bypasses this call entirely for `CommandPalette` (issue #819, slice 2):
         // painting is done via `CommandRunnerSurfaceComposition`, and `TextOverlayRenderer` ignores `rows` whenever
@@ -145,12 +145,12 @@ object SurfaceContentResolver:
         ResolvedSurfaceContent()
       case SurfaceContent.Terminal(buffer, cursor) =>
         PanelContentResolver.resolveTerminal(rect, mode, buffer, cursor)
-      case SurfaceContent.Outline(symbols, activeLocation) =>
-        PanelContentResolver.resolveOutline(rect, mode, symbols, activeLocation)
-      case SurfaceContent.Comments(symbols, activeLocation) =>
-        PanelContentResolver.resolveComments(rect, mode, symbols, activeLocation)
-      case SurfaceContent.Diagnostics(issues, activeLocation) =>
-        PanelContentResolver.resolveDiagnostics(rect, mode, issues, activeLocation)
+      case SurfaceContent.Outline(symbols, activeLocation, scroll) =>
+        PanelContentResolver.resolveOutline(rect, mode, symbols, activeLocation, scroll)
+      case SurfaceContent.Comments(symbols, activeLocation, scroll) =>
+        PanelContentResolver.resolveComments(rect, mode, symbols, activeLocation, scroll)
+      case SurfaceContent.Diagnostics(issues, activeLocation, scroll) =>
+        PanelContentResolver.resolveDiagnostics(rect, mode, issues, activeLocation, scroll)
       case SurfaceContent.ShortcutsHelp(groups) =>
         PanelContentResolver.resolveShortcutsHelp(rect, mode, groups)
       case SurfaceContent.TabList(entries, activeBufferId) =>
@@ -172,17 +172,13 @@ object SurfaceContentResolver:
       case SurfaceContent.CommentLens(lens) =>
         ResolvedSurfaceContent(
           title = titleFor(mode, "comment"),
-          header = Some(OverlayRow("comment")),
+          header = Some(OverlayRow(lens.headline)),
           rows = commentLensRows(lens)
         )
       case SurfaceContent.MarkdownPreview(_, title) =>
         ResolvedSurfaceContent(title = titleFor(mode, s"Preview: $title"))
-      case SurfaceContent.CompanionSprite =>
-        // Painted directly by Renderer's dedicated companion-sprite paint step (surface.pixels.drawImage), not
-        // through this cell-text path -- see the doc comment on SurfaceContent.CompanionSprite.
-        ResolvedSurfaceContent()
-      case SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
-        resolve(originalContent, cachedRect, mode, itemGapRows)
+      case SurfaceContent.Notice(notice, _) =>
+        NoticeContent.resolve(notice, rect)
 
   private[layout] def titleFor(mode: SurfaceRenderMode, title: String): Option[String] =
     mode match
@@ -195,13 +191,14 @@ object SurfaceContentResolver:
     */
   private[layout] def commentLensRows(lens: CommentLensState): List[OverlayRow] =
     val (cursorLine, cursorColumn) = lineAndColumnAt(lens.draft, lens.clampedCursor)
-    splitLines(lens.draft).zipWithIndex.map { (line, index) =>
+    val draftRows = splitLines(lens.draft).zipWithIndex.map { (line, index) =>
       OverlayRow(
         plainText = line,
         selected = index == cursorLine,
         cursorColumn = Option.when(index == cursorLine)(cursorColumn)
       )
     }
+    draftRows ++ lens.threadLines.map(OverlayRow(_))
 
   private def splitLines(text: String): List[String] =
     text.split("\n", -1).toList match
@@ -225,11 +222,10 @@ object SurfaceContentResolver:
   /** `cache` defaults to a freshly constructed [[MarkdownPreviewCache]] (issue #1677) rather than threading a
     * per-`StateManager` instance down from [[com.serenity.state.manager.RenderCaches]]: this method is reached from
     * pure layout/geometry computation with no render-cache instance in scope -- `EditorLayoutContract.pinnedGeometry`
-    * (itself called from `AnimationChoreography`, `PinnedPanelAnimations` and `PinnedPanelMouseHitTesting`, none of
-    * which carry a `RenderContext`) -- as well as from the one paint-time caller that does,
-    * [[com.serenity.ui.renderer.PinnedPanelViewModel.resolve]]. The cache here is pure memoization of inline line
-    * splitting with no bearing on correctness, so a caller without a real instance to pass loses only the caching
-    * benefit for this one text-preview path, never a wrong result.
+    * (itself called from `PinnedPanelMouseHitTesting`, which carries no `RenderContext`) -- as well as from the one
+    * paint-time caller that does, [[com.serenity.ui.renderer.PinnedPanelViewModel.resolve]]. The cache here is pure
+    * memoization of inline line splitting with no bearing on correctness, so a caller without a real instance to pass
+    * loses only the caching benefit for this one text-preview path, never a wrong result.
     */
   def resolveMarkdownPreview(
     title: String,
@@ -249,4 +245,24 @@ object SurfaceContentResolver:
     ResolvedSurfaceContent(
       title = titleFor(mode, s"Preview: $title"),
       rows = rows
+    )
+
+  /** [[resolveMarkdownPreview]] for a buffer's `Rope`: the same rows, but the text is read only when this document has
+    * not been resolved at this panel height before, so resolving an unchanged document on every frame and for every
+    * layout contract costs no pass over it. A missing buffer resolves to an empty preview.
+    */
+  def resolveBufferMarkdownPreview(
+    title: String,
+    content: Option[Rope],
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    cache: MarkdownPreviewCache = MarkdownPreviewCache()
+  ): ResolvedSurfaceContent =
+    val contentRows = SurfaceFrameLayout(rect).contentRect.height.max(0)
+    ResolvedSurfaceContent(
+      title = titleFor(mode, s"Preview: $title"),
+      rows = content
+        .fold(Vector.empty[String])(MarkdownDocumentPreview.panelPreviewRows(_, contentRows, cache))
+        .map(OverlayRow(_))
+        .toList
     )

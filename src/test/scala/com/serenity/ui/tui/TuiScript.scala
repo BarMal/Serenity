@@ -7,7 +7,7 @@ import cats.data.Kleisli
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.keystroke.events.{Event, MouseButton}
-import com.serenity.state.models.{AppState, Buffer, SurfaceContent, UiSurface}
+import com.serenity.state.models.{AppState, Buffer, UiSurface}
 import com.serenity.ui.layout.ViewportSize
 
 /** A scripted interaction with a running TUI session, composed as a for-comprehension.
@@ -102,16 +102,11 @@ trait TuiScriptSyntax:
     */
   val settledScreen: TuiScript[TuiScreen] = step(_.settledScreen)
 
-  /** One frame as the runtime's own fast phase would paint it -- always the full-repaint path (issue #934 v2). */
+  /** One frame as the runtime's own fast phase would paint it -- always the full-repaint path. */
   val runtimeScreen: TuiScript[TuiScreen] = step(_.runtimeScreen)
 
   /** One tick of the idle cursor phase -- see [[TuiSession.idleCursorScreen]]. */
   val idleCursorScreen: TuiScript[TuiScreen] = step(_.idleCursorScreen)
-
-  /** Advance the animation clock by whole frames, for scenarios that assert on motion rather than its outcome. */
-  def advanceAnimations(ticks: Int): TuiScript[Boolean] = step(_.advanceAnimations(ticks))
-
-  val animationsActive: TuiScript[Boolean] = step(_.animationsActive)
 
   val state: TuiScript[AppState] = step(_.state)
 
@@ -123,15 +118,7 @@ trait TuiScriptSyntax:
   val documentText: TuiScript[Option[String]] =
     state.map(focusedBuffer(_).map(_.document.content.toString))
 
-  /** The surfaces actually open, excluding the transient ghost a closing surface leaves behind while it fades out
-    * (`SurfaceContent.GhostOverlay`) -- which is what "is the palette closed?" means to a user.
-    */
-  val openSurfaces: TuiScript[List[UiSurface]] =
-    state.map(_.runtime.uiSurfaces.filter {
-      _.content match
-        case SurfaceContent.GhostOverlay(_, _) => false
-        case _                                 => true
-    })
+  val openSurfaces: TuiScript[List[UiSurface]] = state.map(_.runtime.uiSurfaces)
 
   val eventsApplied: TuiScript[Vector[Event]] = step(_.eventsApplied)
 

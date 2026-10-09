@@ -1,10 +1,10 @@
 package com.serenity.ui.renderer
 
-import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import com.serenity.config.AppConfig
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
 /** Identity of the screen a frame publishes to -- a newtype over the backing canvas/surface's own reference identity,
@@ -15,8 +15,10 @@ opaque type ScreenIdentity = AnyRef
 object ScreenIdentity:
   def apply(value: AnyRef): ScreenIdentity = value
 
-/** Where a frame goes: the screen it will be shown on, and the region sink that screen's repaint should honour. */
-final case class FrameOutput(screenToken: ScreenIdentity, repaintRegion: AtomicReference[Option[PixelRect]])
+/** Where a frame goes: the screen it will be shown on, and the region sink that screen's repaint should honour --
+  * `None` for the whole canvas, otherwise the disjoint rects outside which the frame matches what is on screen.
+  */
+final case class FrameOutput(screenToken: ScreenIdentity, repaintRegion: AtomicReference[Option[List[PixelRect]]])
 
 /** The render parameters that shape a frame but are not part of `AppState`, so `DamageProducer` -- which only diffs
   * `AppState` -- has no way to see them change: the window's pixel size, the three fonts, and the metrics/overrides a
@@ -32,7 +34,7 @@ final case class RenderInputs(
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color]
+    cursorColor: Option[RenderColor]
 )
 
 /** Per-persistence-key bookkeeping this module remembers across frames, replacing the retired `ChromeKey`/
@@ -54,27 +56,37 @@ final case class DrawState(paneIds: Set[PaneId], inputs: RenderInputs)
   * for `drawImage`, independent of which of the (possibly pooled) frame buffers it gets composited onto.
   */
 final case class CachedModalLayer(
-    image: BufferedImage,
+    image: RenderImage,
     viewportWidth: Int,
     viewportHeight: Int,
     cursorVisible: Boolean
 )
 
 /** What [[RendererFramePlanner.paintPanelLayer]] cached the last time it painted a given pinned/expanded/floating panel
-  * into its own buffer (#1100 stage 3): the [[CachedModalLayer]] pattern generalised to every panel kind that reads
-  * pixels back off the frame surface via `blurRegion`, keyed by [[SurfaceId]] rather than held as a single slot, since
-  * -- unlike the modal -- more than one of these panels can be on screen at once. `frameRect` is remembered alongside
-  * viewport shape and cursor-blink state because a panel's own rect can shift (another panel appearing/disappearing
-  * reflows pinned layout) without the panel's own `UiSurface` fields changing, which [[Damage.Surface]] narrowing alone
-  * would not catch.
+  * into its own buffer (#1100 stage 3): the [[CachedModalLayer]] pattern generalised to every panel kind, keyed by
+  * [[SurfaceId]] rather than held as a single slot, since -- unlike the modal -- more than one of these panels can be
+  * on screen at once. `frameRect` is remembered alongside viewport shape and cursor-blink state because a panel's own
+  * rect can shift (another panel appearing/disappearing reflows pinned layout) without the panel's own `UiSurface`
+  * fields changing, which [[Damage.Surface]] narrowing alone would not catch.
   */
 final case class CachedPanelLayer(
-    image: BufferedImage,
+    image: RenderImage,
     viewportWidth: Int,
     viewportHeight: Int,
     cursorVisible: Boolean,
     frameRect: LayoutRect
 )
+
+/** What a frame's annotations are worked out from, compared by object identity: each part is an immutable value the
+  * state replaces rather than edits, so the same object is the same answer and nothing needs deep comparison.
+  */
+final class AnnotationInputs private (private val parts: Vector[AnyRef]):
+
+  def sameAs(other: AnnotationInputs): Boolean =
+    parts.length == other.parts.length && parts.lazyZip(other.parts).forall(_ eq _)
+
+object AnnotationInputs:
+  def apply(parts: AnyRef*): AnnotationInputs = new AnnotationInputs(parts.toVector)
 
 /** The render-plan cache entry [[RendererFramePlanner.prepareScene]] produces and cursor-only entry points reuse when
   * nothing that would invalidate it has changed.
@@ -226,6 +238,28 @@ final class RendererFrameState(initialCapacity: Int):
     */
   private val preparedScenes = new BoundedRefCache[SurfaceContentIdentity, PreparedScene](cacheCapacity)
 
+  private val annotationMemos =
+    new BoundedRefCache[SurfaceContentIdentity, (AnnotationInputs, Map[BufferId, BufferRenderAnnotations])](
+      cacheCapacity
+    )
+
+  /** `compute`'s result for `inputs`, reused for as long as the surface's next frame is handed the very same inputs. A
+    * surface that persists nothing has no frame to carry it over to, so it works them out each time.
+    */
+  def annotationsFor(surface: RenderSurface, inputs: AnnotationInputs)(
+    compute: => Map[BufferId, BufferRenderAnnotations]
+  ): Map[BufferId, BufferRenderAnnotations] =
+    surface.persistentContentKey.fold(compute) { key =>
+      annotationMemos
+        .get(key)
+        .collect { case (previous, annotations) if previous.sameAs(inputs) => annotations }
+        .getOrElse {
+          val annotations = compute
+          annotationMemos.put(key, inputs -> annotations)
+          annotations
+        }
+    }
+
   def preparedSceneFor(surface: RenderSurface): Option[PreparedScene] =
     surface.persistentContentKey.flatMap(preparedScenes.get)
 
@@ -292,35 +326,36 @@ final class RendererFrameState(initialCapacity: Int):
   private val screenDamage  = new BoundedRefCache[ScreenIdentity, Damage](cacheCapacity)
   private val screenPaneIds = new BoundedRefCache[ScreenIdentity, Set[PaneId]](cacheCapacity)
 
-  /** Keyed by the [[RenderSurface]] a frame was painted onto, exactly like [[bufferScreen]] above and for the same
-    * reason: a single JVM-wide slot would let one surface's cached modal image leak into another surface's frame --
-    * harmless in production (there is only ever one real window) but a real hazard for any other concurrently running
-    * render session in the same process, tests included, since these caches are process-wide singletons every suite
-    * shares.
+  /** Keyed by [[RenderSurface.layerCacheOwner]] rather than the surface itself: a GUI frame is a fresh surface every
+    * time, so a surface key never hit and each frame pinned another full-window image until eviction (#1798). Still per
+    * owner, never one JVM-wide slot, so one window's cached modal image can't leak into another's frame.
     */
-  private val modalLayerBuffers = new BoundedRefCache[RenderSurface, CachedModalLayer](cacheCapacity)
+  private val modalLayerBuffers = new BoundedRefCache[ScreenIdentity, CachedModalLayer](cacheCapacity)
 
-  def cachedModalLayerFor(surface: RenderSurface): Option[CachedModalLayer] = modalLayerBuffers.get(surface)
+  def cachedModalLayerFor(surface: RenderSurface): Option[CachedModalLayer] =
+    modalLayerBuffers.get(surface.layerCacheOwner)
 
   def rememberModalLayerBuffer(surface: RenderSurface, layer: CachedModalLayer): Unit =
-    modalLayerBuffers.put(surface, layer)
+    modalLayerBuffers.put(surface.layerCacheOwner, layer)
 
-  def forgetModalLayerBuffer(surface: RenderSurface): Unit = modalLayerBuffers.remove(surface)
+  def forgetModalLayerBuffer(surface: RenderSurface): Unit = modalLayerBuffers.remove(surface.layerCacheOwner)
 
-  /** Keyed by [[RenderSurface]] first and [[SurfaceId]] second, for the same cross-surface-leak reason as
-    * [[modalLayerBuffers]] -- a bare `Map[SurfaceId, CachedPanelLayer]` shared process-wide let any two independently
-    * rendered surfaces that happen to reuse the same `SurfaceId` (unremarkable: tests across many specs all use
-    * `SurfaceId("outline")`) stomp on each other's cached panel image.
+  /** Keyed by owner first and [[SurfaceId]] second, for the same reason as [[modalLayerBuffers]] -- a bare
+    * `Map[SurfaceId, CachedPanelLayer]` shared process-wide let any two independently rendered surfaces that happen to
+    * reuse the same `SurfaceId` (unremarkable: tests across many specs all use `SurfaceId("outline")`) stomp on each
+    * other's cached panel image.
     */
-  private val panelLayerBuffers = new BoundedRefCache[RenderSurface, Map[SurfaceId, CachedPanelLayer]](cacheCapacity)
+  private val panelLayerBuffers =
+    new BoundedRefCache[ScreenIdentity, Map[SurfaceId, CachedPanelLayer]](cacheCapacity)
 
   def cachedPanelLayersFor(surface: RenderSurface): Map[SurfaceId, CachedPanelLayer] =
-    panelLayerBuffers.get(surface).getOrElse(Map.empty)
+    panelLayerBuffers.get(surface.layerCacheOwner).getOrElse(Map.empty)
 
   def rememberPanelLayer(surface: RenderSurface, surfaceId: SurfaceId, layer: CachedPanelLayer): Unit =
+    val owner = surface.layerCacheOwner
     panelLayerBuffers.replaceAll { tracked =>
-      val current = tracked.getOrElse(surface, Map.empty[SurfaceId, CachedPanelLayer])
-      tracked.updated(surface, current.updated(surfaceId, layer))
+      val current = tracked.getOrElse(owner, Map.empty[SurfaceId, CachedPanelLayer])
+      tracked.updated(owner, current.updated(surfaceId, layer))
     }
 
   /** Drop cached panel buffers for surfaces no longer on screen this frame, scoped to `surface`'s own entry -- a
@@ -328,10 +363,17 @@ final class RendererFrameState(initialCapacity: Int):
     * value, not an object this module can bound the lifetime of any other way).
     */
   def pruneStalePanelLayers(surface: RenderSurface, activeIds: Set[SurfaceId]): Unit =
+    val owner = surface.layerCacheOwner
     panelLayerBuffers.replaceAll { tracked =>
-      val current = tracked.getOrElse(surface, Map.empty[SurfaceId, CachedPanelLayer])
-      tracked.updated(surface, current.filter { case (id, _) => activeIds.contains(id) })
+      tracked.get(owner).fold(tracked) { current =>
+        tracked.updated(owner, current.filter { case (id, _) => activeIds.contains(id) })
+      }
     }
+
+  /** Releases every cached layer image `surface`'s owner holds, for when layer caching is switched off. */
+  def forgetLayerBuffers(surface: RenderSurface): Unit =
+    forgetModalLayerBuffer(surface)
+    panelLayerBuffers.remove(surface.layerCacheOwner)
 
   /** Drops every buffer-scoped cache entry for `key` -- used by [[RendererFramePlanner.forgetPreservedContent]]
     * alongside [[forgetPreviousFrameState]] when a surface's preserved pixels are no longer valid.

@@ -39,12 +39,9 @@ object OverlayStackLayout:
                 case _                                                             => false
             }.toList
 
-  /** Nearest the cursor first. Ghosts (closing surfaces) are left out: they paint at their cached rect, not a slot. */
+  /** Nearest the cursor first. */
   private[layout] def orderedAboveCursorSurfaces(state: AppState): List[UiSurface] =
-    state.floatingSurfaces.filter(surface => isAboveCursorSurface(surface) && !isGhost(surface)).sortBy(aboveCursorRank)
-
-  private[layout] def aboveCursorGhostSurfaces(state: AppState): List[UiSurface] =
-    state.floatingSurfaces.filter(surface => isAboveCursorSurface(surface) && isGhost(surface))
+    state.floatingSurfaces.filter(isAboveCursorSurface).sortBy(aboveCursorRank)
 
   /** The lens annotates the text under the cursor and sits against it; a peek explains the symbol there and sits just
     * above; anything else (the command runner's cursor peek) floats beyond both.
@@ -59,11 +56,6 @@ object OverlayStackLayout:
     surface.presentation match
       case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) => true
       case _                                                             => false
-
-  private def isGhost(surface: UiSurface): Boolean =
-    surface.content match
-      case SurfaceContent.GhostOverlay(_, _) => true
-      case _                                 => false
 
   private def isBelowCursorSurface(surface: UiSurface): Boolean =
     surface.presentation match
@@ -185,7 +177,7 @@ object OverlayStackLayout:
     paneLayouts: Map[PaneId, EditorPaneLayout]
   ): Map[SurfaceId, Double] =
     val aboveById       = aboveSurfaces.map(surface => surface.id -> surface).toMap
-    val stackedAboveIds = aboveSurfaces.filterNot(isGhost).map(_.id)
+    val stackedAboveIds = aboveSurfaces.map(_.id)
     val aboveStackRemainder = FloatingSurfaceLayout.floatingStackGapRows(state) -
       FloatingSurfaceLayout.wholeRowOrigin(FloatingSurfaceLayout.floatingStackGapRows(state))
     val aboveOffsets = aboveRects.flatMap { (surfaceId, rect) =>
@@ -316,6 +308,25 @@ object OverlayStackLayout:
   final case class CornerPanelSlot(id: SurfaceId, preferredWidth: Int, preferredHeight: Int)
 
   final case class CornerOverlayLayout(stack: List[(SurfaceId, LayoutRect)], collapsedSurfaceIds: Set[SurfaceId])
+
+  /** Every surface placed in a screen corner -- notices (#1717) -- stacked inside `area` with a cell of margin, newest
+    * nearest the corner. A surface the corner has no room left for is not placed, so not painted.
+    */
+  private[layout] def calculateCornerOverlays(state: AppState, area: LayoutRect): List[(SurfaceId, LayoutRect)] =
+    val inset   = LayoutRect(area.x + 1, area.y + 1, math.max(0, area.width - 2), math.max(0, area.height - 2))
+    val gapRows = FloatingSurfaceLayout.wholeRowOrigin(FloatingSurfaceLayout.floatingStackGapRows(state))
+    val cornered = state.floatingSurfaces.reverse.collect {
+      case surface @ UiSurface(_, _, SurfacePresentation.Floating(_, SurfacePlacement.Corner(position)), _) =>
+        position -> surface
+    }
+    CornerPosition.values.toList.flatMap { position =>
+      val slots = cornered.collect {
+        case (`position`, surface) =>
+          val width = FloatingSurfaceSizing.width(surface.content, state, inset)
+          CornerPanelSlot(surface.id, width, FloatingSurfaceSizing.height(surface.content, width, inset.height, state))
+      }
+      calculateCornerOverlayStack(position, slots, inset, gapRows).stack
+    }
 
   /** Lays out every panel assigned to one screen corner as a vertical list (issue #1310, mode 3), stacking from the
     * corner outward -- the first slot sits closest to the corner itself. Unlike `stackBelowCursorSurfaces`, which

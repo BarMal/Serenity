@@ -1,21 +1,51 @@
+import java.io.PrintStream
+import java.nio.file.Path
+import java.time.Instant
+
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.Duration
 
 import cats.effect.*
 import cats.effect.unsafe.IORuntimeConfig
 import cats.syntax.all.*
-import com.serenity.BuildInfo
 import com.serenity.app.*
-import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning}
-import com.serenity.diagnostics.{Trace, TuiConsoleLogFilter}
+import com.serenity.app.LaunchReset.Moved
+import com.serenity.app.instance.{LaunchRole, SingleInstance}
+import com.serenity.config.{
+  AppConfig,
+  ConfigDiagnostic,
+  ConfigLoadResult,
+  ConfigManager,
+  ConfigMigrationReport,
+  ConfigMigrationWarning,
+  ConfigNotice
+}
+import com.serenity.diagnostics.{
+  CrashRecord,
+  CrashReport,
+  FrameKind,
+  FramePhase,
+  FrameTimings,
+  LogLocation,
+  LogMigration,
+  PreviousRun,
+  RuntimeIdentity,
+  Trace,
+  TuiConsoleLogFilter
+}
 import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
+import com.serenity.session.SessionManager
+import com.serenity.state.models.RestartMode
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.display.DisplayScale
-import com.serenity.ui.renderer.{PaintExecutionContext, RendererCursorOverlay, RendererEntryPoints}
-import com.serenity.ui.terminal.SwingWindow
+import com.serenity.ui.renderer.{FontSpec, PaintExecutionContext, RendererCursorOverlay, RendererEntryPoints}
+import com.serenity.ui.terminal.{SwingFailureDialog, SwingMenuBar, SwingWindow}
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
+import fs2.Stream
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
@@ -32,16 +62,65 @@ object Main extends IOApp:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   def run(args: List[String]): IO[ExitCode] =
-    // An unparseable command line is reported and nothing is started. `Help.errors` is empty for a `--help` request
-    // and non-empty for a rejected argument, which is the difference between exiting zero and exiting non-zero.
-    LaunchOptions.parse(args) match
-      case Left(help) =>
-        IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
-      case Right(options) if options.showVersion =>
-        IO(println(s"Serenity ${BuildInfo.version} (${BuildInfo.commit})")).as(ExitCode.Success)
-      case Right(options) => launch(options)
+    // The terminal stream as it is now: a TUI launch silences System.err, and a failure must still reach a person.
+    val console = System.err
+    // Before anything else: the toolkit is fixed the moment the first java.awt class initialises.
+    ToolkitSelection.install
+      .flatTap(toolkit =>
+        IO(System.setProperty(RuntimeIdentity.ToolkitProperty, s"${toolkit.choice} (${toolkit.reason})")).void
+      )
+      .flatMap { toolkit =>
+        // An unparseable command line is reported and nothing is started. `Help.errors` is empty for a `--help` request
+        // and non-empty for a rejected argument, which is the difference between exiting zero and exiting non-zero.
+        LaunchOptions.parse(args) match
+          case Left(help) =>
+            IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
+          case Right(options) if options.showVersion =>
+            IO(println(VersionBanner.current)).as(ExitCode.Success)
+          case Right(options) =>
+            launchUntilSettled(options, toolkit).handleErrorWith(reportStartupFailure(options, console))
+      }
 
-  private def launch(launchOptionsForLogging: LaunchOptions): IO[ExitCode] =
+  /** Anything that ends the launch before or outside the editor's own supervision: a crash file and, for a window
+    * launch, a native dialog, since a packaged app has no terminal to print to.
+    */
+  private def reportStartupFailure(options: LaunchOptions, console: PrintStream)(error: Throwable): IO[ExitCode] =
+    val display: StartupFailure.Notice => IO[Unit] =
+      if LaunchOptions.resolveTuiMode(options) then _ => IO.unit else SwingFailureDialog.show
+    for
+      at <- IO.realTimeInstant
+      _  <- LoggerFactory[IO].getLogger(using LoggerName("Main")).error(error)("[STARTUP] Failed before the editor ran")
+      _ <- StartupFailure.report(
+        error,
+        RuntimeIdentity.current,
+        CrashRecord(LogLocation.current),
+        at,
+        display,
+        line => IO(console.println(line))
+      )
+    yield ExitCode.Error
+
+  /** A restart ends the running editor and starts the next one in this same JVM, so the terminal and the toolkit choice
+    * carry straight over; the single-instance lock is released and taken again by the next launch. It drops the
+    * one-shot resets.
+    */
+  private def launchUntilSettled(options: LaunchOptions, toolkit: ToolkitSelection.Decision): IO[ExitCode] =
+    Ref.of[IO, Option[RestartMode]](None).flatMap { restartRequested =>
+      launch(options, toolkit, mode => restartRequested.set(Some(mode))) >> restartRequested.get.flatMap {
+        case Some(mode) =>
+          launchUntilSettled(
+            options.copy(safeMode = mode == RestartMode.InSafeMode, resetConfig = false, resetSession = false),
+            toolkit
+          )
+        case None => IO.pure(ExitCode.Success)
+      }
+    }
+
+  private def launch(
+    launchOptionsForLogging: LaunchOptions,
+    toolkit: ToolkitSelection.Decision,
+    requestRestart: RestartMode => IO[Unit]
+  ): IO[ExitCode] =
     // #1215/#1669: must run before the `given logger` below, which triggers logback's one-time console-appender setup
     // on its first call -- `TuiConsoleLogFilter` checks this per log event, but it still has to be configured before
     // the very first event a TUI launch could otherwise leak onto the terminal surface it is about to take over. The
@@ -54,40 +133,175 @@ object Main extends IOApp:
 
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
 
+    val build = RuntimeIdentity.current
     for
-      _ <- Java2DPipeline.installSafeDefaults()
-      _ <- IO(CrashReporter.install())
-      launchOptions = launchOptionsForLogging
-      configResult <- ConfigManager.loadConfigResultIO()
-      // A config that cannot be read means this session runs on defaults -- every setting the user had, gone until
-      // they restart with a readable file. Keep their file aside before anything can overwrite it, and carry a notice
-      // the start page can show: the log line below is invisible in TUI mode, where stderr goes to nowhere.
-      configNotice <- configResult.fold(
-        error =>
-          logger.error(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}") >>
-            IO.blocking(ConfigManager.preserveUnreadableConfig(ConfigManager.defaultConfigPath)).map { preserved =>
-              val kept = preserved.fold("")(path => s" A copy was kept at $path.")
-              Some(s"Configuration could not be read, so this session is using defaults.$kept")
-            },
-        _ => IO.pure(None)
-      )
-      configLoad = configResult.getOrElse(
-        com.serenity.config.ConfigLoadResult(AppConfig.default, com.serenity.config.ConfigMigrationReport.empty)
+      _         <- BuildLogLines.announce
+      _         <- logger.info(s"[TOOLKIT] ${toolkit.choice} (${toolkit.reason})")
+      _         <- logger.info(s"[LOGS] Writing to ${LogLocation.current}")
+      _         <- migrateEarlierLogs
+      _         <- Java2DPipeline.installSafeDefaults()
+      _         <- IO(CrashReporter.install(CrashRecord(LogLocation.current), build))
+      requested <- IO(launchOptionsForLogging.openPaths.map(_.toAbsolutePath.normalize))
+      // #2023: settled before anything reads or writes the session, which only one process may own.
+      instances = SingleInstance.forConfigDirectory(SessionManager.defaultSessionRoot(), logger)
+      _ <- SingleInstance.claim(instances, requested, logger).use {
+        case LaunchRole.Forwarded => reportForwarded(requested)
+        case role                 => runAs(role, launchOptionsForLogging, requestRestart)
+      }
+    yield ExitCode.Success
+
+  /** Logs used to go to `~/.serenity`; they move once, so the new folder holds the whole history. */
+  private def migrateEarlierLogs(using logger: Logger[IO]): IO[Unit] =
+    LogMigration.migrate(LogLocation.currentLegacy, LogLocation.current).flatMap { moved =>
+      moved.traverse_(path => logger.info(s"[LOGS] Moved an earlier log to $path"))
+    }
+
+  private def reportForwarded(paths: List[Path])(using logger: Logger[IO]): IO[Unit] =
+    val message =
+      if paths.isEmpty then "Serenity is already running; its window was brought forward."
+      else s"Serenity is already running; opened ${paths.mkString(", ")} there."
+    logger.info(s"[INSTANCE] $message") >> IO.println(message)
+
+  /** Everything here follows the instance claim: a launch that handed its files to the running one has already
+    * returned, so it records no start attempt and moves no file.
+    */
+  private def runAs(role: LaunchRole, launchOptions: LaunchOptions, requestRestart: RestartMode => IO[Unit])(using
+    logger: Logger[IO]
+  ): IO[Unit] =
+    val store = CrashRecord(LogLocation.current)
+    role match
+      case LaunchRole.Primary(_) =>
+        // Leaving by any route but a lost process clears the marker; a crash caught on the way leaves its own file.
+        recordRun(store)
+          .flatMap(runPlanned(role, launchOptions, requestRestart, store, _))
+          .guarantee(store.markCleanExit)
+      case _ => runPlanned(role, launchOptions, requestRestart, store, PreviousRun.Clean)
+
+  /** How the last run ended, read before this one marks itself as running. */
+  private def recordRun(store: CrashRecord): IO[PreviousRun] =
+    for
+      at       <- IO.realTimeInstant
+      previous <- store.previousRun(RuntimeIdentity.current, at)
+      _        <- store.acknowledge >> store.markRunning(RuntimeIdentity.current, at)
+    yield previous
+
+  private def crashRecorderFor(store: CrashRecord): StartupRecovery.CrashRecorder =
+    (message, error) =>
+      IO.realTimeInstant.flatMap { at =>
+        store.recordCrash(CrashReport.render(RuntimeIdentity.current, at, message, Some(error), store.directory)).void
+      }
+
+  private def runPlanned(
+    role: LaunchRole,
+    launchOptions: LaunchOptions,
+    requestRestart: RestartMode => IO[Unit],
+    store: CrashRecord,
+    previousRun: PreviousRun
+  )(using logger: Logger[IO]): IO[Unit] =
+    for
+      startedAt                   <- IO.realTimeInstant
+      (configMoved, sessionMoved) <- applyResets(role, launchOptions, startedAt)
+      unfinishedStarts            <- countUnfinishedStarts(launchOptions)
+      plan = StartupRecovery
+        .plan(
+          launchOptions,
+          StartupCrashGuard.decide(unfinishedStarts, launchOptions.safeMode),
+          configMoved,
+          sessionMoved,
+          previousRun
+        )
+        .copy(crashRecorder = crashRecorderFor(store))
+      // Safe mode never reads the user's config, so a file it cannot parse is not even set aside.
+      configResult <-
+        if plan.safeMode then IO.pure(Right(ConfigLoadResult(SafeMode.config, ConfigMigrationReport.empty)))
+        else ConfigManager.loadConfigResultIO()
+      // Only a file that cannot be parsed at all means defaults for the session. It is left exactly as it is, and
+      // saving is refused while it stays that way. Anything less costs only the settings that were invalid, and the
+      // start page names them: the log is invisible in TUI mode, where stderr goes to nowhere.
+      (loaded, configNotice) = ConfigNotice.forOutcome(ConfigManager.defaultConfigPath, configResult)
+      _ <- configResult.left.toOption.traverse_(error =>
+        logger.error(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}")
       )
       _ <- ConfigMigrationWarning
-        .message(ConfigManager.defaultConfigPath, configLoad.report)
+        .message(ConfigManager.defaultConfigPath, loaded.report)
         .fold(IO.unit)(message => logger.warn(message))
-      appConfig = resolveAppConfig(configLoad.config, launchOptions)
-      _ <-
-        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, launchOptions, configNotice)
-        else runGui(appConfig, launchOptions, configNotice)
-    yield ExitCode.Success
+      // The warning above already lists deprecated, unknown, removed and invalid entries.
+      _ <- loaded.report.diagnostics.collect {
+        case diagnostic @ (_: ConfigDiagnostic.ConflictingHotkey | _: ConfigDiagnostic.NewerFileVersion |
+            _: ConfigDiagnostic.Migrated) =>
+          logger.warn(s"[CONFIG] ${diagnostic.message}")
+      }.sequence_
+      opens <- LaunchOpens.resolve(launchOptions.openPaths)
+      _     <- opens.notice.traverse_(logger.warn(_))
+      appConfig = resolveAppConfig(loaded.config, launchOptions)
+      startup   = Startup(plan, requestRestart, StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker))
+      // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
+      instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten
+      notice = plan.noticeWith(
+        Option((configNotice.toList ++ instanceNotice ++ opens.notice).mkString(" ")).filter(_.nonEmpty)
+      )
+      // The first file opens as part of startup; the folder and the other files open as a later launch's would.
+      startupOptions = launchOptions.copy(openPaths = opens.files)
+      _ <- safeModeSessionRoot(plan).use { scratchRoot =>
+        val session = SessionChoice(
+          scratchRoot.orElse(role.sessionRootOverride),
+          Stream.emit(opens.root.toList ++ startupOptions.extraOpenPaths).filter(_.nonEmpty) ++ forwardedOpensOf(role)
+        )
+        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, startupOptions, notice, startup, session)
+        else runGui(appConfig, startupOptions, notice, startup, session)
+      }
+      _ <- startup.markStarted
+    yield ()
+
+  /** What the recovery plan adds to a launch beyond the config: the plan itself, how to ask for a restart, and what to
+    * do once the first frame is painted.
+    */
+  final private case class Startup(
+      plan: StartupRecovery.Plan,
+      requestRestart: RestartMode => IO[Unit],
+      markStarted: IO[Unit]
+  )
+
+  /** A launch already in safe mode only reads the marker: a safe start that dies must not push the next one further. */
+  private def countUnfinishedStarts(options: LaunchOptions): IO[Int] =
+    if options.safeMode then StartupCrashGuard.peekUnfinishedStarts(StartupCrashGuard.defaultMarker)
+    else StartupCrashGuard.recordStartAttempt(StartupCrashGuard.defaultMarker)
+
+  /** Safe mode writes its session into a scratch folder, so the real one is neither read nor replaced. */
+  private def safeModeSessionRoot(plan: StartupRecovery.Plan): Resource[IO, Option[Path]] =
+    if plan.safeMode then SafeMode.scratchSessionRoot.map(Some(_)) else Resource.pure(None)
+
+  /** An isolated launch does not own the session folder, so a reset must not move what the running instance writes. */
+  private def applyResets(role: LaunchRole, options: LaunchOptions, at: Instant): IO[(List[Moved], List[Moved])] =
+    for
+      config <-
+        if options.resetConfig then LaunchReset.backUpConfig(ConfigManager.defaultConfigPath, at) else IO.pure(Nil)
+      session <-
+        if options.resetSession && role.sessionRootOverride.isEmpty then
+          LaunchReset.backUpSession(SessionManager.defaultSessionRoot(), at)
+        else IO.pure(Nil)
+      _ <- (config ++ session).traverse_(moved => IO(System.err.println(s"Moved ${moved.from} to ${moved.to}")))
+    yield (config, session)
+
+  /** Which session this process may write, and the files later launches hand it. */
+  final private case class SessionChoice(rootOverride: Option[Path], forwardedOpens: Stream[IO, List[Path]])
+
+  private def forwardedOpensOf(role: LaunchRole): Stream[IO, List[Path]] =
+    role match
+      case LaunchRole.Primary(forwardedOpens) => forwardedOpens
+      case _                                  => Stream.empty
 
   /** The TUI launch path (issue #1112): a real system terminal via [[TerminalShell.resource]], restored on every exit
     * path by that `Resource`'s release. This branch never references `SwingWindow` -- the terminal capability bundle
     * lives entirely in [[TuiRuntime]], which owns no such reference either.
     */
-  private def runTui(appConfig: AppConfig, launchOptions: LaunchOptions, configNotice: Option[String])(using
+  private def runTui(
+    appConfig: AppConfig,
+    launchOptions: LaunchOptions,
+    configNotice: Option[String],
+    startup: Startup,
+    session: SessionChoice
+  )(using
     logger: Logger[IO],
     loggerFactory: LoggerFactory[IO]
   ): IO[Unit] =
@@ -99,33 +313,49 @@ object Main extends IOApp:
         shell = TerminalShell.resource,
         appConfig = appConfig,
         openPath = launchOptions.openPath,
-        configPersistencePath = Some(ConfigManager.defaultConfigPath),
+        configPersistencePath = startup.plan.configPersistencePath(ConfigManager.defaultConfigPath),
         hasDisplay = LaunchOptions.isDisplayReachable(sys.env),
-        configNotice = configNotice
+        sessionRootOverride = session.rootOverride,
+        configNotice = configNotice,
+        recovery = startup.plan,
+        restarter = Some(startup.requestRestart),
+        onFirstFrame = startup.markStarted,
+        forwardedOpens = session.forwardedOpens
       )
 
   /** The GUI launch path: unchanged from before #1112 beyond being extracted into its own method. Constructs a
     * [[SwingWindow]] and closes `AppRuntime.run`'s capabilities over it; never touches [[TerminalShell]].
     */
-  private def runGui(appConfig: AppConfig, launchOptions: LaunchOptions, configNotice: Option[String])(using
+  private def runGui(
+    appConfig: AppConfig,
+    launchOptions: LaunchOptions,
+    configNotice: Option[String],
+    startup: Startup,
+    session: SessionChoice
+  )(using
     logger: Logger[IO],
     loggerFactory: LoggerFactory[IO]
   ): IO[Unit] =
     for
+      smokeReady   <- Deferred[IO, Unit]
       displayState <- RuntimeDisplayState.create(appConfig.editorConfig.fontConfig)
       initialDisplay = displayState.snapshot
+      frameTimings   = FrameTimings()
       _ <- (
         SwingWindow.resource(
           initialDisplay.codeMetrics,
           initialDisplay.uiMetrics,
           appConfig.windowChromeMode,
-          appConfig.preferredWindowSize
+          appConfig.preferredWindowSize,
+          frameTimings,
+          startup.plan.windowTitle
         ),
         PaintExecutionContext.resource
       ).tupled
         .use { (swingWin, paintEc) =>
           val actualAppConfig =
             resolveAutoTextScale(appConfig, swingWin.detectedDeviceTextScale)
+          val fileDialog = SwingFileDialog(swingWin.canvas)
           val initialScaleSync =
             if actualAppConfig.editorConfig.fontConfig != appConfig.editorConfig.fontConfig then
               displayState.update(actualAppConfig.editorConfig.fontConfig) >>
@@ -141,88 +371,146 @@ object Main extends IOApp:
                 val display = displayState.snapshot
                 if swingWin.metrics != display.codeMetrics then
                   swingWin.updateMetrics(display.codeMetrics, display.uiMetrics)
-              }.evalOn(paintEc)
+              }
             }
 
           def syncChromeTheme(state: com.serenity.state.models.AppState): IO[Unit] =
             Trace.timed("render.syncChromeTheme") {
               IO {
                 swingWin.updateChromeTheme(state.persisted.theme)
-              }.evalOn(paintEc)
+              }
             }
 
-          AccessibilitySync.empty.flatMap { accessibilitySync =>
-            def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
-              Trace.timed("render.syncAccessibility") {
-                accessibilitySync
-                  .sync(state)(previous => IO(AccessibilitySnapshot.from(state, swingWin.viewportSize, previous)))
-                  .flatMap(snapshot => IO(swingWin.updateAccessibility(snapshot)))
-                  .evalOn(paintEc)
-              }
+          (AccessibilitySync.empty, Deferred[IO, SwingInputHandler[IO, com.serenity.keystroke.events.Event]]).tupled
+            .flatMap { (accessibilitySync, menuInput) =>
+              def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
+                Trace.timed("render.syncAccessibility") {
+                  accessibilitySync
+                    .sync(state)(previous =>
+                      IO(
+                        AccessibilitySnapshot
+                          .from(state, swingWin.viewportSize, previous, accessibilitySync.previewCache)
+                      )
+                    )
+                    .flatMap(snapshot => IO(swingWin.updateAccessibility(snapshot)))
+                }
 
-            val frontendRuntime = FrontendRuntime(
-              inputHandler = router =>
-                IO.pure(
-                  new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
+              val frontendRuntime = FrontendRuntime(
+                inputHandler = router =>
+                  IO.pure(
+                    new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
+                      swingWin.canvas,
+                      router,
+                      () => swingWin.metrics,
+                      () => displayState.uiMetrics,
+                      actualAppConfig.inputConfig.wheelScrollLines,
+                      frameTimings
+                    )
+                  ).flatTap(menuInput.complete(_).void),
+                renderFull = (state, vis, cc, damage, caches) =>
+                  timedFrame(frameTimings, FrameKind.Full, paintEc)(
+                    syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
+                    IO(
+                      paintFullFrame(
+                        state,
+                        vis,
+                        cc,
+                        swingWin,
+                        displayState.snapshot,
+                        damage,
+                        caches
+                      )
+                    )
+                  ),
+                renderCursorOnly = (state, vis, cc, damage, caches) =>
+                  timedFrame(frameTimings, FrameKind.CursorOnly, paintEc)(
+                    syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
+                    IO(
+                      paintCursorFrame(
+                        state,
+                        vis,
+                        cc,
+                        swingWin,
+                        displayState.snapshot,
+                        damage,
+                        caches
+                      )
+                    )
+                  ),
+                frameTimings = frameTimings,
+                menus = Option.when(SwingMenuBar.enabledFor(System.getProperty("os.name", "")))(
+                  SwingMenuBar.resource(swingWin, menuInput.get)
+                ),
+                offscreenFrames = Some(
+                  OffscreenWarmUpFrames.forCanvas(
                     swingWin.canvas,
-                    router,
-                    () => swingWin.metrics,
-                    () => displayState.uiMetrics,
-                    actualAppConfig.inputConfig.wheelScrollLines
+                    () => swingWin.viewportSize,
+                    () => displayState.snapshot
                   )
                 ),
-              renderFull = (state, vis, cc, damage, bufferAnimations, caches) =>
-                syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >>
-                  IO(
-                    paintFullFrame(state, vis, cc, swingWin, displayState.snapshot, damage, bufferAnimations, caches)
-                  ).evalOn(paintEc),
-              renderCursorOnly = (state, vis, cc, damage, bufferAnimations, caches) =>
-                syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >>
-                  IO(
-                    paintCursorFrame(state, vis, cc, swingWin, displayState.snapshot, damage, bufferAnimations, caches)
-                  ).evalOn(paintEc)
-            )
+                applyPointerShape = shape => IO(swingWin.updatePointerShape(shape))
+              )
 
-            initialScaleSync >> AppRuntime.run(
-              initialViewportSize = swingWin.viewportSize,
-              checkResize = IO(swingWin.doResizeIfNecessary()),
-              runtime = frontendRuntime,
-              appConfig = actualAppConfig,
-              configNotice = configNotice,
-              makeStateManager = Some(logger =>
-                com.serenity.state.manager.StateManager.apply(
-                  logger,
-                  onFontConfigChanged = config =>
-                    displayState.update(config) >>
-                      IO.blocking {
-                        val display = displayState.snapshot
-                        swingWin.updateMetrics(display.codeMetrics, display.uiMetrics)
-                      },
-                  deviceTextScaleProvider = IO.blocking(swingWin.detectedDeviceTextScale),
-                  configPersistencePath = Some(ConfigManager.defaultConfigPath),
-                  windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
-                  onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
-                  fileDialog = Some(SwingFileDialog(swingWin.canvas))
-                )
-              ),
-              awaitExternalQuit = swingWin.awaitClose,
-              registerResizeCallback = cb => swingWin.setOnResize(cb),
-              registerFocusCallback = cb => swingWin.setOnFocusChange(cb),
-              openPath = launchOptions.openPath,
-              frontend = GuiFrontend
-            )
-          }
+              initialScaleSync >> AppRuntime.run(
+                initialViewportSize = swingWin.viewportSize,
+                checkResize = IO(swingWin.doResizeIfNecessary()),
+                runtime = frontendRuntime,
+                appConfig = actualAppConfig,
+                configNotice = configNotice,
+                recovery = startup.plan,
+                onFirstFrame =
+                  startup.markStarted >> IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady)),
+                makeStateManager = Some(logger =>
+                  com.serenity.state.manager.StateManager.apply(
+                    logger,
+                    policy = SessionManager.SessionPolicy.interactive,
+                    sessionRootOverride = session.rootOverride,
+                    onFontConfigChanged = config =>
+                      displayState.update(config) >>
+                        IO.blocking {
+                          val display = displayState.snapshot
+                          swingWin.updateMetrics(display.codeMetrics, display.uiMetrics)
+                        },
+                    deviceTextScaleProvider = IO.blocking(swingWin.detectedDeviceTextScale),
+                    configPersistencePath = startup.plan.configPersistencePath(ConfigManager.defaultConfigPath),
+                    projectTasksEnabled = !startup.plan.safeMode,
+                    restarter = Some(startup.requestRestart),
+                    uiPresetStore = startup.plan.uiPresetStore(session.rootOverride),
+                    windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
+                    onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
+                    fileDialog = Some(fileDialog)
+                  )
+                ),
+                awaitExternalQuit =
+                  if launchOptions.smokeTest then IO.race(swingWin.awaitClose, smokeReady.get).void
+                  else swingWin.awaitClose,
+                registerResizeCallback = cb => swingWin.setOnResize(cb),
+                registerFocusCallback = cb => swingWin.setOnFocusChange(cb),
+                openPath = launchOptions.openPath,
+                frontend = GuiFrontend,
+                forwardedOpens = session.forwardedOpens.evalTap(_ => IO(swingWin.bringToFront())),
+                fileOrFolderOpen = fileDialog.supportsFileOrFolder
+              )
+            }
         }
     yield ()
+
+  /** Syncs window state and draws in a single hop onto the paint thread: each hop is a wait the frame pays for. */
+  private def timedFrame(timings: FrameTimings, kind: FrameKind, paintEc: ExecutionContext)(
+    sync: IO[Unit],
+    draw: IO[Unit]
+  ): IO[Unit] =
+    IO(timings.renderStarted()) >>
+      (timings.timedIO(FramePhase.Sync)(sync) >> draw).evalOn(paintEc).guarantee(IO(timings.renderFinished(kind)))
 
   private def resolveAutoTextScale(config: AppConfig, detectedTextScale: Double): AppConfig =
     config.withFontConfig(config.editorConfig.fontConfig.resolveAutoTextScale(detectedTextScale))
 
   /** Applies the eco overlay (if requested via `--eco` or `SERENITY_ECO=1`) and the alpha overlay (if requested via
     * `--alpha`) before the auto text-scale resolution that follows every config load, so their changes are visible to
-    * that step just like any other loaded setting. Eco touches only the render fps target and motion accessibility;
-    * alpha touches only the currently-gated experimental prototype flags (command-runner cursor-peek today) -- the two
-    * overlays don't share any field, so application order between them doesn't matter.
+    * that step just like any other loaded setting. Eco touches only the render fps target; alpha touches only the
+    * currently-gated experimental prototype flags (command-runner cursor-peek today) -- the two overlays don't share
+    * any field, so application order between them doesn't matter.
     */
   private def resolveAppConfig(loadedConfig: AppConfig, launchOptions: LaunchOptions): AppConfig =
     resolveAutoTextScale(
@@ -239,24 +527,22 @@ object Main extends IOApp:
   private def paintFullFrame(
     state: com.serenity.state.models.AppState,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     window: SwingWindow,
     display: RuntimeDisplayState.Snapshot,
     damage: com.serenity.state.models.Damage,
-    bufferAnimations: Map[com.serenity.state.models.BufferId, com.serenity.animation.AnimationState],
     caches: com.serenity.state.manager.RenderCaches
   ): Unit =
     if cursorVisible then
       val _ = RendererCursorOverlay.renderWithCursorOverlay(
         state,
         window,
-        display.codeFont,
-        display.textFont,
-        display.uiFont,
+        FontSpec.fromAwt(display.codeFont),
+        FontSpec.fromAwt(display.textFont),
+        FontSpec.fromAwt(display.uiFont),
         display.uiMetrics,
         cursorColor,
         damage,
-        bufferAnimations,
         caches
       )
       ()
@@ -265,14 +551,13 @@ object Main extends IOApp:
         state,
         cursorVisible = false,
         window,
-        display.codeFont,
-        display.textFont,
-        display.uiFont,
+        FontSpec.fromAwt(display.codeFont),
+        FontSpec.fromAwt(display.textFont),
+        FontSpec.fromAwt(display.uiFont),
         display.uiMetrics,
         None,
         repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible),
         damage = damage,
-        bufferAnimations = bufferAnimations,
         caches = caches
       )
 
@@ -280,23 +565,21 @@ object Main extends IOApp:
   private def paintCursorFrame(
     state: com.serenity.state.models.AppState,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     window: SwingWindow,
     display: RuntimeDisplayState.Snapshot,
     damage: com.serenity.state.models.Damage,
-    bufferAnimations: Map[com.serenity.state.models.BufferId, com.serenity.animation.AnimationState],
     caches: com.serenity.state.manager.RenderCaches
   ): Unit =
     val rendered = RendererCursorOverlay.renderCursorOnly(
       state,
       cursorVisible,
       window,
-      display.codeFont,
-      display.textFont,
-      display.uiFont,
+      FontSpec.fromAwt(display.codeFont),
+      FontSpec.fromAwt(display.textFont),
+      FontSpec.fromAwt(display.uiFont),
       display.uiMetrics,
       cursorColor,
-      bufferAnimations,
       caches
     )
     if !rendered then
@@ -304,13 +587,12 @@ object Main extends IOApp:
         state,
         cursorVisible,
         window,
-        display.codeFont,
-        display.textFont,
-        display.uiFont,
+        FontSpec.fromAwt(display.codeFont),
+        FontSpec.fromAwt(display.textFont),
+        FontSpec.fromAwt(display.uiFont),
         display.uiMetrics,
         cursorColor,
         repaintOnFlush = true,
         damage = damage,
-        bufferAnimations = bufferAnimations,
         caches = caches
       )

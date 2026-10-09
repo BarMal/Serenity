@@ -39,16 +39,16 @@ class TextStatisticsSpec extends AnyFlatSpec with Matchers:
     stats.characterCountExcludingWhitespace shouldBe text.count(!_.isWhitespace)
   }
 
-  it should "count unicode and CJK content by maximal non-whitespace run" in {
+  it should "count unicode words once and CJK characters one each" in {
     val stats = TextStatistics.of(Rope("café naïve 你好世界 emoji🎉test"))
 
-    stats.wordCount shouldBe 4
+    stats.wordCount shouldBe 8
   }
 
-  it should "count punctuation-only content as words" in {
+  it should "not count punctuation-only content as words" in {
     val stats = TextStatistics.of(Rope("--- ... ???"))
 
-    stats.wordCount shouldBe 3
+    stats.wordCount shouldBe 0
     stats.characterCountExcludingWhitespace shouldBe 9
   }
 

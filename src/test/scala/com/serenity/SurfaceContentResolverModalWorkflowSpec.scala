@@ -4,6 +4,7 @@ import com.serenity.command.*
 import com.serenity.document.RenderedComment
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -93,7 +94,7 @@ class SurfaceContentResolverModalWorkflowSpec extends AnyFlatSpec with Matchers:
     // `ModalSurfaceComposition` (issue #819) is now the sole source of truth for what a `ModalWorkflow` surface
     // paints -- see `ModalSurfaceCompositionSpec` for coverage of each modal kind's actual content.
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("needle"), Vector.empty, 0)),
       LayoutRect(0, 0, 60, 12),
       SurfaceRenderMode.Floating
     )

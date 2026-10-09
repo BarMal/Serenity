@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.state.models.SurfaceContent
+import com.serenity.ui.widget.ListScroll
 
 /** Declarative composition plan for the pinned/expanded outline panel (issue #819, slice 4). Mirrors
   * `DirectoryTreeSurfaceComposition`'s pattern: one resolved plan produces both the paint boxes and the hit regions,
@@ -18,12 +19,13 @@ object OutlineSurfaceComposition extends RowCompositionSupport:
   def forOutline(
     symbols: List[Symbol],
     activeLocation: Option[Location],
-    frameRect: LayoutRect
+    frameRect: LayoutRect,
+    scroll: ListScroll = ListScroll()
   ): ResolvedSurfaceComposition =
-    val content     = SurfaceContent.Outline(symbols, activeLocation)
+    val content     = SurfaceContent.Outline(symbols, activeLocation, scroll)
     val contentRect = SurfaceFrameLayout.forContent(frameRect, content).contentRect
     val bounds      = logicalRect(contentRect.x, contentRect.y, contentRect.width, contentRect.height)
-    val rowViews    = PanelContentResolver.outlineRowViews(frameRect, symbols, activeLocation)
+    val rowViews    = PanelContentResolver.outlineRowViews(frameRect, symbols, activeLocation, scroll)
 
     val slots = SurfaceFrameLayout.contentRowSlotsFor(
       contentRect,

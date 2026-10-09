@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.{Deferred, IO}
+import cats.syntax.all.*
 import com.serenity.command.SessionCommands
 import com.serenity.io.{FileManager, FileUtils, ProjectFileWalker}
 import com.serenity.session.{SessionId, SessionManager, SessionPersistence}
@@ -25,7 +26,8 @@ final private[manager] class StateManagerWorkflowCapability(
     sessionManager: SessionManager,
     operations: StateManagerOperationBoundary,
     lanes: EffectLanePort,
-    filePersistence: StateManagerFilePersistence
+    filePersistence: StateManagerFilePersistence,
+    restarter: Option[RestartMode => IO[Unit]] = None
 )(using balance: com.serenity.rope.Balance):
   import StateManagerWorkflowCapability.{ProjectFilesLane, SessionLane}
 
@@ -43,7 +45,8 @@ final private[manager] class StateManagerWorkflowCapability(
     filePersistence.openFile,
     filePersistence.inspectBeforeSave,
     filePersistence.saveBufferAs,
-    continueCloseAfterFormSaveAs
+    continueCloseAfterFormSaveAs,
+    operations.showNotice
   )
 
   private val replaceWorkflow = new StateManagerReplaceWorkflow(modelCommit.updateValidated)
@@ -68,8 +71,15 @@ final private[manager] class StateManagerWorkflowCapability(
     openFileWorkflowModal(FileWorkflowMode.SaveAs, state, Some(bufferId), Some(statusMessage))
 
   private[manager] def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
-    filePersistence.settlePendingSaves(close.closeTargets(scope, state)) >>
-      modelCommit.currentState.flatMap(current => commitClose(current, close.begun(scope, current)))
+    if restartRequestedWithoutLauncher(scope) then logger.warn("[CMD] Restarting is not available in this session")
+    else
+      filePersistence.settlePendingSaves(close.closeTargets(scope, state)) >>
+        modelCommit.currentState.flatMap(current => commitClose(current, close.begun(scope, current)))
+
+  private def restartRequestedWithoutLauncher(scope: CloseScope): Boolean =
+    scope match
+      case CloseScope.Restart(_) => restarter.isEmpty
+      case _                     => false
 
   /** Commits a close step, then -- if it resolved the last buffer -- quits or shows the start page. */
   private def commitClose(fallback: AppState, transition: CloseTransition): IO[Unit] =
@@ -83,49 +93,40 @@ final private[manager] class StateManagerWorkflowCapability(
     scope match
       case CloseScope.Quit =>
         sessionPersistence.onAppClose(committed) >> quitSignal.complete(()).attempt.void
+      case CloseScope.Restart(mode) =>
+        sessionPersistence.onAppClose(committed) >> restarter.traverse_(_(mode)) >>
+          quitSignal.complete(()).attempt.void
       case CloseScope.ReturnToStartPage =>
         snapshotAndShowStartPage(committed)
       case _ =>
         IO.unit
 
   /** Persist the current session (unsaved buffers included, so [Tab] Quick-resume restores them) and replace the editor
-    * with a start page that offers to resume it. Runtime chrome (theme, viewport, terminal/GUI mode, keyboard tier)
-    * carries over from the committed editor state so the splash matches the environment it came from.
+    * with a start page that offers to resume it. The write runs on the Session lane. If the editor changed while it was
+    * being written, the changed editor is written once more; if it changes again, it stays, with a notice saying why.
     */
   private def snapshotAndShowStartPage(committed: AppState): IO[Unit] =
-    sessionManager.saveSession(committed, persistUnsavedBuffers = true) >>
-      IO.blocking(
-        committed.persisted.recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
-      ).flatMap { readableRecentFiles =>
-        val page = StartupPageContent.createStartPage(
-          sessionExists = true,
-          recentFiles = readableRecentFiles,
-          resumeIdentifier = Some(StartupPageContent.sessionResumeIdentifier(committed))
-        )
-        modelCommit.commitState(startPageStateFrom(committed, page), committed)
-      }
+    lanes.submitEffect(SessionLane, saveThenShowStartPage(committed, rewritesLeft = 1))
 
-  private def startPageStateFrom(committed: AppState, page: StartupPage): AppState =
-    val startPageSurfaceId = SurfaceId("surface-0")
-    val base               = AppState.empty(committed.persisted.config)
-    base.copy(
-      persisted = base.persisted.copy(
-        focus = Focus.Surface(startPageSurfaceId),
-        theme = committed.persisted.theme
-      ),
-      runtime = base.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            id = startPageSurfaceId,
-            content = SurfaceContent.StartPage(page),
-            presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          )
-        ),
-        viewportSize = committed.runtime.viewportSize,
-        nextSurfaceId = SurfaceIdSupply(1),
-        capabilities = committed.runtime.capabilities
-      )
-    )
+  private def saveThenShowStartPage(snapshot: AppState, rewritesLeft: Int): IO[Unit] =
+    // On failure the editor stays: the start page would offer to resume a session that was never written.
+    sessionManager.saveSession(snapshot, persistUnsavedBuffers = true).attempt.flatMap {
+      case Right(_) =>
+        modelCommit.currentState.flatMap { live =>
+          if StartPageTransitions.sameBuffers(live, snapshot) then
+            readableRecentFiles(snapshot).flatMap(recent =>
+              lanes.dispatchEffectResult(EffectResult.StartPageReady(snapshot, recent), _ => IO.unit)
+            )
+          else if rewritesLeft > 0 then saveThenShowStartPage(live, rewritesLeft - 1)
+          else operations.showNotice(FileFailureNotice.stayedInEditor)
+        }
+      case Left(error) =>
+        logger.error(error)("[SESSION] Saving the session before the start page failed") >>
+          operations.showNotice(FileFailureNotice.sessionSaveFailed(error))
+    }
+
+  private def readableRecentFiles(committed: AppState): IO[List[Path]] =
+    IO.blocking(committed.persisted.recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path)))
 
   /** Answers the close waiting on the action stack -- what the close prompt's choices run. */
   private[manager] def resolveClose(choice: CloseWorkflowChoice): IO[Unit] =
@@ -167,7 +168,9 @@ final private[manager] class StateManagerWorkflowCapability(
         commit(close.conflicted(workflow, _))
       case Left(error) =>
         logger.error(error)(s"[FILE] Failed to save buffer $bufferId before closing it") >>
-          commit(close.abandoned(workflow, _))
+          commit(close.abandoned(workflow, _)) >>
+          modelCommit.currentState
+            .flatMap(state => operations.showNotice(FileFailureNotice.forBuffer(state, bufferId, error)))
     }
 
   private[manager] def clearCloseActions(state: AppState): AppState = close.clearCloseActions(state)
@@ -225,7 +228,13 @@ final private[manager] class StateManagerWorkflowCapability(
               .flatMap(directory => dialog.chooseSaveFile(Some(directory), suggestedFileName))
               .flatMap {
                 case Some(path) =>
-                  filePersistence.saveBufferAs(bufferId, path) >> continueCloseAfterNativeSaveAs(bufferId)
+                  filePersistence.saveBufferAs(bufferId, path).attempt.flatMap {
+                    case Right(()) => continueCloseAfterNativeSaveAs(bufferId)
+                    case Left(error) =>
+                      operations.showNotice(
+                        FileFailureNotice.fileSaveFailed(bufferId, path, error, state.persisted.config)
+                      ) >> repromptCloseOn(bufferId)
+                  }
                 case None =>
                   repromptCloseOn(bufferId)
               }
@@ -265,7 +274,8 @@ final private[manager] class StateManagerWorkflowCapability(
       sessionManager.loadSession().flatMap {
         case Some(restoredState) if restoredState.persisted.bufferOrder.nonEmpty =>
           logger.info("[CMD] Session loaded successfully") >>
-            commit(SessionWorkflowTransitions.restoredIntoViewport(restoredState, _))
+            commit(SessionWorkflowTransitions.restoredIntoViewport(restoredState, _)) >>
+            offerHotExitRecovery
         case Some(_) =>
           logger.info("[CMD] Session loaded with no buffers - creating default session") >>
             commit(SessionWorkflowTransitions.withDefaultStartupBuffer)
@@ -274,11 +284,33 @@ final private[manager] class StateManagerWorkflowCapability(
             commit(SessionWorkflowTransitions.withDefaultStartupBuffer)
       }
 
+  /** Asks about each restored buffer whose unsaved text differs from its file (#1904). The files are read after the
+    * restore has committed, so the editor is up before the disk is touched.
+    */
+  private def offerHotExitRecovery: IO[Unit] =
+    modelCommit.currentState.flatMap { restored =>
+      restored.persisted.buffers.values.toList
+        .filter(HotExitRecovery.holdsBackup)
+        .sortBy(_.id.value)
+        .traverseFilter(recoveryOffer)
+        .flatMap(offers => if offers.isEmpty then IO.unit else commit(HotExitRecovery.withRecoveryOffered(_, offers)))
+    }
+
+  /** No offer for a file that can no longer be read: the recovered text is then all there is. */
+  private def recoveryOffer(backup: Buffer): IO[Option[RecoveryOffer]] =
+    backup.document.filePath.fold(IO.pure(Option.empty[RecoveryOffer])) { path =>
+      fileManager.loadFile(path, backup.id).attempt.map(_.toOption.flatMap(HotExitRecovery.offer(backup, _)))
+    }
+
   private[manager] def createStartupSession(): IO[Unit] =
     commit { before =>
       val opened = EditorState.openNewTab(before)
       opened.copy(runtime = opened.runtime.copy(uiSurfaces = List.empty))
     }
+
+  /** Replaces the start page with a fresh editor tab, keeping every other surface; a no-op once it has gone. */
+  private[manager] def leaveStartPage(): IO[Unit] =
+    commit(UiPresetTransitions.seedEditorFromSplash)
 
   /** Opens the "Save Session As..." name prompt (issue #1390), pre-filled empty -- `ModalSessionReducer` routes its
     * Enter into `submitSessionNamePromptEffect` below. Shown on the current state, so the palette's record of the
@@ -318,7 +350,12 @@ final private[manager] class StateManagerWorkflowCapability(
       val dismissed = WorkflowSurfaces.dismissedToPriorFocus(state, surfaceId)
       val write = SessionWorkflowTransitions.sessionNamePrompt(state, surfaceId) match
         case Some((SessionNamePromptMode.SaveAs, input)) if input.trim.nonEmpty =>
-          Some(sessionManager.saveSessionAs(input.trim, dismissed).void)
+          Some(
+            sessionManager
+              .saveSessionAs(input.trim, dismissed)
+              .void
+              .handleErrorWith(error => operations.showNotice(FileFailureNotice.sessionSaveFailed(error)))
+          )
         case Some((SessionNamePromptMode.Rename(sessionId), input)) if input.trim.nonEmpty =>
           Some(sessionManager.renameSession(sessionId, input.trim))
         case _ =>

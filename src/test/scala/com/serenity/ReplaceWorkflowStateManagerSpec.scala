@@ -7,7 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -20,7 +20,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   private def createStateManager(): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("ReplaceWorkflowStateManagerSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   private def executeCommandThroughRunner(
     stateManager: StateManager,
@@ -162,7 +162,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
               cursors = List(CursorPosition(0, 0)),
               selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length)))
             ),
-            findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
+            findState = Some(FindState("needle", Vector(FindResult(0, 0), FindResult(1, 0)), 0))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -181,7 +181,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     replaced.persisted.buffers(bufferId).document.content.collect() shouldBe "thread one\nneedle two\nkeep"
     replaced.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, "thread".length))
     replaced.persisted.buffers(bufferId).primarySelection shouldBe None
-    replaced.persisted.buffers(bufferId).findState shouldBe Some(FindState("needle", List(FindResult(1, 0)), 0))
+    replaced.persisted.buffers(bufferId).findState shouldBe Some(FindState("needle", Vector(FindResult(1, 0)), 0))
 
     stateManager.applyEvent(Undo).unsafeRunSync()
 
@@ -196,7 +196,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))
     )
     undone.persisted.buffers(bufferId).findState shouldBe Some(
-      FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0)
+      FindState("needle", Vector(FindResult(0, 0), FindResult(1, 0)), 0)
     )
   }
 
@@ -216,7 +216,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("e cafe\u0301")
               ),
             editing = EditingState(List(CursorPosition(0, 0))),
-            findState = Some(FindState("e", List(FindResult(0, 0)), 0))
+            findState = Some(FindState("e", Vector(FindResult(0, 0)), 0))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -514,7 +514,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
               cursors = List(CursorPosition(0, 0)),
               selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length)))
             ),
-            findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(2, 0)), 0))
+            findState = Some(FindState("needle", Vector(FindResult(0, 0), FindResult(2, 0)), 0))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -548,7 +548,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))
     )
     undone.persisted.buffers(bufferId).findState shouldBe Some(
-      FindState("needle", List(FindResult(0, 0), FindResult(2, 0)), 0)
+      FindState("needle", Vector(FindResult(0, 0), FindResult(2, 0)), 0)
     )
   }
 
@@ -567,7 +567,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
               .copy(
                 content = com.serenity.rope.Rope("needle one\nneedle two")
               ),
-            findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
+            findState = Some(FindState("needle", Vector(FindResult(0, 0), FindResult(1, 0)), 0))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -584,7 +584,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     updatedState.modalSurface shouldBe None
     updatedState.persisted.buffers(bufferId).document.content.collect() shouldBe "needle! one\nneedle! two"
     updatedState.persisted.buffers(bufferId).findState shouldBe Some(
-      FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0)
+      FindState("needle", Vector(FindResult(0, 0), FindResult(1, 0)), 0)
     )
   }
 

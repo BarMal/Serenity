@@ -9,10 +9,10 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import com.serenity.config.*
+import com.serenity.testkit.LogbackLoggers
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.slf4j.LoggerFactory
 
 /** Load/save error handling: the effectful API, structured migration reports, unparseable/missing files, and the
   * logging behaviour of the synchronous load and save paths on failure.
@@ -79,13 +79,14 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
     ConfigManager.loadConfigIO(Some(missingConfig.toString)).unsafeRunSync() shouldBe AppConfig.default
   }
 
-  it should "return structured errors at the effectful configuration boundary" in {
+  it should "report an invalid value at the effectful configuration boundary without failing the load" in {
+    // Issue #2024: one unusable value used to fail the whole load, so every other setting reset to its default.
     val invalidFile = Files.createTempFile("serenity-invalid-hocon", ".conf")
     Files.writeString(invalidFile, "typography.code.size = [not-a-number]\n")
 
     ConfigManager.loadConfigResultIO(Some(invalidFile.toString)).unsafeRunSync() match
-      case Left(error)  => error.message should include("typography.code.size")
-      case Right(value) => fail(s"expected a structured load error, received $value")
+      case Right(result) => result.report.invalidEntries.map(_.key) should contain("typography.code.size")
+      case Left(error)   => fail(s"expected the load to keep going past one invalid value, received $error")
 
     val directoryPath = Files.createTempDirectory("serenity-save-error")
     ConfigManager.saveConfigIO(AppConfig.default, directoryPath).unsafeRunSync() match
@@ -96,10 +97,10 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
   it should "log the real cause instead of silently discarding it when the synchronous save fails" in {
     // Prior to this test, ConfigManagerTestSupport.saveConfig's `catch case _: Exception => false` swallowed the
     // underlying exception entirely -- the caller got `false` and nothing else was ever recorded anywhere.
-    val logger   = LoggerFactory.getLogger("com.serenity.config.ConfigManagerTestSupport")
+    val logger   = LogbackLoggers.named("com.serenity.config.ConfigManagerTestSupport")
     val appender = new ListAppender[ILoggingEvent]()
     appender.start()
-    logger.asInstanceOf[ch.qos.logback.classic.Logger].addAppender(appender)
+    logger.addAppender(appender)
     try
       val directoryPath = Files.createTempDirectory("serenity-sync-save-error")
 
@@ -110,7 +111,7 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
       errorEvents.exists(_.getFormattedMessage.contains(directoryPath.toString)) shouldBe true
       errorEvents.exists(event => Option(event.getThrowableProxy).isDefined) shouldBe true
     finally
-      logger.asInstanceOf[ch.qos.logback.classic.Logger].detachAppender(appender)
+      logger.detachAppender(appender)
       appender.stop()
   }
 
@@ -120,10 +121,10 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
     // it, and it falls through to a real HOCON parse of unparseable syntax, which does throw.
     Files.writeString(configFile, "this is not valid hocon at all {{{\n")
 
-    val logger   = LoggerFactory.getLogger("com.serenity.config.ConfigManagerTestSupport")
+    val logger   = LogbackLoggers.named("com.serenity.config.ConfigManagerTestSupport")
     val appender = new ListAppender[ILoggingEvent]()
     appender.start()
-    logger.asInstanceOf[ch.qos.logback.classic.Logger].addAppender(appender)
+    logger.addAppender(appender)
     try
       val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
@@ -133,7 +134,7 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
       errorEvents should not be empty
       errorEvents.exists(event => Option(event.getThrowableProxy).isDefined) shouldBe true
     finally
-      logger.asInstanceOf[ch.qos.logback.classic.Logger].detachAppender(appender)
+      logger.detachAppender(appender)
       appender.stop()
   }
 
@@ -148,9 +149,11 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
     )
 
     ConfigManager.loadConfigResultIO(Some(invalidFile.toString)).unsafeRunSync() match
-      case Left(error) =>
-        error.message should include("hotkey.save")
-        error.message should include("keymap.command_runner.submit")
-        error.message should include("lsp.python.enabled")
-      case Right(value) => fail(s"expected binding validation errors, received $value")
+      case Right(result) =>
+        result.report.invalidEntries.map(_.key) should contain allOf (
+          "hotkey.save",
+          "keymap.command_runner.submit",
+          "lsp.python.enabled"
+        )
+      case Left(error) => fail(s"expected binding validation errors in the report, received $error")
   }

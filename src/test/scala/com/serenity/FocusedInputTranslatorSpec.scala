@@ -65,13 +65,6 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     translator.translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl))) shouldBe ToggleCommandRunner
   }
 
-  it should "treat Ctrl+Backspace and Ctrl+Delete as word deletion in editor focus" in {
-    val translator = FocusedInputTranslator.forState(editorState)
-
-    translator.translate(KeyStrokeInfo(InputKey.Backspace, None, Set(Modifier.Ctrl))) shouldBe DeleteWordBackward
-    translator.translate(KeyStrokeInfo(InputKey.Delete, None, Set(Modifier.Ctrl))) shouldBe DeleteWordForward
-  }
-
   it should "dispatch conventional core editing shortcuts from platform-resolved hotkeys" in {
     val linuxState = withConfig(AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux")))
     val macState   = withConfig(AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X")))
@@ -175,7 +168,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
       RunnerRecordBinding(doubleTap, 4_200L)
   }
 
-  it should "reject conflicting loaded hotkeys instead of dispatching the first matching action" in {
+  it should "leave a loaded trigger with one owner, and reject a conflicting config built in memory" in {
     val configFile = Files.createTempFile("serenity-conflicting-hotkeys", ".conf")
     Files.writeString(
       configFile,
@@ -194,49 +187,13 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    FocusedInputTranslator
-      .forState(loadedState)
-      .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
-      .isInstanceOf[UnhandledEvent[?]] shouldBe true
+    val keys = loadedState.persisted.config.inputConfig.hotkeyConfig
+    List(HotkeyAction.ToggleCommandRunner, HotkeyAction.Find).count(keys.bindingsFor(_).contains(duplicate)) shouldBe 1
+    HotkeyConfig.validate(keys) shouldBe Right(())
     FocusedInputTranslator
       .forState(withConfig(invalidConfig))
       .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
       .isInstanceOf[UnhandledEvent[?]] shouldBe true
-  }
-
-  it should "treat PageUp, PageDown, Ctrl+Home, and Ctrl+End as file navigation in editor focus" in {
-    val translator = FocusedInputTranslator.forState(editorState)
-
-    translator.translate(KeyStrokeInfo(InputKey.PageUp, None, Set.empty)) shouldBe PageUp
-    translator.translate(KeyStrokeInfo(InputKey.PageDown, None, Set.empty)) shouldBe PageDown
-    translator.translate(KeyStrokeInfo(InputKey.Home, None, Set(Modifier.Ctrl))) shouldBe MoveToStartOfFile
-    translator.translate(KeyStrokeInfo(InputKey.End, None, Set(Modifier.Ctrl))) shouldBe MoveToEndOfFile
-  }
-
-  it should "treat Shift-arrow keys as selection extension in editor focus" in {
-    val translator = FocusedInputTranslator.forState(editorState)
-    val shift      = Set(Modifier.Shift)
-
-    translator.translate(KeyStrokeInfo(InputKey.ArrowLeft, None, shift)) shouldBe ExtendSelectionLeft
-    translator.translate(KeyStrokeInfo(InputKey.ArrowRight, None, shift)) shouldBe ExtendSelectionRight
-    translator.translate(KeyStrokeInfo(InputKey.ArrowUp, None, shift)) shouldBe ExtendSelectionUp
-    translator.translate(KeyStrokeInfo(InputKey.ArrowDown, None, shift)) shouldBe ExtendSelectionDown
-  }
-
-  it should "treat Ctrl-arrow keys as word navigation in editor focus" in {
-    val translator = FocusedInputTranslator.forState(editorState)
-    val ctrl       = Set(Modifier.Ctrl)
-
-    translator.translate(KeyStrokeInfo(InputKey.ArrowLeft, None, ctrl)) shouldBe MoveWordLeft
-    translator.translate(KeyStrokeInfo(InputKey.ArrowRight, None, ctrl)) shouldBe MoveWordRight
-  }
-
-  it should "treat Ctrl+Shift-arrow keys as word selection extension in editor focus" in {
-    val translator = FocusedInputTranslator.forState(editorState)
-    val ctrlShift  = Set(Modifier.Ctrl, Modifier.Shift)
-
-    translator.translate(KeyStrokeInfo(InputKey.ArrowLeft, None, ctrlShift)) shouldBe ExtendSelectionWordLeft
-    translator.translate(KeyStrokeInfo(InputKey.ArrowRight, None, ctrlShift)) shouldBe ExtendSelectionWordRight
   }
 
   it should "treat Enter and Tab as modal form actions in modal focus" in {
@@ -366,7 +323,9 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
                 RenderedComment(0, "Review this", "Review this"),
                 "Review this",
                 11,
-                Some(DocumentComment(CursorPosition(0, 0), CursorPosition(0, 6), "Review this"))
+                Some(
+                  CommentLensTarget(CommentId(1), DocumentComment(CursorPosition(0, 0), CursorPosition(0, 6), "Review"))
+                )
               )
             ),
             SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
@@ -409,7 +368,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   it should "treat a drilled-in settings group's focus as command-runner input rather than peek input" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
-      .withDrilledSettingsSurface(SettingsSurfaceState(SettingsPage.Group("settings-animation")))
+      .withDrilledSettingsSurface(SettingsSurfaceState(SettingsPage.Group("settings-look")))
     val submenuState = editorState.copy(
       persisted = editorState.persisted.copy(
         focus = Focus.Surface(SurfaceId("command-runner"))

@@ -6,6 +6,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.PaneId
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -19,7 +20,7 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
   trait PaneFixture:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val sm: StateManager    = StateManager.apply(logger).unsafeRunSync()
+    val sm: StateManager    = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
     val pane0: PaneId       = sm.getCurrentState.unsafeRunSync().persisted.layout.activeEditorPaneId.get
 
   /** Every split axis in the tree, outermost first. */

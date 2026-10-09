@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.Color
-
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
@@ -16,7 +14,9 @@ import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{AppState, BufferId, Damage}
+import com.serenity.state.models.{AppState, Damage}
+import com.serenity.testkit.SharedDictionary
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -48,13 +48,11 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
   "AppRuntime" should "reset the cursor activity phase to visible after user input" in {
     val result = (for
       cursorVisible <- Ref.of[IO, Boolean](false)
-      breathIndex   <- Ref.of[IO, Int](17)
-      _             <- AppRuntime.resetCursorActivity(cursorVisible, breathIndex)
+      _             <- AppRuntime.resetCursorActivity(cursorVisible)
       visible       <- cursorVisible.get
-      breathe       <- breathIndex.get
-    yield (visible, breathe)).unsafeRunSync()
+    yield visible).unsafeRunSync()
 
-    result shouldBe (true, 0)
+    result shouldBe true
   }
 
   it should "refresh the focused translator after every input event" in {
@@ -62,7 +60,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       refreshes     <- Ref.of[IO, Int](0)
       resizeChecks  <- Ref.of[IO, Int](0)
       cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
       router = new InputRouter[IO, Event]:
         private val initialTranslator = new TextEntryTranslator(AppConfig.default)
 
@@ -72,17 +69,10 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState(), Map.empty))
-        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
-        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
-        def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit
-        def updateBufferAnimations(
-          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-            BufferId,
-            com.serenity.animation.AnimationState
-          ]
-        ): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit] = IO.unit
+          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState()))
+        def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
+        def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]                           = IO.unit
       clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
       _ <- AppRuntimeRenderLoops
         .inputEventPhase(
@@ -91,7 +81,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
           clipboard,
           resizeChecks.update(_ + 1),
           cursorVisible,
-          breathIndex,
           (_: Damage) => IO.unit
         )(
           Stream.emits(List(InsertChar('a'), DeleteBackward, MoveLeft, InsertChar('b')))
@@ -105,11 +94,11 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe (4, 0)
   }
 
-  it should "check for a resize before applying pointer input" in {
+  it should "time each input's wait for the input loop and its application to the state" in {
+    val timings = com.serenity.diagnostics.FrameTimings()
+    timings.setEnabled(true)
     val program = for
-      resizeChecks  <- Ref.of[IO, Int](0)
       cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
       router = new InputRouter[IO, Event]:
         private val initialTranslator = new TextEntryTranslator(AppConfig.default)
 
@@ -119,17 +108,47 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState(), Map.empty))
-        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
-        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
-        def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit
-        def updateBufferAnimations(
-          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-            BufferId,
-            com.serenity.animation.AnimationState
-          ]
-        ): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit] = IO.unit
+          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState()))
+        def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
+        def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]                           = IO.unit
+      clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
+      _ <- AppRuntimeRenderLoops
+        .inputEventPhase(
+          stateManager,
+          router,
+          clipboard,
+          IO.unit,
+          cursorVisible,
+          (_: Damage) => IO.unit,
+          frameTimings = timings
+        )(Stream.emits(List(InsertChar('a'), MoveLeft, InsertChar('b'))))
+        .compile
+        .drain
+    yield timings.drain()
+
+    val summary = program.unsafeRunSync()
+    summary.phases.get(com.serenity.diagnostics.FramePhase.InputQueue).map(_.count) shouldBe Some(3)
+    summary.phases.get(com.serenity.diagnostics.FramePhase.InputApply).map(_.count) shouldBe Some(3)
+  }
+
+  it should "check for a resize before applying pointer input" in {
+    val program = for
+      resizeChecks  <- Ref.of[IO, Int](0)
+      cursorVisible <- Ref.of[IO, Boolean](true)
+      router = new InputRouter[IO, Event]:
+        private val initialTranslator = new TextEntryTranslator(AppConfig.default)
+
+        def eventStream(infoStream: Stream[IO, KeyStrokeInfo]): Stream[IO, Event] = Stream.empty
+        def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = IO.unit
+        def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(initialTranslator)
+      stateManager = new com.serenity.state.manager.StateEngine:
+        def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
+        def getModel: IO[com.serenity.state.manager.Model] =
+          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState()))
+        def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
+        def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]                           = IO.unit
       clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
       _ <- AppRuntimeRenderLoops
         .inputEventPhase(
@@ -138,7 +157,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
           clipboard,
           resizeChecks.update(_ + 1),
           cursorVisible,
-          breathIndex,
           (_: Damage) => IO.unit
         )(Stream.emit(MousePress(0, 0)))
         .compile
@@ -158,7 +176,8 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       closeRequested       <- Deferred[IO, Unit]
       stateManager <- StateManager.apply(
         LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeStartupInputSpec")),
-        policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+        policy = SessionManager.SessionPolicy(saveOnAppClose = false),
+        dictionaryCache = SharedDictionary.default
       )
       inputHandler = new InputHandler[IO]:
         override def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] = Stream.never
@@ -173,17 +192,15 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
             renderFull = (
               _: AppState,
               _: Boolean,
-              _: Option[Color],
+              _: Option[RenderColor],
               _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState],
               _: com.serenity.state.manager.RenderCaches
             ) => initialRenderStarted.complete(()).flatMap(_ => allowInitialRender.get),
             renderCursorOnly = (
               _: AppState,
               _: Boolean,
-              _: Option[Color],
+              _: Option[RenderColor],
               _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState],
               _: com.serenity.state.manager.RenderCaches
             ) => IO.unit
           ),
@@ -211,7 +228,8 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       inputCancelled <- Deferred[IO, Unit]
       stateManager <- StateManager.apply(
         LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeStartupFailureSpec")),
-        policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+        policy = SessionManager.SessionPolicy(saveOnAppClose = false),
+        dictionaryCache = SharedDictionary.default
       )
       inputHandler = new InputHandler[IO]:
         override def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] = Stream.never
@@ -229,17 +247,15 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
             renderFull = (
               _: AppState,
               _: Boolean,
-              _: Option[Color],
+              _: Option[RenderColor],
               _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState],
               _: com.serenity.state.manager.RenderCaches
             ) => inputStarted.get >> IO.raiseError(RuntimeException("initial render failed")),
             renderCursorOnly = (
               _: AppState,
               _: Boolean,
-              _: Option[Color],
+              _: Option[RenderColor],
               _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState],
               _: com.serenity.state.manager.RenderCaches
             ) => IO.unit
           ),
@@ -260,7 +276,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
     val program = for
       refreshes     <- Ref.of[IO, Int](0)
       cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
       router = new InputRouter[IO, Event]:
         private val initialTranslator = new TextEntryTranslator(AppConfig.default)
 
@@ -270,20 +285,13 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState(), Map.empty))
-        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
-        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
-        def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit
-        def updateBufferAnimations(
-          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-            BufferId,
-            com.serenity.animation.AnimationState
-          ]
-        ): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit] = IO.unit
+          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState()))
+        def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
+        def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]                           = IO.unit
       clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
       _ <- AppRuntimeRenderLoops
-        .inputEventPhase(stateManager, router, clipboard, IO.unit, cursorVisible, breathIndex, (_: Damage) => IO.unit)(
+        .inputEventPhase(stateManager, router, clipboard, IO.unit, cursorVisible, (_: Damage) => IO.unit)(
           Stream.emit(OpenFind)
         )
         .compile

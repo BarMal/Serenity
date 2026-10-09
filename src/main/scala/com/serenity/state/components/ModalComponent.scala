@@ -4,9 +4,11 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalEventReducer, Reducer}
+import com.serenity.ui.layout.WrappedLineCache
 
 class ModalComponent(
-    modalType: ModalType
+    modalType: ModalType,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
 ) extends TypedFocusedComponent[ModalInputEvent]:
   private val reducer: Reducer[ModalInputEvent] = ModalEventReducer.reducer(modalType)
 
@@ -16,5 +18,5 @@ class ModalComponent(
   protected def processTypedEvent(event: ModalInputEvent, currentState: AppState): ComponentResult =
     val result = reducer.reduce(event, currentState)
     ComponentResult.reducerResult(
-      result.copy(state = CursorViewport.ensureVisibleCursors(currentState, result.state))
+      result.copy(state = CursorViewport.ensureVisibleCursors(currentState, result.state, wrapCache))
     )

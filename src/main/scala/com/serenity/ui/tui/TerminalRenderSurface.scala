@@ -1,11 +1,10 @@
 package com.serenity.ui.tui
 
-import java.awt.Color
 import java.awt.font.FontRenderContext
-import java.awt.image.BufferedImage
 import java.io.Writer
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.TextStyle
@@ -23,7 +22,7 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
     extends RenderSurface
     with TextDrawing
     with PixelDrawing
-    with RoundedRectDrawing
+    with PanelOutlineDrawing
     with HardwareCursor:
 
   private val screenBuffer     = new TerminalScreenBuffer(width, height)
@@ -35,9 +34,9 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   private val caretRef            = new AtomicReference[Option[TerminalRenderSurface.Caret]](None)
   private val lastEmittedCaretRef = new AtomicReference[Option[Option[TerminalRenderSurface.Caret]]](None)
 
-  def text: TextDrawing                                 = this
-  def pixels: PixelDrawing                              = this
-  override def roundedRects: Option[RoundedRectDrawing] = Some(this)
+  def text: TextDrawing                                   = this
+  def pixels: PixelDrawing                                = this
+  override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
 
   /** A terminal genuinely holds the previous frame's cells until something overwrites them, so the renderer's dirty-
     * region skip logic may treat this surface as persistent -- see [[clearViewportExcept]], which upholds the other
@@ -46,11 +45,11 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   override def persistentContentKey: Option[SurfaceContentIdentity] =
     Some(SurfaceContentIdentity(screenBuffer))
 
-  def setForegroundColor(color: Color): Unit = screenBuffer.setForegroundColor(color)
-  def setBackgroundColor(color: Color): Unit = screenBuffer.setBackgroundColor(color)
-  def getBackgroundColor: Color              = screenBuffer.getBackgroundColor
+  def setForegroundColor(color: RenderColor): Unit = screenBuffer.setForegroundColor(color.toAwt)
+  def setBackgroundColor(color: RenderColor): Unit = screenBuffer.setBackgroundColor(color.toAwt)
+  def getBackgroundColor: RenderColor              = RenderColor.fromAwt(screenBuffer.getBackgroundColor)
 
-  override def clearViewportExcept(color: Color, preserved: List[PixelRect]): Unit =
+  override def clearViewportExcept(color: RenderColor, preserved: List[PixelRect]): Unit =
     if preserved.isEmpty then clearViewport(color)
     else
       setBackgroundColor(color)
@@ -144,7 +143,7 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   // -- TextDrawing --------------------------------------------------------------------------------------------------
 
   // No AWT font backs a terminal cell; typography controls are inert in cell space (accepted degradation, epic #1103).
-  override def setFont(font: java.awt.Font): Unit = ()
+  override def setFont(font: FontSpec): Unit = ()
 
   // `None` unconditionally: this is what drives #1105's cell-fallback path for callers that would otherwise measure
   // text with a FontRenderContext this surface does not have.
@@ -186,12 +185,12 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   // reliably blanked two characters of "alpha" immediately after the gutter on every frame). TUI's real caret is
   // `HardwareCursor` (`present`/`hide`, DECSCUSR/CUP) -- this call is simply never meant to paint cell content here,
   // so it must stay inert the way #1012 originally left it.
-  override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit = ()
+  override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit = ()
 
-  override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
+  override def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val previousForeground = screenBuffer.getForegroundColor
     val previousBackground = screenBuffer.getBackgroundColor
-    val grid               = HalfBlockImageRenderer.render(image, width, height, fallback = previousBackground)
+    val grid               = HalfBlockImageRenderer.render(image.toAwt, width, height, fallback = previousBackground)
     grid.zipWithIndex.foreach {
       case (row, rowOffset) =>
         row.zipWithIndex.foreach {
@@ -207,25 +206,17 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
 
   override def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit = render
 
-  // -- RoundedRectDrawing -----------------------------------------------------------------------------------------
+  // -- PanelOutlineDrawing ----------------------------------------------------------------------------------------
 
-  /** Draws the frame in the rect's outermost cells -- the border cell `SurfaceFrameLayout` reserves -- with rounded
-    * box-drawing corners standing in for the arc. Only the foreground changes: each cell keeps the background already
-    * painted under it, so the frame sits on the panel's own material.
+  /** Draws the frame in the rect's outermost cells -- the border cell `SurfaceFrameLayout` reserves -- with box-drawing
+    * glyphs. Only the foreground changes: each cell keeps the background already painted under it, so the frame sits on
+    * the panel's own colour.
     */
-  override def strokeRoundRect(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color,
-    strokeWidth: Float = 1.5f
-  ): Unit =
+  override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
     if width >= 2 && height >= 2 then
       val previousForeground = screenBuffer.getForegroundColor
       val previousBackground = screenBuffer.getBackgroundColor
-      screenBuffer.setForegroundColor(color)
+      screenBuffer.setForegroundColor(color.toAwt)
       TerminalRenderSurface.frameGlyphs(x, y, width, height).foreach { glyph =>
         screenBuffer.setBackgroundColor(screenBuffer.backgroundAt(glyph.x, glyph.y).getOrElse(previousBackground))
         screenBuffer.putString(glyph.x, glyph.y, glyph.char.toString)
@@ -233,13 +224,7 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
       screenBuffer.setForegroundColor(previousForeground)
       screenBuffer.setBackgroundColor(previousBackground)
 
-  // A drop shadow needs sub-cell blur a cell grid cannot express; optional decoration per `roundedRects`'s doc.
-  override def drawRoundRectShadow(x: Int, y: Int, width: Int, height: Int, arcPx: Int, color: Color): Unit = ()
-
-  /** The one piece of rounded-rect chrome a cell grid *can* express: a rectangular clip. The arc radius is ignored --
-    * cells have no sub-cell geometry to round a corner with.
-    */
-  override def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, arcPx: Int)(render: => Unit): Unit =
+  override def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
     screenBuffer.withClip(x, y, width, height)(render)
 
 object TerminalRenderSurface:

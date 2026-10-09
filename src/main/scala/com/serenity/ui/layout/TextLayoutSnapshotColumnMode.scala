@@ -32,7 +32,8 @@ object TextLayoutSnapshotColumnMode:
     proseScale: Float = 1.0f,
     columnCount: Int = 1,
     // `document.drop_caps_enabled` config toggle -- see `TextLayoutSnapshot.fromBuffer`'s own parameter.
-    dropCapsEnabled: Boolean = true
+    dropCapsEnabled: Boolean = true,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): Vector[Vector[TextVisualLine]] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -55,7 +56,8 @@ object TextLayoutSnapshotColumnMode:
       richDocument,
       wordWrapEnabled = true,
       proseScale,
-      dropCapsEnabled
+      dropCapsEnabled,
+      wrapCache
     ).drop(topVisualLine).take(totalRowsNeeded)
 
     allVisualLines.grouped(visibleLines).toVector
@@ -66,7 +68,7 @@ object TextLayoutSnapshotColumnMode:
     * ordinary [[TextLayoutSnapshot]] so every downstream consumer (painting, cursor placement) needs no column-mode
     * branch of its own. `panelWidthPx` is the column's own (narrower) width, not the pane's full width. Delegates to
     * [[fromBufferColumns]] and takes the first column; kept as a named entry point for the single-column consumers
-    * (`RendererColumnTransition`'s outgoing sliver, the animation path) that only ever want one column.
+    * (`MouseTargetCache`, `RendererPaneSetup`) that only ever want one column.
     */
   def fromBufferColumn(
     buffer: Buffer,
@@ -76,7 +78,8 @@ object TextLayoutSnapshotColumnMode:
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
     proseScale: Float = 1.0f,
-    dropCapsEnabled: Boolean = true
+    dropCapsEnabled: Boolean = true,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): TextLayoutSnapshot =
     fromBufferColumns(
       buffer,
@@ -87,7 +90,8 @@ object TextLayoutSnapshotColumnMode:
       forceCellLayout,
       proseScale,
       columnCount = 1,
-      dropCapsEnabled
+      dropCapsEnabled,
+      wrapCache
     ).headOption.getOrElse(
       emptyColumnSnapshot(columnWidthPx, font, fontRenderContext, cellMetricsOverride, forceCellLayout, proseScale)
     )
@@ -109,7 +113,8 @@ object TextLayoutSnapshotColumnMode:
     forceCellLayout: Boolean = false,
     proseScale: Float = 1.0f,
     columnCount: Int = 1,
-    dropCapsEnabled: Boolean = true
+    dropCapsEnabled: Boolean = true,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): Vector[TextLayoutSnapshot] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -134,7 +139,8 @@ object TextLayoutSnapshotColumnMode:
       forceCellLayout,
       proseScale,
       columnCount,
-      dropCapsEnabled
+      dropCapsEnabled,
+      wrapCache
     ).map { chunk =>
       TextLayoutSnapshot(
         visualLines = chunk,

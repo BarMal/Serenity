@@ -5,7 +5,7 @@ import java.nio.file.Path
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.ViewIntent
-import com.serenity.config.{AppConfig, AppMode, MarkdownViewMode, VisualFlairLevel}
+import com.serenity.config.{AppConfig, AppMode, MarkdownViewMode}
 import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.io.FileUtils
 import com.serenity.keystroke.events.Event
@@ -31,7 +31,7 @@ final private[manager] class StateManagerPanelEffects(
     collapseExpandedPanel: () => IO[Unit],
     switchToPinnedPanel: PanelTarget => IO[Unit],
     resizePinnedPanel: (PanelTarget, Int) => IO[Unit],
-    setCompanionSpriteEnabled: Boolean => IO[Unit]
+    showModal: Modal => IO[Unit]
 )(using com.serenity.rope.Balance):
 
   /** Floor for command/keyboard panel resize (issue #1310) -- prevents a panel from shrinking to zero or negative
@@ -90,7 +90,12 @@ final private[manager] class StateManagerPanelEffects(
       case ViewIntent.SetDefaultDocumentMode(mode) =>
         updateConfig(_.withDefaultDocumentMode(mode)).void
       case ViewIntent.SetAppMode(mode) =>
-        updateConfig(_.withAppMode(mode)) >> hidePanelsOutside(mode, state)
+        state.runtime.projectTasks.running match
+          case Some(task) if leavesCodeTooling(state, mode) =>
+            showModal(Modal.Confirm(ConfirmPrompt.stopProjectTaskToLeaveCode(task, mode)))
+          case _ => switchAppMode(mode)
+      case ViewIntent.SetAppModeStoppingProjectTask(mode) =>
+        switchAppMode(mode)
       case ViewIntent.SetShowAllSettingsRegardlessOfMode(value) =>
         updateConfig(_.withShowAllSettingsRegardlessOfMode(value)).void
       case ViewIntent.ToggleShortcutsHelp =>
@@ -112,13 +117,11 @@ final private[manager] class StateManagerPanelEffects(
       case MarkdownViewMode.Source | MarkdownViewMode.InlineLens =>
         updateConfigEffect >> commitApp(PanelTransitions.removePanel(PanelId.MarkdownPreview))
 
-  // Hidden through the same animated, undoable unpin a drag-off uses. The companion's visibility is the
-  // `ui.companion_sprite.enabled` setting, so hiding it turns that off too -- otherwise it would return at next start.
+  // Hidden through the same animated, undoable unpin a drag-off uses.
   private def hidePanel(id: PanelId, state: AppState): IO[Unit] =
     state.pinnedSurfaces
       .find(surface => PanelId.forContent(surface.content).contains(id))
-      .traverse_(surface => unpinPanel(PanelTarget.ById(surface.id))) >>
-      setCompanionSpriteEnabled(false).whenA(id == PanelId.Companion)
+      .traverse_(surface => unpinPanel(PanelTarget.ById(surface.id)))
 
   private def isShown(id: PanelId, state: AppState): Boolean =
     state.pinnedSurfaces.exists(surface => PanelId.forContent(surface.content).contains(id))
@@ -132,18 +135,14 @@ final private[manager] class StateManagerPanelEffects(
         case _ =>
           showQuickInfo(state, "Focus a panel to maximise it.")
 
-  /** Switching mode puts away the panels that belong to the other mode, as their commands go with it. */
-  private def hidePanelsOutside(mode: AppMode, state: AppState): IO[Unit] =
-    PanelId.values.toList
-      .filter(id => isShown(id, state) && !PanelRegistry.registrationFor(id).family.modes.contains(mode))
-      .traverse_(setPanelPin(_, None))
+  private def leavesCodeTooling(state: AppState, mode: AppMode): Boolean =
+    state.editingContext.hasCodeTooling && mode != AppMode.Code
+
+  private def switchAppMode(mode: AppMode): IO[Unit] =
+    updateConfig(_.withAppMode(mode)).void
 
   private[manager] def openMarkdownPreview: IO[Unit] =
-    pinPanel(
-      PanelId.MarkdownPreview,
-      PanelRegistry.registrationFor(PanelId.MarkdownPreview).defaultPosition,
-      refreshSelections = false
-    )
+    pinPanel(PanelId.MarkdownPreview, PanelRegistry.registrationFor(PanelId.MarkdownPreview).defaultPosition)
 
   private def placePanel(id: PanelId, position: Option[PanelPosition], index: Int): IO[Unit] =
     position match
@@ -160,15 +159,9 @@ final private[manager] class StateManagerPanelEffects(
   private def setPanelPin(id: PanelId, position: Option[PanelPosition]): IO[Unit] =
     position match
       case None =>
-        commitModel(PanelTransitions.panelChange(_, PanelTransitions.removePanel(id), refreshSelections = true)) >>
-          setCompanionSpriteEnabled(false).whenA(id == PanelId.Companion)
+        commitModel(PanelTransitions.panelChange(_, PanelTransitions.removePanel(id)))
       case Some(targetPosition) =>
-        currentState.flatMap { state =>
-          val showsCompanion =
-            id == PanelId.Companion && state.persisted.config.visualFlairLevel != VisualFlairLevel.Off
-          setCompanionSpriteEnabled(true)
-            .whenA(showsCompanion) >> pinPanel(id, targetPosition, refreshSelections = true)
-        }
+        pinPanel(id, targetPosition)
 
   /** The command/keyboard resize entry point (issue #1310) onto the same `resizePinnedPanel` -- and, through it,
     * `PanelStateReducer.resize` -- the existing mouse-drag path already uses: one shared resize state fed by all three
@@ -187,19 +180,17 @@ final private[manager] class StateManagerPanelEffects(
   /** Only the per-panel pin/unpin mutations declare an undo boundary (#1016 PR4) -- not `PlacePanel`'s same-edge
     * reordering, which adjusts an already-pinned panel rather than pinning or unpinning one.
     */
-  private def pinPanel(id: PanelId, position: PanelPosition, refreshSelections: Boolean): IO[Unit] =
+  private def pinPanel(id: PanelId, position: PanelPosition): IO[Unit] =
     currentState.flatMap { state =>
-      val refreshed =
-        if refreshSelections then commitApp(PanelTransitions.withCommandRunnerPanelSelections) else IO.unit
       PanelTransitions.pinPlan(id, position, state) match
         case PanelPinPlan.Commit(update) =>
-          commitModel(PanelTransitions.panelChange(_, update, refreshSelections))
+          commitModel(PanelTransitions.panelChange(_, update))
         case PanelPinPlan.LoadExplorerRoot(size) =>
-          FileUtils.getCurrentDirectory.flatMap(pinExplorerPanelEffect(position, _, size)) >> refreshed
+          FileUtils.getCurrentDirectory.flatMap(pinExplorerPanelEffect(position, _, size))
         case PanelPinPlan.Report(message) =>
-          showQuickInfo(state, message) >> refreshed
+          showQuickInfo(state, message)
         case PanelPinPlan.Ignore(debugLog) =>
-          logger.debug(debugLog) >> refreshed
+          logger.debug(debugLog)
     }
 
   /** Toggles the TUI's spawned Swing preview window (issue #1113): closes it when already open for the focused buffer,

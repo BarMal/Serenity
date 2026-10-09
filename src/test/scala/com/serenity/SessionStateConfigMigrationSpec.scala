@@ -4,7 +4,6 @@ import java.awt.Font
 
 import _root_.io.circe.Json
 import _root_.io.circe.syntax.*
-import com.serenity.animation.AnimationConfig
 import com.serenity.config.*
 import com.serenity.rope.Balance
 import com.serenity.session.SessionState
@@ -50,151 +49,6 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.languageToolsConfig.spellCheck.dictionaryPaths shouldBe Nil
-  }
-
-  it should "default backgroundStyle to Frosted when loading older JSON without the field" in {
-    val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
-      .asJson
-    val configObject =
-      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
-    val jsonWithoutBackgroundStyle =
-      originalJson.mapObject(
-        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("backgroundStyle")))
-      )
-
-    val decoded = jsonWithoutBackgroundStyle.as[SessionState]
-
-    decoded.isRight shouldBe true
-    decoded.toOption.get.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.Frosted
-  }
-
-  it should "default material and motion presets when loading older JSON without the fields" in {
-    val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
-      .asJson
-    val configObject =
-      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
-    val jsonWithoutPresets =
-      originalJson.mapObject(
-        _.add(
-          "config",
-          _root_.io.circe.Json.fromJsonObject(configObject.remove("materialPreset").remove("motionPreset"))
-        )
-      )
-
-    val decoded = jsonWithoutPresets.as[SessionState]
-
-    decoded.isRight shouldBe true
-    decoded.toOption.get.config.surfaceConfig.materialPreset shouldBe MaterialPreset.Frosted
-    decoded.toOption.get.config.surfaceConfig.motionPreset shouldBe MotionPreset.Smooth
-  }
-
-  it should "default element transition speed scale when loading older JSON without the field" in {
-    val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
-      .asJson
-    val configObject =
-      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
-    val jsonWithoutSpeedScale =
-      originalJson.mapObject(
-        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("elementTransitionSpeedScale")))
-      )
-
-    val decoded = jsonWithoutSpeedScale.as[SessionState]
-
-    decoded.isRight shouldBe true
-    decoded.toOption.get.config.surfaceConfig.elementTransitionSpeedScale shouldBe 1.0
-  }
-
-  it should "default per-family animation speed scales when loading older JSON without the fields" in {
-    val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
-      .asJson
-    val configObject =
-      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
-    val jsonWithoutFamilyScales =
-      originalJson.mapObject(
-        _.add(
-          "config",
-          _root_.io.circe.Json.fromJsonObject(
-            configObject
-              .remove("editorTextTransitionSpeedScale")
-              .remove("commandRunnerTransitionSpeedScale")
-              .remove("uiTransitionSpeedScale")
-              .remove("cursorTransitionSpeedScale")
-          )
-        )
-      )
-
-    val decoded = jsonWithoutFamilyScales.as[SessionState]
-
-    decoded.isRight shouldBe true
-    decoded.toOption.get.config.surfaceConfig.editorTextTransitionSpeedScale shouldBe None
-    decoded.toOption.get.config.surfaceConfig.commandRunnerTransitionSpeedScale shouldBe None
-    decoded.toOption.get.config.surfaceConfig.uiTransitionSpeedScale shouldBe None
-    decoded.toOption.get.config.surfaceConfig.cursorTransitionSpeedScale shouldBe None
-  }
-
-  it should "default command and panel transition kind overrides when loading older JSON without the fields" in {
-    val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
-      .asJson
-    val configObject =
-      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
-    val jsonWithoutPanelIds =
-      originalJson.mapObject(
-        _.add(
-          "config",
-          _root_.io.circe.Json.fromJsonObject(
-            configObject
-              .remove("panelOpenTransitionKind")
-              .remove("panelCloseTransitionKind")
-              .remove("commandRunnerTransitionKind")
-          )
-        )
-      )
-
-    val decoded = jsonWithoutPanelIds.as[SessionState]
-
-    decoded.isRight shouldBe true
-    decoded.toOption.get.config.surfaceConfig.panelOpenTransitionKind shouldBe None
-    decoded.toOption.get.config.surfaceConfig.panelCloseTransitionKind shouldBe None
-    decoded.toOption.get.config.surfaceConfig.commandRunnerTransitionKind shouldBe None
-  }
-
-  it should "default command runner animation when loading older JSON without the field" in {
-    val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
-      .asJson
-    val configObject =
-      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
-    val jsonWithoutCommandRunnerAnimation =
-      originalJson.mapObject(
-        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("commandRunnerAnimation")))
-      )
-
-    val decoded = jsonWithoutCommandRunnerAnimation.as[SessionState]
-
-    decoded.isRight shouldBe true
-    decoded.toOption.get.config.surfaceConfig.commandRunnerAnimation shouldBe com.serenity.animation.AnimationConfig.smooth
-  }
-
-  it should "default UI animation when loading older JSON without the field" in {
-    val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
-      .asJson
-    val configObject =
-      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
-    val jsonWithoutUiAnimation =
-      originalJson.mapObject(
-        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("uiAnimation")))
-      )
-
-    val decoded = jsonWithoutUiAnimation.as[SessionState]
-
-    decoded.isRight shouldBe true
-    decoded.toOption.get.config.surfaceConfig.uiAnimation shouldBe AppConfig.default.surfaceConfig.uiAnimation
   }
 
   it should "default renderFpsTarget to 60 FPS when loading older JSON without the field" in {
@@ -284,23 +138,6 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.uiElementGap shouldBe None
-  }
-
-  it should "default UI corner radius to the existing panel radius when loading older JSON without the field" in {
-    val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
-      .asJson
-    val configObject =
-      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
-    val jsonWithoutUiCornerRadius =
-      originalJson.mapObject(
-        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("uiCornerRadiusPx")))
-      )
-
-    val decoded = jsonWithoutUiCornerRadius.as[SessionState]
-
-    decoded.isRight shouldBe true
-    decoded.toOption.get.config.uiCornerRadiusPx shouldBe 8
   }
 
   it should "default UI outline thickness when loading older JSON without the field" in {

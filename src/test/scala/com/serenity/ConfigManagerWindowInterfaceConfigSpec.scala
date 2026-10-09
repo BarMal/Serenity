@@ -103,20 +103,6 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
     ConfigManager.configToString(config) should include("ui.element_gap = 3")
   }
 
-  it should "load and write UI corner radius" in {
-    val configFile = Files.createTempFile("serenity-ui-corner-radius-config", ".conf")
-    Files.writeString(
-      configFile,
-      """ui.corner_radius = 14
-        |""".stripMargin
-    )
-
-    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
-
-    config.uiCornerRadiusPx shouldBe 14
-    ConfigManager.configToString(config) should include("ui.corner_radius = 14")
-  }
-
   it should "load and write UI outline thickness" in {
     val configFile = Files.createTempFile("serenity-ui-outline-thickness-config", ".conf")
     Files.writeString(
@@ -135,13 +121,11 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
     val config = AppConfig.default
       .withInterfaceDensity(InterfaceDensity.Spacious)
       .withUiElementGap(Some(3))
-      .withUiCornerRadiusPx(14)
       .withUiOutlineThicknessPx(4)
 
     config.interfaceConfig shouldBe InterfaceConfig(
       density = InterfaceDensity.Spacious,
       elementGap = Some(3),
-      cornerRadiusPx = 14,
       outlineThicknessPx = 4
     )
   }

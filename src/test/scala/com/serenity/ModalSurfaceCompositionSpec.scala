@@ -135,8 +135,8 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   it should "compose find input and result rows from one clipped plan" in {
     val plan = planFor(
       Modal.Find(
-        "needle",
-        List(FindResult(1, 2), FindResult(4, 5), FindResult(7, 8)),
+        TextField.of("needle"),
+        Vector(FindResult(1, 2), FindResult(4, 5), FindResult(7, 8)),
         currentIndex = 1
       )
     )
@@ -148,10 +148,26 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     plan.paintBoxes.foreach(box => plan.bounds.containsRect(box.rect) shouldBe true)
   }
 
+  it should "draw the find query's caret where its field's caret is" in {
+    val plan = planFor(Modal.Find(TextField.of("needle").movedTo(2), Vector.empty, currentIndex = 0))
+
+    plan.paintBoxes.flatMap(_.cursorOffset) shouldBe List("Find ".length + 2)
+  }
+
+  it should "give each find result row a typed select action rather than an action id string" in {
+    val plan = planFor(Modal.Find(TextField.of("needle"), Vector(FindResult(1, 2), FindResult(4, 5)), currentIndex = 0))
+
+    plan.hitRegions.flatMap(_.action) shouldBe List(
+      SurfaceAction.SelectFindResult(0),
+      SurfaceAction.SelectFindResult(1)
+    )
+    plan.hitRegions.flatMap(_.actionId) shouldBe Nil
+  }
+
   it should "reserve a result row in a frame derived from a matched find workflow" in {
     val modal = Modal.Find(
-      "needle",
-      List(FindResult(1, 2), FindResult(4, 5), FindResult(7, 8)),
+      TextField.of("needle"),
+      Vector(FindResult(1, 2), FindResult(4, 5), FindResult(7, 8)),
       currentIndex = 1
     )
     val frame = LayoutRect(10, 4, 60, ModalSurfaceComposition.frameHeight(modal, targetRows = 1))
@@ -163,13 +179,13 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "compose a zero-match footer for a non-empty find query" in {
-    val plan = planFor(Modal.Find("missing", Nil, currentIndex = 0))
+    val plan = planFor(Modal.Find(TextField.of("missing"), Vector.empty, currentIndex = 0))
 
     plan.paintBoxes.flatMap(_.text) should contain("0 matches")
   }
 
   it should "keep the zero-match footer below the query in a frame derived from the find workflow" in {
-    val modal = Modal.Find("missing", Nil, currentIndex = 0)
+    val modal = Modal.Find(TextField.of("missing"), Vector.empty, currentIndex = 0)
     val frame = LayoutRect(10, 4, 60, ModalSurfaceComposition.frameHeight(modal, targetRows = 1))
 
     val plan = ModalSurfaceComposition.forModal(modal, frame, targetRows = 1).getOrElse(fail("expected find plan"))
@@ -177,6 +193,26 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     val query  = plan.paintBoxes.find(_.text.contains("Find missing")).getOrElse(fail("expected query"))
     val footer = plan.paintBoxes.find(_.text.contains("0 matches")).getOrElse(fail("expected footer"))
     footer.rect.y should be > query.rect.y
+  }
+
+  it should "show each find option's state and key in the find header" in {
+    val plan = planFor(Modal.Find(TextField.of("needle"), Vector.empty, 0, FindOptions(wholeWord = true)))
+
+    plan.paintBoxes.flatMap(_.text) should contain("find  [ ] case alt+c  [x] word alt+w  [ ] regex alt+r")
+  }
+
+  it should "count a capped find as more than the matches it keeps" in {
+    val plan = planFor(Modal.Find(TextField.of("x"), Vector(FindResult(0, 0), FindResult(0, 2)), 0, capped = true))
+
+    plan.paintBoxes.flatMap(_.text) should contain("2+ matches, 1/2+ at 1:1")
+  }
+
+  it should "show an invalid regex as an error rather than a match count" in {
+    val plan = planFor(Modal.Find(TextField.of("ne(dle"), Vector.empty, 0, FindOptions(regex = true)))
+
+    val footer = plan.paintBoxes.find(_.text.exists(_.startsWith("Invalid regex"))).getOrElse(fail("expected error"))
+    footer.tone shouldBe OverlayTone.Error
+    plan.paintBoxes.flatMap(_.text) should not contain "0 matches"
   }
 
   it should "compose replace fields and actions with stable semantic identities" in {
@@ -384,8 +420,11 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
 
   it should "derive preferred frame height from each workflow composition" in {
     ModalSurfaceComposition.frameHeight(Modal.TextPrompt(TextPrompt.gotoLine("")), targetRows = 1) shouldBe 3
-    ModalSurfaceComposition.frameHeight(Modal.Find("needle", Nil, 0), targetRows = 1) shouldBe 5
-    ModalSurfaceComposition.frameHeight(Modal.Find("needle", List(FindResult(0, 0)), 0), targetRows = 1) shouldBe 6
+    ModalSurfaceComposition.frameHeight(Modal.Find(TextField.of("needle"), Vector.empty, 0), targetRows = 1) shouldBe 5
+    ModalSurfaceComposition.frameHeight(
+      Modal.Find(TextField.of("needle"), Vector(FindResult(0, 0)), 0),
+      targetRows = 1
+    ) shouldBe 6
     ModalSurfaceComposition.frameHeight(
       Modal.ReplaceWorkflow(ReplaceWorkflowState(statusMessage = Some("Nothing to replace"))),
       targetRows = 1

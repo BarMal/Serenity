@@ -1,6 +1,5 @@
 package com.serenity.state.models
 
-import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.command.{CommandFamily, FrontendSupport}
 import com.serenity.ui.layout.{PanelContent, PanelPosition}
 
@@ -15,7 +14,6 @@ enum PanelId(val key: String):
   case Diagnostics     extends PanelId("diagnostics")
   case MarkdownPreview extends PanelId("markdown-preview")
   case ProjectOutput   extends PanelId("project-output")
-  case Companion       extends PanelId("companion")
 
   /** The surface id this panel is always docked under, so there is at most one of each. */
   def surfaceId: SurfaceId = SurfaceId(s"panel-$key")
@@ -24,21 +22,20 @@ object PanelId:
 
   def of(content: PanelContent): PanelId =
     content match
-      case PanelContent.DirectoryTree(_, _)   => Explorer
-      case PanelContent.Outline(_, _)         => Outline
-      case PanelContent.Comments(_, _)        => Comments
-      case PanelContent.Diagnostics(_, _)     => Diagnostics
-      case PanelContent.MarkdownPreview(_, _) => MarkdownPreview
-      case PanelContent.Terminal(_, _)        => ProjectOutput
-      case PanelContent.CompanionSprite       => Companion
+      case PanelContent.DirectoryTree(_, _, _) => Explorer
+      case PanelContent.Outline(_, _)          => Outline
+      case PanelContent.Comments(_, _)         => Comments
+      case PanelContent.Diagnostics(_, _)      => Diagnostics
+      case PanelContent.MarkdownPreview(_, _)  => MarkdownPreview
+      case PanelContent.Terminal(_, _)         => ProjectOutput
 
   /** Exhaustive over [[SurfaceContent]] on purpose: a new kind of content has to decide whether it is a panel. */
   def forContent(content: SurfaceContent): Option[PanelId] =
     content match
-      case SurfaceContent.DirectoryTree(_, _)       => Some(Explorer)
-      case SurfaceContent.Outline(_, _)             => Some(Outline)
-      case SurfaceContent.Comments(_, _)            => Some(Comments)
-      case SurfaceContent.Diagnostics(_, _)         => Some(Diagnostics)
+      case SurfaceContent.DirectoryTree(_, _, _)    => Some(Explorer)
+      case SurfaceContent.Outline(_, _, _)          => Some(Outline)
+      case SurfaceContent.Comments(_, _, _)         => Some(Comments)
+      case SurfaceContent.Diagnostics(_, _, _)      => Some(Diagnostics)
       case SurfaceContent.MarkdownPreview(_, _)     => Some(MarkdownPreview)
       case SurfaceContent.StartPage(_)              => None
       case SurfaceContent.QuickInfo(_)              => None
@@ -58,8 +55,7 @@ object PanelId:
       case SurfaceContent.TabList(_, _)             => None
       case SurfaceContent.RecentFilesInMode(_, _)   => None
       case SurfaceContent.TabBar(_, _)              => None
-      case SurfaceContent.GhostOverlay(_, _)        => None
-      case SurfaceContent.CompanionSprite           => Some(Companion)
+      case SurfaceContent.Notice(_, _)              => None
 
 /** A display mode a registered panel can be shown through (issue #1310). Shortcut-summoned (mode 2) is deliberately
   * absent until #1311's chord system exposes a `Command`-typed completion to register against -- adding a case nothing
@@ -127,9 +123,6 @@ object PanelRegistry:
       case PanelId.ProjectOutput =>
         docked(id, "Project Output", "Output from the latest build, test or run task.", PanelPosition.Bottom)
           .copy(defaultSize = _ => 14, family = CommandFamily.Code)
-      case PanelId.Companion =>
-        docked(id, "Companion", "A small pixel-art companion that reacts to your typing.", PanelPosition.Right)
-          .copy(defaultSize = _ => CompanionSpriteConfig.DefaultSize, focusable = false)
 
   private def docked(id: PanelId, label: String, description: String, position: PanelPosition): PanelRegistration =
     PanelRegistration(

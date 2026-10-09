@@ -2,6 +2,8 @@ package com.serenity.rope
 
 import scala.annotation.tailrec
 
+import com.serenity.text.TextSummary
+
 sealed trait Rope(using balance: Balance):
   def weight: Int
   def height: Int
@@ -9,27 +11,16 @@ sealed trait Rope(using balance: Balance):
   def lastLineLength: Int
   def endsWithNewline: Boolean
 
-  /** Count of characters for which `Character.isWhitespace` is false. Maintained the same way as `newlineCount`:
-    * additive across a `Node`'s children, with no boundary case to worry about since whitespace-ness of one character
-    * never depends on its neighbours.
+  /** Words and grapheme-cluster characters as `TextCounts` defines them, kept incrementally: a `Node` joins its
+    * children's summaries, recounting only a bounded window around the seam (see `TextSummary`).
     */
-  def nonWhitespaceCount: Int
+  def textSummary: TextSummary
 
-  /** Count of maximal runs of non-whitespace characters -- the same definition `wc -w` uses. Maintained the same way as
-    * `lastLineLength`/`endsWithNewline`: a `Node` combines its children's counts and subtracts one when a run spans the
-    * boundary between them, which `startsWithWordChar`/`endsWithWordChar` detect in O(1).
-    */
-  def wordCount: Int
+  def wordCount: Int = textSummary.counts.words
 
-  /** Whether the first character of this rope (if any) is non-whitespace -- the boundary flag `wordCount` needs from a
-    * rope's right sibling to know whether a word run continues across the join.
-    */
-  def startsWithWordChar: Boolean
+  def characterCount: Int = textSummary.counts.characters
 
-  /** Whether the last character of this rope (if any) is non-whitespace -- the boundary flag `wordCount` needs from a
-    * rope's left sibling to know whether a word run continues across the join.
-    */
-  def endsWithWordChar: Boolean
+  def nonWhitespaceCount: Int = textSummary.counts.nonWhitespaceCharacters
 
   def isWeightBalanced: Boolean
   def isHeightBalanced: Boolean
@@ -394,17 +385,14 @@ sealed trait Rope(using balance: Balance):
   */
 @SuppressWarnings(Array("org.wartremover.warts.FinalCaseClass"))
 case class Leaf(value: String)(using balance: Balance) extends Rope:
-  override def weight: Int                 = value.length
-  override def height: Int                 = 1
-  override val newlineCount: Int           = value.count(_ == '\n')
-  override val lastLineLength: Int         = value.length - value.lastIndexOf('\n') - 1
-  override val endsWithNewline: Boolean    = value.endsWith("\n")
-  override val nonWhitespaceCount: Int     = value.count(!_.isWhitespace)
-  override val wordCount: Int              = Rope.countWordRuns(value)
-  override val startsWithWordChar: Boolean = value.headOption.exists(!_.isWhitespace)
-  override val endsWithWordChar: Boolean   = value.lastOption.exists(!_.isWhitespace)
-  override def isWeightBalanced: Boolean   = true
-  override def isHeightBalanced: Boolean   = true
+  override def weight: Int                   = value.length
+  override def height: Int                   = 1
+  override val newlineCount: Int             = value.count(_ == '\n')
+  override val lastLineLength: Int           = value.length - value.lastIndexOf('\n') - 1
+  override val endsWithNewline: Boolean      = value.endsWith("\n")
+  override lazy val textSummary: TextSummary = TextSummary.of(value)
+  override def isWeightBalanced: Boolean     = true
+  override def isHeightBalanced: Boolean     = true
   override def rebalance: Rope =
     if value.length > balance.leafChunkSize then Rope(value) else this
 
@@ -456,19 +444,7 @@ final case class Node(left: Rope, right: Rope)(using balance: Balance) extends R
   override val endsWithNewline: Boolean =
     if right.weight == 0 then left.endsWithNewline else right.endsWithNewline
 
-  override val nonWhitespaceCount: Int = left.nonWhitespaceCount + right.nonWhitespaceCount
-
-  // A run of non-whitespace characters spanning the left/right join was counted once by each side, so it must be
-  // subtracted back to one word -- exactly the boundary case `lastLineLength`/`endsWithNewline` handle for lines.
-  override val wordCount: Int =
-    val runSpansJoin = left.weight > 0 && right.weight > 0 && left.endsWithWordChar && right.startsWithWordChar
-    left.wordCount + right.wordCount - (if runSpansJoin then 1 else 0)
-
-  override val startsWithWordChar: Boolean =
-    if left.weight == 0 then right.startsWithWordChar else left.startsWithWordChar
-
-  override val endsWithWordChar: Boolean =
-    if right.weight == 0 then left.endsWithWordChar else right.endsWithWordChar
+  override lazy val textSummary: TextSummary = TextSummary.join(left.textSummary, right.textSummary)
 
   override def isWeightBalanced: Boolean =
     Math.abs(left.weight - right.weight) <= balance.weightBalance
@@ -544,39 +520,10 @@ object Rope:
 
   def empty(using balance: Balance): Rope = Leaf("")
 
-  /** Counts maximal runs of non-whitespace characters in a single string -- the same definition `wc -w` uses, and the
-    * leaf-level building block `Node.wordCount` combines across the tree. Exposed so callers with a bounded,
-    * already-materialised string (a selection's text, for instance) can count words without going through a `Rope`.
-    */
-  def countWordRuns(value: String): Int =
-    @tailrec
-    def loop(index: Int, inWord: Boolean, count: Int): Int =
-      if index >= value.length then count
-      else if value.charAt(index).isWhitespace then loop(index + 1, inWord = false, count)
-      else loop(index + 1, inWord = true, if inWord then count else count + 1)
-
-    loop(0, inWord = false, 0)
-
   // Normalizes CRLF and bare CR to LF on entry, in one pass, so all downstream code
   // (WrapEngine, RenderEngine, cursor arithmetic) only ever sees '\n'.
   def apply(in: String)(using balance: Balance): Rope =
-    build(normalizeLineEndings(in))
-
-  private def normalizeLineEndings(in: String): String =
-    if !in.exists(c => c == '\r' || c == '\n') then in
-    else
-      @tailrec
-      def loop(index: Int, acc: StringBuilder): String =
-        if index >= in.length then acc.toString
-        else
-          val char = in.charAt(index)
-          if char == '\r' then
-            acc.append('\n')
-            val skipsFollowingLf = index + 1 < in.length && in.charAt(index + 1) == '\n'
-            loop(if skipsFollowingLf then index + 2 else index + 1, acc)
-          else loop(index + 1, acc.append(char))
-
-      loop(0, new StringBuilder(in.length))
+    build(LineEndings.normalized(in))
 
   /** Rebuilds a rope over leaf strings that are already in hand.
     *

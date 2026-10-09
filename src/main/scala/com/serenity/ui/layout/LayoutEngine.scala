@@ -72,6 +72,7 @@ final case class CalculatedLayout(
     belowCursorOverlayRect: Option[LayoutRect] = None,
     aboveCursorOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
     belowCursorOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
+    cornerOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
     collapsedFloatingSurfaceIds: Set[SurfaceId] = Set.empty,
     floatingOverlayOffsetRows: Map[SurfaceId, Double] = Map.empty,
     lineNumberRect: Option[LayoutRect] = None,
@@ -204,11 +205,15 @@ object LayoutEngine:
       math.max(1, contentHeight - topPinnedHeight - bottomPinnedHeight - topGap - bottomGap)
 
     val editorPaneHeaderHeight = paneHeaderHeight(state)
-    val leftSpacerWidth        = (workspaceWidth * textAreaInsets.left).toInt
-    val rightSpacerWidth       = (workspaceWidth * textAreaInsets.right).toInt
-    val contentAreaHeight      = math.max(1, workspaceHeight - editorPaneHeaderHeight)
-    val topSpacerHeight        = (contentAreaHeight * textAreaInsets.top).toInt
-    val bottomSpacerHeight     = (contentAreaHeight * textAreaInsets.bottom).toInt
+    val (leftSpacerWidth, rightSpacerWidth) = ProseColumn.spacers(
+      workspaceWidth - leftBlock - rightBlock,
+      (workspaceWidth * textAreaInsets.left).toInt,
+      (workspaceWidth * textAreaInsets.right).toInt,
+      ProseColumn.widthCells(state)
+    )
+    val contentAreaHeight  = math.max(1, workspaceHeight - editorPaneHeaderHeight)
+    val topSpacerHeight    = (contentAreaHeight * textAreaInsets.top).toInt
+    val bottomSpacerHeight = (contentAreaHeight * textAreaInsets.bottom).toInt
 
     // Adjust editor area to accommodate UI elements
     val availableWidth  = math.max(1, workspaceWidth - leftSpacerWidth - rightSpacerWidth - leftBlock - rightBlock)
@@ -297,16 +302,12 @@ object LayoutEngine:
 
     val paneLayouts = calculateEditorPaneLayouts(state, baseLayout)
 
-    val stackedAboveSurfaces = OverlayStackLayout.orderedAboveCursorSurfaces(state)
-    val ghostAboveSurfaces   = OverlayStackLayout.aboveCursorGhostSurfaces(state)
-    val aboveSurfaces        = stackedAboveSurfaces ++ ghostAboveSurfaces
-    val belowSurfaces        = OverlayStackLayout.orderedBelowCursorSurfaces(state)
+    val aboveSurfaces = OverlayStackLayout.orderedAboveCursorSurfaces(state)
+    val belowSurfaces = OverlayStackLayout.orderedBelowCursorSurfaces(state)
     val aboveLayout =
-      OverlayStackLayout.calculateAboveCursorOverlayStack(stackedAboveSurfaces, state, paneLayouts)
-    val aboveCursorOverlayStack = aboveLayout.stack ++ ghostAboveSurfaces.flatMap(surface =>
-      FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface.id -> _)
-    )
-    val belowLayout = OverlayStackLayout.calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
+      OverlayStackLayout.calculateAboveCursorOverlayStack(aboveSurfaces, state, paneLayouts)
+    val aboveCursorOverlayStack = aboveLayout.stack
+    val belowLayout             = OverlayStackLayout.calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
     val floatingOffsets = OverlayStackLayout.floatingOverlayOffsets(
       aboveSurfaces,
       aboveCursorOverlayStack,
@@ -321,6 +322,7 @@ object LayoutEngine:
       belowCursorOverlayRect = belowLayout.stack.headOption.map(_._2),
       aboveCursorOverlayStack = aboveCursorOverlayStack,
       belowCursorOverlayStack = belowLayout.stack,
+      cornerOverlayStack = OverlayStackLayout.calculateCornerOverlays(state, editorPanelRect),
       collapsedFloatingSurfaceIds = aboveLayout.collapsedSurfaceIds ++ belowLayout.collapsedSurfaceIds,
       floatingOverlayOffsetRows = floatingOffsets
     )
@@ -390,13 +392,12 @@ object LayoutEngine:
     val maxScrollLine     = math.max(0, bufferLineCount - viewport.visibleLines)
     val clampedScrollLine = math.max(0, math.min(desiredScrollLine, maxScrollLine))
 
-    viewport.copy(topLine = clampedScrollLine, topVisualLine = 0)
+    viewport.scrolledTo(clampedScrollLine, viewport.leftColumn, 0)
 
   def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect): Viewport =
     viewport.copy(
       visibleLines = panelRect.height,
-      visibleColumns = panelRect.width,
-      topVisualLine = viewport.topVisualLine.min(math.max(0, panelRect.height - 1))
+      visibleColumns = panelRect.width
     )
 
   def updateBufferViewportDimensions(buffer: Buffer, panelRect: LayoutRect, wordWrapEnabled: Boolean): Viewport =
@@ -519,8 +520,7 @@ object LayoutEngine:
   def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect, metrics: CellMetrics): Viewport =
     viewport.copy(
       visibleLines = panelRect.height / metrics.lineHeight,
-      visibleColumns = panelRect.width / metrics.charWidth,
-      topVisualLine = viewport.topVisualLine.min(math.max(0, panelRect.height / metrics.lineHeight - 1))
+      visibleColumns = panelRect.width / metrics.charWidth
     )
 
   def syncViewportDimensions(state: AppState, viewportSize: ViewportSize): AppState =

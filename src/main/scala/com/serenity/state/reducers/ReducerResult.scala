@@ -3,13 +3,12 @@ package com.serenity.state.reducers
 import java.nio.file.Path
 
 import cats.syntax.all.*
-import com.serenity.animation.{AnimatedCell, AnimationOwner, CharacterKey, TextEdit}
 import com.serenity.command.Command
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Rope
 import com.serenity.state.models.{AppState, BufferId, CloseScope, SurfaceId}
-import com.serenity.state.undo.HistoryEntry
+import com.serenity.state.undo.{EditGrouping, HistoryEntry}
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.theme.config.ThemeConfig
 
@@ -19,6 +18,12 @@ enum ThemeEffect:
   case SaveThemeConfig(config: ThemeConfig)
   case RefreshThemeNames
   case ExportCurrentTheme
+
+enum SettingsEffect:
+  /** Pushes the live config into the parts of the runtime that learn of a change only when told: the font loader, the
+    * render caches, and the command runner and toolbar built from it.
+    */
+  case ReapplyConfig
 
 enum SurfaceEffect:
   case OpenThemePicker
@@ -53,31 +58,17 @@ enum WorkflowEffect:
 
 enum LspQueueEffect:
   case Enqueue(effect: LspEffect)
-  case DocumentChanged(uri: String, languageId: LanguageId, text: String)
-
-/** `Buffer` carries no animation state (`#1001`) -- these are how a reducer that computed an animation change hands it
-  * to the presentation layer that actually owns `AnimationState`, instead of writing it into the `AppState` it returns.
-  * `RemapThroughEdits` carries the edits themselves, not a precomputed `AnimationState`, because the remap
-  * (`AnimationState.remapThroughEdits`) needs the presentation layer's own current animations as input -- state the
-  * pure reducer has no access to.
-  */
-enum AnimationEffect:
-  case RemapThroughEdits(bufferId: BufferId, contentBefore: Rope, contentAfter: Rope, edits: List[TextEdit])
-  case Merge(bufferId: BufferId, delta: Map[CharacterKey, AnimatedCell])
-  case ClearAll(bufferId: BufferId)
-  case ClearOwner(bufferId: BufferId, owner: AnimationOwner)
-  // Not `ClearOwner` + `Merge`: `Merge` overwrites, and a UI sweep must not clobber an in-flight editor-text animation.
-  case RestartUiTransitions(bufferId: BufferId, cells: Map[CharacterKey, AnimatedCell])
+  case DocumentChanged(uri: String, languageId: LanguageId, text: Rope)
 
 /** A reducer's own declaration that the change it just performed is undoable, carrying the [[HistoryEntry]] that
-  * restores it -- see #1016. `groupable` marks whether this should coalesce into an already-open run of edits
-  * (consecutive character/tab insertion) rather than becoming its own undo step; only ever true for a
+  * restores it -- see #1016. `grouping` says whether this coalesces into the buffer's open run of edits (consecutive
+  * typing, or consecutive deletion) or becomes an undo step of its own; only ever coalescing for a
   * `HistoryEntry.BufferEdit`. The entry captures state as it was immediately prior to this change -- carried in the
   * effect itself (rather than left for `UndoRecording` to infer from an event-type allowlist and a before/after diff)
   * because interpretation runs after `AppState` has already been updated to the post-change state.
   */
 enum UndoEffect:
-  case RecordBoundary(entry: HistoryEntry, groupable: Boolean)
+  case RecordBoundary(entry: HistoryEntry, grouping: EditGrouping)
 
 enum AppEffect:
   case CompleteQuit
@@ -89,12 +80,12 @@ enum AppEffect:
   case ExecuteCommandUnrecorded(command: Command)
   case ScheduleCommandRunnerBindingExpiry(recordedAtMillis: Long)
   case Theme(effect: ThemeEffect)
+  case Settings(effect: SettingsEffect)
   case Surface(effect: SurfaceEffect)
   case File(effect: FileEffect)
   case Explorer(effect: ExplorerEffect)
   case Workflow(effect: WorkflowEffect)
   case LspQueue(effect: LspQueueEffect)
-  case Animation(effect: AnimationEffect)
   case Undo(effect: UndoEffect)
 
 final case class ReducerResult(

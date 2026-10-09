@@ -6,7 +6,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Resource}
 import com.serenity.lsp.client.{LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.LanguageId
-import com.serenity.lsp.model.SemanticTokensLegend
+import com.serenity.lsp.model.{SemanticTokensFeatures, SemanticTokensLegend}
 import io.circe.Json
 import io.circe.parser.parse
 import io.circe.syntax.*
@@ -83,4 +83,33 @@ class LspConnectionSemanticTokensSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     legend shouldBe None
+  }
+
+  it should "capture which semantic tokens requests the server offers from its initialize result" in {
+    val initializeResult = Json.obj(
+      "capabilities" -> Json.obj(
+        "semanticTokensProvider" -> Json.obj(
+          "legend" -> Json.obj("tokenTypes" -> Json.arr("keyword".asJson), "tokenModifiers" -> Json.arr()),
+          "full"   -> Json.obj("delta" -> true.asJson),
+          "range"  -> true.asJson
+        )
+      )
+    )
+
+    val features = connectionResource(initializeResult)
+      .use(conn => conn.semanticTokensFeatures)
+      .timeout(testTimeout)
+      .unsafeRunSync()
+
+    features shouldBe SemanticTokensFeatures(full = true, delta = true, range = true)
+  }
+
+  it should "assume only full requests from a connection that never read an initialize result" in {
+    val features = LspConnection
+      .create(LanguageId.Scala, logger)
+      .flatMap(_.semanticTokensFeatures)
+      .timeout(testTimeout)
+      .unsafeRunSync()
+
+    features shouldBe SemanticTokensFeatures.FullOnly
   }

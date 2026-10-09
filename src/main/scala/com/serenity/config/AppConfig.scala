@@ -1,7 +1,7 @@
 package com.serenity.config
 
-import com.serenity.animation.*
-import com.serenity.animation.sprite.CompanionSpriteConfig
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
+
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.config.LspUserConfig
@@ -15,13 +15,14 @@ final case class AppConfig(
     surfaceConfig: SurfaceConfig = SurfaceConfig(),
     cursorConfig: CursorConfig = CursorConfig(),
     windowConfig: WindowConfig = WindowConfig(),
-    companionSpriteConfig: CompanionSpriteConfig = CompanionSpriteConfig.default,
-    visualFlairLevel: VisualFlairLevel = VisualFlairLevel.default,
     documentConfig: DocumentConfig = DocumentConfig(),
     interfaceConfig: InterfaceConfig = InterfaceConfig(),
+    themeFollowConfig: ThemeFollowConfig = ThemeFollowConfig(),
     languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig(),
     appModeConfig: AppModeConfig = AppModeConfig(),
-    statusLine: StatusLineConfig = StatusLineConfig.default
+    statusLine: StatusLineConfig = StatusLineConfig.default,
+    exportTypographyConfig: ExportTypographyConfig = ExportTypographyConfig(),
+    autoSaveConfig: AutoSaveConfig = AutoSaveConfig()
 ):
 
   def withEditorConfig(config: EditorConfig): AppConfig =
@@ -29,6 +30,9 @@ final case class AppConfig(
 
   def withLanguageToolsConfig(config: LanguageToolsConfig): AppConfig =
     copy(languageToolsConfig = config.normalized)
+
+  def withExportTypography(config: ExportTypographyConfig): AppConfig =
+    copy(exportTypographyConfig = config)
 
   def withInputConfig(config: InputConfig): AppConfig =
     copy(inputConfig = config)
@@ -64,24 +68,14 @@ final case class AppConfig(
   def uiElementGap: Option[Double] =
     interfaceConfig.elementGap
 
-  def uiCornerRadiusPx: Int =
-    interfaceConfig.cornerRadiusPx
-
   def uiOutlineThicknessPx: Int =
     interfaceConfig.outlineThicknessPx
 
   def uiChromeScale: Double =
     editorConfig.fontConfig.uiChromeScale
 
-  /** [[uiCornerRadiusPx]] scaled by [[uiChromeScale]] -- what renderers should actually draw with, so a panel's corner
-    * radius stays proportionate to the panel as the UI font size changes (issue #1542) instead of always painting the
-    * configured pixel value regardless of font size.
-    */
-  def scaledUiCornerRadiusPx: Int =
-    math.round(uiCornerRadiusPx * uiChromeScale).toInt.max(0)
-
-  /** [[uiOutlineThicknessPx]] scaled the same way as [[scaledUiCornerRadiusPx]]; floored above zero since `BasicStroke`
-    * requires a positive width.
+  /** [[uiOutlineThicknessPx]] scaled by [[uiChromeScale]], so a panel border stays proportionate to the panel as the UI
+    * font size changes (issue #1542); floored above zero since `BasicStroke` requires a positive width.
     */
   def scaledUiOutlineThicknessPx: Float =
     (uiOutlineThicknessPx * uiChromeScale).toFloat.max(0.5f)
@@ -184,6 +178,9 @@ final case class AppConfig(
   def withFocusedTextBody(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(focusedTextBodyEnabled = enabled))
 
+  def withProseMeasure(measure: Option[Int]): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(proseMeasure = measure.map(ProseMeasure.clamp)))
+
   /** Show or hide the command runner's persistent key-hint footer row (issue #931, Stage 3). */
   def withCommandRunnerShowKeyHints(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(commandRunnerShowKeyHints = enabled))
@@ -214,37 +211,20 @@ final case class AppConfig(
   def withRendererFrameStateCacheCapacity(capacity: Int): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(rendererFrameStateCacheCapacity = capacity))
 
+  def withLayerCaching(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(layerCachingEnabled = enabled))
+
+  def withFrameTiming(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(frameTimingEnabled = enabled))
+
+  def withLatencyTrace(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(latencyTraceEnabled = enabled))
+
+  def withStartupWarmUp(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(startupWarmUpEnabled = enabled))
+
   def withDiagnosticHighlightBlendWeight(weight: Double): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(diagnosticHighlightBlendWeight = weight))
-
-  // #1316: re-assigning a setting its own current value is not customising it -- flip the preset only when the value
-  // actually changes, so putting back what was already there is a no-op.
-  def withBlurRadius(r: Float): AppConfig =
-    if surfaceConfig.blurRadius == r then this
-    else withSurfaceConfig(surfaceConfig.copy(blurRadius = r, materialPreset = MaterialPreset.Custom))
-
-  def withBackgroundStyle(style: BackgroundStyle): AppConfig =
-    if surfaceConfig.backgroundStyle == style then this
-    else withSurfaceConfig(surfaceConfig.copy(backgroundStyle = style, materialPreset = MaterialPreset.Custom))
-
-  def withMaterialPreset(preset: MaterialPreset): AppConfig =
-    preset match
-      case MaterialPreset.Custom =>
-        withSurfaceConfig(surfaceConfig.copy(materialPreset = MaterialPreset.Custom))
-      case _ =>
-        withSurfaceConfig(
-          surfaceConfig.copy(
-            materialPreset = preset,
-            backgroundStyle = preset.backgroundStyle,
-            blurRadius = preset.blurRadius
-          )
-        )
-
-  def withPostProcessingEffect(effect: PostProcessingEffect): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(postProcessingEffect = effect))
-
-  def withUiShadowsEnabled(enabled: Boolean): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(uiShadowsEnabled = enabled))
 
   def cursorMode: CursorMode =
     cursorConfig.mode
@@ -260,6 +240,13 @@ final case class AppConfig(
 
   def withCursorColors(colors: CursorColorConfig): AppConfig =
     withCursorConfig(cursorConfig.copy(colors = colors))
+
+  /** `None` when the caret blinks for as long as the window stays focused. */
+  def cursorBlinkTimeout: Option[FiniteDuration] =
+    Option.when(cursorConfig.blinkTimeoutMillis > 0L)(FiniteDuration(cursorConfig.blinkTimeoutMillis, MILLISECONDS))
+
+  def withCursorBlinkTimeoutMillis(millis: Long): AppConfig =
+    withCursorConfig(cursorConfig.copy(blinkTimeoutMillis = millis.max(0L)))
 
   def withStatusLine(config: StatusLineConfig): AppConfig =
     copy(statusLine =
@@ -300,9 +287,26 @@ final case class AppConfig(
   def withWordGoal(goal: Option[Int]): AppConfig =
     withDocumentConfig(documentConfig.copy(wordGoal = goal))
 
+  /** Create a new config with the name comments are written under set (or cleared, via `None`). */
+  def withCommentAuthor(author: Option[String]): AppConfig =
+    withDocumentConfig(documentConfig.copy(commentAuthor = author))
+
+  /** The name a new comment or reply is written under: the configured one, else the operating system's user name. */
+  def commentAuthor: String =
+    documentConfig.commentAuthor.getOrElse(CommentAuthor.osUserName)
+
   /** Create a new config with the multi-line drop cap paragraph role's rendering enabled or disabled. */
   def withDropCapsEnabled(enabled: Boolean): AppConfig =
     withDocumentConfig(documentConfig.copy(dropCapsEnabled = enabled))
+
+  def withAutoSaveConfig(config: AutoSaveConfig): AppConfig =
+    copy(autoSaveConfig = config)
+
+  def withAutoSaveMode(mode: AutoSaveMode): AppConfig =
+    withAutoSaveConfig(autoSaveConfig.copy(mode = mode))
+
+  def withAutoSaveDelayMillis(delayMillis: Long): AppConfig =
+    withAutoSaveConfig(autoSaveConfig.copy(delayMillis = delayMillis))
 
   def withAppModeConfig(config: AppModeConfig): AppConfig =
     copy(appModeConfig = config)
@@ -325,11 +329,11 @@ final case class AppConfig(
   def withUiElementGap(gap: Option[Double]): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(elementGap = gap))
 
-  def withUiCornerRadiusPx(radius: Int): AppConfig =
-    withInterfaceConfig(interfaceConfig.copy(cornerRadiusPx = radius))
-
   def withUiOutlineThicknessPx(thickness: Int): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(outlineThicknessPx = thickness))
+
+  def withThemeFollowConfig(config: ThemeFollowConfig): AppConfig =
+    copy(themeFollowConfig = config)
 
   def withTextAreaInsets(insets: TextAreaInsets): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(textAreaInsets = insets))
@@ -358,12 +362,6 @@ final case class AppConfig(
   def withPreferredWindowSize(size: PreferredWindowSize): AppConfig =
     withWindowConfig(windowConfig.copy(preferredSize = Some(size.normalized)))
 
-  def withCompanionSpriteConfig(config: CompanionSpriteConfig): AppConfig =
-    copy(companionSpriteConfig = config.normalized)
-
-  def withVisualFlairLevel(level: VisualFlairLevel): AppConfig =
-    copy(visualFlairLevel = level)
-
   def withLspUserConfig(config: LspUserConfig): AppConfig =
     withLanguageToolsConfig(languageToolsConfig.copy(lspUserConfig = config))
 
@@ -372,12 +370,8 @@ final case class AppConfig(
 
 object AppConfig:
 
-  val MinElementTransitionSpeedScale: Double    = 0.0
-  val MaxElementTransitionSpeedScale: Double    = 4.0
   val MinUiElementGap: Double                   = 0.0
   val MaxUiElementGap: Double                   = 8.0
-  val MinUiCornerRadiusPx: Int                  = 0
-  val MaxUiCornerRadiusPx: Int                  = 32
   val MinUiOutlineThicknessPx: Int              = 1
   val MaxUiOutlineThicknessPx: Int              = 8
   val MinCommandRunnerVisibleRows: Int          = 1
@@ -397,14 +391,8 @@ object AppConfig:
   val MinRendererFrameStateCacheCapacity: Int = 8
   val MaxRendererFrameStateCacheCapacity: Int = 4096
 
-  def clampElementTransitionSpeedScale(scale: Double): Double =
-    scale.max(MinElementTransitionSpeedScale).min(MaxElementTransitionSpeedScale)
-
   def clampUiElementGap(gap: Double): Double =
     if gap.isFinite then gap.max(MinUiElementGap).min(MaxUiElementGap) else MinUiElementGap
-
-  def clampUiCornerRadiusPx(radius: Int): Int =
-    radius.max(MinUiCornerRadiusPx).min(MaxUiCornerRadiusPx)
 
   def clampUiOutlineThicknessPx(thickness: Int): Int =
     thickness.max(MinUiOutlineThicknessPx).min(MaxUiOutlineThicknessPx)
@@ -433,52 +421,10 @@ object AppConfig:
     if weight.isFinite then weight.max(MinDiagnosticHighlightBlendWeight).min(MaxDiagnosticHighlightBlendWeight)
     else MinDiagnosticHighlightBlendWeight
 
-  def scaledAnimation(animation: Option[AnimationConfig], speedScale: Double): Option[AnimationConfig] =
-    animation.flatMap(_.scaledBy(clampElementTransitionSpeedScale(speedScale)))
-
-  /** Default configuration keeps text entry immediate and uses restrained frosted surfaces. */
   /** What the app ships with.
     *
     * Only the settings that differ from their own field's default belong here. Restating one that already matches hides
     * which of the two is the real answer -- four of these used to, and telling them apart meant reading both.
     * `ConfigRegistry.defaults` lists every setting's default, and `docs/default-config.conf` is generated from it.
     */
-  val default: AppConfig = AppConfig(
-    surfaceConfig = SurfaceConfig(motionPreset = MotionPreset.Smooth)
-  )
-
-  /** Test configuration with visible animations enabled */
-  val withTestAnimations: AppConfig = AppConfig(
-    editorConfig = EditorConfig(characterAnimation = AnimationConfig.quick),
-    surfaceConfig = SurfaceConfig(
-      uiAnimation = AnimationConfig.quick,
-      motionPreset = MotionPreset.Expressive
-    )
-  )
-
-  /** Quick fade-in animation configuration */
-  val withQuickAnimation: AppConfig = AppConfig(
-    editorConfig = EditorConfig(characterAnimation = AnimationConfig.quick),
-    surfaceConfig = SurfaceConfig(
-      uiAnimation = AnimationConfig.quick,
-      motionPreset = MotionPreset.Expressive
-    )
-  )
-
-  /** Smooth fade-in animation configuration */
-  val withSmoothAnimation: AppConfig = AppConfig(
-    editorConfig = EditorConfig(characterAnimation = AnimationConfig.smooth),
-    surfaceConfig = SurfaceConfig(
-      uiAnimation = AnimationConfig.smooth,
-      motionPreset = MotionPreset.Smooth
-    )
-  )
-
-  /** Subtle fade-in animation configuration */
-  val withSubtleAnimation: AppConfig = AppConfig(
-    editorConfig = EditorConfig(characterAnimation = AnimationConfig.subtle),
-    surfaceConfig = SurfaceConfig(
-      uiAnimation = AnimationConfig.subtle,
-      motionPreset = MotionPreset.Subtle
-    )
-  )
+  val default: AppConfig = AppConfig()

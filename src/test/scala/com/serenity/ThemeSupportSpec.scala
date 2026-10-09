@@ -20,9 +20,8 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
     val darkTheme = Theme.dark
 
     darkTheme.name shouldBe "dark"
-    darkTheme.foregroundColor should not be null
-    darkTheme.backgroundColor should not be null
-    darkTheme.cursorColor should not be null
+    darkTheme.foregroundColor should not be darkTheme.backgroundColor
+    darkTheme.cursorColor should not be darkTheme.backgroundColor
   }
 
   it should "define text styling options" in {

@@ -15,6 +15,13 @@ if ! jar tf "$jar_path" | grep -Fxq "$service_descriptor"; then
   exit 1
 fi
 
+for bundled in META-INF/serenity/LICENSE META-INF/serenity/THIRD-PARTY-NOTICES.md fonts/OFL.txt; do
+  if ! jar tf "$jar_path" | grep -Fxq "$bundled"; then
+    echo "Assembled JAR is missing $bundled" >&2
+    exit 1
+  fi
+done
+
 signature_blocks="$(jar tf "$jar_path" | grep -Ei '^META-INF/[^/]+\.(SF|RSA|DSA|EC)$' || true)"
 if [[ -n "$signature_blocks" ]]; then
   echo "Assembled JAR contains signature blocks that cannot survive relocation:" >&2

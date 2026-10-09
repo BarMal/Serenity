@@ -14,7 +14,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
-import com.serenity.testkit.AwaitCondition
+import com.serenity.testkit.{AwaitCondition, SharedDictionary}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
@@ -68,7 +68,7 @@ class FormattingLossSaveSpec extends AnyFlatSpec with Matchers:
     val directory = Files.createTempDirectory("formatting-loss-save-spec")
     val program =
       for
-        modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+        modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))
         themeNamesRef       <- Ref.of[IO, List[String]](Nil)
         quitSignal          <- cats.effect.Deferred[IO, Unit]
         lspQueue            <- LspEffectQueue.create
@@ -89,7 +89,8 @@ class FormattingLossSaveSpec extends AnyFlatSpec with Matchers:
           uiPresetStore = UiPresetStore(directory.resolve("presets.json")),
           windowSizeProvider = IO.pure(None),
           onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-          fileDialog = None
+          fileDialog = None,
+          dictionaryCache = SharedDictionary.default
         )
         stateManager <- StateManager.fromRuntime(runtime)
       yield Fixture(stateManager, directory)

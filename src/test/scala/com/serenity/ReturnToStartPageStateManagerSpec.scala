@@ -10,6 +10,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -27,7 +28,9 @@ class ReturnToStartPageStateManagerSpec extends AnyFlatSpec with Matchers:
   private def createStateManager(): StateManager =
     val logger  = LoggerFactory[IO].getLogger(using LoggerName("ReturnToStartPageStateManagerSpec"))
     val tempDir = Files.createTempDirectory("serenity-return-to-start-page")
-    StateManager.apply(logger, sessionRootOverride = Some(tempDir)).unsafeRunSync()
+    StateManager
+      .apply(logger, sessionRootOverride = Some(tempDir), dictionaryCache = SharedDictionary.default)
+      .unsafeRunSync()
 
   private def returnCommand =
     CommandRegistry.withToggleUI
@@ -110,7 +113,7 @@ class ReturnToStartPageStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.executeCommand(returnCommand).unsafeRunSync()
     // Save -> Close Anyway, then submit the Close Anyway choice.
     stateManager.applyEvent(TabKey).unsafeRunSync()
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     val afterDiscard = stateManager.getCurrentState.unsafeRunSync()
     afterDiscard.startPageSurface.isDefined shouldBe true

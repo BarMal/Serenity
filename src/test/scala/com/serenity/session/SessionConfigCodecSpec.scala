@@ -6,13 +6,12 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import com.serenity.config.AppConfig
-import com.serenity.testkit.ConfigGenerators
+import com.serenity.testkit.{ConfigGenerators, LogbackLoggers}
 import io.circe.Json
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import org.slf4j.LoggerFactory
 
 /** Session state used to carry a hand-written copy of what an `AppConfig` is, and sixteen settings were missing from it
   * -- pane headers and the viewport margins among them. A restored session replaces the running config wholesale, so
@@ -24,16 +23,16 @@ import org.slf4j.LoggerFactory
   */
 class SessionConfigCodecSpec extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks with BeforeAndAfterEach:
 
-  private val logger   = LoggerFactory.getLogger("com.serenity.session.SessionConfigCodec")
+  private val logger   = LogbackLoggers.named("com.serenity.session.SessionConfigCodec")
   private val appender = new ListAppender[ILoggingEvent]()
 
   override def beforeEach(): Unit =
     appender.list.clear()
     appender.start()
-    logger.asInstanceOf[ch.qos.logback.classic.Logger].addAppender(appender)
+    logger.addAppender(appender)
 
   override def afterEach(): Unit =
-    logger.asInstanceOf[ch.qos.logback.classic.Logger].detachAppender(appender)
+    logger.detachAppender(appender)
     appender.stop()
 
   "SessionConfigCodec" should "return the config it was given" in
@@ -54,8 +53,8 @@ class SessionConfigCodecSpec extends AnyFlatSpec with Matchers with ScalaCheckPr
       encoded.asObject
         .getOrElse(fail("SessionConfigCodec.encode did not produce a JSON object"))
         .add(
-          "motionPreset",
-          Json.fromString("not-a-real-motion-preset")
+          "textAreaInsets",
+          Json.fromString("not-real-insets")
         )
     )
 
@@ -65,8 +64,8 @@ class SessionConfigCodecSpec extends AnyFlatSpec with Matchers with ScalaCheckPr
 
     val messages = appender.list.asScala.toList.filter(_.getLevel == Level.WARN).map(_.getFormattedMessage)
     messages should not be empty
-    messages.exists(_.contains("motionPreset")) shouldBe true
-    messages.exists(_.contains("not-a-real-motion-preset")) shouldBe true
+    messages.exists(_.contains("textAreaInsets")) shouldBe true
+    messages.exists(_.contains("not-real-insets")) shouldBe true
   }
 
   it should "leave the config field untouched, not just logged, when a composite field is missing entirely" in {
@@ -75,7 +74,7 @@ class SessionConfigCodecSpec extends AnyFlatSpec with Matchers with ScalaCheckPr
       encoded.asObject
         .getOrElse(fail("SessionConfigCodec.encode did not produce a JSON object"))
         .remove(
-          "motionPreset"
+          "textAreaInsets"
         )
     )
 

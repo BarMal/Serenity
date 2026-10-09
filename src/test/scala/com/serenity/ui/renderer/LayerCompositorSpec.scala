@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import com.serenity.state.models.{BufferId, Damage}
+import com.serenity.ui.color.RenderColor
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -107,18 +108,12 @@ class LayerCompositorSpec extends AnyFlatSpec with Matchers:
     def paintedAtAlpha: Option[Float]     = painted.get()
     def markPaintedAt(alpha: Float): Unit = painted.set(Some(alpha))
 
-    override def effects: Option[Effects]                                        = Some(this)
-    def setAlpha(alpha: Float): Unit                                             = alphaCalls.updateAndGet(_ :+ alpha)
-    def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit = ()
+    override def effects: Option[Effects] = Some(this)
+    def setAlpha(alpha: Float): Unit      = alphaCalls.updateAndGet(_ :+ alpha)
 
-    def applyPostProcessing(
-      effect: com.serenity.config.PostProcessingEffect,
-      animationPhase: Long = 0L
-    ): Unit = ()
-
-    def setForegroundColor(color: java.awt.Color): Unit                     = ()
-    def setBackgroundColor(color: java.awt.Color): Unit                     = ()
-    def getBackgroundColor: java.awt.Color                                  = java.awt.Color.BLACK
+    def setForegroundColor(color: RenderColor): Unit                        = ()
+    def setBackgroundColor(color: RenderColor): Unit                        = ()
+    def getBackgroundColor: RenderColor                                     = RenderColor.fromArgb(0xff000000)
     def putString(x: Int, y: Int, s: String): Unit                          = ()
     def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit = ()
     def enableStyle(style: com.serenity.ui.theme.TextStyle): Unit           = ()
@@ -131,9 +126,9 @@ class LayerCompositorSpec extends AnyFlatSpec with Matchers:
     def flush(): Unit        = ()
 
   private class NoEffectsSurface extends RenderSurface:
-    def setForegroundColor(color: java.awt.Color): Unit                     = ()
-    def setBackgroundColor(color: java.awt.Color): Unit                     = ()
-    def getBackgroundColor: java.awt.Color                                  = java.awt.Color.BLACK
+    def setForegroundColor(color: RenderColor): Unit                        = ()
+    def setBackgroundColor(color: RenderColor): Unit                        = ()
+    def getBackgroundColor: RenderColor                                     = RenderColor.fromArgb(0xff000000)
     def putString(x: Int, y: Int, s: String): Unit                          = ()
     def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit = ()
     def enableStyle(style: com.serenity.ui.theme.TextStyle): Unit           = ()

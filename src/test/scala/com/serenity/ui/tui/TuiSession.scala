@@ -15,8 +15,7 @@ import com.serenity.input.{FocusedInputTranslator, InProcessClipboard, InputRout
 import com.serenity.keystroke.events.{Event, MousePress}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.state.manager.{DamageProducer, StateManager}
+import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
@@ -50,7 +49,6 @@ final class TuiSession private (
     consumed: Ref[IO, Int],
     applied: Ref[IO, Vector[Event]],
     cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int],
     val stateManager: StateManager,
     val clipboard: SystemClipboard[IO],
     val workspace: Path
@@ -95,9 +93,7 @@ final class TuiSession private (
 
   def screenWithoutCaret: IO[TuiScreen] = renderFrame(cursorVisible = false)
 
-  /** One frame painted the way `AppRuntime`'s fast render phase paints it: always the full content path (issue #934 v2
-    * removed the fast phase's one cursor-only shortcut along with the window sitter it existed for -- see
-    * `AppRuntimeRenderLoops.needsFullContentRender`'s doc).
+  /** One frame painted the way `AppRuntime`'s fast render phase paints it: always the full content path.
     *
     * [[screen]] always paints the full frame too, which is what most scenarios want -- what is on screen once the
     * runtime has caught up. This one reproduces the runtime's own per-frame choice explicitly, so a future change to
@@ -105,10 +101,9 @@ final class TuiSession private (
     */
   def runtimeScreen: IO[TuiScreen] =
     for
-      size       <- shell.viewportSize
-      current    <- state
-      animations <- stateManager.getBufferAnimations
-      pending    <- damage.getAndSet(Damage.Nothing)
+      size    <- shell.viewportSize
+      current <- state
+      pending <- damage.getAndSet(Damage.Nothing)
       surface = surfaces.forSize(size)
       _       <- IO(TuiRuntime.paintFrame(current, surface, size, true, None, pending, stateManager.renderCaches))
       emitted <- drainOutput
@@ -117,8 +112,8 @@ final class TuiSession private (
 
   /** One frame of the *idle* render phase: the cursor-only paint `AppRuntimeRenderLoops.runIdleRenderStep` makes on
     * each tick of the cursor's own cadence, with the visibility and colour
-    * `AppRuntimeRenderLoops.computeIdleCursorFrame` computes for that tick. Successive calls advance the same
-    * blink/breathe cycle a running session would, because they share the refs the input phase resets on a keystroke.
+    * `AppRuntimeRenderLoops.computeIdleCursorFrame` computes for that tick. Successive calls advance the same blink
+    * cycle a running session would, because they share the refs the input phase resets on a keystroke.
     *
     * This is the path that owns the caret while nothing else is happening, so it is the one that has to leave the
     * terminal's cursor where the editing position is (#1215).
@@ -126,53 +121,31 @@ final class TuiSession private (
   def idleCursorScreen: IO[TuiScreen] =
     for
       current <- state
-      frame   <- AppRuntimeRenderLoops.computeIdleCursorFrame(current, cursorVisible, breathIndex)
+      frame   <- AppRuntimeRenderLoops.computeIdleCursorFrame(cursorVisible)
       (visible, colour) = frame
       size <- shell.viewportSize
       surface = surfaces.forSize(size)
-      bufferAnimations <- stateManager.getBufferAnimations
       _ <- IO(
-        TuiRuntime.paintCursorOnly(current, surface, size, visible, colour, bufferAnimations, stateManager.renderCaches)
+        TuiRuntime.paintCursorOnly(
+          current,
+          surface,
+          size,
+          visible,
+          colour,
+          stateManager.renderCaches
+        )
       )
       emitted <- drainOutput
       updated <- screenRef.get
     yield TuiScreen(updated, emitted)
 
-  /** Let the interface finish moving, then paint until the frame stops changing.
-    *
-    * Two things settle here. Surfaces animate in and out (`AppState.runtime.motion.surfaceAnimations`), so a dismissed
-    * command palette is still drawn for as many frames as its exit animation lasts -- exactly as in a real session,
-    * where the render loop advances one animation tick per painted frame. And a frame painted with `Damage.Everything`
-    * -- the first of a session, and the first after a resize -- is followed by one further frame that rewrites blank
-    * cells whose foreground colour differed invisibly.
+  /** Paint until the frame stops changing: a frame painted with `Damage.Everything` -- the first of a session, and the
+    * first after a resize -- is followed by one further frame that rewrites blank cells whose foreground colour
+    * differed invisibly.
     *
     * Scenarios that assert on what is finally on screen, or on emitted bytes, want this rather than a single frame.
     */
-  def settledScreen: IO[TuiScreen] =
-    advanceAnimationsToRest(AnimationTickLimit) >> repaintUntilQuiet(SettleAttempts)
-
-  /** Advance the animation clock by `ticks` frames, folding in the damage each one produces, exactly as the render
-    * loop's fast phase does per painted frame. Returns whether anything is still animating.
-    */
-  def advanceAnimations(ticks: Int): IO[Boolean] =
-    (0 until ticks).toList.foldLeft(IO.pure(false))((previous, _) => previous >> tickAnimations)
-
-  def animationsActive: IO[Boolean] =
-    (state, stateManager.getBufferAnimations).mapN(AppRuntimeRenderLoops.hasActiveAnimations)
-
-  private def tickAnimations: IO[Boolean] =
-    for
-      before           <- state
-      beforeAnimations <- stateManager.getBufferAnimations
-      stillActive      <- stateManager.animationTicker.advanceAnimationsOnTick
-      after            <- state
-      afterAnimations  <- stateManager.getBufferAnimations
-      _ <- damage.update(_ |+| DamageProducer.forTransition(before, after, beforeAnimations, afterAnimations))
-    yield stillActive
-
-  private def advanceAnimationsToRest(remaining: Int): IO[Unit] =
-    if remaining <= 0 then IO.unit
-    else tickAnimations.flatMap(active => if active then advanceAnimationsToRest(remaining - 1) else IO.unit)
+  def settledScreen: IO[TuiScreen] = repaintUntilQuiet(SettleAttempts)
 
   private def repaintUntilQuiet(remaining: Int): IO[TuiScreen] =
     screen.flatMap { current =>
@@ -263,7 +236,6 @@ object TuiSession:
     * animations run for a fraction of a second at the configured frame rate; a scenario needing more than this is
     * either animating forever or waiting for something that is not an animation.
     */
-  private val AnimationTickLimit = 600
 
   /** A mouse press so far off-screen that nothing can be under it. It is the input barrier every [[TuiSession.feed]]
     * ends with: a mouse report is delivered as a direct event, never passed through a translator, so unlike any key it
@@ -347,7 +319,8 @@ object TuiSession:
         terminalConfig,
         sessionRootOverride = Some(workspace.resolve("session")),
         configPersistencePath = None,
-        previewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
+        previewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable,
+        dictionaryCache = com.serenity.testkit.SharedDictionary.cacheFor(terminalConfig)
       )(logger)
       theme    <- AppStartup.startupTheme(stateManager.sessionStartupInfo, AppThemeManager.create)
       viewport <- shell.viewportSize
@@ -369,7 +342,6 @@ object TuiSession:
       consumed       <- Ref.of[IO, Int](0)
       applied        <- Ref.of[IO, Vector[Event]](Vector.empty)
       cursorVisible  <- Ref.of[IO, Boolean](true)
-      breathIndex    <- Ref.of[IO, Int](0)
       session = new TuiSession(
         shell = shell,
         handler = handler,
@@ -384,7 +356,6 @@ object TuiSession:
         consumed = consumed,
         applied = applied,
         cursorVisible = cursorVisible,
-        breathIndex = breathIndex,
         stateManager = stateManager,
         clipboard = clipboard,
         workspace = workspace
@@ -395,7 +366,6 @@ object TuiSession:
         clipboard,
         session.checkResizeAndHandle,
         cursorVisible,
-        breathIndex,
         (next: Damage) => damage.update(_ |+| next)
       )
     yield Built(session, consume(handler, funnel, sentinels, applied, appliedSignals))

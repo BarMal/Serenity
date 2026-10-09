@@ -7,11 +7,12 @@ import cats.effect.{IO, Ref}
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
 import com.serenity.state.models.{BufferId, SurfaceId}
 import com.serenity.state.reducers.*
+import com.serenity.testkit.RopeText
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Exercises [[CommandEffectInterpreter]] on its own: a pure `AppEffect` match routing to one of its ten dependency
+/** Exercises [[CommandEffectInterpreter]] on its own: a pure `AppEffect` match routing to one of its eleven dependency
   * closures. Each case is asserted on as "which dependency fired, with which argument" -- nothing else about it is
   * behavior this class owns.
   */
@@ -29,12 +30,12 @@ class StateManagerEffectDispatcherSpec extends AnyFlatSpec with Matchers:
           command = value => calls.update(_ :+ s"command:$value"),
           unrecordedCommand = value => calls.update(_ :+ s"unrecordedCommand:$value"),
           theme = value => calls.update(_ :+ s"theme:$value"),
+          settings = value => calls.update(_ :+ s"settings:$value"),
           surface = value => calls.update(_ :+ s"surface:$value"),
           file = value => calls.update(_ :+ s"file:$value"),
           explorer = value => calls.update(_ :+ s"explorer:$value"),
           workflow = value => calls.update(_ :+ s"workflow:$value"),
           lspQueue = value => calls.update(_ :+ s"lspQueue:$value"),
-          animation = value => calls.update(_ :+ s"animation:$value"),
           scheduleCommandRunnerBindingExpiry =
             recordedAtMillis => calls.update(_ :+ s"scheduleCommandRunnerBindingExpiry:$recordedAtMillis")
         )
@@ -89,6 +90,15 @@ class StateManagerEffectDispatcherSpec extends AnyFlatSpec with Matchers:
     fixture.calls.get.unsafeRunSync() shouldBe List(s"theme:$effect")
   }
 
+  it should "route Settings to the settings dependency" in {
+    val fixture = harness()
+    val effect  = SettingsEffect.ReapplyConfig
+
+    fixture.interpreter.interpret(AppEffect.Settings(effect)).unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe List(s"settings:$effect")
+  }
+
   it should "route Surface to the surface dependency" in {
     val fixture = harness()
     val effect  = SurfaceEffect.OpenThemePicker
@@ -127,18 +137,10 @@ class StateManagerEffectDispatcherSpec extends AnyFlatSpec with Matchers:
 
   it should "route LspQueue to the lspQueue dependency" in {
     val fixture = harness()
-    val effect  = LspQueueEffect.DocumentChanged("file:///a.md", com.serenity.lsp.config.LanguageId.Markdown, "hi")
+    val effect =
+      LspQueueEffect.DocumentChanged("file:///a.md", com.serenity.lsp.config.LanguageId.Markdown, RopeText("hi"))
 
     fixture.interpreter.interpret(AppEffect.LspQueue(effect)).unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() shouldBe List(s"lspQueue:$effect")
-  }
-
-  it should "route Animation to the animation dependency" in {
-    val fixture = harness()
-    val effect  = AnimationEffect.ClearAll(BufferId(1))
-
-    fixture.interpreter.interpret(AppEffect.Animation(effect)).unsafeRunSync()
-
-    fixture.calls.get.unsafeRunSync() shouldBe List(s"animation:$effect")
   }

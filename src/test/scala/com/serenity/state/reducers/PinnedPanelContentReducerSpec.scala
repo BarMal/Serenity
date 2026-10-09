@@ -4,6 +4,7 @@ import java.nio.file.{Path, Paths}
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.state.undo.EditGrouping
 import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, PanelContent, PanelPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -16,7 +17,7 @@ class PinnedPanelContentReducerSpec extends AnyFlatSpec with Matchers:
 
   private def directoryTrees(state: AppState): List[(DirectoryTreeData, Option[Path])] =
     state.pinnedSurfaces.map(_.content).collect {
-      case SurfaceContent.DirectoryTree(tree, selected) =>
+      case SurfaceContent.DirectoryTree(tree, selected, _) =>
         tree -> selected
     }
 
@@ -29,7 +30,9 @@ class PinnedPanelContentReducerSpec extends AnyFlatSpec with Matchers:
     val result = PinnedPanelContentReducer.pinOrUpdateTerminal("out", PanelPosition.Bottom, 10, AppState.initial)
 
     terminals(result.state) shouldBe List("out")
-    result.effects should matchPattern { case List(AppEffect.Undo(UndoEffect.RecordBoundary(_, false))) => }
+    result.effects should matchPattern {
+      case List(AppEffect.Undo(UndoEffect.RecordBoundary(_, EditGrouping.Standalone))) =>
+    }
     valid(result) shouldBe true
   }
 
@@ -129,7 +132,7 @@ class PinnedPanelContentReducerSpec extends AnyFlatSpec with Matchers:
       AppEffect.Undo(
         UndoEffect.RecordBoundary(
           com.serenity.state.undo.HistoryEntry.PanelChange.capture(AppState.initial),
-          groupable = false
+          EditGrouping.Standalone
         )
       )
     )

@@ -1,5 +1,8 @@
 package com.serenity.keystroke.events
 
+import com.serenity.state.models.FindOption
+import com.serenity.ui.layout.SurfaceAction
+
 sealed trait ModalInputEvent
 
 final case class ModalInsertChar(char: Char) extends ModalInputEvent
@@ -29,7 +32,11 @@ case object ModalNextField                       extends ModalInputEvent
 case object ModalPreviousField                   extends ModalInputEvent
 case object ModalSubmit                          extends ModalInputEvent
 case object ModalFindNext                        extends ModalInputEvent
-case object ModalDismiss                         extends ModalInputEvent
+case object ModalFindPrevious                    extends ModalInputEvent
+
+/** Flips one find option -- match case, whole word or regex (Alt+C/W/R by default, as in VS Code). */
+final case class ModalToggleFindOption(option: FindOption) extends ModalInputEvent
+case object ModalDismiss                                   extends ModalInputEvent
 
 /** Creates a file workflow's missing directories immediately, in one step (issue #1253) -- the explicit counterpart to
   * submitting twice (`missingPathSegments` flagged, then `confirmCreateDirectories` on a second submit). Modal-only:
@@ -44,6 +51,9 @@ case object ModalCreateDirectory extends ModalInputEvent
   */
 case object ModalOpenAsProjectRoot                                     extends ModalInputEvent
 final case class ModalClick(focusId: String, actionId: Option[String]) extends ModalInputEvent
+
+/** A click on an item whose hit region carries a typed [[SurfaceAction]], sent in place of a [[ModalClick]]. */
+final case class ModalActionClick(action: SurfaceAction) extends ModalInputEvent
 
 object ModalInputEvent:
 
@@ -67,4 +77,5 @@ object ModalInputEvent:
     event match
       case modalEvent: ModalInputEvent => Some(modalEvent)
       case FindNext                    => Some(ModalFindNext)
+      case FindPrevious                => Some(ModalFindPrevious)
       case other                       => SurfaceInput.translate[ModalInputEvent](other)

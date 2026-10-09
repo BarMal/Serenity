@@ -34,14 +34,14 @@ class CursorConfigSpec extends AnyFlatSpec with Matchers:
     val foreground = new Color(0x11, 0x22, 0x33)
     val background = new Color(0x44, 0x55, 0x66, 0x77)
     val config = AppConfig.default
-      .withCursorMode(CursorMode.Breathe)
+      .withCursorMode(CursorMode.Blink)
       .withCursorColors(CursorColorConfig(Some(active), Some(inactive)))
       .withStatusLineSegments(List(StatusSegment.Position, StatusSegment.Title))
       .withStatusLinePlacement(StatusLinePlacement.Pinned)
       .withStatusLineColors(StatusLineColors(Some(foreground), Some(background)))
 
     config.cursorConfig.shouldBe(
-      CursorConfig(mode = CursorMode.Breathe, colors = CursorColorConfig(Some(active), Some(inactive)))
+      CursorConfig(mode = CursorMode.Blink, colors = CursorColorConfig(Some(active), Some(inactive)))
     )
     config.statusLine.shouldBe(
       StatusLineConfig(
@@ -57,7 +57,8 @@ class CursorConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "parse cursor config values centrally" in {
-    CursorMode.fromConfigKey("breathing").shouldBe(Some(CursorMode.Breathe))
+    CursorMode.fromConfigKey("breathing").shouldBe(Some(CursorMode.Blink))
+    CursorMode.fromConfigKey("breathe").shouldBe(Some(CursorMode.Blink))
     StatusSegment.parseList("minimal").shouldBe(Some(List(StatusSegment.Position)))
     StatusLinePlacement.fromConfigKey("bottom").shouldBe(Some(StatusLinePlacement.Pinned))
     CursorMode.fromConfigKey("unknown").shouldBe(None)
@@ -97,7 +98,7 @@ class CursorConfigSpec extends AnyFlatSpec with Matchers:
         .read(AppConfig.default, "status.background_color", "#44556680")
         .getOrElse(fail("info bar background colour parse"))
 
-    modeConfig.cursorConfig.mode.shouldBe(CursorMode.Breathe)
+    modeConfig.cursorConfig.mode.shouldBe(CursorMode.Blink)
     activeColorConfig.cursorConfig.colors.active.shouldBe(Some(active))
     inactiveColorConfig.cursorConfig.colors.inactive.shouldBe(Some(inactive))
     segmentsConfig.statusLine.segments.shouldBe(List(StatusSegment.Position))

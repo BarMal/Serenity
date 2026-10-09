@@ -15,6 +15,7 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ReducerResult
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition}
 import com.serenity.ui.presets.UiPresetStore
@@ -66,7 +67,8 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
         uiPresetStore = UiPresetStore(directory.resolve("presets.json")),
         windowSizeProvider = IO.pure(None),
         onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-        fileDialog = None
+        fileDialog = None,
+        dictionaryCache = SharedDictionary.default
       )
       stateManager <- StateManager.fromRuntime(runtime)
     yield stateManager
@@ -74,7 +76,7 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
   /** A state manager over `initial` made invalid, seeded at construction since every write is validated. */
   private def invalidStateManager(initial: AppState = AppState.initial): IO[(StateManager, Ref[IO, Model], AppState)] =
     for
-      modelRef     <- Ref.of[IO, Model](Model(withStaleBufferOrder(initial), UndoState(), Map.empty))
+      modelRef     <- Ref.of[IO, Model](Model(withStaleBufferOrder(initial), UndoState()))
       stateManager <- stateManagerOver(modelRef)
       seeded       <- stateManager.getCurrentState
     yield (stateManager, modelRef, seeded)
@@ -193,7 +195,7 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
 
   private def pipelineOver(initial: AppState): IO[PipelineRig] =
     for
-      model      <- Ref.of[IO, Model](Model(initial, UndoState(), Map.empty))
+      model      <- Ref.of[IO, Model](Model(initial, UndoState()))
       seen       <- Ref.of[IO, List[AppState]](Nil)
       cacheRef   <- Ref.of[IO, Option[MouseTargetCache]](None)
       operations <- StateManagerOperationBoundary.create(model, quietLogger)
@@ -213,7 +215,9 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
       val undoRecording = new UndoRecording(new UndoRecordingPort:
         def updateUndo(update: UndoState => UndoState): IO[Unit] = ModelViews.undoRef(model).update(update)
         def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
-          operations.modelCommit.updateValidated(transition))
+          operations.modelCommit.updateValidated(transition)
+        def updateModelPlaced(transition: Model => Option[Model]): IO[Unit] =
+          operations.modelCommit.updateValidatedPlaced(transition))
       val pipeline = new StateManagerEventPipeline(
         statePort,
         effectPort,

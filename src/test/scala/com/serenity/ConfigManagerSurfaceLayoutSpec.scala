@@ -3,7 +3,7 @@ package com.serenity
 import java.nio.file.Files
 
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -171,6 +171,70 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
 
     config.surfaceConfig.rendererFrameStateCacheCapacity shouldBe 128
     ConfigManager.configToString(config) should include("ui.render.cache_capacity = 128")
+  }
+
+  it should "default layer caching to off, then load and write it" in {
+    AppConfig.default.surfaceConfig.layerCachingEnabled shouldBe false
+
+    val configFile = Files.createTempFile("serenity-render-layer-cache-config", ".conf")
+    Files.writeString(
+      configFile,
+      """ui.render.layer_cache = true
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.layerCachingEnabled shouldBe true
+    ConfigManager.configToString(config) should include("ui.render.layer_cache = true")
+  }
+
+  it should "default frame timing to off, then load and write it" in {
+    AppConfig.default.surfaceConfig.frameTimingEnabled shouldBe false
+
+    val configFile = Files.createTempFile("serenity-render-frame-timing-config", ".conf")
+    Files.writeString(
+      configFile,
+      """ui.render.frame_timing = true
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.frameTimingEnabled shouldBe true
+    ConfigManager.configToString(config) should include("ui.render.frame_timing = true")
+  }
+
+  it should "default the keystroke latency trace to off, then load and write it" in {
+    AppConfig.default.surfaceConfig.latencyTraceEnabled shouldBe false
+
+    val configFile = Files.createTempFile("serenity-render-latency-trace-config", ".conf")
+    Files.writeString(
+      configFile,
+      """ui.render.latency_trace = true
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.latencyTraceEnabled shouldBe true
+    ConfigManager.configToString(config) should include("ui.render.latency_trace = true")
+  }
+
+  it should "default the startup warm-up to on, then load and write it" in {
+    AppConfig.default.surfaceConfig.startupWarmUpEnabled shouldBe true
+
+    val configFile = Files.createTempFile("serenity-startup-warm-up-config", ".conf")
+    Files.writeString(
+      configFile,
+      """startup.warm_up = false
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.startupWarmUpEnabled shouldBe false
+    ConfigManager.configToString(config) should include("startup.warm_up = false")
   }
 
   it should "load and write the cursor info bar background alpha override" in {

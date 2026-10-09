@@ -2,15 +2,15 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.TransitionKind
 import com.serenity.command.*
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.SurfaceContent
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -110,7 +110,6 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       .withInterfaceDensity(InterfaceDensity.Compact)
       .withWindowChromeMode(WindowChromeMode.NativeThemed)
       .withUiElementGap(Some(2))
-      .withUiCornerRadiusPx(6)
       .withUiOutlineThicknessPx(3)
     val runner = CommandRunner.empty.activate(registry, config)
 
@@ -142,20 +141,6 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "2",
         "Cells, decimals supported (0.0-8.0)",
         Some(CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(3)))),
-        None
-      )
-    )
-    settingsGroup(runner, "settings-look-advanced")
-      .flatMap(
-        _.children.collectFirst {
-          case item: CommandSurfaceItem.InputItem if item.id == "ui-corner-radius" =>
-            (item.currentValue, item.hint, item.parse("14"), item.parse("33"))
-        }
-      ) shouldBe Some(
-      (
-        "6",
-        "Pixels (0-32)",
-        Some(CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiCornerRadiusPx(14)))),
         None
       )
     )
@@ -225,7 +210,8 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     "status-word-count",
     "status-char-count",
     "status-reading-time",
-    "status-word-goal"
+    "status-word-goal",
+    "status-line-ending"
   )
 
   it should "expose the status line's placement and one toggle per segment in its own settings group" in {
@@ -264,111 +250,28 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       }) should contain(List("Floating" -> List("Pinned", "Floating", "Off")))
   }
 
-  it should "expose material and motion presets with current selections" in {
+  it should "expose the render cadence options with current selections" in {
     val config = AppConfig.default
-      .withMaterialPreset(MaterialPreset.Crystal)
-      .withMotionPreset(MotionPreset.Reduced)
-      .withEditorInsertionTransitionKind(TransitionKind.TypedText)
-      .withElementTransitionSpeedScale(1.5)
-      .withEditorTextTransitionSpeedScale(Some(0.5))
-      .withCommandRunnerTransitionSpeedScale(Some(2.25))
-      .withUiTransitionSpeedScale(Some(1.25))
-      .withCursorTransitionSpeedScale(Some(0.75))
-      .withPanelOpenTransitionKind(Some(TransitionKind.DirectionalSweep))
-      .withPanelCloseTransitionKind(Some(TransitionKind.Disabled))
-      .withCommandRunnerTransitionKind(Some(TransitionKind.OutlineThenContent))
+      .withRenderFpsTarget(RenderFpsTarget.Fps120)
+      .withRenderDamageGranularity(RenderDamageGranularity.Cells)
     val runner = CommandRunner.empty.activate(registry, config)
 
-    val surfaceGroup = settingsGroup(runner, "settings-surface-appearance").getOrElse {
-      fail("Expected surface appearance settings group")
-    }
-    val motionGroup = settingsGroup(runner, "settings-animation").getOrElse {
-      fail("Expected motion and animation settings group")
-    }
-    surfaceGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "material-preset" =>
+    val children = settingsGroup(runner, "settings-look-advanced").toList.flatMap(_.children)
+    children.collectFirst {
+      case item: CommandSurfaceItem.OptionItem if item.id == "render-fps" =>
         (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Crystal" -> List("Solid", "Clear", "Frosted", "Crystal", "Custom"))
-    motionGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "motion-preset" =>
+    } shouldBe Some("120 FPS" -> List("30 FPS", "60 FPS", "90 FPS", "120 FPS", "Uncapped"))
+    children.collectFirst {
+      case item: CommandSurfaceItem.OptionItem if item.id == "render-damage-granularity" =>
         (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Reduced" -> List("Reduced", "Subtle", "Smooth", "Expressive", "Custom"))
-    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
-      case item: CommandSurfaceItem.InputItem if item.id == "element-transition-speed-scale" =>
-        (item.currentValue, item.hint, item.parse("2.25"))
-    } shouldBe Some(
-      (
-        "1.50",
-        "Scale (0.0-4.0)",
-        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(2.25))))
-      )
-    )
-    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
-      case item: CommandSurfaceItem.InputItem if item.id == "editor-text-speed-scale" =>
-        (item.currentValue, item.hint, item.parse("0.75"))
-    } shouldBe Some(
-      (
-        "0.50",
-        "Editor text scale (0.0-4.0)",
-        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetEditorTextTransitionSpeedScale(0.75))))
-      )
-    )
-    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
-      case item: CommandSurfaceItem.InputItem if item.id == "command-runner-speed-scale" =>
-        (item.currentValue, item.hint, item.parse("1.75"))
-    } shouldBe Some(
-      (
-        "2.25",
-        "Command runner scale (0.0-4.0)",
-        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerTransitionSpeedScale(1.75))))
-      )
-    )
-    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
-      case item: CommandSurfaceItem.InputItem if item.id == "ui-speed-scale" =>
-        (item.currentValue, item.hint, item.parse("1.00"))
-    } shouldBe Some(
-      (
-        "1.25",
-        "Panel/UI scale (0.0-4.0)",
-        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetUiTransitionSpeedScale(1.0))))
-      )
-    )
-    motionGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "editor-text-transition" =>
-        (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Typed" -> List("Fade", "Typed", "Directional", "Tandem", "Off"))
-    motionGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "panel-open-transition" =>
-        (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Directional" -> List("Fade", "Directional", "Tandem", "Outline", "Off"))
-    motionGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "panel-close-transition" =>
-        (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Off" -> List("Fade", "Directional", "Tandem", "Outline", "Off"))
-    motionGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "command-runner-transition" =>
-        (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Outline" -> List("Fade", "Directional", "Tandem", "Outline", "Off"))
-    motionGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "command-runner-fade" =>
-        (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Off" -> List("Off", "Subtle", "Smooth", "Expressive"))
-    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
-      case item: CommandSurfaceItem.InputItem if item.id == "cursor-speed-scale" =>
-        (item.currentValue, item.hint, item.parse("0.25"))
-    } shouldBe Some(
-      (
-        "0.75",
-        "Cursor scale (0.0-4.0)",
-        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCursorTransitionSpeedScale(0.25))))
-      )
-    )
+    } shouldBe Some("Cells" -> List("Rows", "Cells"))
   }
 
   "ensureCommandRunnerSurface (via closePane)" should "use the current config, not defaults" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val sm                  = com.serenity.state.manager.StateManager.apply(logger).unsafeRunSync()
+    val sm =
+      com.serenity.state.manager.StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
     sm.updateState(s =>
       s.copy(persisted =

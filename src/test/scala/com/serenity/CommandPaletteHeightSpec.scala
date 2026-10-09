@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.InterfaceDensity
 import com.serenity.rope.Balance
 import com.serenity.state.models.*

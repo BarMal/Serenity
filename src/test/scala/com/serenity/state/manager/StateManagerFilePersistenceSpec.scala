@@ -68,7 +68,8 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
         sessionPersistence,
         NoOpLogger.impl[IO],
         lspQueueVar,
-        operations.fileLanes
+        operations.fileLanes,
+        operations.showNotice
       )
     )
 

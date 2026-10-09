@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.*
 
 object TextHotkeyConverters:
 
-  private val actionEvents: List[(HotkeyAction, Event)] = List(
+  private[serenity] val actionEvents: List[(HotkeyAction, Event)] = List(
     HotkeyAction.Save                     -> SaveFile,
     HotkeyAction.Quit                     -> Quit,
     HotkeyAction.Undo                     -> Undo,
@@ -46,13 +46,15 @@ object TextHotkeyConverters:
   )
 
   def hotkeyConverter(config: AppConfig = AppConfig.default): PartialFunction[KeyStrokeInfo, Event] =
+    val hotkeys = config.inputConfig.hotkeyConfig
     HotkeyConfig
-      .validate(config.inputConfig.hotkeyConfig.bindings)
+      .validate(hotkeys)
       .fold(
         _ => PartialFunction.empty[KeyStrokeInfo, Event],
         _ =>
           val bindings =
-            actionEvents.flatMap((action, event) => config.inputConfig.hotkeyConfig.bindingsFor(action).map(_ -> event))
+            actionEvents.flatMap((action, event) => hotkeys.bindingsFor(action).map(_ -> event)) ++
+              hotkeys.commandBindings.toList.flatMap((commandId, triggers) => triggers.map(_ -> RunCommand(commandId)))
 
           // `HotkeyTrigger` is an exact-match key (see `HotkeyTrigger.matches`), so a `Map` gives O(1) dispatch in
           // place of the O(n) `collectFirst` scan this used to do per keystroke (issue #1465). Built with `foldLeft`

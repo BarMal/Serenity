@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import cats.syntax.all.*
 import com.serenity.keystroke.events.MouseClick
 import com.serenity.state.core.EditorState
-import com.serenity.state.models.{AppState, BufferId, CloseScope, SurfaceContent, TabListEntry}
+import com.serenity.state.models.{AppState, BufferId, CloseScope, PointerHitTarget, SurfaceContent, TabListEntry}
 import com.serenity.state.reducers.{AppEffect, Transition, WorkflowEffect}
 import com.serenity.ui.layout.{LayoutEngine, LayoutRect, TabBarSurfaceComposition}
 
@@ -51,6 +51,15 @@ private[manager] object TabBarMouseHitTesting:
         // Unreachable: AppState.tabBarSurface only ever builds SurfaceContent.TabBar.
         case _ => (Nil, None)
       hitAt(entries, activeBufferId, rect, col.toDouble, row.toDouble).filterNot(activeBufferId.contains)
+
+  /** The pointer target over the tab strip: the default over tabs and gaps, as mainstream editors show, and the hand
+    * only on a close button or the new-tab button. `None` outside the strip.
+    */
+  def pointerTargetAt(state: AppState, col: Int, row: Int): Option[PointerHitTarget] =
+    clickTarget(state, col, row).map(_ =>
+      if closeClickTarget(state, col, row).isDefined || newTabClickTarget(state, col, row) then PointerHitTarget.Control
+      else PointerHitTarget.Inert
+    )
 
   /** Applies [[clickTarget]]'s resolution to `state`, switching the active pane to the clicked buffer via
     * `EditorState.switchToBuffer` -- the same helper keyboard `NextTab`/`PreviousTab` navigation uses -- when a

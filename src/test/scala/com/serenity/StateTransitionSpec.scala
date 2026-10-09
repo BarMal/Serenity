@@ -7,6 +7,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalStateReducer, PeekStateReducer}
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{DirEntry, PeekContent, SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -24,7 +25,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
 
       // Given: Multiple panes
       buffer1 <- stateManager.createBuffer("First buffer", None)
@@ -57,7 +58,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
 
       // Given: Initial state with active pane
       bufferId     <- stateManager.createBuffer("Some content", None)
@@ -91,7 +92,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
 
       // Given: Active pane with cursor position
       bufferId <- stateManager.createBuffer("Content", None)
@@ -107,7 +108,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       // When: Show peek overlay
       _ <- stateManager.updateStateValidated(state => PeekStateReducer.show(content, cursor, state).state)
 
-      // Then: Focus should be on the peek surface
+      // Then: Focus should stay with the editor
       peekState <- stateManager.getCurrentState
       peekSurface = peekState.runtime.uiSurfaces.find(
         _.content == SurfaceContent.DirectoryListing(
@@ -120,7 +121,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
         )
       )
       _ = peekSurface shouldBe defined
-      _ = peekState.persisted.focus shouldBe Focus.Surface(peekSurface.get.id)
+      _ = peekState.persisted.focus should matchPattern { case Focus.EditorPane(_) => }
       _ = peekSurface.get.presentation shouldBe SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
 
       // When: Dismiss peek overlay
@@ -314,5 +315,8 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
 
     val stateManager: StateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+        com.serenity.rope.Balance.default,
+        LoggerFactory[IO]
+      )
       .unsafeRunSync()

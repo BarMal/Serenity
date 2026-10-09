@@ -2,7 +2,6 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.rope.Balance
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -68,41 +67,32 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
     } shouldBe true
   }
 
-  it should "surface motion settings as an expandable group in settings browsing" in {
+  it should "surface render cadence settings in an expandable Advanced group in settings browsing" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
 
-    val animationGroup = groupByIdRecursive(runner.settingsGroups, "settings-animation")
+    val advancedGroup = groupByIdRecursive(runner.settingsGroups, "settings-look-advanced")
 
-    animationGroup.label shouldBe "Motion"
-    animationGroup.children.map(_.id) shouldBe List(
-      "motion-accessibility",
-      "motion-preset",
-      "editor-text-transition",
-      "panel-open-transition",
-      "panel-close-transition",
-      "command-runner-transition",
-      "command-runner-fade",
-      "ui-animation",
-      "settings-motion-advanced"
+    advancedGroup.label shouldBe "Advanced"
+    advancedGroup.children.map(_.id) shouldBe List(
+      "ui-element-gap",
+      "ui-outline-thickness",
+      "render-fps",
+      "render-damage-granularity"
     )
   }
 
-  it should "return all matching global motion targets for an animation search" in {
+  it should "return the matching global target for a cursor search" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))
-      .updateSearchTerm("animation")
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("cursor")
 
-    // Motion matches by its own id; its Advanced leaf matches through the custom timing inputs it holds; the
-    // preset-scoped copy trails the two global groups.
     runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group.id } shouldBe List(
-      "settings-animation",
-      "settings-motion-advanced",
-      "settings-preset-animation"
+      "settings-cursor"
     )
   }
 
@@ -132,14 +122,14 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))
-      .updateSearchTerm("\"ANIMATION-duration\"")
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("\"UI-outline-thickness\"")
 
     runner.visibleItems.collect {
       case item: CommandSurfaceItem.SettingSearchItem =>
         (item.targetGroupId, item.targetItemId, item.label, item.breadcrumb)
     } shouldBe List(
-      ("settings-motion-advanced", "animation-duration", "Animation Duration", "Settings > Motion > Advanced")
+      ("settings-look-advanced", "ui-outline-thickness", "UI Outline Thickness", "Settings > Look > Advanced")
     )
   }
 
@@ -147,30 +137,30 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))
+      .activate(registry, AppConfig.default)
       .copy(editingPresetName = Some("Review"))
-      .updateSearchTerm("animation duration")
+      .updateSearchTerm("outline thickness")
 
     runner.visibleItems.collect {
-      case item: CommandSurfaceItem.SettingSearchItem if item.targetItemId == "animation-duration" =>
+      case item: CommandSurfaceItem.SettingSearchItem if item.targetItemId == "ui-outline-thickness" =>
         (item.targetGroupId, item.effectiveValue, item.sourceScope)
-    } shouldBe List(("settings-motion-advanced", Some("0"), "Global"))
+    } shouldBe List(("settings-look-advanced", Some("2"), "Global"))
   }
 
   it should "rank a normalized exact setting ahead of a prefix command" in {
     val prefixCommand = Command.typed(
-      name = "quoted-animation-duration",
+      name = "quoted-outline-thickness",
       description = "A command whose label begins with the raw query.",
       intent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers)),
-      label = "\"ANIMATION-duration\" options"
+      label = "\"UI-outline-thickness\" options"
     )
     val registry          = CommandRegistry(List(prefixCommand))
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))
-      .updateSearchTerm("\"ANIMATION-duration\"")
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("\"UI-outline-thickness\"")
 
-    runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-search:animation-duration")
+    runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-search:ui-outline-thickness")
   }
 
   it should "keep an exact settings group query as navigation rather than a leaf edit" in {

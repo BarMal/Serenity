@@ -1,17 +1,20 @@
 package com.serenity
 
+import java.awt.Font
 import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
-import java.awt.{Color, Font}
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect, TextLayoutSnapshot}
 import com.serenity.ui.renderer.{
   Effects,
+  FontSpec,
   HardwareCursor,
+  PanelOutlineDrawing,
   PixelDrawing,
+  RenderImage,
   RenderSurface,
-  RoundedRectDrawing,
   SurfaceContentIdentity,
   TextDrawing
 }
@@ -40,13 +43,13 @@ class MockRenderSurface(
     with TextDrawing
     with PixelDrawing
     with Effects
-    with RoundedRectDrawing:
+    with PanelOutlineDrawing:
 
-  def text: TextDrawing                                 = this
-  def pixels: PixelDrawing                              = this
-  override def effects: Option[Effects]                 = Some(this)
-  override def roundedRects: Option[RoundedRectDrawing] = Some(this)
-  override def hardwareCursor: Option[HardwareCursor]   = hardwareCursorOverride
+  def text: TextDrawing                                   = this
+  def pixels: PixelDrawing                                = this
+  override def effects: Option[Effects]                   = Some(this)
+  override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
+  override def hardwareCursor: Option[HardwareCursor]     = hardwareCursorOverride
   final case class PixelTranslationCall(xPx: Double, yPx: Double)
   private val pixelTranslationCallsBuffer = scala.collection.mutable.ListBuffer.empty[PixelTranslationCall]
   private val currentPixelTranslation     = AtomicReference(PixelTranslationCall(0.0, 0.0))
@@ -54,22 +57,22 @@ class MockRenderSurface(
   final case class PutStringPixelYCall(x: Int, y: Int, pixelY: Int, text: String)
 
   private val chars                      = Array.fill(height, width)(' ')
-  private val fgs                        = Array.fill(height, width)(Color.WHITE)
-  private val bgs                        = Array.fill(height, width)(Color.BLACK)
+  private val fgs                        = Array.fill(height, width)(RenderColor.White.argb)
+  private val bgs                        = Array.fill(height, width)(RenderColor.Black.argb)
   private val putStringCallsBuffer       = scala.collection.mutable.ListBuffer.empty[PutStringCall]
   private val putStringPixelYCallsBuffer = scala.collection.mutable.ListBuffer.empty[PutStringPixelYCall]
 
-  private val currentFg          = AtomicReference[Color](Color.WHITE)
-  private val currentBg          = AtomicReference[Color](Color.BLACK)
+  private val currentFg          = AtomicReference[RenderColor](RenderColor.White)
+  private val currentBg          = AtomicReference[RenderColor](RenderColor.Black)
   private val currentAlpha       = AtomicReference[Float](1.0f)
   private val currentFont        = AtomicReference[Option[Font]](None)
   private val setFontCallsBuffer = scala.collection.mutable.ListBuffer.empty[Font]
   final case class StyleCall(action: String, style: TextStyle)
   private val styleCallsBuffer = scala.collection.mutable.ListBuffer.empty[StyleCall]
 
-  override def setFont(font: Font): Unit =
-    currentFont.set(Some(font))
-    setFontCallsBuffer += font
+  override def setFont(font: FontSpec): Unit =
+    currentFont.set(Some(font.toAwt))
+    setFontCallsBuffer += font.toAwt
 
   override def fontRenderContext: Option[FontRenderContext] = fontRenderContextOverride
 
@@ -78,7 +81,7 @@ class MockRenderSurface(
   override def persistentContentKey: Option[SurfaceContentIdentity] =
     Option.when(persistentContent)(SurfaceContentIdentity(this))
 
-  override def clearViewportExcept(color: Color, preserved: scala.collection.immutable.List[PixelRect]): Unit =
+  override def clearViewportExcept(color: RenderColor, preserved: scala.collection.immutable.List[PixelRect]): Unit =
     if preserved.isEmpty then clearViewport(color)
     else
       val metrics = CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12))
@@ -92,11 +95,11 @@ class MockRenderSurface(
         }
         if !kept then
           chars(y)(x) = ' '
-          bgs(y)(x) = color
+          bgs(y)(x) = color.argb
 
-  def setForegroundColor(color: Color): Unit = currentFg.set(color)
-  def setBackgroundColor(color: Color): Unit = currentBg.set(color)
-  def getBackgroundColor: Color              = currentBg.get()
+  def setForegroundColor(color: RenderColor): Unit = currentFg.set(color)
+  def setBackgroundColor(color: RenderColor): Unit = currentBg.set(color)
+  def getBackgroundColor: RenderColor              = currentBg.get()
 
   def putString(x: Int, y: Int, s: String): Unit =
     putStringCallsBuffer += PutStringCall(x, y, s)
@@ -105,11 +108,20 @@ class MockRenderSurface(
       val px = x + i
       if y >= 0 && y < height && px >= 0 && px < width then
         chars(y)(px) = c
-        fgs(y)(px) = currentFg.get()
-        bgs(y)(px) = currentBg.get()
+        fgs(y)(px) = currentFg.get().argb
+        bgs(y)(px) = currentBg.get().argb
     }
 
-  final case class FillRectCall(x: Int, y: Int, w: Int, h: Int, char: Char, foreground: Color, background: Color)
+  final case class FillRectCall(
+      x: Int,
+      y: Int,
+      w: Int,
+      h: Int,
+      char: Char,
+      foreground: RenderColor,
+      background: RenderColor
+  )
+
   private val fillRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[FillRectCall]
 
   def fillRect(x: Int, y: Int, w: Int, h: Int, char: Char): Unit =
@@ -119,7 +131,7 @@ class MockRenderSurface(
       val py = y + dy
       if py >= 0 && py < height && px >= 0 && px < width then
         chars(py)(px) = char
-        bgs(py)(px) = currentBg.get()
+        bgs(py)(px) = currentBg.get().argb
 
   def fillRectCalls: List[FillRectCall] = fillRectCallsBuffer.toList
 
@@ -130,11 +142,12 @@ class MockRenderSurface(
       lineHeightPx: Int,
       ascentPx: Int,
       s: String,
-      foreground: Color,
-      background: Color,
+      foreground: RenderColor,
+      background: RenderColor,
       font: Option[Font],
       clipGlyphToRun: Boolean,
-      activeStyle: TextStyle
+      activeStyle: TextStyle,
+      translationXPx: Double
   )
 
   private val drawRunPxCallsBuffer = scala.collection.mutable.ListBuffer.empty[DrawRunPxCall]
@@ -167,7 +180,8 @@ class MockRenderSurface(
       currentBg.get(),
       currentFont.get(),
       clipGlyphToRun,
-      currentStyle.get()
+      currentStyle.get(),
+      currentPixelTranslation.get().xPx
     )
     val metrics =
       currentFont
@@ -179,14 +193,14 @@ class MockRenderSurface(
     val row    = math.floor(yPx / metrics.lineHeight.toDouble).toInt
 
     if row >= 0 && row < height then
-      (startX until endX).foreach { x => if x >= 0 && x < width then bgs(row)(x) = currentBg.get() }
+      (startX until endX).foreach { x => if x >= 0 && x < width then bgs(row)(x) = currentBg.get().argb }
 
       s.zipWithIndex.foreach {
         case (char, index) =>
           val x = startX + index
           if x >= 0 && x < width then
             chars(row)(x) = char
-            fgs(row)(x) = currentFg.get()
+            fgs(row)(x) = currentFg.get().argb
       }
 
   def drawRunPxCalls: List[DrawRunPxCall] = drawRunPxCallsBuffer.toList
@@ -211,90 +225,45 @@ class MockRenderSurface(
       CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12)).toPixelY(row)
     }
 
-  final case class StrokeRoundRectCall(x: Int, y: Int, w: Int, h: Int, arcPx: Int, color: Color, strokeWidth: Float)
-  private val strokeRoundRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[StrokeRoundRectCall]
-  final case class RoundRectShadowCall(rect: com.serenity.ui.layout.LayoutRect, arcPx: Int, color: Color)
-  private val roundRectShadowCallsBuffer = scala.collection.mutable.ListBuffer.empty[RoundRectShadowCall]
-  final case class BlurRegionCall(x: Int, y: Int, width: Int, height: Int, radius: Float)
-  private val blurRegionCallsBuffer        = scala.collection.mutable.ListBuffer.empty[BlurRegionCall]
-  private val blurRegionTranslationsBuffer = scala.collection.mutable.ListBuffer.empty[PixelTranslationCall]
-  final case class FillPixelRectCall(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color)
+  final case class StrokeRectCall(x: Int, y: Int, w: Int, h: Int, color: RenderColor, strokeWidth: Float)
+  private val strokeRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[StrokeRectCall]
+  final case class FillPixelRectCall(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor)
   final case class DrawImageCall(image: BufferedImage, x: Int, y: Int, width: Int, height: Int)
   private val fillPixelRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[FillPixelRectCall]
   private val drawImageCallsBuffer     = scala.collection.mutable.ListBuffer.empty[DrawImageCall]
   private val alphaCallsBuffer         = scala.collection.mutable.ListBuffer.empty[Float]
 
-  override def strokeRoundRect(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color,
-    strokeWidth: Float = 1.5f
-  ): Unit =
-    strokeRoundRectCallsBuffer += StrokeRoundRectCall(x, y, width, height, arcPx, color, strokeWidth)
+  override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
+    strokeRectCallsBuffer += StrokeRectCall(x, y, width, height, color, strokeWidth)
 
-  def strokeRoundRectCalls: List[StrokeRoundRectCall] = strokeRoundRectCallsBuffer.toList
+  def strokeRectCalls: List[StrokeRectCall] = strokeRectCallsBuffer.toList
 
-  override def drawRoundRectShadow(x: Int, y: Int, width: Int, height: Int, arcPx: Int, color: Color): Unit =
-    roundRectShadowCallsBuffer += RoundRectShadowCall(
-      com.serenity.ui.layout.LayoutRect(x, y, width, height),
-      arcPx,
-      color
-    )
+  final case class RectClipCall(x: Int, y: Int, width: Int, height: Int)
+  private val rectClipCallsBuffer = scala.collection.mutable.ListBuffer.empty[RectClipCall]
 
-  def roundRectShadowCalls: List[RoundRectShadowCall] = roundRectShadowCallsBuffer.toList
-
-  final case class RoundRectClipCall(x: Int, y: Int, width: Int, height: Int, arcPx: Int)
-  private val roundRectClipCallsBuffer = scala.collection.mutable.ListBuffer.empty[RoundRectClipCall]
-
-  override def withRoundRectClip(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int
-  )(render: => Unit): Unit =
-    roundRectClipCallsBuffer += RoundRectClipCall(x, y, width, height, arcPx)
+  override def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
+    rectClipCallsBuffer += RectClipCall(x, y, width, height)
     render
 
-  def roundRectClipCalls: List[RoundRectClipCall] = roundRectClipCallsBuffer.toList
+  def rectClipCalls: List[RectClipCall] = rectClipCallsBuffer.toList
 
   override def setAlpha(alpha: Float): Unit =
     currentAlpha.set(alpha)
     alphaCallsBuffer += alpha
 
-  override def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
-    blurRegionCallsBuffer += BlurRegionCall(x, y, width, height, radius)
-    blurRegionTranslationsBuffer += currentPixelTranslation.get()
-
-  override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit =
+  override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
     fillPixelRectCallsBuffer += FillPixelRectCall(xPx, yPx, widthPx, heightPx, color)
 
-  override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
-    drawImageCallsBuffer += DrawImageCall(image, x, y, width, height)
+  override def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
+    drawImageCallsBuffer += DrawImageCall(image.toAwt, x, y, width, height)
 
-  final case class PostProcessingCall(effect: com.serenity.config.PostProcessingEffect, animationPhase: Long)
-  private val postProcessingCallsBuffer = scala.collection.mutable.ListBuffer.empty[PostProcessingCall]
-
-  override def applyPostProcessing(
-    effect: com.serenity.config.PostProcessingEffect,
-    animationPhase: Long
-  ): Unit =
-    postProcessingCallsBuffer += PostProcessingCall(effect, animationPhase)
-
-  def postProcessingCalls: List[PostProcessingCall] = postProcessingCallsBuffer.toList
-
-  def currentAlphaValue: Float                           = currentAlpha.get()
-  def blurRegionCalls: List[BlurRegionCall]              = blurRegionCallsBuffer.toList
-  def blurRegionTranslations: List[PixelTranslationCall] = blurRegionTranslationsBuffer.toList
-  def fillPixelRectCalls: List[FillPixelRectCall]        = fillPixelRectCallsBuffer.toList
-  def drawImageCalls: List[DrawImageCall]                = drawImageCallsBuffer.toList
-  def alphaCalls: List[Float]                            = alphaCallsBuffer.toList
-  def putStringCalls: List[PutStringCall]                = putStringCallsBuffer.toList
-  def putStringPixelYCalls: List[PutStringPixelYCall]    = putStringPixelYCallsBuffer.toList
-  def pixelTranslationCalls: List[PixelTranslationCall]  = pixelTranslationCallsBuffer.toList
+  def currentAlphaValue: Float                          = currentAlpha.get()
+  def fillPixelRectCalls: List[FillPixelRectCall]       = fillPixelRectCallsBuffer.toList
+  def drawImageCalls: List[DrawImageCall]               = drawImageCallsBuffer.toList
+  def alphaCalls: List[Float]                           = alphaCallsBuffer.toList
+  def putStringCalls: List[PutStringCall]               = putStringCallsBuffer.toList
+  def putStringPixelYCalls: List[PutStringPixelYCall]   = putStringPixelYCallsBuffer.toList
+  def pixelTranslationCalls: List[PixelTranslationCall] = pixelTranslationCallsBuffer.toList
 
   def enableStyle(style: TextStyle): Unit =
     styleCallsBuffer += StyleCall("enable", style)
@@ -313,10 +282,10 @@ class MockRenderSurface(
   def getChar(x: Int, y: Int): Char =
     if y >= 0 && y < height && x >= 0 && x < width then chars(y)(x) else ' '
 
-  def getFg(x: Int, y: Int): Color =
-    if y >= 0 && y < height && x >= 0 && x < width then fgs(y)(x) else Color.WHITE
+  def getFg(x: Int, y: Int): RenderColor =
+    if y >= 0 && y < height && x >= 0 && x < width then RenderColor.fromArgb(fgs(y)(x)) else RenderColor.White
 
-  def getBg(x: Int, y: Int): Color =
+  def getBg(x: Int, y: Int): RenderColor =
     if y >= 0 && y < height && x >= 0 && x < width then
       val metrics = CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12))
       fillPixelRectCallsBuffer
@@ -325,8 +294,8 @@ class MockRenderSurface(
           y * metrics.lineHeight >= call.yPx && y * metrics.lineHeight < call.yPx + call.heightPx
         }
         .map(_.color)
-        .getOrElse(bgs(y)(x))
-    else Color.BLACK
+        .getOrElse(RenderColor.fromArgb(bgs(y)(x)))
+    else RenderColor.Black
 
   def getRow(y: Int): String =
     if y >= 0 && y < height then chars(y).mkString else ""
@@ -335,12 +304,8 @@ class MockRenderSurface(
     putStringCallsBuffer.clear()
     putStringPixelYCallsBuffer.clear()
     pixelTranslationCallsBuffer.clear()
-    strokeRoundRectCallsBuffer.clear()
-    roundRectShadowCallsBuffer.clear()
-    roundRectClipCallsBuffer.clear()
-    blurRegionCallsBuffer.clear()
-    blurRegionTranslationsBuffer.clear()
-    postProcessingCallsBuffer.clear()
+    strokeRectCallsBuffer.clear()
+    rectClipCallsBuffer.clear()
     fillPixelRectCallsBuffer.clear()
     drawImageCallsBuffer.clear()
     alphaCallsBuffer.clear()
@@ -350,5 +315,5 @@ class MockRenderSurface(
     currentStyle.set(TextStyle.normal)
     for y <- 0 until height; x <- 0 until width do
       chars(y)(x) = ' '
-      fgs(y)(x) = Color.WHITE
-      bgs(y)(x) = Color.BLACK
+      fgs(y)(x) = RenderColor.White.argb
+      bgs(y)(x) = RenderColor.Black.argb

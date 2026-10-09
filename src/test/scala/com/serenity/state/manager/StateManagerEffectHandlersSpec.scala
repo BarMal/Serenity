@@ -7,15 +7,16 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.AppMode
-import com.serenity.io.FileDialog
+import com.serenity.io.{AboutDocument, FileDialog, PrivacyStatement, ReleasesPage}
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.LossyRichTextOverwriteException
 import com.serenity.session.SessionSaveTrigger
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
+import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -80,7 +81,8 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
     try
       val dialog = FileDialog(
         chooseOpenFile = _ => IO.pure(Some(target)),
-        chooseSaveFile = (_, _) => IO.pure(None)
+        chooseSaveFile = (_, _) => IO.pure(None),
+        chooseFolder = _ => IO.pure(None)
       )
       val fixture = harness(fileDialogOpt = Some(dialog))
 
@@ -133,11 +135,8 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
       .interpretCommand(command(CommandIntent.File(FileIntent.OpenRecentFile(missing))), AppState.initial)
       .unsafeRunSync()
 
-    // issue #1048: interpretCommand records MRU usage for every command it runs regardless of outcome, so the
-    // otherwise-no-op file load still bumps `persisted.commandUsage` for `command`'s own "test-command" name.
-    fixture.currentState shouldBe AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(commandUsage = Map(CommandId("test-command") -> 1))
-    )
+    // #1877: "test-command" is no registry command, so its run leaves the recency table alone as well.
+    fixture.currentState shouldBe AppState.initial
   }
 
   it should "route CloseAll, CloseOthers, and CloseCurrentFile to their close scopes" in {
@@ -168,6 +167,60 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
     fixture.currentState.persisted.bufferOrder.size shouldBe AppState.initial.persisted.bufferOrder.size + 1
   }
 
+  it should "open the About Serenity document, which holds the licence and notices, for ShowLicenceAndNotices" in {
+    val fixture = harness()
+
+    fixture.handlers
+      .interpretCommand(command(CommandIntent.File(FileIntent.ShowLicenceAndNotices)), AppState.initial)
+      .unsafeRunSync()
+
+    val opened = fixture.currentState.persisted.buffers.values.flatMap(_.document.filePath).toList
+    opened.map(_.getFileName.toString) should contain(AboutDocument.documentName)
+  }
+
+  it should "open the About Serenity document for ShowAbout" in {
+    val fixture = harness()
+
+    fixture.handlers
+      .interpretCommand(command(CommandIntent.File(FileIntent.ShowAbout)), AppState.initial)
+      .unsafeRunSync()
+
+    val opened = fixture.currentState.persisted.buffers.values.flatMap(_.document.filePath).toList
+    opened.map(_.getFileName.toString) should contain(AboutDocument.documentName)
+  }
+
+  it should "hand the releases page to the browser for OpenReleasesPage" in {
+    val fixture = harness()
+
+    fixture.handlers
+      .interpretCommand(command(CommandIntent.File(FileIntent.OpenReleasesPage)), AppState.initial)
+      .unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe List(s"openExternalUrl:${ReleasesPage.url}")
+  }
+
+  it should "show the About prompt for ShowAbout" in {
+    val fixture = harness()
+
+    fixture.handlers
+      .interpretCommand(command(CommandIntent.Diagnostics(DiagnosticsIntent.ShowAbout)), AppState.initial)
+      .unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe
+      List(s"showModal:${Modal.Confirm(ConfirmPrompt.about(com.serenity.diagnostics.RuntimeIdentity.current))}")
+  }
+
+  it should "open the bundled privacy statement for ShowPrivacyStatement" in {
+    val fixture = harness()
+
+    fixture.handlers
+      .interpretCommand(command(CommandIntent.File(FileIntent.ShowPrivacyStatement)), AppState.initial)
+      .unsafeRunSync()
+
+    val opened = fixture.currentState.persisted.buffers.values.flatMap(_.document.filePath).toList
+    opened.map(_.getFileName.toString) should contain(PrivacyStatement.documentName)
+  }
+
   it should "update the buffer language and open the LSP document when app mode is Code" in {
     val path = Path.of("main.py")
     val state = AppState.initial.copy(persisted =
@@ -193,7 +246,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
         .toList
         .timeoutTo(1.second, IO.pure(Nil))
     )
-    opened shouldBe List(LspEffect.FileOpened(path.toUri.toString, LanguageId.Python, "print(1)"))
+    opened shouldBe List(LspEffect.FileOpened(path.toUri.toString, LanguageId.Python, RopeText("print(1)")))
   }
 
   it should "skip the LSP refresh when the buffer's language does not change" in {
@@ -276,7 +329,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
   }
 
   it should "run an unrecorded command without counting it towards recency, unlike a recorded one" in {
-    val closeAll = command(CommandIntent.File(FileIntent.CloseAll))
+    val closeAll = registryCommand("close-all")
     val fixture  = harness()
 
     fixture.handlers.interpretEffect(AppEffect.ExecuteCommandUnrecorded(closeAll)).unsafeRunSync()
@@ -309,7 +362,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
   it should "show a find modal seeded from the buffer's existing find state" in {
     val buffer = Buffer
       .fromString(bufferId, "cat dog cat")
-      .copy(findState = Some(FindState(query = "cat", results = Nil, currentIndex = 0)))
+      .copy(findState = Some(FindState(query = "cat", results = Vector.empty, currentIndex = 0)))
     val state   = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
     val fixture = harness(state)
 
@@ -318,8 +371,8 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
       .unsafeRunSync()
 
     fixture.currentState.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.ModalWorkflow(Modal.Find(query, results, _))) =>
-        query shouldBe "cat"
+      case List(SurfaceContent.ModalWorkflow(Modal.Find(query, results, _, _, _))) =>
+        query.text shouldBe "cat"
         results.size shouldBe 2
       case other => fail(s"Expected a single Find modal surface, got $other")
   }
@@ -371,7 +424,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
     val fixture  = harness(loadSessionResult = IO.pure(Some(restored)))
 
     fixture.handlers
-      .interpretCommand(command(CommandIntent.Session(SessionIntent.RestoreSession)), AppState.initial)
+      .interpretCommand(registryCommand("restore-session"), AppState.initial)
       .unsafeRunSync()
 
     fixture.currentState.runtime.nextBufferId shouldBe BufferId(99)
@@ -383,17 +436,20 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
     val fixture = harness(loadSessionResult = IO.pure(None))
 
     fixture.handlers
-      .interpretCommand(command(CommandIntent.Session(SessionIntent.RestoreSession)), AppState.initial)
+      .interpretCommand(registryCommand("restore-session"), AppState.initial)
       .unsafeRunSync()
 
-    // issue #1048: interpretCommand records MRU usage for every command it runs regardless of outcome, so the
-    // otherwise-no-op restore still commits a bump of `persisted.commandUsage` for `command`'s own "test-command" name.
+    // issue #1048: interpretCommand records MRU usage for every registry command it runs regardless of outcome, so
+    // the otherwise-no-op restore still commits a bump of `persisted.commandUsage` for "restore-session".
     fixture.committedStates.get.unsafeRunSync() shouldBe List(usageRecorded(AppState.initial))
     fixture.currentState shouldBe usageRecorded(AppState.initial)
   }
 
   private def usageRecorded(state: AppState): AppState =
-    state.copy(persisted = state.persisted.copy(commandUsage = Map(CommandId("test-command") -> 1)))
+    state.copy(persisted = state.persisted.copy(commandUsage = Map(CommandId("restore-session") -> 1)))
+
+  private def registryCommand(name: String): Command =
+    CommandRegistry.withToggleUI.findCommand(name).getOrElse(fail(s"no registry command $name"))
 
   // ---------------------------------------------------------------------------------------------------------------
   // Direct save/load entry points
@@ -510,7 +566,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
 
     reported.inputConfig.wheelScrollLines shouldBe 11
     fixture.currentState.persisted.config.inputConfig.wheelScrollLines shouldBe 11
-    fixture.sessionTriggers.get.unsafeRunSync() shouldBe List(SessionSaveTrigger.Manual)
+    fixture.sessionTriggers.get.unsafeRunSync() shouldBe Nil
   }
 
   it should "report the resulting font config from updateFontConfig" in {

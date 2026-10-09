@@ -3,11 +3,11 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import com.serenity.command.CommandRegistry
-import com.serenity.config.SpellCheckDictionaryFingerprint
+import com.serenity.config.{AppConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.io.ProjectFileListing
 import com.serenity.keystroke.events.RunnerBindingRecordingExpired
 import com.serenity.lsp.client.DocumentUri
-import com.serenity.project.ProjectTaskResult
+import com.serenity.project.{ProjectPresence, ProjectTaskResult}
 import com.serenity.rope.Rope
 import com.serenity.session.SessionMetadata
 import com.serenity.spellcheck.SpellChecker
@@ -16,7 +16,7 @@ import com.serenity.state.models.{
   Buffer,
   BufferId,
   FileWorkflowState,
-  FindResult,
+  FindMatches,
   FindSearchRequest,
   SessionListPurpose,
   SpellCheckFingerprint,
@@ -25,11 +25,13 @@ import com.serenity.state.models.{
 import com.serenity.state.reducers.{
   CommandRunnerReducer,
   ModalEventReducer,
+  NoticeReducer,
   PinnedPanelContentReducer,
   ReducerResult,
   ThemeStateReducer
 }
-import com.serenity.ui.layout.{DirEntry, Symbol}
+import com.serenity.text.TextEncoding
+import com.serenity.ui.layout.{DirEntry, Symbol, WrappedLineCache}
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.Theme
 
@@ -38,7 +40,7 @@ import com.serenity.ui.theme.Theme
   * job cancels an older one, but a result already posted before the cancel still reaches the dispatcher.
   */
 private[manager] enum EffectResult:
-  case FindSearchCompleted(request: FindSearchRequest, results: List[FindResult])
+  case FindSearchCompleted(request: FindSearchRequest, matches: FindMatches)
   case MarkdownPreviewSettled(bufferId: BufferId, generation: Long)
 
   /** The outline of `bufferId` as of `contentVersion`, for docked outline panels. */
@@ -54,6 +56,9 @@ private[manager] enum EffectResult:
   case FileSaved(save: FileSave, saved: Buffer)
   case FileSaveFailed(save: FileSave, error: Throwable)
   case FileReloaded(bufferId: BufferId, path: Path, contentAtRequest: Rope, disk: Buffer)
+
+  /** A reopen as `encoding` found the file's bytes don't fit it (#1627). */
+  case FileReopenFailed(bufferId: BufferId, encoding: TextEncoding)
   case FileLoaded(path: Path, loaded: Buffer)
   case FileLoadFailed(path: Path, error: Throwable)
 
@@ -96,6 +101,16 @@ private[manager] enum EffectResult:
     */
   case FilesListed(pickerId: SurfaceId, root: Path, listing: Either[String, ProjectFileListing])
 
+  // What opening the command palette loads (#1911): each result is for the palette `surfaceId` it was started by, and
+  // is dropped once that palette has closed. See CommandRunnerOpening.
+  case CommandRunnerPresetsListed(surfaceId: SurfaceId, previews: List[UiPreset.Preview])
+  case ProjectPresenceDetected(surfaceId: SurfaceId, presence: ProjectPresence)
+
+  /** The session as `saved` has been written; the start page replaces the editor if it is still what was saved. See
+    * StartPageTransitions.
+    */
+  case StartPageReady(saved: AppState, readableRecentFiles: List[Path])
+
   // Project tasks (#1697 Wave 3): posted by `LaneKey.Project` jobs; see ProjectTaskTransitions.
   /** Output the task wrote since its previous batch. */
   case ProjectTaskOutput(taskId: Long, chunk: String)
@@ -105,12 +120,25 @@ private[manager] enum EffectResult:
   /** The double-tap window of the binding recorded at `recordedAtMillis` has closed. */
   case CommandRunnerBindingExpired(recordedAtMillis: Long)
 
+  /** The config file as edited from outside. `base` is the config the file was last known to match: the edit applies
+    * only while the live config is still that, so a setting changed here in the meantime is not undone by it.
+    */
+  case ConfigReloaded(base: Option[AppConfig], loaded: AppConfig)
+
+  /** A notice's time ran out by `nowNanos`; every notice due by then leaves (#1717). */
+  case NoticesExpired(nowNanos: Long)
+
 private[manager] object EffectResult:
 
-  def applyIfCurrent(state: AppState, result: EffectResult): AppState =
+  def applyIfCurrent(
+    state: AppState,
+    result: EffectResult,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): AppState =
     result match
-      case FindSearchCompleted(request, results) =>
-        CursorViewport.ensureVisibleCursors(state, ModalEventReducer.applyFindSearchResults(state, request, results))
+      case FindSearchCompleted(request, matches) =>
+        val found = ModalEventReducer.applyFindSearchResults(state, request, matches.results, matches.capped)
+        CursorViewport.ensureVisibleCursors(state, found, wrapCache = wrapCache)
       case OutlineRefreshed(bufferId, contentVersion, symbols) =>
         PanelContentSync.withRefreshedOutline(state, bufferId, contentVersion, symbols)
       case MarkdownPreviewSettled(bufferId, generation) =>
@@ -128,8 +156,14 @@ private[manager] object EffectResult:
       case FileSaved(save, saved) => FileResults.saved(state, save, saved)
       case FileReloaded(bufferId, path, contentAtRequest, disk) =>
         FileResults.reloaded(state, bufferId, path, contentAtRequest, disk)
-      case FileLoaded(path, loaded)                    => FileResults.loaded(state, path, loaded)
-      case FileSaveFailed(_, _) | FileLoadFailed(_, _) => state
+      case FileReopenFailed(bufferId, encoding) => ReopenWithEncoding.withFailureShown(state, bufferId, encoding)
+      case FileLoaded(path, loaded)             => FileResults.loaded(state, path, loaded)
+      // A failed save changes nothing: the buffer stays dirty. Its error is not lost here -- it travels in the result
+      // to `commitSave`, which hands it to the submitter's `onFailure` or raises it to the caller that awaited the save.
+      case FileSaveFailed(_, _)         => state
+      case FileLoadFailed(_, _)         => state
+      case NoticesExpired(nowNanos)     => NoticeReducer.expired(state, nowNanos)
+      case ConfigReloaded(base, loaded) => StateManagerConfigEffects.reloaded(state, base, loaded)
 
       case UiPresetFeedback(previews, context) =>
         UiPresetTransitions.withFeedback(state, previews, context)
@@ -146,7 +180,7 @@ private[manager] object EffectResult:
       case ThemeLoaded(requestedName, theme) =>
         ThemeStateReducer.applyRequestedTheme(requestedName, theme, state)
       case ThemeReloaded(requestedName, theme) =>
-        ThemeStateReducer.replaceRequestedTheme(requestedName, theme, state)
+        ThemeStateReducer.applyRequestedTheme(requestedName, theme, state)
       case ThemeNamesListed(names) =>
         ThemeStateReducer.withAvailableThemeNames(names, state).state
       // ---- end explorer and theme results ----
@@ -165,11 +199,23 @@ private[manager] object EffectResult:
       case FilesListed(pickerId, root, listing) =>
         FileFinderTransitions.withFilesListed(state, pickerId, root, listing)
 
-      case projectTask @ (ProjectTaskOutput(_, _) | ProjectTaskFinished(_, _)) => reduce(state, projectTask).state
-      case expired: CommandRunnerBindingExpired                                => reduce(state, expired).state
+      case CommandRunnerPresetsListed(surfaceId, previews) =>
+        CommandRunnerOpening.withPresetsListed(state, surfaceId, previews)
+      case ProjectPresenceDetected(surfaceId, presence) =>
+        CommandRunnerOpening.withPresenceDetected(state, surfaceId, presence)
+      case StartPageReady(saved, readableRecentFiles) =>
+        StartPageTransitions.withStartPageShown(state, saved, readableRecentFiles)
+
+      case projectTask @ (ProjectTaskOutput(_, _) | ProjectTaskFinished(_, _)) =>
+        reduce(state, projectTask, wrapCache).state
+      case expired: CommandRunnerBindingExpired => reduce(state, expired, wrapCache).state
 
   /** [[applyIfCurrent]] together with the effects its transition emits; only the cases matched here emit any. */
-  def reduce(state: AppState, result: EffectResult): ReducerResult =
+  def reduce(
+    state: AppState,
+    result: EffectResult,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): ReducerResult =
     result match
       case ProjectTaskOutput(taskId, chunk)     => ProjectTaskTransitions.outputArrived(state, taskId, chunk)
       case ProjectTaskFinished(taskId, outcome) => ProjectTaskTransitions.finished(state, taskId, outcome)
@@ -179,4 +225,4 @@ private[manager] object EffectResult:
           state,
           CommandRegistry.withToggleUI
         )
-      case other => ReducerResult.noEffects(applyIfCurrent(state, other))
+      case other => ReducerResult.noEffects(applyIfCurrent(state, other, wrapCache = wrapCache))

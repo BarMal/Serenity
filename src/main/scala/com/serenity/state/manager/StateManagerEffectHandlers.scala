@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.*
+import com.serenity.keystroke.events.{CutToDarlings, RestoreDarling}
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.*
@@ -14,14 +15,7 @@ import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.{PanelPosition, PeekContent}
-
-/** A buffer's file seen on disk at a revision other than the one the buffer held when it was read (#1623). */
-final private[manager] case class ExternalRevisionObservation(
-    bufferId: BufferId,
-    path: Path,
-    bufferRevision: Option[com.serenity.io.DocumentRevision],
-    onDisk: com.serenity.io.DocumentRevision
-)
+import com.serenity.ui.theme.appearance.OsAppearanceDetector
 
 /** Owns ordered I/O interpretation for reducer effects. */
 final private[manager] class StateManagerEffectHandlers(
@@ -30,7 +24,8 @@ final private[manager] class StateManagerEffectHandlers(
     surfaces: EffectSurfacePort,
     files: EffectFilePort,
     sessions: EffectSessionPort,
-    workflow: EffectModalWorkflowPort
+    workflow: EffectModalWorkflowPort,
+    appearanceDetector: OsAppearanceDetector = OsAppearanceDetector.system
 )(using balance: com.serenity.rope.Balance):
 
   import editor.*
@@ -42,24 +37,13 @@ final private[manager] class StateManagerEffectHandlers(
   private val DoubleTapWindow = 200.millis
 
   private val workflowEffects = new WorkflowEffectHandler(new WorkflowEffectPort:
-    def requestOpenFile: IO[Unit] = requestOpenFileDialog
+    def requestOpenFile: IO[Unit] = requestOpenFileOrFolderDialog
     def requestSaveAs: IO[Unit]   = currentState.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
     def refresh(surfaceId: SurfaceId): IO[Unit]           = refreshFileWorkflowEffect(surfaceId)
     def refreshFind(request: FindSearchRequest): IO[Unit] = scheduleFindSearch(request)
     def submitFile(surfaceId: SurfaceId): IO[Unit]        = submitFileWorkflowEffect(surfaceId)
-    // `panelEffects` is declared further down this same class (below), not on `workflow` -- referencing it here is
-    // safe (no construction-time cycle: `panelEffects` doesn't depend on `workflowEffects`) because this method body
-    // only runs once the whole object is fully constructed, long after both `val`s are assigned.
     def openAsProjectRoot(surfaceId: SurfaceId): IO[Unit] =
-      openFileWorkflowAsProjectRootEffect(
-        surfaceId,
-        path =>
-          panelEffects.pinExplorerPanelEffect(
-            PanelPosition.Left,
-            path,
-            PanelRegistry.registrationFor(PanelId.Explorer).defaultSize(PanelPosition.Left)
-          )
-      )
+      openFileWorkflowAsProjectRootEffect(surfaceId, openFolderAsProjectRoot)
     def submitReplace(surfaceId: SurfaceId): IO[Unit]           = submitReplaceWorkflowEffect(surfaceId)
     def beginClose(scope: CloseScope): IO[Unit]                 = currentState.flatMap(beginCloseAction(scope, _))
     def createDirectories(surfaceId: SurfaceId): IO[Unit]       = createFileWorkflowDirectoriesEffect(surfaceId)
@@ -70,18 +54,36 @@ final private[manager] class StateManagerEffectHandlers(
       def completeQuit: IO[Unit] = quitSignal.complete(()).attempt.void
   )
 
-  private val animationEffects = new AnimationEffectHandler(updateBufferAnimations)
+  private val reopenEffects     = new ReopenWithEncodingEffects(currentState, commitState, editor, fileManager)
+  private val lineEndingEffects = new LineEndingEffects(currentState, commitState, updateModelValidated)
+  private val manuscriptExport  = new ManuscriptExportEffects(logger, fileDialog, editor, currentState, commitState)
+
+  private val appearanceFollower = new SystemAppearanceFollower(
+    appearanceDetector,
+    currentState,
+    themeName => interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(themeName))),
+    logger
+  )
+
+  private[manager] def followSystemAppearance: IO[Unit] = appearanceFollower.follow
+
+  private[manager] def followSystemAppearanceWithin(bound: FiniteDuration): IO[Unit] =
+    appearanceFollower.followWithin(bound)
 
   private val configEffects = new StateManagerConfigEffects(
     currentState,
     logger,
     configPersistencePath,
-    sessionPersistence,
     onFontConfigChanged,
     deviceTextScaleProvider,
     editor,
-    runtime.renderCaches
+    runtime.renderCaches,
+    showNotice = showNotice,
+    configOnDisk = configOnDisk,
+    followSystemAppearance = followSystemAppearance
   )
+
+  private[manager] val configWatch: Option[ConfigFileWatch] = configEffects.watch
 
   private def commitAppValidated(transition: AppState => AppState): IO[Unit] =
     updateModelValidated(model => Some(model.copy(app = transition(model.app))))
@@ -90,7 +92,7 @@ final private[manager] class StateManagerEffectHandlers(
     new StateManagerKeybindingEffects(currentState, commitAppValidated, configEffects.updateConfig)
 
   private val richTextEffects =
-    new StateManagerRichTextEffects(currentState, commitState, interpretEffect, showPeek)
+    new StateManagerRichTextEffects(currentState, updateModelValidated, interpretEffect, showPeek)
 
   private val projectLspEffects = new StateManagerProjectLspEffects(
     lspQueue,
@@ -103,8 +105,17 @@ final private[manager] class StateManagerEffectHandlers(
     showModal
   )
 
+  private val spellingEffects =
+    new StateManagerSpellingEffects(editor, currentState, interpretEffect, configEffects.addWordToDictionary)
+
   private val navigationEffects =
-    new StateManagerNavigationEffects(currentState, logger, commitState, interpretEffect)
+    new StateManagerNavigationEffects(
+      currentState,
+      logger,
+      commitState,
+      interpretEffect,
+      wrapCache = runtime.renderCaches.wrappedLines
+    )
 
   private val panelEffects = new StateManagerPanelEffects(
     currentState,
@@ -119,8 +130,28 @@ final private[manager] class StateManagerEffectHandlers(
     () => collapseExpandedPanel(),
     switchToPinnedPanel,
     resizePinnedPanel,
-    enabled => configEffects.updateCompanionSpriteConfig(_.copy(enabled = enabled))
+    showModal
   )
+
+  private val externalChangeEffects = new StateManagerExternalChangeEffects(
+    currentState,
+    fileManager,
+    isSaving,
+    reloadBuffer,
+    openReloadConflictModal,
+    bufferLabelFor
+  )
+
+  private val editIntentEffects =
+    new StateManagerEditIntentEffects(logger, enqueueEvent, updateModelValidated, activeEditorBufferId)
+
+  export externalChangeEffects.{
+    observeExternalRevisionEffect,
+    observeFocusedExternalRevisionEffect,
+    openBufferPathsEffect,
+    resolveExternalRevisionEffect
+  }
+  export editIntentEffects.interpret as interpretEditIntent
 
   private val uiPresetEffects = new StateManagerUiPresetEffects(
     currentState,
@@ -145,7 +176,9 @@ final private[manager] class StateManagerEffectHandlers(
     fileDialog,
     commitState,
     editor,
-    interpretEffect
+    interpretEffect,
+    configEffects.updateConfig,
+    followSystemAppearance
   )
 
   private[manager] val behavior = new CommandEffectInterpreter(
@@ -159,8 +192,8 @@ final private[manager] class StateManagerEffectHandlers(
       interpretExplorerEffect,
       interpretWorkflowEffect,
       interpretLspQueueEffect,
-      animationEffects.interpret,
-      scheduleCommandRunnerBindingExpiry
+      scheduleCommandRunnerBindingExpiry,
+      { case SettingsEffect.ReapplyConfig => configEffects.reapplyConfig }
     )
   )
 
@@ -243,34 +276,40 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def dispatchCommand(command: Command, state: AppState, recordUsage: Boolean): IO[Unit] =
     val dispatch = command.intent match
-      case CommandIntent.Lifecycle(intent)    => interpretLifecycleIntent(intent, state)
-      case CommandIntent.File(intent)         => interpretFileIntent(intent, state)
-      case CommandIntent.Edit(intent)         => interpretEditIntent(intent)
-      case CommandIntent.RichText(intent)     => richTextEffects.interpret(intent)
-      case CommandIntent.Comments(intent)     => navigationEffects.interpretComments(intent)
-      case CommandIntent.Placeholders(intent) => navigationEffects.interpretPlaceholders(intent)
-      case CommandIntent.Darlings(intent)     => interpretDarlingIntent(intent)
-      case CommandIntent.Navigation(intent)   => navigationEffects.interpretNavigation(intent)
-      case CommandIntent.Lsp(intent)          => projectLspEffects.interpretLsp(intent, state)
-      case CommandIntent.Theme(intent)        => surfacePopupEffects.interpretThemeIntent(intent, state)
-      case CommandIntent.View(intent)         => panelEffects.interpret(intent, state)
-      case CommandIntent.Project(intent)      => projectLspEffects.interpretProject(intent, state)
-      case CommandIntent.Session(intent)      => interpretSessionIntent(intent, state)
-      case CommandIntent.Keybindings(intent)  => keybindingEffects.interpret(intent)
-      case CommandIntent.UiPresets(intent)    => uiPresetEffects.interpret(intent)
-      case CommandIntent.Settings(intent)     => configEffects.interpret(intent, state)
-    // issue #1048: MRU tracking -- every executed command counts toward its recency, regardless of what triggered
-    // it (palette, mouse click, contextual toolbar, ...), living on `persisted` since `CommandRunner` itself is
-    // reconstructed fresh each time the palette opens (`CommandRunner.recordCommandUsage`'s own doc). Only commands
-    // the user did not choose (`AppEffect.ExecuteCommandUnrecorded`: picker previews and restores) are left out.
+      case CommandIntent.Lifecycle(intent)                     => interpretLifecycleIntent(intent, state)
+      case CommandIntent.Diagnostics(intent)                   => DiagnosticsEffects.system(showModal).interpret(intent)
+      case CommandIntent.File(intent)                          => interpretFileIntent(intent, state)
+      case CommandIntent.Edit(intent)                          => interpretEditIntent(intent)
+      case CommandIntent.RichText(intent)                      => richTextEffects.interpret(intent)
+      case CommandIntent.Comments(intent)                      => navigationEffects.interpretComments(intent)
+      case CommandIntent.Placeholders(intent)                  => navigationEffects.interpretPlaceholders(intent)
+      case CommandIntent.Darlings(DarlingIntent.CutToDarlings) => enqueueEvent(CutToDarlings)
+      case CommandIntent.Darlings(DarlingIntent.RestoreDarling) => enqueueEvent(RestoreDarling)
+      case CommandIntent.Spelling(intent)                       => spellingEffects.interpret(intent)
+      case CommandIntent.Navigation(intent)                     => navigationEffects.interpretNavigation(intent)
+      case CommandIntent.Lsp(intent)                            => projectLspEffects.interpretLsp(intent, state)
+      case CommandIntent.Theme(intent) => surfacePopupEffects.interpretThemeIntent(intent, state, chosen = recordUsage)
+      case CommandIntent.View(intent)  => panelEffects.interpret(intent, state)
+      case CommandIntent.Project(intent)     => projectLspEffects.interpretProject(intent, state)
+      case CommandIntent.Session(intent)     => interpretSessionIntent(intent, state)
+      case CommandIntent.Keybindings(intent) => keybindingEffects.interpret(intent)
+      case CommandIntent.UiPresets(intent)   => uiPresetEffects.interpret(intent)
+      case CommandIntent.Settings(intent)    => configEffects.interpret(intent, state)
+    // issue #1048: MRU tracking -- every executed registry command counts toward its recency, regardless of what
+    // triggered it (palette, hotkey, mouse click, ...), living on `persisted` since `CommandRunner` itself is
+    // reconstructed fresh each time the palette opens (`CommandRunner.recordCommandUsage`'s own doc). Left out:
+    // commands the user did not choose (`AppEffect.ExecuteCommandUnrecorded`: picker previews and restores), and
+    // anything the palette cannot offer -- settings rows, theme picks, toolbar buttons -- whose ids would only clutter
+    // the table (#1877).
     logger.info(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
       updateModelValidated(model =>
         Some(model.copy(app = StateManagerEffectHandlers.withCommandUsageRecorded(model.app, command.name)))
-      ).whenA(recordUsage) >> dispatch
+      ).whenA(recordUsage && StateManagerEffectHandlers.recordsUsage(command.name)) >> dispatch
 
   private def interpretLifecycleIntent(intent: LifecycleIntent, state: AppState): IO[Unit] =
     intent match
       case LifecycleIntent.QuitApp              => beginCloseAction(CloseScope.Quit, state)
+      case LifecycleIntent.Restart(mode)        => beginCloseAction(CloseScope.Restart(mode), state)
       case LifecycleIntent.ResolveClose(choice) => resolveClose(choice)
 
   private def interpretFileIntent(intent: FileIntent, state: AppState): IO[Unit] =
@@ -281,10 +320,17 @@ final private[manager] class StateManagerEffectHandlers(
           case None           => logger.debug("[CMD] No focused buffer to save")
       case FileIntent.SaveCurrentFileAs =>
         requestSaveAsFileDialog(state, state.focusedBufferId)
+      case FileIntent.ExportManuscript(request) => manuscriptExport.run(request, state)
       case FileIntent.OpenFile =>
         requestOpenFileDialog
+      case FileIntent.OpenFolder =>
+        requestOpenFolderDialog
+      case FileIntent.OpenFileOrFolder =>
+        requestOpenFileOrFolderDialog
       case FileIntent.OpenRecentFile(path) =>
         loadFile(path)
+      case FileIntent.ClearRecentFiles =>
+        currentState.flatMap(current => commitState(FileResults.withoutRecentFiles(current), current))
       case FileIntent.OpenFileSearch =>
         interpretSurfaceEffect(SurfaceEffect.OpenFileSearch)
       case FileIntent.GoToFile =>
@@ -303,8 +349,10 @@ final private[manager] class StateManagerEffectHandlers(
             current
           )
         )
-      case FileIntent.SetBufferLanguage(language) =>
-        setBufferLanguage(state, language)
+      case FileIntent.ShowLicenceAndNotices | FileIntent.ShowAbout => com.serenity.io.AboutDocument.open(loadFile)
+      case FileIntent.OpenReleasesPage            => ReleasesPageEffect.open(openExternalUrl, showNotice)
+      case FileIntent.ShowPrivacyStatement        => com.serenity.io.PrivacyStatement.open(loadFile)
+      case FileIntent.SetBufferLanguage(language) => setBufferLanguage(state, language)
       case FileIntent.ReloadFromDisk(bufferId) =>
         reloadBuffer(bufferId)
       case FileIntent.OverwriteOnDisk(bufferId) =>
@@ -312,6 +360,11 @@ final private[manager] class StateManagerEffectHandlers(
       case FileIntent.SaveWithoutFormatting(bufferId) =>
         currentState.flatMap(current => commitState(RichTextReducer.withoutFormatting(bufferId, current), current)) >>
           saveBufferEffect(bufferId)
+      case FileIntent.ChooseReopenEncoding => reopenEffects.chooseEncoding
+      case FileIntent.ReopenWithEncoding(bufferId, encoding, discardEdits) =>
+        reopenEffects.reopen(bufferId, encoding, discardEdits)
+      case FileIntent.ChooseLineEnding                => lineEndingEffects.chooseLineEnding
+      case FileIntent.SetLineEnding(bufferId, ending) => lineEndingEffects.setLineEnding(bufferId, ending)
 
   private def setBufferLanguage(state: AppState, language: Option[LanguageId]): IO[Unit] =
     (state.focusedBufferId, state.focusedBufferId.flatMap(state.persisted.buffers.get)) match
@@ -334,7 +387,7 @@ final private[manager] class StateManagerEffectHandlers(
           buffer.document.filePath match
             case Some(path) if buffer.document.language != language =>
               val uri  = path.toUri.toString
-              val text = buffer.document.content.collect()
+              val text = buffer.document.content
               val closeOld =
                 buffer.document.language.fold(IO.unit)(previous =>
                   lspQueue.enqueue(LspEffect.FileClosed(uri, previous))
@@ -349,42 +402,6 @@ final private[manager] class StateManagerEffectHandlers(
         updateLanguage >> refreshLspBinding
       case _ =>
         IO.unit
-
-  private def interpretEditIntent(intent: EditIntent): IO[Unit] =
-    intent match
-      case EditIntent.FindInCurrentFile =>
-        showModalValidated(findModalForState)
-      case EditIntent.FindAllInCurrentFile =>
-        showModalValidated(findModalForState)
-      case EditIntent.ReplaceInCurrentFile =>
-        showModalValidated(_ => Modal.ReplaceWorkflow(ReplaceWorkflowState()))
-      case EditIntent.ReplaceAllInCurrentFile =>
-        showModalValidated(_ =>
-          Modal.ReplaceWorkflow(ReplaceWorkflowState(selectedAction = ReplaceWorkflowAction.ReplaceAll))
-        )
-      case EditIntent.Copy =>
-        enqueueEvent(com.serenity.keystroke.events.Copy)
-      case EditIntent.Cut =>
-        enqueueEvent(com.serenity.keystroke.events.Cut)
-      case EditIntent.Paste =>
-        enqueueEvent(com.serenity.keystroke.events.Paste)
-      case EditIntent.SelectAll =>
-        enqueueEvent(com.serenity.keystroke.events.SelectAll)
-      case EditIntent.Undo =>
-        enqueueEvent(com.serenity.keystroke.events.Undo)
-      case EditIntent.Redo =>
-        enqueueEvent(com.serenity.keystroke.events.Redo)
-      case EditIntent.FormatCurrentFile =>
-        logger.debug("[CMD] Format command requested")
-
-  private def interpretDarlingIntent(intent: DarlingIntent): IO[Unit] =
-    intent match
-      case DarlingIntent.CutToDarlings  => enqueueEvent(com.serenity.keystroke.events.CutToDarlings)
-      case DarlingIntent.RestoreDarling => enqueueEvent(com.serenity.keystroke.events.RestoreDarling)
-
-  // Read inside the validated model write rather than from a snapshot: a command can run off the dispatcher.
-  private def showModalValidated(modalFor: AppState => Modal): IO[Unit] =
-    updateModelValidated(model => Some(model.copy(app = ModalStateReducer.show(modalFor(model.app), model.app).state)))
 
   private def interpretSessionIntent(intent: SessionIntent, state: AppState): IO[Unit] =
     intent match
@@ -403,6 +420,10 @@ final private[manager] class StateManagerEffectHandlers(
         restoreStartupSession()
       case SessionIntent.StartupOpenFile =>
         requestOpenFileDialog
+      case SessionIntent.StartupOpenFolder =>
+        requestOpenFolderDialog
+      case SessionIntent.StartupOpenFileOrFolder =>
+        requestOpenFileOrFolderDialog
       case SessionIntent.ReturnToStartPage =>
         beginCloseAction(CloseScope.ReturnToStartPage, state)
       case SessionIntent.OpenSaveSessionAsPrompt =>
@@ -415,61 +436,6 @@ final private[manager] class StateManagerEffectHandlers(
         openNamedSession(sessionId, state)
       case SessionIntent.RenameNamedSession(sessionId, currentName) =>
         openRenameSessionPrompt(sessionId, currentName)
-
-  /** Reads the focused buffer's on-disk revision (#1623), for the window focus-gain re-check. Runs off the dispatcher;
-    * the decision is `resolveExternalRevisionEffect`'s.
-    */
-  private[manager] def observeFocusedExternalRevisionEffect: IO[Option[ExternalRevisionObservation]] =
-    currentState.flatMap(_.focusedBufferId.flatTraverse(observeExternalRevisionEffect))
-
-  /** Reads one buffer's on-disk revision (#1623) when it differs from the revision the buffer holds -- the blocking
-    * half of the check both the focus-gain callback and `AppRuntime.externalChangeWatchLoop` drive, run off the
-    * dispatcher.
-    */
-  private[manager] def observeExternalRevisionEffect(bufferId: BufferId): IO[Option[ExternalRevisionObservation]] =
-    currentState.flatMap { state =>
-      state.persisted.buffers.get(bufferId).flatMap(buffer => buffer.document.filePath.map(buffer -> _)) match
-        case Some((buffer, path)) =>
-          fileManager.currentRevision(path).map {
-            case Some(onDisk) if Some(onDisk) != buffer.document.revision =>
-              Some(ExternalRevisionObservation(bufferId, path, buffer.document.revision, onDisk))
-            case _ => None
-          }
-        case None => IO.none
-    }
-
-  /** Decides an external change on the dispatcher. An observation whose buffer has since been saved, reloaded, closed
-    * or re-pathed is stale and dropped: a save's own disk write is not an external change, and the watcher sees the
-    * file again on its next poll anyway. A clean buffer is reloaded silently; a dirty one is prompted, exactly like a
-    * stale save.
-    */
-  private[manager] def resolveExternalRevisionEffect(observation: ExternalRevisionObservation): IO[Unit] =
-    isSaving(observation.path).ifM(IO.unit, decideExternalRevision(observation))
-
-  private def decideExternalRevision(observation: ExternalRevisionObservation): IO[Unit] =
-    currentState.flatMap { state =>
-      state.persisted.buffers
-        .get(observation.bufferId)
-        .filter(buffer =>
-          buffer.document.filePath.contains(observation.path) &&
-            buffer.document.revision == observation.bufferRevision
-        ) match
-        case Some(buffer) if buffer.hasUnsavedChanges =>
-          // A blocking modal already up (most likely this buffer's own reload-conflict prompt from an earlier poll or
-          // focus-gain) must not get a second one stacked on top of it -- code review finding on PR #1664.
-          if state.hasBlockingModal then IO.unit
-          else openReloadConflictModal(state, buffer.id, bufferLabelFor(buffer))
-        case Some(buffer) => reloadBuffer(buffer.id)
-        case None         => IO.unit
-    }
-
-  /** The paths of every currently open local buffer, for `FileChangeWatcher.sync`'s directory set -- `AppRuntime`'s
-    * background watch loop re-derives this each poll cycle so it tracks buffers opening and closing over time.
-    */
-  private[manager] def openBufferPathsEffect: IO[Map[Path, BufferId]] =
-    currentState.map(state =>
-      state.persisted.buffers.values.flatMap(buffer => buffer.document.filePath.map(_ -> buffer.id)).toMap
-    )
 
   private def bufferLabelFor(buffer: Buffer): String =
     buffer.document.filePath
@@ -515,7 +481,8 @@ final private[manager] class StateManagerEffectHandlers(
           workflow.openReloadConflictModal(current, bufferId, bufferLabelFor(current, bufferId))
         )
       case other =>
-        logger.error(other)(s"[FILE] Failed to save buffer $bufferId")
+        logger.error(other)(s"[FILE] Failed to save buffer $bufferId") >>
+          currentState.flatMap(current => showNotice(FileFailureNotice.forBuffer(current, bufferId, other)))
 
   protected def requestOpenFileDialog: IO[Unit] =
     fileDialog match
@@ -525,38 +492,41 @@ final private[manager] class StateManagerEffectHandlers(
         // No native dialog to show at all -- fall back to the in-app form, same as the save-as path.
         currentState.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))
 
+  // Where the platform's dialog takes a file or a folder in one go (macOS) that is the open the hotkey and the start
+  // page run; anywhere else, and in the terminal, it is the file dialog, as before.
+  protected def requestOpenFileOrFolderDialog: IO[Unit] =
+    fileDialog.filter(_.supportsFileOrFolder) match
+      case Some(dialog) => openFileOrFolderFromDialog(dialog, openFolderAsProjectRoot)
+      case None         => requestOpenFileDialog
+
+  /** The one route a chosen folder takes, whether it came from a native dialog or the in-app form's "Open as root":
+    * leave the start page, then pin the Explorer on it.
+    */
+  private[manager] def openFolderAsProjectRoot(folder: Path): IO[Unit] =
+    leaveStartPage() >> panelEffects.pinExplorerPanelEffect(
+      PanelPosition.Left,
+      folder,
+      PanelRegistry.registrationFor(PanelId.Explorer).defaultSize(PanelPosition.Left)
+    )
+
+  // With no native dialog the in-app Open Folder form is the picker; its confirm action goes through the same sink.
+  protected def requestOpenFolderDialog: IO[Unit] =
+    fileDialog match
+      case Some(dialog) =>
+        openFolderFromDialog(dialog, openFolderAsProjectRoot)
+      case None =>
+        currentState.flatMap(state => openFileWorkflowModal(FileWorkflowMode.OpenFolder, state))
+
   private[manager] def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
     currentState.flatMap { state =>
       state.persisted.buffers.get(bufferId) match
         case Some(_) =>
-          saveBufferAs(bufferId, path)
+          saveBufferAs(bufferId, path).handleErrorWith(error =>
+            showNotice(FileFailureNotice.fileSaveFailed(bufferId, path, error, state.persisted.config))
+          )
         case None =>
           logger.debug(s"[FILE] Buffer $bufferId not found for save as")
     }
-
-  private def findModalForState(state: AppState): Modal =
-    activeEditorBufferId(state)
-      .flatMap(state.persisted.buffers.get)
-      .flatMap { buffer =>
-        buffer.findState match
-          case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
-            val resultSet = FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult), currentIndex)
-            Some(Modal.Find(resultSet.query, resultSet.results, resultSet.currentIndex))
-          case _ =>
-            None
-      }
-      .getOrElse(Modal.Find("", Nil, 0))
-
-  private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
-    if query.isEmpty then Nil
-    else
-      buffer.document.content
-        .searchAll(query)
-        .filter(offset => buffer.document.content.isWholeGraphemeRange(offset, offset + query.length))
-        .map(offset => buffer.document.content.offsetToCursorPosition(offset))
-
-  private def toFindResult(cursor: CursorPosition): FindResult =
-    FindResult(cursor.line, cursor.column)
 
   private[manager] def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
@@ -565,8 +535,14 @@ final private[manager] class StateManagerEffectHandlers(
 
 private[manager] object StateManagerEffectHandlers:
 
+  def recordsUsage(commandName: String): Boolean =
+    CommandRegistry.withToggleUI.isRegistered(CommandId(commandName))
+
   def withCommandUsageRecorded(state: AppState, commandName: String): AppState =
-    val nextGeneration = state.persisted.commandUsage.values.maxOption.getOrElse(0) + 1
-    state.copy(persisted =
-      state.persisted.copy(commandUsage = state.persisted.commandUsage + (CommandId(commandName) -> nextGeneration))
-    )
+    if !recordsUsage(commandName) then state
+    else
+      state.copy(persisted =
+        state.persisted.copy(commandUsage =
+          CommandUsageHistory.recorded(state.persisted.commandUsage, CommandId(commandName))
+        )
+      )

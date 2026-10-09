@@ -1,5 +1,6 @@
 package com.serenity.ui.layout
 
+import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.models.*
 
 /** The paint order for one frame of Serenity's user interface. */
@@ -112,13 +113,15 @@ object UiSceneSnapshot:
   def from(
     state: AppState,
     calculatedLayout: CalculatedLayout,
-    viewportSize: ViewportSize
+    viewportSize: ViewportSize,
+    previewCache: MarkdownPreviewCache = MarkdownPreviewCache()
   ): UiSceneSnapshot =
     val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
     val editorContract = EditorLayoutContract.from(
       state,
       viewportSize,
-      calculatedLayout
+      calculatedLayout,
+      previewCache
     )
     val workspacePanes = state.persisted.layout.orderedPaneIds.flatMap { paneId =>
       paneLayouts.get(paneId).toList.flatMap { pane =>
@@ -215,7 +218,8 @@ object UiSceneSnapshot:
     calculatedLayout: CalculatedLayout,
     initialZIndex: Int
   ): List[SceneNode] =
-    (calculatedLayout.aboveCursorOverlayStack ++ calculatedLayout.belowCursorOverlayStack).zipWithIndex
+    (calculatedLayout.aboveCursorOverlayStack ++ calculatedLayout.belowCursorOverlayStack ++
+      calculatedLayout.cornerOverlayStack).zipWithIndex
       .flatMap {
         case ((surfaceId, frame), offset) =>
           state

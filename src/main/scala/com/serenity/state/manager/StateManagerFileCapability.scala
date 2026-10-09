@@ -44,7 +44,7 @@ final private[manager] class StateManagerFileFacade(
         case Some(buffer) =>
           state.copy(persisted =
             state.persisted.copy(buffers =
-              state.persisted.buffers + (bufferId -> buffer.copy(document = buffer.document.copy(isDirty = false)))
+              state.persisted.buffers + (bufferId -> buffer.copy(document = buffer.document.markedSaved))
             )
           )
         case None =>
@@ -74,7 +74,9 @@ final private[manager] class StateManagerFileCapability(
     refreshDictionaryFingerprints: IO[Unit],
     dictionaryWatchDirectories: IO[Set[Path]],
     explorerWatchDirectories: IO[Set[Path]],
-    markExplorerDirectoriesStale: Set[Path] => IO[Unit]
+    markExplorerDirectoriesStale: Set[Path] => IO[Unit],
+    configWatch: Option[ConfigFileWatch],
+    autoSave: StateManagerAutoSave
 ):
 
   // The disk read runs here, off the dispatcher; the decision re-reads state on it, after any in-flight save has
@@ -99,7 +101,8 @@ final private[manager] class StateManagerFileCapability(
   private def saveBufferAs(bufferId: BufferId, filePath: Path): IO[Unit] =
     fileFacade.saveBufferAs(bufferId, filePath)
 
-  val fileOpener: FileOpener = FileOpener(openFile = openFile)
+  val fileOpener: FileOpener =
+    FileOpener(openFile = openFile, openFolder = folder => dispatch(effects.openFolderAsProjectRoot(folder)))
 
   val fileService: FileService = FileService(
     saveBuffer = saveBuffer,
@@ -111,5 +114,7 @@ final private[manager] class StateManagerFileCapability(
     dictionaryWatchDirectories = dictionaryWatchDirectories,
     refreshDictionaryFingerprints = refreshDictionaryFingerprints,
     explorerWatchDirectories = explorerWatchDirectories,
-    markExplorerDirectoriesStale = markExplorerDirectoriesStale
+    markExplorerDirectoriesStale = markExplorerDirectoriesStale,
+    configWatch = configWatch,
+    autoSaveOnWindowFocusLost = autoSave.saveOnWindowFocusLost
   )

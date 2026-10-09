@@ -5,13 +5,22 @@ import java.nio.file.{Files, Path}
 import cats.effect.IO
 import com.serenity.config.AppConfig
 import com.serenity.frontend.FrontendCapabilities
+import com.serenity.session.UnreadableSession
 import com.serenity.state.manager.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
 
 object AppStartup:
+
+  /** How long startup waits for the OS to say whether it is light, dark or high contrast before drawing the first
+    * frame. The queries are a few short processes and normally answer in tens of milliseconds; a detector that has not
+    * answered by now is treated as not having said, so the theme is the configured one and startup is not held.
+    */
+  val AppearanceDetectionBound: scala.concurrent.duration.FiniteDuration =
+    scala.concurrent.duration.DurationInt(200).millis
 
   /** `recentFiles` must already be filtered to existing, readable files -- `createStartPage` does no filesystem access
     * of its own, so callers filter via `IO.blocking` before calling this. Delegates to [[StartupPageContent]] so the
@@ -21,9 +30,10 @@ object AppStartup:
     sessionExists: Boolean,
     recentFiles: List[Path] = Nil,
     configNotice: Option[String] = None,
-    resumeIdentifier: Option[String] = None
+    resumeIdentifier: Option[String] = None,
+    fileOrFolderOpen: Boolean = false
   ): StartupPage =
-    StartupPageContent.createStartPage(sessionExists, recentFiles, configNotice, resumeIdentifier)
+    StartupPageContent.createStartPage(sessionExists, recentFiles, configNotice, resumeIdentifier, fileOrFolderOpen)
 
   def startPageState(
     sessionService: SessionService,
@@ -42,7 +52,13 @@ object AppStartup:
         recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
       )
       resumeIdentifier = loadedSession.map(StartupPageContent.sessionResumeIdentifier)
-      startPage        = createStartPage(sessionExists, readableRecentFiles, configNotice, resumeIdentifier)
+      startPage = createStartPage(
+        sessionExists,
+        readableRecentFiles,
+        configNotice,
+        resumeIdentifier,
+        capabilities.opensFileOrFolder
+      )
     yield
       val startPageSurfaceId = SurfaceId("surface-0")
       val base               = AppState.empty(appConfig)
@@ -75,6 +91,10 @@ object AppStartup:
       theme          <- themeManager.initializeWithTheme(savedThemeName.getOrElse(fallbackThemeName))
     yield theme
 
+  /** Sets an unreadable session aside before anything can save over it, whether or not a file was asked for, then tells
+    * the user about it in a prompt. A notice also goes on the start page when there is one, and into a prompt when a
+    * launch straight into a file means there is none.
+    */
   def initializeState(
     stateManager: StateManager,
     sessionStartupInfo: SessionStartupInfo,
@@ -83,55 +103,74 @@ object AppStartup:
     appConfig: AppConfig = AppConfig.default,
     openPath: Option[Path] = None,
     capabilities: FrontendCapabilities = FrontendCapabilities.gui,
-    configNotice: Option[String] = None
+    configNotice: Option[String] = None,
+    recovery: StartupRecovery.Plan = StartupRecovery.Plan.normal
   ): IO[AppState] =
-    openPath match
-      case Some(path) =>
-        for
-          _ <- stateManager.updateStateValidated { _ =>
-            val base = AppState.empty(appConfig)
-            base.copy(
-              persisted = base.persisted.copy(theme = theme),
-              // The companion sprite surface is added together with its tree dock below, once `openFile` has built a
-              // real workspace tree to dock it into -- adding it here (as `AppState.empty` otherwise would) leaves
-              // uiSurfaces carrying a `Docked` surface the tree doesn't have yet, which fails `openFile`'s own state
-              // validation (issue #817) and silently discards the newly-opened buffer entirely.
-              runtime = base.runtime.copy(
-                uiSurfaces = Nil,
-                viewportSize = Some(initialViewportSize),
-                capabilities = capabilities
-              )
-            )
-          }
-          _ <- stateManager.fileOpener.openFile(path)
-          // Now that `openFile` has built a real workspace tree for the newly-opened buffer's pane, add the
-          // companion sprite surface (if enabled) and dock it in the same update, so uiSurfaces and the tree change
-          // together instead of passing through an inconsistent intermediate state (issue #817: idempotent/no-op if
-          // it's already present, already docked, or the sprite is disabled).
-          _ <- stateManager.updateStateValidated { state =>
-            state.copy(
-              persisted = state.persisted
-                .copy(layout = AppState.dockCompanionSprite(state.persisted.layout, state.persisted.config)),
-              runtime = state.runtime.copy(uiSurfaces =
-                state.runtime.uiSurfaces ++ AppState
-                  .companionSpriteSurfaces(state.persisted.config)
-                  .filterNot(surface => state.runtime.uiSurfaces.exists(_.id == surface.id))
-              )
-            )
-          }
-          state <- stateManager.getCurrentState
-        yield state
-      case None =>
-        for
-          startState <- startPageState(
-            stateManager.sessionService,
-            sessionStartupInfo,
-            theme,
-            initialViewportSize,
-            appConfig,
-            capabilities,
-            configNotice
-          )
-          _     <- stateManager.updateStateValidated(_ => startState)
-          state <- stateManager.getCurrentState
-        yield state
+    initialState(
+      stateManager,
+      sessionStartupInfo,
+      theme,
+      initialViewportSize,
+      appConfig,
+      openPath,
+      capabilities,
+      configNotice
+    )
+      .flatMap(state =>
+        if recovery == StartupRecovery.Plan.normal then IO.pure(state)
+        else stateManager.updateStateValidated(recovery.appliedTo) >> stateManager.getCurrentState
+      )
+
+  private def initialState(
+    stateManager: StateManager,
+    sessionStartupInfo: SessionStartupInfo,
+    theme: Theme,
+    initialViewportSize: ViewportSize,
+    appConfig: AppConfig,
+    openPath: Option[Path],
+    capabilities: FrontendCapabilities,
+    configNotice: Option[String]
+  ): IO[AppState] =
+    for
+      unreadable <- sessionStartupInfo.setAsideUnreadableSession
+      startPageNotice = Option((configNotice.toList ++ unreadable.map(_.summary)).mkString(" ")).filter(_.nonEmpty)
+      _ <- openPath.fold(
+        startPageState(
+          stateManager.sessionService,
+          sessionStartupInfo,
+          theme,
+          initialViewportSize,
+          appConfig,
+          capabilities,
+          startPageNotice
+        ).flatMap(startState => stateManager.updateStateValidated(_ => startState))
+      )(openStraightInto(stateManager, _, theme, initialViewportSize, appConfig, capabilities))
+      unseenNotice = configNotice.filter(_ => openPath.isDefined)
+      _     <- stateManager.updateStateValidated(withStartupPrompts(_, unreadable, unseenNotice))
+      state <- stateManager.getCurrentState
+    yield state
+
+  private def openStraightInto(
+    stateManager: StateManager,
+    path: Path,
+    theme: Theme,
+    initialViewportSize: ViewportSize,
+    appConfig: AppConfig,
+    capabilities: FrontendCapabilities
+  ): IO[Unit] =
+    stateManager.updateStateValidated { _ =>
+      val base = AppState.empty(appConfig)
+      base.copy(
+        persisted = base.persisted.copy(theme = theme),
+        runtime = base.runtime.copy(
+          viewportSize = Some(initialViewportSize),
+          capabilities = capabilities
+        )
+      )
+    } >> stateManager.fileOpener.openFile(path)
+
+  def withStartupPrompts(state: AppState, unreadable: Option[UnreadableSession], notice: Option[String]): AppState =
+    val prompts =
+      notice.map(ConfirmPrompt.startupNotice).toList ++
+        unreadable.map(session => ConfirmPrompt.sessionNotRestored(session.describe, session.recoveredTexts))
+    prompts.foldLeft(state)((current, prompt) => ModalStateReducer.show(Modal.Confirm(prompt), current).state)

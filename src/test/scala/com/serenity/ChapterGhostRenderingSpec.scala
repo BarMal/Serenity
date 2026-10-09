@@ -7,7 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -60,8 +60,8 @@ class ChapterGhostRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      monoFont,
-      propFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
       RenderCaches.create()

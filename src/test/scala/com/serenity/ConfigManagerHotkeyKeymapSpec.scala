@@ -2,7 +2,6 @@ package com.serenity
 
 import java.nio.file.Files
 
-import com.serenity.animation.sprite.{CompanionSpriteConfig, SpriteFrameCycle}
 import com.serenity.config.*
 import com.serenity.keystroke.events.EditorEvent
 import com.serenity.keystroke.{InputKey, Modifier}
@@ -12,27 +11,6 @@ import org.scalatest.matchers.should.Matchers
 
 /** Hotkey overrides, keymap parsing/round-tripping, and the focused keymap JSON codec. */
 class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with OptionValues:
-
-  "ConfigManager" should "persist companion sprite typing-reactivity controls" in {
-    val config = AppConfig.default.withCompanionSpriteConfig(
-      CompanionSpriteConfig(
-        enabled = false,
-        typingCycle = SpriteFrameCycle.Blink,
-        typingActiveTicks = 4,
-        typingFastActiveTicks = 9,
-        typingFastThresholdMs = 275
-      )
-    )
-    val configFile = Files.createTempFile("serenity-companion-sprite-config", ".conf")
-    Files.writeString(configFile, ConfigManager.configToString(config))
-
-    val reloaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString)).companionSpriteConfig
-    reloaded.enabled shouldBe false
-    reloaded.typingCycle shouldBe SpriteFrameCycle.Blink
-    reloaded.typingActiveTicks shouldBe 4
-    reloaded.typingFastActiveTicks shouldBe 9
-    reloaded.typingFastThresholdMs shouldBe 275
-  }
 
   "ConfigManager" should "load configured hotkey overrides from a config file" in {
     val configFile = Files.createTempFile("serenity-config", ".conf")

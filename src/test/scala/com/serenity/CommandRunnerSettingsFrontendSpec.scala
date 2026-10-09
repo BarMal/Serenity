@@ -20,20 +20,13 @@ class CommandRunnerSettingsFrontendSpec extends AnyFlatSpec with Matchers:
 
   private val guiOnlyRowIds = List(
     "window-chrome",
-    "background-style",
-    "post-processing",
-    "ui-shadows",
-    "blur-radius",
-    "ui-corner-radius",
     "ui-outline-thickness",
     "settings-prose-font",
     "settings-code-font",
     "settings-ui-font",
     "settings-text-scale",
     "rich-text-font-family",
-    "rich-text-font-size",
-    "panel-open-transition",
-    "panel-close-transition"
+    "rich-text-font-size"
   )
 
   private val proseMode   = "app-mode"          -> 1
@@ -64,7 +57,7 @@ class CommandRunnerSettingsFrontendSpec extends AnyFlatSpec with Matchers:
     val rowIds = allRows(treeOn(FrontendCapabilities.tui(), proseMode)).map(_.id).toSet
 
     guiOnlyRowIds.filter(rowIds.contains) shouldBe empty
-    rowIds should contain allOf ("rich-text-color", "material-preset", "interface-density", "ui-element-gap")
+    rowIds should contain allOf ("rich-text-color", "interface-density", "ui-element-gap")
   }
 
   it should "drop the Typography group in a code workspace on a TUI frontend, where none of its rows apply" in {
@@ -76,7 +69,7 @@ class CommandRunnerSettingsFrontendSpec extends AnyFlatSpec with Matchers:
 
     guiOnlyRowIds.foreach(id => rowHint(tree, id).getOrElse("") should startWith("Inert in TUI mode -- "))
     rowHint(tree, "settings-prose-font") shouldBe Some("Inert in TUI mode -- Family, size, ligatures")
-    rowHint(tree, "material-preset").getOrElse("") should not include "Inert in TUI mode"
+    rowHint(tree, "interface-density").getOrElse("") should not include "Inert in TUI mode"
     rowHint(tree, "settings-typography") shouldBe Some("Typefaces for prose, code, and interface")
   }
 

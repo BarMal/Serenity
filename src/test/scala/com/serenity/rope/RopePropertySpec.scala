@@ -1,6 +1,7 @@
 package com.serenity.rope
 
 import com.serenity.testkit.Generators
+import com.serenity.text.TextCounts
 import org.scalacheck.Gen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
@@ -68,30 +69,26 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
       left.lineCount shouldBe right.lineCount
       left.wordCount shouldBe right.wordCount
       left.nonWhitespaceCount shouldBe right.nonWhitespaceCount
-      left.startsWithWordChar shouldBe right.startsWithWordChar
-      left.endsWithWordChar shouldBe right.endsWithWordChar
+      left.characterCount shouldBe right.characterCount
       (0 until text.length).foreach(i => left.index(i) shouldBe right.index(i))
     }
   }
 
-  /** `Node.wordCount` subtracts one when a word run straddles the left/right join (`runSpansJoin`), which only fires
-    * for the specific split points that land inside a run. Comparing against `Rope.countWordRuns`/a plain
-    * non-whitespace character count on the source string -- across the varied split points `ropeOfShape` generates --
-    * exercises that boundary case for shapes no hand-written fixture would think to try.
+  /** `TextSummary.join` recounts a window around each seam, which only matters for the split points that land inside a
+    * word or a grapheme. Comparing against a full recount of the source string -- across the varied split points
+    * `ropeOfShape` generates -- exercises that seam case for shapes no hand-written fixture would think to try.
     */
-  property("wordCount agrees with Rope.countWordRuns on the source text, whatever the rope's shape") {
-    forAll(Generators.ropeWithText)((rope, text) => rope.wordCount shouldBe Rope.countWordRuns(text))
-  }
-
-  property("nonWhitespaceCount agrees with a non-whitespace character count, whatever the rope's shape") {
-    forAll(Generators.ropeWithText)((rope, text) => rope.nonWhitespaceCount shouldBe text.count(!_.isWhitespace))
-  }
-
-  property("startsWithWordChar and endsWithWordChar agree with the text's edge characters, whatever the rope's shape") {
+  property("word and character counts agree with a full recount, whatever the rope's shape") {
     forAll(Generators.ropeWithText) { (rope, text) =>
-      rope.startsWithWordChar shouldBe text.headOption.exists(!_.isWhitespace)
-      rope.endsWithWordChar shouldBe text.lastOption.exists(!_.isWhitespace)
+      val full = TextCounts.of(text)
+      rope.wordCount shouldBe full.words
+      rope.characterCount shouldBe full.characters
+      rope.nonWhitespaceCount shouldBe full.nonWhitespaceCharacters
     }
+  }
+
+  property("nonWhitespaceCount agrees with a non-whitespace character count on text without multi-unit characters") {
+    forAll(Generators.ropeWithText)((rope, text) => rope.nonWhitespaceCount shouldBe text.count(!_.isWhitespace))
   }
 
   property("rebalance preserves content and yields a balanced tree") {

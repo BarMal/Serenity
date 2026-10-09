@@ -28,6 +28,27 @@ private[command] object CommandRegistryNavigationCommands:
       label = "Delete Document Comment"
     ),
     Command.typed(
+      "resolve-document-comment",
+      "Resolve the document comment at the current cursor, hiding it until resolved comments are shown.",
+      CommandIntent.Comments(CommentsIntent.ResolveDocumentComment),
+      CommandCategory.Edit,
+      label = "Resolve Document Comment"
+    ),
+    Command.typed(
+      "reopen-document-comment",
+      "Reopen the resolved document comment at the current cursor.",
+      CommandIntent.Comments(CommentsIntent.ReopenDocumentComment),
+      CommandCategory.Edit,
+      label = "Reopen Document Comment"
+    ),
+    Command.typed(
+      "show-resolved-comments",
+      "Show or hide resolved document comments in the comment lens, highlights and comment navigation.",
+      CommandIntent.Comments(CommentsIntent.ToggleResolvedComments),
+      CommandCategory.View,
+      label = "Show Resolved Comments"
+    ),
+    Command.typed(
       "goto-line",
       "Go to a specific line number.",
       CommandIntent.Navigation(NavigationIntent.OpenGotoLine),
@@ -164,5 +185,26 @@ private[command] object CommandRegistryNavigationCommands:
       CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.AddWordAtCursorToDictionary)),
       CommandCategory.Edit,
       label = "Add Word to Dictionary"
+    ),
+    Command.typed(
+      "show-spelling-suggestions",
+      "Suggest corrections for the misspelled word at the cursor.",
+      CommandIntent.Spelling(SpellingIntent.ShowSuggestions),
+      CommandCategory.Edit,
+      label = "Show Spelling Suggestions"
+    ),
+    Command.typed(
+      "ignore-misspelled-word-once",
+      "Leave the misspelled word at the cursor alone here, for this session.",
+      CommandIntent.Spelling(SpellingIntent.IgnoreOnceAtCursor),
+      CommandCategory.Edit,
+      label = "Ignore Misspelling Once"
+    ),
+    Command.typed(
+      "ignore-misspelled-word",
+      "Leave the misspelled word at the cursor alone everywhere, for this session.",
+      CommandIntent.Spelling(SpellingIntent.IgnoreEverywhereAtCursor),
+      CommandCategory.Edit,
+      label = "Ignore Misspelling Everywhere"
     )
   )

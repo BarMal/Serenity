@@ -5,6 +5,7 @@ import cats.effect.{Deferred, Fiber, IO, Ref, Resource}
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
+import com.serenity.testkit.RopeText
 import fs2.Stream
 import io.circe.Json
 import io.circe.syntax.*
@@ -53,7 +54,10 @@ private[lsp] trait LspManagerSpecFixture extends Matchers:
     * error, or cancellation) rather than only the happy path `manager.stop` covered; cancelling a fiber that already
     * finished via `manager.stop` is a no-op, so this changes nothing on that path.
     */
-  protected def harness(serverAvailable: Boolean = true): Resource[IO, Harness] =
+  protected def harness(
+    serverAvailable: Boolean = true,
+    notices: LspNotices = LspNotices.ignoring
+  ): Resource[IO, Harness] =
     for
       effects      <- Resource.eval(Queue.unbounded[IO, Option[LspEffect]])
       events       <- Resource.eval(Ref.of[IO, List[Event]](Nil))
@@ -77,7 +81,8 @@ private[lsp] trait LspManagerSpecFixture extends Matchers:
             Stream.fromQueueNoneTerminated(effects),
             event => events.update(_ :+ event) >> eventApplied.complete(()).void,
             logger,
-            provider
+            provider,
+            notices = notices
           )
           .start
       )(_.cancel)
@@ -104,7 +109,7 @@ private[lsp] trait LspManagerSpecFixture extends Matchers:
     Json.obj("jsonrpc" -> "2.0".asJson, "id" -> id.asJson, "result" -> result)
 
   protected def open(manager: Harness): IO[Unit] =
-    manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo"))) >>
+    manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo")))) >>
       takeMessage(manager.connection).flatMap { message =>
         IO(message.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didOpen"))
       }

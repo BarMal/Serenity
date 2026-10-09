@@ -72,49 +72,6 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe 1
   }
 
-  it should "not recompute when only the decorative companion sprite ticked" in {
-    val stateA = AppState.initial
-    val stateB =
-      stateA.copy(runtime = stateA.runtime.copy(companionSprite = stateA.runtime.companionSprite.copy(frameIndex = 2)))
-    val program = for
-      sync      <- AccessibilitySync.empty
-      callCount <- IO.ref(0)
-      compute = (state: AppState) =>
-        (previous: Option[AccessibilitySnapshot]) =>
-          callCount.update(_ + 1).as(AccessibilitySnapshot.from(state, viewport, previous))
-      first  <- sync.sync(stateA)(compute(stateA))
-      second <- sync.sync(stateB)(compute(stateB))
-      calls  <- callCount.get
-    yield (first, second, calls)
-
-    val (first, second, calls) = program.unsafeRunSync()
-    (second eq first) shouldBe true
-    calls shouldBe 1
-  }
-
-  it should "not recompute when only a theme transition or surface animation ticked" in {
-    val stateA = AppState.initial
-    val stateB = stateA.copy(
-      runtime = stateA.runtime.copy(
-        themeDiscovery = stateA.runtime.themeDiscovery
-          .copy(transition = Some(ThemeTransition(stateA.persisted.theme, currentStep = 1, totalSteps = 5))),
-        motion = stateA.runtime.motion.copy(surfaceAnimations = Map(SurfaceId("runner") -> SurfaceAnimationState()))
-      )
-    )
-    val program = for
-      sync      <- AccessibilitySync.empty
-      callCount <- IO.ref(0)
-      compute = (state: AppState) =>
-        (previous: Option[AccessibilitySnapshot]) =>
-          callCount.update(_ + 1).as(AccessibilitySnapshot.from(state, viewport, previous))
-      _     <- sync.sync(stateA)(compute(stateA))
-      _     <- sync.sync(stateB)(compute(stateB))
-      calls <- callCount.get
-    yield calls
-
-    program.unsafeRunSync() shouldBe 1
-  }
-
   // Judgement call (issue #1001 migration): this test used to build `stateB` by copying `stateA`'s buffer with an
   // `animations` field set, to prove AccessibilitySync's normalized-state cache treats a decorative character-reveal
   // animation as irrelevant. `Buffer.animations` no longer exists -- character animation state now lives entirely in
@@ -174,13 +131,12 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe 1
   }
 
-  it should "still recompute a real change even while the companion sprite is also ticking" in {
+  it should "still recompute a real change even while typing activity also changed" in {
     val stateA = AppState.initial
     val stateB = AppState.initial
       .copy(
         persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("changed"))),
-        runtime =
-          AppState.initial.runtime.copy(companionSprite = AppState.initial.runtime.companionSprite.copy(frameIndex = 2))
+        runtime = AppState.initial.runtime.copy(typingActivity = TypingActivity(quietUntilNanos = Some(5L)))
       )
     val program = for
       sync      <- AccessibilitySync.empty
@@ -194,4 +150,49 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     yield calls
 
     program.unsafeRunSync() shouldBe 2
+  }
+
+  it should "not recompute when only a viewport's pending placement changed" in {
+    val bufferId = BufferId(1)
+    val stateA = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "hello")))
+    )
+    val buffer    = stateA.persisted.buffers(bufferId)
+    val following = buffer.viewport.copy(placement = ViewportPlacement.FollowCaret)
+    val stateB =
+      stateA.copy(persisted = stateA.persisted.copy(buffers = Map(bufferId -> buffer.copy(viewport = following))))
+    val program = for
+      sync      <- AccessibilitySync.empty
+      callCount <- IO.ref(0)
+      compute = (state: AppState) =>
+        (previous: Option[AccessibilitySnapshot]) =>
+          callCount.update(_ + 1).as(AccessibilitySnapshot.from(state, viewport, previous))
+      _     <- sync.sync(stateA)(compute(stateA))
+      _     <- sync.sync(stateB)(compute(stateB))
+      calls <- callCount.get
+    yield calls
+
+    program.unsafeRunSync() shouldBe 1
+  }
+
+  it should "not recompute when only typing activity changed" in {
+    val bufferId = BufferId(1)
+    val stateA = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "hello")))
+    )
+    val stateB = stateA.copy(
+      runtime = stateA.runtime.copy(typingActivity = stateA.runtime.typingActivity.observed(0L))
+    )
+    val program = for
+      sync      <- AccessibilitySync.empty
+      callCount <- IO.ref(0)
+      compute = (state: AppState) =>
+        (previous: Option[AccessibilitySnapshot]) =>
+          callCount.update(_ + 1).as(AccessibilitySnapshot.from(state, viewport, previous))
+      _     <- sync.sync(stateA)(compute(stateA))
+      _     <- sync.sync(stateB)(compute(stateB))
+      calls <- callCount.get
+    yield calls
+
+    program.unsafeRunSync() shouldBe 1
   }

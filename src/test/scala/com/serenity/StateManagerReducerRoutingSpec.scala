@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
@@ -13,7 +14,9 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalStateReducer, PeekStateReducer}
 import com.serenity.testkit.AwaitCondition.awaitValue
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
+import com.serenity.ui.widget.TextField
 import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -29,9 +32,15 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-  private def createStateManager(): StateManager =
+  private def createStateManager(config: AppConfig = AppConfig.default): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerReducerRoutingSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager
+      .apply(logger, initialConfig = config, dictionaryCache = SharedDictionary.cacheFor(config))
+      .unsafeRunSync()
+
+  // The edits below start a background spell-check analysis whose result commits a diagnostics entry whenever it lands,
+  // which would change the state this spec compares against. Analysis is not what the modal gate is about.
+  private val noBackgroundAnalysis: AppConfig = AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = false))
 
   "StateManager.applyEvent" should "toggle the command runner through the application event path" in {
     val stateManager = createStateManager()
@@ -68,7 +77,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
     val tempFile = Files.createTempFile("state-manager-modal-gate", ".scala")
 
     try
-      val stateManager = createStateManager()
+      val stateManager = createStateManager(noBackgroundAnalysis)
       val bufferId     = stateManager.createBuffer("unsaved", None).unsafeRunSync()
 
       stateManager
@@ -208,7 +217,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
     val peekState   = stateManager.getCurrentState.unsafeRunSync()
     val peekSurface = peekState.runtime.uiSurfaces.find(_.content == SurfaceContent.QuickInfo("hint"))
     peekSurface shouldBe defined
-    peekState.persisted.focus shouldBe Focus.Surface(peekSurface.get.id)
+    peekState.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
 
     stateManager.applyEvent(PeekInputEvent.Dismiss).unsafeRunSync()
     val finalState = stateManager.getCurrentState.unsafeRunSync()
@@ -287,7 +296,9 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
     IO.sleep(150.millis).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("need", Nil, 0)))
+    updatedState.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("need"), Vector.empty, 0))
+    )
     updatedState.persisted.buffers(bufferId).findState shouldBe None
   }
 

@@ -38,7 +38,7 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
 
     runner.settingsSurfaceItems.collect {
       case group: CommandSurfaceItem.GroupItem => group.label
-    } should contain allOf ("Workspace", "Editor", "Typography", "Look", "Motion", "Language Tools", "Keys")
+    } should contain allOf ("Workspace", "Editor", "Typography", "Look", "Language Tools", "Keys")
 
     val searched = runner.updateSettingsSearch("default document")
     val result = searched.settingsSurfaceItems
@@ -117,14 +117,14 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
     val root =
       CommandRunner.empty.activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true)).openSettings
     val option = root.withDrilledSettingsSurface(
-      SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance"))
+      SettingsSurfaceState(SettingsPage.Group("settings-interface-layout"))
     )
     val input = option.withDrilledSettingsSurface(
       SettingsSurfaceState(SettingsPage.Group("settings-look-advanced", selectedIndex = 0))
     )
     val editing = input.withDrilledSettingsSurface(
       SettingsSurfaceState(
-        SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "blur-radius", draftText = "1")
+        SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "ui-element-gap", draftText = "1")
       )
     )
 

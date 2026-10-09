@@ -12,6 +12,7 @@ import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.manager.{StateManager, StateUpdater}
 import com.serenity.state.models.{AppState, BufferId}
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -105,12 +106,10 @@ class AppRuntimeCallbackBridgeSpec extends AnyFlatSpec with Matchers:
       closedDispatcher <- Dispatcher.parallel[IO].use(IO.pure)
       windowFocused    <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
       cursorVisible    <- Ref.of[IO, Boolean](true)
-      breathIndex      <- Ref.of[IO, Int](0)
       requested        <- Ref.of[IO, Boolean](false)
       callback = AppRuntime.focusCallbackBridge(
         windowFocused,
         cursorVisible,
-        breathIndex,
         requested.set(true),
         closedDispatcher
       )
@@ -152,7 +151,8 @@ class AppRuntimeCallbackBridgeSpec extends AnyFlatSpec with Matchers:
         given Logger[IO] = new RecordingLogger(logs)
         stateManager <- StateManager.apply(
           summon[Logger[IO]],
-          policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+          policy = SessionManager.SessionPolicy(saveOnAppClose = false),
+          dictionaryCache = SharedDictionary.default
         )
         bufferId = BufferId(3)
         _ <- stateManager

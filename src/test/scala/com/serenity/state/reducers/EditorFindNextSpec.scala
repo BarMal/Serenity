@@ -5,6 +5,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
 import com.serenity.ui.layout.TextLayoutSnapshot
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -67,7 +68,9 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(OpenFind, paneId, initialState).state
     val modalSurface = updatedState.modalSurface
 
-    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("", Nil, 0)))
+    modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of(""), Vector.empty, 0))
+    )
     modalSurface.map(_.presentation) shouldBe Some(
       SurfacePresentation.Floating(Some(CursorPosition(0, 1)), SurfacePlacement.BelowCursor)
     )
@@ -89,7 +92,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha\nbeta\nalpha")),
               editing = EditingState(List(CursorPosition(2, 0))),
-              findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
+              findState = Some(FindState("alpha", Vector(FindResult(0, 0), FindResult(2, 0)), 1))
             )
         )
       )
@@ -99,7 +102,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val modalSurface = updatedState.modalSurface
 
     modalSurface.map(_.content) shouldBe Some(
-      SurfaceContent.ModalWorkflow(Modal.Find("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("alpha"), Vector(FindResult(0, 0), FindResult(2, 0)), 1))
     )
     modalSurface.map(_.presentation) shouldBe Some(
       SurfacePresentation.Floating(Some(CursorPosition(2, 0)), SurfacePlacement.BelowCursor)
@@ -122,7 +125,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("match alpha\nbeta\nmatch gamma")),
               editing = EditingState(List(CursorPosition(0, 1), CursorPosition(2, 2))),
-              findState = Some(FindState("match", List(FindResult(0, 0), FindResult(2, 0)), 0)),
+              findState = Some(FindState("match", Vector(FindResult(0, 0), FindResult(2, 0)), 0)),
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(visibleLines = 2)
             )
         )
@@ -133,7 +136,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.editing.cursorPositions shouldBe List(CursorPosition(2, 0))
-    buffer.findState shouldBe Some(FindState("match", List(FindResult(0, 0), FindResult(2, 0)), 1))
+    buffer.findState shouldBe Some(FindState("match", Vector(FindResult(0, 0), FindResult(2, 0)), 1))
   }
 
   it should "advance find-next through multiple occurrences on one line by column" in {
@@ -151,7 +154,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("needle then needle")),
               editing = EditingState(List(CursorPosition(0, 0))),
-              findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(0, "needle then ".length)), 0))
+              findState = Some(FindState("needle", Vector(FindResult(0, 0), FindResult(0, "needle then ".length)), 0))
             )
         )
       )
@@ -162,7 +165,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
 
     buffer.editing.cursorPositions shouldBe List(CursorPosition(0, "needle then ".length))
     buffer.findState shouldBe Some(
-      FindState("needle", List(FindResult(0, 0), FindResult(0, "needle then ".length)), 1)
+      FindState("needle", Vector(FindResult(0, 0), FindResult(0, "needle then ".length)), 1)
     )
   }
 
@@ -181,7 +184,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("cafe\u0301!")),
               editing = EditingState(List(CursorPosition(0, 0))),
-              findState = Some(FindState("\u0301", List(FindResult(0, 4)), 0))
+              findState = Some(FindState("\u0301", Vector(FindResult(0, 4)), 0))
             )
         )
       )
@@ -211,7 +214,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope(s"a$flag!")),
               editing = EditingState(List(CursorPosition(0, 0))),
-              findState = Some(FindState(firstIndicator, List(FindResult(0, 1)), 0))
+              findState = Some(FindState(firstIndicator, Vector(FindResult(0, 1)), 0))
             )
         )
       )
@@ -240,7 +243,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(content)),
               editing = EditingState(List(CursorPosition(0, 0))),
-              findState = Some(FindState("needle", List(FindResult(0, needleColumn)), 0)),
+              findState = Some(FindState("needle", Vector(FindResult(0, needleColumn)), 0)),
               viewport = Viewport(0, 0, visibleLines = 3, visibleColumns = 12)
             )
         )
@@ -286,7 +289,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("needle\nneedle")),
               editing = EditingState(List(CursorPosition(0, 0))),
-              findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
+              findState = Some(FindState("needle", Vector(FindResult(0, 0), FindResult(1, 0)), 0))
             )
         )
       )
@@ -312,7 +315,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("needle")),
               editing = EditingState(List(CursorPosition(0, "needle".length))),
-              findState = Some(FindState("needle", List(FindResult(0, 0)), 0))
+              findState = Some(FindState("needle", Vector(FindResult(0, 0)), 0))
             )
         )
       )
@@ -323,4 +326,65 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
 
     buffer.document.content.collect() shouldBe "needl"
     buffer.findState shouldBe None
+  }
+
+  it should "never land find-next on a stored result whose text no longer equals the query" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    // Results recorded against "needle\nneedle"; the second line has since become "noodle" through an edit path that
+    // did not clear the find state, and a new "needle" line has appeared below it.
+    val initialState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = AppState.initial.persisted.buffers.updated(
+          bufferId,
+          AppState.initial.persisted
+            .buffers(bufferId)
+            .copy(
+              document = AppState.initial.persisted
+                .buffers(bufferId)
+                .document
+                .copy(content = com.serenity.rope.Rope("needle\nnoodle\nneedle")),
+              editing = EditingState(List(CursorPosition(0, 0))),
+              findState = Some(FindState("needle", Vector(FindResult(0, 0), FindResult(1, 0)), 0))
+            )
+        )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(FindNext, paneId, initialState).state
+    val buffer       = updatedState.persisted.buffers(bufferId)
+    val cursor       = buffer.editing.cursorPositions.head
+    val cursorOffset = buffer.document.content.lineColumnToOffset(cursor.line, cursor.column)
+
+    buffer.document.content.sliceString(cursorOffset, cursorOffset + "needle".length) shouldBe "needle"
+    cursor shouldBe CursorPosition(2, 0)
+    buffer.findState shouldBe Some(FindState("needle", Vector(FindResult(0, 0), FindResult(2, 0)), 1))
+  }
+
+  it should "clear find state when find-next finds no stored result still matching and none left to re-find" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = AppState.initial.persisted.buffers.updated(
+          bufferId,
+          AppState.initial.persisted
+            .buffers(bufferId)
+            .copy(
+              document = AppState.initial.persisted
+                .buffers(bufferId)
+                .document
+                .copy(content = com.serenity.rope.Rope("noodle\nnoodle")),
+              editing = EditingState(List(CursorPosition(0, 3))),
+              findState = Some(FindState("needle", Vector(FindResult(0, 0), FindResult(1, 0)), 0))
+            )
+        )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(FindNext, paneId, initialState).state
+    val buffer       = updatedState.persisted.buffers(bufferId)
+
+    buffer.findState shouldBe None
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 3))
   }

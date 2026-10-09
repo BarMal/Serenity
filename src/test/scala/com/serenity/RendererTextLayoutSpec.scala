@@ -12,7 +12,7 @@ import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -68,8 +68,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      font,
-      textFontOverride.getOrElse(font),
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(textFontOverride.getOrElse(font)),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -124,8 +124,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -190,9 +190,9 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      font,
-      font,
-      uiFont,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(uiFont),
       cellMetrics,
       uiMetrics,
       None,
@@ -337,8 +337,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewport,
-      codeFont,
-      textFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
       cellMetric,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -380,8 +380,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(100, 30),
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -420,8 +420,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       visibleSurface,
       ViewportSize(100, 30),
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -431,8 +431,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       hiddenSurface,
       ViewportSize(100, 30),
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -476,15 +476,15 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(100, 30),
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    surface.fillPixelRectCalls.count(_.color == activeColor) shouldBe 1
-    surface.fillPixelRectCalls.count(_.color == inactiveColor) shouldBe 2
+    surface.fillPixelRectCalls.count(_.color.toAwt == activeColor) shouldBe 1
+    surface.fillPixelRectCalls.count(_.color.toAwt == inactiveColor) shouldBe 2
   }
 
   it should "hide the only cursor during the hidden blink phase" in {
@@ -518,8 +518,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       blinkOff,
       ViewportSize(100, 30),
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()

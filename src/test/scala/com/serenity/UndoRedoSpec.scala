@@ -10,7 +10,7 @@ import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -157,19 +157,19 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = setupBuffer("abcd")
 
-    applyEvent(DeleteBackward)
-    applyEvent(DeleteBackward)
-    applyEvent(DeleteBackward)
-    getContent(bufferId) shouldBe "a"
+    applyEvent(NewLine)
+    applyEvent(NewLine)
+    applyEvent(NewLine)
+    getContent(bufferId) shouldBe "abcd\n\n\n"
 
     applyEvent(Undo)
-    getContent(bufferId) shouldBe "ab"
+    getContent(bufferId) shouldBe "abcd\n\n"
 
     applyEvent(Undo)
-    getContent(bufferId) shouldBe "abc"
+    getContent(bufferId) shouldBe "abcd\n"
 
     applyEvent(Undo)
-    getContent(bufferId) shouldBe "abc"
+    getContent(bufferId) shouldBe "abcd\n"
 
   behavior of "Multi-cursor undo/redo"
 
@@ -251,7 +251,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
         document = initialBuffer.document.copy(isNewEmpty = true),
         editing = EditingStateFixtures(cursors = List(CursorPosition(2, 0)), preferredColumn = Some(0)),
         viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 8, visibleColumns = 40),
-        findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
+        findState = Some(FindState("alpha", Vector(FindResult(0, 0), FindResult(2, 0)), 1))
       )
 
     updateBuffer(bufferId, beforeBuffer)
@@ -276,7 +276,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     undone.editing.cursorPositions shouldBe List(CursorPosition(2, 0))
     undone.editing.cursors.head.preferredColumn shouldBe Some(0)
     undone.viewport shouldBe beforeBuffer.viewport
-    undone.findState shouldBe Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
+    undone.findState shouldBe Some(FindState("alpha", Vector(FindResult(0, 0), FindResult(2, 0)), 1))
     undone.document.isNewEmpty shouldBe true
 
   it should "undo and redo multi-cursor cut with the full cursor set" in new UndoFixture:
@@ -297,21 +297,22 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
   behavior of "Cross-pane undo"
 
-  it should "snap focus to the pane where the edit happened when undoing" in new UndoFixture:
+  // Undo used to pop one app-wide stack, jumping back to pane one and undoing its edit from pane two; each buffer now
+  // keeps its own history (#1930).
+  it should "leave another pane's buffer and the focus alone when undoing" in new UndoFixture:
     val bufferId1 = setupBuffer("pane one")
-    val pane1     = getPaneId
 
     applyEvent(InsertChar('!'))
 
-    setupAnotherBuffer("pane two")
-    getPaneId
+    val bufferId2 = setupAnotherBuffer("pane two")
+    val pane2     = getPaneId
 
-    // Focus is on pane2; undo should snap back to pane1
     applyEvent(Undo)
 
     val state = getState
-    state.persisted.focus shouldBe Focus.EditorPane(pane1)
-    getContent(bufferId1) shouldBe "pane one"
+    state.persisted.focus shouldBe Focus.EditorPane(pane2)
+    getContent(bufferId1) shouldBe "pane one!"
+    getContent(bufferId2) shouldBe "pane two"
 
   trait UndoFixture:
 
@@ -319,7 +320,11 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
       SessionManager.SessionPolicy()
 
     val stateManager: StateManager = StateManager
-      .apply(LoggerFactory[IO].getLogger(using LoggerName("UndoRedoSpec")), policy = sessionPolicy)
+      .apply(
+        LoggerFactory[IO].getLogger(using LoggerName("UndoRedoSpec")),
+        policy = sessionPolicy,
+        dictionaryCache = SharedDictionary.default
+      )
       .unsafeRunSync()
 
     private val currentPaneId = AtomicReference[PaneId](PaneId(0))

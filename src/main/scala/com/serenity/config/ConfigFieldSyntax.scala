@@ -81,24 +81,20 @@ private[config] object ConfigFieldSyntax:
       percent >= ViewportAxisSizing.MinPercent * 100.0 && percent <= ViewportAxisSizing.MaxPercent * 100.0
     )
 
+  /** Characters per line, `off` for none. */
+  private[config] val proseMeasure: FieldCodec[Option[Int]] =
+    given io.circe.Encoder[Option[Int]] = io.circe.Encoder.encodeOption(using io.circe.Encoder.encodeInt)
+    given io.circe.Decoder[Option[Int]] =
+      io.circe.Decoder.decodeOption(using io.circe.Decoder.decodeInt.map(ProseMeasure.clamp))
+    FieldCodec.of(
+      text => if parseBoolean(text).contains(false) then Some(None) else ProseMeasure.parse(text).map(Some.apply),
+      measure => HoconValue.string(measure.fold("off")(ProseMeasure.render))
+    )
+
   private[config] def lowercased[A](values: Array[A]): FieldCodec[A] =
     enumerated(
       text => values.find(_.toString.equalsIgnoreCase(text.replace("-", ""))),
       value => value.toString.toLowerCase(Locale.ROOT)
-    )
-
-  private[config] val materialPreset: FieldCodec[MaterialPreset] =
-    enumerated(
-      text =>
-        text.toLowerCase(Locale.ROOT) match
-          case "solid" | "opaque"      => Some(MaterialPreset.Solid)
-          case "clear" | "transparent" => Some(MaterialPreset.Clear)
-          case "frosted" | "soft"      => Some(MaterialPreset.Frosted)
-          case "crystal" | "glass"     => Some(MaterialPreset.Crystal)
-          case "custom"                => Some(MaterialPreset.Custom)
-          case _                       => None
-      ,
-      _.configKey
     )
 
   private[config] def field[A](key: String, aliases: String*)(codec: FieldCodec[A])(

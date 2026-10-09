@@ -221,11 +221,10 @@ object RendererMarkdownLens:
     snapshot: TextLayoutSnapshot,
     frame: MarkdownLensFrame
   ): Unit =
-    val lines         = frame.lines
-    val previewWindow = frame.previewWindow
-    val lensBackground =
-      SurfaceMaterials.panelBackground(state.persisted.config, state.persisted.theme, context.surface)
-    val lensTheme = state.persisted.theme.copy(background = lensBackground)
+    val lines          = frame.lines
+    val previewWindow  = frame.previewWindow
+    val lensBackground = state.persisted.theme.panel.background
+    val lensTheme      = state.persisted.theme.copy(background = lensBackground)
     frame.activeSourceRanges.foreach { blockRange =>
       val absoluteBlockRange = (blockRange.start + frame.firstSourceLine) to (blockRange.end + frame.firstSourceLine)
       val blockVisualLines   = snapshot.visualLines.filter(line => absoluteBlockRange.contains(line.bufferLine))
@@ -252,7 +251,7 @@ object RendererMarkdownLens:
               context.surface.setForegroundColor(state.persisted.theme.foreground)
               context.surface.setBackgroundColor(lensBackground)
               if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
-                CharacterRenderer.renderMeasuredLineWithAnimation(
+                CharacterRenderer.renderMeasuredLine(
                   context.surface,
                   context.cellMetrics.toPixelX(rect.x).toFloat,
                   context.cellMetrics.toPixelY(screenY),
@@ -260,7 +259,6 @@ object RendererMarkdownLens:
                   snapshot.ascentPx,
                   visualLine,
                   lensTheme,
-                  context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                   syntaxHighlightingEnabled = false,
                   language = None,
                   clipRightXPx = Some(context.cellMetrics.toPixelX(rect.right).toFloat),
@@ -268,17 +266,14 @@ object RendererMarkdownLens:
                   graphemeCache = context.caches.graphemeSegmentationCache
                 )
               else
-                CharacterRenderer.renderStringWithAnimation(
+                CharacterRenderer.renderStyledString(
                   context.surface,
                   rect.x,
                   screenY,
                   visualLine.text,
                   lensTheme,
-                  context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                   syntaxHighlightingEnabled = false,
                   language = None,
-                  bufferLine = visualLine.bufferLine,
-                  bufferStartColumn = visualLine.startColumn,
                   maxColumn = Some(rect.right),
                   highlightCache = context.caches.themeHighlightCache
                 )

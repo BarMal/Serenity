@@ -1,13 +1,11 @@
 package com.serenity.state.manager
 
 import com.serenity.DockedPanelFixtures
-import com.serenity.command.CommandRegistry
 import com.serenity.config.CommentDisplayMode
-import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEventReducer, CommandRunnerPanelSelections, PanelStateReducer}
+import com.serenity.state.reducers.PanelStateReducer
 import com.serenity.state.undo.{HistoryEntry, UndoState}
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
@@ -91,12 +89,11 @@ class PanelTransitionsSpec extends AnyFlatSpec with Matchers:
   }
 
   "panelChange" should "record the pre-change panel layout as an undo entry in the same model" in {
-    val model = Model(focusedMaximisedPreview, UndoState(), Map.empty)
+    val model = Model(focusedMaximisedPreview, UndoState())
 
     val next = PanelTransitions.panelChange(
       model,
-      PanelTransitions.removePanel(PanelId.MarkdownPreview),
-      refreshSelections = false
+      PanelTransitions.removePanel(PanelId.MarkdownPreview)
     )
 
     valid(next.app)
@@ -105,32 +102,14 @@ class PanelTransitionsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "record nothing when the change is a no-op" in {
-    val model = Model(AppState.initial, UndoState(), Map.empty)
+    val model = Model(AppState.initial, UndoState())
 
     val next = PanelTransitions.panelChange(
       model,
-      PanelTransitions.removePanel(PanelId.Outline),
-      refreshSelections = false
+      PanelTransitions.removePanel(PanelId.Outline)
     )
 
     next shouldBe model
-  }
-
-  it should "refresh an open command runner's panel selections when asked" in {
-    val withRunner = AppEventReducer.reduce(ToggleCommandRunner, AppState.initial, CommandRegistry.withToggleUI).state
-    val model      = Model(withRunner, UndoState(), Map.empty)
-
-    val next = PanelTransitions.panelChange(
-      model,
-      PanelTransitions.upsertPanel(PanelId.Diagnostics, SurfaceContent.Diagnostics(Nil), PanelPosition.Left, 30),
-      refreshSelections = true
-    )
-
-    val runner = valid(next.app).runtime.uiSurfaces.collectFirst {
-      case UiSurface(_, SurfaceContent.CommandPalette(runner), _, _) => runner
-    }
-    val expected = CommandRunnerPanelSelections.fromState(next.app)
-    runner.map(r => expected.forall((id, index) => r.optionSelections.get(id).contains(index))) shouldBe Some(true)
   }
 
   "pinPlan" should "commit a docked diagnostics panel at its default size" in {

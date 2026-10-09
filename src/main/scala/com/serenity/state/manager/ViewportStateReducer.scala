@@ -3,14 +3,18 @@ package com.serenity.state.manager
 import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEventReducer, Focused, ReducerResult, SystemEventReducer}
-import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.layout.{ViewportSize, WrappedLineCache}
 
 object ViewportStateReducer:
 
-  def ensureCursorVisible(paneId: PaneId, state: AppState): ReducerResult =
+  def ensureCursorVisible(
+    paneId: PaneId,
+    state: AppState,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): ReducerResult =
     val scrolled = Focused.bufferOf(state, paneId).map { buffer =>
       val cursor   = buffer.editing.cursors.head.position
-      val viewport = CursorViewport.adjustForCursor(buffer, state, cursor)
+      val viewport = CursorViewport.adjustForCursor(buffer, state, cursor, wrapCache)
       Focused.replaceBuffer(state, buffer.copy(viewport = viewport))
     }
     ReducerResult.noEffects(scrolled.getOrElse(state))
@@ -26,7 +30,7 @@ object ViewportStateReducer:
         state,
         buffer.copy(
           editing = EditingState(List(CursorPosition(clampedLine, 0))),
-          viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
+          viewport = buffer.viewport.scrolledTo(newTopLine, buffer.viewport.leftColumn, 0)
         )
       )
     }

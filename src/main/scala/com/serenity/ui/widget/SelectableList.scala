@@ -31,7 +31,7 @@ final case class SelectableList[+A](
 
   /** The items the viewport shows, each with its index. */
   def visible(visibleRows: Int): Vector[(A, Int)] =
-    items.zipWithIndex.slice(offset, offset + math.max(1, visibleRows))
+    items.slice(offset, offset + math.max(1, visibleRows)).zip(Iterator.from(offset.max(0)))
 
   def update(input: WidgetInput, visibleRows: Int): (SelectableList[A], Option[ListOutcome[A]]) =
     input match
@@ -90,17 +90,10 @@ final case class SelectableList[+A](
     yield ListOutcome.Activated(index, item)
 
   private def scrolledToSelection(visibleRows: Int): SelectableList[A] =
-    val rows = math.max(1, visibleRows)
-    selected.fold(copy(offset = clampOffset(offset, rows))) { index =>
-      val intoView =
-        if index < offset then index
-        else if index >= offset + rows then index - rows + 1
-        else offset
-      copy(offset = clampOffset(intoView, rows))
-    }
+    copy(offset = ListScroll(offset).shownOffset(items.size, selected, visibleRows))
 
   private def clampOffset(candidate: Int, visibleRows: Int): Int =
-    candidate.min(items.size - math.max(1, visibleRows)).max(0)
+    ListScroll.clamped(candidate, items.size, visibleRows)
 
 object SelectableList:
 

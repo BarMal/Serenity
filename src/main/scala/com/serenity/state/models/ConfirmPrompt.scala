@@ -1,6 +1,24 @@
 package com.serenity.state.models
 
-import com.serenity.command.{CloseCommands, Command, ExternalChangeCommands, RichTextCommands, RichTextIntent}
+import java.nio.file.Path
+
+import com.serenity.command.{
+  AppModeCommands,
+  CloseCommands,
+  Command,
+  CommandIntent,
+  DiagnosticsCommands,
+  ExternalChangeCommands,
+  FileIntent,
+  LineEndingCommands,
+  ReopenWithEncodingCommands,
+  RichTextCommands,
+  RichTextIntent,
+  SafeModeCommands
+}
+import com.serenity.config.AppMode
+import com.serenity.diagnostics.RuntimeIdentity
+import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
 import com.serenity.ui.widget.{ButtonEmphasis, EndBehaviour, SelectableList}
 
 /** What choosing an option in a [[ConfirmPrompt]] does once the prompt closes. */
@@ -32,6 +50,86 @@ object ConfirmPrompt:
 
   def of(title: String, message: List[String], choices: Seq[ConfirmChoice], blocking: Boolean): ConfirmPrompt =
     ConfirmPrompt(title, message, SelectableList.of(choices, EndBehaviour.Wrap), blocking)
+
+  /** The last starts did not reach a first frame, so this one began in safe mode (#2021). Staying put is the safe
+    * answer, so it is what Escape does.
+    */
+  def startedInSafeMode(unfinishedStarts: Int): ConfirmPrompt =
+    of(
+      title = "Started in Safe Mode",
+      message = List(
+        s"Serenity didn't finish starting $unfinishedStarts times in a row; started in safe mode.",
+        "Safe mode uses default settings, without your session, language servers or project tasks, and changes " +
+          "nothing on disk.",
+        "Restart normally?"
+      ),
+      choices = List(
+        ConfirmChoice("Restart normally", ConfirmAction.Run(SafeModeCommands.restartNormally), ButtonEmphasis.Primary),
+        ConfirmChoice("Stay in safe mode", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** The last run ended without a clean exit (#2020). The report is what the log folder would show, ready to paste. */
+  def closedUnexpectedly(report: String): ConfirmPrompt =
+    of(
+      title = "Serenity closed unexpectedly",
+      message = List(
+        "The last session did not end cleanly. Files you had saved are untouched.",
+        "Serenity keeps unsaved edits in its session about a second after you stop typing and restores them when " +
+          "it starts normally, so the last moments before the crash may be missing.",
+        "The log folder holds what happened; copy the report to include it when asking for help."
+      ),
+      choices = List(
+        ConfirmChoice(
+          "Copy report",
+          ConfirmAction.Run(DiagnosticsCommands.copyToClipboard(report)),
+          ButtonEmphasis.Primary
+        ),
+        ConfirmChoice("Open Logs Folder", ConfirmAction.Run(DiagnosticsCommands.openLogsFolder)),
+        ConfirmChoice("Dismiss", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** Which build this is, with the ways to share it or find the logs. */
+  def about(identity: RuntimeIdentity): ConfirmPrompt =
+    of(
+      title = "About Serenity",
+      message = identity.lines,
+      choices = List(
+        ConfirmChoice(
+          "Copy details",
+          ConfirmAction.Run(DiagnosticsCommands.copyToClipboard(identity.summary)),
+          ButtonEmphasis.Primary
+        ),
+        ConfirmChoice("Open Logs Folder", ConfirmAction.Run(DiagnosticsCommands.openLogsFolder)),
+        ConfirmChoice("Dismiss", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** Switching to `target` would stop the project task that is running, as it has no home outside code mode. Staying
+    * stops nothing, so it is the first choice and what Escape does.
+    */
+  def stopProjectTaskToLeaveCode(task: RunningProjectTask, target: AppMode): ConfirmPrompt =
+    val targetName = target.configKey.capitalize
+    of(
+      title = "Project task running",
+      message = List(
+        s"A ${task.command.kind.lowerLabel} task for ${task.command.ecosystemLabel} is still running.",
+        s"$targetName mode has no project tools, so switching stops it."
+      ),
+      choices = List(
+        ConfirmChoice("Stay in Code mode", ConfirmAction.Dismiss, ButtonEmphasis.Primary),
+        ConfirmChoice(
+          s"Stop task and switch to $targetName",
+          ConfirmAction.Run(AppModeCommands.switchStoppingProjectTask(target)),
+          ButtonEmphasis.Danger
+        )
+      ),
+      blocking = true
+    )
 
   /** "Save changes before closing?" for the buffer a close is waiting on. Escape cancels the close, as Cancel does. */
   def closeUnsaved(bufferLabel: String): ConfirmPrompt =
@@ -72,6 +170,88 @@ object ConfirmPrompt:
       blocking = true
     )
 
+  /** A session brought back unsaved text that differs from its file (#1904). Keeping it is the safe answer, so it is
+    * both the first choice and what Escape does.
+    */
+  def recoverUnsaved(bufferId: BufferId, bufferLabel: String, fileChangedSince: Boolean): ConfirmPrompt =
+    of(
+      title = "Recover unsaved changes",
+      message = List(
+        bufferLabel,
+        if fileChangedSince then "The file has also changed on disk since these changes were made."
+        else "Unsaved changes from your last session are newer than the file on disk."
+      ),
+      choices = List(
+        ConfirmChoice("Keep recovered changes", ConfirmAction.Dismiss, ButtonEmphasis.Primary),
+        ConfirmChoice(
+          "Open the file from disk",
+          ConfirmAction.Run(ExternalChangeCommands.reloadFromDisk(bufferId)),
+          ButtonEmphasis.Danger
+        )
+      ),
+      blocking = true
+    )
+
+  /** A session that could not be restored (#2022). Every copy is already safe on disk, so it only informs, and offers
+    * to open the first few texts exported from it.
+    */
+  def sessionNotRestored(message: List[String], recoveredTexts: List[Path]): ConfirmPrompt =
+    val openRecovered = recoveredTexts.take(3).map { path =>
+      val name = Option(path.getFileName).fold(path.toString)(_.toString)
+      val open = CommandIntent.File(FileIntent.OpenRecentFile(path))
+      ConfirmChoice(
+        s"Open $name",
+        ConfirmAction.Run(Command.typed(s"session.open-recovered.$name", s"Open $path", open))
+      )
+    }
+    of(
+      title = "Session not restored",
+      message = message,
+      choices = ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary) :: openRecovered,
+      blocking = true
+    )
+
+  /** A startup notice with no start page to carry it, such as when Serenity was launched to open a file. */
+  def startupNotice(message: String): ConfirmPrompt =
+    of(
+      title = "Serenity",
+      message = List(message),
+      choices = List(ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary)),
+      blocking = true
+    )
+
+  /** Reopening in another encoding reads the file again, which loses unsaved edits (#1627). */
+  def reopenDiscardingEdits(bufferId: BufferId, bufferLabel: String, encoding: TextEncoding): ConfirmPrompt =
+    of(
+      title = "Discard unsaved changes?",
+      message = List(bufferLabel, s"Reopening as ${encoding.configKey} reads the file again from disk."),
+      choices = List(
+        ConfirmChoice(
+          s"Reopen as ${encoding.configKey}",
+          ConfirmAction.Run(ReopenWithEncodingCommands.reopen(bufferId, encoding, discardEdits = true)),
+          ButtonEmphasis.Danger
+        ),
+        ConfirmChoice("Cancel", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** The file's bytes don't fit the encoding picked to reopen it in (#1627). Nothing changed, so it doesn't block. */
+  def reopenFailed(bufferLabel: String, encoding: TextEncoding): ConfirmPrompt =
+    of(
+      title = "Can't reopen",
+      message = List(s"$bufferLabel isn't valid ${encoding.configKey}."),
+      choices = List(
+        ConfirmChoice(
+          "Choose another encoding",
+          ConfirmAction.Run(ReopenWithEncodingCommands.chooseEncoding),
+          ButtonEmphasis.Primary
+        ),
+        ConfirmChoice("Cancel", ConfirmAction.Dismiss)
+      ),
+      blocking = false
+    )
+
   /** A formatting command on a file whose format can't store formatting. Not blocking: nothing is lost by ignoring it.
     */
   def convertToRichText(bufferLabel: String, requested: RichTextIntent): ConfirmPrompt =
@@ -104,5 +284,35 @@ object ConfirmPrompt:
         ConfirmChoice("Save without formatting", ConfirmAction.Run(RichTextCommands.saveWithoutFormatting(bufferId))),
         ConfirmChoice("Cancel", ConfirmAction.Dismiss)
       ),
+      blocking = false
+    )
+
+  /** A file whose line endings are mixed, which saving makes uniform (#1964). Not blocking: nothing has changed yet,
+    * and the answer is also available as a command until the file is saved.
+    */
+  def mixedLineEndings(bufferId: BufferId, bufferLabel: String, counts: LineEndingCounts): ConfirmPrompt =
+    of(
+      title = "Mixed line endings",
+      message = List(
+        bufferLabel,
+        s"This file has ${counts.describe} line endings.",
+        s"Saving will write every line ending as ${counts.dominant.label}."
+      ),
+      choices = ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary) ::
+        LineEnding.values.toList
+          .filter(_ != counts.dominant)
+          .map(ending =>
+            ConfirmChoice(s"Use ${ending.label} instead", ConfirmAction.Run(LineEndingCommands.set(bufferId, ending)))
+          ),
+      blocking = false
+    )
+
+  /** A mixed file was saved without the user having chosen an ending (#1964), so the lines that changed are reported.
+    */
+  def savedMixedLineEndings(bufferLabel: String, written: LineEnding, counts: LineEndingCounts): ConfirmPrompt =
+    of(
+      title = "Line endings changed",
+      message = List(bufferLabel, s"Saved with ${written.label} line endings; the file had ${counts.describe}."),
+      choices = List(ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary)),
       blocking = false
     )

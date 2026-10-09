@@ -1,105 +1,19 @@
 package com.serenity.config
 
-import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.lsp.config.LspUserConfig
 import com.typesafe.config.ConfigUtil
 
 /** The settings that are not one key to one value.
   *
-  * An animation preset spreads over three keys; a motion family over six; the LSP, hotkey and keymap groups have as
-  * many keys as there are languages, actions and bindings. They cannot be [[ConfigField]]s, but they are still settings
-  * that have to be written, read and covered -- so they are declared here in the same shape, and the writer, the parser
-  * and the coverage tests treat a group exactly as they treat a field.
+  * The LSP, hotkey and keymap groups have as many keys as there are languages, actions and bindings. They cannot be
+  * [[ConfigField]]s, but they are still settings that have to be written, read and covered -- so they are declared here
+  * in the same shape, and the writer, the parser and the coverage tests treat a group exactly as they treat a field.
   */
 object ConfigGroups:
 
-  val motionFamilyPrefix       = "motion.family."
-  val legacyMotionFamilyPrefix = "ui.motion.family."
+  val dynamicPrefixes: List[String] = List("lsp.", "hotkey.", "keymap.")
 
-  val dynamicPrefixes: List[String] =
-    List("lsp.", "hotkey.", "keymap.", motionFamilyPrefix, legacyMotionFamilyPrefix)
-
-  def animationPresetName(animation: Option[AnimationConfig]): String =
-    animation match
-      case None                                                 => "none"
-      case Some(anim) if anim == AnimationConfig.Enabled.quick  => "quick"
-      case Some(anim) if anim == AnimationConfig.Enabled.smooth => "smooth"
-      case Some(anim) if anim == AnimationConfig.Enabled.subtle => "subtle"
-      case Some(_)                                              => "custom"
-
-  def transitionKindConfigKey(kind: TransitionKind): String =
-    kind match
-      case TransitionKind.Disabled               => "off"
-      case TransitionKind.Fade                   => "fade"
-      case TransitionKind.TypedText              => "typed"
-      case TransitionKind.DirectionalSweep       => "directional"
-      case TransitionKind.OutlineThenContent     => "outline"
-      case TransitionKind.LineAndCharacterTandem => "tandem"
-
-  /** A preset name, plus the two keys that only a custom preset needs. */
-  def animationEntries(prefix: String, animation: Option[AnimationConfig]): List[(String, HoconValue)] =
-    val preset = animationPresetName(animation)
-    val custom =
-      if preset != "custom" then Nil
-      else
-        animation.toList.flatMap { anim =>
-          List(
-            s"$prefix.duration_ms" -> HoconValue.number(anim.durationMs),
-            s"$prefix.steps"       -> HoconValue.number(anim.steps)
-          )
-        }
-    (s"$prefix.preset" -> HoconValue.string(preset)) :: custom
-
-  def characterAnimation(config: AppConfig): List[(String, HoconValue)] =
-    animationEntries("motion.character", config.editorConfig.characterAnimation)
-
-  /** The motion hierarchy, plus the legacy per-family speed scales that still override it where they are set. */
-  def motion(config: AppConfig): List[(String, HoconValue)] =
-    val surface = config.surfaceConfig
-    val settings = surface.motionConfiguration match
-      case Some(configuration) => configuration.withFallback(MotionConfig.fromLegacy(surface, configuration.baseline))
-      case None                => MotionConfig.fromLegacy(surface)
-
-    val legacySpeeds = List(
-      "editor_text"    -> surface.editorTextTransitionSpeedScale,
-      "command_runner" -> surface.commandRunnerTransitionSpeedScale,
-      "ui"             -> surface.uiTransitionSpeedScale,
-      "cursor"         -> surface.cursorTransitionSpeedScale
-    ).collect { case (name, Some(value)) => s"motion.$name.speed_scale" -> HoconValue.number(value) }
-
-    val families = MotionFamily.values.toList.flatMap { family =>
-      val family_ = settings.families(family)
-      val prefix  = s"$motionFamilyPrefix${family.configKey}"
-      val speedScale = family match
-        case MotionFamily.EditorText        => surface.editorTextTransitionSpeedScale.getOrElse(family_.speedScale)
-        case MotionFamily.CommandSurfaces   => surface.commandRunnerTransitionSpeedScale.getOrElse(family_.speedScale)
-        case MotionFamily.UiTransitions     => surface.uiTransitionSpeedScale.getOrElse(family_.speedScale)
-        case MotionFamily.Cursor            => surface.cursorTransitionSpeedScale.getOrElse(family_.speedScale)
-        case MotionFamily.PinnedPanels      => family_.speedScale
-        case MotionFamily.ColumnTransitions => family_.speedScale
-        case MotionFamily.PanelGeometry     => family_.speedScale
-        case MotionFamily.SelectionGeometry => family_.speedScale
-      val scopedTransitions =
-        if family != MotionFamily.PinnedPanels then Nil
-        else
-          List(
-            s"$prefix.open_transition" ->
-              HoconValue.string(transitionKindConfigKey(family_.transitionKindFor(TransitionScope.PanelOpen))),
-            s"$prefix.close_transition" ->
-              HoconValue.string(transitionKindConfigKey(family_.transitionKindFor(TransitionScope.PanelClose)))
-          )
-
-      List(
-        s"$prefix.enabled"    -> HoconValue.boolean(family_.enabled),
-        s"$prefix.transition" -> HoconValue.string(transitionKindConfigKey(family_.transitionKind))
-      ) ++ animationEntries(s"$prefix.animation", family_.animation) ++
-        List(s"$prefix.speed_scale" -> HoconValue.number(speedScale)) ++ scopedTransitions
-    }
-
-    List(
-      "motion.preset"        -> HoconValue.string(settings.baseline.configKey),
-      "motion.accessibility" -> HoconValue.string(settings.accessibility.configKey)
-    ) ++ legacySpeeds ++ families
+  private val commandHotkeyPrefix = "hotkey.command."
 
   def lsp(config: LspUserConfig): List[(String, HoconValue)] =
     config.servers
@@ -116,11 +30,26 @@ object ConfigGroups:
           ).flatten
       }
 
-  def hotkeys(config: AppConfig): List[(String, HoconValue)] =
-    HotkeyAction.values.toList.map { action =>
-      ConfigUtil.joinPath("hotkey", action.configKey) ->
-        HoconValue.list(config.inputConfig.hotkeyConfig.bindingsFor(action).map(_.render))
+  def hotkeys(config: AppConfig): List[(String, HoconValue)] = hotkeys(config, HotkeyOverrides.runningOs)
+
+  def hotkeys(config: AppConfig, osName: String): List[(String, HoconValue)] =
+    HotkeyOverrides.actions(config.inputConfig.hotkeyConfig, osName).map { (action, triggers) =>
+      ConfigUtil.joinPath("hotkey", action.configKey) -> HoconValue.list(triggers.map(_.render))
     }
+
+  def commandHotkeys(config: AppConfig): List[(String, HoconValue)] =
+    commandHotkeys(config, HotkeyOverrides.runningOs)
+
+  /** Registry command ids are lowercase words joined by hyphens, which HOCON takes unquoted -- so the id read back from
+    * a key is the id that was written.
+    */
+  def commandHotkeys(config: AppConfig, osName: String): List[(String, HoconValue)] =
+    HotkeyOverrides.commands(config.inputConfig.hotkeyConfig, osName).map { (commandId, triggers) =>
+      ConfigUtil.joinPath("hotkey", "command", commandId) -> HoconValue.list(triggers.map(_.render))
+    }
+
+  def commandIdOf(key: String): Option[String] =
+    Option.when(key.startsWith(commandHotkeyPrefix))(key.stripPrefix(commandHotkeyPrefix)).filter(_.nonEmpty)
 
   def keymaps(config: AppConfig): List[(String, HoconValue)] =
     val keymap = config.inputConfig.focusedKeymapConfig
@@ -147,76 +76,4 @@ object ConfigGroups:
       )
     )
 
-  /** The spellings groups own: the current one first, then the older ones that are still read.
-    *
-    * `ui.motion` was a leaf on a path whose children (`ui.motion.family`, `ui.motion.accessibility`) HOCON would
-    * resolve by dropping it, so it survived only by being written as a quoted key. It stays readable for files that
-    * have it, as does the whole `ui.motion.*` spelling the `motion.*` namespace replaced.
-    */
-  private val spellings: List[(String, Set[String])] = List(
-    "motion.character.preset" -> Set("character.animation.preset", "character.animation", "character_animation"),
-    "motion.character.duration_ms" ->
-      Set("character.animation.duration_ms", "character.animation.duration.ms", "character_animation_duration_ms"),
-    "motion.character.steps" -> Set("character.animation.steps", "character_animation_steps"),
-    "motion.preset"          -> Set("ui.motion.preset", "ui.motion", "ui_motion", "motion_preset"),
-    "motion.accessibility"   -> Set("ui.motion.accessibility"),
-    "motion.speed_scale"     -> Set("ui.motion.speed_scale", "ui_motion_speed_scale", "motion_speed_scale"),
-    "motion.editor_text.speed_scale" ->
-      Set(
-        "ui.motion.editor_text.speed_scale",
-        "ui.motion.editor.text.speed_scale",
-        "ui_motion_editor_text_speed_scale"
-      ),
-    "motion.command_runner.speed_scale" ->
-      Set(
-        "ui.motion.command_runner.speed_scale",
-        "ui.motion.command.runner.speed_scale",
-        "ui_motion_command_runner_speed_scale"
-      ),
-    "motion.ui.speed_scale" ->
-      Set(
-        "ui.motion.ui.speed_scale",
-        "ui.motion.ui_elements.speed_scale",
-        "ui.motion.ui.elements.speed_scale",
-        "ui_motion_ui_speed_scale"
-      ),
-    "motion.cursor.speed_scale" ->
-      Set(
-        "ui.motion.cursor.speed_scale",
-        "ui.motion.cursor_speed_scale",
-        "ui.motion.cursor.speed.scale",
-        "ui_motion_cursor_speed_scale"
-      ),
-    "motion.command_runner" -> Set("ui.motion.command_runner", "ui.motion.command.runner", "ui_motion_command_runner"),
-    "motion.command_runner_reveal" ->
-      Set("ui.motion.command_runner_reveal", "ui.motion.command.runner.reveal", "ui_motion_command_runner_reveal"),
-    "motion.ui"          -> Set("ui.motion.ui", "ui.motion.ui_elements", "ui.motion.ui.elements", "ui_motion_ui"),
-    "motion.editor_text" -> Set("ui.motion.editor_text", "ui.motion.editor.text", "ui_motion_editor_text"),
-    "motion.panel_open"  -> Set("ui.motion.panel_open", "ui.motion.panel.open", "ui_motion_panel_open"),
-    "motion.panel_close" -> Set("ui.motion.panel_close", "ui.motion.panel.close", "ui_motion_panel_close")
-  )
-
-  private val familyKeys: Set[String] =
-    MotionFamily.values.flatMap { family =>
-      Set(
-        "enabled",
-        "transition",
-        "animation",
-        "animation.preset",
-        "animation.duration_ms",
-        "animation.steps",
-        "speed_scale"
-      ).map(field => s"$motionFamilyPrefix${family.configKey}.$field")
-    }.toSet ++ Set(
-      s"${motionFamilyPrefix}pinned_panels.open_transition",
-      s"${motionFamilyPrefix}pinned_panels.close_transition"
-    )
-
-  /** The static keys groups own, which is what keeps them out of "unknown key" warnings. */
-  val currentKeys: Set[String] = spellings.map(_._1).toSet ++ familyKeys
-
-  val deprecatedKeys: Map[String, String] =
-    spellings.flatMap { case (current, older) => older.map(_ -> current) }.toMap
-
-  def handles(key: String): Boolean =
-    currentKeys.contains(key) || deprecatedKeys.contains(key) || dynamicPrefixes.exists(key.startsWith)
+  def handles(key: String): Boolean = dynamicPrefixes.exists(key.startsWith)

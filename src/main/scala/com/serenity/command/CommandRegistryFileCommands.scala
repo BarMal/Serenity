@@ -14,7 +14,7 @@ private[command] object CommandRegistryFileCommands:
       label = "Save As"
     )
 
-  private[command] def fileCommands: List[Command] = List(
+  private[command] def fileCommands: List[Command] = ManuscriptExportCommands.all ++ List(
     Command.typed(
       "open-settings",
       "Browse, search, inspect, and change application settings.",
@@ -30,12 +30,21 @@ private[command] object CommandRegistryFileCommands:
       label = "Save"
     ),
     saveAs,
+    ReopenWithEncodingCommands.chooseEncoding,
+    LineEndingCommands.chooseLineEnding,
     Command.typed(
       "save-config",
       "Write the current settings using the latest config format.",
       CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SaveConfig)),
       CommandCategory.Settings,
       label = "Save Config"
+    ),
+    Command.typed(
+      "reset-settings",
+      "Back up config.conf, then restore every setting to its default.",
+      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.ResetSettings)),
+      CommandCategory.Settings,
+      label = "Reset Settings"
     ),
     Command.typed(
       "save-session",
@@ -93,6 +102,20 @@ private[command] object CommandRegistryFileCommands:
       CommandCategory.File,
       label = "Open File"
     ),
+    Command.typed(
+      "open-folder",
+      "Open a folder and show it in the Explorer.",
+      CommandIntent.File(FileIntent.OpenFolder),
+      CommandCategory.File,
+      label = "Open Folder..."
+    ),
+    Command.typed(
+      "open-file-or-folder",
+      "Open a file or a folder in one dialog.",
+      CommandIntent.File(FileIntent.OpenFileOrFolder),
+      CommandCategory.File,
+      label = "Open..."
+    ),
     FileFinderCommands.goToFile
   )
 
@@ -111,12 +134,51 @@ private[command] object CommandRegistryFileCommands:
       CommandCategory.File,
       label = "Quit"
     ),
+    SafeModeCommands.restart,
+    SafeModeCommands.restartNormally,
+    DiagnosticsCommands.about,
+    DiagnosticsCommands.openLogsFolder,
     Command.typed(
       "new",
       "Create a new file.",
       CommandIntent.File(FileIntent.NewFile),
       CommandCategory.File,
       label = "New File"
+    ),
+    Command.typed(
+      "clear-recent-files",
+      "Forget the recently opened files, which empties the Open Recent menu.",
+      CommandIntent.File(FileIntent.ClearRecentFiles),
+      CommandCategory.File,
+      label = "Clear Recent Files"
+    ),
+    Command.typed(
+      "show-licence-and-notices",
+      "Open the Serenity licence (GPL-3.0-or-later) and the third-party notices, read-only.",
+      CommandIntent.File(FileIntent.ShowLicenceAndNotices),
+      CommandCategory.File,
+      label = "Show Licence and Notices"
+    ),
+    Command.typed(
+      "about",
+      "Open the About Serenity document: version, file locations, privacy statement, licence and notices.",
+      CommandIntent.File(FileIntent.ShowAbout),
+      CommandCategory.File,
+      label = "About Serenity"
+    ),
+    Command.typed(
+      "open-releases-page",
+      "Open the Serenity releases page in the default browser.",
+      CommandIntent.File(FileIntent.OpenReleasesPage),
+      CommandCategory.File,
+      label = "Open Releases Page"
+    ),
+    Command.typed(
+      "show-privacy-statement",
+      "Open the privacy statement: what Serenity stores locally and that it makes no network connections, read-only.",
+      CommandIntent.File(FileIntent.ShowPrivacyStatement),
+      CommandCategory.File,
+      label = "Show Privacy Statement"
     ),
     Command.typed(
       "next-tab",

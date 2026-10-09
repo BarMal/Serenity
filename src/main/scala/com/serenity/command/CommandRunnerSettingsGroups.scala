@@ -9,16 +9,15 @@ import com.serenity.ui.presets.UiPreset
 /** Builds the settings tree from schema rows and current option selections.
   *
   * The tree is cut by the task someone is doing, not by where a value happens to live in `AppConfig`: Workspace (what
-  * am I working on), Editor (what the text area shows), Typography, Look, Motion, Language Tools and Keys. Each group
-  * that has knobs nobody needs day to day keeps them in one nested "Advanced" leaf rather than spreading them across
-  * the top level.
+  * am I working on), Editor (what the text area shows), Typography, Look, Language Tools and Keys. Each group that has
+  * knobs nobody needs day to day keeps them in one nested "Advanced" leaf rather than spreading them across the top
+  * level.
   */
 object CommandRunnerSettingsGroups:
 
   /** Rows with no visible effect on the running frontend (`capabilities`) are hidden, the same way the app mode hides
     * the other mode's rows; Show All Settings brings both back. Which rows are [[FrontendSupport.GuiOnly]] follows epic
-    * #1103's accepted cell-space degradations: fonts, text scale, and pixel effects (blur, alpha, shadows, rounded
-    * corners, outlines, post-processing, window chrome).
+    * #1103's accepted cell-space degradations: fonts, text scale, and pixel effects (outlines, window chrome).
     */
   def build(
     optionSelections: Map[String, Int],
@@ -106,10 +105,21 @@ object CommandRunnerSettingsGroups:
         CommandRunnerSettingsItems.dropCapsEnabledOptionItem(optionSelections)
       )
     )
+    val savingGroup = group(
+      "settings-saving",
+      "Saving",
+      "Write files automatically after a pause or when you leave them",
+      CommandRunnerSettingsItems.autoSaveModeOptionItem(optionSelections) :: input("auto-save-delay")
+    )
     // issue #1057: the one-shot navigation commands that used to sit here are ordinary palette commands. The one item
     // that stays is authoring a document comment's text, a real input rather than an action.
-    val commentsGroup = group("settings-navigation", "Comments", "Author a document comment", input("document-comment"))
-    val fontHint      = "Family, size, ligatures"
+    val commentsGroup = group(
+      "settings-navigation",
+      "Comments",
+      "Author or reply to a document comment",
+      input("document-comment", "reply-document-comment")
+    )
+    val fontHint = "Family, size, ligatures"
     val proseFontGroup = group(
       "settings-prose-font",
       "Prose Font",
@@ -153,16 +163,12 @@ object CommandRunnerSettingsGroups:
         .toList ++ onFrontend.rows(guiOnly, input("rich-text-font-size")) ++ input("rich-text-color")
     )
     val themeGroup = CommandRunnerSettingsItems.themeGroupItem(context.themeNames, context.currentThemeName)
-    val surfaceAppearanceGroup = group(
-      "settings-surface-appearance",
-      "Surface Appearance",
-      "Background, material, and effects",
-      List(
-        onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(optionSelections)),
-        Some(CommandRunnerSettingsAppearanceItems.materialPresetOptionItem(optionSelections)),
-        onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(optionSelections)),
-        onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(optionSelections))
-      ).flatten
+    val followSystemGroup = group(
+      "settings-follow-system",
+      "OS Appearance",
+      "Follow the OS light, dark or high-contrast setting, and the theme for each",
+      CommandRunnerSettingsItems.followSystemOptionItem(optionSelections) ::
+        input("follow-system-light", "follow-system-dark", "follow-system-high-contrast")
     )
     // issue #1046: command-runner row count/spacing (visible rows, item gap, cursor gap) is not editable here as
     // three separate knobs -- Interface Density is the one control that governs all three; the underlying config
@@ -183,60 +189,18 @@ object CommandRunnerSettingsGroups:
     val cursorGroup = group(
       "settings-cursor",
       "Cursor",
-      "Blink or breathe",
+      "Caret style",
       List(CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections))
     )
     val lookAdvancedGroup = group(
       "settings-look-advanced",
       "Advanced",
-      "Blur, spacing, corners, outlines, render cadence, decorative extras",
-      onFrontend.rows(guiOnly, input("blur-radius")) ++ input("ui-element-gap") ++
-        onFrontend.rows(guiOnly, input("ui-corner-radius", "ui-outline-thickness")) ++ List(
-          CommandRunnerSettingsMotionItems.renderFpsOptionItem(optionSelections),
-          CommandRunnerSettingsMotionItems.renderDamageGranularityOptionItem(optionSelections),
-          CommandRunnerSettingsAppearanceItems.visualFlairLevelOptionItem(optionSelections),
-          CommandRunnerSettingsAppearanceItems.companionSpriteEnabledOptionItem(optionSelections),
-          CommandRunnerSettingsAppearanceItems.companionSpriteTypingCycleOptionItem(optionSelections)
+      "Spacing, outlines, render cadence",
+      input("ui-element-gap") ++
+        onFrontend.rows(guiOnly, input("ui-outline-thickness")) ++ List(
+          CommandRunnerSettingsRenderItems.renderFpsOptionItem(optionSelections),
+          CommandRunnerSettingsRenderItems.renderDamageGranularityOptionItem(optionSelections)
         )
-    )
-    val customMotionInputIds =
-      if optionSelections.get("motion-preset").contains(4) then List("animation-duration", "animation-steps") else Nil
-    val motionAdvancedGroup = group(
-      "settings-motion-advanced",
-      "Advanced",
-      "Per-family speed, custom timing, companion sprite typing tuning",
-      input(
-        "cursor-speed-scale",
-        "element-transition-speed-scale",
-        "editor-text-speed-scale",
-        "command-runner-speed-scale",
-        "ui-speed-scale"
-      ) ++ input(customMotionInputIds*) ++ input(
-        "companion-sprite-typing-active-ticks",
-        "companion-sprite-typing-fast-active-ticks",
-        "companion-sprite-typing-fast-threshold-ms"
-      )
-    )
-    val motionGroup = group(
-      "settings-animation",
-      "Motion",
-      "Accessibility, preset, reveal style",
-      List(
-        CommandRunnerSettingsMotionItems.motionAccessibilityOptionItem(optionSelections),
-        CommandRunnerSettingsMotionItems.motionPresetOptionItem(optionSelections),
-        CommandRunnerSettingsMotionItems.editorTextTransitionOptionItem(optionSelections)
-      ) ++ onFrontend.rows(
-        guiOnly,
-        List(
-          CommandRunnerSettingsMotionItems.panelOpenTransitionOptionItem(optionSelections),
-          CommandRunnerSettingsMotionItems.panelCloseTransitionOptionItem(optionSelections)
-        )
-      ) ++ List(
-        CommandRunnerSettingsMotionItems.commandRunnerTransitionOptionItem(optionSelections),
-        CommandRunnerSettingsMotionItems.commandRunnerFadeOptionItem(optionSelections),
-        CommandRunnerSettingsMotionItems.uiAnimationOptionItem(optionSelections),
-        motionAdvancedGroup
-      )
     )
     val bufferLanguageGroup = CommandRunnerSettingsItems.bufferLanguageGroupItem(context.bufferLanguage)
     val spellCheckGroup = group(
@@ -260,9 +224,7 @@ object CommandRunnerSettingsGroups:
         id = "settings-preset-workspace-layout",
         children = CommandRunnerSettingsPanelItems.workspaceLayoutItems
       ),
-      surfaceAppearanceGroup.copy(id = "settings-preset-surface-appearance"),
-      cursorGroup.copy(id = "settings-preset-cursor"),
-      motionGroup.copy(id = "settings-preset-animation")
+      cursorGroup.copy(id = "settings-preset-cursor")
     ) ++ onFrontend.rows(
       guiOnly,
       List(
@@ -298,7 +260,7 @@ object CommandRunnerSettingsGroups:
       "settings-editor",
       "Editor",
       "Display, status line, margins, documents, comments",
-      List(textDisplayGroup, statusLineGroup, textAreaGroup, documentDefaultsGroup, commentsGroup)
+      List(textDisplayGroup, statusLineGroup, textAreaGroup, documentDefaultsGroup, savingGroup, commentsGroup)
     )
     val typographyGroup = group(
       "settings-typography",
@@ -317,8 +279,8 @@ object CommandRunnerSettingsGroups:
     val lookGroup = group(
       "settings-look",
       "Look",
-      "Theme, surfaces, density, cursor",
-      List(themeGroup, surfaceAppearanceGroup, interfaceLayoutGroup, cursorGroup, lookAdvancedGroup)
+      "Theme, density, cursor",
+      List(themeGroup, followSystemGroup, interfaceLayoutGroup, cursorGroup, lookAdvancedGroup)
     )
     val languageToolsGroup = group(
       "settings-language-tools",
@@ -328,4 +290,4 @@ object CommandRunnerSettingsGroups:
     )
     // A code workspace on a terminal has no typography row left to show.
     List(workspaceGroup, editorGroup) ++ Option.when(typographyGroup.children.nonEmpty)(typographyGroup) ++
-      List(lookGroup, motionGroup, languageToolsGroup, keysGroup)
+      List(lookGroup, languageToolsGroup, keysGroup)

@@ -9,6 +9,8 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -30,7 +32,8 @@ class CommandRunnerFindReplaceCommandsSpec extends AnyFlatSpec with Matchers:
         logger,
         sessionRootOverride = sessionRootOverride,
         configPersistencePath = configPersistencePath,
-        fileDialog = fileDialog
+        fileDialog = fileDialog,
+        dictionaryCache = SharedDictionary.default
       )
       .unsafeRunSync()
 
@@ -82,7 +85,9 @@ class CommandRunnerFindReplaceCommandsSpec extends AnyFlatSpec with Matchers:
     val modalSurface = updatedState.modalSurface
 
     updatedState.commandRunnerSurface shouldBe None
-    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("", Nil, 0)))
+    modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of(""), Vector.empty, 0))
+    )
     modalSurface.map(_.presentation) shouldBe Some(
       SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
     )
@@ -101,7 +106,7 @@ class CommandRunnerFindReplaceCommandsSpec extends AnyFlatSpec with Matchers:
             document =
               state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\nalpha")),
             editing = EditingState(List(CursorPosition(2, 0))),
-            findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
+            findState = Some(FindState("alpha", Vector(FindResult(0, 0), FindResult(2, 0)), 1))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -114,7 +119,7 @@ class CommandRunnerFindReplaceCommandsSpec extends AnyFlatSpec with Matchers:
 
     updatedState.commandRunnerSurface shouldBe None
     modalSurface.map(_.content) shouldBe Some(
-      SurfaceContent.ModalWorkflow(Modal.Find("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("alpha"), Vector(FindResult(0, 0), FindResult(2, 0)), 1))
     )
     modalSurface.map(_.presentation) shouldBe Some(
       SurfacePresentation.Floating(Some(CursorPosition(2, 0)), SurfacePlacement.BelowCursor)
@@ -131,7 +136,9 @@ class CommandRunnerFindReplaceCommandsSpec extends AnyFlatSpec with Matchers:
     val modalSurface = updatedState.modalSurface
 
     updatedState.commandRunnerSurface shouldBe None
-    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("", Nil, 0)))
+    modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of(""), Vector.empty, 0))
+    )
     updatedState.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)
   }
 

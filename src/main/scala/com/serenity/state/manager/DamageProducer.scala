@@ -1,8 +1,7 @@
 package com.serenity.state.manager
 
 import cats.syntax.all.*
-import com.serenity.animation.AnimationState
-import com.serenity.config.RenderDamageGranularity
+import com.serenity.config.{AppConfig, RenderDamageGranularity}
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.rope.{Balance, RopeDiff}
 import com.serenity.spellcheck.SpellChecker
@@ -22,10 +21,8 @@ import com.serenity.state.models.*
   * tree structure rather than comparing text, so its cost tracks how much of the document an edit actually touched
   * rather than the document's size.
   *
-  * Called from two funnel points: `AppRuntime.inputEventPhase` around each input event, and
-  * `AppRuntime.fastRenderPhase` (via `advanceAnimationsForCadence`) around each animation tick -- the latter mutates
-  * state entirely outside `inputEventPhase`, so it needs its own before/after diff to report
-  * `animationDamage`/`fullRenderDamage` at all.
+  * Called from two funnel points: `AppRuntime.inputEventPhase` around each input event, and the commit observer
+  * (`AppRuntime.wakeRenderLoopOnCommit`) for every other commit, such as the typing quiet window expiring.
   *
   * `#1000` retires `RendererFramePlanner.planFrame`'s `overlaysMayCoverPanes` stand-down in favour of
   * `fullRenderDamage`'s `uiSurfaces`/`focus` checks below, rather than reasoning about each overlay's precise pixel
@@ -37,9 +34,7 @@ object DamageProducer:
 
   def forTransition(
     before: AppState,
-    after: AppState,
-    beforeAnimations: Map[BufferId, AnimationState] = Map.empty,
-    afterAnimations: Map[BufferId, AnimationState] = Map.empty
+    after: AppState
   )(using Balance): Damage =
     val granularity = after.persisted.config.surfaceConfig.renderDamageGranularity
     val bufferDamage = after.persisted.buffers.foldLeft(Damage.Nothing: Damage) {
@@ -53,13 +48,11 @@ object DamageProducer:
               after,
               beforeBuffer,
               afterBuffer,
-              granularity,
-              beforeAnimations.getOrElse(bufferId, AnimationState.empty),
-              afterAnimations.getOrElse(bufferId, AnimationState.empty)
+              granularity
             )
     }
     bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+|
-      paneChromeDamage(before, after) |+| statusLineDamage(before, after)
+      paneChromeDamage(before, after) |+| statusLineDamage(before, after) |+| tabBarDamage(before, after)
 
   /** Everything about one buffer's own state that can dirty its visible rows without necessarily touching its rope
     * content -- cursor and selection movement, comment/diagnostic annotation changes, and a language reclassification
@@ -73,18 +66,17 @@ object DamageProducer:
     after: AppState,
     beforeBuffer: Buffer,
     afterBuffer: Buffer,
-    granularity: RenderDamageGranularity,
-    beforeAnimations: AnimationState,
-    afterAnimations: AnimationState
+    granularity: RenderDamageGranularity
   )(using Balance): Damage =
-    contentDamage(bufferId, beforeBuffer, afterBuffer, granularity) |+|
-      cursorDamage(bufferId, beforeBuffer, afterBuffer) |+|
+    val content = contentDamage(bufferId, beforeBuffer, afterBuffer, granularity)
+    content |+|
+      cursorDamage(bufferId, beforeBuffer, afterBuffer, Damage.damagedLines(bufferId, content)) |+|
       selectionDamage(bufferId, beforeBuffer, afterBuffer) |+|
+      findMatchDamage(bufferId, before, after) |+|
       commentDamage(bufferId, beforeBuffer, afterBuffer) |+|
       diagnosticDamage(bufferId, before, after, beforeBuffer, afterBuffer) |+|
       languageDamage(bufferId, beforeBuffer, afterBuffer) |+|
       viewportDamage(bufferId, beforeBuffer, afterBuffer) |+|
-      animationDamage(bufferId, beforeAnimations, afterAnimations) |+|
       focusDimmingDamage(bufferId, after, beforeBuffer, afterBuffer)
 
   private def contentDamage(
@@ -137,10 +129,19 @@ object DamageProducer:
     val (endLine, _)   = after.document.content.offsetToLineColumn(lastOffset)
     (startLine to endLine).toSet
 
-  private def cursorDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
+  /** The cell under each old and new caret, not its whole line: a caret is painted on one visual row, so a move inside
+    * a paragraph that wraps into many rows dirties only the rows the carets sit on. Carets on `editedLines` are left
+    * out: the edit already dirties those whole lines, and a cell per caret there would only be normalised away again --
+    * a cost every keystroke of a 50-cursor edit paid.
+    */
+  private def cursorDamage(bufferId: BufferId, before: Buffer, after: Buffer, editedLines: Set[Int]): Damage =
     if before.editing.cursorPositions == after.editing.cursorPositions then Damage.Nothing
     else
-      Damage.BufferRows(bufferId, (before.editing.cursorPositions ++ after.editing.cursorPositions).map(_.line).toSet)
+      val caretCells = (before.editing.cursorPositions ++ after.editing.cursorPositions).collect {
+        case cursor if !editedLines.contains(cursor.line) =>
+          Damage.BufferCells(bufferId, cursor.line, cursor.column, Some(cursor.column + 1)): Damage
+      }
+      Damage.Nothing |+| Damage.Combined(caretCells.toSet)
 
   private def selectionDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.allSelections == after.allSelections then Damage.Nothing
@@ -148,6 +149,24 @@ object DamageProducer:
 
   private def selectionLines(selections: List[Selection]): Set[Int] =
     selections.iterator.flatMap(selection => selection.start.line to selection.end.line).toSet
+
+  /** The rows whose painted find matches change: matches that appeared or went, and the old and new current match. A
+    * match that can span lines (a regex, or a literal holding a newline) has no row extent here to report precisely, so
+    * those repaint every row.
+    */
+  private def findMatchDamage(bufferId: BufferId, before: AppState, after: AppState): Damage =
+    val beforeFind = FindHighlights.paintedFindState(before, bufferId)
+    val afterFind  = FindHighlights.paintedFindState(after, bufferId)
+    if beforeFind == afterFind then Damage.Nothing
+    else
+      val found = beforeFind.toList ++ afterFind.toList
+      if found.exists(state => state.options.regex || state.query.contains('\n')) then Damage.BufferAll(bufferId)
+      else
+        val beforeResults = beforeFind.fold(Set.empty[FindResult])(_.results.toSet)
+        val afterResults  = afterFind.fold(Set.empty[FindResult])(_.results.toSet)
+        val changed       = beforeResults.diff(afterResults) ++ afterResults.diff(beforeResults)
+        val current       = found.flatMap(_.resultSet.selectedResult)
+        Damage.BufferRows(bufferId, (changed ++ current).map(_.line))
 
   private def commentDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.annotations.documentComments == after.annotations.documentComments then Damage.Nothing
@@ -186,30 +205,22 @@ object DamageProducer:
     diagnostics.iterator.flatMap(diagnostic => diagnostic.range.start.line to diagnostic.range.end.line).toSet
 
   /** A language reclassification changes every row's syntax highlighting, not just the rows an edit touched, so this
-    * reports the buffer's full line extent rather than trying to reason about which rows actually recolor.
+    * reports every row rather than trying to reason about which rows actually recolor.
     */
   private def languageDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.document.language == after.document.language then Damage.Nothing
-    else Damage.BufferRows(bufferId, (0 until after.document.content.lineCount).toSet)
+    else Damage.BufferAll(bufferId)
 
   /** Scrolling shifts which buffer line each visual row shows, so every visible row's content changes even though
     * nothing about the buffer's own data did -- this producer has no layout knowledge of which rows are actually on
-    * screen, so it reports the buffer's full line extent, the same coarse-but-safe bias [[languageDamage]] uses.
-    * `Renderer`'s retired row-by-row structural diff already redrew close to every visible row on a scroll in practice
-    * (a shifted row rarely matches what the previous frame had at the same row index), so this is not a regression from
-    * the pixels it replaces.
+    * screen, so it reports every row, the same coarse-but-safe bias [[languageDamage]] uses. `Renderer`'s retired
+    * row-by-row structural diff already redrew close to every visible row on a scroll in practice (a shifted row rarely
+    * matches what the previous frame had at the same row index), so this is not a regression from the pixels it
+    * replaces.
     */
   private def viewportDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.viewport == after.viewport then Damage.Nothing
-    else Damage.BufferRows(bufferId, (0 until after.document.content.lineCount).toSet)
-
-  /** Character-reveal (and other per-cell) animation ticks report exactly the rows whose cells changed, read off
-    * `AnimationState.animations`'s `CharacterKey`s -- a direct structural read rather than a coarsening, feeding the
-    * same `Damage`-based row-reuse bookkeeping `RendererFrameState` now keeps (replacing the retired `PaneRowKey`).
-    */
-  private def animationDamage(bufferId: BufferId, before: AnimationState, after: AnimationState): Damage =
-    if before == after then Damage.Nothing
-    else Damage.BufferRows(bufferId, changedAnimationLines(before, after))
+    else Damage.BufferAll(bufferId)
 
   /** `RendererPaneContent.focusedTextBodyLines` dims every row outside the active paragraph/markdown-block around the
     * cursor. Moving the cursor within the same block changes nothing this needs to report beyond what [[cursorDamage]]
@@ -233,15 +244,12 @@ object DamageProducer:
         FocusedTextBody.activeRange(afterBuffer, afterBuffer.editing.cursorPositions.headOption.map(_.line))
       if beforeRange == afterRange then Damage.Nothing
       else
-        val beforeLines = beforeRange.map(_.toSet).getOrElse((0 until beforeBuffer.document.content.lineCount).toSet)
-        val afterLines  = afterRange.map(_.toSet).getOrElse((0 until afterBuffer.document.content.lineCount).toSet)
-        Damage.BufferRows(bufferId, beforeLines.diff(afterLines) ++ afterLines.diff(beforeLines))
-
-  private def changedAnimationLines(before: AnimationState, after: AnimationState): Set[Int] =
-    (before.animations.keySet ++ after.animations.keySet).iterator
-      .filter(key => before.animations.get(key) != after.animations.get(key))
-      .map(_.line)
-      .toSet
+        (beforeRange, afterRange) match
+          case (Some(beforeRows), Some(afterRows)) =>
+            val (beforeLines, afterLines) = (beforeRows.toSet, afterRows.toSet)
+            Damage.BufferRows(bufferId, beforeLines.diff(afterLines) ++ afterLines.diff(beforeLines))
+          // No active range dims nothing, so moving to or from one flips every line outside the other side's range.
+          case _ => Damage.BufferAll(bufferId)
 
   /** The theme, or *any* config change, forces a full repaint. Config covers far more than the syntax-highlighting
     * toggle this used to check individually -- word wrap, fonts, margins, blur radius, and dozens of other fields this
@@ -251,15 +259,23 @@ object DamageProducer:
     * having to enumerate what every field does to a rendered frame.
     */
   private def chromeDamage(before: AppState, after: AppState): Damage =
-    if before.persisted.theme != after.persisted.theme || before.persisted.config != after.persisted.config then
-      Damage.Everything
+    if before.persisted.theme != after.persisted.theme ||
+        !(before.persisted.config == after.persisted.config || statusRowOnly(
+          before.persisted.config,
+          after.persisted.config
+        ))
+    then Damage.Everything
     else Damage.Nothing
 
-  /** Transitions that touch every visible glyph rather than any one buffer's rows, matching what
-    * `AppRuntime.needsFullContentRender` already treats as requiring a full canvas repaint: a theme transition
-    * cross-fades every glyph and background colour in flight, and a surface animation composites through the same
-    * full-render path as any other overlay (see that function's doc comment for why the window sitter alone is exempt
-    * -- it never touches the canvas at all, so it contributes no damage here).
+  /** Which segments the pinned status row shows, and the word goal one of them reports against, change nothing but that
+    * row's text, which [[gutterDamage]] already compares. Anything else about the status line -- placement, colors, or
+    * the row stopping being pinned, which moves the layout -- is not this.
+    */
+  private def statusRowOnly(before: AppConfig, after: AppConfig): Boolean =
+    before.statusLine.isPinned && after.statusLine.isPinned &&
+      after.withStatusLineSegments(before.statusLine.segments).withWordGoal(before.documentConfig.wordGoal) == before
+
+  /** Transitions that touch every visible glyph rather than any one buffer's rows.
     *
     * `uiSurfaces` changing covers a floating, pinned, modal or expanded surface appearing, moving, resizing or changing
     * content -- `Renderer`'s retired `overlaysMayCoverPanes` stand-down disabled row reuse outright whenever any such
@@ -277,17 +293,11 @@ object DamageProducer:
     * some `SurfaceId`, whose presentation is the same kind (`Modal`/`Docked`/`Floating`) on both sides, and nothing
     * else about `uiSurfaces`, reports `Damage.Surface` scoped to that surface instead of `Everything` (#1100 stage 2
     * for the modal only; stage 3 extends it to docked/floating panels). This is safe for every presentation kind
-    * because `Renderer`'s per-surface layer buffer (`LayerBufferSupport.newLayerSurface` for the modal,
-    * `newSeededLayerSurface` for panels that read pixels back via `blurRegion`) always paints into an isolated buffer
-    * seeded correctly for that kind, never the live frame surface directly -- see
-    * `RendererFramePlanner.paintPanelLayer`'s doc comment for why a panel that samples the pixels behind it
-    * additionally requires the *whole* frame to be undamaged (not just its own surface) before it may reuse a cached
-    * buffer, on top of the `Damage.Surface` narrowing this producer reports here.
+    * because `Renderer`'s per-surface layer buffer (`LayerBufferSupport.newLayerSurface`) always paints into an
+    * isolated buffer, never the live frame surface directly, and no layer reads back the pixels behind it.
     */
   private def fullRenderDamage(before: AppState, after: AppState): Damage =
-    if before.runtime.themeDiscovery.transition != after.runtime.themeDiscovery.transition ||
-        before.runtime.motion != after.runtime.motion ||
-        before.runtime.chapterGhostsVisible != after.runtime.chapterGhostsVisible ||
+    if before.runtime.chapterGhostsVisible != after.runtime.chapterGhostsVisible ||
         before.persisted.focus != after.persisted.focus
     then Damage.Everything
     else
@@ -340,6 +350,17 @@ object DamageProducer:
   private def statusLineDamage(before: AppState, after: AppState): Damage =
     if before.floatingStatusLineSurface == after.floatingStatusLineSurface then Damage.Nothing
     else Damage.Surface(UiSurface.StatusLineSurfaceId)
+
+  /** The tab strip is derived too (`AppState.tabBarSurface`), and shows each buffer's title and dirty glyph -- the same
+    * facts a pane header shows, so it changes on the keystroke that raises [[Damage.PaneChrome]], which no longer
+    * repaints the whole canvas by itself. Only a strip shown on both sides is compared: one appearing or going away is
+    * left to whatever reported it before.
+    */
+  private def tabBarDamage(before: AppState, after: AppState): Damage =
+    (before.tabBarSurface, after.tabBarSurface) match
+      case (Some(beforeStrip), Some(afterStrip)) if beforeStrip != afterStrip =>
+        Damage.Surface(UiSurface.TabBarSurfaceId)
+      case _ => Damage.Nothing
 
   /** Whether `before`/`after` present the same *kind* of [[SurfacePresentation]] (ignoring the fields a non-marker kind
     * carries, e.g. a `Floating` surface's anchor/placement) -- the presentation-stability half of
@@ -403,19 +424,14 @@ object DamageProducer:
       )
     }
 
-  /** The legacy gutter (`RendererGutter.legacyGutterContent`) shows the active pane's cursor position, language and
-    * filename, and line numbers follow the active pane's own visible lines -- so any of those changing on the active
-    * buffer dirties the gutter/line-number chrome, on top of whatever row damage that buffer's own content reports.
+  /** The pinned status row (`RendererGutter.renderGutter`) shows `statusLineText`, so that text changing is exactly
+    * when it needs repainting -- a caret move with no position segment configured, or a scroll, leaves it alone. Line
+    * numbers are not part of it: they repaint with their own rows, which the active buffer's row damage already names.
     */
   private def gutterDamage(before: AppState, after: AppState): Damage =
-    if activeGutterInputs(before) == activeGutterInputs(after) then Damage.Nothing else Damage.Chrome
+    if statusRowInputs(before) == statusRowInputs(after) then Damage.Nothing else Damage.Chrome
 
-  private def activeGutterInputs(state: AppState) =
-    for
-      paneId   <- state.persisted.layout.activeEditorPaneId
-      pane     <- state.persisted.layout.editorPanes.get(paneId)
-      bufferId <- pane.bufferId
-      buffer   <- state.persisted.buffers.get(bufferId)
-    yield (buffer.editing.cursorPositions, buffer.document.language, buffer.document.filePath, buffer.viewport)
+  private def statusRowInputs(state: AppState): Option[(Option[String], Boolean)] =
+    Option.when(state.persisted.config.statusLine.isPinned)((state.statusLineText, state.activeBuffer.isDefined))
 
   private def isSameReference(a: AnyRef, b: AnyRef): Boolean = a eq b

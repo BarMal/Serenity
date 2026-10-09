@@ -11,7 +11,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -97,8 +97,8 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       cursorVisible = true,
       surface,
       ViewportSize(100, 30),
-      codeFont,
-      Font(Font.SANS_SERIF, Font.PLAIN, 12),
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(Font(Font.SANS_SERIF, Font.PLAIN, 12)),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -157,8 +157,10 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    overlay.x shouldBe paneLayout.contentRect.x
-    overlay.width shouldBe paneLayout.contentRect.width
+    paneLayout.contentRect.x shouldBe layout.editorPanelRect.x
+    paneLayout.contentRect.width shouldBe layout.editorPanelRect.width
+    overlay.width should be <= paneLayout.contentRect.width
+    overlay.x shouldBe paneLayout.contentRect.x + (paneLayout.contentRect.width - overlay.width) / 2
     surface.drawRunPxCalls.map(_.s) should contain("beta")
     surface.drawRunPxCalls.map(_.s) should contain("search: op")
   }

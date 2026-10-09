@@ -1,6 +1,5 @@
 package com.serenity.state.reducers
 
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
@@ -28,32 +27,11 @@ class ThemeStateReducerSpec extends AnyFlatSpec with Matchers:
     ThemeStateReducer.toggleTarget(withTheme(Theme.dark.copy(name = "dracula"))) shouldBe "default-light"
   }
 
-  "ThemeStateReducer.applyTheme" should "switch the theme and start a transition from the previous one" in {
-    val state  = withTheme(Theme.dark)
-    val result = ThemeStateReducer.applyTheme(Theme.light, state)
+  "ThemeStateReducer.applyTheme" should "switch the theme instantly" in {
+    val result = ThemeStateReducer.applyTheme(Theme.light, withTheme(Theme.dark))
 
     result.state.persisted.theme shouldBe Theme.light
-    result.state.runtime.themeDiscovery.transition shouldBe
-      state.persisted.config.scaledUiAnimation.map(config => ThemeTransition(Theme.dark, 0, config.steps))
     result.effects shouldBe Nil
-    valid(result) shouldBe true
-  }
-
-  it should "clear any transition when re-applying the current theme" in {
-    val state = withTheme(Theme.dark).copy(runtime =
-      AppState.initial.runtime.copy(themeDiscovery =
-        AppState.initial.runtime.themeDiscovery.copy(transition = Some(ThemeTransition(Theme.light, 1, 5)))
-      )
-    )
-
-    ThemeStateReducer.applyTheme(Theme.dark, state).state.runtime.themeDiscovery.transition shouldBe None
-  }
-
-  "ThemeStateReducer.replaceTheme" should "swap the theme without starting a transition" in {
-    val result = ThemeStateReducer.replaceTheme(Theme.light, withTheme(Theme.dark))
-
-    result.state.persisted.theme shouldBe Theme.light
-    result.state.runtime.themeDiscovery.transition shouldBe AppState.initial.runtime.themeDiscovery.transition
     valid(result) shouldBe true
   }
 

@@ -12,8 +12,8 @@ import com.typesafe.config.ConfigFactory
   * it does not name fails [[missingFromLayout]], and the writer cannot silently drop one.
   *
   * The comments and ordering are authored rather than generated because the config library's renderer would restructure
-  * this file: it nests dotted keys into blocks (`character { animation = ... }`), sorts them alphabetically, losing the
-  * grouping [[Entry.Comment]] and [[Entry.Blank]] exist to express, and quotes every key containing an underscore
+  * this file: it nests dotted keys into blocks (`editor { cursor { mode = ... } }`), sorts them alphabetically, losing
+  * the grouping [[Entry.Comment]] and [[Entry.Blank]] exist to express, and quotes every key containing an underscore
   * (`"info_bar"`). It renders authored comments perfectly well -- `setComments(true)` with `setOriginComments(false)`
   * emits them without the library's own provenance lines -- so comments are not the reason; layout is. This is a file
   * people open and edit.
@@ -24,24 +24,29 @@ object ConfigFileFormat:
     case Comment(text: String)
     case Blank
     case Field(key: String)
-    case Group(settings: AppConfig => List[(String, HoconValue)])
+    case Group(settings: (AppConfig, String) => List[(String, HoconValue)])
 
-  def render(config: AppConfig): String =
-    lines(config)
+  /** `osName` picks the platform defaults that hotkeys are compared against, so the file holds only what differs. */
+  def render(config: AppConfig, osName: String = HotkeyOverrides.runningOs): String =
+    lines(config, osName)
       .map {
         case Left(comment)       => comment
         case Right((key, value)) => s"$key = ${value.rendered}"
       }
       .mkString("", "\n", "\n")
 
+  /** Every setting [[render]] would write, in the order it writes them. */
+  def settings(config: AppConfig, osName: String = HotkeyOverrides.runningOs): List[(String, HoconValue)] =
+    lines(config, osName).collect { case Right(setting) => setting }
+
   /** The settings [[render]] would emit that reading the file back would not return, empty when there are none.
     *
-    * A key at a path that also has children (`ui.motion` alongside `ui.motion.family.…`) is not an error to the library
-    * -- the later assignment simply replaces the earlier value with an object -- so assembling the settings into a
-    * `Config` and counting what survives is what reveals it. A duplicated key shows up the same way.
+    * A key at a path that also has children (`editor.cursor` alongside `editor.cursor.mode`) is not an error to the
+    * library -- the later assignment simply replaces the earlier value with an object -- so assembling the settings
+    * into a `Config` and counting what survives is what reveals it. A duplicated key shows up the same way.
     */
-  def unwritableSettings(config: AppConfig): List[String] =
-    val settings  = lines(config).collect { case Right((key, value)) => key -> value.config }
+  def unwritableSettings(config: AppConfig, osName: String = HotkeyOverrides.runningOs): List[String] =
+    val settings  = lines(config, osName).collect { case Right((key, value)) => key -> value.config }
     val assembled = settings.foldLeft(ConfigFactory.empty()) { case (acc, (key, value)) => acc.withValue(key, value) }
     if assembled.entrySet().size == settings.size then Nil
     else
@@ -57,11 +62,11 @@ object ConfigFileFormat:
   def unknownInLayout: List[String] =
     layout.collect { case Entry.Field(key) if ConfigRegistry.find(key).isEmpty => key }
 
-  private def lines(config: AppConfig): List[Either[String, (String, HoconValue)]] =
+  private def lines(config: AppConfig, osName: String): List[Either[String, (String, HoconValue)]] =
     layout.flatMap {
       case Entry.Comment(text)   => List(Left(s"# $text"))
       case Entry.Blank           => List(Left(""))
-      case Entry.Group(settings) => settings(config).map(Right.apply)
+      case Entry.Group(settings) => settings(config, osName).map(Right.apply)
       case Entry.Field(key) => ConfigRegistry.find(key).toList.map(configField => Right(configField.setting(config)))
     }
 
@@ -69,7 +74,10 @@ object ConfigFileFormat:
   private def comment(text: String): Entry = Entry.Comment(text)
   private def blank: Entry                 = Entry.Blank
 
-  private def group(settings: AppConfig => List[(String, HoconValue)]): Entry = Entry.Group(settings)
+  private def group(settings: AppConfig => List[(String, HoconValue)]): Entry =
+    Entry.Group((config, _) => settings(config))
+
+  private def platformGroup(settings: (AppConfig, String) => List[(String, HoconValue)]): Entry = Entry.Group(settings)
 
   private val layout: List[Entry] = List(
     comment("Serenity Editor Configuration"),
@@ -81,6 +89,12 @@ object ConfigFileFormat:
     comment("Show every setting regardless of the mode filter above"),
     field("workspace.show_all_settings"),
     field("workspace.minimum_pane_width"),
+    blank,
+    comment("Saving: write a file's unsaved changes to the file itself. off, after-delay, on-focus-change (switching"),
+    comment("buffers or leaving the window) or on-window-change (leaving the window)"),
+    field("files.auto_save"),
+    comment("Milliseconds after the last edit that after-delay waits before saving (at least 100)"),
+    field("files.auto_save_delay_ms"),
     blank,
     comment("Editor: what the text area shows"),
     field("editor.syntax_highlighting"),
@@ -114,16 +128,20 @@ object ConfigFileFormat:
     field("editor.contextual_toolbar_mode"),
     comment("Lines one mouse-wheel notch scrolls"),
     field("editor.wheel_scroll_lines"),
-    comment("Cursor: blink or breathe; colour overrides leave empty to use the active theme cursor"),
+    comment("Cursor: blink; colour overrides leave empty to use the active theme cursor"),
     field("editor.cursor.mode"),
     field("editor.cursor.active_color"),
     field("editor.cursor.inactive_color"),
+    comment("Milliseconds the caret blinks without input before it holds solid; 0 blinks for as long as focused"),
+    field("editor.cursor.blink_timeout_ms"),
     comment("Markdown rendering mode: source, split-preview, inline-lens"),
     field("editor.markdown_view"),
     comment("Default mode for new buffers: plain-text, markdown, rich-text"),
     field("editor.default_document_mode"),
     comment("Word-count goal for the active document; auto means no goal is set"),
     field("document.word_goal"),
+    comment("Name new comments and replies are written under; auto uses the operating system's user name"),
+    field("document.comment_author"),
     comment("Multi-line drop caps: render a drop-cap paragraph's first character as a large, multi-line glyph"),
     field("document.drop_caps_enabled"),
     comment("Text area insets as percentages of the central workspace"),
@@ -153,28 +171,26 @@ object ConfigFileFormat:
     field("typography.prose.ligatures"),
     field("typography.code.ligatures"),
     field("typography.ui.ligatures"),
+    comment("Prose line length in characters (e.g. 66ch) while the workspace is in prose mode, or off"),
+    field("typography.prose.measure"),
     comment("How all text adapts to the display: auto, manual (uses the factor below), off"),
     field("typography.scale.mode"),
     field("typography.scale.factor"),
     blank,
-    comment("Look: interface density (compact, comfortable, spacious), material and background"),
+    comment("Export and print typography (separate from the screen): preset smf-courier; paper letter or a4;"),
+    comment("font size, line spacing (a multiple), margin and first-line indent in points, or auto for the preset's"),
+    field("export.typography.preset"),
+    field("export.typography.paper"),
+    field("export.typography.font_size"),
+    field("export.typography.line_spacing"),
+    field("export.typography.margin"),
+    field("export.typography.first_line_indent"),
+    blank,
+    comment("Look: interface density (compact, comfortable, spacious)"),
     field("ui.density"),
-    comment(
-      "UI material: solid, clear, frosted, crystal, custom"
-    ),
-    field("ui.material"),
-    comment("Post-processing: off, scanlines, glow, scanlines-glow"),
-    field("ui.post_processing"),
-    comment("Draw soft shadows behind menus and panels"),
-    field("ui.shadows"),
-    comment("Background treatment behind panes: solid, transparent, frosted, glass-like"),
-    field("ui.background_style"),
-    comment("Blur strength behind translucent surfaces (0.0-1.0)"),
-    field("ui.blur_radius"),
     comment("How strongly a misspelled-word/diagnostic highlight's severity colour shows through (0.0-1.0)"),
     field("ui.diagnostic_highlight_blend_weight"),
     field("ui.element_gap"),
-    field("ui.corner_radius"),
     field("ui.outline_thickness"),
     comment("Where Escape in a focused panel returns focus, per app mode: editor (the active pane) or previous"),
     comment("(whatever had focus before the panel)"),
@@ -199,22 +215,14 @@ object ConfigFileFormat:
     comment("Per-cache capacity for the renderer's bounded frame-state caches (issue #1433). Default 64 suits a"),
     comment("single window; raise it for a session with many concurrently open surfaces."),
     field("ui.render.cache_capacity"),
-    comment("Visual flair tier for purely decorative extras (companion sprite, background blur): full, reduced, off"),
-    field("ui.visual_flair"),
-    comment("Companion sprite: a small pixel-art character idling in a pinned pane, reacting to typing (issue #934)"),
-    field("ui.companion_sprite.enabled"),
-    field("ui.companion_sprite.character"),
-    field("ui.companion_sprite.position"),
-    field("ui.companion_sprite.size"),
-    field("ui.companion_sprite.typing_cycle"),
-    field("ui.companion_sprite.typing_active_ticks"),
-    field("ui.companion_sprite.typing_fast_active_ticks"),
-    field("ui.companion_sprite.typing_fast_threshold_ms"),
-    blank,
-    comment("Motion: preset (reduced, subtle, smooth, expressive, custom), accessibility, and per-family overrides"),
-    group(ConfigGroups.motion),
-    comment("Character animation style: none, quick, smooth, subtle, custom"),
-    group(ConfigGroups.characterAnimation),
+    comment("Cache modal/panel layers between frames instead of repainting them (each holds a full-window image)"),
+    field("ui.render.layer_cache"),
+    comment("Log a [FRAME] timing summary (input, render and paint latency) to the app log every 5 seconds"),
+    field("ui.render.frame_timing"),
+    comment("Log a [LATENCY] line per keystroke (each stage from key event to paint) and a summary every 5 seconds"),
+    field("ui.render.latency_trace"),
+    comment("After the first frame, briefly exercise typing and drawing off-screen so early keystrokes are not slow"),
+    field("startup.warm_up"),
     blank,
     comment(
       "Window chrome: auto uses themed chrome on Linux; native preserves OS snap/window animations; native-themed " +
@@ -230,6 +238,13 @@ object ConfigFileFormat:
     field("window.viewport.height_percent"),
     field("window.viewport.height_max"),
     blank,
+    comment("Theme: follow the operating system's light, dark or high-contrast setting (off by default). When on, the"),
+    comment("theme is re-checked at startup and on window focus; picking a theme by hand turns it off"),
+    field("theme.follow_system"),
+    field("theme.light"),
+    field("theme.dark"),
+    field("theme.high_contrast"),
+    blank,
     comment("LSP server overrides"),
     group(config => ConfigGroups.lsp(config.languageToolsConfig.lspUserConfig)),
     blank,
@@ -239,8 +254,12 @@ object ConfigFileFormat:
     field("spellcheck.dictionary_paths"),
     field("spellcheck.words"),
     blank,
-    comment("Hotkey overrides"),
-    group(ConfigGroups.hotkeys),
+    comment("Hotkey overrides: only the bindings you changed are listed, as hotkey.<action> = [\"ctrl+alt+k\"];"),
+    comment("anything not listed keeps its default, and [] unbinds an action"),
+    platformGroup((config, osName) => ConfigGroups.hotkeys(config, osName)),
+    blank,
+    comment("Keys for any palette command, by its id: hotkey.command.<id> = [\"ctrl+alt+k\"]; [] unbinds it"),
+    platformGroup((config, osName) => ConfigGroups.commandHotkeys(config, osName)),
     blank,
     comment("Focused keymap overrides"),
     group(ConfigGroups.keymaps)

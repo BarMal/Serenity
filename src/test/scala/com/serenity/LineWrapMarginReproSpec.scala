@@ -10,7 +10,7 @@ import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -74,8 +74,8 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      codeFont,
-      textFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()

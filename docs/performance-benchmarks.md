@@ -8,6 +8,8 @@ sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks"
 
 The cursor-only scenario opens a temporary Swing window so it can measure Serenity's real overlay publication path. Run it in a graphical session; a headless Linux environment can use `xvfb-run -a sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks"`.
 
+The `iterations` column is the number of samples actually taken (see "Run-to-run stability audit" below), and the millisecond columns carry seven decimals so a 10 ns benchmark is not rounded to a multiple of 10 ns.
+
 The harness prints CSV rows with `min_ms`, `p50_ms`, `p95_ms`, `max_ms`, `allocation_p50_bytes`, and `allocation_p95_bytes`. Allocation columns are populated for the long measured-line scenario and are sampled separately from timing so the allocation probe does not distort p50/p95. Every scenario builds its immutable document, state, search, LSP, and project-task fixtures before timing, runs the measured operation once, and asserts its observable result before warmup. Java2D frame drawing, reusable backing-buffer acquisition, cursor-overlay composition, and repaint requests remain inside their timed paths because they are part of the user-visible work being measured.
 
 Scenarios cover:
@@ -20,7 +22,40 @@ Scenarios cover:
 - large find/replace result-set presentation and complete find-query updates, including grapheme filtering, offset-to-position conversion, and selected-result application
 - LSP frame decoding and project-task detection/terminal preparation
 - Markdown preview and inline-lens rendering
+- `command_runner.*`: one keystroke and one arrow press in the command palette and the settings view, each measured as
+  the reducer step plus the renderer's read of the result, against a 720-family font catalogue
 - visible animation tick advancement
+- `laptop.*`: the editor at a real laptop's size (1500x1000 logical at 2x, word-wrapped lorem ipsum, default config):
+  full frames with and without a Frosted pinned panel, keystrokes applied through a live `StateManager`, and Swing
+  presenting into a 1500x1000 window. The window needs a screen at least that large, so run it with
+  `xvfb-run -a -s "-screen 0 1920x1200x24"` (at 2x, `-screen 0 3840x2400x24 -dpi 192` and `-Dsun.java2d.uiScale=2`).
+- `laptop.present.swing_fresh_frame_synced_1500x1000`: a full-window present of a device-size frame changed since
+  it was last shown, as every rendered frame is, timed until the X server has finished it (`Toolkit.sync`). It
+  replaced `swing_paint_window_1500x1000`, which re-presented one untouched image: Java2D caches such an image as an
+  X pixmap, so that benchmark skipped the upload a real frame pays and timed only how far the client ran ahead of
+  Xvfb -- bimodal within one run (0.02 vs 0.4 ms on CI), and a 7x p50 spread across five local runs.
+
+- `laptop.input.state_manager.typing_random_letters`: seeded-random letters (about one in six a space) typed at the
+  prose cursor, so nearly every keystroke misses the wrap cache that `continuous_typing`'s cyclic a..z and
+  `type_and_delete`'s re-typed text hit.
+- `laptop.input.state_manager.typing_long_paragraph`: the same typing into one 4000-character paragraph with no
+  newlines, to show per-keystroke cost against paragraph length.
+
+Pass name prefixes to run only some scenarios, e.g. `sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks laptop."`.
+
+## Profiling the keystroke path
+
+`com.serenity.perf.TypingProfile` (test scope, not run by CI) drives one keystroke scenario (random typing, long
+paragraph, cold paced typing, move, page) for long enough to profile with JFR and prints p50/p95/mean per event;
+`bench/jfr-aggregate.py` turns the recording into phase shares. Commands are in `bench/README.md`.
+
+## Frame timing in the running app
+
+Set `ui.render.frame_timing = true` in `~/.serenity/config.conf` and the app logs a `[FRAME]` line to
+`~/.serenity/serenity.log` every 5 seconds: frame counts and rates, then p50/p95/max per stage -- `input-queue`,
+`input-apply`, `render-wait`, `sync`, `render` (sync included), `paint-wait`, `paint`, and `input-to-paint`, the time
+from an input arriving to the end of the first paint that shows it. The `laptop.*` benchmarks measure the same stages,
+so a laptop log and a CI run can be compared stage by stage.
 
 This remains a manual comparison tool for local before/after investigation. CI additionally runs this harness on every
 push/PR and gates on it: `scripts/check_perf_regression.py` compares the run's p50 against a stored baseline and
@@ -234,3 +269,72 @@ Measured harness results (same WSL2 host, warmed run):
 | `reducer.deep_scroll.plain` | 0.006 | 0.048 |
 | `reducer.deep_scroll.rich_text` | 0.011 | 0.036 |
 | `render.diagnostics_and_comments.java2d` | 7.169 | 10.973 |
+
+## `command_runner.*` baseline (#1854): 2026-10-05
+
+Captured on a 4-core x86_64 Linux container under Xvfb, OpenJDK 21.0.11, with
+`sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks command_runner"`. "Before" is the same benchmark run on
+f79b6d17, the commit before #1970 moved the settings index and per-query results into a carried cache; "after" is
+master at dc5bfd01. Times are milliseconds.
+
+| Scenario | Before p50 | Before p95 | After p50 | After p95 |
+| --- | ---: | ---: | ---: | ---: |
+| `command_runner.palette.keystroke` | 14.349 | 15.497 | 1.420 | 1.546 |
+| `command_runner.palette.arrow_press` | 15.651 | 16.228 | 0.065 | 0.197 |
+| `command_runner.settings.keystroke` | 8.207 | 13.074 | 0.511 | 0.554 |
+| `command_runner.settings.arrow_press` | 15.375 | 21.216 | 0.0003 | 0.0003 |
+
+## Run-to-run stability audit -- 2026-10-08
+
+#2147 stabilised `rope.large_json.cursor_offset`, whose p50 sat on one of several JIT plateaus. This pass applied the same
+audit to every benchmark in `PerformanceBenchmarks`.
+
+**Method.** Ten separate JVMs per variant, run alternately at 1x (`-screen 0 1920x1200x24 -dpi 96`) and 2x
+(`-screen 0 3840x2400x24 -dpi 192 -Dsun.java2d.uiScale=2`), the configuration of the CI perf job, on a 4-core Linux
+container shared with other jobs (hence `nice -n -20` on the benchmark JVM; an un-niced first pass was dominated by
+CPU contention, with load averages up to 15). Per benchmark: max/min across the ten per-run p50s, and the number of
+modes (p50s more than 15% apart start a new mode). The "before" set is master at d1542169; "after" is this change.
+
+**What the audit found.**
+
+| Class | Benchmarks | Evidence |
+| --- | --- | --- |
+| Sampling window shorter than a stall | nearly every benchmark | The timed phase was `iterations x sample`, 22 ms for `render.full_frame.java2d` and at most 210 ms for all but two benchmarks. One GC pause or CPU steal that long moved every sample and so the median. The runs that were slow were slow all the way through, at random: 1 or 2 runs in 10 at 2.5 to 7 ms against a 2.7 ms mode. |
+| JIT plateau that outlasts the 500 ms warmup | `rope.large_json.search`, `lsp.framer.large_batch`, `richdoc.open.docx`, `command_runner.palette.keystroke`, `reducer.multi_cursor_move_down`, `damage.caret_move.repaint_region.pinned_status`, `render.cursor_only.scene_reuse.java2d_overlay`, `render.diagnostics_and_comments.java2d` | Forcing the settle phase on every benchmark collapsed their modes and moved the median down (`lsp.framer.large_batch` 1.83 to 0.62 ms), so the old p50 was a pre-C2 number. |
+| Printed resolution | the four `equals.*.same_reference`/`shared_fields_*` benchmarks | `%.5f` ms prints multiples of 10 ns; a 7 ns benchmark read as 10 or 20 ns, a 2x "spread" that was rounding. |
+| Cross-thread hand-off through `StateManager` | `laptop.input.state_manager.*` | Settling made these worse (spread 4 to 6x, and `continuous_typing` doubled as the document grew), so it is not a warmup effect. p95/p50 is 2 to 3 within one run. |
+| Steady-state bimodality below the gate's 0.05 ms floor | `reducer.backspace`, `damage.single_char_long_line.*`, `find_replace.large_result_set` | Warmup counts are already at the cap; neither a longer warmup nor settling moved them. The gate cannot fire on them. |
+
+**Changes.**
+
+- `BenchmarkRunner` samples until the samples span 400 ms (cap 1,000 samples), not just for the configured count. The
+  configured count is the minimum. `fixedSampleCount` opts out the three benchmarks that type without deleting
+  (`continuous_typing`, `typing_random_letters`, `typing_long_paragraph`): each extra sample grows their document, and
+  with the window `typing_random_letters` moved from 1.30 to 2.05 ms.
+- `BenchmarkIterationCounts.JitSettled` lists the eight benchmarks above, which run the settle phase (#2147) before
+  sampling. The others do not: settling every benchmark added 170 s to a 72 s run.
+- `printResults` prints seven decimals and reports the number of samples taken.
+
+**Measured effect** (ten runs each; 71 benchmarks):
+
+| | 1x before | 1x after | 2x before | 2x after |
+| --- | ---: | ---: | ---: | ---: |
+| benchmarks with max/min > 1.3 | 48 | 19 | 41 | 18 |
+| of those, p50 >= 0.05 ms (where the gate can fire) | 26 | 12 | 24 | 12 |
+| worst max/min | 3.24 | 1.66 | 3.93 | 1.87 |
+| suite wall-clock, mean of ten | 71.7 s | 108.2 s | 72.9 s | 107.6 s |
+
+Every remaining spread above 1.3 at or over 0.05 ms is either one slow run in ten (`page_down_up`,
+`type_and_delete`, `typing_long_paragraph`, `paint_caret`), the `StateManager` hand-off scatter (`go_to_line`,
+`typewriter_keystroke`, `typing_random_letters`, 1.4 to 1.9 with no outlier), or `markdown.preview.window_mapping`,
+whose p50 is 0.22 ms or 0.33 ms depending on what ran before it in the JVM (0.19 to 0.22 ms when run alone). The latter
+is why its median moved from 0.23 to 0.32 ms although the benchmark is unchanged: the longer sampling and settling of
+earlier benchmarks changed the JIT state it inherits. Medians of the other benchmarks that were neither settled nor
+fixed-count moved by at most 12% (all downward except `damage.scroll.*` and `damage.markdown.*`, up 5 to 7%), apart from
+the `StateManager` keystroke family (down 12 to 37%, now sampled for longer after the JIT has finished with them) and
+`window_mapping`.
+
+**CI time.** The suite takes 36 s longer per run (+18 s from the sampling window, +18 s from the settle phases). The perf job runs it four
+times (two base, two head), so +2.4 min per perf job once the base commit has this harness (+1.2 min on the PR that
+introduces it, whose base still runs the old one). The job's timeout is 30 minutes.
+

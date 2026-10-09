@@ -33,16 +33,25 @@ private[manager] object ModalMouseHitTesting:
           val submits =
             Set(ModalType.Confirm, ModalType.ListPicker).contains(clickedType) &&
               hit.actionId.nonEmpty
-          reduce(clickedType, ModalClick(hit.focusId.value, hit.actionId.map(_.value))) *>
+          val clicked: ModalInputEvent = hit.action match
+            case Some(action) => ModalActionClick(action)
+            case None         => ModalClick(hit.focusId.value, hit.actionId.map(_.value))
+          reduce(clickedType, clicked) *>
             (if submits then reduce(clickedType, ModalSubmit) else Transition.unit)
         }
       case _ =>
         Transition.unit
 
+  /** The pointer over a modal: the hand on one of its actions, the default anywhere else. */
+  def hover(move: MouseMove, state: AppState): Transition[Unit] =
+    val interactive = modalHitAt(move, state).exists((_, hit) => hit.actionId.nonEmpty || hit.action.nonEmpty)
+    val target      = if interactive then PointerHitTarget.Control else PointerHitTarget.Inert
+    MouseHitTesting.recordPointerShape(PointerShape.forTarget(target), underModal = true)
+
   private def reduce(modalType: ModalType, event: ModalInputEvent): Transition[Unit] =
     Transition.get.flatMap(current => ModalEventReducer.reduce(modalType, event, current).toTransition)
 
-  def modalHitAt(click: MouseClick, state: AppState): Option[(Modal, SurfaceHitRegion)] =
+  def modalHitAt(click: MouseInputEvent, state: AppState): Option[(Modal, SurfaceHitRegion)] =
     for
       viewportSize <- state.runtime.viewportSize
       (id, modal) <- state.topModal
@@ -83,9 +92,13 @@ private[manager] object ModalMouseHitTesting:
 final private[manager] class ModalMouseHitTesting(port: ModalMouseHitTestingPort):
 
   def handleModalMouseInput(event: MouseInputEvent, state: AppState): IO[Unit] =
-    MouseTransition.commit(port.currentState, port.applyReducerResult)(ModalMouseHitTesting.input(event, state))
+    MouseTransition.commit(port.currentState, port.applyReducerResult)(
+      event match
+        case move: MouseMove => ModalMouseHitTesting.hover(move, state)
+        case _               => ModalMouseHitTesting.input(event, state)
+    )
 
-  def modalHitAt(click: MouseClick, state: AppState): Option[(Modal, SurfaceHitRegion)] =
+  def modalHitAt(click: MouseInputEvent, state: AppState): Option[(Modal, SurfaceHitRegion)] =
     ModalMouseHitTesting.modalHitAt(click, state)
 
   def focusedFloatingModalWorkflow(state: AppState): Option[UiSurface] =

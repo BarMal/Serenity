@@ -21,10 +21,9 @@ object ModalSurfaceComposition:
     modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]] = ModalKeyAction.defaultBindings
   ): Option[ResolvedSurfaceComposition] =
     modal match
-      case Modal.Confirm(prompt)    => Some(ConfirmComposition.forPrompt(prompt, frameRect, targetRows))
-      case Modal.TextPrompt(prompt) => Some(textPromptPlan(prompt, frameRect))
-      case Modal.Find(query, results, currentIndex) =>
-        Some(findPlan(query, results, currentIndex, frameRect))
+      case Modal.Confirm(prompt)           => Some(ConfirmComposition.forPrompt(prompt, frameRect, targetRows))
+      case Modal.TextPrompt(prompt)        => Some(textPromptPlan(prompt, frameRect))
+      case find: Modal.Find                => Some(findPlan(find, frameRect, modalBindings))
       case Modal.FileWorkflow(workflow)    => Some(filePlan(workflow, frameRect, modalBindings))
       case Modal.ReplaceWorkflow(workflow) => Some(replacePlan(workflow, frameRect, targetRows))
       case Modal.ListPicker(picker)        => Some(ListPickerComposition.forPicker(picker, frameRect))
@@ -36,8 +35,7 @@ object ModalSurfaceComposition:
     val actionRows = math.max(1, targetRows)
     modal match
       case Modal.TextPrompt(_)                 => 3
-      case Modal.Find(_, Nil, _)               => 5
-      case Modal.Find(_, _, _)                 => 6
+      case find: Modal.Find                    => if find.results.isEmpty then 5 else 6
       case Modal.ListPicker(picker)            => ListPickerComposition.frameHeight(picker)
       case Modal.PanelArrangement(arrangement) => PanelArrangementComposition.frameHeight(arrangement)
       case Modal.ReplaceWorkflow(workflow) =>
@@ -75,16 +73,16 @@ object ModalSurfaceComposition:
     inputPlan(prompt.label, prompt.input, focusId, frameRect, prompt.field.caret)
 
   private def findPlan(
-    query: String,
-    results: List[FindResult],
-    currentIndex: Int,
-    frameRect: LayoutRect
+    find: Modal.Find,
+    frameRect: LayoutRect,
+    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]]
   ): ResolvedSurfaceComposition =
     val content   = SurfaceFrameLayout(frameRect).contentRect
     val bounds    = logicalRect(content.x, content.y, content.width, content.height)
-    val resultSet = FindResultSet.normalized(query, results, currentIndex)
-    val headerBox = textBox("find", rowRect(bounds, 0))
-    val queryBox  = inputBox("Find", query, SurfaceFocusId("find"), rowRect(bounds, 1))
+    val query     = find.query
+    val resultSet = FindResultSet.normalized(query.text, find.results, find.currentIndex, find.capped)
+    val headerBox = textBox(findHeader(find.options, modalBindings), rowRect(bounds, 0))
+    val queryBox  = inputBox("Find", query.text, SurfaceFocusId("find"), rowRect(bounds, 1), caret = Some(query.caret))
     val resultBoxes = resultSet.visibleResults(math.max(0, content.height - 3)).zipWithIndex.map {
       case ((result, index), offset) =>
         textBox(
@@ -92,16 +90,36 @@ object ModalSurfaceComposition:
           rowRect(bounds, offset + 2),
           selected = index == resultSet.currentIndex,
           focusId = Some(SurfaceFocusId(s"find-result-$index")),
-          actionId = Some(SurfaceActionId(s"find-result-$index"))
+          action = Some(SurfaceAction.SelectFindResult(index))
         )
     }
+    val queryError =
+      Option.when(query.text.nonEmpty)(FindPattern.compile(query.text, find.options)).flatMap(_.left.toOption)
     val footer = Option.when(resultSet.query.nonEmpty) {
-      textBox(
-        if resultSet.results.isEmpty then "0 matches" else resultSet.selectionSummary,
-        rowRect(bounds, content.height - 1)
-      )
+      queryError match
+        case Some(error) =>
+          textBox(s"Invalid regex: ${error.message}", rowRect(bounds, content.height - 1), tone = OverlayTone.Error)
+        case None =>
+          textBox(
+            if resultSet.results.isEmpty then "0 matches" else resultSet.selectionSummary,
+            rowRect(bounds, content.height - 1)
+          )
     }
     plan(bounds, headerBox :: queryBox :: resultBoxes ++ footer.toList)
+
+  /** "find" followed by each option's state and key, e.g. `find  [x] case alt+c  [ ] word alt+w  [ ] regex alt+r`. */
+  private def findHeader(options: FindOptions, modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]]): String =
+    val toggles = List(
+      ("case", FindOption.MatchCase, ModalKeyAction.ToggleMatchCase),
+      ("word", FindOption.WholeWord, ModalKeyAction.ToggleWholeWord),
+      ("regex", FindOption.Regex, ModalKeyAction.ToggleRegex)
+    ).map {
+      case (label, option, action) =>
+        val mark = if options.isOn(option) then "[x]" else "[ ]"
+        val key  = modalBindings.getOrElse(action, Nil).headOption.fold("")(trigger => s" ${trigger.render}")
+        s"$mark $label$key"
+    }
+    ("find" :: toggles).mkString("  ")
 
   private def replacePlan(
     workflow: ReplaceWorkflowState,
@@ -186,18 +204,23 @@ object ModalSurfaceComposition:
     // non-interactive header directly -- it has no focusId, so it can never turn up among `hitRegions` the way an
     // interactive control does (#1527).
     val header = headingBox(workflow.operationLabel, rowRect(bounds, 0))
-    val filename = inputBox(
-      "Filename",
-      workflow.filename,
-      SurfaceFocusId("filename"),
-      rowRect(bounds, 1, rowHeight),
-      selected = workflow.activeField == FileWorkflowField.Filename,
-      cursorAtEnd = false,
-      segments = List(
-        OverlaySegment("Filename"),
-        OverlaySegment(workflow.filename, selected = workflow.activeField == FileWorkflowField.Filename)
-      ),
-      layout = SurfacePaintLayout.Split
+    // Open Folder picks a folder, so it has no filename to type: the Path sits directly under the title.
+    val hasFilenameRow = workflow.mode != FileWorkflowMode.OpenFolder
+    val pathRowIndex   = if hasFilenameRow then 2 else 1
+    val filename = Option.when(hasFilenameRow)(
+      inputBox(
+        "Filename",
+        workflow.filename,
+        SurfaceFocusId("filename"),
+        rowRect(bounds, 1, rowHeight),
+        selected = workflow.activeField == FileWorkflowField.Filename,
+        cursorAtEnd = false,
+        segments = List(
+          OverlaySegment("Filename"),
+          OverlaySegment(workflow.filename, selected = workflow.activeField == FileWorkflowField.Filename)
+        ),
+        layout = SurfacePaintLayout.Split
+      )
     )
     val pathLabelSegment = OverlaySegment("Path ")
     val pathSegments =
@@ -219,15 +242,17 @@ object ModalSurfaceComposition:
       "Path",
       workflow.path,
       SurfaceFocusId("path"),
-      rowRect(bounds, 2, rowHeight),
+      rowRect(bounds, pathRowIndex, rowHeight),
       selected = workflow.activeField == FileWorkflowField.Path,
       cursorAtEnd = false,
       segments = visiblePathSegments(pathLabelSegment, pathSegments, bounds.width.toInt),
       layout = SurfacePaintLayout.Inline
     )
     val formatLabel = workflow.detectedFileType.displayName
+    val formatNotes =
+      Option.when(workflow.wouldLoseFormatting)("will lose rich formatting").toList ++ workflow.fidelityNote
     val formatValue =
-      if workflow.wouldLoseFormatting then s"$formatLabel (will lose rich formatting)" else formatLabel
+      if formatNotes.isEmpty then formatLabel else s"$formatLabel (${formatNotes.mkString("; ")})"
     // Open has no format to choose, so it renders no Format row at all (#1527); only Save As shows it. Dropping the
     // row (rather than a dead "Format:" label) also lets the suggestion list start one row higher on Open.
     val formatRow = workflow match
@@ -245,8 +270,8 @@ object ModalSurfaceComposition:
             layout = SurfacePaintLayout.Split
           )
         )
-      case _: OpenFileWorkflowState => Nil
-    val suggestionBaseRow = 3 + formatRow.size
+      case _: OpenFileWorkflowState | _: OpenFolderFileWorkflowState => Nil
+    val suggestionBaseRow = pathRowIndex + 1 + formatRow.size
     // Render a bounded window that follows the selection rather than a frozen top slice, so navigating past the
     // visible cap keeps the highlighted suggestion on screen (#1526). Action/focus ids stay the *global* suggestion
     // index -- `ModalFileWorkflowReducer` maps `file-suggestion-N` straight back into `workflow.suggestions(N)`.
@@ -277,7 +302,7 @@ object ModalSurfaceComposition:
       fileWorkflowKeyHints(workflow, modalBindings),
       rowRect(bounds, suggestions.size + suggestionBaseRow + 1, rowHeight)
     )
-    plan(bounds, header :: filename :: path :: (formatRow ++ suggestions ++ footer :+ keyHints))
+    plan(bounds, header :: (filename.toList ++ (path :: (formatRow ++ suggestions ++ footer :+ keyHints))))
 
   /** Builds the file workflow's own current-action hint, in the same tone as `commandRunnerShowKeyHints` elsewhere in
     * this file: sourced live from `modalBindings` (the app's actual, currently-configured `Modal` keymap group) rather
@@ -290,19 +315,22 @@ object ModalSurfaceComposition:
   ): String =
     val showCreateDirectory =
       workflow.mode == FileWorkflowMode.SaveAs && workflow.missingPathSegments.nonEmpty
-    val showOpenAsProjectRoot = workflow.mode == FileWorkflowMode.Open
+    val choosesFolder = workflow.mode == FileWorkflowMode.OpenFolder
     val navigateLabel = workflow match
       case saveAsWorkflow: SaveAsFileWorkflowState if saveAsWorkflow.activeField == FileWorkflowField.Format =>
         "Cycle format"
-      case _ =>
-        "Suggestions"
+      case _ if choosesFolder => "Folders"
+      case _                  => "Suggestions"
+    // In Open Folder, Enter and Tab only move around; the one action that picks the folder says so.
     val actions = List(
-      "Submit"       -> ModalKeyAction.Submit,
-      "Cancel"       -> ModalKeyAction.Dismiss,
-      "Switch field" -> ModalKeyAction.NextField,
-      navigateLabel  -> ModalKeyAction.NavigateDown
+      (if choosesFolder then "Browse" else "Submit")        -> ModalKeyAction.Submit,
+      "Cancel"                                              -> ModalKeyAction.Dismiss,
+      (if choosesFolder then "Descend" else "Switch field") -> ModalKeyAction.NextField,
+      navigateLabel                                         -> ModalKeyAction.NavigateDown
     ) ++ Option.when(showCreateDirectory)("Create dir" -> ModalKeyAction.CreateDirectory) ++
-      Option.when(showOpenAsProjectRoot)("Open as root" -> ModalKeyAction.OpenAsProjectRoot)
+      Option.when(workflow.canOpenAsProjectRoot)(
+        (if choosesFolder then "Open folder" else "Open as root") -> ModalKeyAction.OpenAsProjectRoot
+      )
     actions
       .flatMap {
         case (label, action) =>
@@ -316,7 +344,7 @@ object ModalSurfaceComposition:
       for
         focusId <- box.focusId
         label   <- box.semanticLabel
-      yield SurfaceHitRegion(box.rect, focusId, box.actionId, label)
+      yield SurfaceHitRegion(box.rect, focusId, box.actionId, label, box.action)
     }
     ResolvedSurfaceComposition(
       bounds = bounds,
@@ -334,7 +362,8 @@ object ModalSurfaceComposition:
     layout: SurfacePaintLayout = SurfacePaintLayout.Plain,
     focusId: Option[SurfaceFocusId] = None,
     actionId: Option[SurfaceActionId] = None,
-    tone: OverlayTone = OverlayTone.Normal
+    tone: OverlayTone = OverlayTone.Normal,
+    action: Option[SurfaceAction] = None
   ): SurfacePaintBox =
     SurfacePaintBox(
       SurfacePaintKind.Text,
@@ -346,7 +375,8 @@ object ModalSurfaceComposition:
       selected = selected,
       segments = segments,
       layout = layout,
-      tone = tone
+      tone = tone,
+      action = action
     )
 
   private def headingBox(text: String, rect: LogicalPixelRect): SurfacePaintBox =

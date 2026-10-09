@@ -1,6 +1,5 @@
 package com.serenity
 
-import java.awt.Color
 import java.nio.file.Files
 
 import scala.concurrent.duration.*
@@ -18,6 +17,8 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, BufferId, CursorPosition, Damage, EditingState}
+import com.serenity.testkit.SharedDictionary
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -53,15 +54,8 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
     override def trace(message: => String): IO[Unit]               = record("trace", message, None)
 
   "AppRuntime" should "keep fast rendering active when fresh damage arrived during finalization" in {
-    AppRuntime
-      .shouldClearFastMode(stillActive = false, pendingDamage = Damage.Nothing)
-      .shouldBe(true)
-    AppRuntime
-      .shouldClearFastMode(stillActive = true, pendingDamage = Damage.Nothing)
-      .shouldBe(false)
-    AppRuntime
-      .shouldClearFastMode(stillActive = false, pendingDamage = Damage.Everything)
-      .shouldBe(false)
+    AppRuntime.shouldClearFastMode(Damage.Nothing).shouldBe(true)
+    AppRuntime.shouldClearFastMode(Damage.Everything).shouldBe(false)
   }
 
   it should "force quit when the external close signal wins runtime coordination" in {
@@ -86,17 +80,15 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
         renderFull = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit
       ),
@@ -127,17 +119,15 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
         renderFull = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit
       ),
@@ -162,17 +152,15 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
         renderFull = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit
       ),
@@ -182,7 +170,8 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
           StateManager.apply(
             logger,
             policy = SessionManager.SessionPolicy(saveOnAppClose = true),
-            sessionRootOverride = Some(fileRoot)
+            sessionRootOverride = Some(fileRoot),
+            dictionaryCache = SharedDictionary.default
           )
         }
       ),
@@ -207,17 +196,15 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
         renderFull = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit
       ),
@@ -226,7 +213,8 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
         StateManager.apply(
           logger,
           policy = SessionManager.SessionPolicy(saveOnAppClose = true),
-          sessionRootOverride = Some(sessionRoot)
+          sessionRootOverride = Some(sessionRoot),
+          dictionaryCache = SharedDictionary.default
         )
       ),
       awaitExternalQuit = IO.never,

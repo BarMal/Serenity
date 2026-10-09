@@ -5,7 +5,7 @@ import java.awt.image.BufferedImage
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
-import com.serenity.ui.renderer.{LayerBufferSupport, RenderSurface, RendererEntryPoints}
+import com.serenity.ui.renderer.{LayerBufferSupport, RenderImage, RenderSurface, RendererEntryPoints, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -29,10 +29,11 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       ModalPlacement.Centered
     )
 
-  private def stateWith(content: String, modal: ModalDialog): AppState =
+  private def stateWith(content: String, modal: ModalDialog, layerCaching: Boolean = true): AppState =
     val buffer = Buffer.fromString(bufferId, content)
     AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
+        config = AppState.initial.persisted.config.withLayerCaching(layerCaching),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = AppState.initial.persisted.layout.copy(
@@ -210,27 +211,97 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     surface.drawImageCalls.size shouldBe firstDrawImageCalls + 1
   }
 
+  it should "reuse the cached modal layer across frames painted on different surfaces of the same window" in {
+    val window      = new Object
+    val firstFrame  = new CountingLayerBufferSurface(80, 24, Some(window))
+    val secondFrame = new CountingLayerBufferSurface(80, 24, Some(window))
+    val state       = stateWith("alpha\nbeta\ngamma", modalDialog)
+    val caches      = com.serenity.state.manager.RenderCaches.create()
+
+    RendererEntryPoints.render(state, cursorVisible = false, firstFrame, viewport, None, Damage.Everything, caches)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      secondFrame,
+      viewport,
+      None,
+      DamageProducer.forTransition(state, state),
+      caches
+    )
+
+    firstFrame.newLayerSurfaceCalls.get() shouldBe 1
+    secondFrame.newLayerSurfaceCalls.get() shouldBe 0
+    secondFrame.drawImageCalls.size shouldBe 1
+  }
+
+  it should "paint the modal straight onto the frame, with no layer buffer, when layer caching is off" in {
+    val surface = new CountingLayerBufferSurface(80, 24)
+    val state   = stateWith("alpha\nbeta\ngamma", modalDialog, layerCaching = false)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
+
+    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport, None, Damage.Everything, caches)
+
+    surface.newLayerSurfaceCalls.get() shouldBe 0
+    caches.frameState.cachedModalLayerFor(surface) shouldBe None
+    val drawnText = surface.putStringCalls.map(_.s) ++ surface.drawRunPxCalls.map(_.s)
+    drawnText.exists(_.contains("notes.scala")) shouldBe true
+  }
+
+  it should "repaint into the previous modal image rather than allocating a new one" in {
+    val surface = new CountingLayerBufferSurface(80, 24)
+    val before  = stateWith("alpha\nbeta\ngamma", modalDialog)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
+
+    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything, caches)
+    val firstImage = caches.frameState.cachedModalLayerFor(surface).map(_.image)
+
+    val changedModal = modalDialog.copy(modal = Modal.Confirm(ConfirmPrompt.closeUnsaved("renamed.scala")))
+    val after        = before.copy(runtime = before.runtime.copy(modalStack = List(changedModal)))
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      DamageProducer.forTransition(before, after),
+      caches
+    )
+
+    surface.newLayerSurfaceCalls.get() shouldBe 2
+    firstImage should not be empty
+    surface.recycledImages.lastOption.flatten shouldBe firstImage
+  }
+
   /** A [[MockRenderSurface]] that also advertises [[LayerBufferSupport]] -- exercising the same
     * `context.surface.layerBuffers`-gated path `Java2DRenderSurface` takes in production, while keeping the char/bg
     * grid assertions [[MockRenderSurface]] already gives tests. `newLayerSurface` hands back a fresh inner
     * `MockRenderSurface` whose `flush()` -- unlike the base class's no-op -- actually invokes `onFlush`, matching what
     * a real offscreen surface does.
     */
-  private class CountingLayerBufferSurface(width: Int, height: Int) extends MockRenderSurface(width, height):
-    val newLayerSurfaceCalls       = new java.util.concurrent.atomic.AtomicInteger(0)
-    val newSeededLayerSurfaceCalls = new java.util.concurrent.atomic.AtomicInteger(0)
+  private class CountingLayerBufferSurface(width: Int, height: Int, window: Option[AnyRef] = None)
+      extends MockRenderSurface(width, height):
+    val newLayerSurfaceCalls = new java.util.concurrent.atomic.AtomicInteger(0)
+    val recycledImages       = scala.collection.mutable.ListBuffer.empty[Option[RenderImage]]
+
+    override def layerCacheOwner: ScreenIdentity = window.fold(super.layerCacheOwner)(ScreenIdentity(_))
 
     override def layerBuffers: Option[LayerBufferSupport] = Some(
       new LayerBufferSupport:
-        def newLayerSurface(onFlush: BufferedImage => Unit): RenderSurface =
+        def newLayerSurface(onFlush: RenderImage => Unit, recycled: Option[RenderImage]): RenderSurface =
           newLayerSurfaceCalls.incrementAndGet()
-          new FlushingLayerSurface(width, height, onFlush)
-
-        def newSeededLayerSurface(onFlush: BufferedImage => Unit): RenderSurface =
-          newSeededLayerSurfaceCalls.incrementAndGet()
-          new FlushingLayerSurface(width, height, onFlush)
+          recycledImages += recycled
+          new FlushingLayerSurface(width, height, onFlush, recycled)
     )
 
-  private class FlushingLayerSurface(width: Int, height: Int, onFlush: BufferedImage => Unit)
-      extends MockRenderSurface(width, height):
-    override def flush(): Unit = onFlush(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB))
+  /** Flushes the recycled image when there is one, as [[com.serenity.ui.renderer.Java2DRenderSurface.forLayer]] does.
+    */
+  private class FlushingLayerSurface(
+      width: Int,
+      height: Int,
+      onFlush: RenderImage => Unit,
+      recycled: Option[RenderImage]
+  ) extends MockRenderSurface(width, height):
+
+    override def flush(): Unit = onFlush(
+      recycled.getOrElse(RenderImage.fromAwt(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)))
+    )

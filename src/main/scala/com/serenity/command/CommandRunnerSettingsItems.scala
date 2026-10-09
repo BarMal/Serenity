@@ -8,8 +8,8 @@ import com.serenity.ui.presets.UiPreset
 
 /** Builds command-runner settings option rows and static settings command rows.
   *
-  * Cursor, motion, appearance, panel, and text-display settings items live in sibling `CommandRunnerSettings*Items`
-  * objects in this package -- split out to keep every file under the architecture size targets.
+  * Cursor, appearance, panel, and text-display settings items live in sibling `CommandRunnerSettings*Items` objects in
+  * this package -- split out to keep every file under the architecture size targets.
   * [[CommandRunnerSettingsOptionItemHelpers]] holds `boundedOptionIndex`/`enabledOptionItem`, shared by this object and
   * those siblings alike.
   */
@@ -132,6 +132,36 @@ object CommandRunnerSettingsItems:
       enabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetDropCapsEnabled(true))),
       disabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetDropCapsEnabled(false))),
       hint = "Render a flagged paragraph's first letter as a large multi-line glyph"
+    )
+
+  private[command] def followSystemOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
+      id = "follow-system-theme",
+      label = "Follow OS Appearance",
+      selectedIndex = optionSelections.getOrElse("follow-system-theme", 1),
+      enabledIntent = CommandIntent.Theme(ThemeIntent.SetFollowSystem(true)),
+      disabledIntent = CommandIntent.Theme(ThemeIntent.SetFollowSystem(false)),
+      hint = "Switch theme with the OS light, dark or high-contrast setting; picking a theme turns it off"
+    )
+
+  private[command] def autoSaveModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    def option(label: String, mode: AutoSaveMode): CommandOption =
+      CommandOption(
+        label,
+        CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAutoSaveMode(mode)))
+      )
+    CommandSurfaceItem.OptionItem(
+      id = "auto-save-mode",
+      label = "Auto Save",
+      options = List(
+        option("Off", AutoSaveMode.Off),
+        option("After Delay", AutoSaveMode.AfterDelay),
+        option("On Focus Change", AutoSaveMode.OnFocusChange),
+        option("On Window Change", AutoSaveMode.OnWindowChange)
+      ),
+      selectedIndex = optionSelections.getOrElse("auto-save-mode", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Write a file's unsaved changes after a pause, or when you leave the buffer or window")
     )
 
   private[command] def appModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =

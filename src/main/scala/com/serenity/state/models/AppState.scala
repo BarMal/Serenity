@@ -1,86 +1,53 @@
 package com.serenity.state.models
 
 import com.serenity.config.*
+import com.serenity.lsp.client.DocumentUri
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.text.TextStatistics
 import com.serenity.ui.layout.{Layout, SpacingScale, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.theme.Theme
 
 final case class AppState(
     persisted: Persisted,
     runtime: Runtime = Runtime()
 ):
 
-  // Per-buffer, not a whole-workspace wrapper map: a fresh `AppState` snapshot is produced on essentially every edit
-  // (#1456), so a caller reaching for one buffer's index must not pay an O(buffers) map-build to get there. Only the
-  // buffers actually placed in a pane are indexed eagerly, below, at construction -- the render path
-  // (`RendererPaneSetup.prepareEditorPaneRenderPlan`) revisits exactly those buffers every frame until the next edit
-  // produces a new `AppState` (and so a freshly recomputed map), which is the same amortization the old cache gave a
-  // paned buffer after its first touch. `annotationIndex`/`semanticTokensAvailability` still answer for any buffer,
-  // paned or not -- one outside a pane is simply computed on demand, uncached, since nothing re-renders it every frame
-  // to make caching worth its keep.
-  //
-  // `markdownFenceIndex` is NOT precomputed here, unlike the other two: nothing in the render path calls it per frame
-  // (`RendererPaneSetup` never reads it), so there is no amortized cost to recoup -- only a whole-buffer `getLine` scan
-  // (`MarkdownBlockLens.fenceRangeIndex`) that every paned buffer would otherwise pay at construction regardless of
-  // language, on every edit. It is computed on demand, exactly like a non-paned buffer's index.
-  //
-  // Plain immutable fields, not `AtomicReference` (#1677): a mutable field -- even one instance-scoped and never
-  // observed to leak across instances -- still turns `AppState` into a value nothing can safely treat as pure data:
-  // `copy`, `equals`/`hashCode`, and every place that reasons about two `AppState`s as independent, referentially
-  // transparent values (not least running two of them in the same JVM in tests) has to reason around it instead.
-  // Eagerly computing just the paned buffers' indexes at construction removes the field without reintroducing the
-  // O(buffers) rebuild #1456 fixed, since construction cost here scales with the pane count, not the buffer count.
+  // The paned buffers' annotation and semantic-token indexes are read by the renderer every frame. They are derived
+  // values (#1864): `withBufferIndexesRefreshed` brings their memos up to date once per commit, recomputing only those
+  // whose inputs changed, and every copy made afterwards reads them for free. A memo whose inputs have since changed is
+  // never served -- that buffer's index is computed on demand instead, as for a buffer outside every pane.
   private def panedBufferIds: Set[BufferId] =
     persisted.layout.editorPanes.values.flatMap(_.bufferId).toSet
 
-  private val annotationIndexByPanedBuffer: Map[BufferId, AnnotationLineIndex] =
-    panedBufferIds.flatMap(id => persisted.buffers.get(id).map(buffer => id -> computeAnnotationIndex(buffer))).toMap
+  private def indexSource(buffer: Buffer): BufferIndexes.Source =
+    BufferIndexes.Source(buffer, runtime.bufferIndexMemos.uriFor(buffer), runtime.languageService)
 
-  private val semanticTokensAvailabilityByPanedBuffer: Map[BufferId, SemanticTokensAvailability] =
-    panedBufferIds
-      .flatMap(id => persisted.buffers.get(id).map(buffer => id -> computeSemanticTokensAvailability(buffer)))
-      .toMap
+  def withBufferIndexesRefreshed: AppState =
+    val paned = panedBufferIds.flatMap(id => persisted.buffers.get(id).map(id -> _)).toMap
+    val memos = runtime.bufferIndexMemos.refreshed(paned, runtime.languageService)
+    if memos eq runtime.bufferIndexMemos then this else copy(runtime = runtime.copy(bufferIndexMemos = memos))
 
-  /** `bufferId`'s annotation index -- precomputed if `bufferId` is placed in a pane (`annotationIndexByPanedBuffer`),
-    * computed fresh on demand otherwise.
-    */
+  /** The URI a buffer's diagnostics and semantic tokens are keyed by, derived once per file path while it is paned. */
+  def documentUri(bufferId: BufferId): Option[DocumentUri] =
+    persisted.buffers.get(bufferId).map(runtime.bufferIndexMemos.uriFor)
+
   def annotationIndex(bufferId: BufferId): Option[AnnotationLineIndex] =
     persisted.buffers.get(bufferId).map { buffer =>
-      annotationIndexByPanedBuffer.getOrElse(bufferId, computeAnnotationIndex(buffer))
+      BufferIndexes.annotations.valueFor(runtime.bufferIndexMemos.annotations.get(bufferId), indexSource(buffer))
     }
 
-  private def computeAnnotationIndex(buffer: Buffer): AnnotationLineIndex =
-    val diagnostics =
-      runtime.languageService.diagnosticsState.diagnostics
-        .getOrElse(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer), Nil)
-    AnnotationLineIndex(
-      buffer.annotations.documentComments.toVector,
-      diagnostics.groupMap(_.range.start.line)(identity)
-    )
-
-  /** `bufferId`'s semantic-tokens status -- precomputed if `bufferId` is placed in a pane
-    * (`semanticTokensAvailabilityByPanedBuffer`), computed fresh on demand otherwise. See
-    * [[SemanticTokensAvailability]] for what each case means and how the renderer treats it: `Pending` (no entry in
+  /** See [[SemanticTokensAvailability]] for what each case means and how the renderer treats it: `Pending` (no entry in
     * `runtime.languageService.semanticTokensState` at all yet) is deliberately distinct from `Unavailable` (confirmed
     * via `unavailableUris`) -- a request still in flight must not render the same muted style as a confirmed absence
     * (issue #859/#1177 rendering-slice review finding).
     */
   def semanticTokensAvailability(bufferId: BufferId): Option[SemanticTokensAvailability] =
     persisted.buffers.get(bufferId).map { buffer =>
-      semanticTokensAvailabilityByPanedBuffer.getOrElse(bufferId, computeSemanticTokensAvailability(buffer))
+      BufferIndexes.semanticTokens.valueFor(runtime.bufferIndexMemos.semanticTokens.get(bufferId), indexSource(buffer))
     }
 
-  private def computeSemanticTokensAvailability(buffer: Buffer): SemanticTokensAvailability =
-    val uri = com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer)
-    runtime.languageService.semanticTokensState.byUri.get(uri) match
-      case Some(tokens) => SemanticTokensAvailability.Available(tokens.groupBy(_.line))
-      case None =>
-        if runtime.languageService.semanticTokensState.unavailableUris.contains(uri) then
-          SemanticTokensAvailability.Unavailable
-        else SemanticTokensAvailability.Pending
-
-  /** `bufferId`'s markdown fence-range index, computed fresh on demand -- see the class-level comment on why this one,
-    * unlike [[annotationIndex]] and [[semanticTokensAvailability]], is never precomputed for a paned buffer.
+  /** Computed on demand, unmemoised: nothing reads it per frame, and its input is the content, which every edit
+    * changes.
     */
   def markdownFenceIndex(bufferId: BufferId): Option[MarkdownBlockLens.FenceRangeIndex] =
     persisted.buffers.get(bufferId).map(computeMarkdownFenceIndex)
@@ -90,6 +57,12 @@ final case class AppState(
 
   def syntaxHighlightingEnabled: Boolean = persisted.config.languageToolsConfig.syntaxHighlightingEnabled
   def isValid: Boolean                   = AppStateValidation.validationErrors(this).isEmpty
+
+  /** The config that is saved: a setting still being previewed has not changed it. */
+  def committedConfig: AppConfig = runtime.pendingSetting.fold(persisted.config)(_.committedConfig)
+
+  /** The theme that is saved: a theme still being previewed has not replaced it. */
+  def committedTheme: Theme = runtime.pendingSetting.fold(persisted.theme)(_.committedTheme)
 
   /** `InterfaceConfig.elementGap`, resolved for this state's surface. `AppConfig` alone can't make this call --
     * `runtime.capabilities` lives only here -- and it must not: the config is shared and persisted across both
@@ -132,8 +105,8 @@ final case class AppState(
     * per-density gap, e.g. zero at `Compact`, so flattening it to one cell regardless of density would be a real
     * behavior change, not just a surface fix), while the TUI now gets the same flush-by-default treatment as every
     * other TUI spacing default rather than always inheriting the GUI-oriented density gap. Replaces
-    * `AppConfig.effectiveCommandRunnerCursorGapRows` (`AppConfigMotionOps`), which read the raw `uiElementGap` field
-    * and so had no way to tell a TUI session from a GUI one at all.
+    * `AppConfig.effectiveCommandRunnerCursorGapRows` (`AppConfigOps`), which read the raw `uiElementGap` field and so
+    * had no way to tell a TUI session from a GUI one at all.
     */
   def effectiveCommandRunnerCursorGapRows: Double =
     persisted.config.surfaceConfig.commandRunnerCursorGapRows.getOrElse(
@@ -153,10 +126,21 @@ final case class AppState(
 
   def editingContext: EditingContext = EditingContext.of(this)
 
-  /** The status text both placements show, or `None` when the status line is off or nothing is open. */
+  /** The status text both placements show, or `None` when the status line is off or nothing is open. In safe mode it
+    * always leads with the safe-mode label, even with nothing open.
+    */
   def statusLineText: Option[String] =
     if !persisted.config.statusLine.isShown then None
-    else StatusLineText.render(this, persisted.config.statusLine.segments)
+    else
+      val text = StatusLineText.render(this, persisted.config.statusLine.segments)
+      if runtime.safeMode then Some((StatusLineText.SafeModeLabel :: text.toList).mkString(StatusLineText.Separator))
+      else text
+
+  /** Whether a typing burst is holding the floating status row hidden -- the only thing `runtime.typingActivity`
+    * changes on screen, so with any other placement it needs no frames at all.
+    */
+  def typingHidesFloatingStatusLine: Boolean =
+    persisted.config.statusLine.isFloating && runtime.typingActivity.isActive
 
   /** The floating status row, derived each frame rather than stored: it follows the caret and steps aside for the
     * length of a typing burst (`runtime.typingActivity`) so nothing near the caret moves while text is going in.
@@ -195,7 +179,8 @@ final case class AppState(
       themeNames = runtime.themeDiscovery.availableThemeNames,
       currentThemeName = Some(persisted.theme.name),
       editingContext = Some(editingContext),
-      projectPresence = runtime.projectPresence
+      projectPresence = runtime.projectPresence,
+      opensFileOrFolder = runtime.capabilities.opensFileOrFolder
     )
 
   /** The active editor pane's buffer, if any. */
@@ -410,6 +395,10 @@ final case class AppState(
       runtime = runtime.copy(focusHistory = persisted.focus :: deduplicated)
     )
 
+  /** A peek is shown without ever taking focus (#1940), so only other surfaces are focused here. */
+  def pushFocusUnlessPeek(surface: UiSurface): AppState =
+    if surface.focusPolicy == SurfaceFocusPolicy.Peek then this else pushFocus(Focus.Surface(surface.id))
+
   def popFocus: AppState =
     runtime.focusHistory match
       case head :: tail =>
@@ -472,17 +461,15 @@ object AppState:
       activeEditorPaneId = Some(PaneId(0)),
       workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
     )
-    val layout = dockCompanionSprite(baseLayout, config)
     AppState(
       persisted = Persisted(
-        layout = layout,
+        layout = baseLayout,
         buffers = Map(initialBufferId -> initialBuffer),
         bufferOrder = List(initialBufferId),
         focus = Focus.EditorPane(PaneId(0)),
         config = config
       ),
       runtime = Runtime(
-        uiSurfaces = companionSpriteSurfaces(config),
         nextBufferId = BufferId(1),
         nextPaneId = PaneId(1),
         nextSurfaceId = SurfaceIdSupply.initial
@@ -494,53 +481,13 @@ object AppState:
   def empty(config: AppConfig): AppState =
     AppState(
       persisted = Persisted(
-        layout = dockCompanionSprite(Layout.empty, config),
+        layout = Layout.empty,
         buffers = Map.empty,
         focus = Focus.EditorPane(PaneId(0)),
         config = config
       ),
-      runtime = Runtime(uiSurfaces = companionSpriteSurfaces(config))
+      runtime = Runtime()
     )
-
-  /** The companion sprite's pinned panel surface, present exactly when a freshly-started or freshly-restored session
-    * should show it -- enabled in config, and visual flair not `Off`. Mirrors
-    * `StateManagerEffectHandlers.syncCompanionSpritePanel`'s same visibility rule, so a session that starts with the
-    * setting already on shows the pane immediately rather than only after the toggle is next flipped during the
-    * session.
-    */
-  def companionSpriteSurfaces(config: AppConfig): List[UiSurface] =
-    Option
-      .when(config.companionSpriteConfig.enabled && config.visualFlairLevel != VisualFlairLevel.Off) {
-        UiSurface(
-          id = SurfaceId.CompanionSprite,
-          content = SurfaceContent.CompanionSprite,
-          presentation = SurfacePresentation.Docked
-        )
-      }
-      .toList
-
-  /** Docks the companion sprite surface (if enabled) into `layout`'s workspace tree at its configured edge and size --
-    * the tree is the sole record of a docked surface's position and size (issue #817), so a surface built with
-    * `SurfacePresentation.Docked` needs an explicit tree entry, not just a place in `uiSurfaces`. A no-op when the
-    * sprite is disabled, `layout` carries no tree yet (`Layout.empty`), or it's already docked (idempotent, so a caller
-    * that isn't sure which applies -- e.g. `AppStartup.initializeState`'s open-path-at-startup flow, where
-    * `AppState.empty`'s companion sprite surface predates the real workspace tree `fileOpener.openFile` builds -- can
-    * call it unconditionally once that tree exists).
-    */
-  def dockCompanionSprite(layout: Layout, config: AppConfig): Layout =
-    companionSpriteSurfaces(config).headOption match
-      case None => layout
-      case Some(surface) =>
-        layout.workspaceTree match
-          case None => layout
-          case Some(tree) =>
-            val position          = config.companionSpriteConfig.position
-            val (splitId, leafId) = tree.nextDockIds(surface.id)
-            // No viewport is known this early in startup -- `dockSized` (via `allocationRatio`) falls back to an
-            // assumed total, the same fallback a `pin` call would hit in the same no-viewport-yet situation.
-            val docked =
-              tree.dockSized(surface.id, position, splitId, leafId, config.companionSpriteConfig.size, None)
-            layout.copy(workspaceTree = docked.orElse(layout.workspaceTree))
 
 enum AppAction:
   case CloseWorkflow(workflow: CloseWorkflowState)

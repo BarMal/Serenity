@@ -15,6 +15,14 @@ final case class SpellCheckFingerprint(
 
 object SpellCheckFingerprint:
 
+  extension (fingerprint: SpellCheckFingerprint)
+
+    /** Whether `other` differs from this only in the content it was taken of. */
+    def sameDictionaryAndConfig(other: SpellCheckFingerprint): Boolean =
+      fingerprint.usesTextFont == other.usesTextFont &&
+        fingerprint.dictionaryFingerprints == other.dictionaryFingerprints &&
+        fingerprint.config == other.config
+
   /** Pure -- takes the dictionaries' on-disk fingerprints as an immutable value rather than reading the filesystem
     * itself. Callers discover `dictionaryFingerprints` once via `SpellCheckConfig.discoverDictionaryFingerprints`
     * inside an explicit `IO.blocking`, then pass the same value into every fingerprint built from that discovery.
@@ -36,5 +44,6 @@ object SpellCheckFingerprint:
 
 final case class SpellCheckCacheEntry(
     fingerprint: SpellCheckFingerprint,
-    diagnostics: List[Diagnostic]
+    diagnostics: List[Diagnostic],
+    analysis: Option[SpellCheckAnalysis] = None
 )

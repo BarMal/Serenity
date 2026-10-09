@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -21,6 +21,12 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
   private val viewport = ViewportSize(80, 24)
 
   private val lines = Vector("alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta")
+
+  private val font = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+
+  // The logical monospaced font differs by OS (15 px rows on Linux, 17 px on Windows), so a whole-canvas height
+  // measured in a fixed 16 px per row would pass or fail depending only on where the spec runs.
+  private val canvasHeightPx = viewport.height * com.serenity.ui.layout.CellMetrics.fromFont(font).lineHeight
 
   private def stateWith(content: Vector[String], cursor: CursorPosition = CursorPosition(0, 0)): AppState =
     val buffer0 = Buffer.fromString(bufferId, content.mkString("\n"))
@@ -45,15 +51,14 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
     damage: Damage,
     caches: com.serenity.state.manager.RenderCaches
   ): Option[PixelRect] =
-    val font = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
     RendererEntryPoints.renderWithRepaintRegion(
       state,
       cursorVisible = false,
       surface,
       viewport,
-      font,
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       com.serenity.ui.layout.CellMetrics.fromFont(font),
       com.serenity.ui.layout.CellMetrics.fromFont(font),
       None,
@@ -122,10 +127,10 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
     val region = repaintRegionFor(surface, edited, DamageProducer.forTransition(state, edited), caches)
 
     region.map(_.heightPx).getOrElse(0) should be > 0
-    region.map(_.heightPx).getOrElse(0) should be < viewport.height * 16
+    region.map(_.heightPx).getOrElse(0) should be < canvasHeightPx
   }
 
-  it should "cover the whole canvas when the chrome changed too" in {
+  it should "stay bounded when a cursor move also changes the status row" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val before  = stateWith(lines, CursorPosition(0, 0))
     val after = before.copy(persisted =
@@ -142,7 +147,9 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
     val caches = com.serenity.state.manager.RenderCaches.create()
     val _      = repaintRegionFor(surface, before, Damage.Everything, caches)
 
-    // The gutter shows the cursor's line/column, so a cursor move also reports Chrome damage -- which
-    // Damage.isBufferRowsOnly excludes, correctly falling back to an unbounded (whole-canvas) repaint.
-    repaintRegionFor(surface, after, DamageProducer.forTransition(before, after), caches) shouldBe None
+    // The status row shows the cursor's line/column, so a cursor move also reports Chrome damage -- which joins the
+    // region as the status row's own rect rather than forcing a whole-canvas repaint (#1835, #1891).
+    val region = repaintRegionFor(surface, after, DamageProducer.forTransition(before, after), caches)
+    region should not be None
+    region.map(_.heightPx).getOrElse(0) should be < canvasHeightPx
   }

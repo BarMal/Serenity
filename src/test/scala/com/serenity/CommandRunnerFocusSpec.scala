@@ -3,13 +3,12 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.CommandRunner
-import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -32,7 +31,7 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerFocusSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   private def currentRunner(stateManager: StateManager) =
     stateManager.getCurrentState
@@ -95,25 +94,19 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
 
   it should "unwind escape from submenu edit mode to submenu, then parent, then closed" in {
     val stateManager = createStateManager()
-    stateManager
-      .updateState(state =>
-        state.copy(persisted = state.persisted.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Custom)))
-      )
-      .unsafeRunSync()
-
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     openSettingsViaCommand(stateManager)
-    (1 to 4).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
+    (1 to 3).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
-    moveSubmenuSelectionTo(stateManager, "settings-motion-advanced")
+    moveSubmenuSelectionTo(stateManager, "settings-look-advanced")
     stateManager.applyEvent(Enter).unsafeRunSync()
-    moveSubmenuSelectionTo(stateManager, "animation-duration")
+    moveSubmenuSelectionTo(stateManager, "ui-outline-thickness")
 
     currentRunner(stateManager).activeSubmenuEditingItemId shouldBe None
 
     stateManager.applyEvent(Enter).unsafeRunSync()
     stateManager.applyEvent(InsertChar('9')).unsafeRunSync()
-    currentRunner(stateManager).activeSubmenuEditingItemId shouldBe Some("animation-duration")
+    currentRunner(stateManager).activeSubmenuEditingItemId shouldBe Some("ui-outline-thickness")
 
     // Escape #1: cancels the in-progress edit, staying on the same (child) submenu page -- and, since issue #1059,
     // on the one command-runner surface (no second surface to move focus to anymore).
@@ -124,9 +117,9 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     afterFirstEscape.runtime.uiSurfaces should have size 1
     afterFirstEscape.persisted.focus shouldBe Focus.Surface(mainSurfaceId)
     currentRunner(stateManager).activeSubmenuEditingItemId shouldBe None
-    currentRunner(stateManager).activeSubmenuGroupId shouldBe Some("settings-motion-advanced")
+    currentRunner(stateManager).activeSubmenuGroupId shouldBe Some("settings-look-advanced")
 
-    // Escape #2: pops from the child submenu ("settings-motion-advanced") to its parent -- still on the one surface.
+    // Escape #2: pops from the child submenu ("settings-look-advanced") to its parent -- still on the one surface.
     stateManager.applyEvent(Escape).unsafeRunSync()
     val afterSecondEscape = stateManager.getCurrentState.unsafeRunSync()
     afterSecondEscape.commandRunnerSurface shouldBe defined

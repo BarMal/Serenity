@@ -96,6 +96,7 @@ class TuiEditingSpec extends TuiSpec:
     yield ()
   }
 
+  // Undo steps by word (#1930): the first undo takes off " edit", not the whole of what was typed.
   "undo and redo" should "step the document back and forward, repainting each time" in runTui() {
     for
       _      <- typeText("first edit")
@@ -106,7 +107,7 @@ class TuiEditingSpec extends TuiSpec:
       redone <- documentText
       _      <- verify("redone")(screen => screen.rowText(1).stripTrailing shouldBe " 1 first edit")
     yield
-      undone shouldBe Some("")
+      undone shouldBe Some("first")
       redone shouldBe Some("first edit")
   }
 
@@ -115,10 +116,7 @@ class TuiEditingSpec extends TuiSpec:
       _      <- typeText("selected text")
       before <- screen
       _      <- selectAll
-      // Selection grow/settle (issue #1085 phase 3): a freshly created selection grows in from a zero-width sliver
-      // when the `SelectionGeometry` motion family is enabled, so the highlight needs its animation settled before
-      // the painted background is asserted -- otherwise this would race the very first (still-zero-width) frame.
-      after <- settledScreen
+      after  <- settledScreen
       _ <- verifyState("selection in state") { current =>
         focusedBuffer(current).flatMap(_.primarySelection).map(_.end.column) shouldBe Some("selected text".length)
       }

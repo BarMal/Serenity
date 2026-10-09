@@ -2,12 +2,16 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.command.{Command, CommandCategory, CommandIntent, CommentsIntent}
+import com.serenity.config.CommentDisplayMode
+import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -27,7 +31,10 @@ class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+        com.serenity.rope.Balance.default,
+        LoggerFactory[IO]
+      )
       .unsafeRunSync()
 
   private val comment = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "A note about hello")
@@ -73,8 +80,20 @@ class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
 
     val lens = commentLensState(state).getOrElse(fail("Expected the comment lens to open on keyboard cursor move"))
     lens.mode shouldBe CommentLensMode.ReadOnly
-    lens.target shouldBe Some(comment)
-    state.persisted.focus shouldBe Focus.Surface(SurfaceId("comment-lens"))
+    lens.target shouldBe Some(CommentLensTarget(comment.id, comment))
+    state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
+  it should "insert the next typed key into the document rather than the lens" in {
+    val sm       = makeStateManager()
+    val bufferId = withCommentedBuffer(sm)
+
+    sm.applyEvent(MoveLeft).unsafeRunSync() // column 6 -> 5, entering the range
+    sm.applyEvent(InsertChar('!')).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    state.persisted.buffers(bufferId).document.content.collect() shouldBe "hello! world"
+    state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "not open a lens for a keyboard cursor move that stays outside the commented range" in {
@@ -86,6 +105,71 @@ class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
     sm.getCurrentState.unsafeRunSync().commentLensSurface shouldBe None
   }
 
+  it should "not open a lens on a resolved comment, until resolved comments are shown" in {
+    val sm       = makeStateManager()
+    val bufferId = withCommentedBuffer(sm)
+    sm.updateState { state =>
+      val buffer = state.persisted.buffers(bufferId)
+      state.copy(persisted =
+        state.persisted.copy(buffers =
+          state.persisted.buffers.updated(
+            bufferId,
+            buffer.copy(annotations = buffer.annotations.copy(documentComments = List(comment.resolve)))
+          )
+        )
+      )
+    }.unsafeRunSync()
+
+    sm.applyEvent(MoveLeft).unsafeRunSync()
+    sm.getCurrentState.unsafeRunSync().commentLensSurface shouldBe None
+
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(resolvedCommentsVisible = true))).unsafeRunSync()
+    sm.applyEvent(MoveRight).unsafeRunSync()
+    sm.applyEvent(MoveLeft).unsafeRunSync()
+
+    commentLensState(sm.getCurrentState.unsafeRunSync()).flatMap(_.target).map(_.comment.resolved) shouldBe Some(true)
+  }
+
+  "Saving the editable comment lens" should "change only the text and stamp the edit time" in {
+    val sm       = makeStateManager()
+    val bufferId = withCommentedBuffer(sm)
+    sm.updateState { state =>
+      val buffer = state.persisted.buffers(bufferId)
+      // Margin mode keeps the cursor move below from opening a read-only lens that the command would then close.
+      state.copy(persisted =
+        state.persisted.copy(
+          config = state.persisted.config.withCommentDisplayMode(CommentDisplayMode.Margin),
+          buffers = state.persisted.buffers.updated(
+            bufferId,
+            buffer.copy(
+              annotations = buffer.annotations.copy(documentComments = List(comment.copy(id = CommentId(1)))),
+              editing = EditingState(List(CursorPosition(0, 2)))
+            )
+          )
+        )
+      )
+    }.unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "comment-lens",
+        "Open the comment lens.",
+        CommandIntent.Comments(CommentsIntent.ToggleCommentLens),
+        CommandCategory.View
+      )
+    ).unsafeRunSync()
+
+    sm.applyEvent(InsertChar('!')).unsafeRunSync()
+    sm.applyEvent(Enter).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    state.commentLensSurface shouldBe None
+    state.persisted.buffers(bufferId).annotations.documentComments match
+      case List(saved) =>
+        saved.editedAt should not be empty
+        saved.copy(editedAt = None) shouldBe comment.copy(id = CommentId(1), text = "A note about hello!")
+      case other => fail(s"Expected the one comment, got $other")
+  }
+
   "A comment lens opened by a keyboard cursor move into the range" should
     "close once the cursor moves back out via the keyboard" in {
       val sm       = makeStateManager()
@@ -94,15 +178,35 @@ class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
       sm.applyEvent(MoveLeft).unsafeRunSync() // column 6 -> 5, entering the range
       commentLensState(sm.getCurrentState.unsafeRunSync()) shouldBe defined
 
-      // Column 5 is inside the editor pane, so re-focus it before moving further -- the lens itself now holds focus.
-      sm.updateState(state => state.copy(persisted = state.persisted.copy(focus = Focus.EditorPane(PaneId(0)))))
-        .unsafeRunSync()
       sm.applyEvent(MoveRight).unsafeRunSync() // column 5 -> 6, leaving the range
 
       val state = sm.getCurrentState.unsafeRunSync()
       state.persisted.buffers(bufferId).editing.cursorPositions.headOption shouldBe Some(CursorPosition(0, 6))
       state.commentLensSurface shouldBe None
     }
+
+  it should "stay open while the cursor moves within the range" in {
+    val sm       = makeStateManager()
+    val bufferId = withCommentedBuffer(sm)
+
+    sm.applyEvent(MoveLeft).unsafeRunSync() // column 6 -> 5, entering the range
+    sm.applyEvent(MoveLeft).unsafeRunSync() // column 5 -> 4, still inside
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    state.persisted.buffers(bufferId).editing.cursorPositions.headOption shouldBe Some(CursorPosition(0, 4))
+    commentLensState(state) shouldBe defined
+  }
+
+  "Editing the comment at the cursor" should "still focus the lens, as an explicit request" in {
+    val sm = makeStateManager()
+    withCommentedBuffer(sm)
+    sm.applyEvent(MoveLeft).unsafeRunSync() // column 6 -> 5, entering the range
+
+    val edited = CommentRendering.openLensAtCursor(sm.getCurrentState.unsafeRunSync())
+
+    commentLensState(edited).map(_.mode) shouldBe Some(CommentLensMode.Editable)
+    edited.persisted.focus shouldBe Focus.Surface(SurfaceId("comment-lens"))
+  }
 
   "A comment lens opened by a mouse click" should "close once a click elsewhere moves the cursor out of range" in {
     import com.serenity.ui.layout.*

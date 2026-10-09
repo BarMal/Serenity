@@ -1,14 +1,15 @@
 package com.serenity
 
-import java.awt.{Color, Font}
+import java.awt.Font
 
 import com.serenity.config.AppConfig
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, CursorPosition}
 import com.serenity.testkit.EditingStateFixtures
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.{RichTextStyling, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -89,7 +90,7 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
 
     val styled = RichTextStyling.styledLine(document, 0, 0, 7, Theme.light)
 
-    styled.map(_.foregroundColor) shouldBe List(Color(0x33, 0x66, 0x99))
+    styled.map(_.foregroundColor) shouldBe List(RenderColor.fromRgba(0x33, 0x66, 0x99))
   }
 
   it should "carry run font family and size metadata into styled text" in {
@@ -162,8 +163,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      monoFont,
-      textFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -189,8 +190,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      monoFont,
-      textFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -220,8 +221,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      monoFont,
-      textFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -244,8 +245,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      monoFont,
-      textFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -281,8 +282,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      monoFont,
-      textFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -314,8 +315,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      monoFont,
-      textFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -347,8 +348,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewportSize,
-      monoFont,
-      textFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()

@@ -2,6 +2,8 @@ package com.serenity.io
 
 import java.nio.file.Path
 
+import com.serenity.richtext.SaveTarget
+
 enum FileType:
   case Scala
   case Java
@@ -67,6 +69,15 @@ object FileType:
       case "sql"                => FileType.Sql
       case "sh" | "bash"        => FileType.Shell
       case _                    => FileType.Unknown
+
+  /** The format a rich document is written in when saved as `fileType`; every other type is saved as plain text. */
+  def saveTarget(fileType: FileType): SaveTarget =
+    fileType match
+      case FileType.WordOpenXmlDocument => SaveTarget.Docx
+      case FileType.OpenDocumentText    => SaveTarget.Odt
+      case FileType.RichText            => SaveTarget.Rtf
+      case FileType.Markdown            => SaveTarget.Markdown
+      case _                            => SaveTarget.PlainText
 
   def displayName(fileType: FileType): String = fileType match
     case FileType.Scala      => "Scala"
@@ -239,10 +250,9 @@ object DocumentFormat:
           preservesRichFormatting = false
         )
       case FileType.RichText | FileType.OpenDocumentText | FileType.WordOpenXmlDocument =>
-        // All three round-trip marks, alignment and headings through their own codecs (RTF approximates headings
-        // visually rather than recovering the exact level -- see `RtfDocumentCodec.headingAdjustedStyle`), so all
-        // three genuinely preserve rich formatting. This previously reported only RTF as lossless and both ODT and
-        // WordOpenXml as lossy -- backwards from the codecs' actual behaviour (#1291).
+        // All three round-trip marks, alignment and headings through their own codecs, so all three genuinely
+        // preserve rich formatting. This previously reported only RTF as lossless and both ODT and WordOpenXml as
+        // lossy -- backwards from the codecs' actual behaviour (#1291).
         DocumentFormatCapabilities(
           canOpen = true,
           canSave = true,

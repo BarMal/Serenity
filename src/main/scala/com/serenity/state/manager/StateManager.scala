@@ -9,13 +9,15 @@ import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.Event
-import com.serenity.lsp.LspEffect
+import com.serenity.lsp.{LspEffect, LspNotices}
 import com.serenity.rope.Balance
-import com.serenity.session.SessionManager
+import com.serenity.session.{SessionManager, SessionSaveTrigger, UnreadableSession}
+import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
+import com.serenity.ui.theme.appearance.OsAppearanceDetector
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
@@ -26,8 +28,8 @@ trait EventApplier:
 trait StateReader:
   def getCurrentState: IO[AppState]
 
-  /** One consistent snapshot of everything the dispatcher owns: use it wherever app state and buffer animations are
-    * read together, since two separate reads can straddle a write.
+  /** One consistent snapshot of everything the dispatcher owns: use it wherever app state and undo history are read
+    * together, since two separate reads can straddle a write.
     */
   def getModel: IO[Model]
 
@@ -48,14 +50,14 @@ trait StateUpdater:
   * `StateUpdater`); `StateEngine` names their union so the hot core is a single first-class type rather than an
   * anonymous intersection. This is the record-of-records epic's one deliberate hot-core exception.
   */
-trait StateEngine extends StateReader, StateUpdater, EventApplier
+trait StateEngine extends StateReader, StateUpdater, EventApplier:
 
-/** Advances renderer-visible animation state.
-  *
-  * A capability record per #1017 -- see `FileService` below for the shape rationale. `StateManager` holds one of these
-  * as a field instead of mixing this trait in directly.
-  */
-final case class AnimationTicker(advanceAnimationsOnTick: IO[Boolean])
+  /** Applies `inputs` in order and reports the models either side of them. This default dispatches each event on its
+    * own; `StateManager` applies the whole batch in one dispatch whose commits the commit observer never sees, so the
+    * caller diffs `before` and `after` once instead.
+    */
+  def applyEventBatch[A](inputs: List[A], steps: EventBatchSteps[A]): IO[EventBatch[A]] =
+    EventBatch.applying(inputs, steps, getModel, applyEvent)
 
 /** Owns application shutdown and periodic session persistence.
   *
@@ -72,7 +74,11 @@ final case class RuntimeLifecycle(
     /** Completes once lane work accepted so far (config/preset writes, searches) and the results it hands back have
       * settled. Event dispatch returns without waiting for that work, so this is the point to observe it.
       */
-    awaitEffects: IO[Unit]
+    awaitEffects: IO[Unit],
+    /** Registers the one observer of committed state changes -- input, effect results and background work alike --
+      * given the states before and after each commit. Render-loop animation ticks are not reported.
+      */
+    observeCommits: ((AppState, AppState) => IO[Unit]) => IO[Unit]
 )
 
 /** Supplies effects for the language-server interpreter.
@@ -80,7 +86,7 @@ final case class RuntimeLifecycle(
   * A `StateManager` capability-record slice (see #1017): a case class holding the stream description directly instead
   * of a trait mixed into `StateManager`.
   */
-final case class LspEffectSource(lspEffectStream: Stream[IO, LspEffect])
+final case class LspEffectSource(lspEffectStream: Stream[IO, LspEffect], notices: LspNotices)
 
 /** Reads persisted session metadata needed before startup restoration.
   *
@@ -90,15 +96,16 @@ final case class LspEffectSource(lspEffectStream: Stream[IO, LspEffect])
   */
 final case class SessionStartupInfo(
     currentSessionThemeName: IO[Option[String]],
-    sessionExists: IO[Boolean]
+    sessionExists: IO[Boolean],
+    setAsideUnreadableSession: IO[Option[UnreadableSession]] = IO.none
 )
 
-/** Opens a file into editor state.
+/** Opens a file into editor state, or a folder as the Explorer root.
   *
   * A capability record per #1017 -- see `FileService` below for the shape rationale. `StateManager` holds one of these
   * as a field instead of mixing this trait in directly.
   */
-final case class FileOpener(openFile: Path => IO[Unit])
+final case class FileOpener(openFile: Path => IO[Unit], openFolder: Path => IO[Unit])
 
 /** Reads the persisted editor session.
   *
@@ -119,20 +126,25 @@ final case class FileService(
     // #1623: re-checks the focused buffer's on-disk revision on window focus-gain, called from AppRuntime's focus
     // callback -- see StateManagerEffectHandlers.resolveExternalRevisionEffect for the reload-or-prompt logic.
     checkExternalChangesOnFocus: IO[Unit],
-    // #1623: the background counterpart -- AppRuntime's FileChangeWatcher poll loop calls openBufferPaths each cycle
-    // to keep its watched directory set current, then checkBufferForExternalChanges for whichever buffers' files a
-    // poll window actually saw change.
+    // #1623: the background counterpart -- AppRuntime's FileChangeWatcher loop calls openBufferPaths whenever a commit
+    // may have changed its watched directory set, then checkBufferForExternalChanges for whichever buffers' files the
+    // watcher saw change.
     openBufferPaths: IO[Map[Path, BufferId]],
     checkBufferForExternalChanges: BufferId => IO[Unit],
-    // #1691: the same FileChangeWatcher poll loop also watches these directories (re-derived from the current
-    // spell-check config on every cycle) and calls refreshDictionaryFingerprints when a poll window sees a change
+    // #1691: the same FileChangeWatcher loop also watches these directories (re-derived from the current
+    // spell-check config with the rest of the set) and calls refreshDictionaryFingerprints when it sees a change
     // under one of them, so an on-disk dictionary edit invalidates StateManagerOperationBoundary's fingerprint cache
     // in real time rather than only on window focus-gain.
     dictionaryWatchDirectories: IO[Set[Path]],
     refreshDictionaryFingerprints: IO[Unit],
     // The directories docked explorers show, and a way to have them re-listed after a change made outside the editor.
     explorerWatchDirectories: IO[Set[Path]],
-    markExplorerDirectoriesStale: Set[Path] => IO[Unit]
+    markExplorerDirectoriesStale: Set[Path] => IO[Unit],
+    // #1934: the config file the same loop watches, absent when this session keeps no config file.
+    configWatch: Option[ConfigFileWatch],
+    // #1992: AppRuntime's focus callback calls this when the window loses focus, for the auto-save modes that write
+    // then; it does nothing under the others.
+    autoSaveOnWindowFocusLost: IO[Unit]
 )
 
 trait StateManager extends StateEngine:
@@ -140,9 +152,14 @@ trait StateManager extends StateEngine:
   def lspEffectSource: LspEffectSource
   def runtimeLifecycle: RuntimeLifecycle
   def sessionService: SessionService
-  def animationTicker: AnimationTicker
   def fileOpener: FileOpener
   def fileService: FileService
+
+  /** Switches theme to match the OS appearance when `theme.follow_system` is on; returns once the switch has settled.
+    */
+  def followSystemAppearance: IO[Unit]
+
+  def followSystemAppearanceWithin(bound: scala.concurrent.duration.FiniteDuration): IO[Unit]
 
   /** The instance-scoped render/mouse-hit-testing cache bundle for this manager (issue #1677): threaded down through
     * [[com.serenity.ui.renderer.RenderContext]] to every render entry point, and via [[EventStatePort]] to every
@@ -192,7 +209,11 @@ object StateManager:
     onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit] = _ => IO.unit,
     fileDialog: Option[FileDialog] = None,
     markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability =
-      com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable
+      com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable,
+    projectTasksEnabled: Boolean = true,
+    restarter: Option[RestartMode => IO[Unit]] = None,
+    dictionaryCache: DictionaryCache = DictionaryCache(),
+    appearanceDetector: OsAppearanceDetector = OsAppearanceDetector.system
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     val renderCaches = RenderCaches.create(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity)
@@ -206,8 +227,7 @@ object StateManager:
             initialState.runtime
               .copy(themeDiscovery = initialState.runtime.themeDiscovery.copy(availableThemeNames = themeNames))
           ),
-          undo = UndoState(maxUndoDepth = policy.maxUndoDepth),
-          bufferAnimations = Map.empty
+          undo = UndoState(maxUndoDepth = policy.maxUndoDepth)
         )
       )
       mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
@@ -227,12 +247,17 @@ object StateManager:
         onFontConfigChanged = onFontConfigChanged,
         deviceTextScaleProvider = deviceTextScaleProvider,
         configPersistencePath = configPersistencePath,
+        configOnDisk = configPersistencePath.map(_ => initialConfig),
         uiPresetStore = uiPresetStore,
         windowSizeProvider = windowSizeProvider,
         onPreferredWindowSizeChanged = onPreferredWindowSizeChanged,
         fileDialog = fileDialog,
         markdownPreviewWindow = markdownPreviewWindow,
-        renderCaches = renderCaches
+        renderCaches = renderCaches,
+        projectTasksEnabled = projectTasksEnabled,
+        restarter = restarter,
+        dictionaryCache = dictionaryCache,
+        appearanceDetector = appearanceDetector
       )
       stateManager <- fromRuntime(runtime)
     yield stateManager
@@ -245,9 +270,20 @@ object StateManager:
       .create(
         runtime.modelRef,
         runtime.logger,
-        listDirectory = StateManagerOperationBoundary.explorerListing(runtime.fileManager.listDirectory)
+        listDirectory = StateManagerOperationBoundary.explorerListing(runtime.fileManager.listDirectory),
+        wrapCache = runtime.renderCaches.wrappedLines,
+        editIdleSessionSave = runtime.policy.saveOnEditIdle.map(idle =>
+          EditIdleSessionSave(idle, runtime.sessionPersistence.maybeSaveSession(_, SessionSaveTrigger.EditIdle))
+        ),
+        announceClosedDocuments = LspDocumentSync.announceClosed(runtime.lspQueue),
+        forgetClosedBuffers = ClosedBufferRetention.forgetRenderCaches(runtime.renderCaches),
+        announceModeChange = ModeTransition.announceLsp(runtime.lspQueue),
+        dictionaryCache = runtime.dictionaryCache
       )
-      .map(operations => new StateManagerImpl(runtime, operations))
+      .flatMap { operations =>
+        val manager = new StateManagerImpl(runtime, operations)
+        operations.installAutoSave(manager.composition.autoSave.saveBuffer).as(manager)
+      }
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
     // issue #931: category tabs (and the `activeCategory` field they drove) are retired, so this no longer names a
@@ -308,7 +344,13 @@ object StateManager:
       runtime.sessionManager,
       runtime.sessionPersistence,
       runtime.renderCaches,
-      operations
+      operations,
+      runtime.restarter,
+      runtime.appearanceDetector,
+      runtime.configOnDisk
     )
 
     export composition.*
+
+    override def applyEventBatch[A](inputs: List[A], steps: EventBatchSteps[A]): IO[EventBatch[A]] =
+      composition.dispatchEventBatch(inputs, steps)

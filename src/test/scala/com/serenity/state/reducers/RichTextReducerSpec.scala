@@ -7,6 +7,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.state.undo.{BufferSnapshot, EditGrouping, HistoryEntry}
 import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{Layout, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -45,8 +46,13 @@ class RichTextReducerSpec extends AnyFlatSpec with Matchers:
   private def validReduce(intent: RichTextIntent, state: AppState): Buffer =
     val result = RichTextReducer.reduce(intent, state)
     AppStateValidation.validationErrors(result.state) shouldBe Nil
-    result.effects shouldBe Nil
+    result.effects.filterNot(isUndoBoundary) shouldBe Nil
     result.state.persisted.buffers.getOrElse(bufferId, fail("expected the edited buffer"))
+
+  private def isUndoBoundary(effect: AppEffect): Boolean =
+    effect match
+      case AppEffect.Undo(_) => true
+      case _                 => false
 
   private def documentOf(buffer: Buffer): RichTextDocument =
     buffer.richText.richTextDocument.getOrElse(fail("expected a rich text document"))
@@ -64,6 +70,23 @@ class RichTextReducerSpec extends AnyFlatSpec with Matchers:
     after.document.isDirty shouldBe true
     after.document.isNewEmpty shouldBe false
     after.richText.insertionRichTextStyle shouldBe Some(RichTextStyle.empty)
+  }
+
+  it should "record the buffer as it stood before formatting as its own undo step" in {
+    val state  = stateWith(selected("hello world", 0, 0, 0, 5))
+    val result = RichTextReducer.reduce(RichTextIntent.ToggleRichTextMark(InlineMark.Bold), state)
+
+    val entry = HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(state.persisted.buffers(bufferId)))
+    result.effects shouldBe List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, EditGrouping.Standalone)))
+  }
+
+  it should "not record an undo step when only the pending insertion style changes" in {
+    val plain   = Buffer.fromString(bufferId, "hello world")
+    val synced  = RichTextDocument.fromPlainText("hello world")
+    val buffer  = plain.copy(richText = plain.richText.withSyncedDocument(Some(synced), plain.document.contentVersion))
+    val toggled = RichTextReducer.reduce(RichTextIntent.ToggleRichTextMark(InlineMark.Italic), stateWith(buffer))
+
+    toggled.effects shouldBe Nil
   }
 
   it should "keep a freshly materialized document in sync across a second, chained formatting command" in {

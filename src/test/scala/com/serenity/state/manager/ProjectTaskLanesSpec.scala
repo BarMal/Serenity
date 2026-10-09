@@ -97,7 +97,7 @@ class ProjectTaskLanesSpec extends AnyFlatSpec with Matchers:
       directory <- IO.blocking(Files.createTempDirectory("project-task-lanes"))
       _         <- IO.blocking(Files.writeString(directory.resolve("Makefile"), "all:\n\ttrue\n"))
       state = focusedOn(directory.resolve("main.c"))
-      modelRef   <- Ref.of[IO, Model](Model(state, UndoState(), Map.empty))
+      modelRef   <- Ref.of[IO, Model](Model(state, UndoState()))
       operations <- StateManagerOperationBoundary.create(modelRef, NoOpLogger.impl[IO])
       batches    <- Ref.of[IO, List[String]](Nil)
       launches   <- Ref.of[IO, Int](0)

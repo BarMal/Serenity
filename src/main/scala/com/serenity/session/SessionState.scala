@@ -4,8 +4,9 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.serenity.command.CommandId
+import com.serenity.command.{CommandId, CommandRegistry, CommandUsageHistory}
 import com.serenity.config.*
+import com.serenity.io.FileManager
 import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
 
@@ -39,6 +40,9 @@ final case class SessionState(
     schemaVersion: SchemaVersion = SessionState.CurrentSchemaVersion
 )
 
+/** A [[SessionState]] whose buffers' unsaved text is left out, keyed by buffer id, for the content store to take. */
+final private[session] case class SessionSnapshot(state: SessionState, unsavedText: Map[Int, UnsavedText])
+
 object SessionState:
 
   /** Schema version 2 adds workspace trees, docked panel snapshots, and maximised-node identity. A version-1 session's
@@ -49,17 +53,34 @@ object SessionState:
     * Schema version 3 adds hidden buffers and the chapter and keyword notes that point at them. Both decode with
     * defaults, so an older session still restores; the bump is so an older build refuses a newer session rather than
     * silently dropping its notes.
+    *
+    * Schema version 4 moves a buffer's unsaved text out of the session file into a content file it names by
+    * `contentRef` (#1912); an older build would restore those buffers empty, so it refuses the session instead.
+    *
+    * Schema version 5 gives comments an id, an author, times, replies and a resolved flag (#1903). Every one decodes
+    * with a default, and a comment without an id is given one on restore; the bump is so an older build refuses the
+    * session rather than silently dropping its threads the next time it saves.
     */
-  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(3)
+  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(5)
 
   def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
+    assemble(appState, orderedBuffers(appState).map(SessionBuffer.fromBuffer(_, persistUnsaved)))
+
+  private[session] def snapshot(appState: AppState, persistUnsaved: Boolean): SessionSnapshot =
+    val snapshots = orderedBuffers(appState).map(SessionBuffer.snapshot(_, persistUnsaved))
+    SessionSnapshot(
+      assemble(appState, snapshots.map(_._1)),
+      snapshots.flatMap((buffer, unsaved) => unsaved.map(buffer.id -> _)).toMap
+    )
+
+  private def assemble(appState: AppState, buffers: List[SessionBuffer]): SessionState =
     SessionState(
-      buffers = orderedBuffers(appState).map(SessionBuffer.fromBuffer(_, persistUnsaved)),
+      buffers = buffers,
       layout = SessionLayout.fromAppState(appState),
       focus = SessionFocus.fromFocus(appState.persisted.focus),
       bufferOrder = appState.persisted.bufferOrder.map(_.value),
-      config = appState.persisted.config,
-      themeName = appState.persisted.theme.name,
+      config = appState.committedConfig,
+      themeName = appState.committedTheme.name,
       recentFiles = appState.persisted.recentFiles.map(_.toString),
       recentFilesByMode = appState.persisted.recentFilesByMode.map {
         case (mode, paths) => mode.configKey -> paths.map(_.toString)
@@ -88,9 +109,11 @@ object SessionState:
   /** Convert SessionState back to AppState for restoration, reading file-backed buffers from disk when older or
     * size-conscious session files do not contain persisted text.
     */
-  def toAppStateIO(sessionState: SessionState, theme: Theme)(using balance: com.serenity.rope.Balance): IO[AppState] =
+  def toAppStateIO(sessionState: SessionState, theme: Theme, files: FileManager)(using
+    balance: com.serenity.rope.Balance
+  ): IO[AppState] =
     for buffers <- sessionState.buffers.traverse { sessionBuffer =>
-          SessionBuffer.toBufferIO(sessionBuffer).map(buffer => BufferId(sessionBuffer.id) -> buffer)
+          SessionBuffer.toBufferIO(sessionBuffer, files).map(buffer => BufferId(sessionBuffer.id) -> buffer)
         }
     yield toAppStateWithBuffers(sessionState, theme, buffers.toMap)
 
@@ -132,7 +155,10 @@ object SessionState:
         recentFilesByMode = sessionState.recentFilesByMode.flatMap {
           case (key, paths) => AppMode.fromConfigKey(key).map(mode => mode -> paths.map(Path.of(_)))
         },
-        commandUsage = sessionState.commandUsage.map { case (name, generation) => CommandId(name) -> generation }
+        commandUsage = CommandUsageHistory.restored(
+          sessionState.commandUsage.map { case (name, generation) => CommandId(name) -> generation },
+          CommandRegistry.withToggleUI.isRegistered
+        )
       ),
       runtime = Runtime(
         uiSurfaces = restoredLayout.surfaces,

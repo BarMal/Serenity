@@ -1,12 +1,12 @@
 package com.serenity.state.reducers
 
-import com.serenity.command.{CommandRegistry, CommandRunner, FileFinderCommands}
+import com.serenity.command.{CommandKeyBindings, CommandRegistry, CommandRunner, FileFinderCommands}
 import com.serenity.input.{CursorPeekDetector, CursorPeekState}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.state.core.{ChapterNoteTransitions, EditorState}
 import com.serenity.state.models.*
-import com.serenity.state.undo.HistoryEntry
+import com.serenity.state.undo.{EditGrouping, HistoryEntry}
 import com.serenity.ui.layout.SplitAxis
 
 object AppEventReducer:
@@ -23,7 +23,12 @@ object AppEventReducer:
 
       case ToggleCommandRunner =>
         if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
-        else ReducerResult.noEffects(toggleCommandRunner(state, registry))
+        else
+          val abandoned = SettingsPreviewReducer.revert(state)
+          ReducerResult(toggleCommandRunner(abandoned.state, registry), abandoned.effects)
+
+      case SettingsPreviewAbandoned =>
+        ReducerResult.withEffect(state, AppEffect.Settings(SettingsEffect.ReapplyConfig))
 
       case ToggleContextualToolbar =>
         if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
@@ -89,6 +94,18 @@ object AppEventReducer:
       case GoToFile =>
         ReducerResult.withEffect(state, AppEffect.ExecuteCommand(FileFinderCommands.goToFile))
 
+      case RunCommand(commandId) =>
+        val command = CommandKeyBindings.runnable(registry, commandId, state.commandRunnerContext)
+        ReducerResult(state, command.map(AppEffect.ExecuteCommand(_)).toList)
+
+      case ActivateBuffer(bufferId) =>
+        ReducerResult.noEffects(
+          if state.persisted.buffers.contains(bufferId) then EditorState.switchToBuffer(state, bufferId) else state
+        )
+
+      case OpenRecentPath(path) =>
+        ReducerResult.withEffect(state, AppEffect.ExecuteCommand(FileFinderCommands.openFile(path)))
+
       case FocusInDirection(direction) =>
         ReducerResult.noEffects(DirectionalFocus.moved(state, direction))
 
@@ -135,8 +152,7 @@ object AppEventReducer:
       state.runtime.capabilities,
       state.commandRunnerContext
     )
-    val runnerWithPanelSelections = activatedRunner.copy(
-      optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state),
+    val runnerWithUsage = activatedRunner.copy(
       // issue #1048: `CommandRunner.empty` is reconstructed fresh on every open, so MRU ranking has to be seeded
       // back in from the one place it survives a close -- `state.persisted.commandUsage`.
       commandUsage = state.persisted.commandUsage
@@ -145,7 +161,7 @@ object AppEventReducer:
       state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
     val surface = UiSurface(
       id = surfaceId,
-      content = SurfaceContent.CommandPalette(runnerWithPanelSelections),
+      content = SurfaceContent.CommandPalette(runnerWithUsage),
       presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
     )
     val clearedSurfaces =
@@ -163,11 +179,10 @@ object AppEventReducer:
 
   // --- Cursor-peek prototype (issue: command-runner-cursor-peek-prototype) -----------------------------------
   //
-  // Experimental, off by default (`SurfaceConfig.commandRunnerCursorPeekEnabled`). `SwingInputHandler` always emits
-  // the raw `CursorPeekModifierPressed`/`Released`/`OtherKeyPressed` events regardless of the flag -- like mouse-move
-  // events, the translator emits unconditionally and this reducer is where the flag actually gates behaviour: every
-  // handler below bails out to an unchanged `state` first when the flag is off, so disabling it is a true no-op, not
-  // just an unused code path.
+  // Experimental, off by default (`SurfaceConfig.commandRunnerCursorPeekEnabled`). `SwingInputHandler` drops the raw
+  // `CursorPeekModifierPressed`/`Released`/`OtherKeyPressed` events while the flag is off (#1845), but the input side
+  // only learns of a config change once the batch that made it is applied, so every handler below still bails out to
+  // an unchanged `state` first when the flag is off -- disabling it is a true no-op, not just an unused code path.
   //
   // `state.runtime.pointerGesture.cursorPeekAnchor` is the cursor position frozen at the moment a peek begins
   // (`PeekBegin`), and is plain data -- reducers may not reach into `LayoutEngine`
@@ -399,7 +414,7 @@ object AppEventReducer:
     if updatedState == state then ReducerResult.noEffects(state)
     else
       val entry = HistoryEntry.PaneClose(state.persisted.layout, state.persisted.focus)
-      ReducerResult.withEffect(updatedState, AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable = false)))
+      ReducerResult.withEffect(updatedState, AppEffect.Undo(UndoEffect.RecordBoundary(entry, EditGrouping.Standalone)))
 
   private def closeTabState(state: AppState, registry: CommandRegistry): AppState =
     val closedState = EditorState.closeFocusedTab(state)

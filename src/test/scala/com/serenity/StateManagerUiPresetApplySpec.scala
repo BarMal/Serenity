@@ -13,6 +13,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.Theme
@@ -39,7 +40,8 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
         uiPresetStore = store,
         windowSizeProvider = windowSize,
         onPreferredWindowSizeChanged = onWindowSizeChanged,
-        sessionRootOverride = sessionRoot
+        sessionRootOverride = sessionRoot,
+        dictionaryCache = SharedDictionary.default
       )
       .unsafeRunSync()
 
@@ -53,7 +55,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     sm.updateState(state =>
       state.copy(
         persisted = state.persisted.copy(
-          config = state.persisted.config.withBackgroundStyle(BackgroundStyle.GlassLike),
+          config = state.persisted.config.withInterfaceDensity(InterfaceDensity.Spacious),
           theme = Theme.light
         )
       )
@@ -70,8 +72,8 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
 
     val saved = store.find("Workbench").unsafeRunSync()
 
-    saved.map(_.themeName) shouldBe Some(Theme.light.name)
-    saved.map(_.config.surfaceConfig.backgroundStyle) shouldBe Some(BackgroundStyle.GlassLike)
+    saved.map(_.themeName) shouldBe Some(Some(Theme.light.name))
+    saved.map(_.config.interfaceDensity) shouldBe Some(InterfaceDensity.Spacious)
     saved.flatMap(_.config.preferredWindowSize) shouldBe Some(size)
     saved.map(_.pinnedPanels.map(panel => panel.position -> panel.size)) shouldBe Some(List(PanelPosition.Bottom -> 12))
   }
@@ -87,9 +89,9 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     val preset = com.serenity.ui.presets.UiPreset(
       name = "Review Custom",
       config = AppConfig.default
-        .withBackgroundStyle(BackgroundStyle.Solid)
+        .withInterfaceDensity(InterfaceDensity.Compact)
         .withPreferredWindowSize(PreferredWindowSize(1280, 720)),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(
         com.serenity.ui.layout.SessionDockedPanel(
           "panel-1",
@@ -117,7 +119,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
 
-    state.persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.Solid
+    state.persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
     state.persisted.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1280, 720))
     state.runtime.viewportSize shouldBe Some(ViewportSize(90, 28))
     state.persisted.theme.name shouldBe Theme.dark.name
@@ -264,6 +266,47 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     config.surfaceConfig.showPaneHeaders shouldBe false
   }
 
+  it should "give Writing its prose defaults while keeping the user's own theme" in {
+    val path  = Files.createTempDirectory("state-manager-writing-prose-defaults").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.updateState(state =>
+      state.copy(persisted =
+        state.persisted.copy(
+          config = state.persisted.config
+            .withSmartPunctuation(false)
+            .withSpellCheck(state.persisted.config.languageToolsConfig.spellCheck.copy(enabled = false))
+            .withTypewriterScrolling(false)
+            .withFocusedTextBody(false),
+          theme = Theme.light
+        )
+      )
+    ).unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "apply-writing-preset",
+        "Apply writing preset",
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Writing")),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val state  = sm.getCurrentState.unsafeRunSync()
+    val config = state.persisted.config
+
+    state.persisted.theme.name shouldBe Theme.light.name
+    config.languageToolsConfig.smartPunctuationEnabled shouldBe true
+    config.languageToolsConfig.spellCheck.enabled shouldBe true
+    config.surfaceConfig.typewriterScrollingEnabled shouldBe true
+    config.surfaceConfig.focusedTextBodyEnabled shouldBe true
+    config.surfaceConfig.proseMeasure shouldBe Some(ProseMeasure.Default)
+    config.surfaceConfig.textAreaInsets shouldBe TextAreaInsets()
+    config.statusLine.segments should contain(StatusSegment.WordGoal)
+    config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF
+  }
+
   it should "apply the built-in documentation preset to the active empty buffer" in {
     val path  = Files.createTempDirectory("state-manager-documentation-empty-ui-preset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
@@ -325,7 +368,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     state.persisted.config.defaultDocumentMode shouldBe com.serenity.config.DefaultDocumentMode.Markdown
-    state.pinnedSurfaces.collect { case UiSurface(_, SurfaceContent.Outline(_, _), _, _) => () } shouldBe Nil
+    state.pinnedSurfaces.collect { case UiSurface(_, SurfaceContent.Outline(_, _, _), _, _) => () } shouldBe Nil
     state.pinnedSurfaces.collectFirst {
       case surface @ UiSurface(_, SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"), _, _)
           if state.persisted.layout.workspaceTree
@@ -374,7 +417,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     ).unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().pinnedSurfaces.collect {
-      case UiSurface(_, SurfaceContent.Outline(_, _), _, _) => ()
+      case UiSurface(_, SurfaceContent.Outline(_, _, _), _, _) => ()
     } shouldBe Nil
   }
 
@@ -416,7 +459,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
     val outlineSymbols = state.pinnedSurfaces.collectFirst {
-      case surface @ UiSurface(_, SurfaceContent.Outline(symbols, _), _, _)
+      case surface @ UiSurface(_, SurfaceContent.Outline(symbols, _, _), _, _)
           if state.persisted.layout.workspaceTree
             .flatMap(_.positionForSurface(surface.id))
             .contains(

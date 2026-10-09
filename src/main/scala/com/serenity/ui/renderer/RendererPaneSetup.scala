@@ -86,6 +86,41 @@ object RendererPaneSetup:
         .filter(_._2.nonEmpty)
         .toMap
 
+    EditorPaneRenderPlan(
+      workspaceLayout,
+      layoutContract,
+      snapshots,
+      columnSnapshots,
+      annotationsFor(state, context, snapshots)
+    )
+
+  /** What each visible buffer line carries -- comments, diagnostics, semantic tokens, ghosts -- as of `state`. Read per
+    * frame rather than kept with the prepared scene: the scene is reused for as long as the layout is unchanged, and a
+    * diagnostic arriving without moving a single line (spell check finishing, or being switched off, while a command
+    * runner covers the editor) changes none of the things that decide that.
+    */
+  def annotationsFor(
+    state: AppState,
+    context: RenderContext,
+    snapshots: Map[PaneId, TextLayoutSnapshot]
+  ): Map[BufferId, BufferRenderAnnotations] =
+    val inputs = AnnotationInputs(
+      snapshots,
+      state.persisted.layout.editorPanes,
+      state.persisted.buffers,
+      state.runtime.bufferIndexMemos,
+      state.runtime.languageService,
+      java.lang.Boolean.valueOf(state.runtime.chapterGhostsVisible),
+      java.lang.Boolean.valueOf(state.runtime.resolvedCommentsVisible),
+      state.persisted.config.markdownViewMode
+    )
+    context.caches.frameState.annotationsFor(context.surface, inputs)(visibleAnnotations(state, context, snapshots))
+
+  private def visibleAnnotations(
+    state: AppState,
+    context: RenderContext,
+    snapshots: Map[PaneId, TextLayoutSnapshot]
+  ): Map[BufferId, BufferRenderAnnotations] =
     val visibleLinesByBuffer = state.persisted.layout.editorPanes.toList
       .flatMap {
         case (paneId, pane) =>
@@ -105,9 +140,10 @@ object RendererPaneSetup:
       .distinct
       .flatMap { bufferId =>
         state.persisted.buffers.get(bufferId).map { buffer =>
-          val visibleLines   = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
-          val cached         = state.annotationIndex(bufferId).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
-          val commentsByLine = cached.commentsByLine(visibleLines)
+          val visibleLines = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
+          val cached       = state.annotationIndex(bufferId).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
+          val commentsByLine =
+            shownComments(cached.commentsByLine(visibleLines), state.runtime.resolvedCommentsVisible)
           val diagnosticsByLine = visibleAnnotationLines(visibleLines, cached.diagnosticsByLine)
           val semanticTokensAvailability =
             state.semanticTokensAvailability(bufferId).getOrElse(SemanticTokensAvailability.Pending)
@@ -124,8 +160,14 @@ object RendererPaneSetup:
         }
       }
       .toMap
+    annotations
 
-    EditorPaneRenderPlan(workspaceLayout, layoutContract, snapshots, columnSnapshots, annotations)
+  private def shownComments(
+    byLine: Map[Int, List[DocumentComment]],
+    showResolved: Boolean
+  ): Map[Int, List[DocumentComment]] =
+    if showResolved then byLine
+    else byLine.view.mapValues(_.filterNot(_.resolved)).filter((_, comments) => comments.nonEmpty).toMap
 
   def visibleAnnotationLines[A](
     visibleLines: Set[Int],
@@ -187,12 +229,10 @@ object RendererPaneSetup:
     val visibleLines = math.max(1, panelHeightPx / math.max(1, bufferMetrics.lineHeight))
     val sizedViewport = baseViewport.copy(
       visibleColumns = visibleColumns,
-      visibleLines = visibleLines,
-      topVisualLine = baseViewport.topVisualLine.min(math.max(0, visibleLines - 1))
+      visibleLines = visibleLines
     )
     val scrollViewport = baseViewport.copy(
-      visibleLines = visibleLines,
-      topVisualLine = baseViewport.topVisualLine.min(math.max(0, visibleLines - 1))
+      visibleLines = visibleLines
     )
     val leftColumn =
       if visibleColumns == baseViewport.visibleColumns then baseViewport.leftColumn
@@ -203,7 +243,7 @@ object RendererPaneSetup:
     val renderBuffer = buffer.copy(
       viewport = renderedViewport
     )
-    context.surface.text.setFont(bufferFont)
+    context.surface.text.setFont(FontSpec.fromAwt(bufferFont))
     val cellMetricsForSnapshot = if hasFontRenderContext then Some(bufferMetrics) else Some(context.cellMetrics)
     val proseScale             = com.serenity.ui.theme.RichTextStyling.proseZoom(bufferFont.getSize2D)
     // A surface with a real FontRenderContext keeps deriving cell-based advances from the buffer's own font, same as
@@ -229,7 +269,8 @@ object RendererPaneSetup:
           cellMetricsOverride = cellMetricsForSnapshot,
           forceCellLayout = !hasFontRenderContext,
           proseScale = proseScale,
-          dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled
+          dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
+          wrapCache = context.caches.wrappedLines
         )
       else
         TextLayoutSnapshot.fromBuffer(
@@ -245,30 +286,10 @@ object RendererPaneSetup:
           // `context.cellMetrics`.
           forceCellLayout = !hasFontRenderContext,
           proseScale = proseScale,
-          dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled
+          dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
+          wrapCache = context.caches.wrappedLines
         )
     if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
-
-  /** Column-based document layout (issue #1338, Phase 1 animation): the snapshot for a column OTHER than the buffer's
-    * own current one -- anchored at `topLine`/`topVisualLine` instead of `buffer.viewport`'s -- used by
-    * `RendererColumnTransition` to rebuild the outgoing column's content for as long as it is still mid-sweep.
-    * Delegates to [[snapshotForBuffer]]'s own column-aware sizing, so the two columns are always measured identically;
-    * callers only ever use this while `columnModeEnabled && wordWrapEnabled`, same as the transition itself requires.
-    */
-  def snapshotForBufferColumnAt(
-    buffer: Buffer,
-    topLine: Int,
-    topVisualLine: Int,
-    contentRect: LayoutRect,
-    state: AppState,
-    context: RenderContext
-  ): TextLayoutSnapshot =
-    snapshotForBuffer(
-      buffer.copy(viewport = buffer.viewport.copy(topLine = topLine, topVisualLine = topVisualLine)),
-      contentRect,
-      state,
-      context
-    )
 
   private def visibleColumnsFor(
     font: Font,
@@ -349,8 +370,10 @@ object RendererPaneSetup:
       case (visualLine, row) if visualLine.xOffsetPx + visualLine.widthPx > contentWidthPx.toFloat => row
     }.toSet
 
-  /** The pixel band each visible row owns, clamped to the pane's content rect. */
-  private def paneRowRects(
+  /** The pixel band each of `snapshot`'s visible rows owns within `contentRect`, clamped to it -- the pane's own text,
+    * or a line-number column painted row for row against the same snapshot.
+    */
+  private[renderer] def paneRowRects(
     contentRect: LayoutRect,
     context: RenderContext,
     snapshot: TextLayoutSnapshot

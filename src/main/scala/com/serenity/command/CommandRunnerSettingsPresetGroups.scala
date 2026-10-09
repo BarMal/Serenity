@@ -31,7 +31,21 @@ private[command] object CommandRunnerSettingsPresetGroups:
         "Save the current workspace into this preset",
         UiPresetsIntent.OverwriteUiPreset(_)
       )
-    ) ++ presetInputItems.filter(_.id == "ui-preset-duplicate") ++ List(
+    ) ++ presetInputItems.filter(_.id == "ui-preset-duplicate") ++ presetInputItems.filter(
+      _.id == "ui-preset-set-theme"
+    ) ++ List(
+      action(
+        "ui-preset-use-current-theme",
+        "Use Current Theme",
+        "Make this preset apply the theme in use now",
+        UiPresetsIntent.UseCurrentThemeForUiPreset(_)
+      ),
+      action(
+        "ui-preset-clear-theme",
+        "Clear Preset Theme",
+        "Make this preset leave the theme alone",
+        UiPresetsIntent.ClearUiPresetTheme(_)
+      ),
       action("ui-preset-delete", "Delete Preset", "Remove this preset", UiPresetsIntent.DeleteUiPreset(_)),
       action("ui-preset-reset", "Reset Preset", "Discard this preset's overrides", UiPresetsIntent.ResetUiPreset(_))
     )
@@ -55,7 +69,7 @@ private[command] object CommandRunnerSettingsPresetGroups:
     val editPresetGroup = group(
       "settings-preset-edit",
       editingPreset.fold("Edit Preset")(name => s"Edit Preset: $name"),
-      editingPreset.fold("Document, layout, typography, motion")(name => s"Editing $name"),
+      editingPreset.fold("Document, layout, typography")(name => s"Editing $name"),
       List(
         group(
           "settings-preset-name",
@@ -90,13 +104,14 @@ private[command] object CommandRunnerSettingsPresetGroups:
       .orElse(optionSelections.get("ui-preset-built-in").flatMap(UiPreset.builtIns.lift).map(_.name))
       .orElse(UiPreset.builtIns.headOption.map(_.name))
 
-  // issue #1060: only Duplicate/Rename still take typed input (both need a new name, which can't be picked from an
-  // existing-preset list) -- Apply/Overwrite/Delete/Reset are pickers now (`presetActionOptionItem`), so they no
+  // issue #1060: only Duplicate/Rename (a new name) and Set Theme (a theme name, typed like the follow-system
+  // themes) still take typed input -- Apply/Overwrite/Delete/Reset are pickers now (`presetActionOptionItem`), so they no
   // longer take a prefill via `currentValue`.
   private def withPresetInputContext(
     item: CommandSurfaceItem.InputItem,
     presetName: Option[String]
   ): CommandSurfaceItem.InputItem =
     (presetName, item.id) match
-      case (Some(name), "ui-preset-duplicate" | "ui-preset-rename") => item.copy(currentValue = s"$name -> ")
-      case _                                                        => item
+      case (Some(name), "ui-preset-duplicate" | "ui-preset-rename" | "ui-preset-set-theme") =>
+        item.copy(currentValue = s"$name -> ")
+      case _ => item

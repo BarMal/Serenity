@@ -8,9 +8,11 @@ import com.serenity.config.AppConfig
 import com.serenity.document.DocumentNavigation
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
+import com.serenity.state.components.{ComponentResult, PinnedPanelComponent}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -28,7 +30,10 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+        com.serenity.rope.Balance.default,
+        LoggerFactory[IO]
+      )
       .unsafeRunSync()
 
   private def dockExplorer(
@@ -137,6 +142,39 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     updated.persisted.focus shouldBe Focus.Surface(surfaceId)
     updated.runtime.focusHistory.headOption shouldBe Some(before.persisted.focus)
     updated.surfaceById(surfaceId).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(test)))
+  }
+
+  it should "select the row clicked below the original fold once the explorer has scrolled" in {
+    val root  = Paths.get("/repo")
+    val files = (0 until 60).toList.map(index => root.resolve(f"file-$index%02d"))
+    val tree = DirectoryTreeData(
+      root,
+      entries = Map(root -> files.map(path => DirEntry(path, path.getFileName.toString, isDirectory = false)))
+    )
+    val surfaceId = SurfaceId("explorer")
+    val sm        = makeStateManager()
+    dockExplorer(sm, surfaceId, tree, selectedPath = Some(root))
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+    sm.updateState(state =>
+      PinnedPanelComponent(PanelPosition.Left).processEvent(PanelInputEvent.Last, state) match
+        case ComponentResult.StateChange(update) => update(state)
+        case other                               => fail(s"Expected End to move the selection, got $other")
+    ).unsafeRunSync()
+
+    val scrolled = sm.getCurrentState.unsafeRunSync()
+    val shown = panelContract(scrolled).panelRowSlots(surfaceId).count {
+      case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), _) => true
+      case _                                                       => false
+    }
+    shown should be < files.size
+    // Scrolled to the end, the second-to-last row shown is the second-to-last file.
+    val point = panelItemPoint(scrolled, surfaceId, displayedItemRow = shown - 2)
+    sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
+
+    val selected = sm.getCurrentState.unsafeRunSync().surfaceById(surfaceId).map(_.content).collect {
+      case explorer: SurfaceContent.DirectoryTree => explorer.selectedPath
+    }
+    selected shouldBe Some(Some(files(58)))
   }
 
   it should "not route clicks or hover to a pinned panel while a close confirmation is active" in {
@@ -352,7 +390,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       case SurfaceContent.CommentLens(lens) => lens
       case other                            => fail(s"Expected CommentLens content, got $other")
     lensState.draft shouldBe "Tighten this"
-    lensState.target shouldBe Some(comment)
+    lensState.target shouldBe Some(CommentLensTarget(comment.id, comment))
     updated.persisted.focus shouldBe Focus.Surface(lensSurface.id)
   }
 

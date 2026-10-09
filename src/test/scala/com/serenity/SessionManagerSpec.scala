@@ -41,7 +41,15 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     val sessionsDirectory = sessionRoot.resolve("sessions")
     if Files.exists(sessionsDirectory) then
       val stream = Files.list(sessionsDirectory)
-      try stream.filter(_.getFileName.toString.startsWith("session.json.corrupt-")).iterator.asScala.toList
+      try
+        stream
+          .filter(path => Files.isRegularFile(path))
+          .filter(path =>
+            List("session.json.corrupt-", "session.json.newer-").exists(path.getFileName.toString.startsWith)
+          )
+          .iterator
+          .asScala
+          .toList
       finally stream.close()
     else Nil
 
@@ -220,7 +228,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
-  it should "return None and keep a quarantined copy when the saved session file is malformed" in {
+  it should "return None and move the malformed session file aside rather than leave it to be overwritten" in {
     val sessionRoot    = Files.createTempDirectory("session-manager-corrupt")
     val sessionManager = createManagerAt(sessionRoot)
     val sessionFile    = currentSessionFile(sessionRoot)
@@ -231,9 +239,8 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       loaded <- sessionManager.loadSession()
     yield
       loaded shouldBe None
-      Files.exists(sessionFile) shouldBe true
-      Files.readString(sessionFile) should include("not valid json")
-      quarantinedSessionFiles(sessionRoot) should not be empty
+      Files.exists(sessionFile) shouldBe false
+      quarantinedSessionFiles(sessionRoot).map(Files.readString) should contain("{ this is not valid json")
 
     program.unsafeRunSync()
   }
@@ -243,7 +250,6 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     val sessionManager = createManagerAt(sessionRoot)
     val sessionFile    = currentSessionFile(sessionRoot)
     val missingLegacyConfigKeys = List(
-      "characterAnimation",
       "syntaxHighlightingEnabled",
       "fontConfig",
       "minimumPaneWidth",
@@ -269,9 +275,6 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       loaded <- sessionManager.loadSession()
     yield
       loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("legacy config")
-      loaded.map(_.persisted.config.editorConfig.characterAnimation) shouldBe Some(
-        AppConfig.default.editorConfig.characterAnimation
-      )
       loaded.map(_.persisted.config.languageToolsConfig.syntaxHighlightingEnabled) shouldBe Some(
         AppConfig.default.languageToolsConfig.syntaxHighlightingEnabled
       )
@@ -305,14 +308,14 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
-  it should "preserve config fields including blurRadius through full disk save/load" in {
+  it should "preserve config fields including the diagnostic highlight blend weight through full disk save/load" in {
     val sessionManager = createManager()
 
     val initial = AppState.initial
     val state =
       initial.copy(persisted =
         initial.persisted.copy(config =
-          AppConfig(surfaceConfig = SurfaceConfig(blurRadius = 0.75f, showLineNumbers = false))
+          AppConfig(surfaceConfig = SurfaceConfig(diagnosticHighlightBlendWeight = 0.75, showLineNumbers = false))
         )
       )
 
@@ -320,7 +323,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       _      <- sessionManager.saveSession(state)
       loaded <- sessionManager.loadSession()
     yield
-      loaded.map(_.persisted.config.surfaceConfig.blurRadius) shouldBe Some(0.75f)
+      loaded.map(_.persisted.config.surfaceConfig.diagnosticHighlightBlendWeight) shouldBe Some(0.75)
       loaded.map(_.persisted.config.surfaceConfig.showLineNumbers) shouldBe Some(false)
 
     program.unsafeRunSync()

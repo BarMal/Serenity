@@ -19,6 +19,7 @@ import com.serenity.state.models.{
   PaneId,
   Viewport
 }
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{
   CellMetrics,
   Layout,
@@ -28,28 +29,31 @@ import com.serenity.ui.layout.{
   WorkspaceNodeId,
   WorkspaceTree
 }
-import com.serenity.ui.renderer.RendererEntryPoints
-import com.serenity.ui.theme.{DefaultThemes, Theme}
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
+import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** The editor's own chrome -- line-number gutter, pinned status gutter, inactive pane header, raw-source markdown lens
-  * -- paints the theme's panel colour as material standing in for the background. Under a theme whose background is the
-  * terminal's own, the TUI shows that backdrop there too, while the gutter divider and the active pane's highlighted
-  * header keep their deliberate contrast.
+  * -- paints the theme's opaque panel colour, even under a theme whose background is the terminal's own, while the
+  * gutter divider and the active pane's highlighted header keep their deliberate contrast.
   */
 class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val font        = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val transparent = DefaultThemes.transparent
-  private val viewport    = ViewportSize(60, 16)
-  private val paneId      = PaneId(0)
-  private val bufferId    = BufferId(1)
+  private val font = Font(Font.MONOSPACED, Font.PLAIN, 12)
+  private val transparent =
+    Theme.dark.copy(background = RenderColor.fromRgba(0, 0, 0, 0), margin = RenderColor.fromRgba(0, 0, 0, 0))
+  private val viewport = ViewportSize(60, 16)
+  private val paneId   = PaneId(0)
+  private val bufferId = BufferId(1)
 
-  private def sameRgb(a: Color, b: Color): Boolean = (a.getRGB & 0xffffff) == (b.getRGB & 0xffffff)
-  private def isBackdrop(color: Color): Boolean    = color == TerminalEmulator.TransparentBackground
+  private def sameRgb(cell: Color, expected: RenderColor): Boolean =
+    (cell.getRGB & 0xffffff) == (expected.argb & 0xffffff)
+  private def isPanel(color: Color): Boolean = sameRgb(color, transparent.panel.background)
+  private def isPanelOrEditor(color: Color): Boolean =
+    isPanel(color) || color == TerminalEmulator.TransparentBackground
 
   private def render(state: AppState): TerminalEmulator =
     val writer  = new StringWriter()
@@ -59,8 +63,8 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewport,
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       CellMetrics.cellUnit,
       None,
       RenderCaches.create()
@@ -97,17 +101,17 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
     (digitCol, row)
 
   "the line-number gutter in the TUI under a transparent theme" should
-    "sit on the terminal's own background, keeping its divider" in {
+    "paint the opaque panel colour, keeping its divider" in {
       val screen = render(editorState(transparent))
 
       val (digitCol, row) = lineNumberCell(screen)
       val (alphaCol, _)   = screen.find("alpha").getOrElse(fail(screen.render))
-      withClue(screen.render)(isBackdrop(screen.cellAt(digitCol, row).bg) shouldBe true)
+      withClue(screen.render)(isPanel(screen.cellAt(digitCol, row).bg) shouldBe true)
       val gutterBackgrounds = (0 until alphaCol).map(col => screen.cellAt(col, row).bg)
       withClue(s"$gutterBackgrounds\n${screen.render}\n")(
         gutterBackgrounds.exists(sameRgb(_, transparent.panelBorder)) shouldBe true
       )
-      gutterBackgrounds.filterNot(sameRgb(_, transparent.panelBorder)).foreach(bg => isBackdrop(bg) shouldBe true)
+      gutterBackgrounds.filterNot(sameRgb(_, transparent.panelBorder)).foreach(bg => isPanelOrEditor(bg) shouldBe true)
     }
 
   "the line-number gutter in the TUI under an opaque theme" should "keep the theme's panel colour" in {
@@ -118,14 +122,14 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
     sameRgb(screen.cellAt(digitCol, row).bg, theme.panel.background) shouldBe true
   }
 
-  "the pinned status gutter in the TUI under a transparent theme" should "sit on the terminal's own background" in {
+  "the pinned status gutter in the TUI under a transparent theme" should "paint the opaque panel colour" in {
     val config = AppConfig.default.withStatusLinePlacement(StatusLinePlacement.Pinned)
     val screen = render(editorState(transparent, config))
 
     val lastRow = viewport.height - 1
     withClue(screen.render)(screen.rowText(lastRow).trim should not be empty)
     (0 until viewport.width).foreach { col =>
-      withClue(s"cell ($col, $lastRow):\n${screen.render}\n")(isBackdrop(screen.cellAt(col, lastRow).bg) shouldBe true)
+      withClue(s"cell ($col, $lastRow):\n${screen.render}\n")(isPanel(screen.cellAt(col, lastRow).bg) shouldBe true)
     }
   }
 
@@ -135,11 +139,11 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
       .withStatusLineColors(StatusLineColors(background = Some(Color.BLUE)))
     val screen = render(editorState(transparent, config))
 
-    sameRgb(screen.cellAt(viewport.width - 1, viewport.height - 1).bg, Color.BLUE) shouldBe true
+    sameRgb(screen.cellAt(viewport.width - 1, viewport.height - 1).bg, RenderColor.fromAwt(Color.BLUE)) shouldBe true
   }
 
   "pane headers in the TUI under a transparent theme" should
-    "show the backdrop behind an inactive header while the active one keeps its highlight" in {
+    "paint an inactive header in the panel colour while the active one keeps its highlight" in {
       val secondPane   = PaneId(1)
       val secondBuffer = BufferId(2)
       val single       = editorState(transparent)
@@ -178,18 +182,18 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
       withClue(screen.render)(
         sameRgb(screen.cellAt(activeCol, activeRow).bg, transparent.highlighted.background) shouldBe true
       )
-      withClue(screen.render)(isBackdrop(screen.cellAt(inactiveCol, inactiveRow).bg) shouldBe true)
+      withClue(screen.render)(isPanel(screen.cellAt(inactiveCol, inactiveRow).bg) shouldBe true)
       // The line-number divider runs through the header row and keeps its own colour.
       (0 until viewport.width)
         .filterNot(col => sameRgb(screen.cellAt(col, inactiveRow).bg, transparent.panelBorder))
         .foreach { col =>
           withClue(s"cell ($col, $inactiveRow) ${screen.cellAt(col, inactiveRow).bg}:\n${screen.render}\n")(
-            isBackdrop(screen.cellAt(col, inactiveRow).bg) shouldBe true
+            isPanelOrEditor(screen.cellAt(col, inactiveRow).bg) shouldBe true
           )
         }
     }
 
-  "the raw-source markdown lens in the TUI under a transparent theme" should "sit on the terminal's own background" in {
+  "the raw-source markdown lens in the TUI under a transparent theme" should "paint the opaque panel colour" in {
     val config = AppConfig.default.withLineNumbers(false).withMarkdownViewMode(MarkdownViewMode.InlineLens)
     val state = editorState(
       transparent,
@@ -206,7 +210,7 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
 
     val (rawCol, rawRow) = screen.find("# Raw").getOrElse(fail(s"no raw lens:\n${screen.render}"))
     (rawCol until viewport.width - 1).foreach { col =>
-      withClue(s"cell ($col, $rawRow):\n${screen.render}\n")(isBackdrop(screen.cellAt(col, rawRow).bg) shouldBe true)
+      withClue(s"cell ($col, $rawRow):\n${screen.render}\n")(isPanel(screen.cellAt(col, rawRow).bg) shouldBe true)
     }
   }
 end TerminalEditorChromeBackdropSpec

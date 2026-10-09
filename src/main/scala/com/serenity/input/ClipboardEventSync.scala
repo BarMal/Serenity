@@ -2,9 +2,16 @@ package com.serenity.input
 
 import cats.effect.IO
 import com.serenity.keystroke.events.*
+import com.serenity.rope.LineEndings
 import com.serenity.state.manager.{StateReader, StateUpdater}
 
 object ClipboardEventSync:
+
+  /** Events with work on either side of their application: [[beforeEvent]] and [[afterEvent]] must run around them. */
+  def touchesSystemClipboard(event: Event): Boolean =
+    event match
+      case Paste | Copy | Cut => true
+      case _                  => false
 
   def beforeEvent(
     event: Event,
@@ -15,7 +22,15 @@ object ClipboardEventSync:
       case Paste =>
         systemClipboard.readText.flatMap {
           case Some(text) =>
-            stateManager.updateStateValidated(state => state.copy(runtime = state.runtime.copy(clipboard = Some(text))))
+            val normalised = LineEndings.normalized(text)
+            stateManager.updateStateValidated(state =>
+              state.copy(runtime =
+                state.runtime.copy(
+                  clipboard = Some(normalised),
+                  clipboardHistory = state.runtime.clipboardHistory.imported(normalised)
+                )
+              )
+            )
           case None => IO.unit
         }
       case _ =>

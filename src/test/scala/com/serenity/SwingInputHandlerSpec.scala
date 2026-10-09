@@ -9,11 +9,8 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO}
 import cats.syntax.parallel.*
-import com.serenity.input.{InputRouter, SwingInputHandler}
+import com.serenity.input.{InputRouter, PendingInput, SwingInputHandler}
 import com.serenity.keystroke.events.{
-  CursorPeekModifierPressed,
-  CursorPeekModifierReleased,
-  CursorPeekOtherKeyPressed,
   Event,
   InsertChar,
   MouseButton,
@@ -22,10 +19,9 @@ import com.serenity.keystroke.events.{
   MouseMove,
   MousePress,
   MouseRenderMetrics,
-  ScrollDown,
+  MouseWheel,
   ScrollLeft,
-  ScrollRight,
-  ScrollUp
+  ScrollRight
 }
 import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
@@ -113,6 +109,47 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
         renderMetrics = Some(MouseRenderMetrics(CellMetrics(8, 16, 13), CellMetrics(8, 16, 13)))
       )
     )
+  }
+
+  it should "hand over everything queued as one batch, in order, with keystrokes left untranslated" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val key       = component.getKeyListeners.head
+    val motion    = component.getMouseMotionListeners.head
+
+    key.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, 1L, 0, KeyEvent.VK_UNDEFINED, 'a'))
+    motion.mouseMoved(
+      java.awt.event.MouseEvent(component, java.awt.event.MouseEvent.MOUSE_MOVED, 2L, 0, 8, 16, 0, false)
+    )
+    key.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, 3L, 0, KeyEvent.VK_UNDEFINED, 'b'))
+
+    handler.inputBatches.take(1).compile.toList.unsafeRunTimed(StreamObservationTimeout).map(_.map(_.toList)) shouldBe
+      Some(
+        List(
+          List(
+            PendingInput.Keystroke(KeyStrokeInfo(InputKey.Character, Some('a'), Set.empty)),
+            PendingInput.Ready(MouseMove(1, 1, Some(8), Some(16), shiftDown = false)),
+            PendingInput.Keystroke(KeyStrokeInfo(InputKey.Character, Some('b'), Set.empty))
+          )
+        )
+      )
+  }
+
+  it should "end its input batches when shutdown is requested while they wait for input" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+
+    val program = for
+      awaiting <- Deferred[IO, Unit]
+      _ <- (
+        awaiting.complete(()) >> handler.inputBatches.compile.drain,
+        awaiting.get >> handler.shutdown
+      ).parMapN((_, _) => ())
+    yield ()
+
+    program.unsafeRunTimed(StreamObservationTimeout).shouldBe(defined)
   }
 
   it should "coalesce only superseded adjacent mouse moves and drags" in {
@@ -330,74 +367,6 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(250.millis) shouldBe None
   }
 
-  it should "always emit a raw CursorPeekModifierPressed for a bare modifier press, regardless of any pending double-tap hotkey" in {
-    val component = new JPanel()
-    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
-    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
-    val listener  = component.getKeyListeners.head
-    val now       = System.currentTimeMillis()
-
-    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_META, '\u0000'))
-
-    handler.eventStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
-      Some(CursorPeekModifierPressed(Modifier.Meta, now))
-  }
-
-  it should "always emit a raw CursorPeekModifierReleased for a bare modifier release" in {
-    val component = new JPanel()
-    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
-    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
-    val listener  = component.getKeyListeners.head
-    val now       = System.currentTimeMillis()
-
-    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_META, '\u0000'))
-    listener.keyReleased(KeyEvent(component, KeyEvent.KEY_RELEASED, now + 5, 0, KeyEvent.VK_META, '\u0000'))
-
-    handler.eventStream.take(2).compile.toList.unsafeRunTimed(StreamObservationTimeout) shouldBe Some(
-      List(CursorPeekModifierPressed(Modifier.Meta, now), CursorPeekModifierReleased(Modifier.Meta, now + 5))
-    )
-  }
-
-  it should "emit raw modifier press/release events for any modifier, not only the cursor-peek prototype's own" in {
-    val component = new JPanel()
-    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
-    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
-    val listener  = component.getKeyListeners.head
-    val now       = System.currentTimeMillis()
-
-    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_CONTROL, '\u0000'))
-
-    handler.eventStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
-      Some(CursorPeekModifierPressed(Modifier.Ctrl, now))
-  }
-
-  it should "emit a raw CursorPeekOtherKeyPressed for a non-modifier key press" in {
-    val component = new JPanel()
-    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
-    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
-    val listener  = component.getKeyListeners.head
-    val now       = System.currentTimeMillis()
-
-    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_A, 'a'))
-
-    handler.eventStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
-      Some(CursorPeekOtherKeyPressed)
-  }
-
-  it should "not surface the new raw cursor-peek events on keyStrokeInfoStream" in {
-    val component = new JPanel()
-    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
-    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
-    val listener  = component.getKeyListeners.head
-    val now       = System.currentTimeMillis()
-
-    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_META, '\u0000'))
-    listener.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, now + 1, 0, KeyEvent.VK_UNDEFINED, 'z'))
-
-    handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
-      Some(KeyStrokeInfo(InputKey.Character, Some('z'), Set.empty))
-  }
-
   // Horizontal scroll-gesture support (issue #1568): a plain wheel notch still scrolls vertically; shift-held is the
   // documented convention (also used by e.g. VS Code and other editors, given AWT's `MouseWheelEvent` exposes no
   // separate horizontal-delta channel of its own) this handler now uses to tell a horizontal gesture apart from a
@@ -440,7 +409,7 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     )
 
     handler.eventStream.take(2).compile.toList.unsafeRunTimed(StreamObservationTimeout) shouldBe Some(
-      List(ScrollDown(3), ScrollUp(3))
+      List(MouseWheel(0, 0, 3, Some(0), Some(0)), MouseWheel(0, 0, -3, Some(0), Some(0)))
     )
   }
 
@@ -512,6 +481,64 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
 
     handler.eventStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
       Some(InsertChar('a'))
+  }
+
+  private def typeTwoKeysAroundAMouseMove(component: JPanel): Unit =
+    val key    = component.getKeyListeners.head
+    val motion = component.getMouseMotionListeners.head
+    key.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, System.currentTimeMillis(), 0, KeyEvent.VK_UNDEFINED, 'a'))
+    motion.mouseMoved(
+      java.awt.event.MouseEvent(component, java.awt.event.MouseEvent.MOUSE_MOVED, 2L, 0, 8, 16, 0, false)
+    )
+    key.keyPressed(
+      KeyEvent(
+        component,
+        KeyEvent.KEY_PRESSED,
+        System.currentTimeMillis(),
+        0,
+        KeyEvent.VK_LEFT,
+        KeyEvent.CHAR_UNDEFINED
+      )
+    )
+
+  it should "stamp each keystroke, and only keystrokes, onto the latency trace as it is queued and taken" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val timings   = com.serenity.diagnostics.FrameTimings()
+    timings.keyLatency.setEnabled(true)
+    val handler = new SwingInputHandler[IO, Event](
+      component,
+      router,
+      () => CellMetrics(8, 16, 13),
+      () => CellMetrics(8, 16, 13),
+      frameTimings = timings
+    )
+
+    typeTwoKeysAroundAMouseMove(component)
+    val batches = handler.inputBatches.take(1).compile.toList.unsafeRunTimed(StreamObservationTimeout)
+
+    batches.map(_.map(_.size)) shouldBe Some(List(3))
+    timings.keyLatency.pendingKeys.map(key => (key.seq, key.enqueuedAt.isDefined, key.dequeuedAt.isDefined)) shouldBe
+      Vector((0L, true, true), (1L, true, true))
+  }
+
+  it should "leave the latency trace empty while it is off" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val timings   = com.serenity.diagnostics.FrameTimings()
+    val handler = new SwingInputHandler[IO, Event](
+      component,
+      router,
+      () => CellMetrics(8, 16, 13),
+      () => CellMetrics(8, 16, 13),
+      frameTimings = timings
+    )
+
+    typeTwoKeysAroundAMouseMove(component)
+    val batches = handler.inputBatches.take(1).compile.toList.unsafeRunTimed(StreamObservationTimeout)
+
+    batches.map(_.map(_.size)) shouldBe Some(List(3))
+    timings.keyLatency.pendingKeys shouldBe empty
   }
 
   private def isWaitingForSwingInput(thread: Thread, trace: Array[StackTraceElement]): Boolean =

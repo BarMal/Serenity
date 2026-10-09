@@ -23,3 +23,77 @@ object PixelRect:
 
   def unionOf(rects: Iterable[PixelRect]): Option[PixelRect] =
     rects.reduceOption(_.union(_))
+
+  /** How many separate rects a repaint is split into before [[coalesced]] gives up and covers their union: each rect is
+    * its own blit, and past a handful the per-blit cost outweighs the pixels left out between them.
+    */
+  val RepaintRectLimit: Int = 8
+
+  /** `rects` with every pair that overlaps or shares an edge merged into their union, until no two touch; empty rects
+    * are dropped. More than `maxRects` pieces fall back to the union of them all.
+    */
+  def coalesced(rects: Iterable[PixelRect], maxRects: Int): List[PixelRect] =
+    val pieces = rects.iterator
+      .filter(rect => rect.widthPx > 0 && rect.heightPx > 0)
+      .toList
+      .sortBy(rect => (rect.yPx, rect.xPx))
+      .foldLeft(List.empty[PixelRect])(absorb)
+    if pieces.sizeIs > maxRects then unionOf(pieces).toList
+    else pieces.sortBy(rect => (rect.yPx, rect.xPx))
+
+  @annotation.tailrec
+  private def absorb(merged: List[PixelRect], rect: PixelRect): List[PixelRect] =
+    val (touching, apart) = merged.partition(touches(rect))
+    if touching.isEmpty then rect :: apart
+    else absorb(apart, touching.foldLeft(rect)(_.union(_)))
+
+  /** Overlapping, or abutting along a shared stretch of edge; rects meeting only at a corner stay apart, since their
+    * union would cover two empty quadrants.
+    */
+  private def touches(a: PixelRect)(b: PixelRect): Boolean =
+    val xOverlap = a.xPx < b.rightPx && b.xPx < a.rightPx
+    val yOverlap = a.yPx < b.bottomPx && b.yPx < a.bottomPx
+    val xMeet    = a.xPx <= b.rightPx && b.xPx <= a.rightPx
+    val yMeet    = a.yPx <= b.bottomPx && b.yPx <= a.bottomPx
+    (xOverlap && yMeet) || (yOverlap && xMeet)
+
+  /** The pixels of `bounds` no rectangle in `holes` covers, as disjoint rectangles: horizontal bands split at every
+    * hole edge, with vertically adjacent bands of the same shape merged into one.
+    */
+  def uncoveredWithin(bounds: PixelRect, holes: List[PixelRect]): List[PixelRect] =
+    val clipped = holes.flatMap(clippedTo(bounds))
+    val edges =
+      (bounds.yPx :: bounds.bottomPx :: clipped.flatMap(hole => List(hole.yPx, hole.bottomPx))).distinct.sorted
+    val bands = edges.zip(edges.drop(1)).map { (top, bottom) =>
+      val covered = clipped.filter(hole => hole.yPx < bottom && top < hole.bottomPx).map(h => (h.xPx, h.rightPx))
+      Band(top, bottom, spansBetween(bounds.xPx, bounds.rightPx, covered.sortBy(_._1)))
+    }
+    mergeStackedBands(bands).flatMap { band =>
+      band.spans.map((left, right) => PixelRect(left, band.top, right - left, band.bottom - band.top))
+    }
+
+  final private case class Band(top: Int, bottom: Int, spans: List[(Int, Int)])
+
+  private def clippedTo(bounds: PixelRect)(rect: PixelRect): Option[PixelRect] =
+    val left   = rect.xPx.max(bounds.xPx)
+    val top    = rect.yPx.max(bounds.yPx)
+    val right  = rect.rightPx.min(bounds.rightPx)
+    val bottom = rect.bottomPx.min(bounds.bottomPx)
+    Option.when(left < right && top < bottom)(PixelRect(left, top, right - left, bottom - top))
+
+  private def spansBetween(left: Int, right: Int, coveredByStart: List[(Int, Int)]): List[(Int, Int)] =
+    val (cursor, spans) = coveredByStart.foldLeft((left, List.empty[(Int, Int)])) {
+      case ((cursor, spans), (coveredLeft, coveredRight)) =>
+        val withGap = if coveredLeft > cursor then (cursor, coveredLeft) :: spans else spans
+        (cursor.max(coveredRight), withGap)
+    }
+    (if cursor < right then (cursor, right) :: spans else spans).reverse
+
+  private def mergeStackedBands(bands: List[Band]): List[Band] =
+    bands
+      .foldLeft(List.empty[Band]) {
+        case (previous :: rest, band) if previous.bottom == band.top && previous.spans == band.spans =>
+          previous.copy(bottom = band.bottom) :: rest
+        case (merged, band) => band :: merged
+      }
+      .reverse

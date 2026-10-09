@@ -129,7 +129,7 @@ private[manager] object UiPresetTransitions:
     * splash has no editor pane, buffer, or workspace tree, so a preset applied onto it directly produced a buffer-less
     * pane, or a tree with no editor leaf that failed validation. A no-op at runtime (no splash).
     */
-  private def seedEditorFromSplash(state: AppState)(using com.serenity.rope.Balance): AppState =
+  private[manager] def seedEditorFromSplash(state: AppState)(using com.serenity.rope.Balance): AppState =
     if state.startPageSurface.isEmpty then state
     else
       val withoutStartPage =
@@ -170,11 +170,11 @@ private[manager] object UiPresetTransitions:
 
   private def hydratePresetSymbolPanels(state: AppState): AppState =
     val hydratedSurfaces = state.runtime.uiSurfaces.map {
-      case surface @ UiSurface(_, SurfaceContent.Outline(_, _), SurfacePresentation.Docked, _) =>
+      case surface @ UiSurface(_, SurfaceContent.Outline(_, _, _), SurfacePresentation.Docked, _) =>
         surface.copy(content = PanelContentSync.outlineContent(state.activeBuffer))
-      case surface @ UiSurface(_, SurfaceContent.Comments(_, _), SurfacePresentation.Docked, _) =>
+      case surface @ UiSurface(_, SurfaceContent.Comments(_, _, _), SurfacePresentation.Docked, _) =>
         surface.copy(content = PanelContentSync.commentsContent(state.activeBuffer))
-      case surface @ UiSurface(_, SurfaceContent.Diagnostics(_, _), SurfacePresentation.Docked, _) =>
+      case surface @ UiSurface(_, SurfaceContent.Diagnostics(_, _, _), SurfacePresentation.Docked, _) =>
         surface.copy(content = PanelContentSync.diagnosticsContent(state, state.activeBuffer))
       case surface =>
         surface

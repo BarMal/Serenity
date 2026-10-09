@@ -46,9 +46,9 @@ object FontLoader:
     def scaledUiFontSize: Float =
       scaledPointSize(uiFontSize)
 
-    /** The factor UI chrome (panel corner radius, border thickness -- see `AppConfig.scaledUiCornerRadiusPx`) is drawn
-      * at, so it grows and shrinks with the same UI font size (and device scale) `scaledUiFontSize` does, rather than
-      * always painting at its configured pixel value regardless of font size (issue #1542).
+    /** The factor UI chrome (panel border thickness -- see `AppConfig.scaledUiOutlineThicknessPx`) is drawn at, so it
+      * grows and shrinks with the same UI font size (and device scale) `scaledUiFontSize` does, rather than always
+      * painting at its configured pixel value regardless of font size (issue #1542).
       */
     def uiChromeScale: Double =
       if uiFontSize > 0.0f then scaledUiFontSize.toDouble / FontConfig.BaselineUiFontSizePx else 1.0

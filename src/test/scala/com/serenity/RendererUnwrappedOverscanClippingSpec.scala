@@ -6,7 +6,7 @@ import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, Layout, LayoutEngine, ViewportSize}
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -69,8 +69,8 @@ class RendererUnwrappedOverscanClippingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()

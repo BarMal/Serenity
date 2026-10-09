@@ -12,6 +12,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.testkit.{RopeText, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -24,7 +25,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
   private def makeStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("LspQueueSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   private def setBufferLanguage(stateManager: StateManager, language: LanguageId): Unit =
     stateManager
@@ -57,22 +58,33 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
         case LspEffect.FileOpened(uri, lang, text) =>
           uri should include("test-lsp")
           lang shouldBe LanguageId.Scala
-          text shouldBe "object Foo"
+          text.collect() shouldBe "object Foo"
         case other => fail(s"Expected FileOpened, got $other")
     finally
       Files.deleteIfExists(tempFile)
       sm.applyEvent(Quit).unsafeRunSync()
   }
 
-  // A "close buffer, expect FileClosed" test previously lived here, driven through
-  // StateManagerEditorCapability.closeBuffer. That façade method was deleted in #1183 as dead production code (no
-  // caller outside test-scenario setup) -- and deleting it surfaced that it was, in fact, the *only* code path that
-  // ever emitted LspEffect.FileClosed for a genuinely closed buffer. The real production close-tab flow
-  // (StateManagerWorkflowCapability.closeBufferUsingExistingFlow -> EditorState.closeFocusedTab) does not notify the
-  // LSP server at all. FileClosed coverage for the two paths that ARE reachable from production remains below
-  // (SetBufferLanguage's language switch, and saveBufferAs's URI change) -- but closing a tab never reaching a real
-  // LSP server is a genuine gap, not something this façade-deletion PR should silently paper over or fix. Flagged
-  // for a follow-up issue rather than addressed here.
+  it should "emit FileClosed when the tab holding an LSP document is closed" in {
+    val sm       = makeStateManager()
+    val tempFile = Files.createTempFile("test-lsp-close-tab", ".scala")
+    Files.writeString(tempFile, "object Closed")
+    try
+      sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
+      sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.drain.unsafeRunSync()
+
+      sm.applyEvent(CloseTab).unsafeRunSync()
+
+      val stillOpen =
+        sm.getCurrentState.unsafeRunSync().persisted.buffers.values.exists(_.document.filePath.contains(tempFile))
+      stillOpen shouldBe false
+      sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync() shouldBe List(
+        LspEffect.FileClosed(tempFile.toUri.toString, LanguageId.Scala)
+      )
+    finally
+      Files.deleteIfExists(tempFile)
+      sm.applyEvent(Quit).unsafeRunSync()
+  }
 
   it should "not emit FileOpened for files without a known language" in {
     val sm       = makeStateManager()
@@ -113,7 +125,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
       effects should have size 2
       effects.head shouldBe LspEffect.FileClosed(tempFile.toUri.toString, LanguageId.Scala)
-      effects(1) shouldBe LspEffect.FileOpened(tempFile.toUri.toString, LanguageId.Markdown, "object Baz")
+      effects(1) shouldBe LspEffect.FileOpened(tempFile.toUri.toString, LanguageId.Markdown, RopeText("object Baz"))
     finally
       Files.deleteIfExists(tempFile)
       sm.applyEvent(Quit).unsafeRunSync()
@@ -125,11 +137,14 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     Files.writeString(tempFile, "object Change")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
+      val opened = sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync()
+
       sm.applyEvent(InsertChar('a')).unsafeRunSync()
       sm.applyEvent(InsertChar('b')).unsafeRunSync()
       sm.applyEvent(InsertChar('c')).unsafeRunSync()
 
-      val effects = sm.lspEffectSource.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
+      val effects =
+        opened ++ sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync()
       val currentText =
         sm.getCurrentState
           .unsafeRunSync()
@@ -137,10 +152,10 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
           .buffers
           .values
           .find(_.document.filePath.contains(tempFile))
-          .map(_.document.content.collect())
+          .map(_.document.content)
 
       currentText shouldBe defined
-      effects.head shouldBe LspEffect.FileOpened(tempFile.toUri.toString, LanguageId.Scala, "object Change")
+      effects.head shouldBe LspEffect.FileOpened(tempFile.toUri.toString, LanguageId.Scala, RopeText("object Change"))
       effects(1) shouldBe LspEffect.FileChanged(tempFile.toUri.toString, LanguageId.Scala, currentText.get, 2)
     finally
       Files.deleteIfExists(tempFile)
@@ -169,10 +184,12 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     Files.writeString(tempFile, "object Stalled")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
+      val opened = sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync()
 
       (1 to 600).foreach(_ => sm.applyEvent(InsertChar('x')).unsafeRunSync())
 
-      val effects = sm.lspEffectSource.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
+      val effects =
+        opened ++ sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync()
       val currentText =
         sm.getCurrentState
           .unsafeRunSync()
@@ -180,7 +197,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
           .buffers
           .values
           .find(_.document.filePath.contains(tempFile))
-          .map(_.document.content.collect())
+          .map(_.document.content)
 
       effects should have size 2
       currentText shouldBe defined
@@ -206,7 +223,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
       sm.lspEffectSource.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync() shouldBe List(
         LspEffect.FileClosed(source.toUri.toString, LanguageId.Scala),
-        LspEffect.FileOpened(target.toUri.toString, LanguageId.Markdown, "object Saved")
+        LspEffect.FileOpened(target.toUri.toString, LanguageId.Markdown, RopeText("object Saved"))
       )
     finally
       Files.deleteIfExists(source)

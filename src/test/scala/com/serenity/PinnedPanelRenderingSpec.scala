@@ -1,11 +1,9 @@
 package com.serenity
 
-import java.awt.{Color, Font}
+import java.awt.Font
 
-import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey, EasingCurve, Tween}
-import com.serenity.config.{AppConfig, BackgroundStyle}
+import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
-import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
@@ -29,20 +27,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default, cellMetrics)
 
     surface.getBg(panel.rect.x + 1, panel.rect.y + 1) shouldBe Theme.light.panel.background
-    surface.strokeRoundRectCalls.map(_.color) should contain(Theme.light.border)
-  }
-
-  it should "use the configured UI corner radius for pinned panel borders" in {
-    val surface = new MockRenderSurface(40, 12)
-    val panel = TextPanelView(
-      rect = LayoutRect(2, 2, 20, 6),
-      title = "outline",
-      rows = List(TextPanelRow("Item 1"))
-    )
-
-    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default.withUiCornerRadiusPx(14), cellMetrics)
-
-    surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(14)
+    surface.strokeRectCalls.map(_.color) should contain(Theme.light.border)
   }
 
   it should "use the configured UI outline thickness for pinned panel borders" in {
@@ -55,29 +40,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
 
     PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default.withUiOutlineThicknessPx(4), cellMetrics)
 
-    surface.strokeRoundRectCalls.headOption.map(_.strokeWidth) shouldBe Some(4.0f)
-  }
-
-  it should "draw a shadow for panels only when UI shadows are enabled" in {
-    val panel = TextPanelView(
-      rect = LayoutRect(2, 2, 20, 6),
-      title = "outline",
-      rows = List(TextPanelRow("Item 1"))
-    )
-    val enabledSurface  = new MockRenderSurface(40, 12)
-    val disabledSurface = new MockRenderSurface(40, 12)
-
-    PinnedPanelRenderer.render(enabledSurface, panel, Theme.light, AppConfig.default, cellMetrics)
-    PinnedPanelRenderer.render(
-      disabledSurface,
-      panel,
-      Theme.light,
-      AppConfig.default.withUiShadowsEnabled(false),
-      cellMetrics
-    )
-
-    enabledSurface.roundRectShadowCalls.map(_.rect) should contain(panel.rect)
-    disabledSurface.roundRectShadowCalls shouldBe empty
+    surface.strokeRectCalls.headOption.map(_.strokeWidth) shouldBe Some(4.0f)
   }
 
   it should "render selected rows using the theme highlight colors" in {
@@ -187,33 +150,6 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getRow(2).slice(4, 7) shouldBe "   "
   }
 
-  it should "apply active animation foreground colors to panel text" in {
-    val surface            = new MockRenderSurface(40, 12)
-    val animatedForeground = new Color(10, 20, 30, 96)
-    val panel = TextPanelView(
-      rect = LayoutRect(2, 2, 20, 6),
-      title = "outline",
-      rows = List(TextPanelRow("Item 1"))
-    )
-    val animationState = AnimationState(
-      Map(
-        CharacterKey(-1, -1) -> AnimatedCell(
-          None,
-          foregroundAnimation = Some(Tween(animatedForeground, animatedForeground, EasingCurve.Linear, steps = 1))
-        ),
-        CharacterKey(0, 1) -> AnimatedCell(
-          Some('I'),
-          foregroundAnimation = Some(Tween(animatedForeground, animatedForeground, EasingCurve.Linear, steps = 1))
-        )
-      )
-    )
-
-    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default, cellMetrics, animationState)
-
-    surface.strokeRoundRectCalls.map(_.color) should contain(animatedForeground)
-    surface.getFg(panel.rect.x + 1, panel.rect.y + 1) shouldBe animatedForeground
-  }
-
   it should "paint from a composition when present, taking priority over the plain rows" in {
     val surface     = new MockRenderSurface(40, 12)
     val contentRect = SurfaceFrameLayout(LayoutRect(2, 2, 20, 6)).contentRect
@@ -280,66 +216,4 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getBg(contentRect.x + 1, contentRect.y) shouldBe Theme.light.panel.background
   }
 
-  it should "request backdrop blur for pinned panels using the configured blur radius" in {
-    val baseState = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        theme = Theme.light,
-        config = AppConfig.default.withBlurRadius(0.4f)
-      ),
-      runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(100, 30)))
-    )
-    val state = DockedPanelFixtures.dock(
-      baseState,
-      SurfaceId("diagnostics"),
-      SurfaceContent.Diagnostics(List(Diagnostic("unused import", DiagnosticSeverity.Warning, Location(1, 0)))),
-      PanelPosition.Right,
-      24
-    )
-    val surface   = new MockRenderSurface(100, 30)
-    val viewport  = ViewportSize(100, 30)
-    val layout    = com.serenity.ui.layout.LayoutEngine.calculateLayout(state, viewport)
-    val panelRect = layout.pinnedPanelRects.getOrElse(PanelPosition.Right, fail("Expected right pinned panel rect"))
-
-    RendererEntryPoints.render(
-      state,
-      cursorVisible = true,
-      surface,
-      viewport,
-      com.serenity.state.manager.RenderCaches.create()
-    )
-
-    surface.blurRegionCalls should contain(
-      surface.BlurRegionCall(panelRect.x, panelRect.y, panelRect.width, panelRect.height, 0.4f)
-    )
-  }
-
-  it should "skip backdrop blur for pinned panels when the background style is solid" in {
-    val baseState = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        theme = Theme.light,
-        config = AppConfig.default
-          .withBlurRadius(0.4f)
-          .withBackgroundStyle(BackgroundStyle.Solid)
-      ),
-      runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(100, 30)))
-    )
-    val state = DockedPanelFixtures.dock(
-      baseState,
-      SurfaceId("diagnostics"),
-      SurfaceContent.Diagnostics(List(Diagnostic("unused import", DiagnosticSeverity.Warning, Location(1, 0)))),
-      PanelPosition.Right,
-      24
-    )
-    val surface = new MockRenderSurface(100, 30)
-
-    RendererEntryPoints.render(
-      state,
-      cursorVisible = true,
-      surface,
-      ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
-    )
-
-    surface.blurRegionCalls shouldBe empty
-  }
 end PinnedPanelRenderingSpec

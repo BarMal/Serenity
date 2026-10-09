@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration.*
-import scala.util.Random
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
@@ -16,6 +15,7 @@ import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.state.reducers.AppEffect
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.SharedDictionary
 import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
@@ -42,8 +42,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
   final private case class PipelineHarness(
       stateRef: Ref[IO, AppState],
       operations: StateManagerOperationBoundary,
-      pipeline: StateManagerEventPipeline,
-      ticker: AnimationTicker
+      pipeline: StateManagerEventPipeline
   )
 
   final private case class DispatchGate(entered: Deferred[IO, Unit], release: Deferred[IO, Unit])
@@ -54,7 +53,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
   /** Every interpreted effect reads the state, waits on `gate`, then commits what it read. */
   private def snapshotCommittingPipeline(initialState: AppState, gate: DispatchGate): IO[PipelineHarness] =
     for
-      sharedModelRef <- Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty))
+      sharedModelRef <- Ref.of[IO, Model](Model(initialState, UndoState()))
       sharedStateRef = ModelViews.appRef(sharedModelRef)
       cacheRef   <- Ref.of[IO, Option[MouseTargetCache]](None)
       lspQueue   <- LspEffectQueue.create
@@ -76,7 +75,8 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       modelCommit = operations.modelCommit
       undoRecording = new UndoRecording(new UndoRecordingPort:
         def updateUndo(update: UndoState => UndoState): IO[Unit] = ModelViews.undoRef(sharedModelRef).update(update)
-        export modelCommit.updateValidated as updateModelValidated)
+        export modelCommit.updateValidated as updateModelValidated
+        export modelCommit.updateValidatedPlaced as updateModelPlaced)
       pipeline = new StateManagerEventPipeline(
         statePort,
         effectPort,
@@ -91,16 +91,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
         operations,
         undoRecording
       )
-      animations = new AnimationChoreography(new AnimationChoreographyPort:
-        def currentState: IO[AppState] = sharedStateRef.get
-        export operations.modelCommit.commitState)
-      editor = new StateManagerEditorCapability(
-        operations.modelCommit,
-        animations,
-        operations,
-        new Random(0L)
-      )
-    yield PipelineHarness(sharedStateRef, operations, pipeline, editor.animationTicker)
+    yield PipelineHarness(sharedStateRef, operations, pipeline)
 
   private def previewEditedTo(generation: Long): AppState =
     AppState.initial.copy(persisted =
@@ -126,32 +117,6 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       yield after.persisted.buffers.get(bufferId).map(_.markdownPreviewCommittedGeneration)
 
     runVirtual(program) shouldBe Some(7L)
-  }
-
-  it should "skip a render tick that arrives mid-dispatch, report it still active, and advance on the next one" in {
-    val typing = AppState.initial.copy(runtime =
-      AppState.initial.runtime.copy(typingActivity = AppState.initial.runtime.typingActivity.observed)
-    )
-    val program =
-      for
-        gate        <- newGate
-        harness     <- snapshotCommittingPipeline(typing, gate)
-        dispatch    <- harness.pipeline.applyEvent(FileSearch).start
-        _           <- gate.entered.get
-        beforeTick  <- harness.stateRef.get
-        stillActive <- harness.ticker.advanceAnimationsOnTick.timeout(10.seconds)
-        midDispatch <- harness.stateRef.get
-        _           <- gate.release.complete(())
-        _           <- dispatch.joinWithNever
-        committed   <- harness.stateRef.get
-        _           <- harness.ticker.advanceAnimationsOnTick
-        nextFrame   <- harness.stateRef.get
-      yield
-        stillActive shouldBe true
-        midDispatch.runtime.typingActivity shouldBe beforeTick.runtime.typingActivity
-        nextFrame.runtime.typingActivity shouldBe committed.runtime.typingActivity.advance
-
-    runVirtual(program)
   }
 
   /** Saves the buffer to disk for real, then holds the save open -- after the disk write, before the state records the
@@ -184,7 +149,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       directory    <- IO.blocking(Files.createTempDirectory("state-manager-dispatch-inbox-spec"))
       file = directory.resolve("notes.txt")
       _                   <- IO.blocking(Files.writeString(file, "draft"))
-      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))
       themeNamesRef       <- Ref.of[IO, List[String]](Nil)
       quitSignal          <- Deferred[IO, Unit]
       lspQueue            <- LspEffectQueue.create
@@ -206,7 +171,8 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
           uiPresetStore = UiPresetStore(directory.resolve("presets.json")),
           windowSizeProvider = IO.pure(None),
           onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-          fileDialog = None
+          fileDialog = None,
+          dictionaryCache = SharedDictionary.default
         )
         .copy(fileManager = new GatedSaveFileManager(written, release, revisionRead))
       stateManager <- StateManager.fromRuntime(runtime)

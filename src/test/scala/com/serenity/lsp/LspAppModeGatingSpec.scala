@@ -9,12 +9,14 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.AppMode
+import com.serenity.keystroke.events.InsertChar
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.BufferId
 import com.serenity.testkit.VirtualTime.runVirtual
+import com.serenity.testkit.{RopeText, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -30,7 +32,7 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("LspAppModeGatingSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   private def setBufferPath(stateManager: StateManager, file: java.nio.file.Path): Unit =
     stateManager
@@ -62,7 +64,7 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
 
       val effect =
         stateManager.lspEffectSource.lspEffectStream.take(1).compile.lastOrError.timeout(3.seconds).unsafeRunSync()
-      effect shouldBe LspEffect.FileOpened(file.toUri.toString, LanguageId.Scala, "")
+      effect shouldBe LspEffect.FileOpened(file.toUri.toString, LanguageId.Scala, RopeText(""))
     finally Files.deleteIfExists(file): Unit
   }
 
@@ -82,6 +84,38 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
         .unsafeRunSync()
       setBufferPath(stateManager, file)
       setLanguage(stateManager, LanguageId.Scala)
+
+      val outcome =
+        runVirtual(
+          stateManager.lspEffectSource.lspEffectStream
+            .take(1)
+            .compile
+            .lastOrError
+            .timeout(500.millis)
+            .attempt
+        )
+      outcome.left.map(_.getClass) shouldBe Left(classOf[TimeoutException])
+    finally Files.deleteIfExists(file): Unit
+  }
+
+  "Editing a Markdown buffer in prose mode" should "not enqueue an LSP document change" in {
+    val stateManager = createStateManager()
+    val file         = Files.createTempFile("lsp-mode-gating-prose-edit", ".md")
+    try
+      stateManager
+        .executeCommand(
+          Command.typed(
+            "app-mode-prose",
+            "Switch to prose mode",
+            CommandIntent.View(ViewIntent.SetAppMode(AppMode.Prose)),
+            CommandCategory.Settings
+          )
+        )
+        .unsafeRunSync()
+      setBufferPath(stateManager, file)
+      setLanguage(stateManager, LanguageId.Markdown)
+      stateManager.applyEvent(InsertChar('a')).unsafeRunSync()
+      stateManager.applyEvent(InsertChar('b')).unsafeRunSync()
 
       val outcome =
         runVirtual(

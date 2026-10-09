@@ -3,6 +3,7 @@ package com.serenity.state.reducers
 import com.serenity.keystroke.events.*
 import com.serenity.rope.*
 import com.serenity.state.models.*
+import com.serenity.state.undo.EditGrouping
 
 /** Copy/Cut/Paste -- the family that reads or writes the clipboard alongside the buffer. Each event gets its own helper
   * (rather than one large match) since all three independently compute a clipboard string alongside their buffer
@@ -16,104 +17,92 @@ private[reducers] object EditorClipboardEventReducer:
 
   def reduce(event: TextEntryEvent, ctx: CursorEventContext): ReducerResult =
     event match
-      case Copy           => reduceCopy(ctx)
-      case Cut            => reduceCut(ctx)
-      case Paste          => reducePaste(ctx)
-      case CutToDarlings  => reduceCutToDarlings(ctx)
-      case RestoreDarling => reduceRestoreDarling(ctx)
-      case _              => ReducerResult.noEffects(ctx.currentState)
+      case Copy                    => reduceCopy(ctx)
+      case Cut                     => reduceCut(ctx)
+      case Paste                   => reducePaste(ctx)
+      case PasteFromHistory(entry) => pasteEntry(ctx, entry)
+      case CutToDarlings           => reduceCutToDarlings(ctx)
+      case RestoreDarling          => reduceRestoreDarling(ctx)
+      case _                       => ReducerResult.noEffects(ctx.currentState)
+
+  /** The selection, or with none every cursor's whole line, one per line. */
+  private def copiedEntry(ctx: CursorEventContext): ClipboardEntry =
+    import ctx.*
+    if hasSelection then ClipboardEntry(selectedTexts(buffer).mkString("\n"), wholeLine = false)
+    else
+      ClipboardEntry(
+        distinctCursorLines(buffer)
+          .map(line => buffer.plainTextExport(buffer.document.content.getLine(line).getOrElse("")))
+          .mkString("\n"),
+        wholeLine = true
+      )
+
+  private def withCopied(state: AppState, entry: ClipboardEntry): AppState =
+    state.copy(runtime =
+      state.runtime
+        .copy(clipboard = Some(entry.text), clipboardHistory = state.runtime.clipboardHistory.recorded(entry))
+    )
 
   private def reduceCopy(ctx: CursorEventContext): ReducerResult =
-    import ctx.*
-    if hasSelection then
-      ReducerResult.noEffects(
-        currentState.copy(runtime = currentState.runtime.copy(clipboard = Some(selectedTexts(buffer).mkString("\n"))))
-      )
-    else
-      val clipboardText =
-        distinctCursorLines(buffer)
-          .map(line => buffer.document.content.getLine(line).getOrElse(""))
-          .mkString("\n")
-      ReducerResult.noEffects(
-        currentState.copy(runtime = currentState.runtime.copy(clipboard = Some(clipboardText)))
-      )
+    ReducerResult.noEffects(withCopied(ctx.currentState, copiedEntry(ctx)))
 
   private def reduceCut(ctx: CursorEventContext): ReducerResult =
     import ctx.*
-    if hasSelection then
-      val (updated, edits) = deleteSelectedRanges(buffer)
-      ReducerResult(
-        currentState.copy(
-          persisted = currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updated)),
-          runtime = currentState.runtime.copy(clipboard = Some(selectedTexts(buffer).mkString("\n")))
+    val entry = copiedEntry(ctx)
+    val (updated, edits) =
+      if hasSelection then deleteSelectedRanges(buffer)
+      else applyMultiCursorLineCut(buffer, distinctCursorLines(buffer))
+    ReducerResult(
+      withCopied(
+        currentState.copy(persisted =
+          currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updated))
         ),
-        animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits) ++
-          undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
-      )
-    else
-      val targetLines = distinctCursorLines(buffer)
-      val clipboardText =
-        targetLines.map(line => buffer.document.content.getLine(line).getOrElse("")).mkString("\n")
-      val (updated, edits) = applyMultiCursorLineCut(buffer, targetLines)
-      ReducerResult(
-        currentState.copy(
-          persisted = currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updated)),
-          runtime = currentState.runtime.copy(clipboard = Some(clipboardText))
-        ),
-        animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits) ++
-          undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
-      )
+        entry
+      ),
+      undoBoundaryEffects(buffer.id, paneId, buffer, edits, grouping = EditGrouping.Standalone)
+    )
 
   private def reducePaste(ctx: CursorEventContext): ReducerResult =
+    val runtime = ctx.currentState.runtime
+    runtime.clipboard
+      .map(text => runtime.clipboardHistory.entryFor(LineEndings.normalized(text)))
+      .filter(entry => entry.text.nonEmpty || entry.wholeLine)
+      .fold(ReducerResult.noEffects(ctx.currentState))(pasteEntry(ctx, _))
+
+  private def pasteEntry(ctx: CursorEventContext, entry: ClipboardEntry): ReducerResult =
     import ctx.*
 
     def applyEditedBuffer(f: Buffer => (Buffer, List[MultiCursorEdit])): ReducerResult =
       val (updated, edits) = f(buffer)
       ReducerResult(
         Focused.replaceBuffer(currentState, updated),
-        animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits) ++
-          undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+        undoBoundaryEffects(buffer.id, paneId, buffer, edits, grouping = EditGrouping.Standalone)
       )
 
-    currentState.runtime.clipboard.filter(_.nonEmpty) match
-      case None => ReducerResult.noEffects(currentState)
-      case Some(text) if hasSelection =>
-        applyEditedBuffer(applyMultiSelectionReplacement(_, text))
-      case Some(text) if isMulti =>
-        applyEditedBuffer(applyMultiCursorInsertion(_, text))
-      case Some(text) =>
-        val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, head, text)
-        val replacedCursor                    = replacedBuffer.editing.cursors.head
-        val newCursor                         = replacedCursor.position
-        val withoutAnimations = buffer.copy(
-          document = buffer.document.copy(
-            content = replacedBuffer.document.content,
-            isDirty = replacedBuffer.document.isDirty,
-            isNewEmpty = replacedBuffer.document.isNewEmpty
-          ),
-          editing = buffer.editing.withPrimary(
-            Cursor(newCursor, replacedCursor.selectionAnchor, Some(newCursor.column), None)
-          ),
-          annotations = replacedBuffer.annotations,
-          richText = replacedBuffer.richText
-        )
-        val (updatedBuffer, delta) = addInsertionAnimations(withoutAnimations, currentState, List(replacementEdit))
-        val edits                  = List(replacementEdit)
-        val effects =
-          animationRemapEffects(
-            buffer.id,
-            buffer.document.content,
-            updatedBuffer.document.content,
-            edits
-          ) ++
-            animationMergeEffects(buffer.id, delta) ++
-            undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
-        ReducerResult(
-          currentState.copy(persisted =
-            currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
-          ),
-          effects
-        )
+    val text = entry.text
+    if hasSelection then applyEditedBuffer(applyMultiSelectionReplacement(_, text))
+    else if entry.wholeLine then applyEditedBuffer(applyWholeLineInsertion(_, text))
+    else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, text))
+    else
+      val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, head, text)
+      val replacedCursor                    = replacedBuffer.editing.cursors.head
+      val newCursor                         = replacedCursor.position
+      val updatedBuffer = buffer.copy(
+        document = replacedBuffer.document,
+        editing = buffer.editing.withPrimary(
+          Cursor(newCursor, replacedCursor.selectionAnchor, Some(newCursor.column), None)
+        ),
+        annotations = replacedBuffer.annotations,
+        richText = replacedBuffer.richText
+      )
+      val effects =
+        undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), grouping = EditGrouping.Standalone)
+      ReducerResult(
+        currentState.copy(persisted =
+          currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
+        ),
+        effects
+      )
 
   /** Neo's "darlings": cuts the active selection into `annotations.darlings` instead of the ordinary clipboard, so it
     * can be brought back later with [[reduceRestoreDarling]] even after other cuts/copies have overwritten the
@@ -135,8 +124,7 @@ private[reducers] object EditorClipboardEventReducer:
         currentState.copy(persisted =
           currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> withDarling))
         ),
-        animationRemapEffects(buffer.id, buffer.document.content, withDarling.document.content, edits) ++
-          undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+        undoBoundaryEffects(buffer.id, paneId, buffer, edits, grouping = EditGrouping.Standalone)
       )
     else ReducerResult.noEffects(currentState)
 
@@ -152,24 +140,16 @@ private[reducers] object EditorClipboardEventReducer:
         val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(bufferWithoutDarling, head, mostRecent.text)
         val replacedCursor                    = replacedBuffer.editing.cursors.head
         val newCursor                         = replacedCursor.position
-        val withoutAnimations = bufferWithoutDarling.copy(
-          document = bufferWithoutDarling.document.copy(
-            content = replacedBuffer.document.content,
-            isDirty = replacedBuffer.document.isDirty,
-            isNewEmpty = replacedBuffer.document.isNewEmpty
-          ),
+        val updatedBuffer = bufferWithoutDarling.copy(
+          document = replacedBuffer.document,
           editing = bufferWithoutDarling.editing.withPrimary(
             Cursor(newCursor, replacedCursor.selectionAnchor, Some(newCursor.column), None)
           ),
           annotations = replacedBuffer.annotations,
           richText = replacedBuffer.richText
         )
-        val (updatedBuffer, delta) = addInsertionAnimations(withoutAnimations, currentState, List(replacementEdit))
-        val edits                  = List(replacementEdit)
         val effects =
-          animationRemapEffects(buffer.id, buffer.document.content, updatedBuffer.document.content, edits) ++
-            animationMergeEffects(buffer.id, delta) ++
-            undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+          undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), grouping = EditGrouping.Standalone)
         ReducerResult(
           currentState.copy(persisted =
             currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
@@ -188,6 +168,16 @@ private[reducers] object EditorClipboardEventReducer:
         MultiCursorEdit(index, offset, offset, insertedText)
     }
     applyTrackedEdits(buffer, insertionOffsets, edits)
+
+  /** Every caret line gets `lines` above it, the carets staying on the text they were on. */
+  private def applyWholeLineInsertion(buffer: Buffer, lines: String): (Buffer, List[MultiCursorEdit]) =
+    val content = buffer.document.content
+    val edits = distinctCursorLines(buffer).zipWithIndex.map {
+      case (line, index) =>
+        val lineStart = content.lineColumnToOffset(line, 0)
+        MultiCursorEdit(index, lineStart, lineStart, lines + "\n")
+    }
+    applyTrackedEdits(buffer, multiCursorEntries(buffer).map(_.offset), edits)
 
   private def applyMultiCursorLineCut(
     buffer: Buffer,
@@ -209,14 +199,14 @@ private[reducers] object EditorClipboardEventReducer:
       val sortedLineEdits = lineEdits
         .sortBy { case (_, start, end) => (-start, -end) }
         .map { case (_, start, end) => MultiCursorEdit(0, start, end, "") }
-      val (updatedContent, updatedRichTextDocument) =
-        foldEditsWithRichText(buffer, sortedLineEdits)((content, edit) =>
-          deleteOrUnchanged(content, edit.start, edit.end)
-        )
-      val edits = lineEdits.zipWithIndex.map {
-        case ((_, start, end), index) =>
-          MultiCursorEdit(index, start, end, "")
-      }
+      val folded =
+        foldEditsTracked(buffer, sortedLineEdits)((content, edit) => deleteOrUnchanged(content, edit.start, edit.end))
+      val (updatedContent, updatedRichTextDocument) = (folded.content, folded.richText)
+      val edits = folded
+        .appliedAmong(lineEdits.zipWithIndex.map {
+          case ((_, start, end), index) =>
+            MultiCursorEdit(index, start, end, "")
+        })
       val maxFinalLine = math.max(0, updatedContent.lineCount - 1)
       val finalCursors = targetLines.distinct.sorted.map { line =>
         val deletedBefore = targetLines.count(_ < line)

@@ -16,6 +16,7 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.testkit.AwaitCondition.awaitValue
+import com.serenity.testkit.SharedDictionary
 import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, PanelPosition, PanelTarget}
@@ -88,7 +89,7 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
     themeWrites: Option[Gates[String, Path]] = None
   ): IO[StateManager] =
     for
-      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))
       themeNamesRef       <- Ref.of[IO, List[String]](Nil)
       quitSignal          <- Deferred[IO, Unit]
       lspQueue            <- LspEffectQueue.create
@@ -110,7 +111,8 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
           uiPresetStore = UiPresetStore(sessionRoot.resolve("ui-presets.json")),
           windowSizeProvider = IO.pure(None),
           onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-          fileDialog = None
+          fileDialog = None,
+          dictionaryCache = SharedDictionary.default
         )
         .copy(fileManager = new GatedFileManager(listings))
       manager <- StateManager.fromRuntime(runtime)
@@ -124,7 +126,7 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
     FileEntry(path, path.getFileName.toString, isDirectory, None, 0L)
 
   private def explorerTree(state: AppState): Option[DirectoryTreeData] =
-    state.pinnedSurfaces.collectFirst { case UiSurface(_, SurfaceContent.DirectoryTree(tree, _), _, _) => tree }
+    state.pinnedSurfaces.collectFirst { case UiSurface(_, SurfaceContent.DirectoryTree(tree, _, _), _, _) => tree }
 
   /** An explorer rooted at [[root]] whose `src` row is selected and focused, ready for Enter to expand it. */
   private def explorerOnChild(manager: StateManager): IO[Unit] =
@@ -239,7 +241,7 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
         _      <- opening.joinWithNever
         filled <- awaitValue(manager.getCurrentState)(explorerTree(_).exists(_.entries.contains(cwd)))
         selected = filled.pinnedSurfaces.collectFirst {
-          case UiSurface(_, SurfaceContent.DirectoryTree(_, sel), _, _) =>
+          case UiSurface(_, SurfaceContent.DirectoryTree(_, sel, _), _, _) =>
             sel
         }
       yield (pinned.map(t => (t.rootPath, t.entries)), explorerTree(filled).map(_.entries(cwd)), selected, cwd)
@@ -303,7 +305,7 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
         .find(surface =>
           state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(position)
         )
-        .collect { case UiSurface(_, SurfaceContent.DirectoryTree(tree, _), _, _) => tree }
+        .collect { case UiSurface(_, SurfaceContent.DirectoryTree(tree, _, _), _, _) => tree }
         .flatMap(_.entries.get(child))
     val program =
       for

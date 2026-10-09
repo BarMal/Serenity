@@ -76,7 +76,6 @@ object RendererPaneContent:
                 state.persisted.config,
                 context,
                 placement.snapshot,
-                state.runtime.capabilities.pixelMotion,
                 paintsCursor = RendererCursorGlyphs.owningColumn(columnPlacements, _).exists(_ eq placement)
               )
             }.toList
@@ -90,8 +89,7 @@ object RendererPaneContent:
                   state.persisted.theme,
                   state.persisted.config,
                   context,
-                  snapshot,
-                  state.runtime.capabilities.pixelMotion
+                  snapshot
                 )
               )
               .getOrElse(Nil)
@@ -136,7 +134,7 @@ object RendererPaneContent:
 
     buffer match
       case Some(buf) if buf.document.content.weight == 0 && buf.document.isNewEmpty =>
-        RendererStartPage.renderWelcomeText(contentRect, state.persisted.theme, context)
+        RendererStartPage.renderWelcomeText(contentRect, state.persisted.theme, context, state.persisted.config)
       case Some(buf) if buf.document.content.weight == 0 =>
         RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)
       case Some(buf) if paintsColumns =>
@@ -166,14 +164,6 @@ object RendererPaneContent:
             annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending)),
             dirtyRows
           )
-          // Column-based document layout (issue #1338, Phase 1 animation): while a column-to-column sweep is
-          // mid-flight for this buffer, paint the outgoing column's receding sliver on top of the incoming column's
-          // content `renderBufferContent` just painted in full. Skipped for the markdown lens, whose content isn't
-          // plain wrapped text to begin with.
-          if !RendererMarkdownLens.isInlineMarkdownLens(buf, state) then
-            state.runtime.motion.columnTransitions.get(buf.id).foreach { transition =>
-              RendererColumnTransition.render(buf, contentRect, state, context, snap, transition)
-            }
         }
       case None =>
         RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)
@@ -193,8 +183,7 @@ object RendererPaneContent:
             state.persisted.theme,
             state.persisted.config,
             cursorContext,
-            placement.snapshot,
-            state.runtime.capabilities.pixelMotion
+            placement.snapshot
           )
         }
       case (Some(buf), Some(snap)) =>
@@ -217,8 +206,7 @@ object RendererPaneContent:
             state.persisted.theme,
             state.persisted.config,
             cursorContext,
-            snap,
-            state.runtime.capabilities.pixelMotion
+            snap
           )
       case _ => ()
 
@@ -243,7 +231,7 @@ object RendererPaneContent:
     val surface    = context.surface
     val headerRect = contract.paneHeaderRect(pane.id).getOrElse(paneLayout.headerRect)
     if headerRect.height > 0 then
-      context.surface.text.setFont(context.uiFont)
+      context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
       val isActive  = state.persisted.layout.activeEditorPaneId.contains(pane.id)
       val titleRect = contract.paneTitleRect(pane.id).getOrElse(paneLayout.titleRect)
 
@@ -251,9 +239,7 @@ object RendererPaneContent:
         surface.setBackgroundColor(state.persisted.theme.highlighted.background)
         surface.setForegroundColor(state.persisted.theme.highlighted.foreground)
       else
-        surface.setBackgroundColor(
-          SurfaceMaterials.panelBackground(state.persisted.config, state.persisted.theme, surface)
-        )
+        surface.setBackgroundColor(state.persisted.theme.panel.background)
         surface.setForegroundColor(state.persisted.theme.panel.foreground)
 
       val bufferTitleBase = buffer match
@@ -329,7 +315,7 @@ object RendererPaneContent:
     annotations: BufferRenderAnnotations,
     dirtyRows: Option[Set[Int]]
   ): Unit =
-    context.surface.text.setFont(context.fontForBuffer(buffer))
+    context.surface.text.setFont(FontSpec.fromAwt(context.fontForBuffer(buffer)))
     if RendererMarkdownLens.isInlineMarkdownLens(buffer, state) then
       val frame = markdownLensFrame.getOrElse(
         RendererMarkdownLens.markdownLensFrameFor(buffer, snapshot, context.caches.markdownPreviewCache)
@@ -352,23 +338,23 @@ object RendererPaneContent:
     annotations: BufferRenderAnnotations,
     dirtyRows: Option[Set[Int]]
   ): Unit =
-    val visualLines     = snapshot.visualLines
-    val xOriginPx       = context.cellMetrics.toPixelX(rect.x).toFloat
-    val contentRightXPx = context.cellMetrics.toPixelX(rect.right).toFloat
-    val activeBodyLines = focusedTextBodyLines(buffer, state)
+    val visualLines       = snapshot.visualLines
+    val xOriginPx         = context.cellMetrics.toPixelX(rect.x).toFloat
+    val contentRightXPx   = context.cellMetrics.toPixelX(rect.right).toFloat
+    val activeBodyLines   = focusedTextBodyLines(buffer, state)
+    val rowMetrics        = textRowMetrics(rect, context, snapshot)
+    val findMatchesByLine = findMatchesOnDrawnRows(buffer, state, visualLines, dirtyRows)
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
-        if dirtyRows.forall(_.contains(screenLineIndex)) &&
-            visualLineFits(rect, screenLineIndex, context, snapshot)
-        then
+        if dirtyRows.forall(_.contains(screenLineIndex)) && rowMetrics.lineFits(screenLineIndex) then
           val screenY   = rect.y + screenLineIndex
-          val lineTopPx = visualLineTopPx(rect, screenLineIndex, context, snapshot)
+          val lineTopPx = rowMetrics.lineTopPx(screenLineIndex)
           val screenX   = rect.x + visualLineCellOffset(visualLine, context)
 
           context.surface.setForegroundColor(state.persisted.theme.foreground)
 
-          if visualLineVisible(rect, screenLineIndex, context, snapshot) &&
+          if rowMetrics.lineVisible(screenLineIndex, context.surface.viewportHeight) &&
               screenY >= 0 &&
               screenX < context.surface.viewportWidth &&
               screenX >= 0 &&
@@ -399,17 +385,14 @@ object RendererPaneContent:
                 lineSemanticTokens
               )
             else
-              CharacterRenderer.renderStringWithAnimation(
+              CharacterRenderer.renderStyledString(
                 context.surface,
                 screenX,
                 screenY,
                 visualLine.text,
                 lineTheme,
-                context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                 state.syntaxHighlightingEnabled,
                 buffer.document.language,
-                bufferLine = visualLine.bufferLine,
-                bufferStartColumn = visualLine.startColumn,
                 styledSegments = styledSegments,
                 semanticTokens = lineSemanticTokens,
                 maxColumn = Some(rect.right),
@@ -445,6 +428,19 @@ object RendererPaneContent:
               blendWeight = state.persisted.config.surfaceConfig.diagnosticHighlightBlendWeight
             )
 
+            RendererHighlights.renderFindMatchHighlights(
+              context.surface,
+              findMatchesByLine.getOrElse(visualLine.bufferLine, Nil),
+              visualLine,
+              rect,
+              screenY,
+              lineTopPx,
+              state.persisted.theme,
+              context,
+              snapshot,
+              styledSegments
+            )
+
             RendererHighlights.renderSelectionHighlights(
               context.surface,
               buffer,
@@ -457,21 +453,19 @@ object RendererPaneContent:
               snapshot,
               styledSegments
             )
+    }
 
-            val stringEnd = visualLine.startColumn + visualLine.text.length
-            val lineAnims = context.bufferAnimations
-              .getOrElse(buffer.id, com.serenity.animation.AnimationState.empty)
-              .getLineAnimations(visualLine.bufferLine)
-            lineAnims.foreach { (col, cell) =>
-              cell.currentBackground.foreach { bg =>
-                if col >= stringEnd then
-                  val bgScreenX = rect.x + visualLineCellOffset(visualLine, context) + (col - visualLine.startColumn)
-                  if bgScreenX >= 0 && bgScreenX < rect.right then
-                    context.surface.setForegroundColor(state.persisted.theme.foreground)
-                    context.surface.setBackgroundColor(bg)
-                    context.surface.putString(bgScreenX, screenY, " ")
-              }
-            }
+  private def findMatchesOnDrawnRows(
+    buffer: Buffer,
+    state: AppState,
+    visualLines: Vector[TextVisualLine],
+    dirtyRows: Option[Set[Int]]
+  ): Map[Int, List[FindHighlight]] =
+    FindHighlights.paintedFindState(state, buffer.id).fold(Map.empty[Int, List[FindHighlight]]) { found =>
+      val drawnLines = visualLines.zipWithIndex.collect {
+        case (visualLine, row) if dirtyRows.forall(_.contains(row)) => visualLine.bufferLine
+      }.toSet
+      FindHighlights.onLines(buffer.document.content, found, drawnLines)
     }
 
   def visualLineFits(
@@ -601,4 +595,4 @@ object RendererPaneContent:
       cache = context.caches.markdownPreviewCache,
       reuseLastRenderWhileEditing = buffer.markdownPreviewEditGeneration != buffer.markdownPreviewCommittedGeneration
     )
-    context.surface.pixels.drawImage(image, rect.x, rect.y, rect.width, rect.height)
+    context.surface.pixels.drawImage(RenderImage.fromAwt(image), rect.x, rect.y, rect.width, rect.height)

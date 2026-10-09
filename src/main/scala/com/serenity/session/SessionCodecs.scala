@@ -5,7 +5,6 @@ import java.awt.{Color, Font}
 import scala.concurrent.duration.FiniteDuration
 
 import cats.syntax.all.*
-import com.serenity.animation.{AnimationConfig, EasingCurve, TransitionKind, TransitionScope}
 import com.serenity.config.*
 import com.serenity.lsp.config.{LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
@@ -19,61 +18,6 @@ import io.circe.syntax.given
 // First encode the basic dependencies
 given Encoder[FiniteDuration] = Encoder.encodeLong.contramap(_.toNanos)
 given Decoder[FiniteDuration] = Decoder.decodeLong.map(scala.concurrent.duration.Duration.fromNanos)
-
-// Tagged rather than derived: `EasingCurve.CubicBezier` carries data the named cases don't, so a plain
-// `deriveEncoder`/`deriveDecoder` sum-type encoding (Scala 3's default: the case name as the sole object key) would
-// work too, but this spells out the tag explicitly so a session file stays readable and the shape doesn't shift
-// silently if a future case is added with different field names.
-given Encoder[EasingCurve] = Encoder.instance {
-  case EasingCurve.Linear    => Json.obj("type" -> Json.fromString("linear"))
-  case EasingCurve.EaseIn    => Json.obj("type" -> Json.fromString("easeIn"))
-  case EasingCurve.EaseOut   => Json.obj("type" -> Json.fromString("easeOut"))
-  case EasingCurve.EaseInOut => Json.obj("type" -> Json.fromString("easeInOut"))
-  case EasingCurve.CubicBezier(p1x, p1y, p2x, p2y) =>
-    Json.obj(
-      "type" -> Json.fromString("cubicBezier"),
-      "p1x"  -> p1x.asJson,
-      "p1y"  -> p1y.asJson,
-      "p2x"  -> p2x.asJson,
-      "p2y"  -> p2y.asJson
-    )
-}
-
-given Decoder[EasingCurve] = Decoder.instance { cursor =>
-  cursor.get[String]("type").flatMap {
-    case "linear"    => Right(EasingCurve.Linear)
-    case "easeIn"    => Right(EasingCurve.EaseIn)
-    case "easeOut"   => Right(EasingCurve.EaseOut)
-    case "easeInOut" => Right(EasingCurve.EaseInOut)
-    case "cubicBezier" =>
-      for
-        p1x <- cursor.get[Double]("p1x")
-        p1y <- cursor.get[Double]("p1y")
-        p2x <- cursor.get[Double]("p2x")
-        p2y <- cursor.get[Double]("p2y")
-      yield EasingCurve.CubicBezier(p1x, p1y, p2x, p2y)
-    case other => Left(DecodingFailure(s"Unknown EasingCurve: $other", cursor.history))
-  }
-}
-
-// A manual instance rather than `deriveEncoder`/`deriveDecoder`, so that a session file written before `curve`
-// existed (issues #1082/#1083) keeps loading: `getOrElse` defaults the missing field to `EasingCurve.Linear`, the
-// same default `AnimationConfig` itself uses in code, rather than failing to decode the whole animation.
-given Encoder[AnimationConfig] = Encoder.instance { config =>
-  Json.obj(
-    "steps"         -> config.steps.asJson,
-    "totalDuration" -> config.totalDuration.asJson,
-    "curve"         -> config.curve.asJson
-  )
-}
-
-given Decoder[AnimationConfig] = Decoder.instance { cursor =>
-  for
-    steps         <- cursor.get[Int]("steps")
-    totalDuration <- cursor.get[FiniteDuration]("totalDuration")
-    curve         <- cursor.getOrElse[EasingCurve]("curve")(EasingCurve.Linear)
-  yield AnimationConfig(steps, totalDuration, curve)
-}
 
 /** Builds the codec for an enum that carries a `configKey` -- the same spelling `ConfigManager` already writes to the
   * config file. The encoder always writes `configKey`, so a value looks identical whether it came from a session file
@@ -135,7 +79,8 @@ given Decoder[FontConfig] = Decoder.instance { cursor =>
 }
 
 given Encoder[CursorMode] = configKeyEncoder(_.configKey)
-given Decoder[CursorMode] = configKeyDecoder("CursorMode", CursorMode.values, _.configKey)
+given Decoder[CursorMode] =
+  Decoder.decodeString.emap(value => CursorMode.fromConfigKey(value).toRight(s"Unknown CursorMode: $value"))
 
 given Encoder[StatusSegment] = configKeyEncoder(_.configKey)
 given Decoder[StatusSegment] = configKeyDecoder("StatusSegment", StatusSegment.values, _.configKey)
@@ -183,99 +128,6 @@ given Decoder[InterfaceConfig]     = deriveDecoder
 
 given Encoder[TextAreaInsets] = deriveEncoder
 given Decoder[TextAreaInsets] = deriveDecoder
-
-// BackgroundStyle has no configKey: it is never written to the config file on its own (ConfigManager derives it
-// from MaterialPreset), so there is no config-file spelling to converge on. Left on toString deliberately.
-given Encoder[BackgroundStyle] = Encoder.encodeString.contramap(_.toString)
-
-given Decoder[BackgroundStyle] = Decoder.decodeString.emap {
-  case "Solid"       => Right(BackgroundStyle.Solid)
-  case "Transparent" => Right(BackgroundStyle.Transparent)
-  case "Frosted"     => Right(BackgroundStyle.Frosted)
-  case "GlassLike"   => Right(BackgroundStyle.GlassLike)
-  case other         => Left(s"Unknown BackgroundStyle: $other")
-}
-
-given Encoder[MaterialPreset] = configKeyEncoder(_.configKey)
-given Decoder[MaterialPreset] = configKeyDecoder("MaterialPreset", MaterialPreset.values, _.configKey)
-
-given Encoder[MotionPreset] = configKeyEncoder(_.configKey)
-given Decoder[MotionPreset] = configKeyDecoder("MotionPreset", MotionPreset.values, _.configKey)
-
-given Encoder[MotionAccessibility] = configKeyEncoder(_.configKey)
-given Decoder[MotionAccessibility] = configKeyDecoder("MotionAccessibility", MotionAccessibility.values, _.configKey)
-
-given Encoder[MotionFamily] = configKeyEncoder(_.configKey)
-given Decoder[MotionFamily] = configKeyDecoder("MotionFamily", MotionFamily.values, _.configKey)
-
-// TransitionKind has no configKey of its own -- ConfigManager keeps a separate ad hoc string mapping
-// (`transitionKindConfigKey`) rather than a field on the enum, so there is nothing here to generalize onto. Left
-// on toString deliberately.
-given Encoder[TransitionKind] = Encoder.encodeString.contramap(_.toString)
-
-given Decoder[TransitionKind] = Decoder.decodeString.emap {
-  case "Disabled"               => Right(TransitionKind.Disabled)
-  case "Fade"                   => Right(TransitionKind.Fade)
-  case "TypedText"              => Right(TransitionKind.TypedText)
-  case "DirectionalSweep"       => Right(TransitionKind.DirectionalSweep)
-  case "OutlineThenContent"     => Right(TransitionKind.OutlineThenContent)
-  case "LineAndCharacterTandem" => Right(TransitionKind.LineAndCharacterTandem)
-  case other                    => Left(s"Unknown TransitionKind: $other")
-}
-
-given Encoder[MotionFamilyConfig] = Encoder.instance { config =>
-  Json.obj(
-    "enabled"        -> config.enabled.asJson,
-    "transitionKind" -> config.transitionKind.asJson,
-    "animation"      -> config.animation.asJson,
-    "speedScale"     -> config.speedScale.asJson,
-    // TransitionScope has no configKey (see the TransitionKind note above), so its toString spelling is the only
-    // one that has ever existed here -- no format divergence to fix for this map's keys.
-    "transitionOverrides" -> config.transitionOverrides.map { case (scope, kind) => scope.toString -> kind }.asJson
-  )
-}
-
-given Decoder[MotionFamilyConfig] = Decoder.instance { cursor =>
-  // "enabled" is read-and-discarded rather than decoded into the model: it is derived from `transitionKind` (see
-  // `MotionFamilyConfig`), so an old session file whose stored `enabled` disagrees with its `transitionKind` should
-  // not resurrect that contradiction on load.
-  for
-    transitionKind <- cursor.get[TransitionKind]("transitionKind")
-    animation      <- cursor.get[Option[AnimationConfig]]("animation")
-    speedScale     <- cursor.get[Double]("speedScale")
-    encoded        <- cursor.getOrElse[Map[String, TransitionKind]]("transitionOverrides")(Map.empty)
-    transitionOverrides <- encoded.toList.traverse {
-      case (name, kind) =>
-        TransitionScope.values
-          .find(_.toString == name)
-          .toRight(DecodingFailure(s"Unknown TransitionScope: $name", cursor.history))
-          .map(_ -> kind)
-    }
-  yield MotionFamilyConfig(transitionKind, animation, speedScale, transitionOverrides.toMap)
-}
-
-given Encoder[MotionConfig] = Encoder.instance { config =>
-  Json.obj(
-    "accessibility" -> config.accessibility.asJson,
-    "baseline"      -> config.baseline.asJson,
-    "families"      -> config.families.map { case (family, settings) => family.configKey -> settings }.asJson
-  )
-}
-
-given Decoder[MotionConfig] = Decoder.instance { cursor =>
-  for
-    accessibility <- cursor.get[MotionAccessibility]("accessibility")
-    baseline      <- cursor.get[MotionPreset]("baseline")
-    encoded       <- cursor.get[Map[String, MotionFamilyConfig]]("families")
-    families <- encoded.toList.traverse {
-      case (name, settings) =>
-        MotionFamily.values
-          .find(family => family.configKey == name || family.toString == name)
-          .toRight(DecodingFailure(s"Unknown MotionFamily: $name", cursor.history))
-          .map(_ -> settings)
-    }
-  yield MotionConfig(accessibility, baseline, families.toMap)
-}
 
 given Encoder[Color] = Encoder.encodeString.contramap(formatColor)
 
@@ -338,8 +190,77 @@ given Decoder[ParagraphAlignment] = Decoder.decodeString.emap {
   case other     => Left(s"Unknown ParagraphAlignment: $other")
 }
 
-given Encoder[RichTextStyle] = deriveEncoder
-given Decoder[RichTextStyle] = deriveDecoder
+given Encoder[InlineAtom] = Encoder.instance {
+  case InlineAtom.SoftBreak => Json.fromString("SoftBreak")
+  case InlineAtom.Opaque(raw, visible) =>
+    Json.obj("opaque" -> Json.fromString(raw), "visible" -> Json.fromBoolean(visible))
+  case InlineAtom.Block(raw, feature) =>
+    Json.obj("block" -> Json.fromString(raw), "feature" -> Json.fromString(DocumentFeature.key(feature)))
+}
+
+given Decoder[InlineAtom] = Decoder.instance { cursor =>
+  cursor.as[String] match
+    case Right("SoftBreak") => Right(InlineAtom.SoftBreak)
+    case Right(other)       => Left(DecodingFailure(s"Unknown InlineAtom: $other", cursor.history))
+    case Left(_) if cursor.downField("block").succeeded =>
+      for
+        raw <- cursor.get[String]("block")
+        feature <- cursor
+          .get[String]("feature")
+          .flatMap(key =>
+            DocumentFeature.fromKey(key).toRight(DecodingFailure(s"Unknown DocumentFeature: $key", cursor.history))
+          )
+      yield InlineAtom.Block(raw, feature)
+    case Left(_) =>
+      for
+        raw     <- cursor.get[String]("opaque")
+        visible <- cursor.getOrElse[Boolean]("visible")(true)
+      yield InlineAtom.Opaque(raw, visible)
+}
+
+given Encoder[FidelityItem] = Encoder.instance(item =>
+  Json.obj(
+    "feature"   -> Json.fromString(DocumentFeature.key(item.feature)),
+    "treatment" -> Json.fromString(Treatment.key(item.treatment)),
+    "count"     -> Json.fromInt(item.count)
+  )
+)
+
+given Decoder[FidelityItem] = Decoder.instance { cursor =>
+  for
+    feature <- cursor
+      .get[String]("feature")
+      .flatMap(key =>
+        DocumentFeature.fromKey(key).toRight(DecodingFailure(s"Unknown DocumentFeature: $key", cursor.history))
+      )
+    treatment <- cursor
+      .get[String]("treatment")
+      .flatMap(key => Treatment.fromKey(key).toRight(DecodingFailure(s"Unknown Treatment: $key", cursor.history)))
+    count <- cursor.get[Int]("count")
+  yield FidelityItem(feature, treatment, count)
+}
+
+given Encoder[FidelityReport] = Encoder.instance(report => Json.obj("items" -> report.items.asJson))
+given Decoder[FidelityReport] = Decoder.instance(_.get[List[FidelityItem]]("items").map(FidelityReport(_)))
+
+given Encoder[RawProperty] = deriveEncoder
+given Decoder[RawProperty] = deriveDecoder
+
+given Encoder[RichTextStyle] =
+  deriveEncoder[RichTextStyle].mapJsonObject(fields =>
+    if fields("extras").exists(_.asArray.exists(_.isEmpty)) then fields.remove("extras") else fields
+  )
+
+given Decoder[RichTextStyle] = Decoder.instance { cursor =>
+  for
+    marks      <- cursor.get[Set[InlineMark]]("marks")
+    fontFamily <- cursor.get[Option[String]]("fontFamily")
+    fontSize   <- cursor.get[Option[Float]]("fontSize")
+    color      <- cursor.get[Option[String]]("color")
+    link       <- cursor.get[Option[String]]("link")
+    extras     <- cursor.getOrElse[List[RawProperty]]("extras")(Nil)
+  yield RichTextStyle(marks, fontFamily, fontSize, color, link, extras)
+}
 
 given Encoder[RichTextRun] = deriveEncoder
 given Decoder[RichTextRun] = deriveDecoder
@@ -375,8 +296,41 @@ given Decoder[ParagraphRole] = Decoder.instance { cursor =>
   }
 }
 
-given Encoder[RichTextParagraph] = deriveEncoder
-given Decoder[RichTextParagraph] = deriveDecoder
+// Manual because a paragraph's provenance is not saved as it is: only which body block it came from (and whether it was
+// split off that block), which is what restoring needs to link it to the package read again from disk.
+given Encoder[RichTextParagraph] = Encoder.instance { paragraph =>
+  val content = Json.obj(
+    "runs"      -> paragraph.runs.asJson,
+    "alignment" -> paragraph.alignment.asJson,
+    "role"      -> paragraph.role.asJson
+  )
+  paragraph.source.flatMap(_.originBlock).fold(content) { block =>
+    val isDerived = paragraph.source.exists(_.blockIndex == ParagraphSource.NoBlock)
+    content.deepMerge(
+      Json
+        .obj("block" -> Json.fromInt(block))
+        .deepMerge(if isDerived then Json.obj("derived" -> Json.True) else Json.obj())
+    )
+  }
+}
+
+given Decoder[RichTextParagraph] = Decoder.instance { cursor =>
+  for
+    runs      <- cursor.get[List[RichTextRun]]("runs")
+    alignment <- cursor.get[ParagraphAlignment]("alignment")
+    role      <- cursor.get[ParagraphRole]("role")
+    block     <- cursor.get[Option[Int]]("block")
+    derived   <- cursor.getOrElse[Boolean]("derived")(false)
+  yield RichTextParagraph(
+    runs,
+    alignment,
+    role,
+    block.map(index =>
+      if derived then ParagraphSource(ParagraphSource.NoBlock, "", Nil, None, Some(index))
+      else ParagraphSource(index, "", Nil, None)
+    )
+  )
+}
 
 // Manual, not derived: RichTextDocument is backed by a ParagraphTree (#1663), not a case class, so
 // deriveEncoder/deriveDecoder no longer apply -- and even if they did, deriving over the tree would leak its

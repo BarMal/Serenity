@@ -1,9 +1,9 @@
 package com.serenity.ui.renderer
 
-import java.awt.{Color, Font}
+import java.awt.Font
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
-import com.serenity.ui.theme.ColorFormat.withAlpha
 import com.serenity.ui.theme.Theme
 
 /** Paints the segment-oriented [[OverlayRowLayout]] variants -- `Distributed`, `Split`, and `Plain`'s inline-segment
@@ -13,7 +13,7 @@ import com.serenity.ui.theme.Theme
 object OverlaySegmentRowRenderer:
 
   /** The foreground a tone paints in, or `None` for the surface's own default. */
-  def toneForeground(tone: OverlayTone, theme: Theme): Option[Color] =
+  def toneForeground(tone: OverlayTone, theme: Theme): Option[RenderColor] =
     tone match
       case OverlayTone.Normal => None
       case OverlayTone.Muted  => Some(theme.muted)
@@ -21,7 +21,7 @@ object OverlaySegmentRowRenderer:
       case OverlayTone.Accent => Some(theme.accent)
 
   /** The background a tone paints in, or `None` for the surface's own default. */
-  def toneBackground(tone: OverlayTone, theme: Theme): Option[Color] =
+  def toneBackground(tone: OverlayTone, theme: Theme): Option[RenderColor] =
     tone match
       case OverlayTone.Error                                           => Some(theme.error.background)
       case OverlayTone.Normal | OverlayTone.Muted | OverlayTone.Accent => None
@@ -33,8 +33,8 @@ object OverlaySegmentRowRenderer:
     width: Int,
     row: OverlayRow,
     theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
+    defaultForeground: RenderColor,
+    defaultBackground: RenderColor,
     font: Font
   ): Unit =
     val segments = row.segments
@@ -70,8 +70,8 @@ object OverlaySegmentRowRenderer:
     width: Int,
     row: OverlayRow,
     theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
+    defaultForeground: RenderColor,
+    defaultBackground: RenderColor,
     font: Font
   ): Unit =
     val segments = row.segments
@@ -113,8 +113,8 @@ object OverlaySegmentRowRenderer:
     width: Int,
     row: OverlayRow,
     theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
+    defaultForeground: RenderColor,
+    defaultBackground: RenderColor,
     font: Font
   ): Unit =
     row.segments match
@@ -180,8 +180,8 @@ object OverlaySegmentRowRenderer:
     left: OverlaySegment,
     rightSegments: List[OverlaySegment],
     theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
+    defaultForeground: RenderColor,
+    defaultBackground: RenderColor,
     font: Font
   ): Unit =
     val leftText = left.text.take(width)
@@ -224,8 +224,8 @@ object OverlaySegmentRowRenderer:
     width: Int,
     row: OverlayRow,
     theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
+    defaultForeground: RenderColor,
+    defaultBackground: RenderColor,
     font: Font
   ): Unit =
     val rightEdge = x + width
@@ -255,8 +255,8 @@ object OverlaySegmentRowRenderer:
     width: Int,
     segment: OverlaySegment,
     theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
+    defaultForeground: RenderColor,
+    defaultBackground: RenderColor,
     font: Font
   ): Unit =
     val iconWidth   = segment.inlineIcon.map(_.length).getOrElse(0).min(width)
@@ -286,41 +286,39 @@ object OverlaySegmentRowRenderer:
     segmentText: String,
     segment: OverlaySegment,
     theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
+    defaultForeground: RenderColor,
+    defaultBackground: RenderColor,
     font: Font
   ): Unit =
     if width > 0 then
       val segmentBackground =
         segment.backgroundColor
-          .map(SurfaceMaterials.fadedWith(_, defaultBackground, theme))
+          .map(_.withAlpha(defaultBackground.alpha))
           .getOrElse(
-            if segment.selected then SurfaceMaterials.fadedWith(theme.highlighted.background, defaultBackground, theme)
-            else
-              toneBackground(segment.tone, theme)
-                .fold(defaultBackground)(SurfaceMaterials.fadedWith(_, defaultBackground, theme))
+            if segment.selected then theme.highlighted.background.withAlpha(defaultBackground.alpha)
+            else toneBackground(segment.tone, theme).fold(defaultBackground)(_.withAlpha(defaultBackground.alpha))
           )
       val segmentForeground =
         segment.foregroundColor
-          .map(_.withAlpha(defaultForeground.getAlpha))
+          .map(_.withAlpha(defaultForeground.alpha))
           .getOrElse(
-            if segment.selected then theme.highlighted.foreground.withAlpha(defaultForeground.getAlpha)
-            else toneForeground(segment.tone, theme).fold(defaultForeground)(_.withAlpha(defaultForeground.getAlpha))
+            if segment.selected then theme.highlighted.foreground.withAlpha(defaultForeground.alpha)
+            else toneForeground(segment.tone, theme).fold(defaultForeground)(_.withAlpha(defaultForeground.alpha))
           )
       surface.setForegroundColor(segmentForeground)
       surface.setBackgroundColor(segmentBackground)
       val inlineIcon = segment.inlineIcon.filter(_ => width > 0)
       inlineIcon.foreach { icon =>
         segment.inlineIconFontFamily.foreach(family =>
-          surface.text.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
+          surface.text.setFont(FontSpec.fromAwt(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D)))
         )
         CharacterRenderer.renderStringPlain(surface, x, y, icon.take(width))
-        if segment.inlineIconFontFamily.nonEmpty then surface.text.setFont(font)
+        if segment.inlineIconFontFamily.nonEmpty then surface.text.setFont(FontSpec.fromAwt(font))
       }
       val iconWidth = inlineIcon.map(_.length.min(width)).getOrElse(0)
       val iconGap   = if iconWidth > 0 && width > iconWidth && segmentText.nonEmpty then 1 else 0
       segment.fontFamily.foreach(family =>
-        surface.text.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
+        surface.text.setFont(FontSpec.fromAwt(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D)))
       )
       CharacterRenderer.renderStringPlain(
         surface,
@@ -328,4 +326,4 @@ object OverlaySegmentRowRenderer:
         y,
         segmentText.take(math.max(0, width - iconWidth - iconGap))
       )
-      if segment.fontFamily.nonEmpty then surface.text.setFont(font)
+      if segment.fontFamily.nonEmpty then surface.text.setFont(FontSpec.fromAwt(font))

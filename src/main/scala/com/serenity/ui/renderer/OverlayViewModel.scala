@@ -1,7 +1,6 @@
 package com.serenity.ui.renderer
 
-import com.serenity.animation.AnimationState
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.document.DocumentNavigation
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -19,7 +18,6 @@ final case class TextOverlayView private (
     rect: LayoutRect,
     contentRect: Option[LayoutRect],
     borderCells: Int,
-    animationState: AnimationState,
     alphaMultiplier: Float,
     title: Option[String],
     itemGapRows: Double,
@@ -45,7 +43,6 @@ object TextOverlayView:
     rect: LayoutRect,
     contentRect: Option[LayoutRect] = None,
     borderCells: Int = 1,
-    animationState: AnimationState = AnimationState.empty,
     alphaMultiplier: Float = 1.0f,
     title: Option[String] = None,
     header: Option[OverlayRow] = None,
@@ -74,7 +71,6 @@ object TextOverlayView:
       rect,
       contentRect,
       borderCells,
-      animationState,
       alphaMultiplier,
       title,
       itemGapRows,
@@ -89,6 +85,7 @@ final case class OverlayViews(
     aboveCursorStack: List[TextOverlayView] = Nil,
     belowCursor: Option[TextOverlayView] = None,
     belowCursorStack: List[TextOverlayView] = Nil,
+    cornerStack: List[TextOverlayView] = Nil,
     modal: List[TextOverlayView] = Nil,
     tabBar: Option[TextOverlayView] = None
 )
@@ -108,13 +105,12 @@ object OverlayViewModel:
     layout: CalculatedLayout,
     scene: Option[UiSceneSnapshot]
   ): OverlayViews =
-    // A surface still fading the buffer out from under it (`SurfacePhase.BufferFadingOut`) is not painted yet.
-    val aboveCursorStack =
-      stackViews(aboveCursorSurfaceIds(state, layout).filterNot(isFadingBufferOut(_, state)), state, layout, scene)
-    val aboveCursor = aboveCursorStack.headOption
+    val aboveCursorStack = stackViews(aboveCursorSurfaceIds(state, layout), state, layout, scene)
+    val aboveCursor      = aboveCursorStack.headOption
 
     val belowCursorStack = stackViews(layout.belowCursorOverlayStack.map(_._1), state, layout, scene)
     val belowCursor      = belowCursorStack.headOption
+    val cornerStack      = stackViews(layout.cornerOverlayStack.map(_._1), state, layout, scene)
     val modal = scene.toList.flatMap(_.modal).flatMap {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) =>
         state.surfaceById(surfaceId) match
@@ -134,6 +130,7 @@ object OverlayViewModel:
       aboveCursorStack = aboveCursorStack,
       belowCursor = belowCursor,
       belowCursorStack = belowCursorStack,
+      cornerStack = cornerStack,
       modal = modal,
       tabBar = tabBar
     )
@@ -152,31 +149,7 @@ object OverlayViewModel:
     collapsed: Boolean,
     verticalOffsetRows: Double
   ): Option[TextOverlayView] =
-    val animState =
-      state.runtime.motion.surfaceAnimations.get(surface.id).map(_.animationState).getOrElse(AnimationState.empty)
     surface.content match
-      case com.serenity.state.models.SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
-        contentView(originalContent, state, cachedRect).map { content =>
-          TextOverlayView(
-            rect = cachedRect,
-            contentRect =
-              Some(com.serenity.ui.layout.SurfaceFrameLayout.forContent(cachedRect, originalContent).contentRect),
-            borderCells = com.serenity.ui.layout.SurfaceFrameLayout.borderCellsFor(originalContent),
-            animationState = animState,
-            alphaMultiplier = 1.0f,
-            title = content.title,
-            header = content.header,
-            rows = content.rows,
-            footer = content.footer,
-            keyHintRow = content.keyHintRow,
-            itemGapRows = itemGapRowsFor(originalContent, state),
-            itemTargetRows =
-              SurfaceFrameLayout.itemTargetRowsFor(originalContent, state.persisted.config.interfaceDensity),
-            verticalOffsetRows = verticalOffsetRows,
-            surfaceId = Some(surface.id),
-            composition = compositionFor(originalContent, cachedRect, state)
-          )
-        }
       case content =>
         layoutRect.flatMap { rect =>
           contentView(content, state, rect, collapsed).map { resolved =>
@@ -184,7 +157,6 @@ object OverlayViewModel:
               rect = rect,
               contentRect = Some(com.serenity.ui.layout.SurfaceFrameLayout.forContent(rect, content).contentRect),
               borderCells = com.serenity.ui.layout.SurfaceFrameLayout.borderCellsFor(content),
-              animationState = animState,
               alphaMultiplier = alphaMultiplierFor(surface, state),
               title = resolved.title,
               header = resolved.header,
@@ -205,14 +177,11 @@ object OverlayViewModel:
 
   private def buildModalView(dialog: ModalDialog, state: AppState, rect: LayoutRect): Option[TextOverlayView] =
     val content = SurfaceContent.ModalWorkflow(dialog.modal)
-    val animState =
-      state.runtime.motion.surfaceAnimations.get(dialog.id).map(_.animationState).getOrElse(AnimationState.empty)
     contentView(content, state, rect).map { resolved =>
       TextOverlayView(
         rect = rect,
         contentRect = Some(com.serenity.ui.layout.SurfaceFrameLayout.forContent(rect, content).contentRect),
         borderCells = com.serenity.ui.layout.SurfaceFrameLayout.borderCellsFor(content),
-        animationState = animState,
         alphaMultiplier = 1.0f,
         title = resolved.title,
         header = resolved.header,
@@ -261,9 +230,6 @@ object OverlayViewModel:
         )
     }
 
-  private def isFadingBufferOut(surfaceId: SurfaceId, state: AppState): Boolean =
-    state.runtime.motion.surfaceAnimations.get(surfaceId).exists(_.phase == SurfacePhase.BufferFadingOut)
-
   private def contentView(
     content: com.serenity.state.models.SurfaceContent,
     state: AppState,
@@ -283,8 +249,9 @@ object OverlayViewModel:
           // `EditorLayoutContract` (`floatingGeometry`) calls that dispatcher independently and genuinely still needs
           // the real, item-count accurate rows/header/footer it produces -- see its own doc comment.
           case SurfaceContent.ContextMenu(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) |
-              SurfaceContent.ContextualToolbar(_) | SurfaceContent.CommentLens(_) | SurfaceContent.Outline(_, _) |
-              SurfaceContent.Diagnostics(_, _) | SurfaceContent.DirectoryTree(_, _) | SurfaceContent.Comments(_, _) =>
+              SurfaceContent.ContextualToolbar(_) | SurfaceContent.CommentLens(_) | SurfaceContent.Outline(_, _, _) |
+              SurfaceContent.Diagnostics(_, _, _) | SurfaceContent.DirectoryTree(_, _, _) |
+              SurfaceContent.Comments(_, _, _) =>
             ResolvedSurfaceContent()
           case _ =>
             SurfaceContentResolver.resolve(
@@ -307,18 +274,18 @@ object OverlayViewModel:
 
   private def isComposedContent(content: SurfaceContent): Boolean =
     content match
-      case SurfaceContent.ModalWorkflow(_)     => true
-      case SurfaceContent.ContextMenu(_)       => true
-      case SurfaceContent.CommandPalette(_)    => true
-      case SurfaceContent.CommandRunnerPeek(_) => true
-      case SurfaceContent.TabBar(_, _)         => true
-      case SurfaceContent.ContextualToolbar(_) => true
-      case SurfaceContent.CommentLens(_)       => true
-      case SurfaceContent.Outline(_, _)        => true
-      case SurfaceContent.Diagnostics(_, _)    => true
-      case SurfaceContent.DirectoryTree(_, _)  => true
-      case SurfaceContent.Comments(_, _)       => true
-      case _                                   => false
+      case SurfaceContent.ModalWorkflow(_)       => true
+      case SurfaceContent.ContextMenu(_)         => true
+      case SurfaceContent.CommandPalette(_)      => true
+      case SurfaceContent.CommandRunnerPeek(_)   => true
+      case SurfaceContent.TabBar(_, _)           => true
+      case SurfaceContent.ContextualToolbar(_)   => true
+      case SurfaceContent.CommentLens(_)         => true
+      case SurfaceContent.Outline(_, _, _)       => true
+      case SurfaceContent.Diagnostics(_, _, _)   => true
+      case SurfaceContent.DirectoryTree(_, _, _) => true
+      case SurfaceContent.Comments(_, _, _)      => true
+      case _                                     => false
 
   private def collapsedContentView(content: com.serenity.state.models.SurfaceContent): ResolvedSurfaceContent =
     content match
@@ -391,16 +358,24 @@ object OverlayViewModel:
         Some(ContextualToolbarSurfaceComposition.forToolbar(toolbarState, state, rect))
       case SurfaceContent.CommentLens(lens) =>
         Some(CommentLensSurfaceComposition.forLens(lens, rect))
-      case SurfaceContent.DirectoryTree(tree, selectedPath) =>
-        Some(DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, rect))
-      case SurfaceContent.Outline(symbols, activeLocation) =>
-        Some(OutlineSurfaceComposition.forOutline(symbols, activeSymbolLocation(symbols, activeLocation, state), rect))
-      case SurfaceContent.Comments(symbols, activeLocation) =>
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scroll) =>
+        Some(DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, scroll, rect))
+      case SurfaceContent.Outline(symbols, activeLocation, scroll) =>
         Some(
-          CommentsSurfaceComposition.forComments(symbols, activeSymbolLocation(symbols, activeLocation, state), rect)
+          OutlineSurfaceComposition.forOutline(
+            symbols,
+            activeSymbolLocation(symbols, activeLocation, state),
+            rect,
+            scroll
+          )
         )
-      case SurfaceContent.Diagnostics(issues, activeLocation) =>
-        Some(DiagnosticsSurfaceComposition.forDiagnostics(issues, activeLocation, rect))
+      case SurfaceContent.Comments(symbols, activeLocation, scroll) =>
+        Some(
+          CommentsSurfaceComposition
+            .forComments(symbols, activeSymbolLocation(symbols, activeLocation, state), rect, scroll)
+        )
+      case SurfaceContent.Diagnostics(issues, activeLocation, scroll) =>
+        Some(DiagnosticsSurfaceComposition.forDiagnostics(issues, activeLocation, rect, scroll))
       case _ => None
 
   /** Mirrors `PinnedPanelViewModel`'s own private helper of the same name: `Outline`/`Comments` content carries its own
@@ -426,6 +401,5 @@ object OverlayViewModel:
 
   private def isCommandRunnerSurface(content: com.serenity.state.models.SurfaceContent): Boolean =
     content match
-      case SurfaceContent.CommandPalette(_)                => true
-      case SurfaceContent.GhostOverlay(originalContent, _) => isCommandRunnerSurface(originalContent)
-      case _                                               => false
+      case SurfaceContent.CommandPalette(_) => true
+      case _                                => false

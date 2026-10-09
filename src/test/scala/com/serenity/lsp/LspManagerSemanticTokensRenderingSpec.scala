@@ -5,7 +5,8 @@ import cats.effect.{Deferred, Fiber, IO, Ref, Resource}
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
-import com.serenity.lsp.model.{SemanticToken, SemanticTokensLegend}
+import com.serenity.lsp.model.{SemanticToken, SemanticTokenData, SemanticTokensLegend}
+import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.Stream
 import io.circe.Json
@@ -95,7 +96,7 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
     Json.obj("jsonrpc" -> "2.0".asJson, "id" -> id.asJson, "result" -> result)
 
   private def open(manager: Harness): IO[Unit] =
-    manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo"))) >>
+    manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo")))) >>
       takeMessage(manager.connection).flatMap { message =>
         IO(message.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didOpen"))
       }
@@ -136,7 +137,9 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
             _ <- manager.connection.recordSemanticTokensLegend(Some(SemanticTokensLegend(List("keyword"), Nil)))
             _ <- open(manager)
             openTokensRequest <- takeMessage(manager.connection) // the didOpen-triggered semanticTokens request
-            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+            _ <- manager.effects.offer(
+              Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo2"), version = 2))
+            )
             // The didOpen-triggered request above is still tracked as in-flight (nothing prunes a completed fiber's
             // entry proactively), so FileChanged's invalidateDocument cancels it first -- the same cancel-before-
             // continuing behavior `LspManagerSpec` covers for hover, now also reachable through semantic tokens.
@@ -181,13 +184,15 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
             _ = eventsOnAnswer shouldBe List(
               LspEvent.LspSemanticTokensReceived(
                 uri,
-                List(
-                  SemanticToken(
-                    line = 0,
-                    startCharacter = 0,
-                    length = 3,
-                    tokenType = "keyword",
-                    tokenModifiers = Set.empty
+                SemanticTokenData.from(
+                  List(
+                    SemanticToken(
+                      line = 0,
+                      startCharacter = 0,
+                      length = 3,
+                      tokenType = "keyword",
+                      tokenModifiers = Set.empty
+                    )
                   )
                 )
               )
@@ -221,7 +226,7 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
         )(_.cancel)
         .use { managerFiber =>
           for
-            _    <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo")))
+            _    <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo"))))
             _    <- applied.get
             seen <- events.get
             _    <- effects.offer(None)
@@ -265,6 +270,68 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
           yield seen shouldBe List(LspEvent.LspSemanticTokensUnavailable(uri))
         }
     yield result
+
+    runVirtual(program)
+  }
+
+  it should "emit LspSemanticTokensUnavailable once per document, not again on each edit, while no server exists" in {
+    val unopenedUri = "file:///workspace/Bar.scala"
+    val program = for
+      effects <- Queue.unbounded[IO, Option[LspEffect]]
+      events  <- Ref.of[IO, List[Event]](Nil)
+      provider = new LspManager.ConnectionProvider:
+        def resolve(
+          languageId: LanguageId,
+          fileUri: DocumentUri,
+          onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+        ): IO[Option[LspManager.ResolvedConnection]] = IO.pure(None)
+      _ <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo"))))
+      _ <- effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo1"), 2)))
+      _ <- effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo12"), 3)))
+      _ <- effects.offer(Some(LspEffect.FileChanged(unopenedUri, LanguageId.Scala, RopeText("object Bar1"), 2)))
+      _ <- effects.offer(Some(LspEffect.FileChanged(unopenedUri, LanguageId.Scala, RopeText("object Bar12"), 3)))
+      _ <- effects.offer(None)
+      _ <- LspManager.runWithProvider(
+        Stream.fromQueueNoneTerminated(effects),
+        event => events.update(_ :+ event),
+        logger,
+        provider
+      )
+      seen <- events.get
+    yield seen shouldBe List(
+      LspEvent.LspSemanticTokensUnavailable(uri),
+      LspEvent.LspSemanticTokensUnavailable(unopenedUri)
+    )
+
+    runVirtual(program)
+  }
+
+  // The report-once rule keys on the manager's text mirror, so a fresh report after a close shows the text was dropped.
+  it should "forget a closed document's text, so an edit after the close is reported as a new document" in {
+    val program = for
+      effects <- Queue.unbounded[IO, Option[LspEffect]]
+      events  <- Ref.of[IO, List[Event]](Nil)
+      provider = new LspManager.ConnectionProvider:
+        def resolve(
+          languageId: LanguageId,
+          fileUri: DocumentUri,
+          onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+        ): IO[Option[LspManager.ResolvedConnection]] = IO.pure(None)
+      _ <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo"))))
+      _ <- effects.offer(Some(LspEffect.FileClosed(uri, LanguageId.Scala)))
+      _ <- effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo1"), 2)))
+      _ <- effects.offer(None)
+      _ <- LspManager.runWithProvider(
+        Stream.fromQueueNoneTerminated(effects),
+        event => events.update(_ :+ event),
+        logger,
+        provider
+      )
+      seen <- events.get
+    yield seen shouldBe List(
+      LspEvent.LspSemanticTokensUnavailable(uri),
+      LspEvent.LspSemanticTokensUnavailable(uri)
+    )
 
     runVirtual(program)
   }

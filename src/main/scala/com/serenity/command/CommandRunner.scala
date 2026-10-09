@@ -47,7 +47,8 @@ final case class CommandRunner(
     // ranking needs, and it keeps this pure and IO-free. In-session only (not persisted across restarts) -- issue
     // #1049's empty-query "recents" view is expected to read this same map, not a separate one. Keyed by `CommandId`
     // (issue #1693), the same `Command.name`-derived identifier `Persisted.commandUsage` uses.
-    commandUsage: Map[CommandId, Int] = Map.empty
+    commandUsage: Map[CommandId, Int] = Map.empty,
+    searchCache: CommandRunnerSearchCache = CommandRunnerSearchCache.empty
 ) extends CommandRunnerSubmenuEditing
     with CommandRunnerLifecycle
     with CommandRunnerSettingsSearch:
@@ -94,15 +95,39 @@ final case class CommandRunner(
   def bindingFor(command: Command): Option[String] =
     commandBindings.get(command.name)
 
+  /** The settings index and results that hold for this runner's fields. Normally the carried `searchCache` as-is; a
+    * transition that changes the query or the settings inputs stores the fresh one (`withSearchCacheRefreshed`) so
+    * later copies need not rebuild it.
+    */
+  private[command] lazy val searchResults: CommandRunnerQueryResults =
+    searchCache.resultsFor(settingsIndexInputs, searchTerm)
+
+  private[command] def withSearchCacheRefreshed: CommandRunner =
+    copy(searchCache = CommandRunnerSearchCache.holding(searchResults))
+
+  private def settingsIndexInputs: CommandRunnerSettingsIndex.Inputs =
+    CommandRunnerSettingsIndex.Inputs(
+      optionSelections = optionSelections,
+      inputItems = inputItems,
+      uiPresetPreviews = uiPresetPreviews,
+      editingPresetName = editingPresetName,
+      capabilities = capabilities,
+      fontFamilies = fontFamilies,
+      statusSegments = statusSegments,
+      context = context
+    )
+
   lazy val visibleItems: List[CommandSurfaceItem] =
     surface match
       case _: CommandRunnerSurface.Settings => settingsSurfaceItems
       case CommandRunnerSurface.PresetDiffReview(presetName, changes, _) =>
         presetDiffReviewItems(presetName, changes)
       case CommandRunnerSurface.Palette(state) =>
-        val commandItems = state.filteredCommands
-          .filter(CommandRelevance.isAvailable(_, context.editingContext))
-          .map(command => CommandSurfaceItem.CommandItem(command, CommandPrerequisites.unmetReason(command, context)))
+        val offered = state.filteredCommands
+          .map(command => command -> CommandAvailability.of(command, context))
+          .filter((_, availability) => availability.isOffered)
+        def itemsOf(commands: List[(Command, Availability)]): List[CommandSurfaceItem.CommandItem] =
+          commands.map((command, availability) => CommandSurfaceItem.CommandItem(command, availability.disabledReason))
         // Category tabs are retired (issue #931): an empty query is just every command, no category to default to.
         // Settings are still reachable here -- via search, below -- exactly as issue #931's "fold into text search"
         // intends; there is just no longer a separate navigation mode for it.
@@ -113,20 +138,26 @@ final case class CommandRunner(
         // never-used command in its original relative order -- so a fresh session (empty `commandUsage`) still
         // shows the exact same "sensible default set" it always has.
         // Settings is a fixed first row that no amount of recency reorders past; behind it come the commands that
-        // can act on the current editing context (`CommandRelevance`), recently used ones first.
+        // can act on the current editing context (`CommandRelevance`): those it boosts (`CommandAvailability`) first,
+        // then recently used ones.
         if state.searchTerm.isEmpty then
-          val (settingsEntry, commands) = commandItems.partition(item => CommandRelevance.isSettingsEntry(item.command))
-          settingsEntry ++ commands
-            .filter(item => CommandRelevance.isRelevant(item.command, context.editingContext))
-            .sortBy(item => -commandUsage.getOrElse(CommandId(item.command.name), 0))
+          val (settingsEntry, commands) = offered.partition((command, _) => CommandRelevance.isSettingsEntry(command))
+          itemsOf(settingsEntry) ++ itemsOf(
+            commands
+              .filter((command, _) => CommandRelevance.isRelevant(command, context.editingContext))
+              .sortBy((command, availability) =>
+                (!availability.isBoosted, -commandUsage.getOrElse(CommandId(command.name), 0))
+              )
+          )
         else
+          val commandItems = itemsOf(offered)
           val (strongCommandMatches, remainingCommandMatches) =
             commandItems.partition(item => CommandRunnerSearch.isStrongCommandMatch(item.command, state.searchTerm))
           val (exactCommandMatches, remainingStrongCommandMatches) =
             strongCommandMatches.partition(item =>
               CommandRunnerSearch.isExactCommandMatch(item.command, state.searchTerm)
             )
-          val settingsMatches = matchingSettingsResults(state.searchTerm)
+          val settingsMatches = searchResults.settingsResults
           val (exactSettingsMatches, remainingSettingsMatches) =
             settingsMatches.partition(item =>
               CommandRunnerSearch.isExactSettingsTarget(
@@ -148,16 +179,13 @@ final case class CommandRunner(
   def updateSearchTerm(term: String)(using registry: CommandRegistry): CommandRunner =
     val filtered =
       if term.isEmpty then registry.getAllCommands
-      // issue #1048: `searchCommands` already ranks by fuzzy relevance; re-sorting (stably) by recency on top of
-      // that lets a recently-used command float above an equally (or less) relevant one without ever displacing a
-      // clearly stronger match, since a `sortBy` is stable across ties in `-commandUsage`.
       else
-        // Filtered before the cap, so commands this mode/frontend hides can't crowd available ones out of it.
-        registry
+        // Filtered and ranked before the cap, so hidden commands can't crowd offered ones out of it, nor the cap
+        // drop a command its boosts would have lifted into it.
+        val matches = registry
           .searchCommands(term, maxResults = registry.getAllCommands.size)
-          .filter(CommandRelevance.isAvailable(_, context.editingContext))
-          .take(50)
-          .sortBy(command => -commandUsage.getOrElse(CommandId(command.name), 0))
+          .filter(CommandAvailability.of(_, context).isOffered)
+        CommandRanking.ranked(matches, term, commandUsage, context).take(50)
     val updatedState = CommandPaletteState(term, 0, filtered)
     val updatedSurface = surface match
       case CommandRunnerSurface.Palette(_)     => CommandRunnerSurface.Palette(updatedState)
@@ -166,7 +194,7 @@ final case class CommandRunner(
       // rather than excluded from this method, since `RunnerInsertChar` dispatches here unconditionally whenever
       // nothing is being edited (see `CommandRunnerReducer.insertCharIntoRoot`).
       case unchanged: CommandRunnerSurface.PresetDiffReview => unchanged
-    copy(surface = updatedSurface, recordingItemId = None, statusMessage = None)
+    copy(surface = updatedSurface, recordingItemId = None, statusMessage = None).withSearchCacheRefreshed
 
   /** Move selection up or down, with wrapping */
   def moveSelection(delta: Int): CommandRunner =
@@ -185,20 +213,10 @@ final case class CommandRunner(
     * run before it.
     */
   def recordCommandUsage(name: String): CommandRunner =
-    val nextGeneration = commandUsage.values.maxOption.getOrElse(0) + 1
-    copy(commandUsage = commandUsage + (CommandId(name) -> nextGeneration))
+    copy(commandUsage = CommandUsageHistory.recorded(commandUsage, CommandId(name)))
 
-  lazy val settingsGroups: List[CommandSurfaceItem.GroupItem] =
-    CommandRunnerSettingsGroups.build(
-      optionSelections = optionSelections,
-      inputItems = inputItems,
-      uiPresetPreviews = uiPresetPreviews,
-      editingPresetName = editingPresetName,
-      capabilities = capabilities,
-      fontFamilies = fontFamilies,
-      statusSegments = statusSegments,
-      context = context
-    )
+  def settingsGroups: List[CommandSurfaceItem.GroupItem] =
+    searchResults.index.settingsGroups
 
   def openSettings: CommandRunner =
     copy(surface = CommandRunnerSurface.Settings(), statusMessage = None)
@@ -249,7 +267,7 @@ final case class CommandRunner(
       case CommandRunnerSurface.Settings(_, Some(drilled)) =>
         filteredPageItems(drilled.current, submenuItems(drilled.current.groupId))
       case CommandRunnerSurface.Settings(root, None) if root.searchTerm.nonEmpty =>
-        matchingSettingsResults(root.searchTerm)
+        searchResults.settingsResults
       case CommandRunnerSurface.Settings(_, None)   => settingsGroups
       case CommandRunnerSurface.Palette(_)          => Nil
       case _: CommandRunnerSurface.PresetDiffReview => Nil
@@ -306,7 +324,7 @@ final case class CommandRunner(
             )
           ),
           editingPresetName = editContext
-        )
+        ).withSearchCacheRefreshed
       case _ => this
 
   /** `exitSubmenuToPreview`'s job is not a plain stack pop: it re-points the revealed parent page at the child we just
@@ -456,41 +474,7 @@ final case class CommandRunner(
 object CommandRunner:
 
   private[command] def commandBindings(config: AppConfig): Map[String, String] =
-    Map(
-      "save"                  -> HotkeyAction.Save,
-      "save-as"               -> HotkeyAction.SaveAs,
-      "open"                  -> HotkeyAction.OpenFile,
-      "file-search"           -> HotkeyAction.FileSearch,
-      "go-to-file"            -> HotkeyAction.GoToFile,
-      "quit"                  -> HotkeyAction.Quit,
-      "new"                   -> HotkeyAction.NewTab,
-      "next-tab"              -> HotkeyAction.NextTab,
-      "previous-tab"          -> HotkeyAction.PreviousTab,
-      "close"                 -> HotkeyAction.CloseTab,
-      "split-pane-horizontal" -> HotkeyAction.SplitPaneHorizontal,
-      "split-pane-vertical"   -> HotkeyAction.SplitPaneVertical,
-      "toggle-chapter-ghosts" -> HotkeyAction.ToggleChapterGhosts,
-      "open-chapter-note"     -> HotkeyAction.OpenChapterNote,
-      "open-keyword-note"     -> HotkeyAction.OpenKeywordNote,
-      "toggle-notes-pin"      -> HotkeyAction.ToggleNotesPin,
-      "close-pane"            -> HotkeyAction.ClosePane,
-      "find"                  -> HotkeyAction.Find,
-      "replace"               -> HotkeyAction.Replace,
-      "copy"                  -> HotkeyAction.Copy,
-      "cut"                   -> HotkeyAction.Cut,
-      "paste"                 -> HotkeyAction.Paste,
-      "select-all"            -> HotkeyAction.SelectAll,
-      "undo"                  -> HotkeyAction.Undo,
-      "redo"                  -> HotkeyAction.Redo,
-      "goto-line"             -> HotkeyAction.GoToLine,
-      "focus-left"            -> HotkeyAction.FocusLeft,
-      "focus-right"           -> HotkeyAction.FocusRight,
-      "focus-up"              -> HotkeyAction.FocusUp,
-      "focus-down"            -> HotkeyAction.FocusDown
-    ).flatMap {
-      case (commandName, action) =>
-        config.inputConfig.hotkeyConfig.bindingsFor(action).headOption.map(trigger => commandName -> trigger.render)
-    }
+    CommandKeyBindings.displayed(config.inputConfig.hotkeyConfig)
 
   /** Empty/inactive command runner */
   def empty: CommandRunner = CommandRunner(isActive = false)

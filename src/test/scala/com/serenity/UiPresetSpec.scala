@@ -3,9 +3,7 @@ package com.serenity
 import java.awt.Font
 import java.nio.file.Files
 
-import com.serenity.animation.TransitionKind
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -23,7 +21,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val root = Files.createTempDirectory("ui-preset-root")
     val config = AppConfig.default
       .withFontConfig(FontConfig(codeFontFamily = "Monospaced", fontSize = 18.0f))
-      .withBackgroundStyle(BackgroundStyle.GlassLike)
+      .withInterfaceDensity(InterfaceDensity.Spacious)
     val baseState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(config = config, theme = Theme.light)
     )
@@ -40,9 +38,9 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     preset.name shouldBe "Writing"
     preset.config.editorConfig.fontConfig.codeFontFamily shouldBe "Monospaced"
     preset.config.editorConfig.fontConfig.codeFontSize shouldBe 18.0f
-    preset.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    preset.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     preset.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1440, 960))
-    preset.themeName shouldBe Theme.light.name
+    preset.themeName shouldBe Some(Theme.light.name)
     preset.pinnedPanels.map(panel => panel.position -> panel.size) shouldBe List(PanelPosition.Left -> 32)
   }
 
@@ -60,7 +58,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       config = AppConfig.default
         .withFontConfig(FontConfig(textFontFamily = "Serif", textFontSize = 17.0f))
         .withPreferredWindowSize(PreferredWindowSize(1280, 800)),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(
         SessionDockedPanel(
           "panel-1",
@@ -75,7 +73,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val restored = UiPreset.applyToState(preset, initial, Theme.dark)
+    val restored = UiPreset.applyToState(preset, initial, Some(Theme.dark))
 
     restored.persisted.theme.name shouldBe Theme.dark.name
     restored.persisted.config.editorConfig.fontConfig.textFontFamily shouldBe "Serif"
@@ -128,8 +126,6 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     writing.config.editorConfig.fontConfig.textFontSize should be > AppConfig.default.editorConfig.fontConfig.textFontSize
     writing.config.surfaceConfig.showLineNumbers shouldBe false
     writing.config.statusLine.isPinned shouldBe false
-    writing.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
-    writing.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
     writing.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
     writing.targetEditorPaneCount shouldBe Some(1)
     writing.config.surfaceConfig.showPaneHeaders shouldBe false
@@ -137,14 +133,11 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     docs.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
     docs.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    docs.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.LineAndCharacterTandem
     docs.targetEditorPaneCount shouldBe Some(1)
     docs.config.surfaceConfig.showPaneHeaders shouldBe false
     docs.pinnedPanels shouldBe Nil
 
     code.config.defaultDocumentMode shouldBe DefaultDocumentMode.PlainText
-    code.config.surfaceConfig.motionPreset shouldBe MotionPreset.Reduced
-    code.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.Disabled
     code.config.surfaceConfig.showLineNumbers shouldBe true
     code.config.surfaceConfig.showPaneHeaders shouldBe true
     code.pinnedPanels.map(_.position) should contain(PanelPosition.Left)
@@ -175,10 +168,10 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     // A prose workflow picked from a code workspace must switch the workspace to prose: otherwise the settings tree
     // keeps hiding the prose groups (Document Writing, Prose Font) the workflow just made relevant.
-    val fromCode = UiPreset.applyBuiltInWorkflowToState(writing, AppState.initial, Theme.dark)
+    val fromCode = UiPreset.applyBuiltInWorkflowToState(writing, AppState.initial)
     fromCode.persisted.config.appMode shouldBe AppMode.Prose
 
-    val backToCode = UiPreset.applyBuiltInWorkflowToState(code, fromCode, Theme.dark)
+    val backToCode = UiPreset.applyBuiltInWorkflowToState(code, fromCode)
     backToCode.persisted.config.appMode shouldBe AppMode.Code
   }
 
@@ -187,7 +180,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     UiPreset.Preview.fromPreset(writing) shouldBe UiPreset.Preview(
       "Writing",
-      "rich text default; dark; subtle motion; typed text reveal; frosted material; frosted background; spacious density; Serif 18pt prose; 1 editor pane"
+      "rich text default; spacious density; Serif 18pt prose; 1 editor pane"
     )
   }
 
@@ -196,8 +189,9 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
     val compact = UiPreset.builtIn("Compact").getOrElse(fail("missing Compact preset"))
 
-    val compactState = UiPreset.applyToState(compact, UiPreset.applyToState(writing, initial, Theme.dark), Theme.dark)
-    val restoredWriting = UiPreset.applyToState(writing, compactState, Theme.dark)
+    val compactState =
+      UiPreset.applyToState(compact, UiPreset.applyToState(writing, initial, Some(Theme.dark)), Some(Theme.dark))
+    val restoredWriting = UiPreset.applyToState(writing, compactState, Some(Theme.dark))
 
     compactState.persisted.config shouldBe compact.config
     compactState.pinnedSurfaces shouldBe Nil
@@ -219,14 +213,14 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     // Code workflows shouldn't spell-check (identifiers aren't prose, and there's no bundled dictionary yet #1175).
     UiPreset
-      .applyBuiltInWorkflowToState(code, spellOn, Theme.dark)
+      .applyBuiltInWorkflowToState(code, spellOn)
       .persisted
       .config
       .languageToolsConfig
       .spellCheck
       .enabled shouldBe false
     UiPreset
-      .applyBuiltInWorkflowToState(compact, spellOn, Theme.dark)
+      .applyBuiltInWorkflowToState(compact, spellOn)
       .persisted
       .config
       .languageToolsConfig
@@ -234,7 +228,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       .enabled shouldBe false
     // Prose keeps whatever the user configured -- spell-check is appropriate there.
     UiPreset
-      .applyBuiltInWorkflowToState(writing, spellOn, Theme.dark)
+      .applyBuiltInWorkflowToState(writing, spellOn)
       .persisted
       .config
       .languageToolsConfig
@@ -246,13 +240,13 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Two Pane Drafting",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = Nil,
       targetEditorPaneCount = Some(2)
     )
 
     UiPreset.Preview.fromPreset(preset).hint shouldBe
-      "plain text default; dark; smooth motion; fade text reveal; frosted material; frosted background; comfortable density; SansSerif 12pt prose; 2 editor panes"
+      "plain text default; dark; comfortable density; SansSerif 12pt prose; 2 editor panes"
   }
 
   it should "name every pinnable panel content kind in its preview summary" in {
@@ -262,7 +256,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Review",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel))
     )
 
@@ -275,59 +269,22 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("outline should be capturable"))
     val preset = UiPreset(
       name = "Drafting",
-      config =
-        AppConfig.default.withBackgroundStyle(BackgroundStyle.Solid).withInterfaceDensity(InterfaceDensity.Compact),
-      themeName = Theme.dark.name,
+      config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Compact),
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
     val sourceConfig = AppConfig.default
-      .withBackgroundStyle(BackgroundStyle.GlassLike)
       .withInterfaceDensity(InterfaceDensity.Spacious)
       .withUiElementGap(Some(4))
       .withUiOutlineThicknessPx(5)
 
     val patched = UiPreset.Patch.Appearance(sourceConfig, themeName = Some(Theme.light.name)).applyTo(preset)
 
-    patched.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
     patched.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     patched.config.uiElementGap shouldBe Some(4)
     patched.config.uiOutlineThicknessPx shouldBe 5
-    patched.themeName shouldBe Theme.light.name
-    patched.pinnedPanels shouldBe List(panel)
-    patched.targetEditorPaneCount shouldBe Some(1)
-  }
-
-  it should "patch motion fields without replacing preset layout snapshots" in {
-    val panel = SessionPinnedPanel
-      .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)
-      .getOrElse(fail("outline should be capturable"))
-    val preset = UiPreset(
-      name = "Drafting",
-      config = AppConfig.default.withMotionPreset(MotionPreset.Reduced),
-      themeName = Theme.dark.name,
-      dockedPanels = List(SessionDockedPanel("panel-1", panel)),
-      targetEditorPaneCount = Some(1)
-    )
-    val sourceConfig = AppConfig.default
-      .withMotionPreset(MotionPreset.Subtle)
-      .withElementTransitionSpeedScale(2.25)
-      .withCursorTransitionSpeedScale(Some(0.75))
-      .withEditorInsertionTransitionKind(TransitionKind.TypedText)
-      .withCommandRunnerTransitionKind(Some(TransitionKind.DirectionalSweep))
-      .withPanelOpenTransitionKind(Some(TransitionKind.OutlineThenContent))
-      .withPanelCloseTransitionKind(Some(TransitionKind.Disabled))
-
-    val patched = UiPreset.Patch.Motion(sourceConfig).applyTo(preset)
-
-    patched.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
-    patched.config.editorConfig.characterAnimation shouldBe MotionPreset.Subtle.animationConfig
-    patched.config.surfaceConfig.elementTransitionSpeedScale shouldBe 2.25
-    patched.config.surfaceConfig.cursorTransitionSpeedScale shouldBe Some(0.75)
-    patched.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
-    patched.config.surfaceConfig.commandRunnerTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
-    patched.config.surfaceConfig.panelOpenTransitionKind shouldBe Some(TransitionKind.OutlineThenContent)
-    patched.config.surfaceConfig.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
+    patched.themeName shouldBe Some(Theme.light.name)
     patched.pinnedPanels shouldBe List(panel)
     patched.targetEditorPaneCount shouldBe Some(1)
   }
@@ -339,7 +296,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Drafting",
       config = AppConfig.default.withFontConfig(FontConfig(textFontFamily = Font.SANS_SERIF, textFontSize = 12.0f)),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
@@ -373,7 +330,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       config = AppConfig.default
         .withDefaultDocumentMode(DefaultDocumentMode.PlainText)
         .withMarkdownViewMode(MarkdownViewMode.Source),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
@@ -399,7 +356,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
         .withLineNumbers(true)
         .withStatusLinePlacement(StatusLinePlacement.Pinned)
         .withWordWrap(true),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
@@ -435,7 +392,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       config = AppConfig.default.withSpellCheck(
         SpellCheckConfig(enabled = false, languages = List("en"), additionalWords = List("serenity"))
       ),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )

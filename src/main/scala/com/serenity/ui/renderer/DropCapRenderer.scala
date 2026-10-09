@@ -1,11 +1,12 @@
 package com.serenity.ui.renderer
 
+import java.awt.Font
 import java.awt.font.FontRenderContext
-import java.awt.{Color, Font}
 
 import com.serenity.lsp.model.SemanticToken
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{AppState, Buffer, TextVisualLine}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{DropCapLayout, TextLayoutSnapshot}
 import com.serenity.ui.theme.{RichTextStyling, StyledText, TextStyle, Theme}
 
@@ -16,10 +17,10 @@ import com.serenity.ui.theme.{RichTextStyling, StyledText, TextStyle, Theme}
   * of those files.
   *
   * Measured (GUI) drawing only: [[renderGlyphPx]] draws one pixel-run spanning the glyph's full multi-line height, the
-  * same `surface.text.drawRunPx` primitive `CharacterRenderer.renderMeasuredLineWithAnimation` uses per run. The
-  * fixed-cell (TUI) grid has no font-size concept to spread a glyph across rows with, so [[renderGlyphCell]] instead
-  * marks the one cell the first character already occupies as bold in a highlighted colour -- never attempting
-  * multi-row spanning there, per this codebase's TUI degradation convention.
+  * same `surface.text.drawRunPx` primitive `CharacterRenderer.renderMeasuredLine` uses per run. The fixed-cell (TUI)
+  * grid has no font-size concept to spread a glyph across rows with, so [[renderGlyphCell]] instead marks the one cell
+  * the first character already occupies as bold in a highlighted colour -- never attempting multi-row spanning there,
+  * per this codebase's TUI degradation convention.
   */
 object DropCapRenderer:
 
@@ -45,8 +46,8 @@ object DropCapRenderer:
     glyphAscentPx: Int,
     glyphText: String,
     glyphStyle: TextStyle,
-    foreground: Color,
-    background: Color
+    foreground: RenderColor,
+    background: RenderColor
   ): Unit =
     if glyphText.nonEmpty && glyphWidthPx > 0.0f && glyphHeightPx > 0 then
       surface.setForegroundColor(foreground)
@@ -63,8 +64,8 @@ object DropCapRenderer:
     x: Int,
     y: Int,
     glyphText: String,
-    accentForeground: Color,
-    background: Color
+    accentForeground: RenderColor,
+    background: RenderColor
   ): Unit =
     if glyphText.nonEmpty then
       surface.setForegroundColor(accentForeground)
@@ -222,8 +223,8 @@ object DropCapRenderer:
     )).getOrElse((visualLine, styledSegments))
 
   /** `RendererPaneContent`'s single call for the measured (GUI) path: computes the drop-cap-adjusted line/segments
-    * ([[adjustHomeLineDraw]]) and paints them via `CharacterRenderer.renderMeasuredLineWithAnimation` -- keeping that
-    * whole call out of `RendererPaneContent`, which is already at this codebase's size ceiling.
+    * ([[adjustHomeLineDraw]]) and paints them via `CharacterRenderer.renderMeasuredLine` -- keeping that whole call out
+    * of `RendererPaneContent`, which is already at this codebase's size ceiling.
     */
   def renderMeasuredHomeAware(
     snapshot: TextLayoutSnapshot,
@@ -254,7 +255,7 @@ object DropCapRenderer:
       lineTopPx,
       lineHeightPx
     )
-    CharacterRenderer.renderMeasuredLineWithAnimation(
+    CharacterRenderer.renderMeasuredLine(
       context.surface,
       xOriginPx,
       lineTopPx,
@@ -262,7 +263,6 @@ object DropCapRenderer:
       ascentPx,
       drawLine,
       theme,
-      context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
       state.syntaxHighlightingEnabled,
       buffer.document.language,
       drawSegments,

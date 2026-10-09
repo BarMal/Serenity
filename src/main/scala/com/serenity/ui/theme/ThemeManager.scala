@@ -1,9 +1,5 @@
 package com.serenity.ui.theme
 
-import java.util.concurrent.atomic.AtomicReference
-
-import scala.collection.immutable.ListMap
-
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.SemanticToken
 
@@ -102,7 +98,7 @@ object ThemeManager:
     text: String,
     theme: Theme,
     baseStyle: TextStyle = TextStyle.normal,
-    foregroundOverride: Option[java.awt.Color] = None
+    foregroundOverride: Option[com.serenity.ui.color.RenderColor] = None
   ): List[StyledText] =
     val defaultForeground = foregroundOverride.getOrElse(theme.foreground)
     val markerColor       = theme.colorFor(SyntaxElement.Delimiter)
@@ -169,43 +165,26 @@ object ThemeManager:
 
     loop(0, Nil)
 
-/** Bounded, `AtomicReference`-backed syntax-highlight memoization cache (issue #1412), delegating the actual
-  * highlighting logic to [[ThemeManager.computeHighlightLine]]. `highlightLine` stays a plain synchronous `def`: it's
-  * called from deep inside the Java2D/terminal paint loop (`CharacterRenderer`, `RendererPaneContent`), which owns its
-  * own thread rather than running inside an IO fiber, so making it return `IO` would mean threading `IO` through the
-  * entire rendering call graph -- well beyond this package. This module was briefly `Ref[IO, ...]`-backed (#1431), with
-  * each accessor forcing that `IO` synchronously via `unsafeRunSync` right back out again to keep this synchronous API
-  * -- which just hid a plain in-memory compare-and-set behind an effect type nothing here ever suspended on, rather
-  * than pushing `IO` to an edge. [[casUpdate]] below is that same compare-and-set directly, with no `IO` to force
-  * (#1434). Eviction here is bounded-FIFO (oldest inserted, not oldest accessed) rather than an access-order LRU -- a
-  * deliberate simplification, since a `ListMap` has no cheap way to bump an existing key to "most recently used"
-  * without an extra write on every cache *hit* too.
+/** Bounded LRU syntax-highlight memo on the per-row paint path, delegating the actual highlighting logic to
+  * [[ThemeManager.computeHighlightLine]]. `highlightLine` stays a plain synchronous `def`: it's called from deep inside
+  * the Java2D/terminal paint loop (`CharacterRenderer`, `RendererPaneContent`), which owns its own thread rather than
+  * running inside an IO fiber, so making it return `IO` would mean threading `IO` through the entire rendering call
+  * graph -- well beyond this package (#1431, #1434). Storage is a hashed [[BoundedLruCache]] (#1843): an immutable
+  * `ListMap` made every lookup a linear walk of up to 4096 keys.
+  *
+  * The key holds the whole [[Theme]] value, not its `name`: a hot-reloaded theme file keeps its name with new colours,
+  * and renderers derive same-named variants via `copy` (e.g. `RendererMarkdownLens`'s lens theme), so a name key could
+  * serve stale colours. `Theme` carries no version or generation id to key on instead.
   *
   * Instance-scoped (issue #1677): one instance is created per render-owning entity (held on
   * [[com.serenity.state.manager.RenderCaches]], threaded through [[com.serenity.ui.renderer.RenderContext]] to every
   * caller) rather than a JVM-wide singleton, so two independently constructed instances share no cache state and never
-  * contend on the same `AtomicReference`.
+  * contend on the same lock.
   */
 final class ThemeHighlightCache:
   import ThemeManager.HighlightKey
 
-  private val MaxHighlightCacheEntries = 4096
-
-  private val highlightCacheRef: AtomicReference[ListMap[HighlightKey, List[StyledText]]] =
-    new AtomicReference(ListMap.empty)
-
-  /** Retries `f` against `ref`'s current value until its compare-and-set succeeds -- the plain-value equivalent of
-    * `Ref.update`.
-    */
-  @annotation.tailrec
-  private def casUpdate[A](ref: AtomicReference[A])(f: A => A): Unit =
-    val current = ref.get()
-    val next    = f(current)
-    if !ref.compareAndSet(current, next) then casUpdate(ref)(f)
-
-  private def boundedPut[K, V](cache: ListMap[K, V], key: K, value: V, maxEntries: Int): ListMap[K, V] =
-    val updated = (cache - key) + (key -> value)
-    if updated.size <= maxEntries then updated else updated.drop(updated.size - maxEntries)
+  private val highlights = BoundedLruCache[HighlightKey, List[StyledText]](ThemeHighlightCache.MaxEntries)
 
   /** Apply syntax highlighting to a line of text, memoized by (line, theme, language, this line's semantic tokens).
     *
@@ -223,13 +202,10 @@ final class ThemeHighlightCache:
     language: Option[LanguageId] = None,
     semanticTokens: Option[List[SemanticToken]] = None
   ): List[StyledText] =
-    val key    = (line, theme, language, semanticTokens)
-    val cached = highlightCacheRef.get().get(key)
-    cached.getOrElse {
-      val computed = ThemeManager.computeHighlightLine(line, theme, language, semanticTokens)
-      casUpdate(highlightCacheRef)(boundedPut(_, key, computed, MaxHighlightCacheEntries))
-      computed
-    }
+    val key = (line, theme, language, semanticTokens)
+    highlights.getOrCompute(key)(ThemeManager.computeHighlightLine(line, theme, language, semanticTokens))
 
 object ThemeHighlightCache:
+  private[theme] val MaxEntries = 4096
+
   def apply(): ThemeHighlightCache = new ThemeHighlightCache

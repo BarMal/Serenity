@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{RenderDamageGranularity, StatusLinePlacement, StatusSegment}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
@@ -48,7 +48,7 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  "DamageProducer.forTransition" should "combine BufferRows and Chrome damage when the active buffer's cursor moves, since the gutter shows it" in {
+  "DamageProducer.forTransition" should "combine caret cells and Chrome damage when the active buffer's cursor moves, since the status row shows it" in {
     val before = stateWithContent("first\nsecond\nthird", cursors = List(CursorPosition(0, 0)))
     val after = before.copy(persisted =
       before.persisted.copy(buffers =
@@ -62,10 +62,12 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
     )
 
     DamageProducer.forTransition(before, after) shouldBe
-      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1)), Damage.Chrome))
+      Damage.Combined(
+        Set(Damage.BufferCells(bufferId, 0, 0, Some(1)), Damage.BufferCells(bufferId, 1, 2, Some(3)), Damage.Chrome)
+      )
   }
 
-  it should "report only BufferRows, no Chrome damage, when a non-active buffer's cursor moves" in {
+  it should "report only caret cells, no Chrome damage, when a non-active buffer's cursor moves" in {
     val otherId = BufferId(99)
     val bare    = stateWithContent("first\nsecond")
     val before = bare.copy(persisted =
@@ -99,7 +101,8 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(otherId, Set(0, 1))
+    DamageProducer.forTransition(before, after) shouldBe
+      Damage.Combined(Set(Damage.BufferCells(otherId, 0, 0, Some(1)), Damage.BufferCells(otherId, 1, 0, Some(1))))
   }
 
   it should "report the damaged row for a single-character edit on one line" in {
@@ -373,7 +376,9 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
 
       before.persisted.config.surfaceConfig.focusedTextBodyEnabled shouldBe false
       DamageProducer.forTransition(before, after) shouldBe
-        Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 3)), Damage.Chrome))
+        Damage.Combined(
+          Set(Damage.BufferCells(bufferId, 0, 0, Some(1)), Damage.BufferCells(bufferId, 3, 0, Some(1)), Damage.Chrome)
+        )
     }
 
   it should "widen damage to every row whose dimmed state flips when the cursor crosses a paragraph boundary" in {
@@ -409,7 +414,9 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
     )
 
     DamageProducer.forTransition(before, after) shouldBe
-      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1)), Damage.Chrome))
+      Damage.Combined(
+        Set(Damage.BufferCells(bufferId, 0, 0, Some(1)), Damage.BufferCells(bufferId, 1, 0, Some(1)), Damage.Chrome)
+      )
   }
 
   it should "report Everything when the focused-text-body feature is toggled on, via chromeDamage's config check" in {

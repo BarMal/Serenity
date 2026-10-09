@@ -5,7 +5,6 @@ import java.awt.Color
 import _root_.io.circe.syntax.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.keystroke.events.*
@@ -14,6 +13,8 @@ import com.serenity.session.SessionState
 import com.serenity.session.given
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
@@ -29,7 +30,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
 
   private def makeStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("CursorModeSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   private def settingsItems(runner: CommandRunner): List[CommandSurfaceItem] =
     def descendants(group: CommandSurfaceItem.GroupItem): List[CommandSurfaceItem] =
@@ -47,30 +48,30 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "change cursorMode via withCursorMode" in {
-    AppConfig.default.withCursorMode(CursorMode.Breathe).cursorMode shouldBe CursorMode.Breathe
+    AppConfig.default.withCursorMode(CursorMode.Blink).cursorMode shouldBe CursorMode.Blink
   }
 
   it should "store cursor settings inside the cursor sub-config" in {
     val active   = new Color(0x22, 0x44, 0x88)
     val inactive = new Color(0x88, 0x44, 0x22, 0x99)
     val config = AppConfig.default
-      .withCursorMode(CursorMode.Breathe)
+      .withCursorMode(CursorMode.Blink)
       .withCursorColors(CursorColorConfig(Some(active), Some(inactive)))
 
     config.cursorConfig shouldBe CursorConfig(
-      mode = CursorMode.Breathe,
+      mode = CursorMode.Blink,
       colors = CursorColorConfig(Some(active), Some(inactive))
     )
   }
 
   it should "leave other fields unchanged when changing cursorMode" in {
     val config = AppConfig(
-      editorConfig = EditorConfig(characterAnimation = AnimationConfig.quick),
-      surfaceConfig = SurfaceConfig(showLineNumbers = false, blurRadius = 0.5f)
-    ).withCursorMode(CursorMode.Breathe)
-    config.editorConfig.characterAnimation shouldBe AnimationConfig.quick
+      editorConfig = EditorConfig(minimumPaneWidth = 40),
+      surfaceConfig = SurfaceConfig(showLineNumbers = false, diagnosticHighlightBlendWeight = 0.5)
+    ).withCursorMode(CursorMode.Blink)
+    config.editorConfig.minimumPaneWidth shouldBe 40
     config.surfaceConfig.showLineNumbers shouldBe false
-    config.surfaceConfig.blurRadius shouldBe 0.5f
+    config.surfaceConfig.diagnosticHighlightBlendWeight shouldBe 0.5
   }
 
   // ── CommandRunner settings ───────────────────────────────────────────────
@@ -82,12 +83,12 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     } should not be empty
   }
 
-  it should "offer Blink and Breathe choices on the cursor mode option" in {
+  it should "offer only the Blink choice on the cursor mode option" in {
     val runner = CommandRunner.empty.copy(isActive = true)
     val item = settingsItems(runner).collectFirst {
       case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
     }.get
-    item.options.map(_.label) should contain allOf ("Blink", "Breathe")
+    item.options.map(_.label) shouldBe List("Blink")
   }
 
   it should "map Blink option to SetCursorMode(Blink) intent" in {
@@ -100,55 +101,15 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "map Breathe option to SetCursorMode(Breathe) intent" in {
-    val runner = CommandRunner.empty.copy(isActive = true)
-    val item = settingsItems(runner).collectFirst {
-      case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
-    }.get
-    item.options.find(_.label == "Breathe").get.intent shouldBe CommandIntent.Settings(
-      SettingsIntent.Cursor(CursorIntent.SetCursorMode(CursorMode.Breathe))
-    )
-  }
-
   // ── StateManager ─────────────────────────────────────────────────────────
 
-  "SetCursorMode" should "update config.cursorMode to Breathe via command runner navigation" in {
+  "SetCursorMode" should "keep Blink when cycling the cursor mode option, which has no other choice" in {
     val sm = makeStateManager()
-    // Open runner, navigate to Settings (5 tabs), move down to cursor mode option, press Right (Blink → Breathe)
     openSettingsGroup(sm, "cursor")
     sm.applyEvent(MoveRight).unsafeRunSync()
-
-    sm.getCurrentState.unsafeRunSync().persisted.config.cursorMode shouldBe CursorMode.Breathe
-  }
-
-  it should "restore Blink by pressing Right again (wraps around)" in {
-    val sm = makeStateManager()
-    openSettingsGroup(sm, "cursor")
-    sm.applyEvent(MoveRight).unsafeRunSync() // Blink → Breathe
-    sm.applyEvent(MoveRight).unsafeRunSync() // Breathe → Blink (wrap)
+    sm.applyEvent(MoveRight).unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().persisted.config.cursorMode shouldBe CursorMode.Blink
-  }
-
-  "SetBackgroundStyle" should "update config.surfaceConfig.backgroundStyle via command runner navigation" in {
-    val sm = makeStateManager()
-    openSettingsGroup(sm, "surface")
-    sm.applyEvent(MoveRight).unsafeRunSync()
-
-    sm.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
-  }
-
-  "SetPostProcessingEffect" should "update the effect via command runner navigation" in {
-    val sm = makeStateManager()
-    openSettingsGroup(sm, "post-processing")
-    sm.applyEvent(MoveRight).unsafeRunSync()
-
-    sm.getCurrentState
-      .unsafeRunSync()
-      .persisted
-      .config
-      .surfaceConfig
-      .postProcessingEffect shouldBe PostProcessingEffect.Scanlines
   }
 
   // ── SessionState JSON round-trip ──────────────────────────────────────────
@@ -163,14 +124,17 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.cursorMode shouldBe CursorMode.Blink
   }
 
-  it should "round-trip CursorMode.Breathe through JSON" in {
-    val initialState = AppState.initial
-    val appState = initialState.copy(persisted =
-      initialState.persisted.copy(config = AppConfig.default.withCursorMode(CursorMode.Breathe))
-    )
-    val decoded = SessionState.fromAppState(appState).asJson.as[SessionState]
-    decoded.isRight shouldBe true
-    decoded.toOption.get.config.cursorMode shouldBe CursorMode.Breathe
+  it should "load a stored breathe cursor mode as Blink" in {
+    import _root_.io.circe.Json
+    val enc = summon[_root_.io.circe.Encoder[AppConfig]]
+    val dec = summon[_root_.io.circe.Decoder[AppConfig]]
+    List("breathe", "Breathe", "breathing").foreach { stored =>
+      val json    = enc(AppConfig.default).mapObject(_.add("cursorMode", Json.fromString(stored)))
+      val decoded = json.as[AppConfig](using dec)
+      withClue(s"stored cursor mode '$stored': ") {
+        decoded.map(_.cursorMode) shouldBe Right(CursorMode.Blink)
+      }
+    }
   }
 
   it should "round-trip CursorMode.Blink through JSON" in {
@@ -232,37 +196,37 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render the cursor using cursorColor override instead of theme.cursor" in {
-    val state        = AppState.initial
-    val surface      = new MockRenderSurface(80, 24)
-    val breatheColor = new Color(255, 128, 0, 128)
+    val state         = AppState.initial
+    val surface       = new MockRenderSurface(80, 24)
+    val overrideColor = RenderColor.fromRgba(255, 128, 0, 128)
     RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      cursorColor = Some(breatheColor),
+      cursorColor = Some(overrideColor),
       com.serenity.state.manager.RenderCaches.create()
     )
 
     val (cx, cy) = cursorScreenPos(state)
-    surface.getBg(cx, cy) shouldBe breatheColor
+    surface.getBg(cx, cy) shouldBe overrideColor
   }
 
   it should "hide cursor when cursorVisible is false regardless of override" in {
-    val state        = AppState.initial
-    val surface      = new MockRenderSurface(80, 24)
-    val breatheColor = new Color(255, 128, 0, 128)
+    val state         = AppState.initial
+    val surface       = new MockRenderSurface(80, 24)
+    val overrideColor = RenderColor.fromRgba(255, 128, 0, 128)
     RendererEntryPoints.render(
       state,
       cursorVisible = false,
       surface,
       ViewportSize(80, 24),
-      cursorColor = Some(breatheColor),
+      cursorColor = Some(overrideColor),
       com.serenity.state.manager.RenderCaches.create()
     )
 
     val (cx, cy) = cursorScreenPos(state)
-    surface.getBg(cx, cy) should not be breatheColor
+    surface.getBg(cx, cy) should not be overrideColor
   }
 
   private def cursorScreenPos(state: AppState): (Int, Int) =

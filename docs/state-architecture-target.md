@@ -62,6 +62,9 @@ type Event = EditorEvent | AppEvent | SystemEvent | SurfaceEvent | MouseInputEve
 `SearchResultsReady`, `AnalysisCompleted`, `ExternalChangeDetected`). Ticks are messages too
 (`AnimationTick(nanos)`), coalesced so at most one is queued.
 
+Note: the animation tick has since been removed along with every animation and the motion configuration; a motion
+engine will be redesigned from scratch rather than restored.
+
 ### Effect lanes
 
 ```scala

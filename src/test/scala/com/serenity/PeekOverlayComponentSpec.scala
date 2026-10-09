@@ -38,16 +38,20 @@ class PeekOverlayComponentSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  "PeekOverlayComponent" should "dismiss on typed navigation events" in {
+  private val dismissedAndPassedOn = ComponentResult.composite(ComponentResult.dismiss, ComponentResult.unhandled)
+
+  "PeekOverlayComponent" should "dismiss on typed navigation events and pass them on to the editor" in {
     val component = PeekOverlayComponent()
 
-    component.processEvent(PeekInputEvent.Navigate(Direction.Up), baseState).shouldBe(ComponentResult.Dismiss)
+    component.processEvent(PeekInputEvent.Navigate(Direction.Up), baseState).shouldBe(dismissedAndPassedOn)
   }
 
-  it should "dismiss on other local input events" in {
+  it should "dismiss on other local input events and pass them on to the editor" in {
     val component = PeekOverlayComponent()
 
-    component.processEvent(PeekInputEvent.OtherInput, baseState).shouldBe(ComponentResult.Dismiss)
-    component.processEvent(PeekInputEvent.Accept, baseState).shouldBe(ComponentResult.Dismiss)
-    component.processEvent(PeekInputEvent.Dismiss, baseState).shouldBe(ComponentResult.Dismiss)
+    component.processEvent(PeekInputEvent.OtherInput, baseState).shouldBe(dismissedAndPassedOn)
+    component.processEvent(PeekInputEvent.Accept, baseState).shouldBe(dismissedAndPassedOn)
   }
+
+  it should "only dismiss on Dismiss" in
+    PeekOverlayComponent().processEvent(PeekInputEvent.Dismiss, baseState).shouldBe(ComponentResult.Dismiss)

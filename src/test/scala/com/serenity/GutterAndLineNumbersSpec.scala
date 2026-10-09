@@ -7,13 +7,12 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{InterfaceDensity, StatusLineColors, StatusLinePlacement, StatusSegment}
 import com.serenity.lsp.config.LanguageId
-import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -137,7 +136,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- warmStateManager(logger)
 
       // Given: Buffer with content and cursor at specific position
       bufferId     <- stateManager.createBuffer("Line 1\nLine 2\nLine 3", None)
@@ -164,7 +163,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- warmStateManager(logger)
 
       // Given: Buffer with file path
       bufferId     <- stateManager.createBuffer("File content", None)
@@ -198,7 +197,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- warmStateManager(logger)
 
       // Given: State with line numbers enabled and some buffer content
       bufferId     <- stateManager.createBuffer("Line 1\nLine 2\nLine 3", None) // Small buffer for testing
@@ -246,7 +245,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- warmStateManager(logger)
 
       // Given: Buffer with many lines
       lines = (1 to 50).map(i => s"Line $i").mkString("\n")
@@ -448,7 +447,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- warmStateManager(logger)
 
       // Given: Buffer with header and gutter enabled
       bufferId     <- stateManager.createBuffer("Some content", None)
@@ -555,8 +554,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val call = surface.drawRunPxCalls
       .find(_.s.contains("Line 2, Col 3"))
       .getOrElse(fail("Expected a gutter draw call showing the cursor info bar text"))
-    call.foreground shouldBe foreground
-    call.background shouldBe background
+    call.foreground.toAwt shouldBe foreground
+    call.background.toAwt shouldBe background
   }
 
   it should "keep the theme's own panel colours in the gutter when no cursor info bar colour override is configured" in {
@@ -629,9 +628,9 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewport,
-      codeFont,
-      textFont,
-      uiFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
+      FontSpec.fromAwt(uiFont),
       cellMetrics,
       uiMetrics,
       None,

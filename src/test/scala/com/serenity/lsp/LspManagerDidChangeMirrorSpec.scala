@@ -6,6 +6,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
 import com.serenity.lsp.model.TextDocumentSyncKind
+import com.serenity.testkit.RopeText
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.Stream
 import io.circe.Json
@@ -69,7 +70,7 @@ class LspManagerDidChangeMirrorSpec extends AnyFlatSpec with Matchers:
     connection.takeOutgoing.flatMap(IO.fromOption(_)(new RuntimeException("Missing LSP message")))
 
   private def open(manager: Harness): IO[Unit] =
-    manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo"))) >>
+    manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, RopeText("object Foo")))) >>
       takeMessage(manager.connection).void
 
   "LspManager" should "keep its previous-text mirror unchanged when a didChange notification fails to send" in
@@ -83,8 +84,12 @@ class LspManagerDidChangeMirrorSpec extends AnyFlatSpec with Matchers:
             // This didChange fails to send (simulated) -- the server never saw "object Foo1", so the manager's
             // documentTexts mirror must not advance to it, or the next diff below would be computed against text
             // the server was never told about.
-            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo1", version = 2)))
-            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 3)))
+            _ <- manager.effects.offer(
+              Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo1"), version = 2))
+            )
+            _ <- manager.effects.offer(
+              Some(LspEffect.FileChanged(uri, LanguageId.Scala, RopeText("object Foo2"), version = 3))
+            )
             change <- takeMessage(manager.connection)
             contentChange = change.hcursor.downField("params").downField("contentChanges").downArray
             _             = contentChange.downField("rangeLength").as[Int].toOption shouldBe Some(0)

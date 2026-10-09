@@ -8,7 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{CursorPosition, PaneId, Selection}
-import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -29,7 +29,7 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(): StateManager =
     val logger       = LoggerFactory[IO].getLogger(using LoggerName("RichTextEditPathDesyncSpec"))
-    val stateManager = StateManager.apply(logger).unsafeRunSync()
+    val stateManager = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
     // Rich-text formatting belongs to prose mode.
     stateManager.updateState(TestAppModes.prose).unsafeRunSync()
     stateManager
@@ -98,6 +98,25 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
     val plainContent = buffer.document.content.collect()
     plainContent shouldBe "alpha beta gamma delta"
     buffer.richText.richTextDocument shouldBe defined
+    buffer.richText.richTextDocument.map(_.plainText) shouldBe Some(plainContent)
+  }
+
+  "a single-cursor paste of CRLF text" should "keep richTextDocument in sync with the normalised content" in {
+    val stateManager = createStateManager()
+    val bufferId     = stateManager.createBuffer("alpha beta", None).unsafeRunSync()
+    stateManager.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+
+    boldSelection(stateManager, bufferId, Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
+    setCursorAndSelection(stateManager, bufferId, CursorPosition(0, 10), None)
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(clipboard = Some("\r\ngamma\rdelta"))))
+      .unsafeRunSync()
+
+    stateManager.applyEvent(Paste).unsafeRunSync()
+
+    val buffer       = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
+    val plainContent = buffer.document.content.collect()
+    plainContent shouldBe "alpha beta\ngamma\ndelta"
     buffer.richText.richTextDocument.map(_.plainText) shouldBe Some(plainContent)
   }
 

@@ -1,26 +1,24 @@
 package com.serenity.ui.theme.config
 
-import java.awt.Color
-
 import scala.util.Try
 
-import com.serenity.ui.theme.ColorFormat.withAlpha
+import com.serenity.ui.color.RenderColor
 
 object ColorParser:
 
   /** `color` with alpha zeroed out, otherwise identical -- the starting/ending point for every fade-in/fade-out
     * animation that needs a transparent variant of a theme color.
     */
-  def transparent(color: Color): Color =
+  def transparent(color: RenderColor): RenderColor =
     color.withAlpha(0)
 
-  def parseColor(colorStr: String): Either[String, Color] =
+  def parseColor(colorStr: String): Either[String, RenderColor] =
     colorStr.trim match
       case hex if hex.startsWith("#")    => parseHexColor(hex)
       case rgb if rgb.startsWith("rgb(") => parseRgbColor(rgb)
       case unknown                       => Left(s"Unknown color: $unknown")
 
-  private def parseHexColor(hex: String): Either[String, Color] =
+  private def parseHexColor(hex: String): Either[String, RenderColor] =
     val cleanHex = hex.substring(1)
     // Invalid hex digits are a genuinely malformed color string, not our own control-flow choice --
     // Integer.parseInt's NumberFormatException is caught by Try and reported through the Either, same
@@ -32,29 +30,36 @@ object ColorParser:
           val r = Integer.parseInt(cleanHex.substring(0, 1), 16) * 17
           val g = Integer.parseInt(cleanHex.substring(1, 2), 16) * 17
           val b = Integer.parseInt(cleanHex.substring(2, 3), 16) * 17
-          new Color(r, g, b)
-        }.toEither.left.map(_.getMessage)
+          (r, g, b, 255)
+        }.toEither.left.map(_.getMessage).flatMap(inRange(hex))
       case 6 =>
         Try {
           val r = Integer.parseInt(cleanHex.substring(0, 2), 16)
           val g = Integer.parseInt(cleanHex.substring(2, 4), 16)
           val b = Integer.parseInt(cleanHex.substring(4, 6), 16)
-          new Color(r, g, b)
-        }.toEither.left.map(_.getMessage)
+          (r, g, b, 255)
+        }.toEither.left.map(_.getMessage).flatMap(inRange(hex))
       // #RRGGBBAA -- the alpha channel a theme's `background` field needs to carry the alpha-0 "use the terminal's
-      // own background" sentinel (#1240): the 6-digit form's `new Color(r, g, b)` always fixes alpha to 255, so a
-      // theme wanting a transparent background has no way to express that without this longer form.
+      // own background" sentinel (#1240): the 6-digit form always fixes alpha to 255, so a theme wanting a transparent
+      // background has no way to express that without this longer form.
       case 8 =>
         Try {
           val r = Integer.parseInt(cleanHex.substring(0, 2), 16)
           val g = Integer.parseInt(cleanHex.substring(2, 4), 16)
           val b = Integer.parseInt(cleanHex.substring(4, 6), 16)
           val a = Integer.parseInt(cleanHex.substring(6, 8), 16)
-          new Color(r, g, b, a)
-        }.toEither.left.map(_.getMessage)
+          (r, g, b, a)
+        }.toEither.left.map(_.getMessage).flatMap(inRange(hex))
       case _ => Left(s"Invalid hex color format: $hex")
 
-  private def parseRgbColor(rgb: String): Either[String, Color] =
+  // `Integer.parseInt` accepts a sign, so "#-1-1-1" parses to negative channels; `java.awt.Color` used to reject those,
+  // and `RenderColor.fromRgba` would clamp them instead.
+  private def inRange(hex: String)(channels: (Int, Int, Int, Int)): Either[String, RenderColor] =
+    val (r, g, b, a) = channels
+    if Seq(r, g, b, a).forall(channel => channel >= 0 && channel <= 255) then Right(RenderColor.fromRgba(r, g, b, a))
+    else Left(s"Hex color channel outside 0-255: $hex")
+
+  private def parseRgbColor(rgb: String): Either[String, RenderColor] =
     val content = rgb.substring(4, rgb.length - 1)
     Try(content.split(",").map(_.trim.toInt)).toEither.left
       .map(_.getMessage)
@@ -63,5 +68,5 @@ object ColorParser:
         else
           val Array(r, g, b) = parts: @unchecked
           if r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255 then Left(s"RGB values must be 0-255: $rgb")
-          else Right(new Color(r, g, b))
+          else Right(RenderColor.fromRgba(r, g, b))
       }

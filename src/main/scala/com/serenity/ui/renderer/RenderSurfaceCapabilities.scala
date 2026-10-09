@@ -1,17 +1,15 @@
 package com.serenity.ui.renderer
 
 import java.awt.font.FontRenderContext
-import java.awt.image.BufferedImage
-import java.awt.{Color, Font}
 
-import com.serenity.config.PostProcessingEffect
+import com.serenity.ui.color.RenderColor
 
 /** Character- and pixel-run text drawing. Every real [[RenderSurface]] implements this -- a surface that cannot draw
   * text cannot render Serenity's UI -- so [[RenderSurface.text]] exposes it directly rather than as an `Option`: the
   * type itself guarantees the capability instead of pushing a check onto every call site that draws a line of text.
   */
 trait TextDrawing:
-  def setFont(font: Font): Unit
+  def setFont(font: FontSpec): Unit
   def fontRenderContext: Option[FontRenderContext]
 
   /** Draw a proportional text run at exact pixel coordinates.
@@ -38,44 +36,37 @@ trait TextDrawing:
   * [[RenderSurface.pixels]] exposes it directly rather than as an `Option`.
   */
 trait PixelDrawing:
-  def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit
-  def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit
+  def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit
+  def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit
 
   /** Composite a whole-surface layer image (a modal/panel layer buffer, produced by
-    * [[LayerBufferSupport.newLayerSurface]]/[[LayerBufferSupport.newSeededLayerSurface]]) back onto this surface,
-    * covering it exactly.
+    * [[LayerBufferSupport.newLayerSurface]]) back onto this surface, covering it exactly.
     *
     * Distinct from [[drawImage]] because a layer buffer is already at this surface's own backing resolution: it must be
     * blitted one-for-one, not scaled through the cell grid and device transform that [[drawImage]]'s cell-addressed
     * geometry applies. Routing it through `drawImage(image, 0, 0, viewportWidth, viewportHeight)` snaps the destination
-    * to `floor(logicalSize / cellSize) * cellSize` and then re-scales by the device factor, so a layer that was seeded
-    * from this surface's own pixels comes back very slightly smaller than it left -- imperceptible in one frame, but
-    * the command runner re-seeds and re-composites the whole frame on every navigation keystroke, so the shrink
-    * compounds into a visible "zoom out" of the editor pane behind it until a full clean repaint resets it.
+    * to `floor(logicalSize / cellSize) * cellSize` and then re-scales by the device factor, so a layer comes back very
+    * slightly smaller than it left -- imperceptible in one frame, but the command runner re-composites on every
+    * navigation keystroke, so the shrink compounds into a visible "zoom out" of the editor pane behind it until a full
+    * clean repaint resets it.
     *
     * The only real surface with a layer-buffer capability is [[Java2DRenderSurface]], which overrides this to blit 1:1
     * in device pixels; every other surface either advertises no layer buffers at all (a terminal) or is a headless test
     * double. The default records the composite as an ordinary full-surface `drawImage` so those doubles keep observing
     * one blit per layer paint, without needing this surface's backing resolution.
     */
-  def compositeFullSurfaceLayer(image: BufferedImage): Unit =
-    drawImage(image, 0, 0, image.getWidth, image.getHeight)
+  def compositeFullSurfaceLayer(image: RenderImage): Unit =
+    drawImage(image, 0, 0, image.widthPx, image.heightPx)
 
   /** Translate drawing in device-independent logical pixels for fractional-cell floating geometry. */
   def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit
 
-/** Alpha compositing, region blur, and CRT-style post-processing. Genuinely optional: a surface that can't do any of
-  * this (or a headless test double) simply skips the polish rather than degrading a required drawing operation, so
-  * [[RenderSurface.effects]] exposes it as an `Option` and callers decide whether skipping the effect is safe.
+/** Alpha compositing. Genuinely optional: a surface that can't do it (or a headless test double) simply skips the fade
+  * rather than degrading a required drawing operation, so [[RenderSurface.effects]] exposes it as an `Option` and
+  * callers decide whether skipping the effect is safe.
   */
 trait Effects:
   def setAlpha(alpha: Float): Unit
-  def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit
-
-  /** Apply `effect` to the whole surface. `animationPhase` drives time-varying effects (e.g. scanline scroll); it
-    * defaults to a wall-clock tick so callers that don't care about a specific phase don't need to compute one.
-    */
-  def applyPostProcessing(effect: PostProcessingEffect, animationPhase: Long = System.nanoTime() / 50000000L): Unit
 
 /** A fresh, independently-paintable surface shaped exactly like the surface this capability came from -- same cell
   * metrics, font, logical size and device scale -- for a layer (a pinned panel, a modal, a floating overlay) to own its
@@ -89,21 +80,17 @@ trait LayerBufferSupport:
 
   /** A new surface painting into a blank, fully transparent buffer the same shape as the surface this capability came
     * from. `onFlush` receives the finished image once the caller's `flush()` completes -- compositing it onto the frame
-    * surface (e.g. via `RenderSurface.pixels.drawImage`) is the caller's job, not this surface's; a layer surface never
-    * publishes itself anywhere on its own.
+    * surface (e.g. via `RenderSurface.pixels.compositeFullSurfaceLayer`) is the caller's job, not this surface's; a
+    * layer surface never publishes itself anywhere on its own.
+    *
+    * Everything the layer's owner didn't paint stays transparent. That is what makes compositing the whole layer back
+    * over a frame whose content has since changed correct (#1798) -- a layer seeded with a full copy of the frame would
+    * paste that stale copy back over everything.
+    *
+    * `recycled` is a previous layer image the caller is done with; it is cleared and painted into instead of
+    * allocating, when its size still matches.
     */
-  def newLayerSurface(onFlush: BufferedImage => Unit): RenderSurface
-
-  /** Like [[newLayerSurface]], but the returned buffer starts as a snapshot of this surface's own current pixels
-    * instead of fully transparent -- for a layer whose paint step reads pixels back off the surface it paints onto
-    * (`Effects.blurRegion`, sampling the background behind a translucent panel) and so cannot start transparent:
-    * blurring a fully transparent surroundings would blur nothing. Painting into the snapshot and compositing the
-    * finished buffer back at full opacity is pixel-identical to painting directly onto this surface -- everywhere the
-    * layer's own paint step didn't touch is untouched pixel-for-pixel to begin with, and everywhere `blurRegion` reads
-    * is exactly the same background it would read painting live, because the snapshot *is* this surface's live pixels
-    * at the moment it was taken (#1100 stage 3).
-    */
-  def newSeededLayerSurface(onFlush: BufferedImage => Unit): RenderSurface
+  def newLayerSurface(onFlush: RenderImage => Unit, recycled: Option[RenderImage] = None): RenderSurface
 
 /** A caret shape a real terminal's own cursor can be styled as via DECSCUSR (`CSI Ps SP q`). */
 enum HardwareCursorShape:
@@ -112,10 +99,10 @@ enum HardwareCursorShape:
 /** A DECSCUSR-expressible caret style: shape plus whether the terminal should blink it itself.
   *
   * There is no cursor-shape setting in [[com.serenity.config.CursorConfig]] today (only
-  * [[com.serenity.config.CursorMode]]'s blink/breathe choice) -- callers that delegate the caret to the terminal
-  * (#1170) currently always ask for a blinking block, the shape every terminal defaults to. `decscusrParam` is kept as
-  * a total function of shape/blink regardless, so a future per-buffer shape setting has somewhere to plug in without
-  * touching the escape-emission code.
+  * [[com.serenity.config.CursorMode]]'s blink mode) -- callers that delegate the caret to the terminal (#1170)
+  * currently always ask for a blinking block, the shape every terminal defaults to. `decscusrParam` is kept as a total
+  * function of shape/blink regardless, so a future per-buffer shape setting has somewhere to plug in without touching
+  * the escape-emission code.
   */
 final case class HardwareCursorStyle(shape: HardwareCursorShape, blinking: Boolean):
 
@@ -139,44 +126,16 @@ trait HardwareCursor:
     */
   def present(cellX: Int, cellY: Int, style: HardwareCursorStyle): Unit
 
-  /** Hide the terminal's own cursor (`DECTCEM` hide) -- used when the caret is app-painted instead (breathe mode on a
-    * GUI canvas, #1170's documented exception; a cell-addressed terminal instead approximates breathe by thresholding
-    * its alpha into present/hide, see `RendererCursorOverlay.presentHardwareCursor`) or genuinely not visible this
-    * frame.
+  /** Hide the terminal's own cursor (`DECTCEM` hide) -- used when the caret is not visible this frame.
     */
   def hide(): Unit
 
-/** Rounded-rectangle chrome: borders, drop shadows, and clipping content to a rounded rect. Genuinely optional
-  * decoration -- panels and overlays still read correctly with square corners and no border/shadow -- so
-  * [[RenderSurface.roundedRects]] exposes it as an `Option`.
+/** Panel chrome: a square border and clipping content to the panel's rect. Genuinely optional decoration -- panels
+  * still read correctly without a border -- so [[RenderSurface.panelOutlines]] exposes it as an `Option`.
   */
-trait RoundedRectDrawing:
+trait PanelOutlineDrawing:
 
-  def strokeRoundRect(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color,
-    strokeWidth: Float = 1.5f
-  ): Unit
+  def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit
 
-  /** Draw a soft shadow behind a rounded UI surface. */
-  def drawRoundRectShadow(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color
-  ): Unit
-
-  /** Restrict drawing performed by `render` to a rounded rectangle in cell coordinates. */
-  def withRoundRectClip(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int
-  )(render: => Unit): Unit
+  /** Restrict drawing performed by `render` to a rectangle in cell coordinates. */
+  def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit

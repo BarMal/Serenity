@@ -26,9 +26,9 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
   private def surface(persistent: Boolean = true): MockRenderSurface = new MockRenderSurface(10, 5, persistent)
 
   private def frameOutput(screen: AnyRef): FrameOutput =
-    FrameOutput(ScreenIdentity(screen), new AtomicReference[Option[com.serenity.ui.layout.PixelRect]](None))
+    FrameOutput(ScreenIdentity(screen), new AtomicReference[Option[List[com.serenity.ui.layout.PixelRect]]](None))
 
-  private def image(): BufferedImage = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
+  private def image(): RenderImage = RenderImage.fromAwt(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB))
 
   private val someInputs = RenderInputs(
     ViewportSize(80, 24),
@@ -143,6 +143,35 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
     frameState.cachedPanelLayersFor(s) shouldBe Map(inner -> layer2)
   }
 
+  "layer buffer caching" should "share one entry between successive surfaces painting the same window" in {
+    // A GUI frame is a fresh surface every time (#1798); keying by the surface itself made every frame a new entry.
+    val window      = new Object
+    val firstFrame  = new OwnedMockSurface(window)
+    val secondFrame = new OwnedMockSurface(window)
+    val modal       = CachedModalLayer(image(), 80, 24, cursorVisible = true)
+    val panel = CachedPanelLayer(image(), 80, 24, cursorVisible = true, com.serenity.ui.layout.LayoutRect(0, 0, 1, 1))
+    val state = RendererFrameState(64)
+
+    state.rememberModalLayerBuffer(firstFrame, modal)
+    state.rememberPanelLayer(firstFrame, SurfaceId("outline"), panel)
+
+    state.cachedModalLayerFor(secondFrame) shouldBe Some(modal)
+    state.cachedPanelLayersFor(secondFrame) shouldBe Map(SurfaceId("outline") -> panel)
+    state.cachedModalLayerFor(new OwnedMockSurface(new Object)) shouldBe None
+  }
+
+  it should "forget both modal and panel layers for a window at once" in {
+    val s     = surface()
+    val panel = CachedPanelLayer(image(), 80, 24, cursorVisible = true, com.serenity.ui.layout.LayoutRect(0, 0, 1, 1))
+    frameState.rememberModalLayerBuffer(s, CachedModalLayer(image(), 80, 24, cursorVisible = true))
+    frameState.rememberPanelLayer(s, SurfaceId("outline"), panel)
+
+    frameState.forgetLayerBuffers(s)
+
+    frameState.cachedModalLayerFor(s) shouldBe None
+    frameState.cachedPanelLayersFor(s) shouldBe Map.empty
+  }
+
   "forgetPreviousFrameState" should "drop remembered floating rects for the key" in {
     val s     = surface()
     val key   = s.persistentContentKey.get
@@ -236,3 +265,6 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
       // capacity of 4) are still tracked.
       screens.foreach(output => frameState.drainScreenDamage(Some(output)) shouldNot be(Damage.Everything))
     }
+
+  private class OwnedMockSurface(window: AnyRef) extends MockRenderSurface(10, 5, true):
+    override def layerCacheOwner: ScreenIdentity = ScreenIdentity(window)

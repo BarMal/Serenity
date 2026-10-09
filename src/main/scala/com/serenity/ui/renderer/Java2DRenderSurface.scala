@@ -2,11 +2,11 @@ package com.serenity.ui.renderer
 
 import java.awt.*
 import java.awt.font.FontRenderContext
-import java.awt.geom.{Area, Rectangle2D, RoundRectangle2D}
+import java.awt.geom.Rectangle2D
 import java.awt.image.*
 import java.util.concurrent.atomic.AtomicReference
 
-import com.serenity.config.PostProcessingEffect
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.theme.TextStyle
 
@@ -27,28 +27,27 @@ class Java2DRenderSurface(
     logicalHeightPx: Int = -1,
     deviceScaleX: Double = 1.0,
     deviceScaleY: Double = 1.0,
-    contentPersists: Boolean = false
+    contentPersists: Boolean = false,
+    layerCacheOwnerOverride: Option[ScreenIdentity] = None
 ) extends RenderSurface
     with TextDrawing
     with PixelDrawing
     with Effects
-    with RoundedRectDrawing
+    with PanelOutlineDrawing
     with LayerBufferSupport:
-  def text: TextDrawing                                 = this
-  def pixels: PixelDrawing                              = this
-  override def effects: Option[Effects]                 = Some(this)
-  override def roundedRects: Option[RoundedRectDrawing] = Some(this)
-  override def layerBuffers: Option[LayerBufferSupport] = Some(this)
+  def text: TextDrawing                                   = this
+  def pixels: PixelDrawing                                = this
+  override def effects: Option[Effects]                   = Some(this)
+  override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
+  override def layerBuffers: Option[LayerBufferSupport]   = Some(this)
+
+  override def layerCacheOwner: ScreenIdentity = layerCacheOwnerOverride.getOrElse(super.layerCacheOwner)
 
   /** A fresh, fully transparent surface with this surface's own metrics/font/logical-size/device-scale -- derived
     * entirely from values this surface already computed, not from a `JPanel` (see [[Java2DRenderSurface.forLayer]] for
-    * why that matters). Painting the same content into it at the same cell coordinates as painting directly into this
-    * surface, then compositing the flushed image back on top of this surface at full opacity, is pixel-identical to
-    * painting directly here -- standard "paint onto transparent, then composite over" associativity for `SRC_OVER` --
-    * as long as the caller never reads this surface's own pixels back while painting the layer (no `blurRegion`, no
-    * shadow sampling): the frame planner's modal layer, the first consumer of this seam, satisfies that.
+    * why that matters).
     */
-  override def newLayerSurface(onFlush: BufferedImage => Unit): RenderSurface =
+  override def newLayerSurface(onFlush: RenderImage => Unit, recycled: Option[RenderImage]): RenderSurface =
     Java2DRenderSurface.forLayer(
       metrics,
       baseFontRef.get(),
@@ -56,24 +55,8 @@ class Java2DRenderSurface(
       effectiveLogicalHeightPx,
       deviceScaleX,
       deviceScaleY,
-      onFlush
-    )
-
-  /** As [[newLayerSurface]], but the returned buffer's backing image starts as a pixel copy of `image` -- this
-    * surface's own current backing image -- rather than fully transparent. See
-    * [[LayerBufferSupport.newSeededLayerSurface]]'s doc comment for why a layer that reads pixels back while painting
-    * (`blurRegion`) needs this instead of the transparent buffer [[newLayerSurface]] hands out.
-    */
-  override def newSeededLayerSurface(onFlush: BufferedImage => Unit): RenderSurface =
-    Java2DRenderSurface.forLayer(
-      metrics,
-      baseFontRef.get(),
-      effectiveLogicalWidthPx,
-      effectiveLogicalHeightPx,
-      deviceScaleX,
-      deviceScaleY,
-      onFlush,
-      seed = Some(image)
+      image => onFlush(RenderImage.fromAwt(image)),
+      recycled = recycled.map(_.toAwt)
     )
 
   private val g: Graphics2D = image.createGraphics()
@@ -96,12 +79,13 @@ class Java2DRenderSurface(
 
   private val fgRef                   = AtomicReference(Color.WHITE)
   private val bgRef                   = AtomicReference(Color.BLACK)
+  private val lastPaintColorRef       = AtomicReference(Color.WHITE)
   private val baseFontRef             = AtomicReference(font)
   private val logicalPixelRowOverride = AtomicReference[Option[(Int, Int)]](None)
 
-  override def setFont(newFont: Font): Unit =
-    baseFontRef.set(newFont)
-    g.setFont(newFont)
+  override def setFont(newFont: FontSpec): Unit =
+    baseFontRef.set(newFont.toAwt)
+    g.setFont(newFont.toAwt)
 
   override def fontRenderContext: Option[FontRenderContext] = Some(renderContext)
 
@@ -135,9 +119,14 @@ class Java2DRenderSurface(
           g.drawString(s, xPx, (yPx + ascentPx).toFloat)
         finally g.setClip(savedClip)
 
-  def setForegroundColor(color: Color): Unit = fgRef.set(color)
-  def setBackgroundColor(color: Color): Unit = bgRef.set(color)
-  def getBackgroundColor: Color              = bgRef.get()
+  def setForegroundColor(color: RenderColor): Unit = fgRef.set(Java2DRenderSurface.awtColor(color, fgRef.get()))
+  def setBackgroundColor(color: RenderColor): Unit = bgRef.set(Java2DRenderSurface.awtColor(color, bgRef.get()))
+  def getBackgroundColor: RenderColor              = RenderColor.fromAwt(bgRef.get())
+
+  private def paintColor(color: RenderColor): Color =
+    val awt = Java2DRenderSurface.awtColor(color, lastPaintColorRef.get())
+    lastPaintColorRef.set(awt)
+    awt
 
   /** The backing image doubles as the persistence key: whoever hands the same image back next frame gets the pixels
     * this frame leaves behind. Only surfaces built with `contentPersists` advertise it, because an image the caller
@@ -151,36 +140,32 @@ class Java2DRenderSurface(
     * default SRC_OVER composite gives a zero-alpha fill against a buffer that may already carry opaque pixels from a
     * previous frame (this surface's backing image can be pooled/reused across frames, see `contentPersists`). Restores
     * whatever composite (e.g. an active `setAlpha` translucency scale) was in effect before the fill, so this only
-    * affects the one fill call, never anything drawn after it.
+    * affects the one fill call, never anything drawn after it. A frame image has no alpha, and the canvas shows black
+    * through a transparent pixel, so it gets that black.
     */
   private def fillBackground(color: Color, px: Int, py: Int, pw: Int, ph: Int): Unit =
     if color.getAlpha == 0 then
       val savedComposite = g.getComposite
       g.setComposite(AlphaComposite.Src)
-      g.setColor(color)
+      g.setColor(if image.getColorModel.hasAlpha then color else Color.BLACK)
       g.fillRect(px, py, pw, ph)
       g.setComposite(savedComposite)
     else
       g.setColor(color)
       g.fillRect(px, py, pw, ph)
 
-  override def clearViewport(color: Color): Unit =
-    bgRef.set(color)
-    fillBackground(color, 0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
+  override def clearViewport(color: RenderColor): Unit =
+    setBackgroundColor(color)
+    fillBackground(bgRef.get(), 0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
 
-  override def clearViewportExcept(color: Color, preserved: scala.collection.immutable.List[PixelRect]): Unit =
+  override def clearViewportExcept(color: RenderColor, preserved: scala.collection.immutable.List[PixelRect]): Unit =
     if preserved.isEmpty then clearViewport(color)
     else
-      bgRef.set(color)
-      val clearable = new Area(new Rectangle(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx))
-      preserved.foreach(rect =>
-        clearable.subtract(new Area(new Rectangle(rect.xPx, rect.yPx, rect.widthPx, rect.heightPx)))
-      )
-      val savedClip = g.getClip
-      try
-        g.clip(clearable)
-        fillBackground(color, 0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
-      finally g.setClip(savedClip)
+      setBackgroundColor(color)
+      val background = bgRef.get()
+      PixelRect
+        .uncoveredWithin(PixelRect(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx), preserved)
+        .foreach(rect => fillBackground(background, rect.xPx, rect.yPx, rect.widthPx, rect.heightPx))
 
   def putString(x: Int, y: Int, s: String): Unit =
     if s.nonEmpty then
@@ -233,114 +218,26 @@ class Java2DRenderSurface(
   override def setAlpha(alpha: Float): Unit =
     g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha.max(0f).min(1f)))
 
-  override def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
-    if radius > 0f then
-      val px         = metrics.toPixelX(x)
-      val py         = metrics.toPixelY(y)
-      val pw         = width * metrics.charWidth
-      val ph         = height * metrics.lineHeight
-      val transform  = g.getTransform
-      val activeClip = Option(g.getClip).map(transform.createTransformedShape)
-      val bounds = transform
-        .createTransformedShape(new Rectangle2D.Double(px, py, pw, ph))
-        .getBounds2D
-      val left   = math.floor(bounds.getMinX).toInt
-      val top    = math.floor(bounds.getMinY).toInt
-      val right  = math.ceil(bounds.getMaxX).toInt
-      val bottom = math.ceil(bounds.getMaxY).toInt
-      Java2DRenderSurface
-        .deviceRegionFor(
-          logicalX = left,
-          logicalY = top,
-          logicalWidth = right - left,
-          logicalHeight = bottom - top,
-          imageWidth = image.getWidth,
-          imageHeight = image.getHeight,
-          deviceScaleX = 1.0,
-          deviceScaleY = 1.0
-        )
-        .foreach { region =>
-          val size        = (radius * 10).toInt.max(1) * 2 + 1
-          val weight      = 1.0f / (size * size)
-          val data        = Array.fill(size * size)(weight)
-          val kernel      = new Kernel(size, size, data)
-          val op          = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP, Java2DRenderSurface.defaultRenderingHints)
-          val src         = image.getSubimage(region.xPx, region.yPx, region.widthPx, region.heightPx)
-          val blurred     = op.filter(src, Java2DRenderSurface.compatibleDestImage(op, src))
-          val rawGraphics = image.createGraphics()
-          try
-            activeClip.foreach(rawGraphics.clip)
-            rawGraphics.drawImage(blurred, region.xPx, region.yPx, Java2DRenderSurface.NoOpImageObserver)
-          finally rawGraphics.dispose()
-        }
-
-  override def applyPostProcessing(effect: PostProcessingEffect, animationPhase: Long): Unit =
-    effect match
-      case PostProcessingEffect.Off => ()
-      case PostProcessingEffect.Scanlines =>
-        Java2DPostProcessingEffects.applyScanlines(image, animationPhase)
-      case PostProcessingEffect.Glow =>
-        Java2DPostProcessingEffects.applyGlow(image)
-      case PostProcessingEffect.ScanlinesAndGlow =>
-        Java2DPostProcessingEffects.applyGlow(image)
-        Java2DPostProcessingEffects.applyScanlines(image, animationPhase)
-
-  override def drawRoundRectShadow(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color
-  ): Unit =
-    val px             = metrics.toPixelX(x)
-    val py             = metrics.toPixelY(y)
-    val pw             = width * metrics.charWidth
-    val ph             = height * metrics.lineHeight
-    val savedComposite = g.getComposite
-    try
-      scala.collection.immutable.List(6 -> 0.025f, 5 -> 0.035f, 4 -> 0.05f, 3 -> 0.07f).foreach { (offset, alpha) =>
-        g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha))
-        g.setColor(color)
-        g.fillRoundRect(px + offset, py + offset, pw, ph, arcPx * 2, arcPx * 2)
-      }
-    finally g.setComposite(savedComposite)
-
-  override def strokeRoundRect(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color,
-    strokeWidth: Float = 1.5f
-  ): Unit =
+  override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
     val px          = metrics.toPixelX(x)
     val py          = metrics.toPixelY(y)
     val pw          = width * metrics.charWidth
     val ph          = height * metrics.lineHeight
     val inset       = math.ceil(strokeWidth / 2).toInt
     val savedStroke = g.getStroke
-    g.setColor(color)
-    g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND))
-    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-    g.drawRoundRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset, arcPx * 2, arcPx * 2)
+    g.setColor(paintColor(color))
+    g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER))
+    g.drawRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset)
     g.setStroke(savedStroke)
 
-  override def withRoundRectClip(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int
-  )(render: => Unit): Unit =
+  override def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
     val px        = metrics.toPixelX(x)
     val py        = metrics.toPixelY(y)
     val pw        = width * metrics.charWidth
     val ph        = height * metrics.lineHeight
     val savedClip = g.getClip
     try
-      g.clip(new RoundRectangle2D.Double(px, py, pw, ph, arcPx * 2.0, arcPx * 2.0))
+      g.clip(new Rectangle2D.Double(px, py, pw, ph))
       render
     finally g.setClip(savedClip)
 
@@ -349,19 +246,19 @@ class Java2DRenderSurface(
     yPx: Int,
     widthPx: Int,
     heightPx: Int,
-    color: Color
+    color: RenderColor
   ): Unit =
-    g.setColor(color)
+    g.setColor(paintColor(color))
     g.fillRect(xPx, yPx, widthPx.max(1), heightPx.max(1))
 
-  override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
+  override def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val px        = metrics.toPixelX(x)
     val py        = metrics.toPixelY(y)
     val pw        = width * metrics.charWidth
     val ph        = height * metrics.lineHeight
     val savedClip = g.getClip
     g.clipRect(px, py, pw, ph)
-    g.drawImage(image, px, py, pw, ph, Java2DRenderSurface.NoOpImageObserver)
+    g.drawImage(image.toAwt, px, py, pw, ph, Java2DRenderSurface.NoOpImageObserver)
     g.setClip(savedClip)
 
   /** Blit a whole-surface layer buffer straight onto this surface's backing image at device resolution, 1:1, bypassing
@@ -370,10 +267,10 @@ class Java2DRenderSurface(
     * device-pixel copy reproduces it exactly -- see [[PixelDrawing.compositeFullSurfaceLayer]] for why routing it
     * through [[drawImage]] instead would shrink it a little per composite.
     */
-  override def compositeFullSurfaceLayer(layerImage: BufferedImage): Unit =
+  override def compositeFullSurfaceLayer(layerImage: RenderImage): Unit =
     val rawGraphics = image.createGraphics()
     try
-      val _ = rawGraphics.drawImage(layerImage, 0, 0, Java2DRenderSurface.NoOpImageObserver)
+      val _ = rawGraphics.drawImage(layerImage.toAwt, 0, 0, Java2DRenderSurface.NoOpImageObserver)
     finally rawGraphics.dispose()
 
   def hideCursor(): Unit = ()
@@ -390,7 +287,6 @@ class Java2DRenderSurface(
 object Java2DRenderSurface:
 
   final private[serenity] case class DeviceScale(x: Double, y: Double)
-  final private[serenity] case class DeviceRegion(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)
 
   /** `Graphics2D.drawImage`'s `ImageObserver` callback exists for images that may still be loading asynchronously (e.g.
     * from a URL); every image this class ever draws is an already-fully-materialised `BufferedImage`, so the callback
@@ -399,18 +295,11 @@ object Java2DRenderSurface:
     */
   private[serenity] val NoOpImageObserver: ImageObserver = (_, _, _, _, _, _) => false
 
-  /** Equivalent to passing `null` for `ConvolveOp`'s `RenderingHints` parameter -- per its Javadoc, `RenderingHints`
-    * constructed from a `null` (or here, empty) map behaves identically to Java2D's default rendering-hint choices.
+  /** Reuses `current` when it already carries `color`, so a renderer re-setting the same theme colour on every run does
+    * not allocate a fresh `java.awt.Color` each time.
     */
-  private[serenity] def defaultRenderingHints: RenderingHints = new RenderingHints(java.util.Map.of())
-
-  /** Equivalent to passing `null` as `BufferedImageOp#filter`'s destination image -- per its Javadoc, a `null`
-    * destination causes the op to allocate one via `createCompatibleDestImage(src, null)`; this calls that directly
-    * with `src`'s own color model instead of leaving Java2D to infer it, which is what `null` would resolve to for
-    * every filter this class uses (`ConvolveOp`, which does not override `createCompatibleDestImage`).
-    */
-  private[serenity] def compatibleDestImage(op: BufferedImageOp, src: BufferedImage): BufferedImage =
-    op.createCompatibleDestImage(src, src.getColorModel())
+  private def awtColor(color: RenderColor, current: Color): Color =
+    if current.getRGB == color.argb then current else color.toAwt
 
   def forFrame(
     metrics: CellMetrics,
@@ -432,6 +321,11 @@ object Java2DRenderSurface:
     * `contentPersists` says the acquired image is recycled rather than freshly allocated, so whatever was drawn into
     * that same image instance previously is still there. Callers pass a pooled acquirer together with `true`; a
     * single-use image must stay `false` so nothing downstream tries to reuse pixels that were never kept.
+    *
+    * The image is `TYPE_INT_RGB`: the window is opaque, and Java2D blends glyphs into it markedly faster than into
+    * ARGB.
+    *
+    * Every frame built over the same `canvas` shares one [[RenderSurface.layerCacheOwner]].
     */
   def forFrame(
     metrics: CellMetrics,
@@ -447,7 +341,7 @@ object Java2DRenderSurface:
     val image = acquireImage(
       deviceImageDimension(logicalWidth, scale.x),
       deviceImageDimension(logicalHeight, scale.y),
-      BufferedImage.TYPE_INT_ARGB
+      BufferedImage.TYPE_INT_RGB
     )
     new Java2DRenderSurface(
       image,
@@ -458,7 +352,8 @@ object Java2DRenderSurface:
       logicalHeightPx = logicalHeight,
       deviceScaleX = scale.x,
       deviceScaleY = scale.y,
-      contentPersists = contentPersists
+      contentPersists = contentPersists,
+      layerCacheOwnerOverride = Some(ScreenIdentity(canvas))
     )
 
   def forImage(
@@ -486,11 +381,8 @@ object Java2DRenderSurface:
     * #1100 flagged those two as "tied to a Swing `JPanel` for device-scale/logical-size derivation" as the open design
     * problem blocking per-surface buffering; this resolves it by deriving the same inputs from an existing
     * [[Java2DRenderSurface]] that already computed them (see [[Java2DRenderSurface.newLayerSurface]]) instead of from a
-    * canvas. The resulting image starts fully transparent (`TYPE_INT_ARGB`'s zero value) unless `seed` is given, in
-    * which case it starts as a pixel copy of `seed` instead (#1100 stage 3, [[newSeededLayerSurface]]) -- and is never
-    * reused across calls (`contentPersists = false`) -- each call to [[LayerBufferSupport.newLayerSurface]] /
-    * [[LayerBufferSupport.newSeededLayerSurface]] hands back a brand-new buffer for its caller to composite and then
-    * own the lifetime of.
+    * canvas. The image starts fully transparent: `recycled` is cleared and reused when its size matches, otherwise a
+    * new image is allocated.
     */
   def forLayer(
     metrics: CellMetrics,
@@ -500,18 +392,14 @@ object Java2DRenderSurface:
     deviceScaleX: Double,
     deviceScaleY: Double,
     onFlush: BufferedImage => Unit,
-    seed: Option[BufferedImage] = None
+    recycled: Option[BufferedImage] = None
   ): Java2DRenderSurface =
-    val image = new BufferedImage(
-      deviceImageDimension(logicalWidthPx, deviceScaleX),
-      deviceImageDimension(logicalHeightPx, deviceScaleY),
-      BufferedImage.TYPE_INT_ARGB
-    )
-    seed.foreach { seedImage =>
-      val seedGraphics = image.createGraphics()
-      try seedGraphics.drawImage(seedImage, 0, 0, NoOpImageObserver)
-      finally seedGraphics.dispose()
-    }
+    val width  = deviceImageDimension(logicalWidthPx, deviceScaleX)
+    val height = deviceImageDimension(logicalHeightPx, deviceScaleY)
+    val image = recycled
+      .filter(candidate => candidate.getWidth == width && candidate.getHeight == height)
+      .map(clearedForReuse)
+      .getOrElse(new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB))
     new Java2DRenderSurface(
       image,
       metrics,
@@ -524,6 +412,14 @@ object Java2DRenderSurface:
       contentPersists = false
     )
 
+  private def clearedForReuse(image: BufferedImage): BufferedImage =
+    val graphics = image.createGraphics()
+    try
+      graphics.setComposite(AlphaComposite.Clear)
+      graphics.fillRect(0, 0, image.getWidth, image.getHeight)
+    finally graphics.dispose()
+    image
+
   private[serenity] def deviceImageDimension(logicalDimensionPx: Int, deviceScale: Double): Int =
     math.ceil(logicalDimensionPx.max(1) * deviceScale.max(1.0)).toInt.max(1)
 
@@ -531,29 +427,7 @@ object Java2DRenderSurface:
     if currentPx > 0 then currentPx
     else preferredPx.max(1)
 
-  private[serenity] def deviceRegionFor(
-    logicalX: Int,
-    logicalY: Int,
-    logicalWidth: Int,
-    logicalHeight: Int,
-    imageWidth: Int,
-    imageHeight: Int,
-    deviceScaleX: Double,
-    deviceScaleY: Double
-  ): Option[DeviceRegion] =
-    val x0 = scaledFloor(logicalX, deviceScaleX).max(0).min(imageWidth)
-    val y0 = scaledFloor(logicalY, deviceScaleY).max(0).min(imageHeight)
-    val x1 = scaledCeil(logicalX + logicalWidth, deviceScaleX).max(0).min(imageWidth)
-    val y1 = scaledCeil(logicalY + logicalHeight, deviceScaleY).max(0).min(imageHeight)
-    Option.when(x1 > x0 && y1 > y0)(DeviceRegion(x0, y0, x1 - x0, y1 - y0))
-
-  private def scaledFloor(logicalPx: Int, deviceScale: Double): Int =
-    math.floor(logicalPx.toDouble * deviceScale.max(1.0)).toInt
-
-  private def scaledCeil(logicalPx: Int, deviceScale: Double): Int =
-    math.ceil(logicalPx.toDouble * deviceScale.max(1.0)).toInt
-
-  private def deviceScaleFor(canvas: javax.swing.JPanel): DeviceScale =
+  private[serenity] def deviceScaleFor(canvas: javax.swing.JPanel): DeviceScale =
     Option(canvas.getGraphicsConfiguration)
       .map(_.getDefaultTransform)
       .map(transform => DeviceScale(transform.getScaleX.max(1.0), transform.getScaleY.max(1.0)))

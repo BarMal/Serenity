@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Color
 
 import com.serenity.config.{AppConfig, CursorColorConfig}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, LayoutRect}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -110,17 +111,18 @@ class RendererCursorGlyphsSpec extends AnyFlatSpec with Matchers:
     RendererCursorGlyphs.cursorColorFor(
       config,
       theme,
-      contextWith(cellMetrics, cursorColorOverride = Some(overrideColor)),
+      contextWith(cellMetrics, cursorColorOverride = Some(RenderColor.fromAwt(overrideColor))),
       isPrimaryCursor = true
-    ) shouldBe overrideColor
+    ) shouldBe RenderColor.fromAwt(overrideColor)
   }
 
   it should "fall back to the theme's cursor colour when config has no active colour and no override applies" in {
     val theme  = Theme.dark
     val config = AppConfig.default
 
+    config.cursorColors.active shouldBe None
     RendererCursorGlyphs.cursorColorFor(config, theme, contextWith(cellMetrics), isPrimaryCursor = true) shouldBe
-      config.cursorColors.activeOr(theme.cursor)
+      theme.cursor
   }
 
   it should "colour a secondary cursor from config's inactive colour, falling back to the resolved active colour" in {
@@ -145,12 +147,12 @@ class RendererCursorGlyphsSpec extends AnyFlatSpec with Matchers:
     )
 
     RendererCursorGlyphs.cursorColorFor(config, theme, contextWith(cellMetrics), isPrimaryCursor = false) shouldBe
-      inactive
+      RenderColor.fromAwt(inactive)
   }
 
   private def contextWith(
     cellMetrics: CellMetrics,
-    cursorColorOverride: Option[Color] = None
+    cursorColorOverride: Option[RenderColor] = None
   ): RenderContext =
     RenderContext(
       surface = new NoopSurface,
@@ -171,11 +173,11 @@ class RendererCursorGlyphsSpec extends AnyFlatSpec with Matchers:
     * one to construct.
     */
   private class NoopSurface extends RenderSurface:
-    def text: TextDrawing                      = throw new UnsupportedOperationException("not exercised by these specs")
-    def pixels: PixelDrawing                   = throw new UnsupportedOperationException("not exercised by these specs")
-    def setForegroundColor(color: Color): Unit = ()
-    def setBackgroundColor(color: Color): Unit = ()
-    def getBackgroundColor: Color              = Color.BLACK
+    def text: TextDrawing    = throw new UnsupportedOperationException("not exercised by these specs")
+    def pixels: PixelDrawing = throw new UnsupportedOperationException("not exercised by these specs")
+    def setForegroundColor(color: RenderColor): Unit                        = ()
+    def setBackgroundColor(color: RenderColor): Unit                        = ()
+    def getBackgroundColor: RenderColor                                     = RenderColor.fromAwt(Color.BLACK)
     def putString(x: Int, y: Int, s: String): Unit                          = ()
     def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit = ()
     def enableStyle(style: com.serenity.ui.theme.TextStyle): Unit           = ()

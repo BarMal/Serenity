@@ -1,8 +1,9 @@
 package com.serenity.ui.renderer
 
-import java.awt.{Color, Font}
+import java.awt.Font
 
 import com.serenity.MockRenderSurface
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{OverlayRow, OverlaySegment}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -16,8 +17,8 @@ class OverlayColumnRowRendererSpec extends AnyFlatSpec with Matchers:
 
   private val theme = Theme.dark
   private val font  = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val fg    = Color.WHITE
-  private val bg    = Color.BLACK
+  private val fg    = RenderColor.White
+  private val bg    = RenderColor.Black
 
   "threeColumnWidths" should "use the preferred label/value/hint split when the row is wide enough" in {
     val (label, hint, value) = OverlayColumnRowRenderer.threeColumnWidths(60)

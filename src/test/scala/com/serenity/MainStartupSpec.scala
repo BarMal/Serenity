@@ -9,10 +9,11 @@ import com.serenity.config.AppConfig
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{Focus, SurfaceContent}
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -34,7 +35,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     val result = for
       themeManager <- IO.pure(AppThemeManager.create)
       defaultTheme <- themeManager.initializeWithTheme()
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
       finalState <- AppStartup.initializeState(
         stateManager,
         stateManager.sessionStartupInfo,
@@ -58,9 +59,11 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     given com.serenity.rope.Balance = com.serenity.rope.Balance.default
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
 
-    val logger       = LoggerFactory[IO].getLogger(using LoggerName("Main"))
-    val config       = AppConfig.default.withRendererFrameStateCacheCapacity(128)
-    val stateManager = StateManager.apply(logger, initialConfig = config).unsafeRunSync()
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Main"))
+    val config = AppConfig.default.withRendererFrameStateCacheCapacity(128)
+    val stateManager = StateManager
+      .apply(logger, initialConfig = config, dictionaryCache = SharedDictionary.cacheFor(config))
+      .unsafeRunSync()
 
     stateManager.renderCaches.frameState.currentCacheCapacity shouldBe 128
   }
@@ -76,7 +79,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       for
         themeManager <- IO.pure(AppThemeManager.create)
         defaultTheme <- themeManager.initializeWithTheme()
-        stateManager <- StateManager.apply(logger)
+        stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
         finalState <- AppStartup.initializeState(
           stateManager,
           stateManager.sessionStartupInfo,
@@ -110,7 +113,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     val result = for
       themeManager <- IO.pure(AppThemeManager.create)
       defaultTheme <- themeManager.initializeWithTheme()
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
       openedState <- AppStartup.initializeState(
         stateManager,
         stateManager.sessionStartupInfo,
@@ -134,7 +137,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     val result = for
       themeManager <- IO.pure(AppThemeManager.create)
       defaultTheme <- themeManager.initializeWithTheme()
-      stateManager <- StateManager.apply(logger)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
       finalState <- AppStartup.initializeState(
         stateManager,
         stateManager.sessionStartupInfo,
@@ -148,7 +151,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     finalState.startPageSurface.map(_.content) match
       case Some(SurfaceContent.StartPage(startPage)) =>
         startPage.title shouldBe "Welcome to Serenity"
-        startPage.actions.map(_.id) should contain allOf ("new-session", "open-file")
+        startPage.actions.map(_.id) should contain allOf ("new-session", "open-file", "open-folder")
         startPage.actions.map(_.id) should not contain "restore-session"
         startPage.workflows.map(_.id) should contain("workflow-writing")
         startPage.statusMessage shouldBe Some("No previous session found")
@@ -169,7 +172,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       val result = for
         themeManager <- IO.pure(AppThemeManager.create)
         defaultTheme <- themeManager.initializeWithTheme()
-        stateManager <- StateManager.apply(logger)
+        stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
         finalState <- AppStartup.initializeState(
           stateManager,
           stateManager.sessionStartupInfo,
@@ -208,8 +211,8 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         cursorVisible = true,
         surface,
         initialViewportSize,
-        font,
-        font,
+        FontSpec.fromAwt(font),
+        FontSpec.fromAwt(font),
         cellMetrics,
         None,
         com.serenity.state.manager.RenderCaches.create()
@@ -230,12 +233,17 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     val initialViewportSize = ViewportSize(120, 30)
 
     val program = for
-      firstManager <- StateManager.apply(logger, sessionRootOverride = Some(sessionRoot))
+      firstManager <- StateManager.apply(
+        logger,
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
+      )
       _ <- firstManager.updateState(state => state.copy(persisted = state.persisted.copy(theme = Theme.light)))
       _ <- firstManager.saveSession
       secondManager <- StateManager.apply(
         logger,
-        sessionRootOverride = Some(sessionRoot)
+        sessionRootOverride = Some(sessionRoot),
+        dictionaryCache = SharedDictionary.default
       )
       startupTheme <- AppStartup.startupTheme(secondManager.sessionStartupInfo, AppThemeManager.create)
       finalState <- AppStartup.initializeState(

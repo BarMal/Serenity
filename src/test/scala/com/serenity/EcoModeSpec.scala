@@ -2,7 +2,6 @@ package com.serenity
 
 import com.serenity.app.{EcoMode, LaunchOptions}
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -13,22 +12,13 @@ class EcoModeSpec extends AnyFlatSpec with Matchers:
     .withUiElementGap(Some(4.0))
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withWindowChromeMode(WindowChromeMode.Native)
-    .withMotionPreset(MotionPreset.Expressive)
+    .withWordWrap(false)
     .withHotkeyOverride(HotkeyAction.Save, "ctrl+shift+s")
 
-  "EcoMode.overlay" should "set the render fps target to 30 and motion accessibility to reduced" in {
+  "EcoMode.overlay" should "set the render fps target to 30" in {
     val eco = EcoMode.overlay(customized)
 
     eco.surfaceConfig.renderFpsTarget shouldBe RenderFpsTarget.Fps30
-    eco.surfaceConfig.motionConfiguration.map(_.accessibility) shouldBe Some(MotionAccessibility.Reduced)
-  }
-
-  it should "disable every motion family, including cursor blink/breathe, without a separate cursor knob" in {
-    val eco = EcoMode.overlay(customized)
-
-    MotionFamily.values.foreach { family =>
-      eco.surfaceConfig.effectiveMotionConfiguration.family(family).enabled shouldBe false
-    }
   }
 
   it should "leave every other setting -- theme-adjacent, input, window, document config -- untouched" in {
@@ -38,25 +28,13 @@ class EcoModeSpec extends AnyFlatSpec with Matchers:
     eco.inputConfig shouldBe customized.inputConfig
     eco.cursorConfig shouldBe customized.cursorConfig
     eco.windowConfig shouldBe customized.windowConfig
-    eco.companionSpriteConfig shouldBe customized.companionSpriteConfig
     eco.documentConfig shouldBe customized.documentConfig
     eco.interfaceConfig shouldBe customized.interfaceConfig
     eco.languageToolsConfig shouldBe customized.languageToolsConfig
 
-    // Within surfaceConfig, only the fps target and the motion hierarchy's accessibility field moved.
-    eco.surfaceConfig.copy(
-      renderFpsTarget = customized.surfaceConfig.renderFpsTarget,
-      motionConfiguration = customized.surfaceConfig.motionConfiguration
-    ) shouldBe customized.surfaceConfig
-  }
-
-  it should "preserve the user's motion baseline and per-family values under the accessibility override" in {
-    val eco = EcoMode.overlay(customized)
-
-    eco.surfaceConfig.motionConfiguration.map(_.baseline) shouldBe
-      customized.surfaceConfig.motionConfiguration.map(_.baseline)
-    eco.surfaceConfig.motionConfiguration.map(_.families) shouldBe
-      customized.surfaceConfig.motionConfiguration.map(_.families)
+    // Within surfaceConfig, only the fps target moved.
+    eco.surfaceConfig.copy(renderFpsTarget = customized.surfaceConfig.renderFpsTarget) shouldBe
+      customized.surfaceConfig
   }
 
   it should "be idempotent" in {

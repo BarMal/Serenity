@@ -22,15 +22,15 @@ class TuiSettingsSpec extends TuiSpec:
   it should "search within settings and open the matching group" in runTui() {
     for
       _ <- openSettings
-      _ <- typeText("material")
+      _ <- typeText("density")
       _ <- verify("searched") { screen =>
-        screen.containsText("Settings search: material") shouldBe true
-        screen.containsText("Surface Appearance") shouldBe true
+        screen.containsText("Settings search: density") shouldBe true
+        screen.containsText("Interface Layout") shouldBe true
       }
       _ <- enter
       _ <- verify("opened group") { screen =>
-        screen.containsText("Settings > Look > Surface Appearance") shouldBe true
-        screen.containsText("Material Preset") shouldBe true
+        screen.containsText("Settings > Look > Interface Layout") shouldBe true
+        screen.containsText("Interface Density") shouldBe true
       }
     yield ()
   }
@@ -45,6 +45,7 @@ class TuiSettingsSpec extends TuiSpec:
         _      <- verify("option row")(screen => screen.containsText("Line Numbers") shouldBe true)
         _      <- arrowRight
         _      <- verifyState("flag")(current => current.persisted.config.surfaceConfig.showLineNumbers shouldBe false)
+        _      <- enter
         _      <- dismissSurfaces()
         after  <- settledScreen
       yield
@@ -61,6 +62,7 @@ class TuiSettingsSpec extends TuiSpec:
         _     <- arrowRight
         _     <- arrowRight
         _     <- verifyState("flag")(current => current.persisted.config.surfaceConfig.showLineNumbers shouldBe true)
+        _     <- enter
         _     <- dismissSurfaces()
         after <- settledScreen
       yield after.rowText(1).stripTrailing shouldBe " 1 body text"
@@ -94,21 +96,21 @@ class TuiSettingsSpec extends TuiSpec:
     yield ()
   }
 
-  /** The Post-processing hint is longer than the settings surface's hint column, which is a fixed share of the panel
+  /** The Window Chrome hint is longer than the settings surface's hint column, which is a fixed share of the panel
     * width and does not grow with the terminal -- at 240 columns just as at 200. The annotation therefore has to lead
     * the hint to be legible at all: elision takes the description's tail instead.
     */
-  "the post-processing option" should "be reachable with Show All Settings, showing its value and its annotation" in
+  "the window chrome option" should "be reachable with Show All Settings, showing its value and its annotation" in
     runTui(
       TuiEnvironment.default.withViewport(TuiViewport.Wide).withConfig(_.withShowAllSettingsRegardlessOfMode(true))
     ) {
       for
         _ <- openSettings
-        _ <- typeText("post")
+        _ <- typeText("window chrome")
         _ <- enter
         _ <- verify("option row") { screen =>
-          val row = screen.rowOf("Post-processing").getOrElse(fail("expected the Post-processing option"))
-          screen.rowText(row) should include("Off")
+          val row = screen.rowOf("Window Chrome").getOrElse(fail("expected the Window Chrome option"))
+          screen.rowText(row) should include("Auto")
           screen.rowText(row) should include("Inert in TUI mode")
           screen.rowText(row) should include("...")
         }

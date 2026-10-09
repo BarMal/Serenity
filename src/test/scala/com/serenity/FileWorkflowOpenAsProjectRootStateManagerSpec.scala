@@ -4,12 +4,14 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.keystroke.events.ModalOpenAsProjectRoot
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -27,7 +29,14 @@ class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Mat
 
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("FileWorkflowOpenAsProjectRootStateManagerSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    // Spell check off: its background analysis commits on its own and these specs compare states across a command.
+    StateManager
+      .apply(
+        logger,
+        initialConfig = AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = false)),
+        dictionaryCache = SharedDictionary.default
+      )
+      .unsafeRunSync()
 
   private def currentWorkflow(stateManager: StateManager): Option[FileWorkflowState] =
     stateManager.getCurrentState
@@ -68,8 +77,8 @@ class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Mat
       finalState.topModal shouldBe None
 
       def rootPathOf(surface: UiSurface): Option[java.nio.file.Path] = surface.content match
-        case SurfaceContent.DirectoryTree(tree, _) => Some(tree.rootPath)
-        case _                                     => None
+        case SurfaceContent.DirectoryTree(tree, _, _) => Some(tree.rootPath)
+        case _                                        => None
 
       val pinnedRoot = finalState.pinnedSurfaces.find(surface => rootPathOf(surface).contains(tempDir))
       pinnedRoot shouldBe defined

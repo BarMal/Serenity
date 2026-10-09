@@ -18,7 +18,11 @@ class CommandRegistry(private val commands: List[Command]):
       category -> categoryCommands
     }.toMap
 
+  private lazy val commandIds: Set[CommandId] = commands.map(command => CommandId(command.name)).toSet
+
   def getAllCommands: List[Command] = commands
+
+  def isRegistered(id: CommandId): Boolean = commandIds.contains(id)
 
   /** The commands usable in `mode` on `shell`, in registry order (the palette's recency ranking is a stable sort over
     * it).
@@ -48,10 +52,7 @@ class CommandRegistry(private val commands: List[Command]):
     val optionItems =
       if category == CommandCategory.Settings then
         List(
-          CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections),
-          CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(optionSelections),
-          CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(optionSelections),
-          CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(optionSelections)
+          CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections)
         )
       else Nil
 
@@ -64,10 +65,7 @@ class CommandRegistry(private val commands: List[Command]):
   ): List[CommandSurfaceItem] =
     val commandItems = searchCommands(term, maxResults).map(CommandItem(_))
     val optionItems = List(
-      CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections),
-      CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(optionSelections),
-      CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(optionSelections),
-      CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(optionSelections)
+      CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections)
     ).filter { item =>
       val lowerTerm = term.toLowerCase
       lowerTerm.isEmpty || item.searchText.toLowerCase.contains(lowerTerm)

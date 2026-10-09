@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.InterfaceDensityMetrics
 import com.serenity.state.models.*
 
@@ -33,6 +33,8 @@ private[layout] object FloatingSurfaceSizing:
       // A quiet single row: as wide as its text (plus a cell of padding each side), never the whole pane.
       case SurfaceContent.StatusLine(text) =>
         math.min(contentRect.width, text.length + 2)
+      case SurfaceContent.Notice(notice, _) =>
+        NoticeContent.frameWidth(notice, contentRect.width)
       case _ =>
         contentRect.width
 
@@ -59,7 +61,7 @@ private[layout] object FloatingSurfaceSizing:
       case SurfaceContent.SymbolDefinition(_, _)  => 4
       case SurfaceContent.StatusLine(_)           => 1
       case SurfaceContent.DirectoryListing(_, entries, _) => math.max(4, math.min(6, entries.take(4).size + 2))
-      case SurfaceContent.DirectoryTree(tree, _) =>
+      case SurfaceContent.DirectoryTree(tree, _, _) =>
         math.max(4, math.min(8, DirectoryTreeData.visibleRows(tree).size + 2))
       case SurfaceContent.CommandPalette(_) =>
         CommandRunnerSurfaceComposition.frameHeight(state, maxHeight, roomOnPreferredSide)
@@ -98,8 +100,8 @@ private[layout] object FloatingSurfaceSizing:
           modal,
           SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
         )
-      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) |
-          SurfaceContent.Diagnostics(_, _) | SurfaceContent.MarkdownPreview(_, _) | SurfaceContent.CompanionSprite =>
+      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _, _) | SurfaceContent.Comments(_, _, _) |
+          SurfaceContent.Diagnostics(_, _, _) | SurfaceContent.MarkdownPreview(_, _) =>
         math.min(8, math.max(4, maxHeight - 1))
       case SurfaceContent.ShortcutsHelp(groups) =>
         // Wants enough rows for every group heading plus its entries, but never more than the viewport allows --
@@ -112,8 +114,8 @@ private[layout] object FloatingSurfaceSizing:
         math.min(maxHeight - 1, math.max(4, entries.size + 2))
       case SurfaceContent.RecentFilesInMode(_, paths) =>
         math.min(maxHeight - 1, math.max(4, paths.size + 2))
-      case SurfaceContent.GhostOverlay(_, cachedRect) =>
-        cachedRect.height
+      case SurfaceContent.Notice(notice, _) =>
+        NoticeContent.frameHeight(notice, maxWidth)
       case SurfaceContent.TabBar(_, _) =>
         // A single always-visible strip row, the same "quiet single line" sizing as StatusLine below -- see also
         // the matching `floor` case for it just below.

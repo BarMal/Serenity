@@ -9,6 +9,12 @@ final case class SurfaceFocusId(value: String)
 /** Stable action identity for a selectable surface item. */
 final case class SurfaceActionId(value: String)
 
+/** What clicking a surface item does, carried as data so the reducer that handles it matches a case instead of parsing
+  * an id string back apart.
+  */
+enum SurfaceAction:
+  case SelectFindResult(index: Int)
+
 /** Device-independent intrinsic size produced by the pure surface layout pass. */
 final case class SurfaceIntrinsicSize(width: Double, height: Double)
 
@@ -65,7 +71,8 @@ final case class SurfacePaintBox(
     cursorOffset: Option[Int] = None,
     segments: List[OverlaySegment] = Nil,
     layout: SurfacePaintLayout = SurfacePaintLayout.Plain,
-    tone: OverlayTone = OverlayTone.Normal
+    tone: OverlayTone = OverlayTone.Normal,
+    action: Option[SurfaceAction] = None
 )
 
 /** One semantic pointer target emitted from the same box used for painting. */
@@ -73,7 +80,8 @@ final case class SurfaceHitRegion(
     rect: LogicalPixelRect,
     focusId: SurfaceFocusId,
     actionId: Option[SurfaceActionId],
-    semanticLabel: String
+    semanticLabel: String,
+    action: Option[SurfaceAction] = None
 )
 
 /** Pure, immutable surface layout output shared by rendering, focus traversal, and pointer hit testing. */

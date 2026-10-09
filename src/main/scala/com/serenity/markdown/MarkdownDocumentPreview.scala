@@ -7,6 +7,7 @@ import java.net.URI
 import scala.jdk.CollectionConverters.*
 import scala.util.control.NonFatal
 
+import com.serenity.rope.Rope
 import com.serenity.ui.theme.Theme
 import org.commonmark.Extension
 import org.commonmark.ext.gfm.tables.TablesExtension
@@ -202,7 +203,7 @@ object MarkdownDocumentPreview:
         safeWidth,
         safeHeight
       )
-      val resourcePolicy = new MarkdownPreviewImageResources.PreviewResourcePolicy(baseUri)
+      val resourcePolicy = new MarkdownPreviewImageResources.PreviewResourcePolicy(baseUri, cache.decodedImages)
       renderer.getSharedContext.setReplacedElementFactory(
         MarkdownPreviewImageResources.previewReplacedElementFactory(resourcePolicy)
       )
@@ -251,6 +252,14 @@ object MarkdownDocumentPreview:
 
   def renderInlineLines(sourceLines: Vector[String], cache: MarkdownPreviewCache): Vector[String] =
     renderInlineDocument(sourceLines, cache).map(_.text)
+
+  /** The first `rowCount` preview lines of `content` that are not blank -- what a docked preview panel shows. The
+    * document's text is read only when this `Rope` has not been resolved at this height before.
+    */
+  def panelPreviewRows(content: Rope, rowCount: Int, cache: MarkdownPreviewCache): Vector[String] =
+    cache.cachedPreviewRows(content, rowCount) {
+      renderInlineLines(content.collect().linesIterator.toVector, cache).take(rowCount).filter(_.trim.nonEmpty)
+    }
 
   def renderInlineDocument(sourceLines: Vector[String], cache: MarkdownPreviewCache): Vector[InlinePreviewLine] =
     inlinePreviewIndex(sourceLines, cache).previewLines

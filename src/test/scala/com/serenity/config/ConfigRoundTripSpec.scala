@@ -3,18 +3,13 @@ package com.serenity.config
 import java.awt.Color
 import java.nio.file.{Files, Path}
 
-import scala.concurrent.duration.DurationInt
-
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig, SpriteFrameCycle}
-import com.serenity.animation.{AnimationConfig, TransitionKind}
-import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment}
+import com.serenity.config.AppConfigOps.*
+import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment, ThemeFollowConfig}
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.PanelPosition
 import com.typesafe.config.ConfigFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -84,10 +79,6 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withFocusedTextBody(true)
     .withContextualToolbarEnabled(false)
     .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
-    .withBlurRadius(0.42f)
-    .withBackgroundStyle(BackgroundStyle.Solid)
-    .withPostProcessingEffect(PostProcessingEffect.Scanlines)
-    .withUiShadowsEnabled(false)
     .withCommandRunnerVisibleRows(Some(11))
     .withCommandRunnerItemGapRows(Some(1.5))
     .withCommandRunnerCursorGapRows(Some(2.0))
@@ -99,28 +90,36 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withRenderFpsTarget(RenderFpsTarget.Fps30)
     .withRenderDamageGranularity(RenderDamageGranularity.Cells)
     .withRendererFrameStateCacheCapacity(96)
+    .withLayerCaching(true)
+    .withFrameTiming(true)
+    .withLatencyTrace(true)
+    .withStartupWarmUp(false)
     .withDiagnosticHighlightBlendWeight(0.2)
-    .withCursorMode(CursorMode.Breathe)
+    .withCursorMode(CursorMode.Blink)
+    .withCursorBlinkTimeoutMillis(4000L)
     .withStatusLineSegments(List(StatusSegment.Position, StatusSegment.WordCount))
     .withStatusLinePlacement(StatusLinePlacement.Floating)
     .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
     .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
     .withWordGoal(Some(50000))
+    .withCommentAuthor(Some("Ada Lovelace"))
     .withDropCapsEnabled(false)
+    .withAutoSaveMode(AutoSaveMode.OnFocusChange)
+    .withAutoSaveDelayMillis(2500L)
     .withAppMode(AppMode.Prose)
     .withShowAllSettingsRegardlessOfMode(true)
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withUiElementGap(Some(2.0))
-    .withUiCornerRadiusPx(6)
     .withUiOutlineThicknessPx(3)
+    .withThemeFollowConfig(
+      ThemeFollowConfig(followSystem = true, lightTheme = "paper", darkTheme = "ink", highContrastTheme = "contrast")
+    )
     .withTextAreaLeftInset(12.0)
     .withTextAreaRightInset(13.0)
     .withTextAreaTopInset(4.0)
     .withTextAreaBottomInset(5.0)
     .withMinimumPaneWidth(24)
     .withWindowChromeMode(WindowChromeMode.Native)
-    .withMaterialPreset(MaterialPreset.Clear)
-    .withCharacterAnimation(AnimationConfig(steps = 9, totalDuration = 210.milliseconds))
     .withFontConfig(
       FontConfig(
         codeFontFamily = "Iosevka",
@@ -148,68 +147,38 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     )
     .withSpellCheck(
       SpellCheckConfig(
-        enabled = true,
+        enabled = false,
         languages = List("en", "fr"),
         dictionaryPaths = List("/tmp/words.dic"),
         additionalWords = List("Serenity", "scalafix")
       )
     )
-    .withElementTransitionSpeedScale(1.4)
-    .withEditorTextTransitionSpeedScale(Some(1.1))
-    .withCommandRunnerTransitionSpeedScale(Some(1.2))
-    .withUiTransitionSpeedScale(Some(1.3))
-    .withCursorTransitionSpeedScale(Some(0.9))
-    .withMotionPreset(MotionPreset.Expressive)
-    .withEditorInsertionTransitionKind(TransitionKind.DirectionalSweep)
-    .withCommandRunnerTransitionKind(Some(TransitionKind.DirectionalSweep))
-    .withPanelOpenTransitionKind(Some(TransitionKind.TypedText))
-    .withPanelCloseTransitionKind(Some(TransitionKind.DirectionalSweep))
-    .withCommandRunnerAnimation(Some(AnimationConfig(steps = 7, totalDuration = 140.milliseconds)))
-    .withUiAnimation(Some(AnimationConfig(steps = 6, totalDuration = 130.milliseconds)))
     .withViewportWidthSizing(ViewportAxisSizing(percent = 0.8, maxCells = Some(120)))
+    .withProseMeasure(Some(72))
     .withViewportHeightSizing(ViewportAxisSizing(percent = 0.9, maxCells = Some(60)))
     .withPreferredWindowSize(PreferredWindowSize(1280, 800))
     .withWheelScrollLines(5)
     .withPanelEscapeTarget(AppMode.Code, PanelEscapeTarget.Previous)
     .withPanelEscapeTarget(AppMode.Prose, PanelEscapeTarget.Previous)
-    .withCompanionSpriteConfig(
-      CompanionSpriteConfig(
-        enabled = true,
-        character = CompanionCharacter.PixelWizard,
-        position = PanelPosition.Bottom,
-        size = 14,
-        typingCycle = SpriteFrameCycle.Blink,
-        typingActiveTicks = 9,
-        typingFastActiveTicks = 17,
-        typingFastThresholdMs = 175
+    .withHotkeyConfig(HotkeyConfig().withCommandBinding("toggle-line-numbers", "ctrl+alt+l"))
+    .withExportTypography(
+      ExportTypographyConfig(
+        paper = com.serenity.manuscript.PaperSize.A4,
+        fontSize = Some(11.5f),
+        lineSpacing = Some(1.5),
+        margin = Some(54f),
+        firstLineIndent = Some(18f)
       )
     )
-    .withVisualFlairLevel(VisualFlairLevel.Reduced)
-
-  /** Fields that are mirrors of the motion hierarchy rather than settings in their own right: `motionConfiguration` and
-    * its families are what the file carries, and `AppConfig`'s `effectiveMotion*` accessors resolve behaviour from
-    * that. The legacy fields stay in the model for configs written before the hierarchy existed, so a saved file
-    * legitimately reconstructs the hierarchy and leaves them at their defaults. What has to survive is the behaviour,
-    * which the effective-motion test below asserts directly.
-    */
-  private val supersededByMotionHierarchy: Set[String] = Set(
-    // The editor-text family's animation and this field are one setting under two names (`withEditorTextAnimation`
-    // writes both). They agree for any config a user has actually touched; they differ only in the shipped default,
-    // where the field is "no character animation" and the hierarchy derives the baseline preset's -- so the value
-    // reloaded there is the hierarchy's, and no user setting is at stake either way.
-    "editorConfig.characterAnimation",
-    "surfaceConfig.motionConfiguration",
-    "surfaceConfig.elementTransitionSpeedScale",
-    "surfaceConfig.commandRunnerAnimation",
-    "surfaceConfig.uiAnimation",
-    "surfaceConfig.editorInsertionTransitionKind",
-    "surfaceConfig.commandRunnerTransitionKind",
-    "surfaceConfig.panelOpenTransitionKind",
-    "surfaceConfig.panelCloseTransitionKind"
-  )
-
-  private def isSuperseded(path: String): Boolean =
-    supersededByMotionHierarchy.exists(prefix => path == prefix || path.startsWith(s"$prefix."))
+    .withExportTypography(
+      ExportTypographyConfig(
+        paper = com.serenity.manuscript.PaperSize.A4,
+        fontSize = Some(11.5f),
+        lineSpacing = Some(1.5),
+        margin = Some(54f),
+        firstLineIndent = Some(18f)
+      )
+    )
 
   private def differences(path: String, before: Any, after: Any): List[String] =
     (before, after) match
@@ -218,8 +187,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
           .zip(b.productIterator.zip(a.productIterator))
           .flatMap { case (name, (bv, av)) => differences(if path.isEmpty then name else s"$path.$name", bv, av) }
           .toList
-      case (b, a) if b == a || isSuperseded(path) => Nil
-      case (b, a)                                 => List(s"$path: saved $b, loaded back $a")
+      case (b, a) if b == a => Nil
+      case (b, a)           => List(s"$path: saved $b, loaded back $a")
 
   "a saved config" should "be valid HOCON, whatever the settings are" in {
     noException should be thrownBy ConfigFactory.parseString(savedText(mutated))
@@ -231,6 +200,11 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     * here rather than silently resetting on the user's next restart.
     */
   private val notExercised: Set[String] = Set(
+    // `CursorMode` has a single value, so there is nothing to move it to. Older files naming `breathe` still load, as
+    // blink (CursorConfigSpec).
+    "cursorConfig.mode",
+    // `TypographyPreset` has a single value until a serif face is bundled.
+    "exportTypographyConfig.preset",
     // Keyed maps with their own dedicated specs (LspUserConfigSpec, HotkeyConfigSpec, FocusedKeymapConfigSpec) and
     // their own dynamic key prefixes in the schema.
     "languageToolsConfig.lspUserConfig.servers",
@@ -240,18 +214,10 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     "inputConfig.focusedKeymapConfig.modal.bindings",
     "inputConfig.focusedKeymapConfig.panel.bindings",
     "inputConfig.focusedKeymapConfig.peek.bindings",
-    "inputConfig.hotkeyConfig.bindings",
-    // CompanionCharacter has exactly one bundled value today (the placeholder sprite sheet), so there is no other
-    // value `mutated` could move this field to -- CompanionCharacterSpec covers fromConfigKey/id round-tripping
-    // directly instead.
-    "companionSpriteConfig.character",
-    // `AnimationConfig.curve` (issues #1082/#1083): nothing in the settings surface can choose a curve yet (see
-    // `ConfigFileFormat`/`ConfigGroups.animationEntries`, which only ever write a preset name or `steps`/
-    // `duration_ms`) -- wiring a curve picker into settings is separate follow-up work, not part of adding the
-    // primitive. `editorConfig.characterAnimation`'s own `.curve` doesn't show up here at all: its default is `None`
-    // rather than a populated `AnimationConfig`, so this suite's `defaults` map has no leaf for it to compare against.
-    "surfaceConfig.commandRunnerAnimation.value.curve",
-    "surfaceConfig.uiAnimation.value.curve"
+    // Records that the bindings were adjusted for a terminal at startup; it is a property of the running frontend,
+    // never written to the file (HotkeyOverridesSpec).
+    "inputConfig.hotkeyConfig.terminalAdjusted",
+    "inputConfig.hotkeyConfig.bindings"
   )
 
   private def leafValues(config: AppConfig): Map[String, Any] =
@@ -301,35 +267,6 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     withClue(s"${lost.size} field(s) lost:\n${lost.mkString("\n")}\n")(lost shouldBe empty)
   }
 
-  it should "keep the motion behaviour it saved, which the hierarchy carries rather than the legacy fields" in {
-    val reloaded = savedAndReloaded(mutated)
-
-    // Per family, everything except the speed scale, which a saved file deliberately migrates: the writer folds the
-    // legacy per-family speed-scale fields into the hierarchy's own, so the reloaded config holds in one place what
-    // the in-memory one still holds in two. The four effective accessors below are what behaviour actually reads, and
-    // they are what has to agree.
-    def families(config: AppConfig): Map[MotionFamily, (Boolean, Any, Any, Any)] =
-      config.surfaceConfig.effectiveMotionConfiguration.families.map {
-        case (family, settings) =>
-          family -> (settings.enabled, settings.transitionKind, settings.animation, settings.transitionOverrides)
-      }
-
-    families(reloaded) shouldBe families(mutated)
-    reloaded.surfaceConfig.effectiveMotionBaseline shouldBe mutated.surfaceConfig.effectiveMotionBaseline
-    reloaded.surfaceConfig.effectiveCommandRunnerTransitionKind shouldBe
-      mutated.surfaceConfig.effectiveCommandRunnerTransitionKind
-    reloaded.surfaceConfig.effectivePanelOpenTransitionKind shouldBe
-      mutated.surfaceConfig.effectivePanelOpenTransitionKind
-    reloaded.surfaceConfig.effectiveEditorTextTransitionSpeedScale shouldBe
-      mutated.surfaceConfig.effectiveEditorTextTransitionSpeedScale
-    reloaded.surfaceConfig.effectiveCommandRunnerTransitionSpeedScale shouldBe
-      mutated.surfaceConfig.effectiveCommandRunnerTransitionSpeedScale
-    reloaded.surfaceConfig.effectiveUiTransitionSpeedScale shouldBe
-      mutated.surfaceConfig.effectiveUiTransitionSpeedScale
-    reloaded.surfaceConfig.effectiveCursorTransitionSpeedScale shouldBe
-      mutated.surfaceConfig.effectiveCursorTransitionSpeedScale
-  }
-
   it should "survive a cursor info bar with several segments, which needs quoting to stay parseable" in {
     val configured = AppConfig.default
       .withStatusLineSegments(
@@ -350,7 +287,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     val file = Files.createTempFile("serenity-unreadable-config", ".conf")
     Files.writeString(file, "editor.pane_headers = false\nthis is not = valid = hocon {\n")
 
-    val preserved = ConfigManager.preserveUnreadableConfig(file)
+    val preserved = ConfigManager.backUpConfig(file, java.time.Instant.now())
 
     preserved.map(Files.readString) shouldBe Some(Files.readString(file))
     preserved.map(_.getFileName.toString).exists(_.startsWith(file.getFileName.toString)) shouldBe true
@@ -364,7 +301,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     // unquoted comma that makes it invalid HOCON. Every setting in such a file was silently replaced by defaults.
     Files.writeString(
       file,
-      """"character.animation" = none
+      """"editor.word_wrap" = false
         |"cursor.info_bar" = position,word_count
         |cursor.info_bar.placement = floating
         |""".stripMargin

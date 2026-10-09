@@ -1,11 +1,15 @@
 package com.serenity.state.manager
 
-import com.serenity.animation.Interpolator.given
-import com.serenity.animation.{TransitionDirection, Tween}
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot}
+import com.serenity.ui.layout.{
+  CellMetrics,
+  LayoutEngine,
+  RichTextContext,
+  TextLayoutSnapshot,
+  VisualRowCounts,
+  WrappedLineCache
+}
 
 /** Java2D/font measurement for cursor-visibility scrolling belongs at the effect boundary, not in a reducer -- a
   * reducer runs mid-edit against content the effect boundary has not seen yet. `adjustForCursor` is the shared
@@ -14,187 +18,47 @@ import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot}
   */
 object CursorViewport:
 
-  def ensureVisibleCursors(before: AppState, after: AppState): AppState =
+  def ensureVisibleCursors(
+    before: AppState,
+    after: AppState,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): AppState =
     after.persisted.buffers.foldLeft(after) {
       case (state, (bufferId, buffer)) =>
         val beforeBuffer = before.persisted.buffers.get(bufferId)
         val headMoved =
           beforeBuffer.exists(_.editing.cursorPositions.headOption != buffer.editing.cursorPositions.headOption)
-        val stateAfterViewport =
-          if !headMoved then state
-          else
-            buffer.editing.cursorPositions.headOption match
-              case Some(cursor) =>
-                val surfaceConfig    = state.persisted.config.surfaceConfig
-                val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
-                val placement =
-                  if columnModeActive then adjustForCursorColumnMode(buffer, state, cursor)
-                  else adjustForCursor(buffer, state, cursor)
-                val updatedBuffer = buffer.copy(viewport = placement)
-                val updatedState = state.copy(persisted =
-                  state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
-                )
-                if columnModeActive then seedColumnTransition(bufferId, buffer.viewport, placement, updatedState)
-                else updatedState
-              case None => state
-        val stateAfterGlide = beforeBuffer.fold(stateAfterViewport)(seedCursorGlide(bufferId, _, stateAfterViewport))
-        beforeBuffer.fold(stateAfterGlide)(seedSelectionGeometry(bufferId, _, stateAfterGlide))
+        if headMoved then placeCursor(state, buffer, wrapCache) else state
     }
 
-  /** Caret-glide (issue #1085 phase 2): seeds/retargets `Cursor.glide` for every cursor in `bufferId` whose position
-    * changed between `beforeBuffer` and the buffer now in `state` -- any change (typing, navigation, mouse click,
-    * search jump), matched positionally the same way `RendererCursorGlyphs` already indexes cursors for painting, not
-    * only when the primary cursor moves (unlike the viewport placement above, which only re-centres on the primary
-    * cursor). Gated by the `Cursor` motion family (`AppConfig.scaledCursorGlideAnimation` already folds in
-    * accessibility and the `Reduced` preset) and by `state.runtime.capabilities.pixelMotion`: TUI's caret snaps
-    * instantly, since a terminal cursor can't glide sub-cell (`RendererCursorOverlay.presentHardwareCursor`'s existing
-    * GUI/TUI split).
-    *
-    * Retargets an in-flight glide (`Tween.retarget`) rather than reseeding at progress zero when a cursor moves again
-    * before its previous glide finishes -- the same jump-cut fix `seedColumnTransition` already applies to the
-    * column-sweep tween.
+  /** Places every buffer an editor pane shows, for a change of pane geometry: a resize re-wraps the text, so the
+    * viewport placed against the old wrap no longer holds the cursor on its centred row.
     */
-  private def seedCursorGlide(bufferId: BufferId, beforeBuffer: Buffer, state: AppState): AppState =
-    if !state.runtime.capabilities.pixelMotion then state
-    else
-      state.persisted.config.scaledCursorGlideAnimation match
-        case None => state
-        case Some(animation) =>
-          state.persisted.buffers.get(bufferId) match
-            case None => state
-            case Some(afterBuffer) =>
-              val beforeCursors = beforeBuffer.editing.cursors.toList
-              val updatedCursors = afterBuffer.editing.cursors.zipWithIndex.map {
-                case (cursor, index) =>
-                  beforeCursors.lift(index) match
-                    case Some(previous) if previous.position != cursor.position =>
-                      val newPixel =
-                        CursorGlideGeometry.paneRelativePosition(afterBuffer, state.persisted.config, cursor.position)
-                      // The reducer that moved this cursor typically rebuilds `EditingState` from bare `CursorPosition`s
-                      // (`EditingState.apply`/`Cursor.apply(position)`), which wipes `cursor.glide` back to `None` before
-                      // this ever runs -- so whether a glide was already in flight has to be read from `previous` (the
-                      // pre-reducer `before` state this pass diffs against, which still carries whatever the last
-                      // `seedCursorGlide` call set), never from `cursor` itself.
-                      val tween = previous.glide.filterNot(_.isComplete) match
-                        case Some(existing) => existing.retarget(newPixel)
-                        case None =>
-                          val oldPixel =
-                            CursorGlideGeometry.paneRelativePosition(
-                              afterBuffer,
-                              state.persisted.config,
-                              previous.position
-                            )
-                          Tween(start = oldPixel, end = newPixel, curve = animation.curve, steps = animation.steps)
-                      cursor.copy(glide = Some(tween))
-                    case _ => cursor
-              }
-              if updatedCursors == afterBuffer.editing.cursors then state
-              else
-                val updatedBuffer = afterBuffer.withCursorList(updatedCursors)
-                state.copy(persisted =
-                  state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
-                )
+  def replaceShownCursors(state: AppState, wrapCache: WrappedLineCache = WrappedLineCache.Uncached): AppState =
+    val shown = state.persisted.layout.editorPanes.values.flatMap(_.bufferId).toSet
+    state.persisted.buffers.foldLeft(state) {
+      case (current, (bufferId, buffer)) =>
+        if shown.contains(bufferId) then placeCursor(current, buffer, wrapCache) else current
+    }
 
-  /** Selection grow/settle (issue #1085 phase 3): seeds/retargets `Cursor.selectionGeometry` for every cursor in
-    * `bufferId` whose selection changed between `beforeBuffer` and the buffer now in `state` -- any change (extend,
-    * shrink, create, clear), matched positionally the same way `seedCursorGlide` above does. Gated by the
-    * `SelectionGeometry` motion family (`AppConfig.scaledSelectionGeometryAnimation` already folds in accessibility and
-    * the `Reduced` preset). Unlike `seedCursorGlide`, this runs regardless of `state.runtime.capabilities.pixelMotion`
-    * -- `SelectionGeometryState`'s column-granular model serves both the GUI's measured painting and TUI's cell
-    * painting (see its own doc comment), so there is nothing GUI-only about it here.
-    *
-    * Retargets an in-flight geometry (`SelectionGeometryState.diff`'s own `Tween.retarget` handling) rather than
-    * reseeding at progress zero when a selection changes again before its previous animation finishes -- the same
-    * jump-cut fix `seedCursorGlide`/`seedColumnTransition` already apply to their own tweens.
-    */
-  private def seedSelectionGeometry(bufferId: BufferId, beforeBuffer: Buffer, state: AppState): AppState =
-    state.persisted.config.scaledSelectionGeometryAnimation match
+  private def placeCursor(state: AppState, buffer: Buffer, wrapCache: WrappedLineCache): AppState =
+    buffer.editing.cursorPositions.headOption match
+      case Some(cursor) =>
+        val surfaceConfig    = state.persisted.config.surfaceConfig
+        val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
+        val placement =
+          if columnModeActive then adjustForCursorColumnMode(buffer, state, cursor, wrapCache)
+          else adjustForCursor(buffer, state, cursor, wrapCache)
+        state.copy(persisted =
+          state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> buffer.copy(viewport = placement)))
+        )
       case None => state
-      case Some(animation) =>
-        state.persisted.buffers.get(bufferId) match
-          case None => state
-          case Some(afterBuffer) =>
-            val beforeCursors = beforeBuffer.editing.cursors.toList
-            val updatedCursors = afterBuffer.editing.cursors.zipWithIndex.map {
-              case (cursor, index) =>
-                beforeCursors.lift(index) match
-                  case Some(previous) if previous.selection != cursor.selection =>
-                    val beforeRects = previous.selection
-                      .map(SelectionGeometry.rectsForSelection(afterBuffer, state.persisted.config, _))
-                      .getOrElse(Map.empty)
-                    val afterRects = cursor.selection
-                      .map(SelectionGeometry.rectsForSelection(afterBuffer, state.persisted.config, _))
-                      .getOrElse(Map.empty)
-                    val geometry = SelectionGeometryState.diff(
-                      previous.selectionGeometry.filterNot(_.isComplete),
-                      beforeRects,
-                      afterRects,
-                      animation.curve,
-                      animation.steps
-                    )
-                    cursor.copy(selectionGeometry = geometry)
-                  case _ => cursor
-            }
-            if updatedCursors == afterBuffer.editing.cursors then state
-            else
-              val updatedBuffer = afterBuffer.withCursorList(updatedCursors)
-              state.copy(persisted =
-                state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
-              )
-
-  /** Column-based document layout (issue #1338, Phase 1 animation): seeds `Runtime.motion.columnTransitions` whenever
-    * [[adjustForCursorColumnMode]] actually moved which column is showing -- whatever moved the cursor there, not only
-    * `ColumnLeft`/`ColumnRight`, since this effect boundary has no narrower notion of "why" the cursor moved than any
-    * other placement it applies. Gated by the `ColumnTransitions` motion family
-    * (`AppConfig.scaledColumnTransitionAnimation` already folds in accessibility and the `Reduced` preset): a `None`
-    * there means "snap instantly," so no transition is recorded at all -- the viewport still moves to the new column,
-    * there is just nothing to animate between.
-    *
-    * If a transition for this buffer is already in flight, this retargets it (issue #1083's `Tween.retarget`) rather
-    * than reseeding at progress 0: the previous behaviour snapped the sweep back to its start whenever the cursor
-    * crossed another column boundary before the current sweep finished, a visible jump-cut. Retargeting keeps the
-    * in-flight transition's own `direction`/`previousTop*` -- the column being swept away is still the same one -- and
-    * just lets the sweep continue smoothly the rest of the way to full progress.
-    */
-  private def seedColumnTransition(
-    bufferId: BufferId,
-    previousViewport: Viewport,
-    placedViewport: Viewport,
-    state: AppState
-  ): AppState =
-    val columnChanged =
-      previousViewport.topLine != placedViewport.topLine || previousViewport.topVisualLine != placedViewport.topVisualLine
-    if !columnChanged then state
-    else
-      state.persisted.config.scaledColumnTransitionAnimation match
-        case None => state
-        case Some(animation) =>
-          val inFlight = state.runtime.motion.columnTransitions.get(bufferId).filterNot(_.isComplete)
-          val transition = inFlight match
-            case Some(existing) => existing.retarget
-            case None =>
-              val movedForward =
-                placedViewport.topLine > previousViewport.topLine ||
-                  (placedViewport.topLine == previousViewport.topLine &&
-                    placedViewport.topVisualLine > previousViewport.topVisualLine)
-              ColumnTransitionState.seeded(
-                steps = animation.steps,
-                curve = animation.curve,
-                direction = if movedForward then TransitionDirection.RightToLeft else TransitionDirection.LeftToRight,
-                previousTopLine = previousViewport.topLine,
-                previousTopVisualLine = previousViewport.topVisualLine
-              )
-          state.copy(runtime =
-            state.runtime.copy(motion =
-              state.runtime.motion
-                .copy(columnTransitions = state.runtime.motion.columnTransitions.updated(bufferId, transition))
-            )
-          )
 
   def adjustForCursor(
     buffer: Buffer,
     currentState: AppState,
-    cursor: CursorPosition
+    cursor: CursorPosition,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): Viewport =
     val wordWrapEnabled            = currentState.persisted.config.surfaceConfig.wordWrapEnabled
     val typewriterScrollingEnabled = currentState.persisted.config.surfaceConfig.typewriterScrollingEnabled
@@ -227,6 +91,7 @@ object CursorViewport:
     val forceCellLayout     = isTui
     val wrapWidthPx         = if isTui then viewport.visibleColumns * CellMetrics.cellUnit.charWidth else gridWidthPx
     val lineText            = buffer.document.content.getLine(cursor.line).getOrElse("")
+    val dropCapsEnabled     = currentState.persisted.config.documentConfig.dropCapsEnabled
     val cursorVisualLine =
       if !wordWrapEnabled then 0
       else
@@ -238,63 +103,53 @@ object CursorViewport:
           wordWrapEnabled = true,
           cellMetricsOverride = cellMetricsOverride,
           forceCellLayout = forceCellLayout,
-          rowAffinity = cursor.rowAffinity
+          rowAffinity = cursor.rowAffinity,
+          wrapCache = wrapCache,
+          bufferLine = cursor.line,
+          richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled)
         )
 
-    // The number of visual rows a logical line occupies on screen -- 1 unless word wrap folds it across several
-    // rows, in which case it must be measured the same way `cursorVisualLine` above was, or the two disagree.
-    def visualRowCountForLine(lineIndex: Int): Int =
-      if !wordWrapEnabled then 1
+    // Counted the same way `cursorVisualLine` above was measured, or the two disagree.
+    val visualRows =
+      if !wordWrapEnabled then VisualRowCounts.oneRowPerLine(buffer.document.content.lineCount)
       else
-        val text = buffer.document.content.getLine(lineIndex).getOrElse("")
-        TextLayoutSnapshot
-          .boundedVisualLinesForText(
-            text,
-            lineIndex,
-            wrapWidthPx,
-            font,
-            cellMetricsOverride = cellMetricsOverride,
-            forceCellLayout = forceCellLayout
-          )
-          .length
-          .max(1)
+        VisualRowCounts.forBuffer(
+          buffer,
+          wrapWidthPx,
+          font,
+          cellMetricsOverride,
+          forceCellLayout,
+          wrapCache,
+          dropCapsEnabled
+        )
 
-    // Desired top: walk backward from the cursor's own line in visual rows (not logical lines) until halfVisibleLines
-    // rows of context above the cursor's own visual row have been accounted for, or the buffer start is reached,
-    // carrying the partial offset into whatever line the walk lands on so the cursor stays centred. Forcing that offset
-    // to 0 (as before) whenever the top wasn't the cursor's own line let the cursor drift off-centre by up to a full
-    // wrapped line's worth of rows.
+    // Desired top: halfVisibleLines rows of context above the cursor's own visual row, counted in visual rows (not
+    // logical lines) and carrying the partial offset into whatever line that lands on so the cursor stays centred.
+    // Forcing that offset to 0 whenever the top wasn't the cursor's own line let the cursor drift off-centre by up to a
+    // full wrapped line's worth of rows.
     val scrollUpBudget = halfVisibleLines - cursorVisualLine
-    def walkBackward(line: Int, remainingBudget: Int): (Int, Int) =
-      if line <= 0 then (0, 0)
-      else
-        val previousLineRows = visualRowCountForLine(line - 1)
-        if previousLineRows >= remainingBudget then (line - 1, previousLineRows - remainingBudget)
-        else walkBackward(line - 1, remainingBudget - previousLineRows)
     val (rawTopLine, rawTopVisualLine) =
       if scrollUpBudget <= 0 then (cursor.line, math.max(0, cursorVisualLine - halfVisibleLines))
-      else walkBackward(cursor.line, scrollUpBudget)
+      else visualRows.rowAbove(cursor.line, scrollUpBudget)
 
-    // Bottom clamp: the latest (line, visual-row) start that still fills the viewport with real content, found by
-    // walking backward from the buffer's last line until visibleLines rows of content have been accounted for.
-    // Without this, a cursor near the end of a short-ish document can leave blank rows below the last line. Typewriter
-    // scrolling deliberately skips this clamp: its entire point is to hold the cursor's line at its centred row even
-    // while typing at the very end of the document, which means padding with blank rows below rather than showing as
-    // much real content as fits (#1204, #1293).
+    // Bottom clamp: the latest (line, visual-row) start that still fills the viewport with real content. Without this,
+    // a cursor near the end of a short-ish document can leave blank rows below the last line. Typewriter scrolling
+    // deliberately skips this clamp: its entire point is to hold the cursor's line at its centred row even while
+    // typing at the very end of the document, which means padding with blank rows below rather than showing as much
+    // real content as fits (#1204, #1293).
     val lineCount = buffer.document.content.lineCount
-    def bottomAlignedWindow(line: Int, remaining: Int): (Int, Int) =
-      val rows = visualRowCountForLine(line)
-      if remaining <= rows || line == 0 then (line, math.max(0, rows - remaining))
-      else bottomAlignedWindow(line - 1, remaining - rows)
-    val (bottomLine, bottomVisualLine) =
-      if lineCount <= 0 then (0, 0) else bottomAlignedWindow(lineCount - 1, effectiveVisibleLines)
-
-    val exceedsBottom =
-      rawTopLine > bottomLine || (rawTopLine == bottomLine && rawTopVisualLine > bottomVisualLine)
+    // Every line is at least one row, so the bottom-aligned top is never above `lineCount - effectiveVisibleLines`; a
+    // desired top above that cannot exceed it, and the last screen need not be measured.
+    def exceedsBottomWindow: Option[(Int, Int)] =
+      if lineCount <= 0 || rawTopLine < lineCount - effectiveVisibleLines then None
+      else
+        val (bottomLine, bottomVisualLine) = visualRows.rowAbove(lineCount, effectiveVisibleLines)
+        val exceedsBottom =
+          rawTopLine > bottomLine || (rawTopLine == bottomLine && rawTopVisualLine > bottomVisualLine)
+        Option.when(exceedsBottom)((bottomLine, bottomVisualLine))
     val (clampedTopLine, topVisualLine) =
       if typewriterScrollingEnabled then (rawTopLine, rawTopVisualLine)
-      else if exceedsBottom then (bottomLine, bottomVisualLine)
-      else (rawTopLine, rawTopVisualLine)
+      else exceedsBottomWindow.getOrElse((rawTopLine, rawTopVisualLine))
     val clampedLeftColumn =
       if wordWrapEnabled then 0
       else
@@ -339,7 +194,8 @@ object CursorViewport:
   def adjustForCursorColumnMode(
     buffer: Buffer,
     currentState: AppState,
-    cursor: CursorPosition
+    cursor: CursorPosition,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): Viewport =
     val isTui      = currentState.runtime.capabilities.isCellGrid
     val viewport   = buffer.viewport
@@ -356,19 +212,17 @@ object CursorViewport:
     val lineCount           = buffer.document.content.lineCount
     val visibleLines        = math.max(1, viewport.visibleLines)
 
-    def visualRowCountForLine(lineIndex: Int): Int =
-      val text = buffer.document.content.getLine(lineIndex).getOrElse("")
-      TextLayoutSnapshot
-        .boundedVisualLinesForText(
-          text,
-          lineIndex,
-          wrapWidthPx,
-          font,
-          cellMetricsOverride = cellMetricsOverride,
-          forceCellLayout = forceCellLayout
-        )
-        .length
-        .max(1)
+    val dropCapsEnabled = currentState.persisted.config.documentConfig.dropCapsEnabled
+    val visualRows =
+      VisualRowCounts.forBuffer(
+        buffer,
+        wrapWidthPx,
+        font,
+        cellMetricsOverride,
+        forceCellLayout,
+        wrapCache,
+        dropCapsEnabled
+      )
 
     val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
     val cursorVisualRowInLine =
@@ -380,15 +234,11 @@ object CursorViewport:
         wordWrapEnabled = true,
         cellMetricsOverride = cellMetricsOverride,
         forceCellLayout = forceCellLayout,
-        rowAffinity = cursor.rowAffinity
+        rowAffinity = cursor.rowAffinity,
+        wrapCache = wrapCache,
+        bufferLine = cursor.line,
+        richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled)
       )
-
-    // Rows spanned by the lines [fromLine, toLineExclusive), walking forward -- bounded by the distance between the
-    // two lines, used both to place the cursor relative to the previous top and to walk that same distance again.
-    @annotation.tailrec
-    def rowsForward(fromLine: Int, toLineExclusive: Int, acc: Int): Int =
-      if fromLine >= toLineExclusive then acc
-      else rowsForward(fromLine + 1, toLineExclusive, acc + visualRowCountForLine(fromLine))
 
     // Multi-column page anchoring (issue #1338, Phase 2 / slice 1): a "page" shows `columnCount` columns side by side,
     // so the viewport anchors to a whole-page boundary (`pageRows` rows) rather than a single column (`visibleLines`
@@ -397,21 +247,8 @@ object CursorViewport:
     val columnCount = columnCountForBuffer(buffer, currentState)
     val pageRows    = columnCount * visibleLines
 
-    @annotation.tailrec
-    def findTopForward(line: Int, consumedRows: Int, targetRow: Int): (Int, Int) =
-      if line >= lineCount then (math.max(0, lineCount - 1), 0)
-      else
-        val rows = visualRowCountForLine(line)
-        if consumedRows + rows > targetRow then (line, targetRow - consumedRows)
-        else findTopForward(line + 1, consumedRows + rows, targetRow)
-
-    @annotation.tailrec
-    def findTopBackward(line: Int, remainingDeficit: Int): (Int, Int) =
-      if line <= 0 then (0, 0)
-      else
-        val previousLineRows = visualRowCountForLine(line - 1)
-        if previousLineRows >= remainingDeficit then (line - 1, previousLineRows - remainingDeficit)
-        else findTopBackward(line - 1, remainingDeficit - previousLineRows)
+    def findTopForward(line: Int, targetRow: Int): (Int, Int) =
+      visualRows.rowBelow(line, targetRow).getOrElse((math.max(0, lineCount - 1), 0))
 
     val previousTopValid = viewport.topVisualLine % pageRows == 0
 
@@ -420,18 +257,15 @@ object CursorViewport:
       else if previousTopValid then
         val previousTopLine = math.max(0, math.min(viewport.topLine, lineCount - 1))
         val relativeCursorRow =
-          if cursor.line >= previousTopLine then
-            rowsForward(previousTopLine, cursor.line, 0) + cursorVisualRowInLine - viewport.topVisualLine
-          else -rowsForward(cursor.line, previousTopLine, 0) + cursorVisualRowInLine - viewport.topVisualLine
+          visualRows.rowsBetween(previousTopLine, cursor.line) + cursorVisualRowInLine - viewport.topVisualLine
         val targetOffsetFromPreviousTop      = Math.floorDiv(relativeCursorRow, pageRows) * pageRows
         val targetRowFromPreviousTopLineHead = viewport.topVisualLine + targetOffsetFromPreviousTop
-        if targetRowFromPreviousTopLineHead >= 0 then
-          findTopForward(previousTopLine, 0, targetRowFromPreviousTopLineHead)
-        else findTopBackward(previousTopLine, -targetRowFromPreviousTopLineHead)
+        if targetRowFromPreviousTopLineHead >= 0 then findTopForward(previousTopLine, targetRowFromPreviousTopLineHead)
+        else visualRows.rowAbove(previousTopLine, -targetRowFromPreviousTopLineHead)
       else
-        val absoluteCursorRow = rowsForward(0, cursor.line, 0) + cursorVisualRowInLine
+        val absoluteCursorRow = visualRows.rowsBetween(0, cursor.line) + cursorVisualRowInLine
         val targetVisualRow   = (absoluteCursorRow / pageRows) * pageRows
-        findTopForward(0, 0, targetVisualRow)
+        findTopForward(0, targetVisualRow)
 
     viewport.copy(topLine = topLine, leftColumn = 0, topVisualLine = topVisualLine)
 

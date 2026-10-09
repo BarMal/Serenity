@@ -7,13 +7,12 @@ import com.serenity.command.{
   Command,
   CommandCategory,
   CommandIntent,
-  GeneralSettingsIntent,
-  MotionIntent,
+  InterfaceChromeIntent,
   SessionIntent,
   SettingsIntent,
   UiPresetsIntent
 }
-import com.serenity.config.{BackgroundStyle, MaterialPreset, MotionPreset}
+import com.serenity.config.InterfaceDensity
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
@@ -31,7 +30,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver
       .updateState(state =>
         state.copy(persisted =
-          state.persisted.copy(config = state.persisted.config.withBackgroundStyle(BackgroundStyle.Solid))
+          state.persisted.copy(config = state.persisted.config.withInterfaceDensity(InterfaceDensity.Compact))
         )
       )
       .unsafeRunSync()
@@ -48,7 +47,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     val saved = store.find("Scenario").unsafeRunSync()
     val frame = driver.renderFrame("saved").unsafeRunSync()
 
-    saved.map(_.config.surfaceConfig.backgroundStyle) shouldBe Some(BackgroundStyle.Solid)
+    saved.map(_.config.interfaceDensity) shouldBe Some(InterfaceDensity.Compact)
     frame.evidence.layoutViolations shouldBe empty
   }
 
@@ -60,29 +59,32 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver
       .updateState(state =>
         state.copy(persisted =
-          state.persisted.copy(config = state.persisted.config.withBackgroundStyle(BackgroundStyle.Solid))
+          state.persisted.copy(config = state.persisted.config.withInterfaceDensity(InterfaceDensity.Compact))
         )
       )
       .unsafeRunSync()
-    val savedMotion = driver.state.unsafeRunSync().persisted.config.surfaceConfig.motionPreset
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Scenario")))
     val beforeChange = driver.renderFrame("before-settings-change").unsafeRunSync()
-    execute(driver, CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Subtle))))
+    execute(
+      driver,
+      CommandIntent.Settings(
+        SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
+      )
+    )
     val changed = driver.renderFrame("changed").unsafeRunSync()
-    driver.state.unsafeRunSync().persisted.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
+    driver.state.unsafeRunSync().persisted.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     changed.evidence.layoutViolations shouldBe empty
-    store.find("Scenario").unsafeRunSync().map(_.config.surfaceConfig.motionPreset) shouldBe Some(savedMotion)
+    store.find("Scenario").unsafeRunSync().map(_.config.interfaceDensity) shouldBe Some(InterfaceDensity.Compact)
 
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Scenario")))
     val reapplied = driver.state.unsafeRunSync()
-    reapplied.persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.Solid
-    reapplied.persisted.config.surfaceConfig.motionPreset shouldBe savedMotion
+    reapplied.persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
     beforeChange.evidence.layoutViolations shouldBe empty
     driver.renderFrame("after-reapply").unsafeRunSync().evidence.layoutViolations shouldBe empty
 
     val restarted = UiScenarioDriver.create("ui-preset-restarted", uiPresetStore = Some(store)).unsafeRunSync()
     execute(restarted, CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Scenario")))
-    restarted.state.unsafeRunSync().persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.Solid
+    restarted.state.unsafeRunSync().persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
     restarted.renderFrame("restarted").unsafeRunSync().evidence.layoutViolations shouldBe empty
   }
 
@@ -92,21 +94,26 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
 
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Scenario")))
     val beforeChange = driver.renderFrame("before-change-save").unsafeRunSync()
-    val savedMotion  = store.find("Scenario").unsafeRunSync().map(_.config.surfaceConfig.motionPreset)
-    execute(driver, CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Subtle))))
+    val savedDensity = store.find("Scenario").unsafeRunSync().map(_.config.interfaceDensity)
+    execute(
+      driver,
+      CommandIntent.Settings(
+        SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Compact))
+      )
+    )
     val changed = driver.renderFrame("changed-save").unsafeRunSync()
-    store.find("Scenario").unsafeRunSync().map(_.config.surfaceConfig.motionPreset) shouldBe savedMotion
+    store.find("Scenario").unsafeRunSync().map(_.config.interfaceDensity) shouldBe savedDensity
 
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset("Scenario")))
     val saved = driver.renderFrame("after-save").unsafeRunSync()
-    store.find("Scenario").unsafeRunSync().map(_.config.surfaceConfig.motionPreset) shouldBe Some(MotionPreset.Subtle)
+    store.find("Scenario").unsafeRunSync().map(_.config.interfaceDensity) shouldBe Some(InterfaceDensity.Compact)
 
     val restarted =
       UiScenarioDriver.create("ui-preset-preview-save-restarted", uiPresetStore = Some(store)).unsafeRunSync()
     execute(restarted, CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Scenario")))
     val appliedAfterRestart = restarted.renderFrame("applied-after-restart").unsafeRunSync()
 
-    restarted.state.unsafeRunSync().persisted.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
+    restarted.state.unsafeRunSync().persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
     beforeChange.evidence.layoutViolations shouldBe empty
     changed.evidence.layoutViolations shouldBe empty
     saved.evidence.layoutViolations shouldBe empty
@@ -120,19 +127,28 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
       .create("ui-preset-dirty-restart", uiPresetStore = Some(store), sessionRoot = Some(sessionRoot))
       .unsafeRunSync()
 
-    driver.dispatch(ToggleCommandRunner).unsafeRunSync()
+    (driver.dispatch(ToggleCommandRunner) >> driver.stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
     execute(
       driver,
-      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetMaterialPreset(MaterialPreset.Solid)))
+      CommandIntent.Settings(
+        SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Compact))
+      )
     )
     val changed = driver.renderFrame("changed-before-restart").unsafeRunSync()
     driver.stateManager.saveSession.unsafeRunSync()
+    // Settings live in config.conf, which a restart reads at startup; the session restores the workspace only (#1934).
+    val persistedConfig = driver.state.unsafeRunSync().persisted.config
 
     val restarted = UiScenarioDriver
-      .create("ui-preset-fresh-runtime", uiPresetStore = Some(store), sessionRoot = Some(sessionRoot))
+      .create(
+        "ui-preset-fresh-runtime",
+        initialConfig = persistedConfig,
+        uiPresetStore = Some(store),
+        sessionRoot = Some(sessionRoot)
+      )
       .unsafeRunSync()
     execute(restarted, CommandIntent.Session(SessionIntent.StartupRestoreSession))
-    restarted.dispatch(ToggleCommandRunner).unsafeRunSync()
+    (restarted.dispatch(ToggleCommandRunner) >> restarted.stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
     val reopened      = restarted.state.unsafeRunSync()
     val reopenedFrame = restarted.renderFrame("changed-after-restart").unsafeRunSync()
     val runner = reopened.commandRunnerSurface
@@ -141,7 +157,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
         case _                                      => None)
       .getOrElse(fail("command runner should reopen after session restore"))
 
-    reopened.persisted.config.surfaceConfig.materialPreset shouldBe MaterialPreset.Solid
+    reopened.persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
     store.find("Restart Draft").unsafeRunSync() shouldBe None
     // issue #1060: "ui-preset-overwrite" is a picker (OptionItem) now, not a typed InputItem.
     inputIds(runner.settingsGroups) should contain("ui-preset-save-as-new")

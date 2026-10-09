@@ -1,8 +1,6 @@
 package com.serenity.command
 
-import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.frontend.FrontendCapabilities
 
 /** Builds the flat list of command-runner settings input items from the current config.
@@ -28,9 +26,6 @@ object CommandRunnerSettingsInputItems:
     */
   final private case class DerivedValues(
       inputConfig: InputConfig,
-      durationValue: String,
-      stepsValue: String,
-      blurValue: String,
       codeFontSizeValue: String,
       textFontSizeValue: String,
       uiFontSizeValue: String,
@@ -39,21 +34,14 @@ object CommandRunnerSettingsInputItems:
       textAreaRightValue: String,
       textAreaTopValue: String,
       textAreaBottomValue: String,
-      editorTextSpeedScaleValue: String,
-      commandRunnerSpeedScaleValue: String,
-      uiSpeedScaleValue: String,
-      cursorSpeedScaleValue: String,
-      speedScaleValue: String,
       elementGapValue: String,
-      cornerRadiusValue: String,
       outlineThicknessValue: String,
       lineNumberMarginLeftValue: String,
       lineNumberMarginRightValue: String,
       lineNumberPaddingValue: String,
       columnCountValue: String,
       columnGapValue: String,
-      spellCheck: SpellCheckConfig,
-      companionSpriteConfig: CompanionSpriteConfig
+      spellCheck: SpellCheckConfig
   )
 
   private def derivedValues(config: AppConfig, capabilities: FrontendCapabilities): DerivedValues =
@@ -63,9 +51,6 @@ object CommandRunnerSettingsInputItems:
     val languageToolsConfig = config.languageToolsConfig
     DerivedValues(
       inputConfig = config.inputConfig,
-      durationValue = editorConfig.characterAnimation.map(_.durationMs.toString).getOrElse("0"),
-      stepsValue = editorConfig.characterAnimation.map(_.steps.toString).getOrElse("0"),
-      blurValue = surfaceConfig.blurRadius.toString,
       codeFontSizeValue = editorConfig.fontConfig.codeFontSize.toString,
       textFontSizeValue = editorConfig.fontConfig.textFontSize.toString,
       uiFontSizeValue = editorConfig.fontConfig.uiFontSize.toString,
@@ -74,17 +59,11 @@ object CommandRunnerSettingsInputItems:
       textAreaRightValue = f"${surfaceConfig.textAreaInsets.rightPercent}%.1f",
       textAreaTopValue = f"${surfaceConfig.textAreaInsets.topPercent}%.1f",
       textAreaBottomValue = f"${surfaceConfig.textAreaInsets.bottomPercent}%.1f",
-      editorTextSpeedScaleValue = f"${config.effectiveEditorTextTransitionSpeedScale}%.2f",
-      commandRunnerSpeedScaleValue = f"${config.effectiveCommandRunnerTransitionSpeedScale}%.2f",
-      uiSpeedScaleValue = f"${config.effectiveUiTransitionSpeedScale}%.2f",
-      cursorSpeedScaleValue = f"${config.effectiveCursorTransitionSpeedScale}%.2f",
-      speedScaleValue = f"${surfaceConfig.elementTransitionSpeedScale}%.2f",
       // Unset resolves to the same surface-specific number `AppState.effectiveUiElementGap` and its
       // `effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding` siblings would show -- a GUI cell of breathing
       // room, or the TUI's existing zero -- rather than the literal string "auto" (issue #1621 carve-out).
       elementGapValue =
         interfaceConfig.elementGap.fold(formatDecimal(if capabilities.isCellGrid then 0.0 else 1.0))(formatDecimal),
-      cornerRadiusValue = interfaceConfig.cornerRadiusPx.toString,
       outlineThicknessValue = interfaceConfig.outlineThicknessPx.toString,
       lineNumberMarginLeftValue =
         surfaceConfig.lineNumberLayout.marginLeft.fold(if capabilities.isCellGrid then "0" else "1")(_.toString),
@@ -93,8 +72,7 @@ object CommandRunnerSettingsInputItems:
         surfaceConfig.lineNumberLayout.padding.fold(if capabilities.isCellGrid then "0" else "1")(_.toString),
       columnCountValue = surfaceConfig.columnCount.fold("auto")(_.toString),
       columnGapValue = surfaceConfig.columnGap.toString,
-      spellCheck = languageToolsConfig.spellCheck.normalized,
-      companionSpriteConfig = config.companionSpriteConfig
+      spellCheck = languageToolsConfig.spellCheck.normalized
     )
 
   def build(
@@ -114,6 +92,18 @@ object CommandRunnerSettingsInputItems:
           CommandRunnerSettingsTextParsing
             .nonEmptyText(text)
             .map(commandIntentArg => CommandIntent.Comments(CommentsIntent.AddDocumentComment(commandIntentArg))),
+        category = CommandCategory.Edit
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "reply-document-comment",
+        label = "Reply to Document Comment",
+        hint = "Reply text",
+        currentValue = "",
+        kind = CommandSurfaceItem.InputKind.FreeText,
+        parse = text =>
+          CommandRunnerSettingsTextParsing
+            .nonEmptyText(text)
+            .map(commandIntentArg => CommandIntent.Comments(CommentsIntent.ReplyToDocumentComment(commandIntentArg))),
         category = CommandCategory.Edit
       ),
       CommandSurfaceItem.InputItem(
@@ -160,21 +150,8 @@ object CommandRunnerSettingsInputItems:
       ) ++
       CommandRunnerSettingsInputItemsTextAreaAndSpellCheck.columnItems(v.columnCountValue, v.columnGapValue) ++
       CommandRunnerSettingsInputItemsTextAreaAndSpellCheck.spellCheckItems(v.spellCheck) ++
-      CommandRunnerSettingsInputItemsMotion.animationTimingItems(
-        v.durationValue,
-        v.stepsValue,
-        v.speedScaleValue,
-        v.editorTextSpeedScaleValue
-      ) ++
-      CommandRunnerSettingsInputItemsMotion.speedScaleItems(
-        v.commandRunnerSpeedScaleValue,
-        v.uiSpeedScaleValue,
-        v.cursorSpeedScaleValue,
-        v.blurValue
-      ) ++
       CommandRunnerSettingsInputItemsUiLayout.uiSpacingItems(
         v.elementGapValue,
-        v.cornerRadiusValue,
         v.outlineThicknessValue
       ) ++
       CommandRunnerSettingsInputItemsUiLayout.lineNumberSpacingItems(
@@ -182,11 +159,10 @@ object CommandRunnerSettingsInputItems:
         v.lineNumberMarginRightValue,
         v.lineNumberPaddingValue
       ) ++
-      CommandRunnerSettingsInputItemsCompanionSpriteAndFont.companionSpriteAndInputItems(
-        v.companionSpriteConfig,
-        v.inputConfig.wheelScrollLines
-      ) ++
-      CommandRunnerSettingsInputItemsCompanionSpriteAndFont.fontSizeItems(
+      CommandRunnerSettingsInputItemsInputAndFont.inputItems(v.inputConfig.wheelScrollLines) ++
+      CommandRunnerSettingsInputItemsInputAndFont.autoSaveItems(config.autoSaveConfig.delayMillis) ++
+      CommandRunnerSettingsInputItemsFollowSystem.items(config.themeFollowConfig) ++
+      CommandRunnerSettingsInputItemsInputAndFont.fontSizeItems(
         v.codeFontSizeValue,
         v.textFontSizeValue,
         v.uiFontSizeValue,

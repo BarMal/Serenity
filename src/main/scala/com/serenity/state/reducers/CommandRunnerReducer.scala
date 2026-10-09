@@ -6,6 +6,7 @@ import com.serenity.state.models.*
 import com.serenity.text.TextEditing
 
 object CommandRunnerReducer:
+  import CommandRunnerReducerSettingsPreview.{changed, committedPreview, previewHighlighted, settled, stepped, valueRow}
 
   def reducer(registry: CommandRegistry): Reducer[CommandRunnerEvent] =
     Reducer.instance((event, state) => reduce(event, state, registry))
@@ -17,7 +18,7 @@ object CommandRunnerReducer:
       .getOrElse(ReducerResult.noEffects(state))
 
   def reduce(event: CommandRunnerEvent, state: AppState, registry: CommandRegistry): ReducerResult =
-    if currentRunner(state).exists(_.isActive) then reduceActive(event, state, registry)
+    if currentRunner(state).exists(_.isActive) then settled(event, reduceActive(event, state, registry))
     else ReducerResult.noEffects(state)
 
   /** Opens the command runner (activating it first if it is closed) directly into its settings view. Moved out of the
@@ -64,7 +65,8 @@ object CommandRunnerReducer:
       case RunnerNavigate(Direction.Right) => reduceHorizontalNavigate(1, state)
 
   private def reduceDismiss(state: AppState): ReducerResult =
-    if CommandRunnerReducerKeyRecording.submenuRecording(state) then
+    if state.runtime.pendingSetting.isDefined then SettingsPreviewReducer.revert(state)
+    else if CommandRunnerReducerKeyRecording.submenuRecording(state) then
       ReducerResult.noEffects(CommandRunnerReducerKeyRecording.clearSubmenuRecording(state))
     else if submenuEditing(state) then ReducerResult.noEffects(clearSubmenuEditMode(state))
     else if submenuSearching(state) then ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch("")))
@@ -81,6 +83,9 @@ object CommandRunnerReducer:
     else ReducerResult.noEffects(deactivate(state))
 
   private def reduceSubmit(state: AppState): ReducerResult =
+    committedPreview(state).getOrElse(submitSelection(state))
+
+  private def submitSelection(state: AppState): ReducerResult =
     if submenuHasFocus(state) then submitSubmenu(state)
     else if currentRunner(state).exists(_.selectedItem.exists(entersGroupOnSubmit))
     then ReducerResult.noEffects(replaceRunner(state, _.enterSelectedGroup))
@@ -307,15 +312,26 @@ object CommandRunnerReducer:
           else ReducerResult.noEffects(state)
 
   private def reducePaste(state: AppState, registry: CommandRegistry): ReducerResult =
-    state.runtime.clipboard
-      .getOrElse("")
-      .filter(char => char != '\r' && char != '\n')
-      .foldLeft(ReducerResult.noEffects(state))((result, char) =>
+    val pasted = state.runtime.clipboard.getOrElse("").filter(char => char != '\r' && char != '\n')
+    if pasted.nonEmpty && typingSearchesRoot(state) then
+      given CommandRegistry = registry
+      ReducerResult.noEffects(replaceRunner(state, r => r.updateSearchTerm(r.searchTerm + pasted)))
+    else
+      pasted.foldLeft(ReducerResult.noEffects(state))((result, char) =>
         reduceActive(RunnerInsertChar(char), result.state, registry)
       )
 
+  /** Whether a typed character would go to the root search box -- the case where pasting it one character at a time
+    * would search once per character (#1854).
+    */
+  private def typingSearchesRoot(state: AppState): Boolean =
+    !submenuHasFocus(state) && currentRunner(state).exists { runner =>
+      val inputSelected = runner.selectedItem.collect { case input: CommandSurfaceItem.InputItem => input }.nonEmpty
+      runner.editingItemId.isEmpty && !inputSelected
+    }
+
   private def reduceVerticalNavigate(delta: Int, state: AppState): ReducerResult =
-    if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.moveSubmenuSelection(delta)))
+    if submenuHasFocus(state) then previewHighlighted(replaceRunner(state, _.moveSubmenuSelection(delta)))
     else ReducerResult.noEffects(replaceRunner(state, _.moveSelection(delta)))
 
   private def reduceHorizontalNavigate(delta: Int, state: AppState): ReducerResult =
@@ -331,53 +347,43 @@ object CommandRunnerReducer:
       // fallback below, since an InputItem has no index of its own to look up post-adjustment.
       case Some(runner) =>
         submenuSelectedItem(runner) match
-          case Some(input: CommandSurfaceItem.InputItem) =>
-            input.steppedIntent(delta) match
-              case Some(intent) =>
-                ReducerResult(
-                  state,
-                  List(AppEffect.ExecuteCommand(Command.typed(input.id, input.label, intent, input.category)))
-                )
-              case None =>
-                ReducerResult.noEffects(state)
+          case Some(input: CommandSurfaceItem.InputItem) => stepped(state, input, delta)
           case _ =>
             val updatedRunner = runner.adjustSelectedSubmenuOption(delta)
-            val effects = submenuSelectedOption(updatedRunner)
-              .flatMap(_.selectedIntent)
-              .toList
-              .map(intent =>
-                AppEffect
-                  .ExecuteCommand(Command.typed(intent.toString, intent.toString, intent, CommandCategory.Settings))
-              )
-            ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
+            val updatedState  = replaceRunner(state, _ => updatedRunner)
+            submenuSelectedOption(updatedRunner)
+              .flatMap(option => option.selectedIntent.map(option -> _))
+              .fold(ReducerResult.noEffects(updatedState)) {
+                case (option, intent) =>
+                  changed(
+                    updatedState,
+                    option.id,
+                    Command.typed(intent.toString, intent.toString, intent, CommandCategory.Settings)
+                  )
+              }
 
-  private def submenuSelectedItem(runner: CommandRunner): Option[CommandSurfaceItem] =
+  private[reducers] def submenuSelectedItem(runner: CommandRunner): Option[CommandSurfaceItem] =
     runner.activeSettingsSurface.flatMap(_ => runner.focusedSubmenuItems.lift(runner.settingsSurfaceSelectedIndex))
 
   private def cycleRootOption(delta: Int, state: AppState): ReducerResult =
     currentRunner(state) match
-      case Some(runner) if runner.searchTerm.isEmpty && runner.editingItemId.isEmpty =>
-        runner.selectedItem match
+      case Some(runner) if runner.editingItemId.isEmpty =>
+        valueRow(runner) match
           case Some(option: CommandSurfaceItem.OptionItem) =>
-            val nextIndex     = (option.selectedIndex + delta + option.options.length) % option.options.length
-            val nextIntent    = option.options(nextIndex).intent
-            val updatedRunner = runner.adjustSelectedOption(delta)
-            val effects =
-              List(AppEffect.ExecuteCommand(Command.typed(option.id, option.label, nextIntent, option.category)))
-            ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
+            option
+              .moveSelection(delta)
+              .selectedIntent
+              .fold(ReducerResult.noEffects(state))(intent =>
+                changed(
+                  replaceRunner(state, _.adjustOption(option, delta)),
+                  option.id,
+                  Command.typed(option.id, option.label, intent, option.category)
+                )
+              )
           // issue #1056: a numeric setting steps by one increment on Left/Right, same gesture as an enum's
           // inline cycle above -- no typing needed, clamped to whatever range the item's own `parse` enforces.
-          case Some(input: CommandSurfaceItem.InputItem) =>
-            input.steppedIntent(delta) match
-              case Some(intent) =>
-                ReducerResult(
-                  state,
-                  List(AppEffect.ExecuteCommand(Command.typed(input.id, input.label, intent, input.category)))
-                )
-              case None =>
-                ReducerResult.noEffects(state)
-          case _ =>
-            ReducerResult.noEffects(state)
+          case Some(input: CommandSurfaceItem.InputItem) => stepped(state, input, delta)
+          case _                                         => ReducerResult.noEffects(state)
       case _ =>
         ReducerResult.noEffects(state)
 
@@ -420,10 +426,10 @@ object CommandRunnerReducer:
     * drilled-in page being present is the whole signal -- there is no second surface to focus, and `isSettingsSurface`
     * no longer needs distinguishing here since the two paths behave identically once inside a group.
     */
-  private def submenuHasFocus(state: AppState): Boolean =
+  private[reducers] def submenuHasFocus(state: AppState): Boolean =
     activeSubmenu(state).nonEmpty
 
-  private def submenuEditing(state: AppState): Boolean =
+  private[reducers] def submenuEditing(state: AppState): Boolean =
     activeSubmenu(state).exists(_.current.editingItemId.nonEmpty)
 
   private def submenuSearching(state: AppState): Boolean =

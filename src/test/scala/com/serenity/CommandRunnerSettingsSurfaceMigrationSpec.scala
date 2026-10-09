@@ -42,13 +42,13 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
   }
 
   "enterSelectedSubmenuGroup" should "push, making the left group (at its current index) the nearest ancestor" in {
-    val level1 = opened.withSelectedItem("settings-look").enterSelectedGroup.moveSubmenuSelection(1)
+    val level1 = opened.withSelectedItem("settings-look").enterSelectedGroup.moveSubmenuSelection(2)
 
     val level2 = level1.enterSelectedSubmenuGroup
 
-    level2.activeSettingsSurface.map(_.current.groupId) shouldBe Some("settings-surface-appearance")
+    level2.activeSettingsSurface.map(_.current.groupId) shouldBe Some("settings-interface-layout")
     level2.activeSettingsSurface.map(_.ancestors) shouldBe Some(
-      List(SettingsPage.Group("settings-look", 1))
+      List(SettingsPage.Group("settings-look", 2))
     )
   }
 
@@ -56,12 +56,12 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     val level2 = opened
       .withSelectedItem("settings-look")
       .enterSelectedGroup
-      .moveSubmenuSelection(1)
+      .moveSubmenuSelection(2)
       .enterSelectedSubmenuGroup
 
     val back = level2.exitSubmenuToPreview
 
-    back.activeSettingsSurface shouldBe Some(SettingsSurfaceState(SettingsPage.Group("settings-look", 1)))
+    back.activeSettingsSurface shouldBe Some(SettingsSurfaceState(SettingsPage.Group("settings-look", 2)))
   }
 
   it should "close the whole stack when there is no parent to reveal" in {
@@ -81,7 +81,7 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
   }
 
   it should "drop an Editing page back to Group, mirroring the old model always exiting edit mode" in {
-    val editing = editingBlurRadius // selectedIndex 0 of 8 items
+    val editing = editingElementGap // selectedIndex 0 of 8 items
 
     val moved = editing.moveSubmenuSelection(1)
 
@@ -92,25 +92,25 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     val level2 = advancedLook
     val currentValue = level2
       .submenuItems("settings-look-advanced")
-      .collectFirst { case item: CommandSurfaceItem.InputItem if item.id == "blur-radius" => item.currentValue }
-      .getOrElse(fail("Expected a blur-radius InputItem"))
+      .collectFirst { case item: CommandSurfaceItem.InputItem if item.id == "ui-element-gap" => item.currentValue }
+      .getOrElse(fail("Expected a ui-element-gap InputItem"))
 
     val editing = level2.beginSubmenuEditMode
 
     editing.activeSettingsSurface.map(_.current) shouldBe Some(
-      SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "blur-radius", draftText = currentValue)
+      SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "ui-element-gap", draftText = currentValue)
     )
   }
 
   "normalizeSubmenuEditMode" should "leave an Editing page alone while its item is still selected" in {
-    val editing = editingBlurRadius
+    val editing = editingElementGap
 
     editing.normalizeSubmenuEditMode shouldBe editing
   }
 
   it should "revert to a Group page once the edited item is no longer selected" in {
-    val editing = editingBlurRadius
-    // Simulate the underlying item list changing so the edited item ("blur-radius") is no longer present -- this
+    val editing = editingElementGap
+    // Simulate the underlying item list changing so the edited item ("ui-element-gap") is no longer present -- this
     // isolates normalizeSubmenuEditMode's own reconciliation from moveSubmenuSelection (which already clears edit
     // state itself and so can't be used to set this up).
     val stale = editing.activeSettingsSurface match
@@ -133,13 +133,13 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
   }
 
   "updateSubmenuSearch" should "reset to a filtered Group page at index 0, dropping any Editing page" in {
-    val editing = editingBlurRadius
+    val editing = editingElementGap
 
-    val searched = editing.updateSubmenuSearch("blur")
+    val searched = editing.updateSubmenuSearch("gap")
 
     searched.activeSettingsSurface shouldBe Some(
       SettingsSurfaceState(
-        SettingsPage.Group("settings-look-advanced", 0, "blur"),
+        SettingsPage.Group("settings-look-advanced", 0, "gap"),
         List(SettingsPage.Group("settings-look", 4))
       )
     )
@@ -149,7 +149,7 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     val level2 = opened
       .withSelectedItem("settings-look")
       .enterSelectedGroup
-      .moveSubmenuSelection(1)
+      .moveSubmenuSelection(2)
       .enterSelectedSubmenuGroup
 
     val adjusted = level2.adjustSelectedSubmenuOption(1)
@@ -167,7 +167,7 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
   }
 
   it should "drop an Editing page back to Group" in {
-    val editing = editingBlurRadius
+    val editing = editingElementGap
 
     val moved = editing.withSelectedFocusedSubmenuIndex(2)
 
@@ -175,7 +175,7 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
   }
 
   "deactivate" should "clear the settings-surface stack along with everything else" in {
-    val active = editingBlurRadius
+    val active = editingElementGap
 
     val deactivated = active.deactivate
 
@@ -204,9 +204,9 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     val searched = opened
       .withSelectedItem("settings-look")
       .enterSelectedGroup
-      .updateSubmenuSearch("appearance")
+      .updateSubmenuSearch("layout")
 
-    searched.focusedSubmenuItems.map(_.id) should contain("settings-surface-appearance")
+    searched.focusedSubmenuItems.map(_.id) should contain("settings-interface-layout")
     searched.focusedSubmenuItems.size should be < searched.submenuItems("settings-look").size
   }
 
@@ -217,7 +217,7 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
   }
 
   "settingsSurfaceSelectedIndex" should "read through activeSettingsSurface, recovering an Editing page's index by item id" in {
-    val editing = editingBlurRadius
+    val editing = editingElementGap
 
     editing.settingsSurfaceSelectedIndex shouldBe 0
   }
@@ -226,58 +226,58 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     val level2 = opened
       .withSelectedItem("settings-look")
       .enterSelectedGroup
-      .moveSubmenuSelection(1)
+      .moveSubmenuSelection(2)
       .enterSelectedSubmenuGroup
 
-    level2.settingsSurfaceBreadcrumbLabels shouldBe List("Settings", "Look", "Surface Appearance")
+    level2.settingsSurfaceBreadcrumbLabels shouldBe List("Settings", "Look", "Interface Layout")
   }
 
   "submenuBreadcrumbLabels" should "read through activeSettingsSurface.ancestors, reversed back to root-first" in {
     val level2 = opened
       .withSelectedItem("settings-look")
       .enterSelectedGroup
-      .moveSubmenuSelection(1)
+      .moveSubmenuSelection(2)
       .enterSelectedSubmenuGroup
 
-    level2.submenuBreadcrumbLabels("settings-surface-appearance") shouldBe List(
+    level2.submenuBreadcrumbLabels("settings-interface-layout") shouldBe List(
       "Look",
-      "Surface Appearance"
+      "Interface Layout"
     )
   }
 
   "withSubmenuEditingItem" should "begin editing a specific item with the given text" in {
     val level2 = advancedLook
 
-    val editing = level2.withSubmenuEditingItem("blur-radius", "1")
+    val editing = level2.withSubmenuEditingItem("ui-element-gap", "1")
 
     editing.activeSettingsSurface.map(_.current) shouldBe Some(
-      SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "blur-radius", draftText = "1")
+      SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "ui-element-gap", draftText = "1")
     )
   }
 
   it should "continue (replace) the edit when called again for the same item" in {
     val started = advancedLook
-      .withSubmenuEditingItem("blur-radius", "1")
+      .withSubmenuEditingItem("ui-element-gap", "1")
 
-    val continued = started.withSubmenuEditingItem("blur-radius", "12")
+    val continued = started.withSubmenuEditingItem("ui-element-gap", "12")
 
     continued.activeSettingsSurface.map(_.current) shouldBe Some(
-      SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "blur-radius", draftText = "12")
+      SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "ui-element-gap", draftText = "12")
     )
   }
 
   it should "be a no-op with no active submenu" in {
     val runner = opened
-    runner.withSubmenuEditingItem("blur-radius", "1") shouldBe runner
+    runner.withSubmenuEditingItem("ui-element-gap", "1") shouldBe runner
   }
 
   "withSubmenuEditingText" should "replace the currently-edited item's draft text" in {
-    val editing = editingBlurRadius
+    val editing = editingElementGap
 
     val updated = editing.withSubmenuEditingText("12")
 
     updated.activeSettingsSurface.map(_.current) shouldBe Some(
-      SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "blur-radius", draftText = "12")
+      SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "ui-element-gap", draftText = "12")
     )
   }
 
@@ -288,7 +288,7 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
   }
 
   "cancelSubmenuEditingText" should "cancel an in-progress edit, reverting to a Group page" in {
-    val editing = editingBlurRadius
+    val editing = editingElementGap
 
     val cancelled = editing.cancelSubmenuEditingText
 
@@ -298,21 +298,21 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
   "beginSubmenuRecording" should "begin an Editing page tagged with a fresh RecordingState" in {
     val level2 = advancedLook
 
-    val recording = level2.beginSubmenuRecording("blur-radius")
+    val recording = level2.beginSubmenuRecording("ui-element-gap")
 
     recording.activeSettingsSurface.map(_.current) shouldBe Some(
       SettingsPage.Editing(
         groupId = "settings-look-advanced",
-        itemId = "blur-radius",
+        itemId = "ui-element-gap",
         draftText = "",
-        recording = Some(RecordingState("blur-radius"))
+        recording = Some(RecordingState("ui-element-gap"))
       )
     )
   }
 
   "withPendingRecordedBinding" should "stash a pending keystroke on the current Editing page's RecordingState" in {
     val level2    = advancedLook
-    val recording = level2.beginSubmenuRecording("blur-radius")
+    val recording = level2.beginSubmenuRecording("ui-element-gap")
     val info      = com.serenity.keystroke.KeyStrokeInfo(com.serenity.keystroke.InputKey.Ctrl, None, Set.empty)
 
     val pending = recording.withPendingRecordedBinding(info, 100L)
@@ -320,9 +320,9 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     pending.activeSettingsSurface.map(_.current) shouldBe Some(
       SettingsPage.Editing(
         groupId = "settings-look-advanced",
-        itemId = "blur-radius",
+        itemId = "ui-element-gap",
         draftText = "",
-        recording = Some(RecordingState("blur-radius", pendingRecordedBinding = Some(info -> 100L)))
+        recording = Some(RecordingState("ui-element-gap", pendingRecordedBinding = Some(info -> 100L)))
       )
     )
   }
@@ -330,11 +330,11 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
   "clearSubmenuEditingAndRecording" should "clear all editing/recording sub-state, reverting to a Group page" in {
     val level2    = advancedLook
     val info      = com.serenity.keystroke.KeyStrokeInfo(com.serenity.keystroke.InputKey.Ctrl, None, Set.empty)
-    val recording = level2.beginSubmenuRecording("blur-radius").withPendingRecordedBinding(info, 100L)
+    val recording = level2.beginSubmenuRecording("ui-element-gap").withPendingRecordedBinding(info, 100L)
 
     val cleared = recording.clearSubmenuEditingAndRecording
 
-    // Recovers the Group page's index by looking up "blur-radius" itself (pageSelectedIndex's id-lookup for an
+    // Recovers the Group page's index by looking up "ui-element-gap" itself (pageSelectedIndex's id-lookup for an
     // Editing page), landing on its own position (0) rather than whatever index was selected before
     // beginSubmenuRecording was called directly on an item -- the page stack has no separate "index before editing"
     // field to fall back to (issue #1059's `SettingsPage.Editing` names its item by id, not position).
@@ -342,23 +342,23 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
   }
 
   "deleteSubmenuTextBackward" should "delete one character of an Editing page's draft text" in {
-    val editing = editingBlurRadius.withSubmenuEditingItem("blur-radius", "12")
+    val editing = editingElementGap.withSubmenuEditingItem("ui-element-gap", "12")
 
     val deleted = editing.deleteSubmenuTextBackward
 
     deleted.activeSettingsSurface.map(_.current) shouldBe Some(
-      SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "blur-radius", draftText = "1")
+      SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "ui-element-gap", draftText = "1")
     )
   }
 
   it should "delete one character of a Group page's search term" in {
     val searched = advancedLook
-      .updateSubmenuSearch("blur")
+      .updateSubmenuSearch("gap")
 
     val deleted = searched.deleteSubmenuTextBackward
 
     deleted.activeSettingsSurface.map(_.current) shouldBe Some(
-      SettingsPage.Group("settings-look-advanced", 0, "blu")
+      SettingsPage.Group("settings-look-advanced", 0, "ga")
     )
   }
 
@@ -373,10 +373,10 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     runner.deleteSubmenuTextBackward shouldBe runner
   }
 
-  /** Navigates to Look > Advanced (index 4 of 5) > blur-radius (index 0) and begins editing it -- the same target
+  /** Navigates to Look > Advanced (index 3 of 4) > ui-element-gap (index 0) and begins editing it -- the same target
     * `SettingsSurfaceSpec` exercises for its footer/breadcrumb assertions.
     */
-  private def editingBlurRadius: CommandRunner = advancedLook.beginSubmenuEditMode
+  private def editingElementGap: CommandRunner = advancedLook.beginSubmenuEditMode
 
   private def advancedLook: CommandRunner =
     opened

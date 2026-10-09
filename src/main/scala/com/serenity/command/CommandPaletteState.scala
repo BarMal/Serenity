@@ -67,7 +67,7 @@ object CommandPaletteState:
   * `CommandPaletteState`'s search/select shape for that root state (rather than inventing a second near-identical type)
   * means both roots -- the palette's and the settings surface's -- are searched and navigated by the exact same
   * mechanics; `root.filteredCommands` is simply unused there (settings search goes through
-  * `CommandRunner.matchingSettingsResults` instead).
+  * `CommandRunnerSettingsIndex.matchingSettingsResults` instead).
   *
   * A group entered from either root carries that root forward as `drilled`'s sibling `root` field, so the search that
   * led to it (if any) survives while drilled in -- `CommandRunnerReducerSpec`'s "open the matched settings leaf without

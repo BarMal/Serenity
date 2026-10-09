@@ -33,9 +33,10 @@ import java.nio.file.{
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 
 import scala.jdk.CollectionConverters.*
+import scala.util.Try
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.io.{AtomicFileSystem, AtomicFileWriteException, AtomicFileWriter}
+import com.serenity.io.{AtomicFileSystem, AtomicFileWriteException, AtomicFileWriter, DirectorySyncPolicy}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -182,11 +183,21 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
 
   final private class RecordingFileSystem(
       failWrite: Boolean = false,
-      rejectAtomicMove: Boolean = false
+      rejectAtomicMove: Boolean = false,
+      failFirstInPlaceWrite: Boolean = false
   ) extends AtomicFileSystem:
     private val replacementMoveUsed = AtomicBoolean(false)
+    private val inPlaceWrites       = AtomicInteger(0)
+    private val recorded            = AtomicReference(Vector.empty[(String, Path)])
+    private val jdk                 = AtomicFileWriter.defaultFileSystem
 
     def usedReplacementMove: Boolean = replacementMoveUsed.get
+
+    /** Durability-relevant calls in order, each with the path it was made on. */
+    def operations: Vector[(String, Path)] = recorded.get
+
+    private def record(operation: String, path: Path): Unit =
+      recorded.updateAndGet(_ :+ (operation -> path)): Unit
 
     override def createDirectories(path: Path): Path = Files.createDirectories(path)
 
@@ -198,15 +209,44 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
     override def copyAttributes(source: Path, target: Path): Path =
       Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
 
+    override def realPath(path: Path): Path = jdk.realPath(path)
+
+    override def linkCount(path: Path): Option[Int] = jdk.linkCount(path)
+
+    override def copyFile(source: Path, target: Path): Path =
+      record("copyFile", target)
+      jdk.copyFile(source, target)
+
+    override def readBytes(path: Path): Array[Byte] = jdk.readBytes(path)
+
     override def write(path: Path, bytes: Array[Byte]): Path =
+      record("write", path)
       if failWrite then throw IOException("disk full")
       else Files.write(path, bytes)
 
+    // The first in-place write fails part-way, after truncating, like a full disk mid-overwrite.
+    override def overwriteInPlace(path: Path, bytes: Array[Byte]): Path =
+      record("overwriteInPlace", path)
+      if failFirstInPlaceWrite && inPlaceWrites.getAndIncrement() == 0 then
+        jdk.overwriteInPlace(path, Array.emptyByteArray)
+        throw IOException("disk full")
+      else jdk.overwriteInPlace(path, bytes)
+
+    override def syncFile(path: Path): Unit =
+      record("syncFile", path)
+      jdk.syncFile(path)
+
+    override def syncDirectory(directory: Path): Unit =
+      record("syncDirectory", directory)
+      jdk.syncDirectory(directory)
+
     override def moveAtomically(source: Path, target: Path): Path =
+      record("moveAtomically", target)
       if rejectAtomicMove then throw AtomicMoveNotSupportedException(source.toString, target.toString, "unsupported")
       else Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
 
     override def moveReplacing(source: Path, target: Path): Path =
+      record("moveReplacing", target)
       replacementMoveUsed.set(true)
       Files.move(source, target, StandardCopyOption.REPLACE_EXISTING)
 
@@ -351,4 +391,113 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
       Files.readString(target) shouldBe "before"
       Files.list(directory).toArray.map(_.asInstanceOf[Path].getFileName.toString) shouldBe Array("document.txt")
     finally Files.walk(directory).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists)
+  }
+
+  // #1881: replacing the path itself would swap a symlinked dotfile for a regular file.
+  it should "update a symlink's target and leave the symlink in place when saving through it" in {
+    val directory = Files.createTempDirectory("serenity-atomic-symlink")
+    val realFile  = directory.resolve("real.txt")
+    val link      = directory.resolve("link.txt")
+    Files.writeString(realFile, "before")
+
+    try
+      assume(Try(Files.createSymbolicLink(link, realFile)).isSuccess, "symbolic links are unavailable")
+
+      AtomicFileWriter.writeString(link, "after").unsafeRunSync()
+
+      Files.isSymbolicLink(link) shouldBe true
+      Files.readSymbolicLink(link) shouldBe realFile
+      Files.readString(realFile) shouldBe "after"
+      Files.list(directory).toArray.map(_.asInstanceOf[Path].getFileName.toString).sorted shouldBe
+        Array("link.txt", "real.txt")
+    finally Files.walk(directory).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists)
+  }
+
+  // #1881: an atomic rename gives the saved name a new inode, splitting it from its other hardlinks.
+  it should "overwrite a hardlinked target in place so the link count and every link's content are kept" in {
+    val directory = Files.createTempDirectory("serenity-atomic-hardlink")
+    val target    = directory.resolve("document.txt")
+    val sibling   = directory.resolve("sibling.txt")
+    Files.writeString(target, "before")
+
+    try
+      assume(Try(Files.getAttribute(target, "unix:nlink")).isSuccess, "unix:nlink is unavailable")
+      Files.createLink(sibling, target)
+
+      AtomicFileWriter.writeString(target, "after").unsafeRunSync()
+
+      Files.getAttribute(target, "unix:nlink").toString shouldBe "2"
+      Files.isSameFile(target, sibling) shouldBe true
+      Files.readString(sibling) shouldBe "after"
+      Files.list(directory).toArray.map(_.asInstanceOf[Path].getFileName.toString).sorted shouldBe
+        Array("document.txt", "sibling.txt")
+    finally Files.walk(directory).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists)
+  }
+
+  it should "restore a hardlinked target from its backup when the in-place overwrite fails" in {
+    val directory  = Files.createTempDirectory("serenity-atomic-hardlink-failure")
+    val target     = directory.resolve("document.txt")
+    val sibling    = directory.resolve("sibling.txt")
+    val fileSystem = RecordingFileSystem(failFirstInPlaceWrite = true)
+    Files.writeString(target, "before")
+
+    try
+      assume(Try(Files.getAttribute(target, "unix:nlink")).isSuccess, "unix:nlink is unavailable")
+      Files.createLink(sibling, target)
+
+      val result = AtomicFileWriter.writeString(target, "after", fileSystem).attempt.unsafeRunSync()
+
+      result.left.toOption.map(_.getCause.getMessage) shouldBe Some("disk full")
+      Files.readString(sibling) shouldBe "before"
+      Files.getAttribute(target, "unix:nlink").toString shouldBe "2"
+      fileSystem.operations.map(_._1) shouldBe
+        Vector("copyFile", "syncFile", "overwriteInPlace", "overwriteInPlace", "syncFile")
+      Files.list(directory).toArray.map(_.asInstanceOf[Path].getFileName.toString).sorted shouldBe
+        Array("document.txt", "sibling.txt")
+    finally Files.walk(directory).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists)
+  }
+
+  // #1881: rename-without-fsync can leave a zero-length file after power loss (ext4 delayed allocation).
+  it should "fsync the temporary file before the rename and the parent directory after it" in {
+    val directory  = Files.createTempDirectory("serenity-atomic-fsync").toRealPath()
+    val target     = directory.resolve("document.txt")
+    val fileSystem = RecordingFileSystem()
+    Files.writeString(target, "before")
+
+    try
+      AtomicFileWriter.writeString(target, "after", fileSystem).unsafeRunSync()
+
+      val operations = fileSystem.operations
+      operations.map(_._1) shouldBe Vector("write", "syncFile", "moveAtomically", "syncDirectory")
+      operations(1)._2 shouldBe operations(0)._2
+      operations(2)._2 shouldBe target
+      operations(3)._2 shouldBe directory
+      Files.readString(target) shouldBe "after"
+    finally Files.walk(directory).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists)
+  }
+
+  it should "fsync the parent directory after a non-atomic replacement move too" in {
+    val directory  = Files.createTempDirectory("serenity-atomic-fsync-fallback").toRealPath()
+    val target     = directory.resolve("document.txt")
+    val fileSystem = RecordingFileSystem(rejectAtomicMove = true)
+
+    try
+      AtomicFileWriter.writeString(target, "after", fileSystem).unsafeRunSync()
+
+      fileSystem.operations.map(_._1) shouldBe
+        Vector("write", "syncFile", "moveAtomically", "moveReplacing", "syncDirectory")
+    finally Files.walk(directory).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists)
+  }
+
+  "DirectorySyncPolicy" should "ignore directory-sync failures only on Windows, which cannot open directories" in {
+    DirectorySyncPolicy.forOs("Windows 11") shouldBe DirectorySyncPolicy.IgnoreFailure
+    DirectorySyncPolicy.forOs("Linux") shouldBe DirectorySyncPolicy.Propagate
+    DirectorySyncPolicy.forOs("Mac OS X") shouldBe DirectorySyncPolicy.Propagate
+  }
+
+  it should "swallow an IOException under IgnoreFailure and raise it under Propagate" in {
+    val failingSync: () => Unit = () => throw IOException("directories cannot be opened")
+
+    noException should be thrownBy DirectorySyncPolicy.IgnoreFailure.run(failingSync)
+    an[IOException] should be thrownBy DirectorySyncPolicy.Propagate.run(failingSync)
   }

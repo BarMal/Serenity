@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -37,7 +38,7 @@ class ModalStateReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep non-blocking find workflows on the floating layer" in {
-    val shown = ModalStateReducer.show(Modal.Find("", Nil, 0), AppState.initial).state
+    val shown = ModalStateReducer.show(Modal.Find(TextField.of(""), Vector.empty, 0), AppState.initial).state
 
     shown.runtime.modalStack shouldBe Nil
     shown.modalSurface.map(_.id) shouldBe shown.floatingSurfaces.headOption.map(_.id)
@@ -46,7 +47,7 @@ class ModalStateReducerSpec extends AnyFlatSpec with Matchers:
   it should "reject a modeless workflow while a blocking confirmation owns focus" in {
     val blocking = ModalStateReducer.show(closeWorkflow, AppState.initial).state
 
-    ModalStateReducer.show(Modal.Find("", Nil, 0), blocking).state shouldBe blocking
+    ModalStateReducer.show(Modal.Find(TextField.of(""), Vector.empty, 0), blocking).state shouldBe blocking
   }
 
   it should "put FileWorkflow on the modal layer, centered, so the open dialog is always visible" in {
@@ -62,6 +63,6 @@ class ModalStateReducerSpec extends AnyFlatSpec with Matchers:
     val fileWorkflow = Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open))
     val withDialog   = ModalStateReducer.show(fileWorkflow, AppState.initial).state
 
-    ModalStateReducer.show(Modal.Find("", Nil, 0), withDialog).state shouldBe withDialog
+    ModalStateReducer.show(Modal.Find(TextField.of(""), Vector.empty, 0), withDialog).state shouldBe withDialog
   }
 end ModalStateReducerSpec

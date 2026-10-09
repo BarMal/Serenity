@@ -2,7 +2,9 @@ package com.serenity.ui.renderer
 
 import com.serenity.MockRenderSurface
 import com.serenity.command.{Command, CommandIntent, SessionIntent}
+import com.serenity.config.{AppConfig, HotkeyAction, HotkeyConfig}
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CalculatedLayout, CellMetrics, LayoutRect, ViewportSize}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -61,7 +63,13 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(60, 10, fontRenderContextOverride = None)
     val rect    = LayoutRect(0, 0, 60, 5)
 
-    RendererStartPage.renderWelcomeText(rect, theme, contextWith(surface))
+    RendererStartPage.renderWelcomeText(
+      rect,
+      theme,
+      contextWith(surface),
+      AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("linux")),
+      "linux"
+    )
 
     val lines = List(
       "Welcome to Serenity!",
@@ -77,6 +85,28 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
           (expectedX until expectedX + line.length).map(surface.getChar(_, row)).mkString shouldBe line
         else surface.getRow(row).trim shouldBe ""
     }
+  }
+
+  "welcomeLines" should "name the Cmd binding on macOS" in {
+    RendererStartPage.welcomeLines(HotkeyConfig.forOs("Mac OS X"), "Mac OS X").last shouldBe
+      "Press Cmd+P for command palette"
+  }
+
+  it should "name the Ctrl binding on Linux and Windows" in
+    List("Linux", "Windows 11").foreach { os =>
+      RendererStartPage.welcomeLines(HotkeyConfig.forOs(os), os).last shouldBe "Press Ctrl+P for command palette"
+    }
+
+  it should "name the rebound trigger when the command palette key is rebound" in {
+    val rebound = HotkeyConfig.forOs("Linux").withBinding(HotkeyAction.ToggleCommandRunner, "alt+k")
+    RendererStartPage.welcomeLines(rebound, "Linux").last shouldBe "Press Alt+K for command palette"
+  }
+
+  it should "drop the palette hint when the command palette has no binding" in {
+    val unbound = HotkeyConfig
+      .forOs("Linux")
+      .copy(bindings = HotkeyConfig.forOs("Linux").bindings - HotkeyAction.ToggleCommandRunner)
+    RendererStartPage.welcomeLines(unbound, "Linux").filter(_.contains("Press")) shouldBe Nil
   }
 
   private def simplePage(selectedIndex: Int): StartupPage =
@@ -133,7 +163,7 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
     val startYPx                   = math.max(0, (viewportSize.height * cellMetrics.lineHeight - totalHeightPx) / 2)
     def rowOf(lineIndex: Int): Int = cellMetrics.toRow(startYPx + lineIndex * lineHeightPx)
 
-    def foregroundOfCenteredLine(row: Int, line: String): java.awt.Color =
+    def foregroundOfCenteredLine(row: Int, line: String): RenderColor =
       val x = (viewportSize.width - line.length) / 2
       surface.getFg(x, row)
 

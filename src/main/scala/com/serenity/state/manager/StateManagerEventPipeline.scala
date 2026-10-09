@@ -1,24 +1,31 @@
 package com.serenity.state.manager
 
 import cats.syntax.foldable.*
-import com.serenity.animation.*
+import cats.syntax.traverse.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.diagnostics.Trace
 import com.serenity.keystroke.events.*
+import com.serenity.project.ProjectPresence
+import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.components.*
+import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
-import com.serenity.ui.presets.{UiPreset, UiPresetStore}
+import com.serenity.ui.layout.WrappedLineCache
+import com.serenity.ui.presets.UiPresetStore
 
 /** Minimal state boundary for resize routing. */
 private[manager] trait ResizeEventPort:
   def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit]
 
 /** Routes resize transitions without depending on command, workflow, or runtime services. */
-final private[manager] class ResizeEventHandler(port: ResizeEventPort):
+final private[manager] class ResizeEventHandler(
+    port: ResizeEventPort,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+):
 
   def apply(event: ResizeEvent, previousState: AppState): cats.effect.IO[Unit] =
-    port.applyReducerResult(EventPipelineTransitions.resized(event, previousState), previousState)
+    port.applyReducerResult(EventPipelineTransitions.resized(event, previousState, wrapCache), previousState)
 
 private[manager] object StateManagerEventPipeline:
 
@@ -45,13 +52,19 @@ final private[manager] class StateManagerEventPipeline(
     ],
     resizePinnedPanel: (com.serenity.ui.layout.PanelTarget, Int) => cats.effect.IO[Unit],
     operations: StateManagerOperationBoundary,
-    undoRecording: UndoRecording
+    undoRecording: UndoRecording,
+    detectProjectPresence: AppState => cats.effect.IO[ProjectPresence] = ProjectTaskStart.presence
 )(using balance: com.serenity.rope.Balance):
 
   import state.*
   import workflow.*
 
   private val modelCommit = operations.modelCommit
+
+  // The same cache the scene wraps with, so a keystroke and the frame that follows it measure each line once.
+  private val wrappedLines = authoritativeScene.wrappedLines
+
+  private val focusHandlers = new FocusHandlerRouting(wrappedLines)
 
   private def drainPendingOperations: cats.effect.IO[Unit] =
     operations.takeOperations.flatMap {
@@ -60,26 +73,34 @@ final private[manager] class StateManagerEventPipeline(
         pendingOperations.traverse_ {
           // Already on the dispatcher: offering through the public `applyEvent` would queue behind this very dispatch
           // and deadlock waiting for it.
-          case StateManagerOperation.Event(event)                       => applyEventOnDispatcher(event)
-          case StateManagerOperation.ApplyAnimationHooks(previousState) => applyAnimationHooks(previousState)
+          case StateManagerOperation.Event(event) => applyEventOnDispatcher(event)
         } >> drainPendingOperations
     }
 
   private def interpretEffect(effect: AppEffect): cats.effect.IO[Unit] =
     effect match
-      case AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable)) =>
-        undoRecording.recordUndoBoundary(entry, groupable)
+      case AppEffect.Undo(UndoEffect.RecordBoundary(entry, grouping)) =>
+        undoRecording.recordUndoBoundary(entry, grouping)
       case other =>
         effects.interpretEffect(other) >> drainPendingOperations
 
   private def interpretCommand(command: com.serenity.command.Command, state: AppState): cats.effect.IO[Unit] =
     effects.interpretCommand(command, state) >> drainPendingOperations
 
-  private val resizeEvents = new ResizeEventHandler(
-    new ResizeEventPort:
-      def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
-        StateManagerEventPipeline.this.applyReducerResult(result, fallbackState)
-  )
+  // Called from lane jobs, off the dispatcher: the result is applied there, and what it enqueues replayed.
+  private val lanePort = new EffectLanePort:
+    def submitEffect(lane: Lane.Keyed, job: cats.effect.IO[Unit]): cats.effect.IO[Unit] =
+      operations.submitEffect(lane, job)
+    def dispatchEffectResult(result: EffectResult, onApplied: AppState => cats.effect.IO[Unit]): cats.effect.IO[Unit] =
+      dispatch(modelCommit.applyResult(result, onApplied, effects.interpretEffect))
+
+  private val commandRunnerLoads = new CommandRunnerOpeningLoads(uiPresetStore, detectProjectPresence, lanePort, logger)
+
+  private val resizePort = new ResizeEventPort:
+    def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
+      StateManagerEventPipeline.this.applyReducerResult(result, fallbackState)
+
+  private val resizeEvents = new ResizeEventHandler(resizePort, wrappedLines)
 
   private val lspDocumentSync = new LspDocumentSync(
     LspDocumentSyncPort(
@@ -88,11 +109,6 @@ final private[manager] class StateManagerEventPipeline(
       candidateLspBufferIds = StateManagerEventPipeline.candidateLspBufferIds
     )
   )
-
-  private val animations = new AnimationChoreography(new AnimationChoreographyPort:
-    def currentState: cats.effect.IO[AppState] = modelCommit.currentState
-    def commitState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
-      modelCommit.commitState(newState, fallbackState))
 
   private val editorMouseTargeting = new EditorMouseTargeting(
     EditorMouseTargetingPort(
@@ -113,7 +129,12 @@ final private[manager] class StateManagerEventPipeline(
     EditorContextMenuHitTestingPort(
       currentState = modelCommit.currentState,
       applyReducerResult = applyReducerResult,
-      resolveMouseTarget = editorMouseTargeting.resolveMouseTarget
+      resolveMouseTarget = editorMouseTargeting.resolveMouseTarget,
+      spellingItems = (state, buffer, at) =>
+        SpellChecker
+          .misspellingAt(state, buffer, at)
+          .traverse(found => operations.spellingSuggestions(found.word).map(SpellingMenu.items(found, _)))
+          .map(_.getOrElse(Nil))
     )
   )
 
@@ -182,25 +203,80 @@ final private[manager] class StateManagerEventPipeline(
   def dispatch(decision: cats.effect.IO[Unit]): cats.effect.IO[Unit] =
     operations.dispatch(decision >> drainPendingOperations)
 
-  private def applyEventOnDispatcher(event: Event): cats.effect.IO[Unit] =
+  private[manager] def applyEventOnDispatcher(event: Event): cats.effect.IO[Unit] =
     given org.typelevel.log4cats.Logger[cats.effect.IO] = logger
     def eventLabel                                      = s"event.${event.getClass.getSimpleName}"
     Trace.timed(eventLabel) {
-      modelCommit.currentState.flatMap { rawState =>
-        // Not written back on its own: every handler builds on `prevState`, so the normalised focus lands in the
-        // event's own commit (and `prepareCommit` normalises every commit anyway).
-        val prevState = EventPipelineTransitions.commandRunnerFocusNormalized(rawState)
-        val handleEvent: cats.effect.IO[Unit] =
-          if prevState.hasBlockingModal && !allowedWhileBlockingModal(event) then cats.effect.IO.unit
-          else Trace.timed(s"$eventLabel.dispatch")(dispatchEvent(event, prevState))
-        handleEvent >>
-          Trace.timed(s"$eventLabel.enqueueChangedLspDocuments")(
-            lspDocumentSync.enqueueChangedLspDocuments(prevState)
-          ) >>
-          Trace.timed(s"$eventLabel.scheduleMarkdownPreviewCommits")(scheduleMarkdownPreviewCommits(prevState)) >>
-          Trace.timed(s"$eventLabel.applyAnimationHooks")(applyAnimationHooks(prevState))
+      cats.effect.IO.monotonic.product(modelCommit.model).flatMap { (now, model) =>
+        typedRunStep(event, model, now.toNanos) match
+          case Some(typed) => commitTypedRun(model, typed)
+          case None        => dispatchGeneral(event, eventLabel, now.toNanos, model.app)
       }
     }
+
+  private def dispatchGeneral(event: Event, eventLabel: String, nowNanos: Long, rawState: AppState)(using
+    org.typelevel.log4cats.Logger[cats.effect.IO]
+  ): cats.effect.IO[Unit] =
+    // Not written back on its own: every handler builds on `prevState`, so the normalised focus and any typing
+    // activity land in the event's own commit (and `prepareCommit` normalises every commit anyway).
+    val prevState = EventPipelineTransitions.typingObserved(event, nowNanos)(
+      EventPipelineTransitions.commandRunnerFocusNormalized(rawState)
+    )
+    val handleEvent: cats.effect.IO[Unit] =
+      if prevState.hasBlockingModal && !allowedWhileBlockingModal(event) then cats.effect.IO.unit
+      else Trace.timed(s"$eventLabel.dispatch")(dispatchEvent(event, prevState))
+    handleEvent >>
+      Trace.timed(s"$eventLabel.enqueueChangedLspDocuments")(
+        lspDocumentSync.enqueueChangedLspDocuments(prevState)
+      ) >>
+      Trace.timed(s"$eventLabel.scheduleMarkdownPreviewCommits")(scheduleMarkdownPreviewCommits(prevState))
+
+  /** The model a character typed into an editor pane commits, before centring, when its only effect is undo
+    * bookkeeping; `None` for any other event, which takes the general dispatch. Every typed key goes through here,
+    * whether dispatched alone or folded into a batch's run, and [[commitTypedRun]] centres and commits it (#1985).
+    *
+    * A key joins a run even when it records an undo snapshot: the buffer it leaves is marked `FollowCaret`, so the
+    * snapshot holds a viewport waiting for the caret, which undo and redo place when they restore it.
+    */
+  private[manager] def typedRunStep(event: Event, model: Model, nowNanos: Long): Option[Model] =
+    typedKeyModel(event, model, nowNanos)
+
+  private def typedKeyModel(event: Event, model: Model, nowNanos: Long): Option[Model] =
+    event match
+      case key: InsertChar =>
+        val prevState = EventPipelineTransitions.typingObserved(event, nowNanos)(
+          EventPipelineTransitions.commandRunnerFocusNormalized(model.app)
+        )
+        if prevState.hasBlockingModal then None
+        else
+          FocusScopes.peekKeyOutcome(key, prevState) match
+            case FocusScopes.PeekKeyOutcome.PassedOn(base) =>
+              base.persisted.focus match
+                case Focus.EditorPane(paneId) =>
+                  new EditorPaneComponent(paneId, wrapCache = wrappedLines)(using balance)
+                    .typedWithoutCentring(key, base)
+                    .filter(_.effects.forall(ModelCommit.isModelEffect))
+                    .flatMap(result =>
+                      StateManagerOperationBoundary
+                        .prepareCommit(result.state, model.app)
+                        .toOption
+                        .map(committed =>
+                          EventPipelineTransitions
+                            .committed(model, result)
+                            .copy(app = ViewportResolution.markFollow(model.app, committed))
+                        )
+                    )
+                case _ => None
+            case FocusScopes.PeekKeyOutcome.Consumed(_) => None
+      case _ => None
+
+  /** Commits a run [[typedRunStep]] folded from `start`, with the cursor centred once for all of its keys. */
+  private[manager] def commitTypedRun(start: Model, typed: Model): cats.effect.IO[Unit] =
+    val centred =
+      typed.copy(app = ViewportResolution.resolve(ViewportResolution.markFollow(start.app, typed.app), wrappedLines))
+    modelCommit.commitValidated(start.app)(_ => centred) >>
+      lspDocumentSync.enqueueChangedLspDocuments(start.app) >>
+      scheduleMarkdownPreviewCommits(start.app)
 
   private def allowedWhileBlockingModal(event: Event): Boolean =
     event match
@@ -219,6 +295,8 @@ final private[manager] class StateManagerEventPipeline(
         applyReducerResult(ThemeEventReducer.reduce(themeEvent, prevState), prevState)
       case fileEvent: FileEvent =>
         applyReducerResult(FileEventReducer.reduce(fileEvent, prevState), prevState)
+      case wheel: MouseWheel =>
+        dispatchWheel(wheel, prevState)
       case mouse: MouseInputEvent if prevState.hasBlockingModal =>
         modalMouseHitTesting.handleModalMouseInput(mouse, prevState)
       case click: MouseClick
@@ -233,23 +311,28 @@ final private[manager] class StateManagerEventPipeline(
         mouseHitTesting.handleMouseDrag(drag, prevState)
       case move: MouseMove =>
         mouseHitTesting.handleMouseMove(move, prevState)
-      case vertical: VerticalNavigationEvent =>
-        prevState.persisted.focus match
-          case Focus.EditorPane(paneId) =>
-            EditorGeometryProducer.forPane(prevState, paneId) match
-              case Some(geometry) =>
-                val reducedState =
-                  EditorEventReducer.reduceVerticalNavigation(vertical, paneId, prevState, geometry).state
-                // #1042 carved vertical nav out to dispatch here directly rather than through
-                // dispatchToFocusedHandler/EditorPaneComponent, which is the only place that otherwise applies this
-                // pass -- without it, MoveUp/MoveDown/ExtendSelectionUp/ExtendSelectionDown move the cursor but never
-                // scroll the viewport to follow it.
-                modelCommit.commitState(CursorViewport.ensureVisibleCursors(prevState, reducedState), prevState)
-              case None => dispatchToFocusedHandler(vertical, prevState)
-          case _ => dispatchToFocusedHandler(vertical, prevState)
+      case key: (VerticalNavigationEvent | TextEntryEvent | SurfaceEvent) =>
+        FocusScopes.peekKeyOutcome(key, prevState) match
+          case FocusScopes.PeekKeyOutcome.Consumed(closed)     => modelCommit.commitState(closed, prevState)
+          case FocusScopes.PeekKeyOutcome.PassedOn(afterPeeks) => dispatchToFocusedHandler(key, afterPeeks, prevState)
 
-      case _: (TextEntryEvent | SurfaceEvent) =>
-        dispatchToFocusedHandler(event, prevState)
+  /** The wheel over a docked list panel scrolls it; anywhere else -- or under a blocking modal, or over a floating
+    * surface -- it is the plain scroll the focused component has always had, gated exactly as before.
+    */
+  private def dispatchWheel(wheel: MouseWheel, prevState: AppState): cats.effect.IO[Unit] =
+    val overPanel =
+      if prevState.hasBlockingModal || MouseHitTestGeometry.isInsideFloatingSurface(
+            wheel,
+            prevState,
+            authoritativeScene
+          )
+      then cats.effect.IO.pure(false)
+      else pinnedPanelMouseHitTesting.handlePinnedPanelWheel(wheel, prevState)
+    overPanel.flatMap { scrolledPanel =>
+      if scrolledPanel || (prevState.hasBlockingModal && !allowedWhileBlockingModal(wheel.scroll)) then
+        cats.effect.IO.unit
+      else dispatchEvent(wheel.scroll, prevState)
+    }
 
   private def afterOutsideModalDismissed(event: MouseInputEvent, prevState: AppState)(
     handle: AppState => cats.effect.IO[Unit]
@@ -262,50 +345,84 @@ final private[manager] class StateManagerEventPipeline(
       case Some(dismissed) => applyReducerResult(dismissed, prevState) >> modelCommit.currentState.flatMap(handle)
       case None            => handle(prevState)
 
-  private def dispatchToFocusedHandler(event: Event, prevState: AppState): cats.effect.IO[Unit] =
-    val logCommandRunnerEvent =
-      focusedCommandRunner(prevState) match
-        case Some(runner) =>
-          logger.debug(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}")
-        case None =>
-          cats.effect.IO.unit
+  /** `base` is `prevState` with whatever the key already did to the peeks; the commit is checked against `prevState`. A
+    * surface's unhandled key bubbles out to the editor pane (#1940).
+    */
+  private def dispatchToFocusedHandler(event: Event, base: AppState, prevState: AppState): cats.effect.IO[Unit] =
+    base.persisted.focus match
+      case Focus.EditorPane(paneId) => dispatchToEditorPane(event, paneId, base, prevState)
+      case focus =>
+        val logCommandRunnerEvent =
+          focusedCommandRunner(base) match
+            case Some(runner) =>
+              logger.debug(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}")
+            case None =>
+              cats.effect.IO.unit
 
-    val result =
-      getLocalHandlerForFocus(prevState.persisted.focus, prevState).processEvent(event, prevState)
+        val result = getLocalHandlerForFocus(focus, base).processEvent(event, base)
 
-    logCommandRunnerEvent >>
-      applyComponentResult(result, prevState).flatMap(newState => modelCommit.commitState(newState, prevState))
+        logCommandRunnerEvent >>
+          applyComponentResult(result, base).flatMap { handled =>
+            FocusScopes.bubbleTarget(focus, result, base).zip(FocusScopes.asEditorEvent(event)) match
+              case Some((paneId, editorEvent)) => dispatchToEditorPane(editorEvent, paneId, handled, prevState)
+              case None                        => modelCommit.commitState(handled, prevState)
+          }
+
+  private def dispatchToEditorPane(
+    event: Event,
+    paneId: PaneId,
+    base: AppState,
+    prevState: AppState
+  ): cats.effect.IO[Unit] =
+    val verticalGeometry = event match
+      case vertical: VerticalNavigationEvent =>
+        EditorGeometryProducer.forPane(base, paneId, wrapCache = wrappedLines).map(vertical -> _)
+      case _ => None
+    verticalGeometry match
+      case Some((vertical, geometry)) =>
+        val reducedState = EditorEventReducer.reduceVerticalNavigation(vertical, paneId, base, geometry).state
+        // #1042 carved vertical nav out to dispatch here directly rather than through EditorPaneComponent, which is the
+        // only place that otherwise applies this pass -- without it, MoveUp/MoveDown/ExtendSelectionUp/
+        // ExtendSelectionDown move the cursor but never scroll the viewport to follow it.
+        modelCommit.commitState(
+          CursorViewport.ensureVisibleCursors(base, reducedState, wrapCache = wrappedLines),
+          prevState
+        )
+      case None =>
+        val result = new EditorPaneComponent(paneId, wrapCache = wrappedLines)(using balance).processEvent(event, base)
+        applyComponentResult(result, base).flatMap(newState => modelCommit.commitState(newState, prevState))
 
   /** Routed by type alone: `CloseTab` and `Quit` previously had to precede the `GlobalAppEvent` branch. */
   private def dispatchGlobalAppEvent(event: GlobalAppEvent, prevState: AppState): cats.effect.IO[Unit] =
     val registry = CommandRegistry.withToggleUI
     def result   = AppEventReducer.reduce(event, prevState, registry)(using balance)
     def reduced  = applyReducerResult(result, prevState)
-    def tabCycled(sweep: SweepDirection) =
-      commitReducerResult(result, prevState, EventPipelineTransitions.withPaneFlow(_, sweep))
     event match
-      case CloseTab => beginCloseAction(CloseScope.Current, prevState)
-      case Quit     => beginCloseAction(CloseScope.Quit, prevState)
-      case ToggleCommandRunner =>
-        for
-          previews <- uiPresetPreviews
-          presence <- ProjectTaskStart.presence(prevState)
-          detected = prevState.copy(runtime = prevState.runtime.copy(projectPresence = presence))
-          _ <- commitReducerResult(
-            AppEventReducer.reduce(event, detected, registry)(using balance),
-            prevState,
-            EventPipelineTransitions.withCommandRunnerUiPresetPreviews(_, previews)
-          )
-        yield ()
-      case NextTab     => tabCycled(SweepDirection.Backward)
-      case PreviousTab => tabCycled(SweepDirection.Forward)
-      case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab |
-          FileSearch | GoToFile | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane |
+      case CloseTab            => beginCloseAction(CloseScope.Current, prevState)
+      case Quit                => beginCloseAction(CloseScope.Quit, prevState)
+      case ToggleCommandRunner => openCommandRunner(event, prevState, registry)
+      case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab | NextTab |
+          PreviousTab | FileSearch | GoToFile | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane |
           _: CloseTabById | MoveTabLeft | MoveTabRight | _: FocusInDirection | ToggleChapterGhosts | OpenChapterNote |
-          OpenKeywordNote | ToggleNotesPin =>
+          OpenKeywordNote | ToggleNotesPin | _: RunCommand | SettingsPreviewAbandoned | _: ActivateBuffer | _: OpenRecentPath =>
         reduced
       case _: CursorPeekModifierPressed | _: CursorPeekModifierReleased | CursorPeekOtherKeyPressed =>
         applyReducerResult(EventPipelineTransitions.withCursorPeekAnchorResolved(result), prevState)
+
+  /** Commits the toggle with project presence `Unchecked` and no presets listed, then starts the reads that fill them
+    * in on their lanes (#1911): none of that disk work holds up the key that opened the palette. The project is probed
+    * from the state before the toggle, since the palette takes focus from the buffer whose file locates it.
+    */
+  private def openCommandRunner(
+    event: GlobalAppEvent,
+    prevState: AppState,
+    registry: CommandRegistry
+  ): cats.effect.IO[Unit] =
+    val unchecked = prevState.copy(runtime = prevState.runtime.copy(projectPresence = ProjectPresence.Unchecked))
+    applyReducerResult(AppEventReducer.reduce(event, unchecked, registry)(using balance), prevState) >>
+      modelCommit.currentState.flatMap(opened =>
+        CommandRunnerOpening.openedBy(prevState, opened).traverse_(commandRunnerLoads.request(_, prevState))
+      )
 
   /** Bumps `markdownPreviewEditGeneration` synchronously for any buffer this event's dispatch changed the content of,
     * provided that buffer currently has a live markdown preview -- and schedules a debounced commit of that generation
@@ -359,11 +476,11 @@ final private[manager] class StateManagerEventPipeline(
     */
   private def getLocalHandlerForFocus(focus: Focus, state: AppState): LocalEventHandler =
     focus match
-      case Focus.EditorPane(paneId) => new EditorPaneComponent(paneId)(using balance)
+      case Focus.EditorPane(paneId) => new EditorPaneComponent(paneId, wrapCache = wrappedLines)(using balance)
       case Focus.Modal =>
         state.topModal match
           case None         => NoOpLocalEventHandler
-          case Some(dialog) => FocusHandlerRouting.forModalType(ModalEventReducer.modalType(dialog.modal))
+          case Some(dialog) => focusHandlers.forModalType(ModalEventReducer.modalType(dialog.modal))
       case Focus.Surface(surfaceId) =>
         state.surfaceById(surfaceId) match
           case None =>
@@ -372,10 +489,10 @@ final private[manager] class StateManagerEventPipeline(
             surface.presentation match
               case SurfacePresentation.Docked =>
                 state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)) match
-                  case Some(position) => FocusHandlerRouting.forPinnedPanel(position)
-                  case None           => FocusHandlerRouting.forSurfaceContent(surface.content)
+                  case Some(position) => focusHandlers.forPinnedPanel(position)
+                  case None           => focusHandlers.forSurfaceContent(surface.content)
               case SurfacePresentation.Floating(_, _) =>
-                FocusHandlerRouting.forSurfaceContent(surface.content)
+                focusHandlers.forSurfaceContent(surface.content)
 
   private[manager] def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
     commitReducerResult(result, fallbackState, identity)
@@ -395,25 +512,10 @@ final private[manager] class StateManagerEventPipeline(
       _ <- result.effects.filterNot(ModelCommit.isModelEffect).traverse_(interpretEffect)
     yield ()
 
-  // Listed before the toggle commits so the runner opens with its previews in the same write.
-  private def uiPresetPreviews: cats.effect.IO[List[UiPreset.Preview]] =
-    uiPresetStore
-      .list()
-      .map(_.map(UiPreset.Preview.fromPreset))
-      .handleErrorWith(error => logger.error(error)("[PRESET] Failed to list UI presets").map(_ => Nil))
-
-  private[manager] def applyAnimationHooks(prevState: AppState): cats.effect.IO[Unit] =
-    animations.applyAnimationHooks(prevState)
-
-  private[manager] def shouldApplySurfaceAnimationHooks(state: AppState): Boolean =
-    animations.shouldApplySurfaceAnimationHooks(state)
-
-  private[manager] def advanceSurfaceAnimations(state: AppState): AppState =
-    animations.advanceSurfaceAnimations(state)
-
   private[manager] def applyComponentResult(result: ComponentResult, state: AppState): cats.effect.IO[AppState] =
     result match
       case ComponentResult.NoChange            => cats.effect.IO.pure(state)
+      case ComponentResult.Unhandled           => cats.effect.IO.pure(state)
       case ComponentResult.StateChange(update) => cats.effect.IO.pure(update(state))
       case ComponentResult.ReducerUpdate(result) =>
         modelCommit.currentState.flatMap(committed => applyReducerResult(result, committed)) >> modelCommit.currentState

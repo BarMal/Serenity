@@ -8,7 +8,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.{ConfigManagerTestSupport, SpellCheckConfig}
+import com.serenity.config.{ConfigManagerTestSupport, ConfigVersion, SpellCheckConfig}
 import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.client.DocumentUri
@@ -17,6 +17,8 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.AwaitCondition.awaitValue
+import com.serenity.testkit.SharedDictionary
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.ThemeConfigLoader
 import org.scalatest.flatspec.AnyFlatSpec
@@ -34,7 +36,8 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
   ): FileDialog =
     FileDialog(
       chooseOpenFile = _ => IO.pure(openSelection),
-      chooseSaveFile = (_, _) => IO.pure(saveSelection)
+      chooseSaveFile = (_, _) => IO.pure(saveSelection),
+      chooseFolder = _ => IO.pure(None)
     )
 
   private def createStateManager(
@@ -49,7 +52,8 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         logger,
         sessionRootOverride = sessionRootOverride,
         configPersistencePath = configPersistencePath,
-        fileDialog = fileDialog
+        fileDialog = fileDialog,
+        dictionaryCache = SharedDictionary.default
       )
       .unsafeRunSync()
 
@@ -134,8 +138,8 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
     val theme = Theme.light.copy(
       name = "quiet-focus",
-      background = new java.awt.Color(0x112233),
-      panelBorder = new java.awt.Color(0x445566)
+      background = RenderColor.fromArgb(0xff112233),
+      panelBorder = RenderColor.fromArgb(0xff445566)
     )
     stateManager.updateState(state => state.copy(persisted = state.persisted.copy(theme = theme))).unsafeRunSync()
 
@@ -163,7 +167,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         state.copy(persisted =
           state.persisted.copy(
             buffers = state.persisted.buffers + (bufferId -> buffer),
-            config = state.persisted.config.withSpellCheck(SpellCheckConfig(enabled = false))
+            config = state.persisted.config.withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
           )
         )
       }
@@ -200,8 +204,8 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "save-config", "save-config")
 
     val saved = Files.readString(configFile)
-    saved should include("config.version = 1")
-    saved should include("motion.preset = smooth")
+    saved should include(s"config.version = ${ConfigVersion.Current.value}")
+    saved should include("editor.word_wrap = true")
     stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface shouldBe None
   }
 
@@ -213,7 +217,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-visible-rows",
           "Set command runner visible rows.",
-          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(Some(9)))),
+          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetCommandRunnerVisibleRows(Some(9)))),
           CommandCategory.Settings
         )
       )
@@ -228,7 +232,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-visible-rows-auto",
           "Reset command runner visible rows.",
-          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(None))),
+          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetCommandRunnerVisibleRows(None))),
           CommandCategory.Settings
         )
       )
@@ -245,7 +249,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-item-gap-rows",
           "Set command runner item gaps.",
-          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerItemGapRows(Some(1)))),
+          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetCommandRunnerItemGapRows(Some(1)))),
           CommandCategory.Settings
         )
       )
@@ -255,7 +259,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-cursor-gap-rows",
           "Set command runner cursor gap.",
-          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerCursorGapRows(Some(3)))),
+          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetCommandRunnerCursorGapRows(Some(3)))),
           CommandCategory.Settings
         )
       )

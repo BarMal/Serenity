@@ -56,18 +56,17 @@ private[manager] trait StateManagerEffectHandlersHarness:
     saveExistingBufferHook: BufferId => IO[Unit] = _ => IO.unit,
     loadSessionResult: IO[Option[AppState]] = IO.pure(None)
   ): Harness =
-    val modelRefVar            = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
-    val stateRefVar            = ModelViews.appRef(modelRefVar)
-    val committedVar           = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
-    val eventsVar              = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
-    val callsVar               = Ref.of[IO, List[String]](Nil).unsafeRunSync()
-    val fontConfigsVar         = Ref.of[IO, List[com.serenity.ui.fonts.FontLoader.FontConfig]](Nil).unsafeRunSync()
-    val sessionRoot            = Files.createTempDirectory("effect-handlers-spec")
-    val sessionTriggersVar     = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
-    val themeNamesRefVar       = Ref.of[IO, List[String]](Nil).unsafeRunSync()
-    val bufferAnimationsRefVar = ModelViews.bufferAnimationsRef(modelRefVar)
-    val quitSignalVar          = Deferred[IO, Unit].unsafeRunSync()
-    val lspQueueVar            = LspEffectQueue.create.unsafeRunSync()
+    val modelRefVar        = Ref.of[IO, Model](Model(initialState, UndoState())).unsafeRunSync()
+    val stateRefVar        = ModelViews.appRef(modelRefVar)
+    val committedVar       = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
+    val eventsVar          = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
+    val callsVar           = Ref.of[IO, List[String]](Nil).unsafeRunSync()
+    val fontConfigsVar     = Ref.of[IO, List[com.serenity.ui.fonts.FontLoader.FontConfig]](Nil).unsafeRunSync()
+    val sessionRoot        = Files.createTempDirectory("effect-handlers-spec")
+    val sessionTriggersVar = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
+    val themeNamesRefVar   = Ref.of[IO, List[String]](Nil).unsafeRunSync()
+    val quitSignalVar      = Deferred[IO, Unit].unsafeRunSync()
+    val lspQueueVar        = LspEffectQueue.create.unsafeRunSync()
 
     val runtime = new EffectRuntimePort:
       val currentState                        = stateRefVar.get
@@ -94,12 +93,6 @@ private[manager] trait StateManagerEffectHandlersHarness:
         modelRefVar.get.flatMap(model =>
           transition(model).fold(IO.unit)(next => committedVar.update(_ :+ next.app) >> modelRefVar.set(next))
         )
-      def updateBufferAnimations(
-        update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-          BufferId,
-          com.serenity.animation.AnimationState
-        ]
-      ): IO[Unit] = bufferAnimationsRefVar.update(update)
       def scheduleDocumentAnalysis(): IO[Unit] = IO.unit
       def scheduleFindSearch(request: FindSearchRequest): IO[Unit] =
         callsVar.update(_ :+ s"scheduleFindSearch:$request")
@@ -113,6 +106,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
     val surfaces = new EffectSurfacePort:
       def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = callsVar.update(_ :+ s"showPeek:$content")
       def showModal(modal: Modal): IO[Unit]                            = callsVar.update(_ :+ s"showModal:$modal")
+      def showNotice(notice: Notice): IO[Unit] = callsVar.update(_ :+ s"showNotice:${notice.message}")
       def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
         callsVar.update(_ :+ s"pinPanel:$content:$position:$size")
       def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit] =
@@ -140,7 +134,8 @@ private[manager] trait StateManagerEffectHandlersHarness:
       sessionPersistenceVar,
       NoOpLogger.impl[IO],
       lspQueueVar,
-      inlineLanes
+      inlineLanes,
+      notice => callsVar.update(_ :+ s"showNotice:${notice.message}")
     )
 
     val files = new EffectFilePort:
@@ -153,7 +148,12 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def forceSaveExistingBuffer(id: BufferId): IO[Unit]  = callsVar.update(_ :+ s"forceSaveExistingBuffer:$id")
       def loadFile(path: Path): IO[Unit]                   = filePersistence.loadFile(path)
       def openFromDialog(dialog: FileDialog): IO[Unit]     = filePersistence.openFromDialog(dialog)
-      def isSaving(path: Path): IO[Boolean]                = filePersistence.isSaving(path)
+      def openFolderFromDialog(dialog: FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
+        filePersistence.openFolderFromDialog(dialog, openFolder)
+      def openFileOrFolderFromDialog(dialog: FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
+        filePersistence.openFileOrFolderFromDialog(dialog, openFolder)
+      def isSaving(path: Path): IO[Boolean]                     = filePersistence.isSaving(path)
+      override def openExternalUrl(uri: java.net.URI): IO[Unit] = callsVar.update(_ :+ s"openExternalUrl:$uri")
 
     val sessions = new EffectSessionPort:
       val sessionPersistence                  = sessionPersistenceVar
@@ -188,6 +188,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
         restoredState
       def createStartupSession(): IO[Unit]                        = callsVar.update(_ :+ "createStartupSession")
+      def leaveStartPage(): IO[Unit]                              = callsVar.update(_ :+ "leaveStartPage")
       def restoreStartupSession(): IO[Unit]                       = callsVar.update(_ :+ "restoreStartupSession")
       def activeEditorBufferId(state: AppState): Option[BufferId] = state.focusedBufferId
       def openSaveSessionAsPrompt(state: AppState): IO[Unit]      = callsVar.update(_ :+ "openSaveSessionAsPrompt")

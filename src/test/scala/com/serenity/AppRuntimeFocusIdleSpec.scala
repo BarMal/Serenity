@@ -1,14 +1,11 @@
 package com.serenity
 
-import java.awt.Color
-
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.frontend.{FrontendCapabilities, FrontendRuntime, GuiFrontend, TuiFrontend}
 import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
@@ -16,8 +13,10 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{AppState, BufferId, Damage}
+import com.serenity.state.models.{AppState, Damage}
+import com.serenity.testkit.SharedDictionary
 import com.serenity.testkit.VirtualTime.runVirtual
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -56,23 +55,19 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
     val program = for
       windowFocused       <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
       cursorVisible       <- Ref.of[IO, Boolean](false)
-      breathIndex         <- Ref.of[IO, Int](7)
       fastRenderRequested <- Ref.of[IO, Boolean](false)
       _ <- AppRuntime.onWindowFocusChanged(
         focused = false,
         windowFocused = windowFocused,
         cursorVisible = cursorVisible,
-        breathIndex = breathIndex,
         requestFastRender = fastRenderRequested.set(true)
       )
       focusedAfter <- windowFocused.get
       visible      <- cursorVisible.get
-      breathe      <- breathIndex.get
       requested    <- fastRenderRequested.get
     yield
       focusedAfter shouldBe false
       visible shouldBe true
-      breathe shouldBe 0
       requested shouldBe true
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
@@ -82,13 +77,11 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
     val program = for
       windowFocused       <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
       cursorVisible       <- Ref.of[IO, Boolean](true)
-      breathIndex         <- Ref.of[IO, Int](0)
       fastRenderRequested <- Ref.of[IO, Boolean](false)
       _ <- AppRuntime.onWindowFocusChanged(
         focused = true,
         windowFocused = windowFocused,
         cursorVisible = cursorVisible,
-        breathIndex = breathIndex,
         requestFastRender = fastRenderRequested.set(true)
       )
       focusedAfter <- windowFocused.get
@@ -104,13 +97,11 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
     val program = for
       windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
       cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
       gainedCount   <- Ref.of[IO, Int](0)
       _ <- AppRuntime.onWindowFocusChanged(
         focused = true,
         windowFocused = windowFocused,
         cursorVisible = cursorVisible,
-        breathIndex = breathIndex,
         requestFastRender = IO.unit,
         onFocusGained = gainedCount.update(_ + 1)
       )
@@ -118,7 +109,6 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
         focused = false,
         windowFocused = windowFocused,
         cursorVisible = cursorVisible,
-        breathIndex = breathIndex,
         requestFastRender = IO.unit,
         onFocusGained = gainedCount.update(_ + 1)
       )
@@ -128,16 +118,39 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
 
-  it should "default onFocusGained to a no-op for callers that don't supply one" in {
+  it should "run onFocusLost when focus is lost, but not when focus is regained (#1992)" in {
     val program = for
-      windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
       cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
+      lostCount     <- Ref.of[IO, Int](0)
+      _ <- AppRuntime.onWindowFocusChanged(
+        focused = false,
+        windowFocused = windowFocused,
+        cursorVisible = cursorVisible,
+        requestFastRender = IO.unit,
+        onFocusLost = lostCount.update(_ + 1)
+      )
       _ <- AppRuntime.onWindowFocusChanged(
         focused = true,
         windowFocused = windowFocused,
         cursorVisible = cursorVisible,
-        breathIndex = breathIndex,
+        requestFastRender = IO.unit,
+        onFocusLost = lostCount.update(_ + 1)
+      )
+      count <- lostCount.get
+    yield count shouldBe 1
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "default onFocusGained to a no-op for callers that don't supply one" in {
+    val program = for
+      windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      cursorVisible <- Ref.of[IO, Boolean](true)
+      _ <- AppRuntime.onWindowFocusChanged(
+        focused = true,
+        windowFocused = windowFocused,
+        cursorVisible = cursorVisible,
         requestFastRender = IO.unit
       )
       focusedAfter <- windowFocused.get
@@ -166,14 +179,14 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "sleep for the cursor idle interval, not block, while the window is focused" in {
-    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02)
+    val fastConfig = AppConfig.default
     val state      = AppState.initial(fastConfig)
 
     val program = for
       windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
       result <- IO.race(
         AppRuntime.awaitFocusedIdleTick(IO.pure(state), windowFocused, GuiFrontend.cursorIdleInterval),
-        IO.sleep(500.millis)
+        IO.sleep(1.second)
       )
     yield result shouldBe Left(())
 
@@ -199,26 +212,8 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
     runVirtual(program)
   }
 
-  it should "still wake the idle tick in TUI breathe mode -- breathe stays the documented app-painted exception" in {
-    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02).withCursorMode(CursorMode.Breathe)
-    val tuiBreatheState =
-      AppState
-        .initial(fastConfig)
-        .copy(runtime = AppState.initial(fastConfig).runtime.copy(capabilities = FrontendCapabilities.tui()))
-
-    val program = for
-      windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
-      result <- IO.race(
-        AppRuntime.awaitFocusedIdleTick(IO.pure(tuiBreatheState), windowFocused, tuiFrontend.cursorIdleInterval),
-        IO.sleep(500.millis)
-      )
-    yield result shouldBe Left(())
-
-    runVirtual(program)
-  }
-
   it should "skip idle cursor rendering entirely while unfocused, then resume once focus returns" in {
-    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02)
+    val fastConfig = AppConfig.default
     val state      = AppState.initial(fastConfig)
 
     val program = for
@@ -226,25 +221,22 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
       windowFocused      <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
       pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
       cursorVisible      <- Ref.of[IO, Boolean](true)
-      breathIndex        <- Ref.of[IO, Int](0)
       renderCalls        <- Ref.of[IO, Int](0)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       fiber <- AppRuntimeRenderLoops
         .idleRenderPhase(
-          loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
+          loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState())),
           fastModeSignal = fastModeSignal,
           windowFocused = windowFocused,
           pendingPaintDamage = pendingPaintDamage,
           currentStateForDiagnostics = IO.pure(Some(state)),
           checkResizeAndHandle = IO.unit,
           cursorVisible = cursorVisible,
-          breathIndex = breathIndex,
           renderCursorOnly = (
             _: AppState,
             _: Boolean,
-            _: Option[Color],
+            _: Option[RenderColor],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState],
             _: com.serenity.state.manager.RenderCaches
           ) => renderCalls.update(_ + 1),
           requestFastRender = IO.unit,
@@ -254,10 +246,10 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
         .compile
         .drain
         .start
-      _                   <- IO.sleep(150.millis)
+      _                   <- IO.sleep(1.second)
       callsWhileUnfocused <- renderCalls.get
       _                   <- windowFocused.set(true)
-      _                   <- IO.sleep(150.millis)
+      _                   <- IO.sleep(1.second)
       callsAfterFocus     <- renderCalls.get
       _                   <- fiber.cancel
     yield
@@ -268,7 +260,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "never render an idle cursor frame in TUI blink mode -- zero idle wakeups, terminal owns the caret" in {
-    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02)
+    val fastConfig = AppConfig.default
     val state = AppState
       .initial(fastConfig)
       .copy(runtime = AppState.initial(fastConfig).runtime.copy(capabilities = FrontendCapabilities.tui()))
@@ -278,25 +270,22 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
       windowFocused      <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
       pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
       cursorVisible      <- Ref.of[IO, Boolean](true)
-      breathIndex        <- Ref.of[IO, Int](0)
       renderCalls        <- Ref.of[IO, Int](0)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       fiber <- AppRuntimeRenderLoops
         .idleRenderPhase(
-          loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
+          loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState())),
           fastModeSignal = fastModeSignal,
           windowFocused = windowFocused,
           pendingPaintDamage = pendingPaintDamage,
           currentStateForDiagnostics = IO.pure(Some(state)),
           checkResizeAndHandle = IO.unit,
           cursorVisible = cursorVisible,
-          breathIndex = breathIndex,
           renderCursorOnly = (
             _: AppState,
             _: Boolean,
-            _: Option[Color],
+            _: Option[RenderColor],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState],
             _: com.serenity.state.manager.RenderCaches
           ) => renderCalls.update(_ + 1),
           requestFastRender = IO.unit,
@@ -306,7 +295,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
         .compile
         .drain
         .start
-      _     <- IO.sleep(300.millis) // several multiples of what would have been a 500ms*0.02=10ms idle cadence
+      _     <- IO.sleep(1.second) // several multiples of what would have been a 500ms*0.02=10ms idle cadence
       calls <- renderCalls.get
       _     <- fiber.cancel
     yield calls shouldBe 0
@@ -314,64 +303,18 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
     runVirtual(program)
   }
 
-  it should "keep rendering idle breathe frames in TUI mode -- breathe is app-painted, not delegated to the terminal" in {
-    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02).withCursorMode(CursorMode.Breathe)
-    val state = AppState
-      .initial(fastConfig)
-      .copy(runtime = AppState.initial(fastConfig).runtime.copy(capabilities = FrontendCapabilities.tui()))
-
-    val program = for
-      fastModeSignal     <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
-      windowFocused      <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
-      pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
-      cursorVisible      <- Ref.of[IO, Boolean](true)
-      breathIndex        <- Ref.of[IO, Int](0)
-      renderCalls        <- Ref.of[IO, Int](0)
-      given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
-      fiber <- AppRuntimeRenderLoops
-        .idleRenderPhase(
-          loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
-          fastModeSignal = fastModeSignal,
-          windowFocused = windowFocused,
-          pendingPaintDamage = pendingPaintDamage,
-          currentStateForDiagnostics = IO.pure(Some(state)),
-          checkResizeAndHandle = IO.unit,
-          cursorVisible = cursorVisible,
-          breathIndex = breathIndex,
-          renderCursorOnly = (
-            _: AppState,
-            _: Boolean,
-            _: Option[Color],
-            _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState],
-            _: com.serenity.state.manager.RenderCaches
-          ) => renderCalls.update(_ + 1),
-          requestFastRender = IO.unit,
-          cursorIdleInterval = tuiFrontend.cursorIdleInterval,
-          renderCaches = com.serenity.state.manager.RenderCaches.create()
-        )
-        .compile
-        .drain
-        .start
-      _     <- IO.sleep(150.millis)
-      calls <- renderCalls.get
-      _     <- fiber.cancel
-    yield calls should be > 0
-
-    runVirtual(program)
-  }
-
   it should "pause idle cursor rendering while unfocused and resume once focus returns, via registerFocusCallback wiring" in {
     given Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeFocusWiringSpec"))
 
-    val fastConfig          = AppConfig.default.withElementTransitionSpeedScale(0.02)
+    val fastConfig          = AppConfig.default
     val focusCallbackHolder = new java.util.concurrent.atomic.AtomicReference[Option[Boolean => Unit]](None)
 
     val program = for
       stateManager <- StateManager.apply(
         LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeFocusWiringSpec")),
         policy = SessionManager.SessionPolicy(saveOnAppClose = false),
-        initialConfig = fastConfig
+        initialConfig = fastConfig,
+        dictionaryCache = SharedDictionary.cacheFor(fastConfig)
       )
       idleRenderCalls <- Ref.of[IO, Int](0)
       closeRequested  <- Deferred[IO, Unit]
@@ -384,17 +327,15 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
             renderFull = (
               _: AppState,
               _: Boolean,
-              _: Option[Color],
+              _: Option[RenderColor],
               _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState],
               _: com.serenity.state.manager.RenderCaches
             ) => IO.unit,
             renderCursorOnly = (
               _: AppState,
               _: Boolean,
-              _: Option[Color],
+              _: Option[RenderColor],
               _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState],
               _: com.serenity.state.manager.RenderCaches
             ) => idleRenderCalls.update(_ + 1)
           ),
@@ -405,15 +346,15 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
           registerFocusCallback = cb => focusCallbackHolder.set(Some(cb))
         )
         .start
-      _                   <- IO.sleep(200.millis)
+      _                   <- IO.sleep(1.second)
       callsBeforeBlur     <- idleRenderCalls.get
       _                   <- IO(focusCallbackHolder.get().foreach(_.apply(false)))
       _                   <- IO.sleep(100.millis)
       _                   <- idleRenderCalls.set(0)
-      _                   <- IO.sleep(300.millis)
+      _                   <- IO.sleep(1.second)
       callsWhileUnfocused <- idleRenderCalls.get
       _                   <- IO(focusCallbackHolder.get().foreach(_.apply(true)))
-      _                   <- IO.sleep(300.millis)
+      _                   <- IO.sleep(1.second)
       callsAfterRefocus   <- idleRenderCalls.get
       _                   <- closeRequested.complete(())
       _                   <- fiber.joinWithNever
@@ -439,17 +380,15 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
               renderFull = (
                 _: AppState,
                 _: Boolean,
-                _: Option[Color],
+                _: Option[RenderColor],
                 _: Damage,
-                _: Map[BufferId, com.serenity.animation.AnimationState],
                 _: com.serenity.state.manager.RenderCaches
               ) => IO.unit,
               renderCursorOnly = (
                 _: AppState,
                 _: Boolean,
-                _: Option[Color],
+                _: Option[RenderColor],
                 _: Damage,
-                _: Map[BufferId, com.serenity.animation.AnimationState],
                 _: com.serenity.state.manager.RenderCaches
               ) => IO.raiseError(RuntimeException("idle render failed"))
             ),
@@ -457,7 +396,8 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
             makeStateManager = Some(logger =>
               StateManager.apply(
                 logger,
-                policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+                policy = SessionManager.SessionPolicy(saveOnAppClose = false),
+                dictionaryCache = SharedDictionary.default
               )
             ),
             awaitExternalQuit = IO.never,

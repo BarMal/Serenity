@@ -5,11 +5,12 @@ import java.awt.{Color, Font}
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JPanel
 
-import com.serenity.config.{AppConfig, PostProcessingEffect}
+import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{Java2DRenderSurface, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -18,7 +19,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  "Java2DRenderSurface.strokeRoundRect" should "respect the active alpha composite when drawing borders" in {
+  "Java2DRenderSurface.strokeRect" should "respect the active alpha composite when drawing borders" in {
     val lowAlphaImage  = new BufferedImage(80, 60, BufferedImage.TYPE_INT_ARGB)
     val fullAlphaImage = new BufferedImage(80, 60, BufferedImage.TYPE_INT_ARGB)
     val metrics        = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
@@ -27,180 +28,39 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val lowAlphaSurface =
       new Java2DRenderSurface(lowAlphaImage, metrics, font, _ => ())
     lowAlphaSurface.setAlpha(0.25f)
-    lowAlphaSurface.strokeRoundRect(1, 1, 4, 3, arcPx = 0, color = java.awt.Color.WHITE, strokeWidth = 2.0f)
+    lowAlphaSurface.strokeRect(1, 1, 4, 3, color = RenderColor.fromAwt(java.awt.Color.WHITE), strokeWidth = 2.0f)
     lowAlphaSurface.flush()
 
     val fullAlphaSurface =
       new Java2DRenderSurface(fullAlphaImage, metrics, font, _ => ())
     fullAlphaSurface.setAlpha(1.0f)
-    fullAlphaSurface.strokeRoundRect(1, 1, 4, 3, arcPx = 0, color = java.awt.Color.WHITE, strokeWidth = 2.0f)
+    fullAlphaSurface.strokeRect(1, 1, 4, 3, color = RenderColor.fromAwt(java.awt.Color.WHITE), strokeWidth = 2.0f)
     fullAlphaSurface.flush()
 
     maxAlpha(lowAlphaImage) should be < maxAlpha(fullAlphaImage)
   }
 
-  "Java2DRenderSurface.blurRegion" should "respect an active rounded clip" in {
+  "Java2DRenderSurface.withRectClip" should "confine drawing to the clipped cells" in {
     val image   = new BufferedImage(120, 120, BufferedImage.TYPE_INT_ARGB)
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
 
-    surface.clearViewport(Color.WHITE)
-    surface.fillPixelRect(25, 25, 10, 10, Color.BLACK)
-    surface.withRoundRectClip(x = 1, y = 1, width = 10, height = 10, arcPx = 50) {
-      surface.blurRegion(x = 1, y = 1, width = 10, height = 10, radius = 1.0f)
+    surface.clearViewport(RenderColor.fromAwt(Color.WHITE))
+    surface.withRectClip(x = 1, y = 1, width = 2, height = 2) {
+      surface.fillPixelRect(0, 0, 120, 120, RenderColor.fromAwt(Color.BLACK))
     }
     surface.flush()
 
-    new Color(image.getRGB(20, 20), true) shouldBe Color.WHITE
-  }
-
-  it should "blur the translated device region for fractional floating offsets" in {
-    val image   = new BufferedImage(12, 14, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.GREEN)
-    (5 to 10).foreach(y => image.setRGB(6, y, Color.BLUE.getRGB))
-    image.setRGB(6, 7, Color.RED.getRGB)
-
-    surface.withPixelTranslation(0.0, 5.5) {
-      surface.blurRegion(x = 0, y = 0, width = 12, height = 5, radius = 0.1f)
-    }
-    surface.flush()
-
-    new Color(image.getRGB(6, 7), true) should not be Color.RED
-    new Color(image.getRGB(6, 2), true) shouldBe Color.GREEN
+    new Color(image.getRGB(5, 5), true) shouldBe Color.WHITE
+    new Color(image.getRGB(15, 15), true) shouldBe Color.BLACK
+    new Color(image.getRGB(35, 35), true) shouldBe Color.WHITE
   }
 
   "Java2DRenderSurface.deviceImageDimension" should "scale logical pixels up to device pixels" in {
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 1024, deviceScale = 2.0) shouldBe 2048
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 801, deviceScale = 1.5) shouldBe 1202
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 0, deviceScale = 2.0) shouldBe 2
-  }
-
-  "Java2DRenderSurface.forLayer" should "build a surface at the given logical size and device scale without a JPanel" in {
-    val metrics    = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
-    val font       = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
-
-    val layer = Java2DRenderSurface.forLayer(
-      metrics,
-      font,
-      logicalWidthPx = 100,
-      logicalHeightPx = 50,
-      deviceScaleX = 2.0,
-      deviceScaleY = 2.0,
-      onFlush = image => flushedRef.set(Some(image))
-    )
-    layer.viewportWidth shouldBe 10
-    layer.viewportHeight shouldBe 5
-
-    layer.flush()
-
-    flushedRef.get().map(_.getWidth) shouldBe Some(200)
-    flushedRef.get().map(_.getHeight) shouldBe Some(100)
-  }
-
-  it should "start fully transparent" in {
-    val metrics    = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
-    val font       = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
-
-    val layer = Java2DRenderSurface.forLayer(metrics, font, 40, 40, 1.0, 1.0, image => flushedRef.set(Some(image)))
-    layer.flush()
-
-    (new Color(flushedRef.get().get.getRGB(5, 5), true)).getAlpha shouldBe 0
-  }
-
-  "Java2DRenderSurface.forLayer" should "start as a pixel copy of the given seed image instead of transparent" in {
-    val metrics      = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
-    val font         = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val seed         = new BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB)
-    val seedGraphics = seed.createGraphics()
-    seedGraphics.setColor(Color.RED)
-    seedGraphics.fillRect(0, 0, 20, 20)
-    seedGraphics.dispose()
-
-    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
-    val layer = Java2DRenderSurface.forLayer(
-      metrics,
-      font,
-      logicalWidthPx = 20,
-      logicalHeightPx = 20,
-      deviceScaleX = 1.0,
-      deviceScaleY = 1.0,
-      onFlush = image => flushedRef.set(Some(image)),
-      seed = Some(seed)
-    )
-    layer.flush()
-
-    new Color(flushedRef.get().get.getRGB(5, 5), true) shouldBe Color.RED
-  }
-
-  "Java2DRenderSurface.newSeededLayerSurface" should "seed the layer from this surface's own current pixels" in {
-    val image   = new BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.BLUE)
-    surface.flush()
-
-    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
-    val layer = surface.layerBuffers
-      .getOrElse(fail("expected layer buffer support"))
-      .newSeededLayerSurface(image => flushedRef.set(Some(image)))
-    layer.viewportWidth shouldBe surface.viewportWidth
-    layer.viewportHeight shouldBe surface.viewportHeight
-    layer.flush()
-
-    new Color(flushedRef.get().get.getRGB(5, 5), true) shouldBe Color.BLUE
-  }
-
-  "Java2DRenderSurface.layerBuffers" should "expose a capability that builds a same-shaped layer surface" in {
-    val image   = new BufferedImage(80, 60, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
-    val layer = surface.layerBuffers.getOrElse(fail("expected layer buffer support")).newLayerSurface { image =>
-      flushedRef.set(Some(image))
-    }
-    layer.viewportWidth shouldBe surface.viewportWidth
-    layer.viewportHeight shouldBe surface.viewportHeight
-
-    layer.flush()
-
-    flushedRef.get() shouldBe defined
-  }
-
-  "Java2DRenderSurface.deviceRegionFor" should "map logical pixel regions to clamped device pixels" in {
-    Java2DRenderSurface.deviceRegionFor(
-      logicalX = 10,
-      logicalY = 5,
-      logicalWidth = 20,
-      logicalHeight = 10,
-      imageWidth = 200,
-      imageHeight = 100,
-      deviceScaleX = 2.0,
-      deviceScaleY = 1.5
-    ) shouldBe Some(Java2DRenderSurface.DeviceRegion(xPx = 20, yPx = 7, widthPx = 40, heightPx = 16))
-  }
-
-  it should "discard device regions outside the backing image" in {
-    Java2DRenderSurface.deviceRegionFor(
-      logicalX = 50,
-      logicalY = 50,
-      logicalWidth = 10,
-      logicalHeight = 10,
-      imageWidth = 30,
-      imageHeight = 30,
-      deviceScaleX = 2.0,
-      deviceScaleY = 2.0
-    ) shouldBe None
   }
 
   it should "keep viewport dimensions in logical cells for a high-DPI backing image" in {
@@ -228,8 +88,8 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val font    = new Font(Font.SANS_SERIF, Font.BOLD, 40)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
 
-    surface.setBackgroundColor(Color.WHITE)
-    surface.setForegroundColor(Color.BLACK)
+    surface.setBackgroundColor(RenderColor.fromAwt(Color.WHITE))
+    surface.setForegroundColor(RenderColor.fromAwt(Color.BLACK))
     surface.drawRunPx(xPx = 10.0f, yPx = 5, bgWidthPx = 24.0f, lineHeightPx = 40, ascentPx = 32, s = "WWWWWW")
     surface.flush()
 
@@ -250,8 +110,8 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     val renderContext = surface.fontRenderContext.getOrElse(fail("Java2D surface must expose its font render context"))
     val backgroundWidth = font.getStringBounds("f", renderContext).getWidth.toFloat
-    surface.setBackgroundColor(Color.WHITE)
-    surface.setForegroundColor(Color.BLACK)
+    surface.setBackgroundColor(RenderColor.fromAwt(Color.WHITE))
+    surface.setForegroundColor(RenderColor.fromAwt(Color.BLACK))
     surface.drawRunPx(xPx = 20.0f, yPx = 5, bgWidthPx = backgroundWidth, lineHeightPx = 50, ascentPx = 38, s = "f")
     surface.flush()
 
@@ -272,10 +132,10 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     val renderContext = surface.fontRenderContext.getOrElse(fail("Java2D surface must expose its font render context"))
     val backgroundWidth = font.getStringBounds("f", renderContext).getWidth.toFloat
-    surface.setBackgroundColor(Color.BLACK)
-    surface.setForegroundColor(Color.BLUE)
+    surface.setBackgroundColor(RenderColor.fromAwt(Color.BLACK))
+    surface.setForegroundColor(RenderColor.fromAwt(Color.BLUE))
     surface.drawRunPx(xPx = 20.0f, yPx = 5, bgWidthPx = backgroundWidth, lineHeightPx = 50, ascentPx = 38, s = "f")
-    surface.setForegroundColor(Color.RED)
+    surface.setForegroundColor(RenderColor.fromAwt(Color.RED))
     surface.drawRunPx(
       xPx = 20.0f,
       yPx = 5,
@@ -330,143 +190,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val image = provided.get().getOrElse(fail("frame image provider was not called"))
     image.getWidth shouldBe 640
     image.getHeight shouldBe 480
-    image.getType shouldBe BufferedImage.TYPE_INT_ARGB
-  }
-
-  it should "darken alternating device rows for the scanline post-process" in {
-    val image   = new BufferedImage(8, 8, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.WHITE)
-    surface.applyPostProcessing(PostProcessingEffect.Scanlines, animationPhase = 0L)
-    surface.flush()
-
-    new Color(image.getRGB(0, 1), true).getRed should be < new Color(image.getRGB(0, 0), true).getRed
-  }
-
-  it should "add a phosphor mask to the scanline post-process" in {
-    val image   = new BufferedImage(9, 9, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.WHITE)
-    surface.applyPostProcessing(PostProcessingEffect.Scanlines)
-    surface.flush()
-
-    val firstPhosphor  = new Color(image.getRGB(0, 0), true)
-    val secondPhosphor = new Color(image.getRGB(1, 0), true)
-    firstPhosphor.getRed should not be secondPhosphor.getRed
-  }
-
-  it should "move uneven, variably thick scanlines between animation phases" in {
-    def darkRows(phase: Long): List[Int] =
-      val image   = new BufferedImage(24, 24, BufferedImage.TYPE_INT_ARGB)
-      val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-      val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-      val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-      surface.clearViewport(Color.WHITE)
-      surface.applyPostProcessing(PostProcessingEffect.Scanlines, phase)
-      surface.flush()
-
-      (0 until image.getHeight).filter(y => new Color(image.getRGB(12, y), true).getRed < 230).toList
-
-    val initial = darkRows(phase = 0L)
-    val moved   = darkRows(phase = 1L)
-
-    initial should not be empty
-    initial.sliding(2).exists { case List(first, second) => second == first + 1; case _ => false } shouldBe true
-    moved should not be initial
-  }
-
-  it should "spread bright UI pixels into a glow" in {
-    val image   = new BufferedImage(9, 9, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.BLACK)
-    surface.fillPixelRect(4, 4, 1, 1, Color.WHITE)
-    surface.applyPostProcessing(PostProcessingEffect.Glow)
-    surface.flush()
-
-    new Color(image.getRGB(3, 4), true).getRed should be > 0
-    new Color(image.getRGB(4, 4), true).getRed should be >= 250
-  }
-
-  it should "extend the glow halo beyond immediately adjacent pixels" in {
-    val image   = new BufferedImage(11, 11, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.BLACK)
-    surface.fillPixelRect(5, 5, 1, 1, Color.WHITE)
-    surface.applyPostProcessing(PostProcessingEffect.Glow)
-    surface.flush()
-
-    new Color(image.getRGB(3, 5), true).getRed should be > 0
-  }
-
-  it should "spread dark glyphs into a halo on a light background" in {
-    val image   = new BufferedImage(11, 11, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.WHITE)
-    surface.fillPixelRect(5, 5, 1, 1, Color.BLACK)
-    surface.applyPostProcessing(PostProcessingEffect.Glow)
-    surface.flush()
-
-    new Color(image.getRGB(3, 5), true).getRed should be < 255
-    new Color(image.getRGB(5, 5), true) shouldBe Color.BLACK
-  }
-
-  it should "preserve sharp source glyphs when compositing glow" in {
-    val image   = new BufferedImage(11, 11, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.WHITE)
-    surface.fillPixelRect(5, 5, 1, 1, Color.BLACK)
-    surface.applyPostProcessing(PostProcessingEffect.Glow)
-    surface.flush()
-
-    new Color(image.getRGB(5, 5), true) shouldBe Color.BLACK
-    new Color(image.getRGB(3, 5), true).getRed should be > 210
-  }
-
-  it should "compose scanlines and glow in one post-process" in {
-    val image   = new BufferedImage(15, 15, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.BLACK)
-    surface.fillPixelRect(7, 7, 1, 1, Color.WHITE)
-    surface.applyPostProcessing(PostProcessingEffect.ScanlinesAndGlow, animationPhase = 0L)
-    surface.flush()
-
-    new Color(image.getRGB(5, 7), true).getRed should be > 0
-    (0 until image.getHeight).exists(y => new Color(image.getRGB(12, y), true).getRed < 230) shouldBe true
-  }
-
-  it should "not bloom scanlines across a light background when composing effects" in {
-    val image   = new BufferedImage(15, 15, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.WHITE)
-    surface.applyPostProcessing(PostProcessingEffect.ScanlinesAndGlow, animationPhase = 0L)
-    surface.flush()
-
-    new Color(image.getRGB(6, 4), true).getRed shouldBe 255
+    image.getType shouldBe BufferedImage.TYPE_INT_RGB
   }
 
   "RendererEntryPoints.render" should "clear pixels outside the whole-cell grid to the theme background" in {
@@ -486,44 +210,14 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(8, 5),
-      font,
-      font,
+      FontSpec.fromAwt(font),
+      FontSpec.fromAwt(font),
       metrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    new Color(image.getRGB(82, 56), true) shouldBe Theme.light.background
-  }
-
-  it should "apply the configured post-process after rendering the frame" in {
-    val image   = new BufferedImage(83, 57, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        theme = Theme.light,
-        config = AppConfig.default
-          .withLineNumbers(false)
-          .withoutStatusLine
-          .withPostProcessingEffect(PostProcessingEffect.Scanlines)
-      )
-    )
-
-    RendererEntryPoints.render(
-      state,
-      cursorVisible = true,
-      surface,
-      ViewportSize(8, 5),
-      font,
-      font,
-      metrics,
-      None,
-      com.serenity.state.manager.RenderCaches.create()
-    )
-
-    (0 until image.getHeight).exists(y => new Color(image.getRGB(82, y), true).getRed < 230) shouldBe true
+    RenderColor.fromArgb(image.getRGB(82, 56)) shouldBe Theme.light.background
   }
 
   // A background Color with alpha 0 is the transparency sentinel (#1240): `clearViewport`/`fillRect`/`putString` must
@@ -536,12 +230,12 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
 
-    surface.clearViewport(Color.RED)
+    surface.clearViewport(RenderColor.fromAwt(Color.RED))
     surface.flush()
     new Color(image.getRGB(5, 5), true).getAlpha shouldBe 255
 
     val reopened = new Java2DRenderSurface(image, metrics, font, _ => ())
-    reopened.clearViewport(new Color(0, 0, 0, 0))
+    reopened.clearViewport(RenderColor.fromAwt(new Color(0, 0, 0, 0)))
     reopened.flush()
 
     new Color(image.getRGB(5, 5), true).getAlpha shouldBe 0
@@ -553,7 +247,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
 
-    surface.clearViewport(Color.BLUE)
+    surface.clearViewport(RenderColor.fromAwt(Color.BLUE))
     surface.flush()
 
     new Color(image.getRGB(3, 3), true) shouldBe new Color(0, 0, 255, 255)
@@ -565,14 +259,14 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
 
-    surface.setBackgroundColor(Color.RED)
+    surface.setBackgroundColor(RenderColor.fromAwt(Color.RED))
     surface.putString(0, 0, "a")
     surface.flush()
     new Color(image.getRGB(2, 2), true).getAlpha shouldBe 255
 
     val reopened = new Java2DRenderSurface(image, metrics, font, _ => ())
-    reopened.setForegroundColor(Color.WHITE)
-    reopened.setBackgroundColor(new Color(0, 0, 0, 0))
+    reopened.setForegroundColor(RenderColor.fromAwt(Color.WHITE))
+    reopened.setBackgroundColor(RenderColor.fromAwt(new Color(0, 0, 0, 0)))
     reopened.putString(0, 0, " ")
     reopened.flush()
 

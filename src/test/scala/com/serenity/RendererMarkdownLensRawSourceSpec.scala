@@ -8,7 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -50,8 +50,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -113,8 +113,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -134,7 +134,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
     val image = surface.drawImageCalls.head.image
     val firstContentRow = (0 until image.getHeight)
       .find(row =>
-        (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.persisted.theme.background.getRGB)
+        (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.persisted.theme.background.argb)
       )
 
     firstContentRow should not be empty
@@ -150,7 +150,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
 
     val image = surface.drawImageCalls.head.image
     val contentRows = (0 until image.getHeight).filter(row =>
-      (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.persisted.theme.background.getRGB)
+      (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.persisted.theme.background.argb)
     )
     val contentBands = contentRows.foldLeft(Vector.empty[Vector[Int]]) { (bands, row) =>
       bands.lastOption match
@@ -196,8 +196,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -246,8 +246,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -292,14 +292,14 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    surface.strokeRoundRectCalls shouldBe empty
+    surface.strokeRectCalls shouldBe empty
   }
 
   it should "reveal only a thematic break when the caret is on it" in {
@@ -397,8 +397,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, viewportHeight),
-      codeFont = font,
-      textFont = font,
+      codeFont = FontSpec.fromAwt(font),
+      textFont = FontSpec.fromAwt(font),
       cellMetrics = metrics,
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()

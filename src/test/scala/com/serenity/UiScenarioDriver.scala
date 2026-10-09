@@ -1,14 +1,12 @@
 package com.serenity
 
+import java.awt.Font
 import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
-import java.awt.{Color, Font}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
-import cats.syntax.apply.*
-import com.serenity.animation.AnimationState
 import com.serenity.config.ConfigManagerTestSupport
 import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
@@ -16,16 +14,20 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.renderer.{
   Effects,
+  FontSpec,
   Java2DRenderSurface,
+  PanelOutlineDrawing,
   PixelDrawing,
+  RenderImage,
   RenderSurface,
   RendererEntryPoints,
-  RoundedRectDrawing,
   SurfaceContentIdentity,
   TextDrawing
 }
@@ -57,7 +59,6 @@ final case class ScenarioFrameEvidence(
     drawnItems: Map[SurfaceId, List[ScenarioDrawnItem]],
     drawnImageRects: List[LayoutRect],
     renderedContentRows: Set[Int],
-    animationComplete: Boolean,
     layoutViolations: List[LayoutContractViolation]
 )
 
@@ -65,10 +66,10 @@ final case class ScenarioFrameEvidence(
 final case class ScenarioDrawnText(text: String, bounds: LayoutRect)
 
 /** A renderer region paired with the semantic colours active while it was painted. */
-final case class ScenarioPaintedRegion(bounds: LayoutRect, foreground: Color, background: Color)
+final case class ScenarioPaintedRegion(bounds: LayoutRect, foreground: RenderColor, background: RenderColor)
 
-/** A rounded surface border submitted with its semantic focus or elevation colour. */
-final case class ScenarioBorder(bounds: LayoutRect, color: Color)
+/** A surface border submitted with its semantic focus colour. */
+final case class ScenarioBorder(bounds: LayoutRect, color: RenderColor)
 
 /** A text-style transition submitted while rendering a scenario frame. */
 final case class ScenarioStyleCall(action: String, style: TextStyle)
@@ -101,18 +102,9 @@ final class UiScenarioDriver private (
   def state: IO[AppState] =
     stateManager.getCurrentState
 
-  def advanceToSettled(maxTicks: Int = 256): IO[Boolean] =
-    def loop(remaining: Int): IO[Boolean] =
-      stateManager.animationTicker.advanceAnimationsOnTick.flatMap { active =>
-        if !active then IO.pure(true)
-        else if remaining <= 0 then IO.pure(false)
-        else loop(remaining - 1)
-      }
-    loop(maxTicks)
-
   /** Render one frame and return state/layout evidence without consulting private renderer state. */
   def renderFrame(name: String): IO[ScenarioFrame] =
-    (state, stateManager.getBufferAnimations).mapN { (current, bufferAnimations) =>
+    state.map { current =>
       val logicalWidth  = environment.viewport.width * environment.cellMetrics.charWidth
       val logicalHeight = environment.viewport.height * environment.cellMetrics.lineHeight
       val image = new BufferedImage(
@@ -136,9 +128,9 @@ final class UiScenarioDriver private (
         cursorVisible = true,
         recordingSurface,
         environment.viewport,
-        codeFont,
-        codeFont,
-        uiFont,
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(uiFont),
         environment.cellMetrics,
         environment.cellMetrics,
         cursorColor = None,
@@ -146,7 +138,7 @@ final class UiScenarioDriver private (
       )
       val layout   = LayoutEngine.calculateLayoutWithUI(current, environment.viewport)
       val contract = EditorLayoutContract.from(current, environment.viewport, layout)
-      val frame    = ScenarioFrame(image, evidenceFor(current, bufferAnimations, contract, image, recordingSurface))
+      val frame    = ScenarioFrame(image, evidenceFor(current, contract, image, recordingSurface))
       artifactDirectory.foreach { directory =>
         Files.createDirectories(directory)
         javax.imageio.ImageIO.write(image, "png", directory.resolve(s"$name.png").toFile)
@@ -169,7 +161,6 @@ final class UiScenarioDriver private (
 
   private def evidenceFor(
     state: AppState,
-    bufferAnimations: Map[BufferId, AnimationState],
     contract: EditorLayoutContract,
     image: BufferedImage,
     recordingSurface: ScenarioRecordingSurface
@@ -233,7 +224,7 @@ final class UiScenarioDriver private (
       (0 until environment.viewport.height * environment.cellMetrics.lineHeight).collect {
         case row
             if (0 until environment.viewport.width * environment.cellMetrics.charWidth)
-              .exists(column => image.getRGB(column, row) != state.persisted.theme.background.getRGB) =>
+              .exists(column => image.getRGB(column, row) != state.persisted.theme.background.argb) =>
           row
       }.toSet
     val drawnItems = itemRects.view.mapValues { targets =>
@@ -259,8 +250,6 @@ final class UiScenarioDriver private (
       drawnItems,
       recordingSurface.drawnImages.map(_.bounds),
       renderedContentRows,
-      animationComplete = state.runtime.motion.surfaceAnimations.values.forall(_.animationState.animations.isEmpty) &&
-        bufferAnimations.values.forall(_.animations.isEmpty),
       contract.violations
     )
 
@@ -295,7 +284,7 @@ final class UiScenarioDriver private (
 
   private def compositedPreviewSourceLines(
     image: BufferedImage,
-    background: Color,
+    background: RenderColor,
     buffer: Buffer,
     placement: ScenarioPreviewPlacement,
     activeSourceLines: Set[Int]
@@ -317,7 +306,7 @@ final class UiScenarioDriver private (
 
   private def finalPreviewRowHasContent(
     image: BufferedImage,
-    background: Color,
+    background: RenderColor,
     placement: ScenarioPreviewPlacement,
     localPreviewRow: Int
   ): Boolean =
@@ -331,7 +320,7 @@ final class UiScenarioDriver private (
       .toInt
       .min(image.getHeight)
     left < right && top < bottom && (top until bottom).exists { y =>
-      (left until right).exists(x => image.getRGB(x, y) != background.getRGB)
+      (left until right).exists(x => image.getRGB(x, y) != background.argb)
     }
 
 final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: CellMetrics) extends RenderSurface:
@@ -340,8 +329,8 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
   private val paintedRegionsBuffer = scala.collection.mutable.ListBuffer.empty[ScenarioPaintedRegion]
   private val bordersBuffer        = scala.collection.mutable.ListBuffer.empty[ScenarioBorder]
   private val styleCallsBuffer     = scala.collection.mutable.ListBuffer.empty[ScenarioStyleCall]
-  private val foregroundColor      = AtomicReference(Color.BLACK)
-  private val backgroundColor      = AtomicReference(Color.BLACK)
+  private val foregroundColor      = AtomicReference(RenderColor.Black)
+  private val backgroundColor      = AtomicReference(RenderColor.Black)
 
   def drawnText: List[ScenarioDrawnText] = drawnTextBuffer.toList
 
@@ -355,17 +344,17 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
 
   override def persistentContentKey: Option[SurfaceContentIdentity] = delegate.persistentContentKey
 
-  def setForegroundColor(color: Color): Unit =
+  def setForegroundColor(color: RenderColor): Unit =
     foregroundColor.set(color)
     delegate.setForegroundColor(color)
 
-  def setBackgroundColor(color: Color): Unit =
+  def setBackgroundColor(color: RenderColor): Unit =
     backgroundColor.set(color)
     delegate.setBackgroundColor(color)
 
-  def getBackgroundColor: Color = delegate.getBackgroundColor
+  def getBackgroundColor: RenderColor = delegate.getBackgroundColor
 
-  override def clearViewportExcept(color: Color, preserved: scala.collection.immutable.List[PixelRect]): Unit =
+  override def clearViewportExcept(color: RenderColor, preserved: scala.collection.immutable.List[PixelRect]): Unit =
     delegate.clearViewportExcept(color, preserved)
 
   def putString(x: Int, y: Int, text: String): Unit =
@@ -394,7 +383,7 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
     * `render` un-adjusted instead of forwarding to the real surface.
     */
   private val textDrawing: TextDrawing = new TextDrawing:
-    def setFont(font: Font): Unit                    = delegate.text.setFont(font)
+    def setFont(font: FontSpec): Unit                = delegate.text.setFont(font)
     def fontRenderContext: Option[FontRenderContext] = delegate.text.fontRenderContext
 
     def drawRunPx(
@@ -423,11 +412,11 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
     * through this surface during a translated block rendered at the untranslated position.
     */
   private val pixelDrawing: PixelDrawing = new PixelDrawing:
-    def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit =
+    def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
       delegate.pixels.fillPixelRect(xPx, yPx, widthPx, heightPx, color)
 
-    def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
-      drawnImageBuffer += ScenarioDrawnImage(image, LayoutRect(x, y, width, height))
+    def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
+      drawnImageBuffer += ScenarioDrawnImage(image.toAwt, LayoutRect(x, y, width, height))
       delegate.pixels.drawImage(image, x, y, width, height)
 
     def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =
@@ -438,33 +427,16 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
   override def effects: Option[Effects] = delegate.effects.map { delegateEffects =>
     new Effects:
       def setAlpha(alpha: Float): Unit = delegateEffects.setAlpha(alpha)
-      def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
-        delegateEffects.blurRegion(x, y, width, height, radius)
-      def applyPostProcessing(
-        effect: com.serenity.config.PostProcessingEffect,
-        animationPhase: Long
-      ): Unit = delegateEffects.applyPostProcessing(effect, animationPhase)
   }
 
-  override def roundedRects: Option[RoundedRectDrawing] = delegate.roundedRects.map { delegateRoundedRects =>
-    new RoundedRectDrawing:
-      def strokeRoundRect(
-        x: Int,
-        y: Int,
-        width: Int,
-        height: Int,
-        arcPx: Int,
-        color: Color,
-        strokeWidth: Float = 1.5f
-      ): Unit =
+  override def panelOutlines: Option[PanelOutlineDrawing] = delegate.panelOutlines.map { delegateOutlines =>
+    new PanelOutlineDrawing:
+      def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
         bordersBuffer += ScenarioBorder(LayoutRect(x, y, width, height), color)
-        delegateRoundedRects.strokeRoundRect(x, y, width, height, arcPx, color, strokeWidth)
+        delegateOutlines.strokeRect(x, y, width, height, color, strokeWidth)
 
-      def drawRoundRectShadow(x: Int, y: Int, width: Int, height: Int, arcPx: Int, color: Color): Unit =
-        delegateRoundedRects.drawRoundRectShadow(x, y, width, height, arcPx, color)
-
-      def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, arcPx: Int)(render: => Unit): Unit =
-        delegateRoundedRects.withRoundRectClip(x, y, width, height, arcPx)(render)
+      def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
+        delegateOutlines.withRectClip(x, y, width, height)(render)
   }
 
   def hideCursor(): Unit  = delegate.hideCursor()
@@ -504,8 +476,21 @@ object UiScenarioDriver:
         deviceTextScaleProvider = IO.pure(environment.deviceScale),
         sessionRootOverride = Some(configuredSessionRoot),
         initialConfig = configuredInitialConfig,
-        uiPresetStore = uiPresetStore.getOrElse(UiPresetStore.default)
+        uiPresetStore = uiPresetStore.getOrElse(UiPresetStore.default),
+        dictionaryCache = SharedDictionary.cacheFor(configuredInitialConfig)
       )
+      driver <- over(manager, environment, artifactDirectory)
+    yield driver
+
+  /** A driver over a state manager built elsewhere -- one with substituted infrastructure, such as storage that refuses
+    * every write.
+    */
+  def over(
+    manager: StateManager,
+    environment: UiScenarioEnvironment = UiScenarioEnvironment(),
+    artifactDirectory: Option[Path] = None
+  ): IO[UiScenarioDriver] =
+    for
       _ <- manager.applyEvent(ResizeEvent(environment.viewport))
       _ <- manager.updateState(state =>
         state.copy(persisted = state.persisted.copy(theme = themeFor(environment.themeName)))

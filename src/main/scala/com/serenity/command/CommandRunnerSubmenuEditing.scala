@@ -197,21 +197,23 @@ private[command] trait CommandRunnerSubmenuEditing:
       case Some(surface) =>
         val items = filteredPageItems(surface.current, submenuItems(surface.current.groupId))
         items.lift(pageSelectedIndex(surface.current)) match
-          case Some(option: CommandSurfaceItem.OptionItem) =>
-            val updatedOption = option.moveSelection(delta)
-            copy(optionSelections = optionSelections + (option.id -> updatedOption.selectedIndex))
-          case _ =>
-            this
+          case Some(option: CommandSurfaceItem.OptionItem) => adjustOption(option, delta)
+          case _                                           => this
       case None =>
         this
 
   def adjustSelectedOption(delta: Int): CommandRunner =
     selectedItem match
-      case Some(option: CommandSurfaceItem.OptionItem) =>
-        val updatedOption = option.moveSelection(delta)
-        copy(optionSelections = optionSelections + (option.id -> updatedOption.selectedIndex))
-      case _ =>
-        this
+      case Some(option: CommandSurfaceItem.OptionItem) => adjustOption(option, delta)
+      case _                                           => this
+
+  /** Moves `option`'s selection by `delta`, wherever the row is shown -- under the highlight, or reached from a search
+    * result that points at it.
+    */
+  def adjustOption(option: CommandSurfaceItem.OptionItem, delta: Int): CommandRunner =
+    copy(optionSelections =
+      optionSelections + (option.id -> option.moveSelection(delta).selectedIndex)
+    ).withSearchCacheRefreshed
 
   /** Effective checked state for a `ToggleItem`, following the same override-map convention `optionSelections` uses for
     * `OptionItem.selectedIndex` -- `toggleSelections` records a flip in place, independent of whatever `checked` the

@@ -58,6 +58,12 @@ private[reducers] object EditorCursorMovement:
   def wordRightTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
     horizontalTarget(wordBoundaryFrom(buffer, from, (rope, offset) => rope.nextWordBoundary(offset)))
 
+  def subWordLeftTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
+    horizontalTarget(wordBoundaryFrom(buffer, from, (rope, offset) => rope.previousSubWordBoundary(offset)))
+
+  def subWordRightTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
+    horizontalTarget(wordBoundaryFrom(buffer, from, (rope, offset) => rope.nextSubWordBoundary(offset)))
+
   /** `from` is passed rather than derived: arrow keys resume from the selection focus so a right-arrow off a selection
     * lands past its end, while Home and End resume from the head cursor.
     */
@@ -98,7 +104,14 @@ private[reducers] object EditorCursorMovement:
   ): Buffer =
     val selectionAnchor = buffer.primarySelection.map(_.anchor).getOrElse(anchor)
     buffer.copy(
-      editing = buffer.editing.withPrimary(Cursor(focus, Some(selectionAnchor), preferredColumn, preferredXPx))
+      editing = buffer.editing.withPrimary(
+        Cursor(
+          focus,
+          Option.when(selectionAnchor.line != focus.line || selectionAnchor.column != focus.column)(selectionAnchor),
+          preferredColumn,
+          preferredXPx
+        )
+      )
     )
 
   def collapseSelectionsToFocus(buffer: Buffer): Buffer =
@@ -223,5 +236,5 @@ private[reducers] object EditorCursorMovement:
   def selectedTexts(buffer: Buffer): List[String] =
     mergedActiveSelectionRanges(buffer, buffer.document.content).map {
       case (start, end) =>
-        buffer.document.content.sliceString(start, end)
+        buffer.plainTextExport(buffer.document.content.sliceString(start, end))
     }

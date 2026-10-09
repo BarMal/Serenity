@@ -9,8 +9,22 @@ class SmartPunctuationSpec extends AnyFlatSpec with Matchers:
     SmartPunctuation.replacementFor('-', "a") shouldBe None
   }
 
-  it should "turn a second consecutive hyphen into an em dash, replacing the first" in {
-    SmartPunctuation.replacementFor('-', "a-") shouldBe Some((1, "—"))
+  it should "turn a second consecutive hyphen into an en dash, replacing the first" in {
+    SmartPunctuation.replacementFor('-', "a-") shouldBe Some((1, "–"))
+  }
+
+  it should "turn a hyphen typed after an en dash into an em dash, so three hyphens make one em dash" in {
+    SmartPunctuation.replacementFor('-', "a–") shouldBe Some((1, "—"))
+  }
+
+  it should "leave hyphens literal on a line holding only hyphens so far, a thematic break or front-matter fence" in {
+    SmartPunctuation.replacementFor('-', "-") shouldBe None
+    SmartPunctuation.replacementFor('-', "--") shouldBe None
+  }
+
+  it should "leave hyphens literal in a Markdown table delimiter row" in {
+    SmartPunctuation.replacementFor('-', "|-") shouldBe None
+    SmartPunctuation.replacementFor('-', "| :--- | -") shouldBe None
   }
 
   it should "leave a lone period typed with no preceding periods unchanged" in {
@@ -49,6 +63,24 @@ class SmartPunctuationSpec extends AnyFlatSpec with Matchers:
     SmartPunctuation.replacementFor('\'', "don") shouldBe Some((0, "’"))
   }
 
+  it should "turn an opening single quote into an apostrophe once a digit follows it, as in '90s" in {
+    SmartPunctuation.replacementFor('9', "the ‘") shouldBe Some((1, "’9"))
+    SmartPunctuation.replacementFor('0', "‘") shouldBe Some((1, "’0"))
+  }
+
+  it should "leave a digit after anything but an opening single quote unchanged" in {
+    SmartPunctuation.replacementFor('9', "the ") shouldBe None
+    SmartPunctuation.replacementFor('9', "rock’") shouldBe None
+  }
+
   it should "leave characters with no smart-punctuation rule unchanged" in {
     SmartPunctuation.replacementFor('x', "a") shouldBe None
+  }
+
+  "withinInlineCode" should "report a caret after an unclosed backtick as inside a code span" in {
+    SmartPunctuation.withinInlineCode("call `a-") shouldBe true
+  }
+
+  it should "report a caret after a closed code span as outside it" in {
+    SmartPunctuation.withinInlineCode("call `a--` then") shouldBe false
   }

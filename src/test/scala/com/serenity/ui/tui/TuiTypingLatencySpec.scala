@@ -8,10 +8,9 @@ package com.serenity.ui.tui
   * a full content repaint. That predicate was always false in TUI mode (`docs/tui-mode.md`, "Known degradations"), so a
   * terminal session painted no typed text until the sitter decayed.
   *
-  * Issue #934 v2 retired the window sitter and, with it, the fast phase's only cursor-only shortcut -- see
-  * `AppRuntime.needsFullContentRender`'s doc. The fast phase now always takes the full-repaint path, so the bug class
-  * this spec guards against can no longer occur structurally; these tests are kept as a plain regression guard against
-  * a similar shortcut being reintroduced without checking pending keystroke damage.
+  * The window sitter is gone, and so is the fast phase's cursor-only shortcut: the fast phase always takes the
+  * full-repaint path, so the bug class this spec guards against can no longer occur structurally; these tests are kept
+  * as a plain regression guard against a similar shortcut being reintroduced without checking pending keystroke damage.
   */
 class TuiTypingLatencySpec extends TuiSpec:
 

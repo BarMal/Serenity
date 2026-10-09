@@ -2,7 +2,6 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
@@ -51,11 +50,8 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
   ): AppState =
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val effectiveConfig =
-      if itemId == "animation-duration" || itemId == "animation-steps" then config.withMotionPreset(MotionPreset.Custom)
-      else config
     val searchedRunner = CommandRunner.empty
-      .activate(registry, effectiveConfig)
+      .activate(registry, config)
       .openSettings
       .updateSearchTerm(settingsGroupSearchTerm(groupId))
     val selectedIndex = searchedRunner.visibleItems.indexWhere(_.id == groupId) match
@@ -100,10 +96,10 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
     movedLeft.state shouldBe state
   }
 
-  it should "adjust the selected motion accessibility option inside the submenu with left and right" in {
+  it should "adjust the selected render fps option inside the submenu with left and right" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val state             = settingsStateOnItem("settings-animation", "motion-accessibility")
+    val state             = settingsStateOnItem("settings-look-advanced", "render-fps")
 
     val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
     val runnerAfterLeft = movedLeft.state.commandRunnerSurface
@@ -115,11 +111,11 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected command runner surface"))
 
     runnerAfterLeft
-      .submenuItems("settings-animation")
+      .submenuItems("settings-look-advanced")
       .collectFirst {
-        case option: CommandSurfaceItem.OptionItem if option.id == "motion-accessibility" => option.selectedOption
+        case option: CommandSurfaceItem.OptionItem if option.id == "render-fps" => option.selectedOption
       }
-      .shouldBe(Some("Off"))
+      .shouldBe(Some("30 FPS"))
 
     val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), movedLeft.state, registry)
     val runnerAfterRight = movedRight.state.commandRunnerSurface
@@ -131,70 +127,19 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected command runner surface"))
 
     runnerAfterRight
-      .submenuItems("settings-animation")
+      .submenuItems("settings-look-advanced")
       .collectFirst {
-        case option: CommandSurfaceItem.OptionItem if option.id == "motion-accessibility" => option.selectedOption
+        case option: CommandSurfaceItem.OptionItem if option.id == "render-fps" => option.selectedOption
       }
-      .shouldBe(Some("Standard"))
-  }
-
-  it should "adjust the selected background style inside the surface appearance submenu with left and right" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
-    // "settings-surface-appearance" nests one level under the top-level "settings-appearance-motion" group, so it's
-    // reached directly here rather than through withSelectedItem/enterSelectedGroup (which only resolve a top-level
-    // selection) -- this test is about adjustSelectedSubmenuOption's Left/Right behavior once inside a group, not
-    // about the navigation path to reach it.
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-      .openSettings
-      .withDrilledSettingsSurface(SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance")))
-    val surface = UiSurface(
-      SurfaceId("command-runner"),
-      SurfaceContent.CommandPalette(runner),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val state = AppState(
-      persisted = Persisted(
-        layout = Layout.empty,
-        buffers = Map.empty,
-        focus = Focus.Surface(surface.id)
-      ),
-      runtime = Runtime(uiSurfaces = List(surface))
-    )
-
-    val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
-    val runnerAfterLeft = movedLeft.state.commandRunnerSurface
-      .flatMap {
-        _.content match
-          case SurfaceContent.CommandPalette(updatedRunner) => Some(updatedRunner)
-          case _                                            => None
-      }
-      .getOrElse(fail("Expected command runner surface"))
-
-    runnerAfterLeft
-      .submenuItems("settings-surface-appearance")
-      .collectFirst {
-        case option: CommandSurfaceItem.OptionItem if option.id == "background-style" => option.selectedOption
-      }
-      .shouldBe(Some("Transparent"))
-
-    val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), movedLeft.state, registry)
-    movedRight.effects.exists {
-      case AppEffect.ExecuteCommand(command) =>
-        command.intent == CommandIntent.Settings(
-          SettingsIntent.General(GeneralSettingsIntent.SetBackgroundStyle(BackgroundStyle.Frosted))
-        )
-      case _ =>
-        false
-    } shouldBe true
+      .shouldBe(Some("60 FPS"))
   }
 
   it should "adjust the selected interface density inside the interface layout submenu" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    // "settings-interface-layout" nests one level under the top-level "settings-appearance-motion" group -- see the
-    // same note on the background-style test above.
+    // "settings-interface-layout" nests one level under a top-level group, so it's reached directly here rather than
+    // through withSelectedItem/enterSelectedGroup (which only resolve a top-level selection) -- this test is about
+    // adjustSelectedSubmenuOption's Left/Right behavior once inside a group, not about the navigation path to reach it.
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .openSettings
@@ -216,7 +161,7 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
     val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), state, registry)
 
     movedRight.effects.exists {
-      case AppEffect.ExecuteCommand(command) =>
+      case AppEffect.ExecuteCommandUnrecorded(command) =>
         command.intent == CommandIntent.Settings(
           SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
         )

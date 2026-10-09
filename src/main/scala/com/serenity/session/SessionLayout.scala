@@ -74,9 +74,16 @@ object SessionLayout:
       if restored.exists(_.id == surface.id) then restored else restored :+ surface
     }
     val pinnedSurfaceIds = surfaces.map(_.id).toSet
+    // A panel whose saved content no longer decodes (a kind since removed, such as the companion sprite) is dropped
+    // from the tree too, so the panels that do restore keep the arrangement they were saved in.
     val decodedTree = savedTree
       .flatMap(SessionWorkspaceNode.toWorkspaceNode)
       .map(WorkspaceTree.apply)
+      .map(tree =>
+        tree.dockedSurfaceIds.filterNot(pinnedSurfaceIds.contains).foldLeft(tree) { (pruned, orphan) =>
+          pruned.removeSurface(orphan).getOrElse(pruned)
+        }
+      )
       .filter(_.validationErrors(editorPanes.keySet, pinnedSurfaceIds).isEmpty)
     val fallbackTree =
       SessionDockedPanel.fallbackWorkspaceTree(orderedPaneIds, dockedPanels)

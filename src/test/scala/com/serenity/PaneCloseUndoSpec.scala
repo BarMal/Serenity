@@ -7,6 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -21,8 +22,15 @@ class PaneCloseUndoSpec extends AnyFlatSpec with Matchers:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   trait PaneFixture:
+
     val sm: StateManager =
-      StateManager.apply(LoggerFactory[IO].getLogger(using LoggerName("PaneCloseUndoSpec"))).unsafeRunSync()
+      StateManager
+        .apply(
+          LoggerFactory[IO].getLogger(using LoggerName("PaneCloseUndoSpec")),
+          dictionaryCache = SharedDictionary.default
+        )
+        .unsafeRunSync()
+
     val pane0: PaneId = sm.getCurrentState.unsafeRunSync().persisted.layout.activeEditorPaneId.get
 
   behavior of "Undoing a pane close"
@@ -74,6 +82,8 @@ class PaneCloseUndoSpec extends AnyFlatSpec with Matchers:
     afterFirstUndo.persisted.layout.editorPanes.keySet shouldBe Set(pane0, pane1)
     afterFirstUndo.persisted.buffers(bufferId).document.content.collect() shouldBe "hello!"
 
+    // Text undo acts on the buffer being worked in (#1930), and the restored pane1 holds none: go back to pane0's.
+    sm.switchToPane(pane0).unsafeRunSync()
     sm.applyEvent(Undo).unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect() shouldBe "hello"
 

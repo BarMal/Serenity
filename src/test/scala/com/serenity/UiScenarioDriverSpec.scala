@@ -5,13 +5,13 @@ import java.nio.file.Files
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
 import com.serenity.command.{Command, CommandCategory, CommandIntent, GeneralSettingsIntent, SettingsIntent}
-import com.serenity.config.{AppConfig, MarkdownViewMode, MaterialPreset, MotionPreset}
+import com.serenity.config.MarkdownViewMode
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
-import com.serenity.ui.renderer.SurfaceMaterials
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -55,7 +55,6 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     val driver = UiScenarioDriver.create("isolated-config", isolatedConfig = true).unsafeRunSync()
     val config = driver.state.unsafeRunSync().persisted.config
 
-    config.surfaceConfig.motionPreset shouldBe MotionPreset.Reduced
     config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
     config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(0)
   }
@@ -87,9 +86,8 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
         expectedFocusStyle = true
       )
 
-      val crystalConfig = AppConfig.default.withMaterialPreset(MaterialPreset.Crystal)
       val runnerDriver = UiScenarioDriver
-        .create(s"semantic-$themeName-runner", environment, initialConfig = crystalConfig)
+        .create(s"semantic-$themeName-runner", environment)
         .unsafeRunSync()
       runnerDriver.dispatch(ToggleCommandRunner).unsafeRunSync()
       val runner = runnerDriver.renderFrame("command-runner").unsafeRunSync()
@@ -104,8 +102,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
         expectedBackgrounds = Set(theme.panel.background, theme.selection.background),
         expectedFocusStyle = true,
         expectedSurfaceCount = 1,
-        expectedBorderColor = Some(theme.focus),
-        expectedSheen = SurfaceMaterials.glassSheenBackground(crystalConfig, theme)
+        expectedBorderColor = Some(theme.focus)
       )
 
       val settingsDriver = UiScenarioDriver.create(s"semantic-$themeName-settings", environment).unsafeRunSync()
@@ -175,12 +172,11 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
   private def assertVisualReference(
     frame: ScenarioFrame,
     environment: UiScenarioEnvironment,
-    expectedForegrounds: Set[java.awt.Color],
-    expectedBackgrounds: Set[java.awt.Color],
+    expectedForegrounds: Set[RenderColor],
+    expectedBackgrounds: Set[RenderColor],
     expectedFocusStyle: Boolean = false,
     expectedSurfaceCount: Int = 0,
-    expectedBorderColor: Option[java.awt.Color] = None,
-    expectedSheen: Option[java.awt.Color] = None
+    expectedBorderColor: Option[RenderColor] = None
   ): Unit =
     frame.image.getWidth shouldBe environment.viewport.width * environment.cellMetrics.charWidth
     frame.image.getHeight shouldBe environment.viewport.height * environment.cellMetrics.lineHeight
@@ -196,7 +192,6 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
         frame.evidence.borders should contain(ScenarioBorder(surfaceRect, color))
       }
     }
-    expectedSheen.foreach(color => frame.evidence.paintedRegions.map(_.background) should contain(color))
     frame.evidence.drawnText.foreach { drawnText =>
       drawnText.bounds.x should be >= 0
       drawnText.bounds.x should be < environment.viewport.width

@@ -72,6 +72,24 @@ object ArchitectureChecks {
         "a concrete frontend's own implementation package",
       mainOnly = true
     ),
+    // #1206: the manuscript model, compiler and writers are pure; reading sources, dialogs and the disk belong to the
+    // shell, and the future paginator must not measure through AWT.
+    ImportRule(
+      "com/serenity/manuscript",
+      Seq("java.awt", "org.apache.pdfbox", "org.apache.fontbox", "cats.effect", "com.serenity.state"),
+      "the manuscript package is the pure export core: take sources and settings as values, and leave IO, AWT, " +
+        "font parsing and the editor state to the shell",
+      mainOnly = true
+    ),
+    // S5: the exporting package is the effectful edge of that core (font loading, later the PDF painter); it reads the
+    // manuscript model but never the editor state, and never AWT, so measurement and painting stay on one font file.
+    ImportRule(
+      "com/serenity/exporting/",
+      Seq("java.awt", "com.serenity.state"),
+      "the exporting package measures and paints from the bundled font files through FontBox/PDFBox: no AWT, and the " +
+        "editor state reaches it only as values",
+      mainOnly = true
+    ),
     ImportRule(
       "com/serenity/command",
       Seq("com.serenity.ui.tui", "com.serenity.ui.terminal"),
@@ -80,6 +98,19 @@ object ArchitectureChecks {
       mainOnly = true
     )
   )
+
+  /** #1911: the files that decide an event on the state dispatcher do no I/O. Disk work goes to a lane job in a file of
+    * its own and comes back as an `EffectResult`, so a key never waits behind a read or a write.
+    */
+  val DispatcherPathFiles: Seq[String] = Seq(
+    "main/scala/com/serenity/state/manager/StateManagerEventPipeline.scala",
+    "main/scala/com/serenity/state/manager/EventPipelineTransitions.scala"
+  )
+
+  val DispatcherBlockingCalls: Seq[String] = Seq("IO.blocking", "IO.interruptible", "Files.", "FileUtils.")
+
+  val DispatcherBlockingReason: String =
+    "the dispatcher path does no I/O (#1911): hand disk work to a lane job and take its answer as an EffectResult"
 
   /** Blocking/synchronous escape hatches out of `IO` that #1434 removed from src/main. Test code legitimately
     * calls these to drive `IO` synchronously in specs, so this is scoped to `main/` only -- the same split
@@ -95,7 +126,7 @@ object ArchitectureChecks {
       "runs an IO synchronously outside the Cats Effect runtime (#1434) -- use IOApp, a Resource/Dispatcher " +
         "boundary, or push the IO to the edge instead"
     )
-  )
+  ) ++ DispatcherPathFiles.map(file => (file, DispatcherBlockingCalls, DispatcherBlockingReason))
 
   /** State ownership (#1697): only the dispatcher/ModelCommit layer holds the model `Ref`. Capabilities read state
     * through an `IO[AppState]` and write it only through `ModelCommit`'s validated commits, so a raw `Ref` -- or a
@@ -125,6 +156,54 @@ object ArchitectureChecks {
       "Ref[IO, Model] outside the dispatcher/ModelCommit layer -- take a ModelCommit instead"
     )
   )
+
+  /** #1935: a document's `content` changes only through `Document.withContent` (directly, or through `Buffer`'s
+    * edit helpers), which advances `contentVersion` -- the stamp `Buffer.richTextInSync` and the debounced outline
+    * re-parse trust instead of re-comparing text. A `document.copy(content = ...)` skips that bump, so it is refused in
+    * `src/main` outside the file that defines the sanctioned path. Matched over the whole file rather than per line,
+    * since a formatted `copy(` often puts `content =` on a later line.
+    */
+  val DocumentContentOwner: String = "main/scala/com/serenity/state/models/Buffer.scala"
+
+  private val DocumentCopy = """\bdocument\s*\.\s*copy\s*\(""".r
+  private val ContentArgument = """(^|[(,\s])content\s*=(?!=)""".r
+
+  /** The text between the `(` that ends at `start` and its matching `)`. */
+  private def balancedArguments(text: String, start: Int): String = {
+    var depth = 1
+    var i = start
+    while (i < text.length && depth > 0) {
+      text.charAt(i) match {
+        case '(' => depth += 1
+        case ')' => depth -= 1
+        case _   => ()
+      }
+      i += 1
+    }
+    text.substring(start, math.max(start, i - 1))
+  }
+
+  private def documentContentViolations(path: String, lines: Vector[String]): Seq[Violation] =
+    if (!path.startsWith("main/") || path == DocumentContentOwner) Nil
+    else {
+      val text = lines.map { line =>
+        val trimmed = line.trim
+        if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) "" else line
+      }.mkString("\n")
+      DocumentCopy.findAllMatchIn(text).toSeq.flatMap { found =>
+        if (ContentArgument.findFirstIn(balancedArguments(text, found.end)).isEmpty) Nil
+        else {
+          val line = text.substring(0, found.start).count(_ == '\n') + 1
+          Seq(
+            Violation(
+              path,
+              s"document content assigned at line $line: use Document.withContent so contentVersion advances (#1935)",
+              1
+            )
+          )
+        }
+      }
+    }
 
   /** #1677: no `AtomicReference`, `AtomicInteger`, `synchronized`, or `mutable.` may live inside a top-level
     * `object` declaration, or anywhere under `state/models`, in `src/main`. An `object` compiles to a single
@@ -300,7 +379,8 @@ object ArchitectureChecks {
       val fileViolation =
         if (lines.length > MaxFileLines) Seq(Violation(path, "file length", lines.length)) else Nil
       fileViolation ++ methodViolations(path, lines) ++ importViolations(path, lines) ++ callViolations(path, lines) ++
-        stateOwnershipViolations(path, lines) ++ mutabilityViolations(path, lines)
+        stateOwnershipViolations(path, lines) ++ mutabilityViolations(path, lines) ++
+        documentContentViolations(path, lines)
     }
 
   def readBaseline(file: File): Map[String, Int] =
@@ -455,6 +535,36 @@ object ArchitectureChecks {
       expectCaught = true
     )
 
+    def checkDispatcherPath(description: String, line: String, path: String, expectCaught: Boolean): Unit = {
+      val violations = callViolations(path, Vector(line))
+      require(
+        violations.nonEmpty == expectCaught,
+        s"ArchitectureChecks self-test failed ($description): expected a blocking call to be " +
+          s"${if (expectCaught) "caught" else "ignored"}, got ${violations.size} violation(s)"
+      )
+    }
+
+    checkDispatcherPath(
+      "a blocking effect in the event pipeline",
+      "    cats.effect.IO.blocking(readIndex())",
+      DispatcherPathFiles.head,
+      expectCaught = true
+    )
+
+    checkDispatcherPath(
+      "a java.nio Files call in the event pipeline",
+      "    val present = Files.exists(path)",
+      DispatcherPathFiles.head,
+      expectCaught = true
+    )
+
+    checkDispatcherPath(
+      "a blocking effect in a lane job's own file",
+      "    IO.blocking(readIndex())",
+      "main/scala/com/serenity/state/manager/CommandRunnerOpening.scala",
+      expectCaught = false
+    )
+
     def checkMutability(
         description: String,
         lines: Vector[String],
@@ -544,6 +654,58 @@ object ArchitectureChecks {
       ),
       expectCaught = false,
       path = "test/scala/com/serenity/ui/renderer/SampleSpec.scala"
+    )
+
+    def checkDocumentContent(
+        description: String,
+        lines: Vector[String],
+        expectCaught: Boolean,
+        path: String = "main/scala/com/serenity/state/reducers/Sample.scala"
+    ): Unit = {
+      val violations = documentContentViolations(path, lines)
+      require(
+        violations.nonEmpty == expectCaught,
+        s"ArchitectureChecks self-test failed ($description): expected a document content assignment to be " +
+          s"${if (expectCaught) "caught" else "ignored"}, got ${violations.size} violation(s)"
+      )
+    }
+
+    checkDocumentContent(
+      "a document copy that sets content on one line",
+      Vector("  val next = buffer.document.copy(content = edited, isDirty = true)"),
+      expectCaught = true
+    )
+
+    checkDocumentContent(
+      "a document copy that sets content on a later line",
+      Vector("  val next = buffer.document.copy(", "    isDirty = true,", "    content = edited", "  )"),
+      expectCaught = true
+    )
+
+    checkDocumentContent(
+      "a document copy that leaves content alone",
+      Vector("  val next = buffer.document.copy(language = language(content == other))"),
+      expectCaught = false
+    )
+
+    checkDocumentContent(
+      "a surface copy whose own field is called content",
+      Vector("  val next = surface.copy(content = kept)"),
+      expectCaught = false
+    )
+
+    checkDocumentContent(
+      "the file that defines the sanctioned path",
+      Vector("  def withContent(newContent: Rope): Document = document.copy(content = newContent)"),
+      expectCaught = false,
+      path = DocumentContentOwner
+    )
+
+    checkDocumentContent(
+      "a test fixture building a buffer with some text",
+      Vector("  val fixture = buffer.document.copy(content = Rope(text))"),
+      expectCaught = false,
+      path = "test/scala/com/serenity/state/reducers/SampleSpec.scala"
     )
   }
 }

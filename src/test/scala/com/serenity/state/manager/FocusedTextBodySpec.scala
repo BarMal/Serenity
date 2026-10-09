@@ -1,6 +1,7 @@
 package com.serenity.state.manager
 
 import com.serenity.lsp.config.LanguageId
+import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.{AppState, BufferId}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -15,6 +16,10 @@ class FocusedTextBodySpec extends AnyFlatSpec with Matchers:
   private def bufferWithContent(text: String, language: Option[LanguageId] = None) =
     val base = AppState.initial.persisted.buffers(bufferId)
     base.copy(document = base.document.copy(content = Rope(text), language = language))
+
+  private def richTextBufferWithContent(text: String) =
+    val plain = bufferWithContent(text)
+    plain.copy(richText = plain.richText.copy(richTextDocument = Some(RichTextDocument.fromPlainText(text))))
 
   "FocusedTextBody.activeRange" should "report None when there is no active line" in {
     val buffer = bufferWithContent("alpha\nbeta\ngamma")
@@ -35,6 +40,17 @@ class FocusedTextBodySpec extends AnyFlatSpec with Matchers:
   it should "report the whole buffer as one block when there are no blank separators" in {
     val buffer = bufferWithContent("first\nsecond\nthird")
     FocusedTextBody.activeRange(buffer, Some(1)) shouldBe Some(0 to 2)
+  }
+
+  it should "report only the active line for a rich-text document, whose paragraphs are one line each" in {
+    val buffer = richTextBufferWithContent("First paragraph.\nSecond paragraph.\nThird paragraph.")
+    FocusedTextBody.activeRange(buffer, Some(1)) shouldBe Some(1 to 1)
+    FocusedTextBody.activeRange(buffer, Some(2)) shouldBe Some(2 to 2)
+  }
+
+  it should "report None for a rich-text document when the active line falls outside it" in {
+    val buffer = richTextBufferWithContent("First paragraph.\nSecond paragraph.")
+    FocusedTextBody.activeRange(buffer, Some(5)) shouldBe None
   }
 
   it should "report the markdown block around the active line for a markdown buffer" in {

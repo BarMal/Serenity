@@ -3,13 +3,15 @@ package com.serenity.input
 import java.awt.event.*
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 import java.util.concurrent.{ConcurrentLinkedQueue, Semaphore}
+import javax.swing.KeyStroke
 
 import cats.effect.Sync
 import com.serenity.config.InputConfig
+import com.serenity.diagnostics.FrameTimings
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.ui.layout.CellMetrics
-import fs2.Stream
+import fs2.{Chunk, Stream}
 
 /** Bridges AWT keyboard and mouse events on a Swing component to the input pipeline.
   *
@@ -22,7 +24,8 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     inputRouter: InputRouter[F, E],
     metrics: () => CellMetrics,
     uiMetrics: () => CellMetrics,
-    wheelScrollLines: Int = InputConfig().wheelScrollLines
+    wheelScrollLines: Int = InputConfig().wheelScrollLines,
+    frameTimings: FrameTimings = FrameTimings()
 ) extends InputHandler[F]:
 
   def this(component: java.awt.Component, inputRouter: InputRouter[F, E], metrics: () => CellMetrics) =
@@ -73,23 +76,39 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   private val enqueuesInFlight   = new AtomicInteger(0)
   private val shutdownFlag       = new AtomicBoolean(false)
   private val pendingModifierTap = new AtomicReference[ModifierTapState](ModifierTapState.empty)
+  private val wheelRemainder     = new AtomicReference[WheelScrollState](WheelScrollState.empty)
+  private val lastKeyPress       = new AtomicReference[Option[(KeyStroke, Long)]](None)
 
-  private def enqueueInput(info: KeyStrokeInfo): Unit =
+  /** The last key press this handler queued and when it arrived, for [[MenuActivationGuard]]. The arrival time is read
+    * from the clock here rather than from `KeyEvent.getWhen`, whose time base the platform decides.
+    */
+  def lastPressed: Option[(KeyStroke, Long)] = lastKeyPress.get()
+
+  /** Queues an event from outside the AWT listeners, in order with the keys and clicks already queued. */
+  def submit(event: Event): Unit = enqueueRaw(event)
+
+  private def enqueueKey(info: KeyStrokeInfo, e: KeyEvent): Unit =
+    frameTimings.keyLatency.keyReceived(e.getWhen)
     enqueue(QueuedKey(info))
+    frameTimings.keyLatency.keyEnqueued()
 
   private def enqueueMouse(event: Event): Unit =
     enqueue(QueuedMouse(event))
 
-  /** Cursor-peek prototype: raw bare-modifier press/release and non-modifier-key-pressed signals, always emitted
-    * regardless of `commandRunnerCursorPeekEnabled` -- like mouse-move events, the translator emits unconditionally and
-    * `AppEventReducer` (which has `AppState`/`AppConfig`) decides whether the flag makes them relevant. See
-    * `GlobalAppEvent.scala`'s `CursorPeekModifierPressed`/`CursorPeekModifierReleased`/`CursorPeekOtherKeyPressed`.
-    */
   private def enqueueRaw(event: Event): Unit =
     enqueue(QueuedRaw(event))
 
+  /** Cursor-peek prototype: raw bare-modifier press/release and non-modifier-key-pressed signals. Dropped here while
+    * the prototype is off, so a key press costs no dispatch of its own (#1845); `AppEventReducer` still decides what
+    * they do once it is on. See `GlobalAppEvent.scala`'s `CursorPeekModifierPressed`/`CursorPeekModifierReleased`/
+    * `CursorPeekOtherKeyPressed`.
+    */
+  private def enqueueCursorPeek(event: Event): Unit =
+    if inputRouter.cursorPeekEnabled then enqueueRaw(event)
+
   private def enqueue(input: QueuedInput): Unit =
     if !shutdownFlag.get() then
+      frameTimings.inputArrived()
       enqueuesInFlight.incrementAndGet()
       if !shutdownFlag.get() then
         input match
@@ -129,32 +148,53 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
 
   component.addKeyListener(new KeyAdapter:
     override def keyTyped(e: KeyEvent): Unit =
-      translateTyped(e).foreach(enqueueInput)
+      translateTyped(e).foreach(enqueueKey(_, e))
     override def keyPressed(e: KeyEvent): Unit =
-      translatePressed(e).foreach(enqueueInput)
-      modifierOf(e).foreach((_, modifier) => enqueueRaw(CursorPeekModifierPressed(modifier, e.getWhen)))
+      lastKeyPress.set(Some((KeyStroke.getKeyStrokeForEvent(e), System.currentTimeMillis)))
+      translatePressed(e).foreach(enqueueKey(_, e))
+      modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierPressed(modifier, e.getWhen)))
     override def keyReleased(e: KeyEvent): Unit =
       translateModifierReleased(e)
-      modifierOf(e).foreach((_, modifier) => enqueueRaw(CursorPeekModifierReleased(modifier, e.getWhen))))
+      modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierReleased(modifier, e.getWhen))))
 
   // AWT reports a wheel notch as one "unit scroll" of `getScrollAmount` units; the platform's own amount is a system
-  // preference this setting stands in for, so a notch is `wheelScrollLines` lines whatever the OS says. Block scrolls
-  // (a page notch, some trackpads) report their own count and are honoured as multiples of it.
+  // preference this setting stands in for, so a notch is `wheelScrollLines` lines whatever the OS says. A block scroll
+  // notch is a page, as Swing's own scroll panes treat it. Trackpads report fractions of a notch through the precise
+  // rotation alone, so those are summed across events until they make a whole notch (issue #1796).
   //
   // Horizontal scroll gestures (issue #1568): AWT's `MouseWheelEvent` has no separate horizontal-delta channel of its
   // own, so shift-held is the convention this handler uses to tell a horizontal gesture (shift+wheel, or however a
   // given trackpad driver surfaces two-finger horizontal scrolling through the same event) apart from an ordinary
   // vertical one -- the same convention most editors already use for a plain scroll wheel.
-  component.addMouseWheelListener((e: java.awt.event.MouseWheelEvent) =>
-    val notches = if e.getWheelRotation != 0 then e.getWheelRotation else 0
-    if notches != 0 then
-      val amount = math.abs(notches) * wheelScrollLines
-      val event =
-        if e.isShiftDown then if notches > 0 then ScrollRight(amount) else ScrollLeft(amount)
-        else if notches > 0 then ScrollDown(amount)
-        else ScrollUp(amount)
+  component.addMouseWheelListener((e: MouseWheelEvent) =>
+    val axis = if e.isShiftDown then WheelAxis.Horizontal else WheelAxis.Vertical
+    val step = WheelScrollAccumulator.accumulate(wheelRemainder.get, axis, e.getPreciseWheelRotation)
+    wheelRemainder.set(step.state)
+    if step.notches != 0 then
+      val amount = math.abs(step.notches) * linesPerNotch(e, axis)
+      val event: Event = axis match
+        case WheelAxis.Horizontal => if step.notches > 0 then ScrollRight(amount) else ScrollLeft(amount)
+        case WheelAxis.Vertical =>
+          val pointer = buildMouseEvent(e, metrics())
+          MouseWheel(
+            pointer.col,
+            pointer.row,
+            if step.notches > 0 then amount else -amount,
+            pixelX = pointer.pixelX,
+            pixelY = pointer.pixelY,
+            shiftDown = pointer.shiftDown
+          )
       enqueueRaw(event)
   )
+
+  private def linesPerNotch(e: MouseWheelEvent, axis: WheelAxis): Int =
+    if e.getScrollType == MouseWheelEvent.WHEEL_BLOCK_SCROLL then
+      val currentMetrics = metrics()
+      val page = axis match
+        case WheelAxis.Vertical   => currentMetrics.toRow(component.getHeight)
+        case WheelAxis.Horizontal => currentMetrics.toCol(component.getWidth)
+      math.max(1, page)
+    else wheelScrollLines
 
   component.addMouseListener(
     new MouseAdapter:
@@ -244,6 +284,46 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       }
     )(input => Option(input).getOrElse(QueuedShutdown))
 
+  /** Parks on the blocking pool only when nothing is queued yet: input that piles up while the previous batch was being
+    * applied is taken without that thread hop.
+    */
+  override def inputBatches: Stream[F, Chunk[PendingInput]] =
+    Stream.eval(Sync[F].delay(shutdownFlag.get())).flatMap {
+      case true => Stream.empty
+      case false =>
+        Stream
+          .repeatEval(takeBatch)
+          .takeThrough(batch => !batch.contains(QueuedShutdown))
+          .evalMap(batch => Sync[F].delay { traceDequeuedKeys(batch); Chunk.from(batch.flatMap(pendingInput)) })
+          .filter(_.nonEmpty)
+    }
+
+  private def takeBatch: F[Vector[QueuedInput]] =
+    Sync[F].flatMap(Sync[F].delay(drainAvailable(Vector.empty))) { available =>
+      if available.nonEmpty then Sync[F].pure(available)
+      else Sync[F].flatMap(takeInput)(first => Sync[F].delay(drainAvailable(Vector(first))))
+    }
+
+  @annotation.tailrec
+  private def drainAvailable(taken: Vector[QueuedInput]): Vector[QueuedInput] =
+    if taken.lastOption.contains(QueuedShutdown) || !inputAvailable.tryAcquire() then taken
+    else drainAvailable(taken :+ Option(inputQueue.poll()).getOrElse(QueuedShutdown))
+
+  private def traceDequeuedKeys(batch: Vector[QueuedInput]): Unit =
+    if frameTimings.keyLatency.isEnabled then
+      frameTimings.keyLatency.keysDequeued(batch.count {
+        case QueuedKey(_) => true
+        case _            => false
+      })
+
+  private def pendingInput(input: QueuedInput): Option[PendingInput] =
+    input match
+      case QueuedKey(info)      => Some(PendingInput.Keystroke(info))
+      case QueuedMouse(event)   => Some(PendingInput.Ready(event))
+      case QueuedRaw(event)     => Some(PendingInput.Ready(event))
+      case QueuedMovement(slot) => slot.claim.map(PendingInput.Ready(_))
+      case QueuedShutdown       => None
+
   /** Cell coordinates and shared fields (pixel position, shift state) common to every mouse event, converted from a raw
     * AWT MouseEvent via the current CellMetrics.
     */
@@ -308,7 +388,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       case None if isModifierKey(e) => None
       case None =>
         pendingModifierTap.set(ModifierTapDetector.otherKeyPressed(pendingModifierTap.get))
-        enqueueRaw(CursorPeekOtherKeyPressed)
+        enqueueCursorPeek(CursorPeekOtherKeyPressed)
         val m = mods(e)
         e.getKeyCode match
           case VK_UP         => Some(KeyStrokeInfo(InputKey.ArrowUp, None, m))

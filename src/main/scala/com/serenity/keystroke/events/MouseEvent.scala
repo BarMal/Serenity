@@ -53,3 +53,18 @@ final case class MouseMove(
     shiftDown: Boolean = false,
     button: MouseButton = MouseButton.Primary
 ) extends MouseInputEvent
+
+/** A vertical wheel step at the pointer's cell, `lines` positive towards the end. The list panel under the pointer
+  * scrolls; anywhere else the step is [[scroll]] for the focused component.
+  */
+final case class MouseWheel(
+    col: Int,
+    row: Int,
+    lines: Int,
+    pixelX: Option[Int] = None,
+    pixelY: Option[Int] = None,
+    shiftDown: Boolean = false,
+    button: MouseButton = MouseButton.Other
+) extends MouseInputEvent:
+
+  def scroll: ScrollEvent = if lines < 0 then ScrollUp(-lines) else ScrollDown(lines)

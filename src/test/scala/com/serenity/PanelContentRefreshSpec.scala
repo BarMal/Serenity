@@ -29,8 +29,8 @@ class PanelContentRefreshSpec extends AnyFlatSpec with Matchers with StateManage
   private def outlineNames(state: AppState): List[String] =
     state.surfaceById(outlineId).toList.flatMap {
       _.content match
-        case SurfaceContent.Outline(symbols, _) => symbols.map(_.name)
-        case _                                  => Nil
+        case SurfaceContent.Outline(symbols, _, _) => symbols.map(_.name)
+        case _                                     => Nil
     }
 
   "A docked outline" should "pick up headings added by an edit" in {
@@ -55,7 +55,7 @@ class PanelContentRefreshSpec extends AnyFlatSpec with Matchers with StateManage
   private val explorerId = SurfaceId("explorer")
 
   private def explorerTree(state: AppState): Option[DirectoryTreeData] =
-    state.surfaceById(explorerId).map(_.content).collect { case SurfaceContent.DirectoryTree(tree, _) => tree }
+    state.surfaceById(explorerId).map(_.content).collect { case SurfaceContent.DirectoryTree(tree, _, _) => tree }
 
   "A docked explorer" should "list its root and expanded directories however it was docked" in {
     val root = Files.createTempDirectory("panel-refresh-explorer")

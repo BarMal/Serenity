@@ -7,6 +7,7 @@ import javax.accessibility.AccessibleContext
 import javax.swing.JComponent
 
 import com.serenity.config.WindowChromeMode
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.terminal.{SwingWindow, WindowsNativeChrome}
 import com.serenity.ui.theme.Theme
@@ -30,110 +31,15 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     scaled.titleBarHeight shouldBe base.titleBarHeight * 2
     scaled.buttonWidth shouldBe base.buttonWidth * 2
     scaled.margin shouldBe base.margin * 2
-    scaled.cornerArc shouldBe base.cornerArc * 2
     scaled.titleFontSize shouldBe base.titleFontSize * 2
   }
 
-  "SwingWindow" should "use per-pixel translucency for non-maximized custom chrome when supported" in {
-    SwingWindow.shouldUsePerPixelRoundedCorners(
-      usesCustomChrome = true,
-      maximized = false,
-      perPixelTranslucencySupported = true
-    ) shouldBe true
-
-    SwingWindow.shouldUsePerPixelRoundedCorners(
-      usesCustomChrome = true,
-      maximized = true,
-      perPixelTranslucencySupported = true
-    ) shouldBe false
-
-    SwingWindow.shouldUsePerPixelRoundedCorners(
-      usesCustomChrome = true,
-      maximized = false,
-      perPixelTranslucencySupported = false
-    ) shouldBe false
-  }
-
-  it should "use rounded custom chrome only for Auto mode on Linux" in {
-    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Auto, "Linux") shouldBe true
-    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Auto, "Windows 11") shouldBe false
-    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Native, "Linux") shouldBe false
-    SwingWindow.shouldUseCustomChrome(WindowChromeMode.NativeThemed, "Linux") shouldBe false
-    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Custom, "Linux") shouldBe true
-  }
-
-  it should "refresh the per-pixel corner mask when chrome metrics change" in {
-    val base   = SwingWindow.ChromeMetrics.fromCellMetrics(CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13))
-    val scaled = SwingWindow.ChromeMetrics.fromCellMetrics(CellMetrics(charWidth = 16, lineHeight = 32, ascent = 26))
-
-    val before = SwingWindow.roundedCornerMask(
-      usesCustomChrome = true,
-      maximized = false,
-      perPixelTranslucencySupported = true,
-      cornerArc = base.cornerArc
-    )
-    val after = SwingWindow.roundedCornerMask(
-      usesCustomChrome = true,
-      maximized = false,
-      perPixelTranslucencySupported = true,
-      cornerArc = scaled.cornerArc
-    )
-
-    SwingWindow.shouldRefreshRoundedCornerMask(before, after) shouldBe true
-  }
-
-  it should "coalesce burst resize shape updates until the queued update runs" in {
-    val updates   = new AtomicInteger(0)
-    val queued    = new java.util.concurrent.ConcurrentLinkedQueue[Runnable]()
-    val coalescer = new SwingWindow.CoalescedEdtUpdate(() => updates.incrementAndGet())
-
-    coalescer.schedule(queued.add)
-    coalescer.schedule(queued.add)
-    coalescer.schedule(queued.add)
-
-    queued.size shouldBe 1
-    updates.get() shouldBe 0
-
-    queued.remove().run()
-    updates.get() shouldBe 1
-
-    coalescer.schedule(queued.add)
-    queued.size shouldBe 1
-  }
-
-  it should "antialias a per-pixel rounded-corner mask over the composed window contents" in {
-    val contents = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB)
-    val graphics = contents.createGraphics()
-    try
-      graphics.setColor(new Color(0x22, 0x44, 0x66))
-      graphics.fillRect(0, 0, contents.getWidth, contents.getHeight)
-    finally graphics.dispose()
-
-    val masked = new SwingWindow.RoundedCornerMaskBufferCache().acquire(32, 32, cornerArc = 16).mask(contents)
-    val alphas =
-      for
-        x <- 0 until masked.getWidth
-        y <- 0 until masked.getHeight
-      yield (masked.getRGB(x, y) >>> 24) & 0xff
-
-    ((masked.getRGB(0, 0) >>> 24) & 0xff) shouldBe 0
-    ((masked.getRGB(16, 0) >>> 24) & 0xff) shouldBe 255
-    alphas.exists(alpha => alpha > 0 && alpha < 255) shouldBe true
-    val topCornerEdgeAlpha = (masked.getRGB(4, 0) >>> 24) & 0xff
-    topCornerEdgeAlpha should be > 0
-    topCornerEdgeAlpha should be < 40
-  }
-
-  "SwingWindow.RoundedCornerMaskBufferCache" should "reuse buffers until their size or corner arc changes" in {
-    val cache        = new SwingWindow.RoundedCornerMaskBufferCache
-    val initial      = cache.acquire(width = 640, height = 480, cornerArc = 12)
-    val sameGeometry = cache.acquire(width = 640, height = 480, cornerArc = 12)
-    val resized      = cache.acquire(width = 800, height = 480, cornerArc = 12)
-    val resizedArc   = cache.acquire(width = 800, height = 480, cornerArc = 24)
-
-    sameGeometry should be theSameInstanceAs initial
-    resized should not be theSameInstanceAs(initial)
-    resizedArc should not be theSameInstanceAs(resized)
+  "SwingWindow" should "use custom chrome only for Auto mode on Linux" in {
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Auto, "Linux", Map.empty) shouldBe true
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Auto, "Windows 11", Map.empty) shouldBe false
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Native, "Linux", Map.empty) shouldBe false
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.NativeThemed, "Linux", Map.empty) shouldBe false
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Custom, "Linux", Map.empty) shouldBe true
   }
 
   "SwingWindow.ReusableImagePool" should "reuse an unpublished image and alternate after publication" in {
@@ -176,22 +82,6 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     val second = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
 
     second should not be theSameInstanceAs(first)
-  }
-
-  it should "clear prior frame pixels before masking a reused rounded buffer" in {
-    val buffers = new SwingWindow.RoundedCornerMaskBufferCache().acquire(width = 32, height = 32, cornerArc = 16)
-
-    buffers.render { graphics =>
-      graphics.setColor(Color.RED)
-      graphics.fillRect(0, 0, 32, 32)
-    }
-    val refreshed = buffers.render { graphics =>
-      graphics.setColor(Color.BLUE)
-      graphics.fillRect(16, 1, 1, 1)
-    }
-
-    ((refreshed.getRGB(16, 16) >>> 24) & 0xff) shouldBe 0
-    refreshed.getRGB(16, 1) shouldBe Color.BLUE.getRGB
   }
 
   it should "derive viewport size from the live canvas size when available" in {
@@ -275,8 +165,8 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     WindowsNativeChrome.RoundedCornerPreference shouldBe 2
   }
 
-  "SwingWindow.NativeChromeThemeCache" should "avoid reapplying an unchanged supported palette" in {
-    val cache        = new SwingWindow.NativeChromeThemeCache
+  "SwingWindow.ChromePaletteCache" should "avoid reapplying an unchanged supported palette" in {
+    val cache        = new SwingWindow.ChromePaletteCache
     val lightPalette = SwingWindow.ChromePalette.fromTheme(Theme.light)
     val darkPalette  = SwingWindow.ChromePalette.fromTheme(Theme.dark)
 
@@ -286,8 +176,17 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     cache.recordIfChanged(darkPalette, supported = true) shouldBe false
   }
 
+  it should "apply the chrome palette once for repeated identical themes" in {
+    val cache = new SwingWindow.ChromePaletteCache
+
+    val applied = List(Theme.dark, Theme.dark.copy(), Theme.dark, Theme.light, Theme.light)
+      .map(theme => cache.recordIfChanged(SwingWindow.ChromePalette.fromTheme(theme), supported = true))
+
+    applied shouldBe List(true, false, false, true, false)
+  }
+
   it should "leave the palette uncached when native chrome is unsupported" in {
-    val cache   = new SwingWindow.NativeChromeThemeCache
+    val cache   = new SwingWindow.ChromePaletteCache
     val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
 
     cache.recordIfChanged(palette, supported = false) shouldBe false
@@ -308,16 +207,16 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
 
   "SwingWindow.ChromePalette" should "derive custom chrome colours from the active theme" in {
     val theme = Theme.light.copy(
-      border = new Color(0x111111),
-      panelBorder = new Color(0x222222)
+      border = RenderColor.fromArgb(0xff111111),
+      panelBorder = RenderColor.fromArgb(0xff222222)
     )
     val palette = SwingWindow.ChromePalette.fromTheme(theme)
 
-    palette.titleBackground shouldBe theme.panel.background
-    palette.titleForeground shouldBe theme.panel.foreground
-    palette.border shouldBe theme.panelBorder
-    palette.border should not be theme.border
-    palette.closeHoverBackground shouldBe theme.error.foreground
+    palette.titleBackground shouldBe theme.panel.background.toAwt
+    palette.titleForeground shouldBe theme.panel.foreground.toAwt
+    palette.border shouldBe theme.panelBorder.toAwt
+    palette.border should not be theme.border.toAwt
+    palette.closeHoverBackground shouldBe theme.error.foreground.toAwt
   }
 
   it should "derive distinct custom chrome colours for dark and light themes" in {
@@ -340,7 +239,7 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
   it should "derive focused button affordance colours from the active theme" in {
     val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
 
-    palette.focusBorder shouldBe Theme.light.highlighted.foreground
+    palette.focusBorder shouldBe Theme.light.highlighted.foreground.toAwt
     palette.focusBorder should not be palette.border
   }
 

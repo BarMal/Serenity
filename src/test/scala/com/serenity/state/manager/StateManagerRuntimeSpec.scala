@@ -18,6 +18,7 @@ import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.{AppState, BufferId, SurfaceContent}
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
@@ -56,7 +57,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       uiPresetStore = UiPresetStore.default,
       windowSizeProvider = IO.pure(Some(PreferredWindowSize(1000, 700))),
       onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-      fileDialog = None
+      fileDialog = None,
+      dictionaryCache = SharedDictionary.default
     )
 
   private def compose(runtime: StateManagerRuntime, operations: StateManagerOperationBoundary) =
@@ -105,7 +107,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
           )
         )
       )
-      modelRef  <- Ref.of[IO, Model](Model(focused, UndoState(), Map.empty))
+      modelRef  <- Ref.of[IO, Model](Model(focused, UndoState()))
       remaining <- Ref.of[IO, List[EndlessTask]](tasks)
       runtime   <- runtimeOver(modelRef)
       launcher: ProjectTaskLauncher = (_, _) =>
@@ -136,7 +138,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
 
   "StateManagerRuntime" should "collect manager dependencies behind one runtime boundary" in {
     val program = for
-      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))
       themeNamesRef       <- Ref.of[IO, List[String]](List("dark"))
       quitSignal          <- Deferred[IO, Unit]
       lspQueue            <- LspEffectQueue.create
@@ -159,7 +161,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         uiPresetStore = UiPresetStore.default,
         windowSizeProvider = IO.pure(Some(PreferredWindowSize(1000, 700))),
         onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-        fileDialog = None
+        fileDialog = None,
+        dictionaryCache = SharedDictionary.default
       )
     yield
       runtime.modelRef shouldBe modelRef
@@ -330,7 +333,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
             case LspQueueEffect.Enqueue(value) => observed.update(_ :+ value)
             case LspQueueEffect.DocumentChanged(uri, languageId, text) =>
               observed.update(_ :+ LspEffect.FileChanged(uri, languageId, text, version = 0)),
-          animation = _ => IO.unit,
           scheduleCommandRunnerBindingExpiry = _ => IO.unit
         )
       )

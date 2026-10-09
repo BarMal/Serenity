@@ -20,13 +20,13 @@ class PeekStackingReducerSpec extends AnyFlatSpec with Matchers:
 
   private def valid(state: AppState): Boolean = AppStateValidation.validated(state).isRight
 
-  "PeekStateReducer.show" should "keep an open comment lens while focusing the new peek" in {
+  "PeekStateReducer.show" should "keep an open comment lens, and its focus, alongside the new peek" in {
     val lensOpen = withLens(line)
     val shown    = lensAndPeek(line)
 
     shown.commentLensSurface shouldBe lensOpen.commentLensSurface
     shown.peekSurface.map(_.content) shouldBe Some(SurfaceContent.QuickInfo(PeekText))
-    shown.persisted.focus shouldBe Focus.Surface(peekId(shown))
+    shown.persisted.focus shouldBe Focus.Surface(lensId(shown))
     valid(shown) shouldBe true
   }
 

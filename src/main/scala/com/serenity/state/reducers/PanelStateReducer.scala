@@ -1,7 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.state.models.*
-import com.serenity.state.undo.HistoryEntry
+import com.serenity.state.undo.{EditGrouping, HistoryEntry}
 import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition, PanelTarget}
 
 object PanelStateReducer:
@@ -33,7 +33,7 @@ object PanelStateReducer:
         ),
         runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ panel)
       ),
-      AppEffect.Undo(UndoEffect.RecordBoundary(undoEntry, groupable = false))
+      AppEffect.Undo(UndoEffect.RecordBoundary(undoEntry, EditGrouping.Standalone))
     )
 
   /** Every panel docks under its own fixed id, replacing any instance of it already docked (keeping focus on it). */
@@ -135,7 +135,7 @@ object PanelStateReducer:
             ),
             runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id))
           ),
-          AppEffect.Undo(UndoEffect.RecordBoundary(undoEntry, groupable = false))
+          AppEffect.Undo(UndoEffect.RecordBoundary(undoEntry, EditGrouping.Standalone))
         )
       case None =>
         ReducerResult.noEffects(state)
@@ -212,11 +212,15 @@ object PanelStateReducer:
       )
     )
 
+  /** A peek never holds focus (#1940), so it is found by what it shows rather than as the focused surface. */
   def pinPeekOverlay(position: PanelPosition, state: AppState): ReducerResult =
-    pinActiveFloatingSurface(position, state)
+    pinFloatingSurface(state.peekSurface, position, state)
 
   def pinActiveFloatingSurface(position: PanelPosition, state: AppState): ReducerResult =
-    activeFloatingSurface(state)
+    pinFloatingSurface(activeFloatingSurface(state), position, state)
+
+  private def pinFloatingSurface(floating: Option[UiSurface], position: PanelPosition, state: AppState): ReducerResult =
+    floating
       .flatMap(toPinnedSurface)
       .map { panel =>
         val tree = state.persisted.layout.workspaceTree.flatMap { workspaceTree =>
@@ -255,23 +259,23 @@ object PanelStateReducer:
             dismissOnMove = false
           )
         )
-      case SurfaceContent.DirectoryTree(tree, selectedPath) =>
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scroll) =>
         Some(
           surface.copy(
-            content = SurfaceContent.DirectoryTree(tree, selectedPath.orElse(Some(tree.rootPath))),
+            content = SurfaceContent.DirectoryTree(tree, selectedPath.orElse(Some(tree.rootPath)), scroll),
             presentation = SurfacePresentation.Docked,
             dismissOnMove = false
           )
         )
-      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) |
-          SurfaceContent.Diagnostics(_, _) | SurfaceContent.MarkdownPreview(_, _) =>
+      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _, _) | SurfaceContent.Comments(_, _, _) |
+          SurfaceContent.Diagnostics(_, _, _) | SurfaceContent.MarkdownPreview(_, _) =>
         Some(surface.copy(presentation = SurfacePresentation.Docked, dismissOnMove = false))
       case SurfaceContent.StartPage(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) |
           SurfaceContent.ThemeCreator(_) | SurfaceContent.ContextualToolbar(_) | SurfaceContent.ContextMenu(_) |
           SurfaceContent.CommentLens(_) | SurfaceContent.ModalWorkflow(_) | SurfaceContent.QuickInfo(_) |
           SurfaceContent.FilePreview(_, _) | SurfaceContent.SymbolDefinition(_, _) | SurfaceContent.StatusLine(_) |
-          SurfaceContent.GhostOverlay(_, _) | SurfaceContent.ShortcutsHelp(_) | SurfaceContent.TabList(_, _) |
-          SurfaceContent.RecentFilesInMode(_, _) | SurfaceContent.TabBar(_, _) | SurfaceContent.CompanionSprite =>
+          SurfaceContent.ShortcutsHelp(_) | SurfaceContent.TabList(_, _) | SurfaceContent.RecentFilesInMode(_, _) |
+          SurfaceContent.TabBar(_, _) | SurfaceContent.Notice(_, _) =>
         None
 
   private def replaceSurface(surfaces: List[UiSurface], updated: UiSurface): List[UiSurface] =

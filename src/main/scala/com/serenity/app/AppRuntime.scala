@@ -5,25 +5,32 @@ import java.nio.file.Path
 import scala.concurrent.duration.*
 
 import cats.effect.*
-import cats.effect.std.Dispatcher
+import cats.effect.std.{Dispatcher, Supervisor}
+import cats.syntax.apply.*
 import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
 import com.serenity.config.{AppConfig, RenderFpsTarget}
+import com.serenity.diagnostics.{FrameTimingReport, FrameTimings, KeyLatencyReport}
 import com.serenity.frontend.{Frontend, FrontendRuntime}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
 import com.serenity.state.manager.*
-import com.serenity.state.models.{AppState, BufferId, Damage}
+import com.serenity.state.models.{AppState, Damage, PointerShape}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import fs2.Stream
-import fs2.concurrent.SignallingRef
+import fs2.concurrent.{Signal, SignallingRef}
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 object AppRuntime:
+
+  export AppRuntimeExternalChanges.{externalChangeWatchLoop, watchInputsChanged}
+  export AppRuntimeSettingFollowers.{followFrameTimingSetting, followLatencyTraceSetting}
+  export AppRuntimeCallbacks.{closeMarkdownPreviewWindowInState, markdownPreviewCloseCallbackBridge}
+  export AppRuntimeDiagnostics.describeStateForDiagnostics
 
   /** Issue #1669's remaining scope moved this onto [[FrontendRuntime]], the frontend-owned render/input bundle; kept as
     * an alias so callers outside this file (`AppRuntimeRenderLoops`, `TuiRuntime`) don't need to know it moved.
@@ -38,37 +45,43 @@ object AppRuntime:
   private[serenity] def fastFrameInterval(target: RenderFpsTarget): FiniteDuration =
     FiniteDuration(NanosPerSecond / target.framesPerSecond.toLong, NANOSECONDS)
 
+  /** How long a fast frame waits so it starts no earlier than one interval after the previous frame's start: render
+    * time already spent counts towards the interval instead of adding to it, and a frame whose deadline has passed --
+    * or the first frame ever -- starts at once.
+    */
   private[serenity] def fastFrameDelay(
     frameInterval: FiniteDuration,
-    isInitialFrame: Boolean = false
+    previousFrameStart: Option[FiniteDuration],
+    now: FiniteDuration
   ): FiniteDuration =
-    if isInitialFrame then Duration.Zero else frameInterval
+    previousFrameStart.fold(Duration.Zero)(previous => (previous + frameInterval - now).max(Duration.Zero))
 
-  private[serenity] def resetCursorActivity(cursorVisible: Ref[IO, Boolean], breathIndex: Ref[IO, Int]): IO[Unit] =
-    cursorVisible.set(true) >> breathIndex.set(0)
+  private[serenity] def resetCursorActivity(cursorVisible: Ref[IO, Boolean]): IO[Unit] =
+    cursorVisible.set(true)
 
   /** React to a Swing window focus transition. Losing focus parks the cursor visible-and-steady (reset to the start of
-    * its blink/breathe cycle) and forces one fast render so the steady caret paints immediately, regardless of where
-    * the idle loop was in its own cadence. Regaining focus flips the signal the idle loop is waiting on --
+    * its blink cycle) and forces one fast render so the steady caret paints immediately, regardless of where the idle
+    * loop was in its own cadence. Regaining focus flips the signal the idle loop is waiting on --
     * `awaitFocusedIdleTick` picks that up and resumes the normal cadence on its own -- and runs `onFocusGained` (#1623:
     * re-checking the focused buffer's file for external changes), defaulted to a no-op for callers that don't need it
-    * (most existing tests).
+    * (most existing tests). Losing focus runs `onFocusLost` last (#1992: the auto-save modes that write when the window
+    * is left), after the caret and render are settled.
     */
   private[serenity] def onWindowFocusChanged(
     focused: Boolean,
     windowFocused: SignallingRef[IO, Boolean],
     cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int],
     requestFastRender: IO[Unit],
-    onFocusGained: IO[Unit] = IO.unit
+    onFocusGained: IO[Unit] = IO.unit,
+    onFocusLost: IO[Unit] = IO.unit
   ): IO[Unit] =
     if focused then windowFocused.set(true) >> onFocusGained
-    else windowFocused.set(false) >> resetCursorActivity(cursorVisible, breathIndex) >> requestFastRender
+    else windowFocused.set(false) >> resetCursorActivity(cursorVisible) >> requestFastRender >> onFocusLost
 
   /** The idle loop's per-tick wait: the normal cursor idle cadence while the window is focused, or an indefinite,
     * wakeup-free wait otherwise -- the mechanism that actually stops idle wakeups, rather than merely skipping the
     * render they'd otherwise trigger. Two things can make focused waiting indefinite instead of cadenced:
-    * `cursorIdleInterval` returning `None` (motion disabled, or #1170's TUI-blink caret delegation --
+    * `cursorIdleInterval` returning `None` (#1170's TUI-blink caret delegation --
     * [[com.serenity.frontend.Frontend.cursorIdleInterval]]), racing here against [[Stream.interruptWhen]]'s
     * `fastModeSignal` in [[idleRenderPhase]] so a real input event still wakes it immediately -- and losing focus
     * entirely, which waits on `windowFocused` turning true again instead.
@@ -89,27 +102,29 @@ object AppRuntime:
         windowFocused.discrete.find(identity).compile.drain
     }
 
-  /** The fast phase may stand down once nothing is animating and no fresh damage arrived while it was running --
-    * `pendingDamage` is drained to `Damage.Nothing` when the phase starts, so any non-`Nothing` value here means
-    * `emitDamage` was called again since, and the phase should carry straight on rather than idle even one tick.
+  /** Whether the caret blinks on after `blinks` idle ticks without input, or has blinked through the configured cursor
+    * blink timeout and should hold solid (#1883).
     */
-  private[serenity] def shouldClearFastMode(stillActive: Boolean, pendingDamage: Damage): Boolean =
-    !stillActive && pendingDamage == Damage.Nothing
+  private[serenity] def keepsBlinking(config: AppConfig, blinkInterval: FiniteDuration, blinks: Int): Boolean =
+    config.cursorBlinkTimeout.forall(timeout => blinkInterval * blinks.toLong < timeout)
 
-  final private[serenity] case class AnimationTickCadence(remainderNanos: Long):
+  /** The fast phase stands down once no fresh damage arrived while it was running -- `pendingDamage` is drained to
+    * `Damage.Nothing` when the phase starts, so any non-`Nothing` value here means `emitDamage` was called again since,
+    * and the loop should carry straight on to another frame rather than idle.
+    */
+  private[serenity] def shouldClearFastMode(pendingDamage: Damage): Boolean =
+    pendingDamage == Damage.Nothing
 
-    def advance(frameInterval: FiniteDuration): (AnimationTickCadence, Int) =
-      // The tick bucket follows the caller's own frame interval (i.e. the configured renderFpsTarget) rather than a
-      // fixed 60Hz constant, so animation state advances once per actual paint frame -- lowering render FPS also
-      // lowers animation-tick CPU cost instead of ticking internally at 60Hz regardless of paint rate.
-      val totalNanos     = remainderNanos + frameInterval.toNanos
-      val animationNanos = math.max(1L, frameInterval.toNanos)
-      val ticks          = (totalNanos / animationNanos).toInt
-      val nextRemainder  = totalNanos % animationNanos
-      (AnimationTickCadence(nextRemainder), ticks)
-
-  private[serenity] object AnimationTickCadence:
-    val empty: AnimationTickCadence = AnimationTickCadence(0L)
+  /** Only input, resize and focus changes call `emitDamage` themselves; this covers every other commit -- language
+    * server diagnostics, an async open, task output, find results -- so it shows without waiting for the next key. A
+    * commit that changes nothing on screen stays silent, so an idle editor stays idle.
+    */
+  private[serenity] def wakeRenderLoopOnCommit(
+    emitDamage: Damage => IO[Unit]
+  )(using com.serenity.rope.Balance): (AppState, AppState) => IO[Unit] =
+    (before, after) =>
+      val damage = DamageProducer.forTransition(before, after)
+      IO.whenA(damage != Damage.Nothing)(emitDamage(damage))
 
   final private[serenity] case class RuntimeFailure(
       loopName: String,
@@ -131,9 +146,13 @@ object AppRuntime:
     openPath: Option[Path] = None,
     systemClipboard: SystemClipboard[IO] = SystemClipboard.awt[IO],
     frontend: Frontend = com.serenity.frontend.GuiFrontend,
-    configNotice: Option[String] = None
+    configNotice: Option[String] = None,
+    recovery: StartupRecovery.Plan = StartupRecovery.Plan.normal,
+    onFirstFrame: IO[Unit] = IO.unit,
+    forwardedOpens: Stream[IO, List[Path]] = Stream.empty,
+    fileOrFolderOpen: Boolean = false
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
-    Dispatcher.parallel[IO].use { resizeCallbackDispatcher =>
+    (Dispatcher.parallel[IO], Supervisor[IO](await = false)).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
       for
         _ <- logger.info("Starting Serenity text editor")
         themeManager = com.serenity.ui.theme.config.AppThemeManager.create
@@ -141,45 +160,63 @@ object AppRuntime:
           logger
         )
         startupTheme <- AppStartup.startupTheme(stateManager.sessionStartupInfo, themeManager)
-        initialState <- AppStartup.initializeState(
+        _ <- AppStartup.initializeState(
           stateManager,
           stateManager.sessionStartupInfo,
           startupTheme,
           initialViewportSize,
           appConfig,
           openPath,
-          frontend.capabilities,
-          configNotice
+          frontend.capabilities.copy(opensFileOrFolder = fileOrFolderOpen),
+          configNotice,
+          recovery
         )
+        // The first frame is drawn from this state, so the OS appearance is applied to it before it exists, within a bound.
+        _            <- stateManager.followSystemAppearanceWithin(AppStartup.AppearanceDetectionBound)
+        initialState <- stateManager.getCurrentState
+        surfaceConfig = initialState.persisted.config.surfaceConfig
         inputRouter    <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
         inputHandler   <- runtime.inputHandler(inputRouter)
         _              <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
+        _              <- inputRouter.setCursorPeekEnabled(surfaceConfig.commandRunnerCursorPeekEnabled)
         fastModeSignal <- SignallingRef.of[IO, Boolean](false)
         pendingDamage  <- Ref.of[IO, Damage](Damage.Nothing)
-        // Separate from pendingDamage: that ref answers "should the fast loop keep running," reset once per phase and
-        // deliberately blind to the phase's own animation ticks (see shouldClearFastMode). This one answers "what has
-        // changed since the last frame was actually drawn," fed by both input events and animation ticks alike, and
-        // drained by every render call rather than once per phase -- the render-surface-side accumulator #999 is
-        // building keeps this from growing unbounded, since a real render drains it dozens of times a second.
+        // Separate from pendingDamage: that ref answers "did more damage arrive while the fast phase ran" (see
+        // shouldClearFastMode). This one answers "what has changed since the last frame was actually drawn," and is
+        // drained by every render call.
         pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
         emitDamage = (damage: Damage) =>
           pendingDamage.update(_ |+| damage) >> pendingPaintDamage.update(_ |+| damage) >> fastModeSignal.set(true)
         // The resize/idle-recovery paths don't have a before/after AppState to diff, so they report the coarsest
         // damage rather than none -- inputEventPhase is the one caller that reports real per-event damage.
         requestFastRender = emitDamage(Damage.Everything)
+        typingQuietTimer    <- TypingQuietTimer.create(timerSupervisor, TypingQuietTimer.expireIn(stateManager))
+        frameTimingEnabled  <- SignallingRef.of[IO, Boolean](surfaceConfig.frameTimingEnabled)
+        latencyTraceEnabled <- SignallingRef.of[IO, Boolean](surfaceConfig.latencyTraceEnabled)
+        watchInputs         <- SignallingRef.of[IO, Long](0L)
+        wakeOnCommit = wakeRenderLoopOnCommit(emitDamage)
+        observeTransition = (before: AppState, after: AppState) =>
+          typingQuietTimer.onCommit(before, after) >> followFrameTimingSetting(frameTimingEnabled)(before, after) >>
+            followLatencyTraceSetting(latencyTraceEnabled)(before, after) >>
+            IO.whenA(watchInputsChanged(before, after))(watchInputs.update(_ + 1)) >>
+            IO.whenA(PointerShape.shown(before) != PointerShape.shown(after))(
+              runtime.applyPointerShape(PointerShape.shown(after))
+            )
+        _ <- stateManager.runtimeLifecycle.observeCommits((before, after) =>
+          wakeOnCommit(before, after) >> observeTransition(before, after)
+        )
         _             <- IO(registerResizeCallback(resizeCallbackBridge(requestFastRender, resizeCallbackDispatcher)))
         cursorVisible <- Ref.of[IO, Boolean](true)
-        breathIndex   <- Ref.of[IO, Int](0)
         windowFocused <- SignallingRef.of[IO, Boolean](true)
         _ <- IO(
           registerFocusCallback(
             focusCallbackBridge(
               windowFocused,
               cursorVisible,
-              breathIndex,
               requestFastRender,
               resizeCallbackDispatcher,
-              stateManager.fileService.checkExternalChangesOnFocus
+              stateManager.fileService.checkExternalChangesOnFocus >> stateManager.followSystemAppearance,
+              stateManager.fileService.autoSaveOnWindowFocusLost
             )
           )
         )
@@ -188,69 +225,85 @@ object AppRuntime:
             markdownPreviewCloseCallbackBridge(stateManager, resizeCallbackDispatcher)
           )
         )
-        animationTickCadence <- Ref.of[IO, AnimationTickCadence](AnimationTickCadence.empty)
-        translatorCache      <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
+        lastFastFrameStart <- Ref.of[IO, Option[FiniteDuration]](None)
+        translatorCache    <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
         currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
-        inputFunnel = AppRuntimeRenderLoops.inputEventPhase(
-          stateManager,
-          inputRouter,
-          systemClipboard,
-          checkResizeAndHandle,
-          cursorVisible,
-          breathIndex,
-          emitDamage,
-          translatorCache
+        firstInput <- Deferred[IO, Unit]
+        inputFunnel = AppRuntimeRenderLoops.inputBatchPhase(
+          AppRuntimeRenderLoops.InputBatchContext(
+            stateManager,
+            inputRouter,
+            systemClipboard,
+            checkResizeAndHandle,
+            cursorVisible,
+            emitDamage,
+            translatorCache,
+            runtime.frameTimings,
+            onUserInput = firstInput.complete(()).void,
+            observeBatch = observeTransition,
+            logEvent = (event, focus) => AppRuntimeLogging.logSelectiveEvents(event, focus, logger)
+          )
         )
-        inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
+        inputLoop = runInputLoop(stateManager, inputHandler.inputBatches.through(inputFunnel))
         _ <-
           Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
-            runtime.renderFull(initialState, true, None, Damage.Everything, Map.empty, stateManager.renderCaches) >>
+            runtime.renderFull(initialState, true, None, Damage.Everything, stateManager.renderCaches) >>
+              onFirstFrame >>
               logger.info("Initial render completed, starting main loop") >>
-              {
-                val idlePhase = AppRuntimeRenderLoops.idleRenderPhase(
-                  loadModel = stateManager.getModel,
-                  fastModeSignal = fastModeSignal,
-                  windowFocused = windowFocused,
-                  pendingPaintDamage = pendingPaintDamage,
-                  currentStateForDiagnostics = currentStateForDiagnostics,
-                  checkResizeAndHandle = checkResizeAndHandle,
-                  cursorVisible = cursorVisible,
-                  breathIndex = breathIndex,
-                  renderCursorOnly = runtime.renderCursorOnly,
-                  requestFastRender = requestFastRender,
-                  cursorIdleInterval = frontend.cursorIdleInterval,
-                  renderCaches = stateManager.renderCaches
+              startupWarmUp(runtime, initialState, initialViewportSize, firstInput)
+                .flatMap(_ =>
+                  runtime.menuResource(stateManager.getModel, dispatchIfRunning(resizeCallbackDispatcher)(_))
                 )
-
-                val fastPhase = AppRuntimeRenderLoops.fastRenderPhase(
-                  stateManager,
-                  stateManager.animationTicker,
-                  fastModeSignal,
-                  pendingDamage,
-                  pendingPaintDamage,
-                  animationTickCadence,
-                  currentStateForDiagnostics,
-                  checkResizeAndHandle,
-                  runtime.renderFull,
-                  stateManager.renderCaches
-                )
-
-                val renderLoop: Stream[IO, Unit] =
-                  Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
-
-                com.serenity.io.FileChangeWatcher.create.use(watcher =>
-                  runRuntimeLoops(
-                    stateManager,
-                    inputHandler,
-                    inputFiber.joinWithNever,
-                    renderLoop,
-                    watcher,
-                    awaitExternalQuit,
-                    appConfig
+                .surround {
+                  val idlePhase = AppRuntimeRenderLoops.idleRenderPhase(
+                    loadModel = stateManager.getModel,
+                    fastModeSignal = fastModeSignal,
+                    windowFocused = windowFocused,
+                    pendingPaintDamage = pendingPaintDamage,
+                    currentStateForDiagnostics = currentStateForDiagnostics,
+                    checkResizeAndHandle = checkResizeAndHandle,
+                    cursorVisible = cursorVisible,
+                    renderCursorOnly = runtime.renderCursorOnly,
+                    requestFastRender = requestFastRender,
+                    cursorIdleInterval = frontend.cursorIdleInterval,
+                    renderCaches = stateManager.renderCaches
                   )
-                )
-              }
+
+                  val fastPhase = AppRuntimeRenderLoops.fastRenderPhase(
+                    stateManager,
+                    fastModeSignal,
+                    pendingDamage,
+                    pendingPaintDamage,
+                    currentStateForDiagnostics,
+                    checkResizeAndHandle,
+                    runtime.renderFull,
+                    stateManager.renderCaches,
+                    lastFrameStart = lastFastFrameStart,
+                    keyLatency = runtime.frameTimings.keyLatency
+                  )
+
+                  val renderLoop = AppRuntimeRenderLoops.renderLoop(idlePhase, fastPhase)
+
+                  com.serenity.io.FileChangeWatcher.create.use(watcher =>
+                    runRuntimeLoops(
+                      stateManager,
+                      inputHandler,
+                      inputFiber.joinWithNever,
+                      renderLoop,
+                      watcher,
+                      awaitExternalQuit,
+                      appConfig,
+                      runtime.frameTimings,
+                      frameTimingEnabled,
+                      latencyTraceEnabled,
+                      watchInputs.discrete.as(()),
+                      windowFocused,
+                      forwardedOpens,
+                      recovery.crashRecorder
+                    )
+                  )
+                }
           }
         _ <- logger.info("Serenity editor shutdown complete")
       yield ()
@@ -263,33 +316,41 @@ object AppRuntime:
     renderLoop: Stream[IO, Unit],
     fileChangeWatcher: com.serenity.io.FileChangeWatcher,
     awaitExternalQuit: IO[Unit],
-    appConfig: AppConfig
+    appConfig: AppConfig,
+    frameTimings: FrameTimings,
+    frameTimingEnabled: SignallingRef[IO, Boolean],
+    latencyTraceEnabled: SignallingRef[IO, Boolean],
+    watchInputsChanges: Stream[IO, Unit],
+    windowFocused: Signal[IO, Boolean],
+    forwardedOpens: Stream[IO, List[Path]],
+    recordCrash: StartupRecovery.CrashRecorder
   )(using logger: Logger[IO]): IO[Unit] =
     val (lifecycle, quitSignal) = (stateManager.runtimeLifecycle, stateManager.runtimeLifecycle.awaitQuit.attempt)
     (
       awaitInputLoop,
-      AppRuntimeRenderLoops.superviseLoop("render loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("render loop", lifecycle.forceQuit, recordCrash)(
         renderLoop.interruptWhen(quitSignal).compile.drain
       ),
       lifecycle.awaitQuit,
-      AppRuntimeRenderLoops.superviseLoop("interval save loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("interval save loop", lifecycle.forceQuit, recordCrash)(
         lifecycle.intervalSaveStream.compile.drain
       ),
-      AppRuntimeRenderLoops.superviseLoop("external quit coordinator", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("external quit coordinator", lifecycle.forceQuit, recordCrash)(
         coordinateExternalQuit(awaitExternalQuit, lifecycle.forceQuit, lifecycle.awaitQuit)
       ),
-      AppRuntimeRenderLoops.superviseLoop("input shutdown", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("input shutdown", lifecycle.forceQuit, recordCrash)(
         shutdownInputAfterQuit(lifecycle.awaitQuit, inputHandler.shutdown)
       ),
-      AppRuntimeRenderLoops.superviseLoop("LSP loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("LSP loop", lifecycle.forceQuit, recordCrash)(
         LspManager.run(
           stateManager.lspEffectSource.lspEffectStream,
           stateManager.applyEvent,
           logger,
-          appConfig.languageToolsConfig.lspUserConfig
+          appConfig.languageToolsConfig.lspUserConfig,
+          stateManager.lspEffectSource.notices
         )
       ),
-      AppRuntimeRenderLoops.superviseLoop("external change watch loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("external change watch loop", lifecycle.forceQuit, recordCrash)(
         externalChangeWatchLoop(
           fileChangeWatcher,
           stateManager.fileService.openBufferPaths,
@@ -297,76 +358,70 @@ object AppRuntime:
           stateManager.fileService.dictionaryWatchDirectories,
           stateManager.fileService.refreshDictionaryFingerprints,
           stateManager.fileService.explorerWatchDirectories,
-          stateManager.fileService.markExplorerDirectoriesStale
+          stateManager.fileService.markExplorerDirectoriesStale,
+          stateManager.fileService.configWatch,
+          watchInputsChanges,
+          windowFocused = windowFocused
         ).interruptWhen(quitSignal).compile.drain
+      ),
+      AppRuntimeRenderLoops.superviseLoop("frame timing report", lifecycle.forceQuit, recordCrash)(
+        FrameTimingReport
+          .stream(frameTimings, frameTimingEnabled.discrete, line => logger.info(line))
+          .interruptWhen(quitSignal)
+          .compile
+          .drain
+      ),
+      AppRuntimeRenderLoops.superviseLoop("latency trace report", lifecycle.forceQuit, recordCrash)(
+        KeyLatencyReport
+          .stream(frameTimings.keyLatency, latencyTraceEnabled.discrete, line => logger.info(line))
+          .interruptWhen(quitSignal)
+          .compile
+          .drain
+      ),
+      AppRuntimeRenderLoops.superviseLoop("forwarded open loop", lifecycle.forceQuit, recordCrash)(
+        forwardedOpens.evalMap(openForwarded(stateManager.fileOpener)).interruptWhen(quitSignal).compile.drain
       )
-    ).parMapN((_, _, _, _, _, _, _, _) => ())
+    ).parMapN((_, _, _, _, _, _, _, _, _, _, _) => ())
 
-  /** Background half of external-change detection (#1623), complementing the focus-in re-check: each cycle, re-derives
-    * the watched directory set from the currently open local buffers (`FileChangeWatcher.sync` handles buffers
-    * opening/closing since the last cycle) plus `dictionaryWatchDirectories` (#1691's spell-check dictionary
-    * directories, re-derived the same way from the current config), polls for real filesystem events, and reacts to
-    * whichever kind of watched path a poll window actually saw change: a buffer's file gets the same reload-or-prompt
-    * check the focus-in path runs, and any change under a dictionary directory calls `refreshDictionaryFingerprints` to
-    * invalidate `StateManagerOperationBoundary`'s cached fingerprints -- neither is gated on the window regaining
-    * focus.
-    *
-    * `WatchService.poll` is a genuine blocking OS call, so it only runs when there is at least one directory to watch
-    * -- with nothing open, the cycle sleeps instead. This isn't just an efficiency nicety: a real blocking call left
-    * running unconditionally makes this loop, and therefore any `AppRuntime.run` caller, incompatible with a
-    * virtual-time test harness (`VirtualTime.runVirtual`'s own `TestControl` treats `IO.blocking` as non-terminating)
-    * -- a plain buffer-less startup (the common case every such test starts from) must stay virtual-time-compatible.
-    * Spell-check is disabled by default (`SpellCheckConfig.enabled = false`), so `dictionaryWatchDirectories` is
-    * `Set.empty` in that common case too, and the loop still sleeps rather than polls.
+  /** Opens what a later launch handed over (#2023). A path that fails to open must not take the editor down with it. A
+    * folder becomes the Explorer root, as Open Folder makes it.
     */
-  private[serenity] def externalChangeWatchLoop(
-    watcher: com.serenity.io.FileChangeWatcher,
-    openBufferPaths: IO[Map[Path, BufferId]],
-    checkBufferForExternalChanges: BufferId => IO[Unit],
-    dictionaryWatchDirectories: IO[Set[Path]] = IO.pure(Set.empty),
-    refreshDictionaryFingerprints: IO[Unit] = IO.unit,
-    explorerWatchDirectories: IO[Set[Path]] = IO.pure(Set.empty),
-    markExplorerDirectoriesStale: Set[Path] => IO[Unit] = _ => IO.unit,
-    pollInterval: FiniteDuration = 2.seconds
-  ): Stream[IO, Unit] =
-    Stream.repeatEval(
-      for
-        paths                 <- openBufferPaths
-        dictionaryDirectories <- dictionaryWatchDirectories
-        explorerDirectories   <- explorerWatchDirectories
-        bufferDirectories  = paths.keys.flatMap(path => Option(path.getParent)).toSet
-        watchedDirectories = bufferDirectories ++ dictionaryDirectories ++ explorerDirectories
-        _ <- watcher.sync(watchedDirectories)
-        _ <-
-          if watchedDirectories.isEmpty then IO.sleep(pollInterval)
-          else
-            watcher.pollChangedFiles(pollInterval).flatMap { changed =>
-              val changedDirectories = changed.flatMap(path => Option(path.getParent))
-              val staleExplorers     = changedDirectories.intersect(explorerDirectories)
-              changed.flatMap(paths.get).toList.traverse_(checkBufferForExternalChanges) >>
-                IO.whenA(changedDirectories.exists(dictionaryDirectories.contains))(refreshDictionaryFingerprints) >>
-                IO.whenA(staleExplorers.nonEmpty)(markExplorerDirectoriesStale(staleExplorers))
-            }
-      yield ()
-    )
+  private[serenity] def openForwarded(fileOpener: FileOpener)(paths: List[Path])(using logger: Logger[IO]): IO[Unit] =
+    def attempt(path: Path, open: Path => IO[Unit]): IO[Unit] =
+      open(path).handleErrorWith(error => logger.error(error)(s"[INSTANCE] Could not open forwarded path $path"))
+    LaunchOpens.resolve(paths).flatMap { opens =>
+      opens.notice.traverse_(logger.warn(_)) >>
+        opens.root.traverse_(attempt(_, fileOpener.openFolder)) >> opens.files.traverse_(
+          attempt(_, fileOpener.openFile)
+        )
+    }
 
-  private def runInputLoop(
-    stateManager: StateManager,
-    inputHandler: InputHandler[IO],
-    inputFunnel: Stream[IO, Event] => Stream[IO, Unit]
-  )(using logger: Logger[IO]): IO[Unit] =
+  /** Runs [[StartupWarmUp]] in the background for as long as the main loop does, if the frontend can draw off-screen
+    * and `startup.warm_up` is on.
+    */
+  private def startupWarmUp(
+    runtime: FrontendRuntime,
+    initialState: AppState,
+    viewport: ViewportSize,
+    firstInput: Deferred[IO, Unit]
+  )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Resource[IO, Unit] =
+    runtime.offscreenFrames.filter(_ => initialState.persisted.config.surfaceConfig.startupWarmUpEnabled) match
+      case None => Resource.unit
+      case Some(frames) =>
+        StartupWarmUp
+          .run(initialState.persisted.config, initialState.persisted.theme, viewport, frames, firstInput)
+          .timed
+          .flatMap((elapsed, outcome) => logger.info(s"[WARMUP] $outcome after ${elapsed.toMillis}ms"))
+          .handleErrorWith(error => logger.warn(error)("[WARMUP] Startup warm-up failed"))
+          .background
+          .map(_ => ())
+
+  private def runInputLoop(stateManager: StateManager, inputLoop: Stream[IO, Unit])(using
+    logger: Logger[IO]
+  ): IO[Unit] =
     val quitSignal = stateManager.runtimeLifecycle.awaitQuit.attempt
     AppRuntimeRenderLoops.superviseLoop("input loop", stateManager.runtimeLifecycle.forceQuit)(
-      inputHandler.eventStream
-        .evalTap(event =>
-          stateManager.getCurrentState.flatMap(s =>
-            AppRuntimeLogging.logSelectiveEvents(event, s.persisted.focus, logger)
-          )
-        )
-        .through(inputFunnel)
-        .interruptWhen(quitSignal)
-        .compile
-        .drain
+      inputLoop.interruptWhen(quitSignal).compile.drain
     )
 
   private[serenity] def coordinateExternalQuit(
@@ -403,64 +458,13 @@ object AppRuntime:
   private[serenity] def focusCallbackBridge(
     windowFocused: SignallingRef[IO, Boolean],
     cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int],
     requestFastRender: IO[Unit],
     dispatcher: Dispatcher[IO],
-    onFocusGained: IO[Unit] = IO.unit
+    onFocusGained: IO[Unit] = IO.unit,
+    onFocusLost: IO[Unit] = IO.unit
   )(using logger: Logger[IO]): Boolean => Unit =
     focused =>
       dispatchIfRunning(dispatcher)(
-        onWindowFocusChanged(focused, windowFocused, cursorVisible, breathIndex, requestFastRender, onFocusGained)
+        onWindowFocusChanged(focused, windowFocused, cursorVisible, requestFastRender, onFocusGained, onFocusLost)
           .handleErrorWith(error => logger.error(error)("[RUNTIME] focus callback failed"))
       )
-
-  /** Bridges the TUI's spawned Markdown preview window (issue #1113) closing via its own native close control back into
-    * application state: the window only hides itself (see `MarkdownPreviewWindow.resource`), so this callback's sole
-    * job is toggling `markdownPreviewWindowBuffer` back off rather than orphaning a dead window reference.
-    */
-  private[serenity] def markdownPreviewCloseCallbackBridge(
-    stateManager: StateUpdater,
-    dispatcher: Dispatcher[IO]
-  )(using logger: Logger[IO]): () => Unit =
-    () =>
-      dispatcher.unsafeRunAndForget(
-        stateManager
-          .updateStateValidated(closeMarkdownPreviewWindowInState)
-          .handleErrorWith(error => logger.error(error)("[RUNTIME] markdown preview close callback failed"))
-      )
-
-  private[serenity] def closeMarkdownPreviewWindowInState(state: AppState): AppState =
-    state.copy(runtime = state.runtime.copy(markdownPreviewWindowBuffer = None))
-
-  private[serenity] def describeStateForDiagnostics(state: AppState): String =
-    val viewport   = state.runtime.viewportSize.map(size => s"${size.width}x${size.height}").getOrElse("unknown")
-    val activePane = state.persisted.layout.activeEditorPaneId
-    val activeBuffer =
-      activePane.flatMap(paneId =>
-        state.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.persisted.buffers.get)
-      )
-    val activeBufferSummary = activeBuffer match
-      case Some(buffer) =>
-        val language = buffer.document.language.map(_.id).getOrElse("plaintext")
-        val cursor   = buffer.editing.cursorPositions.headOption.map(c => s"${c.line}:${c.column}").getOrElse("none")
-        List(
-          s"activeBuffer=${buffer.id}",
-          s"chars=${buffer.document.content.weight}",
-          s"lines=${buffer.document.content.lineCount}",
-          s"dirty=${buffer.document.isDirty}",
-          s"language=$language",
-          s"cursor=$cursor"
-        ).mkString(" ")
-      case None =>
-        "activeBuffer=none"
-    List(
-      s"focus=${state.persisted.focus}",
-      s"viewport=$viewport",
-      s"buffers=${state.persisted.buffers.size}",
-      s"panes=${state.persisted.layout.editorPanes.size}",
-      s"surfaces=${state.runtime.uiSurfaces.size}",
-      s"activePane=${activePane.map(_.toString).getOrElse("none")}",
-      activeBufferSummary,
-      s"themeTransition=${state.runtime.themeDiscovery.transition.isDefined}",
-      s"surfaceAnimations=${state.runtime.motion.surfaceAnimations.size}"
-    ).mkString(" ")

@@ -1,6 +1,6 @@
 package com.serenity.config
 
-import AppConfigMotionOps.*
+import AppConfigOps.*
 
 /** Rendering cadence and everything `display.*`: chrome rows, wrap, scrolling, toolbar. */
 private[config] object ConfigFieldsDisplay:
@@ -41,6 +41,22 @@ private[config] object ConfigFieldsDisplay:
     )(
       _.surfaceConfig.rendererFrameStateCacheCapacity,
       (config, value) => config.withRendererFrameStateCacheCapacity(value)
+    ),
+    field("ui.render.layer_cache", "render.layer_cache", "render_layer_cache")(boolean)(
+      _.surfaceConfig.layerCachingEnabled,
+      (config, value) => config.withLayerCaching(value)
+    ),
+    field("ui.render.frame_timing", "render.frame_timing", "render_frame_timing")(boolean)(
+      _.surfaceConfig.frameTimingEnabled,
+      (config, value) => config.withFrameTiming(value)
+    ),
+    field("ui.render.latency_trace", "render.latency_trace", "render_latency_trace")(boolean)(
+      _.surfaceConfig.latencyTraceEnabled,
+      (config, value) => config.withLatencyTrace(value)
+    ),
+    field("startup.warm_up", "startup_warm_up")(boolean)(
+      _.surfaceConfig.startupWarmUpEnabled,
+      (config, value) => config.withStartupWarmUp(value)
     ),
     named("editor.word_wrap", "wordWrapEnabled", "display.word_wrap", "display.word.wrap", "display_word_wrap")(
       boolean

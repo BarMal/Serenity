@@ -1,11 +1,12 @@
 package com.serenity
 
 import com.serenity.command.*
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{AppConfig, InterfaceDensity}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -476,7 +477,9 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
         List(
           UiSurface(
             SurfaceId("find"),
-            SurfaceContent.ModalWorkflow(Modal.Find("needle", List(FindResult(1, 0), FindResult(3, 0)), 0)),
+            SurfaceContent.ModalWorkflow(
+              Modal.Find(TextField.of("needle"), Vector(FindResult(1, 0), FindResult(3, 0)), 0)
+            ),
             SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
           )
         )

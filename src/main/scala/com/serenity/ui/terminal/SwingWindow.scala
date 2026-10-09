@@ -2,7 +2,6 @@ package com.serenity.ui.terminal
 
 import java.awt.*
 import java.awt.event.*
-import java.awt.geom.RoundRectangle2D
 import java.awt.image.BufferedImage
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
@@ -13,7 +12,9 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
-import com.serenity.ui.accessibility.{AccessibilitySnapshot, SwingAccessibilityBridge}
+import com.serenity.diagnostics.FrameTimings
+import com.serenity.state.models.PointerShape
+import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.theme.Theme
@@ -22,10 +23,20 @@ class SwingWindow(
     initialPixelSize: Dimension,
     initialMetrics: CellMetrics,
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
-    initialChromeMetrics: CellMetrics
+    initialChromeMetrics: CellMetrics,
+    frameTimings: FrameTimings = FrameTimings(),
+    env: Map[String, String] = sys.env,
+    windowTitle: String = SwingWindow.WindowTitle
 ):
 
-  private val usesCustomChrome           = SwingWindow.shouldUseCustomChrome(chromeMode)
+  private val usesCustomChrome =
+    SwingWindow.shouldUseCustomChrome(
+      chromeMode,
+      System.getProperty("os.name", ""),
+      env,
+      SwingWindow.isNativeWaylandToolkit(Toolkit.getDefaultToolkit.getClass.getName)
+    )
+
   private val effectiveChromeMode        = if usesCustomChrome then WindowChromeMode.Custom else chromeMode
   private val usesNativeThemedChrome     = chromeMode == WindowChromeMode.NativeThemed
   private val initialChromeLayoutMetrics = SwingWindow.ChromeMetrics.fromCellMetrics(initialChromeMetrics)
@@ -38,41 +49,32 @@ class SwingWindow(
       initialChromeLayoutMetrics
     )
 
-  private val initialCanvasPixelSize = initialCanvasResizeSnapshot.pixelSize
-  private val pixelSize              = new AtomicReference(initialCanvasPixelSize)
-  private val metricsRef             = new AtomicReference(initialMetrics)
-  private val chromeMetricsRef       = new AtomicReference(initialChromeLayoutMetrics)
-  private val chromePaletteRef       = new AtomicReference(SwingWindow.ChromePalette.fromTheme(Theme.default))
-  private val nativeChromeThemeCache = new SwingWindow.NativeChromeThemeCache
-  private val pendingResize          = new AtomicReference[Option[ViewportSize]](None)
-  private val closeLatch             = new CountDownLatch(1)
-  private val baseImageRef           = new AtomicReference[Option[BufferedImage]](None)
-  private val publishedImagesRef     = new AtomicReference(SwingWindow.PublishedImages.empty)
-  private val previousCursorRectsRef = new AtomicReference[scala.List[Rectangle]](Nil)
-  private val baseImagePool          = new SwingWindow.ReusableImagePool
-  private val cursorOverlayPool      = new SwingWindow.ReusableImagePool
-  private val savedBoundsRef         = new AtomicReference[Option[Rectangle]](None)
-  private val maximizedRef           = new AtomicBoolean(false)
-  private val maxBtnRef              = new AtomicReference[Option[ChromeControlButton]](None)
-  private val controlButtonsRef      = new AtomicReference[scala.List[ChromeControlButton]](Nil)
-  private val controlPanelRef        = new AtomicReference[Option[JPanel]](None)
-  private val titleBarRef            = new AtomicReference[Option[JPanel]](None)
-  private val titleLabelRef          = new AtomicReference[Option[JLabel]](None)
-  private val titleSpacerRef         = new AtomicReference[Option[JPanel]](None)
-  private val onResizeCallbackRef    = new AtomicReference[Option[() => Unit]](None)
-  private val onFocusCallbackRef     = new AtomicReference[Option[Boolean => Unit]](None)
-  private val resizeGlassPaneRef     = new AtomicReference[Option[JComponent]](None)
-  private val roundedCornerMaskRef   = new AtomicReference[Option[Int]](None)
-  private val roundedContentBuffers  = new SwingWindow.RoundedCornerMaskBufferCache
-  private val perPixelTranslucencySupported =
-    SwingWindow.perPixelTranslucencySupported
-  private val shapeUpdateCoalescer = new SwingWindow.CoalescedEdtUpdate(() => updateShape())
-
-  /** Whether `canvas` should paint its own background as genuinely transparent this frame -- see
-    * [[SwingWindow.shouldPaintTransparentContent]]. Kept up to date by [[updateChromeTheme]], which already runs once
-    * per frame (`Main`'s `syncChromeTheme`), so no extra wiring is needed to keep this current.
-    */
-  private val contentTransparentRef = new AtomicBoolean(false)
+  private val initialCanvasPixelSize   = initialCanvasResizeSnapshot.pixelSize
+  private val pixelSize                = new AtomicReference(initialCanvasPixelSize)
+  private val metricsRef               = new AtomicReference(initialMetrics)
+  private val chromeMetricsRef         = new AtomicReference(initialChromeLayoutMetrics)
+  private val chromePaletteRef         = new AtomicReference(SwingWindow.ChromePalette.fromTheme(Theme.default))
+  private val nativeChromeThemeCache   = new SwingWindow.ChromePaletteCache
+  private val customChromePaletteCache = new SwingWindow.ChromePaletteCache
+  private val menuBarRef               = new AtomicReference[Option[JMenuBar]](None)
+  private val menuBarPaletteRef        = new AtomicReference[Option[MenuBarPalette]](None)
+  private val pendingResize            = new AtomicReference[Option[ViewportSize]](None)
+  private val closeLatch               = new CountDownLatch(1)
+  private val baseImageRef             = new AtomicReference[Option[BufferedImage]](None)
+  private val publishedCaretsRef       = new AtomicReference[scala.List[SwingWindow.CaretPaint]](Nil)
+  private val previousCursorRectsRef   = new AtomicReference[scala.List[Rectangle]](Nil)
+  private val pendingRepaintRef        = new AtomicReference[Option[SwingWindow.CanvasRepaint]](None)
+  private val baseImagePool            = new SwingWindow.ReusableImagePool
+  private val savedBoundsRef           = new AtomicReference[Option[Rectangle]](None)
+  private val maximizedRef             = new AtomicBoolean(false)
+  private val maxBtnRef                = new AtomicReference[Option[ChromeControlButton]](None)
+  private val controlButtonsRef        = new AtomicReference[scala.List[ChromeControlButton]](Nil)
+  private val controlPanelRef          = new AtomicReference[Option[JPanel]](None)
+  private val titleBarRef              = new AtomicReference[Option[JPanel]](None)
+  private val titleLabelRef            = new AtomicReference[Option[JLabel]](None)
+  private val titleSpacerRef           = new AtomicReference[Option[JPanel]](None)
+  private val onResizeCallbackRef      = new AtomicReference[Option[() => Unit]](None)
+  private val onFocusCallbackRef       = new AtomicReference[Option[Boolean => Unit]](None)
 
   def setOnResize(cb: () => Unit): Unit = onResizeCallbackRef.set(Some(cb))
 
@@ -90,102 +92,92 @@ class SwingWindow(
           publishCanvasResize(getSize())
     )
     override def paintComponent(g: java.awt.Graphics): Unit =
-      val g2 = g.create().asInstanceOf[Graphics2D]
-      try SwingWindow.paintCanvasBackground(g2, getWidth, getHeight, contentTransparentRef.get())
-      finally g2.dispose()
-      val published = publishedImagesRef.get()
-      published.base.foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
-      published.overlay.foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
+      val paintStart = frameTimings.paintStarted()
+      val g2         = g.create().asInstanceOf[Graphics2D]
+      try
+        val base = baseImagePool.leasePublished()
+        SwingWindow.paintPresentedFrame(g2, base, publishedCaretsRef.get(), getWidth, getHeight)
+      finally
+        baseImagePool.releaseLease()
+        g2.dispose()
+        frameTimings.paintFinished(paintStart)
 
-  private val accessibilityBridge = new SwingAccessibilityBridge(canvas)
+  private val accessibilityBridge      = new SwingAccessibilityBridge(canvas)
+  private val accessibilityPublishGate = new AccessibilityPublishGate
 
   /** Publish the semantic projection of the custom-painted canvas to Swing accessibility clients. */
   def updateAccessibility(snapshot: AccessibilitySnapshot): Unit =
-    val publish: Runnable = () => accessibilityBridge.publish(snapshot, metrics)
-    if SwingUtilities.isEventDispatchThread then publish.run()
-    else SwingUtilities.invokeLater(publish)
+    val currentMetrics = metrics
+    if accessibilityPublishGate.admit(snapshot, currentMetrics) then
+      val publish: Runnable = () => accessibilityBridge.publish(snapshot, currentMetrics)
+      if SwingUtilities.isEventDispatchThread then publish.run()
+      else SwingUtilities.invokeLater(publish)
+
+  private val pointerCursorSync = new PointerCursorSync(shape =>
+    val apply: Runnable = () => canvas.setCursor(Cursor.getPredefinedCursor(PointerCursorSync.awtCursorType(shape)))
+    if SwingUtilities.isEventDispatchThread then apply.run()
+    else SwingUtilities.invokeLater(apply)
+  )
+
+  def updatePointerShape(shape: PointerShape): Unit = pointerCursorSync.sync(shape)
 
   def onImageReady(image: BufferedImage): Unit =
     onImageReady(image, None)
 
-  /** Publish a finished base frame, repainting only `dirtyRegion` when the rest of the frame is known to be identical
-    * to what is already on screen.
-    *
-    * The bounded repaint is dropped whenever a cursor overlay was part of the displayed frame: dropping that overlay
-    * changes pixels outside the region, and stale caret pixels would survive a partial repaint.
+  /** Publish a finished base frame, repainting only `dirtyRects` when the rest of the frame is known to be identical to
+    * what is already on screen -- plus any carets this frame drops, whose pixels would otherwise survive.
     */
-  def onImageReady(image: BufferedImage, dirtyRegion: Option[Rectangle]): Unit =
-    val displayedOverlay = publishedImagesRef.get().overlay
+  def onImageReady(image: BufferedImage, dirtyRects: Option[scala.List[Rectangle]]): Unit =
+    val displayedCarets = publishedCaretsRef.getAndSet(Nil)
     baseImagePool.publish(image)
     baseImageRef.set(Some(image))
-    cursorOverlayPool.clearPublished()
-    publishedImagesRef.set(SwingWindow.PublishedImages(Some(image), None))
-    dirtyRegion.filter(_ => displayedOverlay.isEmpty) match
-      case Some(region) if region.width > 0 && region.height > 0 =>
-        SwingUtilities.invokeLater(() => canvas.repaint(region.x, region.y, region.width, region.height))
-      case Some(_) => ()
-      case None    => SwingUtilities.invokeLater(() => canvas.repaint())
+    requestRepaint(SwingWindow.cursorRepaint(dirtyRects, displayedCarets.map(_.rect), Nil))
+
+  private def requestRepaint(repaint: SwingWindow.CanvasRepaint): Unit =
+    if repaint != SwingWindow.CanvasRepaint.Rects(Nil) then
+      frameTimings.framePublished()
+      val earlier =
+        pendingRepaintRef.getAndUpdate(pending => Some(pending.fold(repaint)(SwingWindow.mergedRepaint(_, repaint))))
+      if earlier.isEmpty then SwingUtilities.invokeLater(() => paintPendingRepaint())
+
+  /** Each rect is painted on its own and at once: `canvas.repaint(rect)` would let Swing's `RepaintManager` fold them
+    * into one dirty rect spanning all of them, the very copy splitting them avoids. Frames published before this runs
+    * have already merged into the pending repaint, so a burst of frames is still painted once.
+    */
+  private def paintPendingRepaint(): Unit =
+    pendingRepaintRef.getAndSet(None).foreach {
+      case SwingWindow.CanvasRepaint.Whole        => canvas.repaint()
+      case SwingWindow.CanvasRepaint.Rects(rects) => rects.foreach(rect => canvas.paintImmediately(rect))
+    }
 
   def onBaseImageReady(image: BufferedImage): Unit =
+    publishedCaretsRef.set(Nil)
     baseImagePool.publish(image)
     baseImageRef.set(Some(image))
-    cursorOverlayPool.clearPublished()
-    publishedImagesRef.set(SwingWindow.PublishedImages(Some(image), None))
 
-  /** Publish a freshly-painted cursor overlay and repaint just the pixels it actually changed.
+  /** Publish the carets to fill over the current base frame and repaint just the pixels they changed.
     *
-    * The overlay image is cleared and redrawn from scratch every call, so a caret that moved needs both its old and new
-    * position repainted -- not just whatever the base frame changed. `baseDirtyRegion` is the caller's own
-    * bounded-repaint region for the base frame (`None` for "the whole canvas changed"); `drawOverlay` paints the
-    * overlay and reports back the pixel rects it painted. The final repaint is bounded to the union of all three, or
-    * unbounded whenever `baseDirtyRegion` itself is `None`.
+    * A caret that moved needs both its old and new position repainted -- not just whatever the base frame changed.
+    * `baseDirtyRects` are the caller's own bounded-repaint rects for the base frame (`None` for "the whole canvas
+    * changed"); `paintCarets` reports the carets to fill. The repaint covers all three ([[SwingWindow.cursorRepaint]]),
+    * or the whole canvas whenever `baseDirtyRects` itself is `None`.
     */
-  def onCursorOverlayReady(baseDirtyRegion: Option[Rectangle])(
-    drawOverlay: BufferedImage => scala.List[Rectangle]
+  def onCursorOverlayReady(baseDirtyRects: Option[scala.List[Rectangle]])(
+    paintCarets: => scala.List[SwingWindow.CaretPaint]
   ): Boolean =
     baseImageRef.get() match
-      case Some(baseImage) =>
-        val overlayImage = cursorOverlayPool.acquire(baseImage.getWidth, baseImage.getHeight, baseImage.getType)
-        SwingWindow.clearImage(overlayImage)
-        val currentCursorRects = drawOverlay(overlayImage)
-        cursorOverlayPool.publish(overlayImage)
-        publishedImagesRef.set(SwingWindow.PublishedImages(Some(baseImage), Some(overlayImage)))
+      case Some(_) =>
+        val carets = paintCarets
+        publishedCaretsRef.set(carets)
+        val currentCursorRects  = carets.map(_.rect)
         val previousCursorRects = previousCursorRectsRef.getAndSet(currentCursorRects)
-        SwingWindow.combinedCursorRepaintRegion(baseDirtyRegion, previousCursorRects, currentCursorRects) match
-          case Some(region) if region.width > 0 && region.height > 0 =>
-            SwingUtilities.invokeLater(() => canvas.repaint(region.x, region.y, region.width, region.height))
-          case Some(_) => ()
-          case None    => SwingUtilities.invokeLater(() => canvas.repaint())
+        requestRepaint(SwingWindow.cursorRepaint(baseDirtyRects, previousCursorRects, currentCursorRects))
         true
       case None =>
         false
 
   private[serenity] def acquireBaseImage(width: Int, height: Int, imageType: Int): BufferedImage =
     baseImagePool.acquire(width, height, imageType)
-
-  private def updateShape(): Unit =
-    val roundedCornerMask = SwingWindow.roundedCornerMask(
-      usesCustomChrome,
-      maximizedRef.get(),
-      perPixelTranslucencySupported,
-      chromeMetricsRef.get().cornerArc
-    )
-    val refreshRoundedCornerMask =
-      SwingWindow.shouldRefreshRoundedCornerMask(roundedCornerMaskRef.get(), roundedCornerMask)
-    roundedCornerMaskRef.set(roundedCornerMask)
-
-    if roundedCornerMask.nonEmpty
-    then frame.setShape(null)
-    else if usesCustomChrome && !maximizedRef.get() then
-      val d      = frame.getSize
-      val chrome = chromeMetricsRef.get()
-      frame.setShape(new RoundRectangle2D.Double(0, 0, d.width, d.height, chrome.cornerArc, chrome.cornerArc))
-    else if usesCustomChrome then frame.setShape(null)
-
-    if refreshRoundedCornerMask then resizeGlassPaneRef.get().foreach(_.repaint())
-
-  private def scheduleShapeUpdate(): Unit =
-    if usesCustomChrome then shapeUpdateCoalescer.schedule(SwingUtilities.invokeLater)
 
   private def toggleMaximize(): Unit =
     if maximizedRef.get() then
@@ -213,7 +205,8 @@ class SwingWindow(
     () => chromeSpacerSize,
     () => chromeTitleBarSize,
     () => toggleMaximize(),
-    activateChromeControl
+    activateChromeControl,
+    windowTitle
   )
 
   maxBtnRef.set(chromeTitleBar.maxButton)
@@ -223,11 +216,12 @@ class SwingWindow(
   titleLabelRef.set(Some(chromeTitleBar.titleLabel))
   titleBarRef.set(Some(chromeTitleBar.panel))
 
+  private val chromeNorth = new JPanel(new BorderLayout)
+
   private val frame: JFrame =
-    val f = new JFrame(SwingWindow.WindowTitle)
+    val f = new JFrame(windowTitle)
     f.setIconImages(SwingWindow.applicationIconImages.asJava)
     f.setUndecorated(usesCustomChrome)
-    if usesCustomChrome && perPixelTranslucencySupported then f.setBackground(SwingWindow.Transparent)
     f.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE)
     f.addWindowListener(
       new WindowAdapter:
@@ -248,29 +242,17 @@ class SwingWindow(
             .foreach(_.setKind {
               if isMax then SwingWindow.ChromeControlKind.Restore else SwingWindow.ChromeControlKind.Maximize
             })
-          updateShape()
       }
     )
-    f.addComponentListener(
-      new ComponentAdapter:
-        override def componentResized(e: ComponentEvent): Unit =
-          scheduleShapeUpdate()
-    )
-    val content = new RoundedContentPane(
-      new BorderLayout,
-      usesCustomChrome,
-      maximizedRef,
-      perPixelTranslucencySupported,
-      chromeMetricsRef,
-      roundedContentBuffers
-    ):
+    val content = new JPanel(new BorderLayout):
       setBackground(Color.BLACK)
-    if usesCustomChrome then content.add(chromeTitleBar.panel, BorderLayout.NORTH)
+    if usesCustomChrome then
+      chromeNorth.add(chromeTitleBar.panel, BorderLayout.NORTH)
+      content.add(chromeNorth, BorderLayout.NORTH)
     content.add(canvas, BorderLayout.CENTER)
     f.setContentPane(content)
     if usesCustomChrome then
       val glassPane = new ResizeGlassPane(() => frame, chromeMetricsRef, maximizedRef)
-      resizeGlassPaneRef.set(Some(glassPane))
       f.setGlassPane(glassPane)
       glassPane.setVisible(true)
     f.pack()
@@ -283,10 +265,37 @@ class SwingWindow(
 
   def awaitClose: IO[Unit] = SwingWindow.awaitCloseLatch(closeLatch)
 
+  /** Puts `bar` where [[SwingWindow.menuBarPlacement]] says, on the event-dispatch thread, and makes room for it so the
+    * canvas keeps its size: before the window is shown by packing, afterwards by growing the frame.
+    */
+  def installMenuBar(bar: JMenuBar): Unit =
+    val install: Runnable = () =>
+      menuBarRef.set(Some(bar))
+      menuBarPaletteRef.get().foreach(MenuBarTheming.apply(bar, _))
+      SwingWindow.menuBarPlacement(System.getProperty("os.name", ""), usesCustomChrome) match
+        case MenuBarPlacement.UnderCustomTitleBar                           => chromeNorth.add(bar, BorderLayout.SOUTH)
+        case MenuBarPlacement.ScreenMenuBar | MenuBarPlacement.FrameMenuBar => frame.setJMenuBar(bar)
+      if frame.isShowing then
+        if (frame.getExtendedState & Frame.MAXIMIZED_BOTH) == 0 then
+          frame.setSize(frame.getWidth, frame.getHeight + bar.getPreferredSize.height)
+        frame.validate()
+      else frame.pack()
+    if SwingUtilities.isEventDispatchThread then install.run()
+    else SwingUtilities.invokeAndWait(install)
+
+  /** Raises the window for a later launch that handed its files over to this one (#2023). */
+  def bringToFront(): Unit =
+    SwingUtilities.invokeLater { () =>
+      if (frame.getExtendedState & Frame.ICONIFIED) != 0 then
+        frame.setExtendedState(frame.getExtendedState & ~Frame.ICONIFIED)
+      frame.toFront()
+      frame.requestFocus()
+      val _ = canvas.requestFocusInWindow()
+    }
+
   def start(): Unit =
     val showWindow: Runnable = () =>
       frame.setVisible(true)
-      if usesCustomChrome then updateShape()
       if usesNativeThemedChrome then updateNativeChromeTheme(chromePaletteRef.get())
       publishCanvasResize(canvas.getSize())
       val _ = canvas.requestFocusInWindow()
@@ -339,19 +348,27 @@ class SwingWindow(
     onResizeCallbackRef.get().foreach(_.apply())
 
   def updateChromeTheme(theme: Theme): Unit =
-    contentTransparentRef.set(
-      SwingWindow.shouldPaintTransparentContent(
-        usesCustomChrome,
-        perPixelTranslucencySupported,
-        theme.background.getAlpha
-      )
-    )
+    updateTitleBarTheme(theme)
+    updateMenuBarTheme(MenuBarPalette.fromTheme(theme))
+
+  /** The bar follows the editor theme in every chrome mode, so it is restyled only when the palette changed. */
+  private def updateMenuBarTheme(palette: MenuBarPalette): Unit =
+    if !menuBarPaletteRef.get().contains(palette) then
+      menuBarPaletteRef.set(Some(palette))
+      menuBarRef
+        .get()
+        .foreach: bar =>
+          val restyle: Runnable = () => MenuBarTheming.apply(bar, palette)
+          if SwingUtilities.isEventDispatchThread then restyle.run() else SwingUtilities.invokeLater(restyle)
+
+  private def updateTitleBarTheme(theme: Theme): Unit =
     if usesCustomChrome then
       val palette = SwingWindow.ChromePalette.fromTheme(theme)
-      chromePaletteRef.set(palette)
-      val applyPalette: Runnable = () => applyChromePalette(palette)
-      if SwingUtilities.isEventDispatchThread then applyPalette.run()
-      else SwingUtilities.invokeLater(applyPalette)
+      if customChromePaletteCache.recordIfChanged(palette, supported = true) then
+        chromePaletteRef.set(palette)
+        val applyPalette: Runnable = () => applyChromePalette(palette)
+        if SwingUtilities.isEventDispatchThread then applyPalette.run()
+        else SwingUtilities.invokeLater(applyPalette)
     else if usesNativeThemedChrome then updateNativeChromeTheme(SwingWindow.ChromePalette.fromTheme(theme))
 
   private def updateNativeChromeTheme(palette: SwingWindow.ChromePalette): Unit =
@@ -389,7 +406,6 @@ class SwingWindow(
       titleSpacerRef.get().foreach(_.setPreferredSize(chromeSpacerSize))
       titleBarRef.get().foreach(_.setPreferredSize(chromeTitleBarSize))
       frame.setMinimumSize(new Dimension(chrome.minWidth, chrome.minHeight))
-      updateShape()
       frame.revalidate()
     else frame.setMinimumSize(new Dimension(SwingWindow.BaseMinWidth, SwingWindow.BaseMinHeight))
 
@@ -431,7 +447,6 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
     */
   private[serenity] def awaitCloseLatch(latch: CountDownLatch): IO[Unit] =
     IO.interruptible(latch.await())
-  private[serenity] val Transparent = new Color(0, 0, 0, 0)
 
   private[serenity] lazy val applicationIconImages: scala.List[Image] =
     Option(getClass.getResource(ApplicationIconResource))
@@ -443,24 +458,24 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
   val BaseMinHeight: Int                    = 300
   private[serenity] val WindowTitle: String = "Serenity"
 
-  private[serenity] def perPixelTranslucencySupported: Boolean =
-    GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice
-      .isWindowTranslucencySupported(GraphicsDevice.WindowTranslucency.PERPIXEL_TRANSLUCENT)
-
   def resource(
     metrics: CellMetrics = DefaultMetrics,
     chromeMetrics: CellMetrics = DefaultMetrics,
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
-    preferredWindowSize: Option[PreferredWindowSize] = None
+    preferredWindowSize: Option[PreferredWindowSize] = None,
+    frameTimings: FrameTimings = FrameTimings(),
+    title: String = WindowTitle
   ): Resource[IO, SwingWindow] =
     Resource.make(
       IO.blocking {
-        val initialSize = preferredWindowSize.map(_.normalized).getOrElse(PreferredWindowSize(1024, 768))
+        val initialSize = preferredWindowSize.map(_.normalized).getOrElse(PreferredWindowSize.Default)
         val win = new SwingWindow(
           new Dimension(initialSize.width, initialSize.height),
           metrics,
           chromeMode,
-          chromeMetrics
+          chromeMetrics,
+          frameTimings,
+          windowTitle = title
         )
         win.start()
         win

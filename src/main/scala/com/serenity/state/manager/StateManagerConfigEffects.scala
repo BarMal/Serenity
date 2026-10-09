@@ -1,41 +1,58 @@
 package com.serenity.state.manager
 
+import java.nio.file.Files
+
 import cats.effect.IO
 import cats.syntax.all.*
-import com.serenity.animation.AnimationConfig
-import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.command.*
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{
   AppConfig,
   ConfigError,
+  ConfigLoadResult,
   ConfigManager,
+  ConfigNotice,
+  ConfigRestart,
+  HotkeyOverrides,
   LineNumberLayout,
+  SpellCheckLanguage,
   StatusLinePlacement,
-  StatusSegment,
-  VisualFlairLevel
+  StatusSegment
 }
-import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
+import com.serenity.io.{FileStamp, TimestampedBackup}
 import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{CommandRunnerPanelSelections, CommandRunnerReducer}
+import com.serenity.state.reducers.{CommandRunnerReducer, SettingsPreviewReducer}
 
-/** Config-update infrastructure and the settings-intent dispatch that drives it: appearance, motion, cursor, panel
-  * chrome, spell-check, and general settings all funnel through the same commit-then-persist path. The state change
-  * commits once, validated, on the dispatcher; the config file write and the session auto-save run FIFO on the Config
-  * lane (#1697).
+/** Config-update infrastructure and the settings-intent dispatch that drives it: appearance, cursor, panel chrome,
+  * spell-check, and general settings all funnel through the same commit-then-persist path. The state change commits
+  * once, validated, on the dispatcher; the config file write runs on the Config lane (#1697), once per burst of changes
+  * and skipped when nothing in the file would change. An outside edit of the file is reloaded on that same lane
+  * (#1934). The session is not involved: it keeps no settings.
   */
 final private[manager] class StateManagerConfigEffects(
     currentState: IO[AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     configPersistencePath: Option[java.nio.file.Path],
-    sessionPersistence: SessionPersistence,
     onFontConfigChanged: com.serenity.ui.fonts.FontLoader.FontConfig => IO[Unit],
     deviceTextScaleProvider: IO[Double],
     editor: EffectEditorPort,
     renderCaches: RenderCaches,
-    saveConfig: (AppConfig, java.nio.file.Path) => IO[Either[ConfigError, Unit]] = ConfigManager.saveConfigIO
+    saveConfig: (AppConfig, java.nio.file.Path) => IO[Either[ConfigError, Unit]] = ConfigManager.saveConfigIO,
+    showNotice: Notice => IO[Unit] = _ => IO.unit,
+    configOnDisk: Option[AppConfig] = None,
+    loadConfig: java.nio.file.Path => IO[Either[ConfigError, ConfigLoadResult]] = ConfigFileSync.defaultLoad,
+    followSystemAppearance: IO[Unit] = IO.unit
 )(using balance: com.serenity.rope.Balance):
+
+  private val writes = WriteCoalescer.unsafe
+
+  private val configFile: Option[ConfigFileSync] =
+    configPersistencePath.map(ConfigFileSync.unsafe(_, configOnDisk, saveConfig, loadConfig))
+
+  /** The config file to watch for outside edits, absent when this session has none to keep. */
+  val watch: Option[ConfigFileWatch] =
+    configFile.map(file => ConfigFileWatch(file.path.toAbsolutePath.normalize, reloadFromDisk(file)))
 
   private[manager] def updateConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
@@ -43,55 +60,42 @@ final private[manager] class StateManagerConfigEffects(
   private def updateAppearanceConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
 
-  private def updateMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
-    applyConfigUpdate(update, cancelsDisabledMotion = true)
-
-  private def updateMotionAccessibility(accessibility: com.serenity.config.MotionAccessibility): IO[AppConfig] =
-    updateMotionConfig(_.withMotionAccessibility(accessibility))
-
-  private[manager] def updateCompanionSpriteConfig(update: CompanionSpriteConfig => CompanionSpriteConfig): IO[Unit] =
-    applyConfigUpdate(
-      config => config.withCompanionSpriteConfig(update(config.companionSpriteConfig)),
-      syncState = StateManagerConfigEffects.withCompanionSpritePanel
-    ).void
-
-  private[manager] def updateVisualFlairLevel(level: VisualFlairLevel): IO[Unit] =
-    applyConfigUpdate(
-      _.withVisualFlairLevel(level),
-      syncState = StateManagerConfigEffects.withCompanionSpritePanel
-    ).void
-
-  private def updateCustomMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
-    updateMotionConfig(config => update(config).withCustomMotionBaseline)
-
   private[manager] def updateTextDisplayConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
 
-  /** Commits `update` (plus `syncState`, and cancelling motion it disabled) as one validated model write, then queues
-    * the config write and session auto-save on the Config lane. Returns the config live afterwards -- the old one if
-    * validation rejected the change.
+  /** Commits `update` (plus `syncState`) as one validated model write, then asks for the config file to be written.
+    * Returns the config live afterwards -- the old one if validation rejected the change.
     */
   private def applyConfigUpdate(
     update: AppConfig => AppConfig,
-    syncState: (AppState, AppConfig) => AppState = (state, _) => state,
-    cancelsDisabledMotion: Boolean = false
+    syncState: (AppState, AppConfig) => AppState = (state, _) => state
   ): IO[AppConfig] =
-    editor.updateModelValidated(model =>
-      Some(StateManagerConfigEffects.configTransition(model, update, syncState, cancelsDisabledMotion))
-    ) >>
+    editor.updateModelValidated(model => Some(StateManagerConfigEffects.configTransition(model, update, syncState))) >>
       currentState
         .map(_.persisted.config)
         .flatTap(config =>
           IO(renderCaches.frameState.configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity))
         )
-        .flatTap(config =>
-          editor.submitEffect(
-            PersistenceLanes.Config,
-            writeConfigFile(config) >>
-              currentState
-                .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
-                .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after config change failed"))
-          )
+        .flatTap(_ => requestUnlessPreviewing)
+
+  // A previewed value stays in memory: the config file keeps the committed one until the preview is accepted.
+  private def requestUnlessPreviewing: IO[Unit] =
+    currentState.flatMap(live => requestConfigWrite.unlessA(live.runtime.pendingSetting.isDefined))
+
+  /** Pushes the live config into the parts of the runtime that learn of a change only when told, after the state's own
+    * config was put back without going through an update.
+    */
+  private[manager] def reapplyConfig: IO[Unit] =
+    editor.updateModelValidated(model =>
+      Some(
+        model.copy(app = StateManagerConfigEffects.withUpdatedRunnerConfig(model.app, model.app.persisted.config))
+      )
+    ) >>
+      currentState
+        .map(_.persisted.config)
+        .flatMap(config =>
+          IO(renderCaches.frameState.configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity)) >>
+            onFontConfigChanged(config.editorConfig.fontConfig)
         )
 
   private[manager] def updateFontConfig(
@@ -116,13 +120,11 @@ final private[manager] class StateManagerConfigEffects(
   private[manager] def interpret(intent: SettingsIntent, state: AppState): IO[Unit] =
     intent match
       case SettingsIntent.Font(fontIntent)               => interpretFontIntent(fontIntent)
-      case SettingsIntent.Motion(motionIntent)           => interpretMotionIntent(motionIntent)
       case SettingsIntent.StatusLine(statusLineIntent)   => interpretStatusLineIntent(statusLineIntent)
       case SettingsIntent.Cursor(cursorIntent)           => interpretCursorIntent(cursorIntent)
       case SettingsIntent.TextDisplay(textDisplayIntent) => interpretTextDisplayIntent(textDisplayIntent)
       case SettingsIntent.InterfaceChrome(interfaceChromeIntent) =>
         interpretInterfaceChromeIntent(interfaceChromeIntent)
-      case SettingsIntent.Decoration(decorationIntent) => interpretDecorationIntent(decorationIntent)
       case SettingsIntent.SpellCheck(spellCheckIntent) => interpretSpellCheckIntent(spellCheckIntent, state)
       case SettingsIntent.General(generalIntent)       => interpretGeneralSettingsIntent(generalIntent, state)
 
@@ -177,41 +179,6 @@ final private[manager] class StateManagerConfigEffects(
         updateFontConfig(config =>
           config.copy(enableLigatures = !config.enableLigatures, textLigatures = !config.textLigatures)
         )
-
-  private def interpretMotionIntent(intent: MotionIntent): IO[Unit] =
-    intent match
-      case MotionIntent.SetMotionPreset(preset) =>
-        updateMotionConfig(_.withMotionPreset(preset)).void
-      case MotionIntent.SetMotionAccessibility(accessibility) =>
-        updateMotionAccessibility(accessibility).void
-      case MotionIntent.SetElementTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withElementTransitionSpeedScale(scale)).void
-      case MotionIntent.SetEditorTextTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withEditorTextTransitionSpeedScale(Some(scale))).void
-      case MotionIntent.SetCommandRunnerTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withCommandRunnerTransitionSpeedScale(Some(scale))).void
-      case MotionIntent.SetUiTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withUiTransitionSpeedScale(Some(scale))).void
-      case MotionIntent.SetCursorTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withCursorTransitionSpeedScale(Some(scale))).void
-      case MotionIntent.SetCommandRunnerAnimation(animation) =>
-        updateCustomMotionConfig(_.withCommandRunnerAnimation(animation)).void
-      case MotionIntent.SetUiAnimation(animation) =>
-        updateCustomMotionConfig(_.withUiAnimation(animation)).void
-      case MotionIntent.SetCommandRunnerVisibleRows(rows) =>
-        updateAppearanceConfig(_.withCommandRunnerVisibleRows(rows)).void
-      case MotionIntent.SetCommandRunnerItemGapRows(rows) =>
-        updateAppearanceConfig(_.withCommandRunnerItemGapRows(rows)).void
-      case MotionIntent.SetCommandRunnerCursorGapRows(rows) =>
-        updateAppearanceConfig(_.withCommandRunnerCursorGapRows(rows)).void
-      case MotionIntent.SetEditorInsertionTransitionKind(kind) =>
-        updateCustomMotionConfig(_.withEditorInsertionTransitionKind(kind)).void
-      case MotionIntent.SetCommandRunnerTransitionKind(kind) =>
-        updateCustomMotionConfig(_.withCommandRunnerTransitionKind(Some(kind))).void
-      case MotionIntent.SetPanelOpenTransitionKind(kind) =>
-        updateCustomMotionConfig(_.withPanelOpenTransitionKind(Some(kind))).void
-      case MotionIntent.SetPanelCloseTransitionKind(kind) =>
-        updateCustomMotionConfig(_.withPanelCloseTransitionKind(Some(kind))).void
 
   private def interpretCursorIntent(intent: CursorIntent): IO[Unit] =
     intent match
@@ -319,8 +286,6 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withCommandRunnerShowKeyHints(enabled)).void
       case InterfaceChromeIntent.SetUiElementGap(gap) =>
         updateAppearanceConfig(_.withUiElementGap(Some(gap))).void
-      case InterfaceChromeIntent.SetUiCornerRadiusPx(radius) =>
-        updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
       case InterfaceChromeIntent.SetUiOutlineThicknessPx(thickness) =>
         updateAppearanceConfig(_.withUiOutlineThicknessPx(thickness)).void
       case InterfaceChromeIntent.SetInterfaceDensity(density) =>
@@ -332,27 +297,12 @@ final private[manager] class StateManagerConfigEffects(
       case InterfaceChromeIntent.SetPanelEscapeTarget(mode, target) =>
         updateConfig(_.withPanelEscapeTarget(mode, target)).void
 
-  private def interpretDecorationIntent(intent: DecorationIntent): IO[Unit] =
-    intent match
-      case DecorationIntent.SetCompanionSpriteEnabled(enabled) =>
-        updateCompanionSpriteConfig(_.copy(enabled = enabled))
-      case DecorationIntent.SetCompanionSpriteTypingCycle(cycle) =>
-        updateCompanionSpriteConfig(_.copy(typingCycle = cycle))
-      case DecorationIntent.SetCompanionSpriteTypingActiveTicks(ticks) =>
-        updateCompanionSpriteConfig(_.copy(typingActiveTicks = ticks))
-      case DecorationIntent.SetCompanionSpriteTypingFastActiveTicks(ticks) =>
-        updateCompanionSpriteConfig(_.copy(typingFastActiveTicks = ticks))
-      case DecorationIntent.SetCompanionSpriteTypingFastThresholdMs(ms) =>
-        updateCompanionSpriteConfig(_.copy(typingFastThresholdMs = ms))
-      case DecorationIntent.SetVisualFlairLevel(level) =>
-        updateVisualFlairLevel(level)
-
   private def interpretSpellCheckIntent(intent: SpellCheckIntent, state: AppState): IO[Unit] =
     intent match
       case SpellCheckIntent.SetSpellCheckEnabled(enabled) =>
         updateSpellCheckConfig(_.copy(enabled = enabled))
       case SpellCheckIntent.SetSpellCheckLanguages(languages) =>
-        updateSpellCheckConfig(_.copy(languages = languages))
+        updateSpellCheckConfig(_.copy(languages = languages.map(SpellCheckLanguage.canonical)))
       case SpellCheckIntent.SetSpellCheckDictionaryPaths(paths) =>
         updateSpellCheckConfig(_.copy(dictionaryPaths = paths))
       case SpellCheckIntent.SetSpellCheckWords(words) =>
@@ -364,12 +314,46 @@ final private[manager] class StateManagerConfigEffects(
   // is a no-op with no comment at the cursor, rather than surfacing an error for a command reachable from a
   // static context-menu/command-palette entry that doesn't know in advance whether it applies.
   private def addFlaggedWordAtCursorToDictionary(state: AppState): IO[Unit] =
-    SpellChecker.flaggedWordAtCursor(state) match
-      case Some(word) =>
-        val normalized = DictionaryWord.normalize(word)
-        updateSpellCheckConfig(config => config.copy(additionalWords = (config.additionalWords :+ normalized).distinct))
-      case None =>
-        IO.unit
+    SpellChecker.flaggedWordAtCursor(state).traverse_(addWordToDictionary)
+
+  /** Persists `word` in the configured custom words, which every later session loads. */
+  private[manager] def addWordToDictionary(word: String): IO[Unit] =
+    val normalized = DictionaryWord.normalize(word)
+    updateSpellCheckConfig(config => config.copy(additionalWords = (config.additionalWords :+ normalized).distinct))
+
+  /** Moves the config file aside first and goes no further if that fails, so a reset never overwrites the only copy. A
+    * session with no config file (safe mode, whose settings are not the user's) has nothing to reset.
+    */
+  private def resetSettings: IO[Unit] =
+    configPersistencePath.fold(logger.info("[CONFIG] This session has no config file, so there is nothing to reset")) {
+      path =>
+        IO.realTimeInstant
+          .flatMap(now =>
+            IO.blocking {
+              val backup = TimestampedBackup.siblingOf(path, now)
+              Option.when(Files.exists(path))(TimestampedBackup.moveAside(path, backup))
+            }
+          )
+          .attempt
+          .flatMap {
+            case Left(error) =>
+              logger.warn(error)("[CONFIG] Settings were not reset: the config file could not be backed up")
+            case Right(backup) =>
+              backup.traverse_(kept => logger.info(s"[CONFIG] Previous settings kept at $kept")) >>
+                configFile.traverse_(_.forget) >> restoreDefaultSettings
+          }
+    }
+
+  private def restoreDefaultSettings: IO[Unit] =
+    deviceTextScaleProvider.flatMap { deviceTextScale =>
+      val defaults = AppConfig.default
+      applyConfigUpdate(current =>
+        HotkeyOverrides.likeRunning(
+          current,
+          defaults.withFontConfig(defaults.editorConfig.fontConfig.resolveAutoTextScale(deviceTextScale))
+        )
+      ).flatMap(config => onFontConfigChanged(config.editorConfig.fontConfig))
+    }
 
   private def interpretGeneralSettingsIntent(intent: GeneralSettingsIntent, state: AppState): IO[Unit] =
     intent match
@@ -379,85 +363,133 @@ final private[manager] class StateManagerConfigEffects(
           editor.commitState(newState, current)
         }
       case GeneralSettingsIntent.SaveConfig =>
-        persistConfigFile(state.persisted.config)
-      case GeneralSettingsIntent.SetMaterialPreset(preset) =>
-        updateAppearanceConfig(_.withMaterialPreset(preset)).void
-      case GeneralSettingsIntent.SetPostProcessingEffect(effect) =>
-        updateAppearanceConfig(_.withPostProcessingEffect(effect)).void
-      case GeneralSettingsIntent.SetUiShadowsEnabled(enabled) =>
-        updateAppearanceConfig(_.withUiShadowsEnabled(enabled)).void
+        persistConfigFile(state.committedConfig)
+      case GeneralSettingsIntent.ResetSettings =>
+        resetSettings
       case GeneralSettingsIntent.SetRenderFpsTarget(target) =>
         updateAppearanceConfig(_.withRenderFpsTarget(target)).void
       case GeneralSettingsIntent.SetRenderDamageGranularity(granularity) =>
         updateAppearanceConfig(_.withRenderDamageGranularity(granularity)).void
-      case GeneralSettingsIntent.SetBackgroundStyle(style) =>
-        updateAppearanceConfig(_.withBackgroundStyle(style)).void
-      case GeneralSettingsIntent.SetBlurRadius(r) =>
-        updateAppearanceConfig(_.withBlurRadius(r)).void
-      case GeneralSettingsIntent.SetAnimationDuration(ms) =>
-        updateCustomMotionConfig(withEditorTextAnimationDuration(_, ms)).void
-      case GeneralSettingsIntent.SetAnimationSteps(n) =>
-        updateCustomMotionConfig(withEditorTextAnimationSteps(_, n)).void
+      case GeneralSettingsIntent.SetCommandRunnerVisibleRows(rows) =>
+        updateAppearanceConfig(_.withCommandRunnerVisibleRows(rows)).void
+      case GeneralSettingsIntent.SetCommandRunnerItemGapRows(rows) =>
+        updateAppearanceConfig(_.withCommandRunnerItemGapRows(rows)).void
+      case GeneralSettingsIntent.SetCommandRunnerCursorGapRows(rows) =>
+        updateAppearanceConfig(_.withCommandRunnerCursorGapRows(rows)).void
+      case GeneralSettingsIntent.SetAutoSaveMode(mode) =>
+        applyConfigUpdate(_.withAutoSaveMode(mode)).void
+      case GeneralSettingsIntent.SetAutoSaveDelayMillis(millis) =>
+        applyConfigUpdate(_.withAutoSaveDelayMillis(millis)).void
 
-  private def withEditorTextAnimationDuration(config: AppConfig, ms: Int): AppConfig =
-    val newAnim =
-      if ms <= 0 then None
-      else
-        Some(
-          config.editorConfig.characterAnimation.fold(
-            AnimationConfig(steps = 12, totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
-          )(existing => existing.copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L)))
-        )
-    config.withEditorTextAnimation(newAnim)
-
-  private def withEditorTextAnimationSteps(config: AppConfig, n: Int): AppConfig =
-    val newAnim =
-      if n <= 0 then None
-      else
-        Some(
-          config.editorConfig.characterAnimation.fold(
-            AnimationConfig(steps = n, totalDuration = scala.concurrent.duration.Duration.fromNanos(200_000_000L))
-          )(existing => existing.copy(steps = n))
-        )
-    config.withEditorTextAnimation(newAnim)
-
-  /** Queues a write of `config` to the config file, behind any config write already queued. */
+  /** Queues a write of `config` to the config file, behind any config write already queued, whether or not it looks
+    * changed.
+    */
   private[manager] def persistConfigFile(config: AppConfig): IO[Unit] =
-    editor.submitEffect(PersistenceLanes.Config, writeConfigFile(config))
+    configFile.traverse_(file =>
+      editor.submitEffect(PersistenceLanes.Config, file.write(config).flatMap(_.fold(reportSaveFailure, _ => IO.unit)))
+    )
 
-  private def writeConfigFile(config: AppConfig): IO[Unit] =
-    configPersistencePath match
-      case Some(path) =>
-        saveConfig(config, path).flatMap {
-          case Right(_) => IO.unit
-          case Left(error) =>
-            logger.warn(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}")
+  private def requestConfigWrite: IO[Unit] =
+    writes.request(editor.submitEffect(PersistenceLanes.Config, _), writeLatestConfig)
+
+  private def writeLatestConfig: IO[Unit] =
+    configFile.traverse_(file =>
+      currentState
+        .flatMap(state => file.writeIfChanged(state.committedConfig))
+        .flatMap(_.fold(reportSaveFailure, _ => IO.unit))
+    )
+
+  private def reportSaveFailure(error: ConfigError): IO[Unit] =
+    logger.warn(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}")
+
+  private def reloadFromDisk(file: ConfigFileSync): IO[Unit] =
+    editor.submitEffect(
+      PersistenceLanes.Config,
+      file.externalChange
+        .flatMap(_.traverse_(applyExternalChange(file, _)))
+        .handleErrorWith(error => logger.warn(error)(s"[CONFIG] Reloading ${file.path} failed"))
+    )
+
+  private def applyExternalChange(file: ConfigFileSync, change: ConfigFileChange): IO[Unit] =
+    change match
+      case ConfigFileChange.Unreadable(error, stamp) =>
+        file.noteSeen(stamp) >> showConfigNotice(List(ConfigNotice.unparseableOnReload(file.path, error)))
+      case ConfigFileChange.Edited(loaded, stamp) =>
+        (deviceTextScaleProvider, file.onDisk, currentState.map(_.persisted.config)).flatMapN { (scale, disk, live) =>
+          val config   = loaded.config.withFontConfig(loaded.config.editorConfig.fontConfig.resolveAutoTextScale(scale))
+          val unseen   = !disk.flatMap(_.stamp).contains(stamp)
+          val problems = Option.when(unseen)(ConfigNotice.forLoad(file.path, loaded.report)).flatten.toList
+          if disk.exists(_.encoded == ConfigManager.configToString(config)) then
+            file.noteSeen(stamp) >> showConfigNotice(problems)
+          else reloadInto(file, disk.map(_.config), live, config, stamp, problems)
         }
-      case None =>
-        IO.unit
+
+  private def reloadInto(
+    file: ConfigFileSync,
+    base: Option[AppConfig],
+    before: AppConfig,
+    config: AppConfig,
+    stamp: FileStamp,
+    problems: List[String]
+  ): IO[Unit] =
+    editor.dispatchEffectResult(EffectResult.ConfigReloaded(base, config), _ => IO.unit) >>
+      currentState.map(_.persisted.config).flatMap { now =>
+        if now == config then
+          file.adopt(config, stamp) >> configApplied(before, config) >> logger.info(
+            s"[CONFIG] Reloaded ${file.path}"
+          ) >>
+            showConfigNotice(problems ++ ConfigRestart.notice(ConfigRestart.changed(before, config)))
+        else
+          showConfigNotice(
+            problems :+ s"${file.path.getFileName} was edited while a setting was being changed here, so the " +
+              "settings from this session were kept."
+          )
+      }
+
+  private def configApplied(before: AppConfig, config: AppConfig): IO[Unit] =
+    IO(renderCaches.frameState.configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity)) >>
+      IO.whenA(config.editorConfig.fontConfig != before.editorConfig.fontConfig)(
+        onFontConfigChanged(config.editorConfig.fontConfig)
+      ) >>
+      IO.whenA(config.languageToolsConfig.spellCheck != before.languageToolsConfig.spellCheck)(
+        editor.scheduleDocumentAnalysis()
+      ) >>
+      IO.whenA(config.themeFollowConfig != before.themeFollowConfig)(followSystemAppearance)
+
+  private def showConfigNotice(messages: List[String]): IO[Unit] =
+    IO.whenA(messages.nonEmpty)(
+      showNotice(Notice(NoticeLevel.Warning, messages.mkString(" "), topic = Some(NoticeTopic.ConfigFile)))
+    )
 
 private[manager] object StateManagerConfigEffects:
 
   /** The whole state change of a config update: the new config, the live command runner and contextual toolbar
-    * refreshed for it, `syncState`, and -- for a motion change -- in-flight motion of families it switched off.
+    * refreshed for it, and `syncState`.
     */
   def configTransition(
     model: Model,
     update: AppConfig => AppConfig,
-    syncState: (AppState, AppConfig) => AppState,
-    cancelsDisabledMotion: Boolean
+    syncState: (AppState, AppConfig) => AppState
   ): Model =
-    val previous = model.app.persisted.config
-    val config   = update(previous)
-    val app      = syncState(configUpdated(model.app, _ => config), config)
-    val cancellation =
-      if cancelsDisabledMotion then MotionCancellation.between(previous, config) else MotionCancellation.Families(Nil)
-    if cancellation.isEmpty then model.copy(app = app)
-    else
-      model.copy(
-        app = cancellation.cancelState(app),
-        bufferAnimations = cancellation.cancelBufferAnimations(model.bufferAnimations)
-      )
+    val config = update(model.app.persisted.config)
+    model.copy(app = syncState(configUpdated(model.app, _ => config), config))
+
+  /** `loaded` as the live config, unless it already is or a change made here since `base` would be undone by it.
+    *
+    * A preview is not a change made here: the file is compared with the config the preview began from. If it differs,
+    * the preview ends and `loaded` replaces both, so that Escape has nothing stale to put back and the file's edit is
+    * not lost. Re-running the previewed command against a config it was not chosen over would be a guess.
+    */
+  def reloaded(state: AppState, base: Option[AppConfig], loaded: AppConfig): AppState =
+    state.runtime.pendingSetting match
+      case Some(pending) =>
+        if pending.committedConfig == loaded || base.exists(_ != pending.committedConfig) then state
+        else
+          val rebased = pending.copy(committedConfig = loaded)
+          SettingsPreviewReducer.revert(state.copy(runtime = state.runtime.copy(pendingSetting = Some(rebased)))).state
+      case None =>
+        val live = state.persisted.config
+        if live == loaded || base.exists(_ != live) then state else configUpdated(state, _ => loaded)
 
   def configUpdated(state: AppState, update: AppConfig => AppConfig): AppState =
     val config = update(state.persisted.config)
@@ -469,12 +501,7 @@ private[manager] object StateManagerConfigEffects:
       state.commandRunnerSurface.flatMap { surface =>
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
-            val configRunner = runner.updateInputItems(config)
-            Some(
-              configRunner.copy(optionSelections =
-                configRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
-              )
-            )
+            Some(runner.updateInputItems(config))
           case _ =>
             None
       }
@@ -493,38 +520,3 @@ private[manager] object StateManagerConfigEffects:
         other
     }
     state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
-
-  /** Adds or removes the companion sprite's pinned panel surface to match the config: visible exactly when the
-    * companion sprite is enabled and visual flair is not `Off` (matching item 8/9's "Off = don't render" rule). Called
-    * after either setting changes, since either can flip the panel's visibility.
-    */
-  def withCompanionSpritePanel(state: AppState, config: AppConfig): AppState =
-    val shouldShow = config.companionSpriteConfig.enabled && config.visualFlairLevel != VisualFlairLevel.Off
-    val exists     = state.runtime.uiSurfaces.exists(_.id == SurfaceId.CompanionSprite)
-    if shouldShow && !exists then
-      val surface = UiSurface(
-        id = SurfaceId.CompanionSprite,
-        content = SurfaceContent.CompanionSprite,
-        presentation = SurfacePresentation.Docked
-      )
-      // Docking is the tree's job alone (issue #817) -- `AppState.dockCompanionSprite` is the one place that seeds a
-      // companion sprite's position/ratio, reused here so startup and this runtime toggle can't drift apart.
-      state.copy(
-        persisted = state.persisted.copy(layout = AppState.dockCompanionSprite(state.persisted.layout, config)),
-        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces :+ surface)
-      )
-    else if !shouldShow && exists then
-      val prunedTree = state.persisted.layout.workspaceTree.flatMap(_.removeSurface(SurfaceId.CompanionSprite))
-      val maximized = state.persisted.layout.maximizedWorkspaceNodeId.filterNot(nodeId =>
-        state.persisted.layout.workspaceTree.flatMap(_.surfaceIdForNode(nodeId)).contains(SurfaceId.CompanionSprite)
-      )
-      state.copy(
-        persisted = state.persisted.copy(layout =
-          state.persisted.layout.copy(
-            workspaceTree = prunedTree.orElse(state.persisted.layout.workspaceTree),
-            maximizedWorkspaceNodeId = maximized
-          )
-        ),
-        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == SurfaceId.CompanionSprite))
-      )
-    else state

@@ -2,7 +2,9 @@ package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.client.DocumentUri
-import com.serenity.state.models.AppState
+import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.model.LspProgressTask
+import com.serenity.state.models.{AppState, LanguageServiceState}
 import com.serenity.ui.layout.*
 
 object SystemEventReducer:
@@ -21,19 +23,31 @@ object SystemEventReducer:
         ReducerResult.noEffects(state)
 
   private def reduceLspEvent(event: LspEvent, state: AppState): ReducerResult =
+    if isServerReport(event) && !state.editingContext.hasCodeTooling then ReducerResult.noEffects(state)
+    else reduceAcceptedLspEvent(event, state)
+
+  /** What a server volunteers about its documents, as against the answer to a request the editor made. A prose
+    * workspace has no servers, so one arriving there is late from a server let go in the switch, and would only leave
+    * data that nothing clears.
+    */
+  private def isServerReport(event: LspEvent): Boolean =
+    event match
+      case LspEvent.LspDiagnosticsReceived(_, _) | LspEvent.LspSemanticTokensReceived(_, _) |
+          LspEvent.LspSemanticTokensRangeReceived(_, _, _, _) | LspEvent.LspSemanticTokensEdited(_, _) |
+          LspEvent.LspSemanticTokensUnavailable(_) | LspEvent.LspProgressReceived(_, _, _) =>
+        true
+      case LspEvent.LspHoverReceived(_, _) | LspEvent.LspCompletionReceived(_, _) |
+          LspEvent.LspDefinitionReceived(_, _, _, _) | LspEvent.LspReferencesReceived(_, _, _) |
+          LspEvent.LspRenameReceived(_, _) | LspEvent.LspServerStopped(_) | LspEvent.LspWorkspaceEditRequested(_) =>
+        false
+
+  private def reduceAcceptedLspEvent(event: LspEvent, state: AppState): ReducerResult =
     event match
       case LspEvent.LspDiagnosticsReceived(rawUri, diagnostics) =>
-        val uri = DocumentUri(rawUri)
-        ReducerResult.noEffects(
-          state.copy(runtime =
-            state.runtime.copy(languageService =
-              state.runtime.languageService.copy(diagnosticsState =
-                state.runtime.languageService.diagnosticsState
-                  .copy(diagnostics = state.runtime.languageService.diagnosticsState.diagnostics + (uri -> diagnostics))
-              )
-            )
-          )
-        )
+        withOpenDocumentData(rawUri, state) { (uri, languageService) =>
+          val held = languageService.diagnosticsState
+          languageService.copy(diagnosticsState = held.copy(diagnostics = held.diagnostics + (uri -> diagnostics)))
+        }
 
       case LspEvent.LspHoverReceived(text, anchor) =>
         PeekStateReducer.show(PeekContent.QuickInfo(text), anchor, state)
@@ -63,32 +77,70 @@ object SystemEventReducer:
       case LspEvent.LspRenameReceived(edits, anchor) =>
         RenameEditReducer.apply(edits, anchor, state)
 
+      case LspEvent.LspProgressReceived(languageId, token, progress) =>
+        withProgress(state, languageId, LspProgressTask.advance(_, token, progress))
+
+      case LspEvent.LspServerStopped(languageId) => withProgress(state, languageId, _ => Nil)
+
+      case LspEvent.LspWorkspaceEditRequested(edits) => WorkspaceEditReducer(edits, state)
+
       case LspEvent.LspSemanticTokensReceived(rawUri, tokens) =>
-        val uri = DocumentUri(rawUri)
-        ReducerResult.noEffects(
-          state.copy(runtime =
-            state.runtime.copy(languageService =
-              state.runtime.languageService.copy(semanticTokensState =
-                state.runtime.languageService.semanticTokensState.copy(
-                  byUri = state.runtime.languageService.semanticTokensState.byUri + (uri -> tokens),
-                  unavailableUris = state.runtime.languageService.semanticTokensState.unavailableUris - uri
-                )
-              )
-            )
+        withOpenDocumentData(rawUri, state) { (uri, languageService) =>
+          val held = languageService.semanticTokensState
+          languageService.copy(semanticTokensState =
+            held.copy(byUri = held.byUri + (uri -> tokens), unavailableUris = held.unavailableUris - uri)
           )
-        )
+        }
+
+      case LspEvent.LspSemanticTokensRangeReceived(rawUri, firstLine, lastLine, tokens) =>
+        withOpenDocumentData(rawUri, state) { (uri, languageService) =>
+          val held = languageService.semanticTokensState
+          val merged =
+            held.byUri.get(uri).fold(tokens)(_.replaceLines(firstLine, lastLine, tokens))
+          languageService.copy(semanticTokensState =
+            held.copy(byUri = held.byUri + (uri -> merged), unavailableUris = held.unavailableUris - uri)
+          )
+        }
+
+      case LspEvent.LspSemanticTokensEdited(rawUri, change) =>
+        withOpenDocumentData(rawUri, state) { (uri, languageService) =>
+          val held = languageService.semanticTokensState
+          languageService.copy(semanticTokensState =
+            held.copy(byUri = held.byUri.updatedWith(uri)(_.map(_.acceptEdit(change))))
+          )
+        }
 
       case LspEvent.LspSemanticTokensUnavailable(rawUri) =>
-        val uri = DocumentUri(rawUri)
-        ReducerResult.noEffects(
-          state.copy(runtime =
-            state.runtime.copy(languageService =
-              state.runtime.languageService.copy(semanticTokensState =
-                state.runtime.languageService.semanticTokensState.copy(
-                  byUri = state.runtime.languageService.semanticTokensState.byUri - uri,
-                  unavailableUris = state.runtime.languageService.semanticTokensState.unavailableUris + uri
-                )
-              )
-            )
+        withOpenDocumentData(rawUri, state) { (uri, languageService) =>
+          val held = languageService.semanticTokensState
+          languageService.copy(semanticTokensState =
+            held.copy(byUri = held.byUri - uri, unavailableUris = held.unavailableUris + uri)
           )
-        )
+        }
+
+  // A server may still publish for a document after it was closed (an in-flight publish, a re-publish on didClose);
+  // nothing reads language data for a document without a buffer, so it would only leak.
+  private def withOpenDocumentData(rawUri: String, state: AppState)(
+    update: (DocumentUri, LanguageServiceState) => LanguageServiceState
+  ): ReducerResult =
+    val uri    = DocumentUri(rawUri)
+    val isOpen = state.persisted.buffers.values.exists(state.runtime.bufferIndexMemos.uriFor(_) == uri)
+    ReducerResult.noEffects(
+      if isOpen then
+        state.copy(runtime = state.runtime.copy(languageService = update(uri, state.runtime.languageService)))
+      else state
+    )
+
+  private def withProgress(
+    state: AppState,
+    languageId: LanguageId,
+    update: List[LspProgressTask] => List[LspProgressTask]
+  ): ReducerResult =
+    val languageService = state.runtime.languageService
+    val tasks           = update(languageService.progress.getOrElse(languageId, Nil))
+    val progress =
+      if tasks.isEmpty then languageService.progress - languageId
+      else languageService.progress.updated(languageId, tasks)
+    ReducerResult.noEffects(
+      state.copy(runtime = state.runtime.copy(languageService = languageService.copy(progress = progress)))
+    )

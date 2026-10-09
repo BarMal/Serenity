@@ -1,18 +1,16 @@
 package com.serenity.ui.renderer
 
-import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
-import com.serenity.config.PostProcessingEffect
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
-/** What a frame decided to reuse: the rows it still has to draw per pane and the pixel bands it kept. */
+/** What a frame redraws per pane, the pixel bands it keeps, and the screen rects it changed (`None`: all of it). */
 final case class FramePlan(
     dirtyRowsByPane: Map[PaneId, Set[Int]],
     preserved: List[PixelRect],
-    repaintRegion: Option[PixelRect],
-    boundedRepaint: Boolean
+    repaintRegion: Option[List[PixelRect]]
 )
 
 /** Decides what a frame actually has to (re)draw and paints the resulting layer stack: the row-level reuse plan
@@ -44,10 +42,9 @@ object RendererFramePlanner:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     output: Option[FrameOutput],
     damage: Damage,
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty,
     caches: com.serenity.state.manager.RenderCaches = com.serenity.state.manager.RenderCaches.create()
   ): Option[EditorPaneRenderPlan] =
     surface.hideCursor()
@@ -109,8 +106,7 @@ object RendererFramePlanner:
             caches.frameState.rememberPreparedScene(surface, next)
             next
           }
-        val finalizedScene   = prepared.scene
-        val editorRenderPlan = prepared.renderPlan
+        val finalizedScene = prepared.scene
         val context = RenderContext(
           surface,
           finalizedScene.calculatedLayout,
@@ -121,8 +117,11 @@ object RendererFramePlanner:
           uiFont,
           cellMetrics,
           uiMetrics,
-          bufferAnimations,
           caches
+        )
+        // The prepared scene is reused while the layout is, which says nothing of the annotations drawn on it.
+        val editorRenderPlan = prepared.renderPlan.copy(
+          annotations = RendererPaneSetup.annotationsFor(state, context, prepared.renderPlan.snapshots)
         )
         val framePlan = planFrame(state, context, editorRenderPlan, viewportSize, output, damage)
         // Recorded *after* `planFrame` (and thus `dirtyRowsFor`) has read this surface's snapshots for this frame, so
@@ -138,7 +137,6 @@ object RendererFramePlanner:
         commitFramePlan(framePlan, output)
         Some(editorRenderPlan)
 
-    surface.effects.foreach(_.applyPostProcessing(state.persisted.config.surfaceConfig.postProcessingEffect))
     surface.flush()
     editorRenderPlan
 
@@ -211,8 +209,7 @@ object RendererFramePlanner:
     * Painting `renderModalLayer` into a fresh, fully-transparent [[LayerBufferSupport.newLayerSurface]] instead of
     * `context.surface` directly, then compositing the result back at full opacity, is pixel-identical to painting
     * directly -- see [[Java2DRenderSurface.newLayerSurface]]'s doc comment for why, and for the one correctness
-    * precondition (`renderModalLayer` never reads pixels back off the surface it paints onto) that keeps this safe for
-    * the modal specifically while pinned/expanded panels (which do, via `blurRegion`) aren't yet covered.
+    * precondition (`renderModalLayer` never reads pixels back off the surface it paints onto) that keeps this safe.
     */
   private def paintModalLayer(
     state: AppState,
@@ -220,7 +217,7 @@ object RendererFramePlanner:
     scene: UiSceneSnapshot,
     isDirty: Boolean
   ): Unit =
-    context.surface.layerBuffers match
+    layerSupportFor(state, context) match
       case None => RendererFloatingPanels.renderModalLayer(state, context, scene)
       case Some(support) =>
         scene.modalBackdrop match
@@ -235,8 +232,8 @@ object RendererFramePlanner:
             }
             if reusable then cached.foreach(c => context.surface.pixels.compositeFullSurfaceLayer(c.image))
             else
-              val capturedRef  = new AtomicReference[Option[BufferedImage]](None)
-              val layerSurface = support.newLayerSurface(image => capturedRef.set(Some(image)))
+              val capturedRef  = new AtomicReference[Option[RenderImage]](None)
+              val layerSurface = support.newLayerSurface(image => capturedRef.set(Some(image)), cached.map(_.image))
               RendererFloatingPanels.renderModalLayer(state, context.copy(surface = layerSurface), scene)
               layerSurface.flush()
               capturedRef.get().foreach { image =>
@@ -253,46 +250,32 @@ object RendererFramePlanner:
   /** Whether a pinned/expanded/floating panel identified by `surfaceId` must repaint this frame rather than reuse its
     * cached buffer -- the panel generalisation of [[paintModalLayer]]'s `isDirty` flag (#1100 stage 3).
     *
-    * `Damage.narrowToSurface(damage, surfaceId)` alone is exactly what makes the modal's own caching safe: it is
-    * `Damage.Nothing` whenever this frame's damage doesn't name this surface, even if it names something else entirely
-    * (editor content elsewhere, chrome, another surface). That is safe for the modal because `renderModalLayer` never
-    * reads pixels back off the frame it paints onto -- but a panel that blurs its own background
-    * (`SurfaceMaterials.effectiveBlurRadius > 0`) *does* read pixels back, via `blurRegion`, and those pixels can be
-    * exactly the ones some *other* damage (an edit under a translucent panel) just changed. Reusing a cached buffer in
-    * that case would composite a blur of stale content back onto a frame whose real content has since moved on --
-    * silently wrong output, not just a missed optimisation. So when blur is active, a panel is dirty unless the whole
-    * frame's damage is `Damage.Nothing` -- truly nothing changed anywhere, which is the one case a stale blur is
-    * provably still correct. When blur is inactive (`blurRadius <= 0f`), no panel reads pixels back, and the narrower,
-    * per-surface check applies exactly as it does for the modal: a panel only redraws when its own `Damage.Surface`
-    * entry says so.
+    * `Damage.narrowToSurface(damage, surfaceId)` is `Damage.Nothing` whenever this frame's damage doesn't name this
+    * surface, even if it names something else entirely (editor content elsewhere, chrome, another surface). That is
+    * safe because a panel, like the modal, never reads pixels back off the frame it paints onto: it only redraws when
+    * its own `Damage.Surface` entry says so.
     */
-  def panelDirtyCheck(damage: Damage, blurRadius: Float)(surfaceId: SurfaceId): Boolean =
-    Damage.narrowToSurface(damage, surfaceId) != Damage.Nothing || (blurRadius > 0f && damage != Damage.Nothing)
+  def panelDirtyCheck(damage: Damage)(surfaceId: SurfaceId): Boolean =
+    Damage.narrowToSurface(damage, surfaceId) != Damage.Nothing
 
   /** Paint one pinned/expanded/floating panel's own content into an isolated layer buffer, reusing its last-painted
     * pixels instead of repainting when [[panelDirtyCheck]] says it's safe to -- the panel generalisation of
     * [[paintModalLayer]] (#1100 stage 3).
     *
-    * Unlike the modal, a panel's own paint step (`paintPanel`) can read pixels back off the surface it paints onto
-    * (`SurfaceMaterials.effectiveBlurRadius`'s `blurRegion` call), so this seeds the layer buffer from a snapshot of
-    * this frame's live pixels (`LayerBufferSupport.newSeededLayerSurface`) instead of starting fully transparent --
-    * `blurRegion` then reads exactly the same background it would reading the live frame surface directly, because the
-    * snapshot *is* that surface's pixels at the moment it was taken. Painting the rest of the panel into the same
-    * seeded buffer and compositing the whole buffer back at full opacity is then pixel-identical to painting directly,
-    * the same "paint onto a copy, composite back" argument [[Java2DRenderSurface.newLayerSurface]]'s doc comment makes
-    * for the transparent case.
+    * The layer starts transparent, so everything the panel didn't paint stays transparent and compositing the whole
+    * layer back over a frame whose content has since changed is still correct.
     *
-    * No `layerBuffers` capability (TUI's `TerminalRenderSurface`) -> falls straight through to `paintPanel`, painting
-    * directly into the shared surface every frame exactly as before this stage -- the same TUI exclusion #1100 stage 2
-    * documented for the modal.
+    * No `layerBuffers` capability (TUI's `TerminalRenderSurface`), or layer caching switched off -> falls straight
+    * through to `paintPanel`, painting directly into the shared surface every frame.
     */
   def paintPanelLayer(
+    state: AppState,
     context: RenderContext,
     surfaceId: SurfaceId,
     frameRect: LayoutRect,
     isDirty: Boolean
   )(paintPanel: RenderContext => Unit): Unit =
-    context.surface.layerBuffers match
+    layerSupportFor(state, context) match
       case None => paintPanel(context)
       case Some(support) =>
         val cached = context.caches.frameState.cachedPanelLayersFor(context.surface).get(surfaceId)
@@ -304,8 +287,8 @@ object RendererFramePlanner:
         }
         if reusable then cached.foreach(c => context.surface.pixels.compositeFullSurfaceLayer(c.image))
         else
-          val capturedRef  = new AtomicReference[Option[BufferedImage]](None)
-          val layerSurface = support.newSeededLayerSurface(image => capturedRef.set(Some(image)))
+          val capturedRef  = new AtomicReference[Option[RenderImage]](None)
+          val layerSurface = support.newLayerSurface(image => capturedRef.set(Some(image)), cached.map(_.image))
           paintPanel(context.copy(surface = layerSurface))
           layerSurface.flush()
           capturedRef.get().foreach { image =>
@@ -333,9 +316,19 @@ object RendererFramePlanner:
     val pinnedAndExpandedIds = RendererFloatingPanels.pinnedAndExpandedSurfaces(state).map(_.id).toSet
     val overlays             = OverlayViewModel.fromState(state, scene)
     val floatingIds =
-      (overlays.aboveCursorStack ++ overlays.belowCursorStack ++ overlays.tabBar.toList).flatMap(_.surfaceId).toSet
+      (overlays.aboveCursorStack ++ overlays.belowCursorStack ++ overlays.cornerStack ++ overlays.tabBar.toList)
+        .flatMap(_.surfaceId)
+        .toSet
     val activeIds = pinnedAndExpandedIds ++ floatingIds
-    caches.frameState.pruneStalePanelLayers(surface, activeIds)
+    if state.persisted.config.surfaceConfig.layerCachingEnabled then
+      caches.frameState.pruneStalePanelLayers(surface, activeIds)
+    else caches.frameState.forgetLayerBuffers(surface)
+
+  /** Layer buffers exist only to be cached; with caching off, painting straight onto the frame is the same picture
+    * without allocating a full-window image per layer per frame (#1798).
+    */
+  private def layerSupportFor(state: AppState, context: RenderContext): Option[LayerBufferSupport] =
+    context.surface.layerBuffers.filter(_ => state.persisted.config.surfaceConfig.layerCachingEnabled)
 
   /** Drop every reuse promise attached to this surface and force the next repaint to cover the whole canvas.
     *
@@ -361,22 +354,18 @@ object RendererFramePlanner:
     }
 
   private def commitFramePlan(framePlan: Option[FramePlan], output: Option[FrameOutput]): Unit =
-    output.foreach { value =>
-      val bounded = framePlan.filter(_.boundedRepaint).map(_.repaintRegion.getOrElse(PixelRect(0, 0, 0, 0)))
-      value.repaintRegion.set(bounded)
-    }
+    output.foreach(_.repaintRegion.set(framePlan.flatMap(_.repaintRegion)))
 
   /** Decide which pane rows this frame still has to draw, and which pixel bands it may keep from an earlier frame.
     *
     * Returns `None` — meaning "draw everything, remember nothing" — whenever the frame cannot be reasoned about safely:
-    * a surface that does not preserve pixels, or a post-processing pass that would compound over kept pixels. A
-    * floating/pinned/modal/expanded layer being visible no longer stands the whole optimisation down by itself
-    * (`#1000`, retiring the old `overlaysMayCoverPanes` check) -- `DamageProducer.fullRenderDamage` reports
-    * `Everything` whenever `uiSurfaces`/`focus` actually change, which still wipes out any stale
-    * shadow/blur/translucency bleed the instant an overlay appears, moves, resizes or changes content, while leaving
-    * row reuse active on every other frame an overlay merely sits on screen. `damage` is always folded into every
-    * tracked identity first, regardless of which branch this frame takes, so a pixel buffer that sits idle through a
-    * stood-down frame does not lose the damage that frame reported.
+    * a surface that does not preserve pixels. A floating/pinned/modal/expanded layer being visible no longer stands the
+    * whole optimisation down by itself (`#1000`, retiring the old `overlaysMayCoverPanes` check) --
+    * `DamageProducer.fullRenderDamage` reports `Everything` whenever `uiSurfaces`/`focus` actually change, which still
+    * wipes out any stale shadow/blur/translucency bleed the instant an overlay appears, moves, resizes or changes
+    * content, while leaving row reuse active on every other frame an overlay merely sits on screen. `damage` is always
+    * folded into every tracked identity first, regardless of which branch this frame takes, so a pixel buffer that sits
+    * idle through a stood-down frame does not lose the damage that frame reported.
     */
   private def planFrame(
     state: AppState,
@@ -390,7 +379,6 @@ object RendererFramePlanner:
     context.caches.frameState.accumulateScreenDamage(output, damage)
 
     val plan = context.surface.persistentContentKey
-      .filter(_ => state.persisted.config.surfaceConfig.postProcessingEffect == PostProcessingEffect.Off)
       .map { persistenceKey =>
         val panes   = RendererPaneSetup.paneRecordsFor(state, context, renderPlan)
         val paneIds = panes.keySet
@@ -429,22 +417,20 @@ object RendererFramePlanner:
           allPanesReusable &&
             ghostPaneIds.isEmpty &&
             !context.caches.frameState.screenPaneIdsChanged(output, paneIds) &&
-            Damage.isBufferRowsOnly(screenDamageSincePublish)
-        val repaintRows =
+            Damage.isBufferRowsOrChromeOnly(screenDamageSincePublish)
+        val repaintRegion =
           Option.when(boundedRepaintEligible) {
-            panes.toList.flatMap {
-              case (paneId, record) =>
-                dirtyRowsFor(screenDamageSincePublish, paneId, record, persistenceKey, context.caches).toList
-                  .flatMap(record.rowRects.lift)
-            }
+            RendererRepaintRegion.rects(
+              state,
+              context,
+              renderPlan,
+              panes,
+              screenDamageSincePublish,
+              dirtyRowsFor(screenDamageSincePublish, _, _, persistenceKey, context.caches)
+            )
           }
 
-        FramePlan(
-          dirtyRowsByPane = dirtyRowsByPane,
-          preserved = preserved,
-          repaintRegion = repaintRows.flatMap(PixelRect.unionOf),
-          boundedRepaint = repaintRows.isDefined
-        )
+        FramePlan(dirtyRowsByPane = dirtyRowsByPane, preserved = preserved, repaintRegion = repaintRegion)
       }
 
     if plan.isEmpty then forgetPreservedContent(context.surface, output, context.caches)
@@ -462,8 +448,9 @@ object RendererFramePlanner:
       case NoteKey.Keyword(_) => false
 
   /** Rows of `record` that `damage` marks dirty, translated from buffer line numbers to this pane's current visual row
-    * indices, widened by one row on each side and by the rows whose glyphs reach outside the band this pane can
-    * preserve, plus any row whose pixel band was under a floating panel's *previous*-frame rect for every
+    * indices -- every row of a damaged line, but only the rows a [[Damage.BufferCells]] span falls on
+    * ([[rowsUnderSpans]]) -- widened by one row on each side and by the rows whose glyphs reach outside the band this
+    * pane can preserve, plus any row whose pixel band was under a floating panel's *previous*-frame rect for every
     * `Damage.Surface(id)` fact in `damage` ([[vacatedFloatingSurfaceRows]]). `Damage.Surface` carries no buffer-row
     * detail for `Damage.coarsenToRows` to translate -- a panel's move/resize/close only reports which surface changed,
     * not which pane pixels it used to cover -- so without this, a pane whose own content didn't change preserves rows a
@@ -488,17 +475,34 @@ object RendererFramePlanner:
     caches: com.serenity.state.manager.RenderCaches
   ): Set[Int] =
     val damageDirty =
-      if Damage.isEverything(damage) then record.rowBufferLines.indices.toSet
+      val facts = Damage.rowFactsFor(record.bufferId, damage)
+      if facts.everyRow || Damage.isEverything(damage) then record.rowBufferLines.indices.toSet
       else
-        val bufferLines = Damage.coarsenToRows(record.bufferId, damage)
-        val dirty = record.rowBufferLines.zipWithIndex.collect {
-          case (bufferLine, row) if bufferLines.contains(bufferLine) => row
+        val lineRows = record.rowBufferLines.zipWithIndex.collect {
+          case (bufferLine, row) if facts.lines.contains(bufferLine) => row
         }.toSet
+        val dirty = lineRows ++ rowsUnderSpans(record, facts.spans)
         DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
           record.overflowingRows ++
           vacatedFloatingSurfaceRows(damage, record, persistenceKey, caches)
     val previousSnapshot = caches.frameState.previousSnapshotsFor(persistenceKey).get(paneId)
     damageDirty ++ DirtyLineDiff.dirtyRows(previousSnapshot, record.snapshot)
+
+  /** The visual rows each span's columns fall on. A column at a wrap boundary matches both rows it sits between, as the
+    * caret lookup does. A span that matches no row of its line (whitespace dropped at a wrap, say) dirties the whole
+    * line rather than nothing.
+    */
+  private def rowsUnderSpans(record: PaneFrameRecord, spans: List[Damage.BufferCells]): Set[Int] =
+    spans.toSet.flatMap { span =>
+      val lineRows =
+        record.snapshot.visualLines.zipWithIndex.filter((visualLine, _) => visualLine.bufferLine == span.row)
+      val touched = lineRows.collect {
+        case (visualLine, row)
+            if span.fromColumn <= visualLine.endColumn && span.toColumn.forall(_ > visualLine.startColumn) =>
+          row
+      }
+      if touched.nonEmpty then touched else lineRows.map(_._2)
+    }
 
   /** Rows of `record` whose pixel band ([[PaneFrameRecord.rowRects]]) intersects the previous frame's rect of any
     * floating surface `damage` reports as changed ([[Damage.surfaceIds]]). A surface absent from this owner's
@@ -528,7 +532,7 @@ object RendererFramePlanner:
     viewportSize: ViewportSize,
     scene: UiSceneSnapshot,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
     uiFont: java.awt.Font,

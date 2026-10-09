@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.awt.Font
 
 import com.serenity.command.{Command, CommandPaletteState, CommandRegistry, CommandRunner, CommandRunnerSurface}
-import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
+import com.serenity.config.{AppConfig, InterfaceDensity, StatusLinePlacement, TextAreaInsets}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -18,7 +18,7 @@ import com.serenity.ui.layout.{
   WorkspaceNodeId,
   WorkspaceTree
 }
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -80,6 +80,18 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     second should be theSameInstanceAs first
   }
 
+  it should "bring the floating status line back into the key once a typing burst goes quiet" in {
+    val floating = AppConfig.default.withStatusLinePlacement(StatusLinePlacement.Floating)
+    val state    = stateWith(Buffer.fromString(bufferId, "alpha"), floating)
+    val typing   = state.copy(runtime = state.runtime.observeTyping(1L))
+    val quiet    = typing.copy(runtime = typing.runtime.copy(typingActivity = TypingActivity.idle))
+    val scene    = AuthoritativeUiScene()
+
+    quiet.floatingStatusLineSurface should not be empty
+    scene.layoutKeyFor(typing, ViewportSize(80, 24)).derivedStatusLineSurface shouldBe empty
+    scene.layoutKeyFor(quiet, ViewportSize(80, 24)).derivedStatusLineSurface shouldBe quiet.floatingStatusLineSurface
+  }
+
   it should "cache full editor pane layouts for mouse hit testing" in {
     val config = AppConfig.default.withTextAreaInsets(TextAreaInsets(0.15, 0.10))
     val state  = stateWith(Buffer.fromString(bufferId, "alpha\nbeta"), config)
@@ -127,8 +139,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       size,
-      mono,
-      text,
+      FontSpec.fromAwt(mono),
+      FontSpec.fromAwt(text),
       CellMetrics.fromFont(mono),
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -201,8 +213,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       size,
-      codeFont,
-      textFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
       CellMetrics.fromFont(codeFont),
       None,
       caches
@@ -211,15 +223,10 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     MouseTargetCache.fromState(state, size, caches.authoritativeScene).scene should be theSameInstanceAs scene
   }
 
-  it should "share a scene when rendering uses an effective theme copy" in {
+  it should "share the rendered scene with mouse targeting across a theme change" in {
     val baseState = stateWith(Buffer.fromString(bufferId, "alpha beta"))
-    val state = baseState.copy(runtime =
-      baseState.runtime.copy(themeDiscovery =
-        baseState.runtime.themeDiscovery
-          .copy(transition = Some(ThemeTransition(com.serenity.ui.theme.Theme.light, currentStep = 1, totalSteps = 4)))
-      )
-    )
-    val size = ViewportSize(80, 24)
+    val state     = baseState
+    val size      = ViewportSize(80, 24)
     val codeFont =
       com.serenity.ui.fonts.FontLoader
         .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)
@@ -237,8 +244,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       size,
-      codeFont,
-      textFont,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
       CellMetrics.fromFont(codeFont),
       None,
       caches
@@ -458,12 +465,18 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     )
     val openFileCommand = Command.typed(
       "startup.open-file",
-      "Open an existing file or directory",
+      "Open an existing file",
       com.serenity.command.CommandIntent.Session(com.serenity.command.SessionIntent.StartupOpenFile)
+    )
+    val openFolderCommand = Command.typed(
+      "startup.open-folder",
+      "Open an existing folder",
+      com.serenity.command.CommandIntent.Session(com.serenity.command.SessionIntent.StartupOpenFolder)
     )
     val actions = List(
       StartupAction("new-session", "Start a new session", newSessionCommand),
-      StartupAction("open-file", "Open a file", openFileCommand)
+      StartupAction("open-file", "Open a file", openFileCommand),
+      StartupAction("open-folder", "Open a folder", openFolderCommand)
     )
     val page = StartupPage(title = "Welcome", actions = actions, selectedIndex = selectedIndex)
     val surface = UiSurface(

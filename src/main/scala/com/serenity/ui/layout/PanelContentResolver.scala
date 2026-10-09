@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.state.models.*
+import com.serenity.ui.widget.{ListScroll, SelectableList}
 
 /** Resolves the fixed-shape informational panels -- directory listings/trees, the terminal, outline/comments/
   * diagnostics lists, the shortcuts reference, and the tab/recent-files corner widgets -- into overlay rows. Split out
@@ -45,14 +46,23 @@ private[layout] object PanelContentResolver:
     */
   final private[layout] case class DirectoryTreeRowView(row: OverlayRow, path: java.nio.file.Path)
 
+  /** The tree's rows and the window `rect` shows of them, where `scroll` puts it. */
+  private[layout] def directoryTreeWindow(
+    rect: LayoutRect,
+    tree: com.serenity.ui.layout.DirectoryTreeData,
+    selectedPath: Option[java.nio.file.Path],
+    scroll: ListScroll
+  ): SelectableList[DirectoryTreeRow] =
+    DirectoryTreeData.rowList(tree, selectedPath, scroll, ListPanelScrolling.itemRows(rect))
+
   private[layout] def directoryTreeRowViews(
     rect: LayoutRect,
     tree: com.serenity.ui.layout.DirectoryTreeData,
-    selectedPath: Option[java.nio.file.Path]
+    selectedPath: Option[java.nio.file.Path],
+    scroll: ListScroll
   ): List[DirectoryTreeRowView] =
-    val visibleRows = com.serenity.ui.layout.DirectoryTreeData.visibleRows(tree)
-    val maxRows     = math.max(1, rect.height - 2)
-    visibleRows.take(maxRows).map { row =>
+    val window = directoryTreeWindow(rect, tree, selectedPath, scroll)
+    window.visible(ListPanelScrolling.itemRows(rect)).map(_._1).toList.map { row =>
       val marker =
         if row.isDirectory then
           if row.isExpanded then "▾ "
@@ -79,11 +89,12 @@ private[layout] object PanelContentResolver:
     rect: LayoutRect,
     mode: SurfaceRenderMode,
     tree: com.serenity.ui.layout.DirectoryTreeData,
-    selectedPath: Option[java.nio.file.Path]
+    selectedPath: Option[java.nio.file.Path],
+    scroll: ListScroll
   ): ResolvedSurfaceContent =
     ResolvedSurfaceContent(
       title = SurfaceContentResolver.titleFor(mode, tree.rootPath.getFileName.toString),
-      rows = directoryTreeRowViews(rect, tree, selectedPath).map(_.row)
+      rows = directoryTreeRowViews(rect, tree, selectedPath, scroll).map(_.row)
     )
 
   def resolveTerminal(
@@ -119,7 +130,8 @@ private[layout] object PanelContentResolver:
   private[layout] def outlineRowViews(
     rect: LayoutRect,
     symbols: List[Symbol],
-    activeLocation: Option[Location]
+    activeLocation: Option[Location],
+    scroll: ListScroll = ListScroll()
   ): List[OutlineRowView] =
     SurfaceLayoutKind.classify(rect) match
       case SurfaceLayoutKind.Horizontal =>
@@ -135,14 +147,14 @@ private[layout] object PanelContentResolver:
       case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square if symbols.isEmpty =>
         List(OutlineRowView(emptyStateRow("No headings in this document"), None))
       case SurfaceLayoutKind.Vertical =>
-        windowed(symbols, rect.height - 2, activeLocation)(_.location).map {
+        windowed(symbols, ListPanelScrolling.itemRows(rect), activeLocation, scroll)(_.location).map {
           case (symbol, index) =>
             val active = activeLocation.contains(symbol.location)
             val prefix = if active then "> " else ""
             OutlineRowView(OverlayRow(s"$prefix${symbol.kind} ${symbol.name}", selected = active), Some(index))
         }
       case SurfaceLayoutKind.Square =>
-        windowed(symbols, rect.height - 2, activeLocation)(_.location).map {
+        windowed(symbols, ListPanelScrolling.itemRows(rect), activeLocation, scroll)(_.location).map {
           case (symbol, index) =>
             val active = activeLocation.contains(symbol.location)
             val prefix = if active then "> " else ""
@@ -163,11 +175,12 @@ private[layout] object PanelContentResolver:
     rect: LayoutRect,
     mode: SurfaceRenderMode,
     symbols: List[Symbol],
-    activeLocation: Option[Location]
+    activeLocation: Option[Location],
+    scroll: ListScroll = ListScroll()
   ): ResolvedSurfaceContent =
     ResolvedSurfaceContent(
       SurfaceContentResolver.titleFor(mode, "outline"),
-      rows = outlineRowViews(rect, symbols, activeLocation).map(_.row)
+      rows = outlineRowViews(rect, symbols, activeLocation, scroll).map(_.row)
     )
 
   /** One rendered comments row paired with the index into `symbols` it represents, when the row is addressable at all
@@ -181,7 +194,8 @@ private[layout] object PanelContentResolver:
   private[layout] def commentsRowViews(
     rect: LayoutRect,
     symbols: List[Symbol],
-    activeLocation: Option[Location]
+    activeLocation: Option[Location],
+    scroll: ListScroll = ListScroll()
   ): List[CommentsRowView] =
     SurfaceLayoutKind.classify(rect) match
       case SurfaceLayoutKind.Horizontal =>
@@ -197,7 +211,7 @@ private[layout] object PanelContentResolver:
       case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square if symbols.isEmpty =>
         List(CommentsRowView(emptyStateRow("No comments in this document"), None))
       case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square =>
-        windowed(symbols, rect.height - 2, activeLocation)(_.location).map {
+        windowed(symbols, ListPanelScrolling.itemRows(rect), activeLocation, scroll)(_.location).map {
           case (symbol, index) =>
             val active = activeLocation.contains(symbol.location)
             val prefix = if active then "> " else ""
@@ -218,11 +232,12 @@ private[layout] object PanelContentResolver:
     rect: LayoutRect,
     mode: SurfaceRenderMode,
     symbols: List[Symbol],
-    activeLocation: Option[Location]
+    activeLocation: Option[Location],
+    scroll: ListScroll = ListScroll()
   ): ResolvedSurfaceContent =
     ResolvedSurfaceContent(
       SurfaceContentResolver.titleFor(mode, "comments"),
-      rows = commentsRowViews(rect, symbols, activeLocation).map(_.row)
+      rows = commentsRowViews(rect, symbols, activeLocation, scroll).map(_.row)
     )
 
   /** One rendered diagnostics row paired with the index into `issues` it represents, when the row is addressable at all
@@ -237,7 +252,8 @@ private[layout] object PanelContentResolver:
   private[layout] def diagnosticsRowViews(
     rect: LayoutRect,
     issues: List[com.serenity.ui.layout.Diagnostic],
-    activeLocation: Option[Location]
+    activeLocation: Option[Location],
+    scroll: ListScroll = ListScroll()
   ): List[DiagnosticsRowView] =
     val errorCount   = issues.count(_.severity == com.serenity.ui.layout.DiagnosticSeverity.Error)
     val warningCount = issues.count(_.severity == com.serenity.ui.layout.DiagnosticSeverity.Warning)
@@ -251,7 +267,7 @@ private[layout] object PanelContentResolver:
       case SurfaceLayoutKind.Vertical if issues.isEmpty =>
         List(DiagnosticsRowView(emptyStateRow("No problems in this document"), None))
       case SurfaceLayoutKind.Vertical =>
-        windowed(issues, rect.height - 2, activeLocation)(_.location).map {
+        windowed(issues, ListPanelScrolling.itemRows(rect), activeLocation, scroll)(_.location).map {
           case (issue, index) =>
             DiagnosticsRowView(
               OverlayRow(s"${issue.severity}: ${issue.message}", selected = activeLocation.contains(issue.location)),
@@ -262,7 +278,7 @@ private[layout] object PanelContentResolver:
         List(DiagnosticsRowView(emptyStateRow("No problems in this document"), None))
       case SurfaceLayoutKind.Square =>
         DiagnosticsRowView(OverlayRow(s"$errorCount error, $warningCount warning"), None) ::
-          windowed(issues, rect.height - 3, activeLocation)(_.location).map {
+          windowed(issues, ListPanelScrolling.diagnosticsItemRows(rect), activeLocation, scroll)(_.location).map {
             case (issue, index) =>
               DiagnosticsRowView(
                 OverlayRow(issue.message, selected = activeLocation.contains(issue.location)),
@@ -279,23 +295,24 @@ private[layout] object PanelContentResolver:
     rect: LayoutRect,
     mode: SurfaceRenderMode,
     issues: List[com.serenity.ui.layout.Diagnostic],
-    activeLocation: Option[Location]
+    activeLocation: Option[Location],
+    scroll: ListScroll = ListScroll()
   ): ResolvedSurfaceContent =
     ResolvedSurfaceContent(
       SurfaceContentResolver.titleFor(mode, "diagnostics"),
-      rows = diagnosticsRowViews(rect, issues, activeLocation).map(_.row)
+      rows = diagnosticsRowViews(rect, issues, activeLocation, scroll).map(_.row)
     )
 
-  /** The `rows` items of `items` (each with its index) shown when `active` is highlighted: the first page, or, once the
-    * highlight is further down, the page ending on it -- so the highlighted row is always in view.
+  /** The `rows` items of `items` (each with its index) that `scroll` shows with `active` highlighted. Only the shown
+    * items are paired with an index; the highlight is looked up only while `scroll` follows it.
     */
-  private def windowed[A](items: List[A], rows: Int, active: Option[Location])(
+  private def windowed[A](items: List[A], rows: Int, active: Option[Location], scroll: ListScroll)(
     location: A => Location
   ): List[(A, Int)] =
-    val visible  = math.max(1, rows)
-    val selected = active.map(target => items.indexWhere(location(_) == target)).filter(_ >= 0)
-    val offset   = selected.fold(0)(index => (index - visible + 1).max(0))
-    items.zipWithIndex.slice(offset, offset + visible)
+    val selected =
+      active.filter(_ => scroll.followsSelection).map(target => items.indexWhere(location(_) == target)).filter(_ >= 0)
+    val shown = scroll.window(items.size, selected, rows)
+    items.iterator.slice(shown.start, shown.end).zip(Iterator.from(shown.start)).toList
 
   /** A muted, unselectable row standing in for a list with nothing in it. */
   private def emptyStateRow(message: String): OverlayRow =

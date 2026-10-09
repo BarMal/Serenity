@@ -1,88 +1,5 @@
 package com.serenity.config
 
-import com.serenity.animation.*
-
-enum BackgroundStyle:
-  case Solid
-  case Transparent
-  case Frosted
-  case GlassLike
-
-  def configKey: String =
-    this match
-      case Solid       => "solid"
-      case Transparent => "transparent"
-      case Frosted     => "frosted"
-      case GlassLike   => "glass-like"
-
-object BackgroundStyle:
-
-  def fromConfigKey(value: String): Option[BackgroundStyle] =
-    val normalized = value.trim.toLowerCase.replace("_", "-")
-    BackgroundStyle.values.find(_.configKey == normalized)
-
-enum MaterialPreset(val configKey: String):
-  case Solid   extends MaterialPreset("solid")
-  case Clear   extends MaterialPreset("clear")
-  case Frosted extends MaterialPreset("frosted")
-  case Crystal extends MaterialPreset("crystal")
-  case Custom  extends MaterialPreset("custom")
-
-  def backgroundStyle: BackgroundStyle =
-    this match
-      case Solid   => BackgroundStyle.Solid
-      case Clear   => BackgroundStyle.Transparent
-      case Frosted => BackgroundStyle.Frosted
-      case Crystal => BackgroundStyle.GlassLike
-      case Custom  => BackgroundStyle.Frosted
-
-  def blurRadius: Float =
-    this match
-      case Solid | Clear => 0.0f
-      case Frosted       => 0.18f
-      case Crystal       => 0.42f
-      case Custom        => 0.18f
-
-enum PostProcessingEffect(val configKey: String):
-  case Off              extends PostProcessingEffect("off")
-  case Scanlines        extends PostProcessingEffect("scanlines")
-  case Glow             extends PostProcessingEffect("glow")
-  case ScanlinesAndGlow extends PostProcessingEffect("scanlines-glow")
-
-object PostProcessingEffect:
-
-  def fromConfigKey(value: String): Option[PostProcessingEffect] =
-    value.trim.toLowerCase match
-      case "off" | "none" | "disabled"      => Some(PostProcessingEffect.Off)
-      case "scanlines" | "scanline" | "crt" => Some(PostProcessingEffect.Scanlines)
-      case "glow"                           => Some(PostProcessingEffect.Glow)
-      case "scanlines-glow" | "scanlines+glow" | "scanlines,glow" | "glow,scanlines" =>
-        Some(PostProcessingEffect.ScanlinesAndGlow)
-      case _ => None
-
-enum MotionPreset(val configKey: String):
-  case Reduced    extends MotionPreset("reduced")
-  case Subtle     extends MotionPreset("subtle")
-  case Smooth     extends MotionPreset("smooth")
-  case Expressive extends MotionPreset("expressive")
-  case Custom     extends MotionPreset("custom")
-
-  def animationConfig: Option[AnimationConfig] =
-    this match
-      case Reduced    => AnimationConfig.none
-      case Subtle     => AnimationConfig.subtle
-      case Smooth     => AnimationConfig.smooth
-      case Expressive => AnimationConfig.quick
-      case Custom     => AnimationConfig.smooth
-
-  def elementTransitionSettings: ElementTransitionSettings =
-    this match
-      case Reduced    => ElementTransitionSettings.disabled
-      case Subtle     => ElementTransitionSettings.subtle
-      case Smooth     => ElementTransitionSettings.smooth
-      case Expressive => ElementTransitionSettings.expressive
-      case Custom     => ElementTransitionSettings.smooth
-
 enum RenderFpsTarget(val configKey: String, val framesPerSecond: Int):
   case Fps30    extends RenderFpsTarget("30", 30)
   case Fps60    extends RenderFpsTarget("60", 60)
@@ -118,16 +35,15 @@ object RenderDamageGranularity:
       case _                => None
 
 enum CursorMode(val configKey: String):
-  case Blink   extends CursorMode("blink")
-  case Breathe extends CursorMode("breathe")
+  case Blink extends CursorMode("blink")
 
 object CursorMode:
 
+  /** `breathe`/`breathing` name a mode that no longer exists; configs and sessions still carrying it load as blink. */
   def fromConfigKey(value: String): Option[CursorMode] =
     value.trim.toLowerCase match
-      case "blink"                 => Some(CursorMode.Blink)
-      case "breathe" | "breathing" => Some(CursorMode.Breathe)
-      case _                       => None
+      case "blink" | "breathe" | "breathing" => Some(CursorMode.Blink)
+      case _                                 => None
 
 /** Selects how a buffer's `DocumentComment`s become visible (#1222).
   *

@@ -12,6 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -37,7 +38,8 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
         uiPresetStore = store,
         windowSizeProvider = windowSize,
         onPreferredWindowSizeChanged = onWindowSizeChanged,
-        sessionRootOverride = sessionRoot
+        sessionRootOverride = sessionRoot,
+        dictionaryCache = SharedDictionary.default
       )
       .unsafeRunSync()
 
@@ -95,11 +97,11 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
   it should "reject saving or duplicating over an existing preset name" in {
     val path     = Files.createTempDirectory("state-manager-ui-preset-name-collision").resolve("ui-presets.json")
     val store    = UiPresetStore(path)
-    val existing = UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Theme.dark.name, Nil)
+    val existing = UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Some(Theme.dark.name), Nil)
     val sm       = managerWithStore(store)
     store.upsert(existing).unsafeRunSync()
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "save-as-new",
@@ -132,7 +134,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "rename-writing-preset",
@@ -153,9 +155,11 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
     val path  = Files.createTempDirectory("state-manager-ui-preset-overwrite").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
-    store.upsert(UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Theme.dark.name, Nil)).unsafeRunSync()
+    store
+      .upsert(UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Some(Theme.dark.name), Nil))
+      .unsafeRunSync()
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "set-markdown-default",
@@ -210,7 +214,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
     val sm      = managerWithStore(store)
     val initial = sm.getCurrentState.unsafeRunSync()
     store
-      .upsert(UiPreset("Missing Theme", AppConfig.default.withLineNumbers(false), "not-installed", Nil))
+      .upsert(UiPreset("Missing Theme", AppConfig.default.withLineNumbers(false), Some("not-installed"), Nil))
       .unsafeRunSync()
     store
       .upsert(
@@ -219,13 +223,13 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
           AppConfig.default.withFontConfig(
             AppConfig.default.editorConfig.fontConfig.copy(textFontFamily = "not-installed")
           ),
-          Theme.dark.name,
+          Some(Theme.dark.name),
           Nil
         )
       )
       .unsafeRunSync()
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "apply",
@@ -257,7 +261,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
     val path  = Files.createTempDirectory("state-manager-ui-preset-delete-built-in").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "delete-writing-preset",

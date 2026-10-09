@@ -68,9 +68,10 @@ object CommandScope:
         CommandFamily.Prose
       case CommandIntent.Edit(edit) => editFamily(edit)
       case CommandIntent.View(view) => viewScope(view).family
-      case CommandIntent.Lifecycle(_) | CommandIntent.File(_) | CommandIntent.Comments(_) |
-          CommandIntent.Navigation(_) | CommandIntent.Theme(_) | CommandIntent.Session(_) |
-          CommandIntent.Keybindings(_) | CommandIntent.UiPresets(_) | CommandIntent.Settings(_) =>
+      case CommandIntent.Lifecycle(_) | CommandIntent.Diagnostics(_) | CommandIntent.File(_) |
+          CommandIntent.Comments(_) | CommandIntent.Navigation(_) | CommandIntent.Theme(_) | CommandIntent.Session(_) |
+          CommandIntent.Keybindings(_) | CommandIntent.UiPresets(_) | CommandIntent.Settings(_) |
+          CommandIntent.Spelling(_) =>
         CommandFamily.Core
 
   private def editFamily(intent: EditIntent): CommandFamily =
@@ -78,7 +79,8 @@ object CommandScope:
       case EditIntent.FormatCurrentFile => CommandFamily.Code
       case EditIntent.FindInCurrentFile | EditIntent.FindAllInCurrentFile | EditIntent.ReplaceInCurrentFile |
           EditIntent.ReplaceAllInCurrentFile | EditIntent.Copy | EditIntent.Cut | EditIntent.Paste |
-          EditIntent.SelectAll | EditIntent.Undo | EditIntent.Redo =>
+          EditIntent.ChoosePasteFromHistory | EditIntent.PasteFromHistory(_) | EditIntent.SelectAll | EditIntent.Undo |
+          EditIntent.Redo =>
         CommandFamily.Core
 
   /** A panel command is offered where its panel is (the panel's registration); hiding one never is refused, so a panel
@@ -94,11 +96,13 @@ object CommandScope:
       case ViewIntent.SetPanelPin(_, None)       => core
       case ViewIntent.NextTab | ViewIntent.PreviousTab | ViewIntent.SplitPaneHorizontal | ViewIntent.SplitPaneVertical |
           ViewIntent.ClosePane | ViewIntent.ToggleMaximisePanel | ViewIntent.OpenChapterNote |
-          ViewIntent.OpenKeywordNote | ViewIntent.ToggleChapterGhosts | ViewIntent.ToggleNotesPin |
-          ViewIntent.FocusInDirection(_) | ViewIntent.ArrangePanels | ViewIntent.OpenMarkdownPreview |
-          ViewIntent.SetMarkdownViewMode(_) | ViewIntent.SetDefaultDocumentMode(_) | ViewIntent.SetAppMode(_) |
-          ViewIntent.SetShowAllSettingsRegardlessOfMode(_) | ViewIntent.ToggleShortcutsHelp | ViewIntent.ToggleTabList |
-          ViewIntent.ToggleRecentFilesInMode | ViewIntent.TogglePanel(_) | ViewIntent.SetPanelSize(_, _) =>
+          ViewIntent.OpenKeywordNote | ViewIntent.ToggleChapterGhosts |
+          ViewIntent.ToggleNotesPin | ViewIntent.FocusInDirection(_) |
+          ViewIntent.ArrangePanels | ViewIntent.OpenMarkdownPreview | ViewIntent.SetMarkdownViewMode(_) |
+          ViewIntent.SetDefaultDocumentMode(_) | ViewIntent.SetAppMode(_) |
+          ViewIntent.SetAppModeStoppingProjectTask(_) | ViewIntent.SetShowAllSettingsRegardlessOfMode(_) |
+          ViewIntent.ToggleShortcutsHelp | ViewIntent.ToggleTabList | ViewIntent.ToggleRecentFilesInMode |
+          ViewIntent.TogglePanel(_) | ViewIntent.SetPanelSize(_, _) =>
         core
 
   private def panelScope(id: PanelId): CommandScope =

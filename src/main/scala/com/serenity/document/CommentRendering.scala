@@ -13,10 +13,11 @@ final case class RenderedComment(
 
 object CommentRendering:
 
-  def atCursor(buffer: Buffer): Option[RenderedComment] =
+  /** The comment under the cursor; a resolved authored comment counts only when `showResolved`. */
+  def atCursor(buffer: Buffer, showResolved: Boolean = true): Option[RenderedComment] =
     for
       cursor  <- buffer.editing.cursorPositions.headOption
-      comment <- authoredCommentAt(buffer, cursor).orElse(commentAtLine(buffer, cursor.line))
+      comment <- authoredCommentAt(buffer, cursor, showResolved).orElse(commentAtLine(buffer, cursor.line))
     yield comment
 
   /** Opens the above-cursor Comment Lens for the comment at the active editor's cursor, replacing any existing one,
@@ -26,21 +27,22 @@ object CommentRendering:
     openLensAtCursor(state, CommentLensMode.Editable)
 
   /** As [[openLensAtCursor]], but lets the caller pick the opened lens's display mode. Floating display mode's
-    * click-to-open (see `MouseHitTesting`) opens `ReadOnly`; every other caller keeps passing `Editable`.
+    * click-to-open (see `MouseHitTesting`) opens `ReadOnly`; every other caller keeps passing `Editable`. Only an
+    * editable lens takes focus: a read-only one is a peek, so typing still reaches the buffer (#1674).
     */
   def openLensAtCursor(state: AppState, mode: CommentLensMode): AppState =
     activeEditorComment(state) match
       case Some((cursor, lens)) =>
         val surface = UiSurface(
           id = SurfaceId("comment-lens"),
-          content = SurfaceContent.CommentLens(lens.copy(mode = mode)),
+          content = SurfaceContent.CommentLens(lens.withMode(mode)),
           presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
         )
         state
           .copy(runtime =
             state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isCommentLensSurface) :+ surface)
           )
-          .pushFocus(Focus.Surface(surface.id))
+          .pushFocusUnlessPeek(surface)
       case None =>
         state
 
@@ -48,16 +50,19 @@ object CommentRendering:
     * `StateManagerOperationBoundary.prepareCommit` (#1550), so a keyboard cursor move opens/closes it exactly the way a
     * mouse click already did: moving into a `DocumentComment`'s range opens the same read-only lens `MouseHitTesting`'s
     * click handler opens, and moving out of it -- by any further interaction, not only a click -- closes it. Scoped to
-    * `Focus.EditorPane` so it never touches a lens the user is actively interacting with
-    * (`Focus.Surface(comment-lens)`, entered by `openLensAtCursor`/`CommentLensMouseHitTesting` the moment the lens
-    * opens), and only opens for a plain (collapsed-cursor) move -- a double/triple-click word/line selection or a
-    * shift-click/shift-arrow range selection landing inside the range is a selection gesture, not a request to read the
-    * comment, matching `MouseHitTesting.opensFloatingCommentLens`'s own click-count/shift exclusion.
+    * `Focus.EditorPane` so it never touches a lens the user is actively editing (`Focus.Surface(comment-lens)`, entered
+    * only by an explicit edit: the `comment-lens` command or a click in the lens body), and only opens for a plain
+    * (collapsed-cursor) move -- a double/triple-click word/line selection or a shift-click/shift-arrow range selection
+    * landing inside the range is a selection gesture, not a request to read the comment, matching
+    * `MouseHitTesting.opensFloatingCommentLens`'s own click-count/shift exclusion.
     *
     * Opens only on genuine *entry* into a comment's range -- `previousState`'s cursor was over a different comment (or
     * none) -- rather than on every transition the cursor happens to still be inside one for. Otherwise dismissing the
-    * lens with Escape (which moves focus back to `Focus.EditorPane` without moving the cursor out of the comment) would
-    * have this immediately reopen the very lens Escape just closed.
+    * lens with Escape (which closes it without moving the cursor out of the comment) would have this immediately reopen
+    * the very lens Escape just closed.
+    *
+    * Closes on genuine exit likewise, or when the cursor moves: a read-only lens opened on a source-code comment by the
+    * `comment-lens` command leaves focus in the editor (#1674), and must survive the transition that opened it.
     */
   def syncFloatingLensWithCursor(state: AppState, previousState: AppState): AppState =
     if state.persisted.config.surfaceConfig.commentDisplayMode != CommentDisplayMode.Floating then state
@@ -68,8 +73,16 @@ object CommentRendering:
             case Some(_) if hasActiveSelection(state, paneId)                                      => state
             case Some(comment) if documentCommentAtCursor(previousState, paneId).contains(comment) => state
             case Some(_) => openLensAtCursor(state, CommentLensMode.ReadOnly)
-            case None    => dismissFloatingLens(state)
+            case None
+                if documentCommentAtCursor(previousState, paneId).isDefined ||
+                  cursorMoved(state, previousState, paneId) =>
+              dismissFloatingLens(state)
+            case None => state
         case _ => state
+
+  private def cursorMoved(state: AppState, previousState: AppState, paneId: PaneId): Boolean =
+    paneBuffer(state, paneId).map(_.editing.cursorPositions) !=
+      paneBuffer(previousState, paneId).map(_.editing.cursorPositions)
 
   private def paneBuffer(state: AppState, paneId: PaneId): Option[Buffer] =
     for
@@ -85,7 +98,7 @@ object CommentRendering:
     for
       buffer  <- paneBuffer(state, paneId)
       cursor  <- buffer.editing.cursorPositions.headOption
-      comment <- buffer.annotations.documentComments.find(_.contains(cursor))
+      comment <- buffer.annotations.shownComments(state.runtime.resolvedCommentsVisible).find(_.contains(cursor))
     yield comment
 
   private def dismissFloatingLens(state: AppState): AppState =
@@ -99,10 +112,13 @@ object CommentRendering:
       bufferId <- pane.bufferId
       buffer   <- state.persisted.buffers.get(bufferId)
       cursor   <- buffer.editing.cursorPositions.headOption
-      comment  <- atCursor(buffer)
+      comment  <- atCursor(buffer, state.runtime.resolvedCommentsVisible)
     yield
-      val target = buffer.annotations.documentComments.find(_.contains(cursor))
-      val draft  = target.map(_.text).getOrElse(comment.raw)
+      val target = buffer.annotations
+        .shownComments(state.runtime.resolvedCommentsVisible)
+        .find(_.contains(cursor))
+        .map(authored => CommentLensTarget(authored.id, authored))
+      val draft = target.map(_.comment.text).getOrElse(comment.raw)
       (cursor, CommentLensState(comment = comment, draft = draft, cursor = draft.length, target = target))
 
   private def isCommentLensSurface(surface: UiSurface): Boolean =
@@ -112,9 +128,11 @@ object CommentRendering:
 
   private def authoredCommentAt(
     buffer: Buffer,
-    cursor: com.serenity.state.models.CursorPosition
+    cursor: com.serenity.state.models.CursorPosition,
+    showResolved: Boolean
   ): Option[RenderedComment] =
-    buffer.annotations.documentComments
+    buffer.annotations
+      .shownComments(showResolved)
       .find(_.contains(cursor))
       .map { comment =>
         val lines = comment.text.linesIterator.toVector

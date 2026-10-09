@@ -1,11 +1,5 @@
 package com.serenity.richtext
 
-/** Inline text formatting that can be applied to rich text runs. */
-enum InlineMark:
-  case Bold
-  case Italic
-  case Underline
-
 enum ParagraphAlignment:
   case Left
   case Center
@@ -39,7 +33,9 @@ final case class RichTextStyle(
     marks: Set[InlineMark] = Set.empty,
     fontFamily: Option[String] = None,
     fontSize: Option[Float] = None,
-    color: Option[String] = None
+    color: Option[String] = None,
+    link: Option[String] = None,
+    extras: List[RawProperty] = Nil
 ):
   def withMark(mark: InlineMark): RichTextStyle =
     copy(marks = marks + mark)
@@ -56,13 +52,54 @@ final case class RichTextStyle(
   def withColor(color: String): RichTextStyle =
     copy(color = Some(color.trim).filter(_.nonEmpty))
 
+  /** `target` is an external URL, or `#name` for an anchor inside the document. */
+  def withLink(target: String): RichTextStyle =
+    copy(link = Some(target.trim).filter(_.nonEmpty))
+
+  /** The style with its link removed: what a format that stores links outside character formatting styles by. */
+  def withoutLink: RichTextStyle =
+    copy(link = None)
+
 object RichTextStyle:
   val empty: RichTextStyle = RichTextStyle()
 
-/** A contiguous span of text sharing the same inline style. */
-final case class RichTextRun(text: String, style: RichTextStyle = RichTextStyle.empty):
+/** A contiguous span of text sharing the same inline style. A run carrying an [[InlineAtom]] is exactly one
+  * [[RichTextRun.AtomCharacter]] and never merges with its neighbours.
+  */
+final case class RichTextRun(
+    text: String,
+    style: RichTextStyle = RichTextStyle.empty,
+    atom: Option[InlineAtom] = None
+):
   def isEmpty: Boolean =
     text.isEmpty
+
+  def mergesWith(next: RichTextRun): Boolean =
+    atom.isEmpty && next.atom.isEmpty && style == next.style
+
+  /** The text a plain-text or Markdown export shows for this run. */
+  def exportText: String =
+    atom.fold(text) {
+      case InlineAtom.SoftBreak    => "\n"
+      case InlineAtom.Opaque(_, _) => ""
+      case InlineAtom.Block(_, _)  => ""
+    }
+
+object RichTextRun:
+  /** U+FFFC OBJECT REPLACEMENT CHARACTER: the rope character standing for a soft break. */
+  val AtomCharacter: Char = InlineAtom.SoftBreakCharacter
+
+  def softBreak(style: RichTextStyle = RichTextStyle.empty): RichTextRun =
+    atom(InlineAtom.SoftBreak, style)
+
+  def opaque(raw: String, visible: Boolean, style: RichTextStyle = RichTextStyle.empty): RichTextRun =
+    atom(InlineAtom.Opaque(raw, visible), style)
+
+  def block(raw: String, feature: DocumentFeature): RichTextRun =
+    atom(InlineAtom.Block(raw, feature), RichTextStyle.empty)
+
+  private def atom(atom: InlineAtom, style: RichTextStyle): RichTextRun =
+    RichTextRun(atom.character.toString, style, Some(atom))
 
 /** Position inside a rich text document, measured as a UTF-16 offset within one paragraph. */
 final case class RichTextPosition(paragraphIndex: Int, offset: Int)
@@ -80,31 +117,77 @@ final case class RichTextRange(start: RichTextPosition, end: RichTextPosition):
 final case class RichTextParagraph(
     runs: List[RichTextRun],
     alignment: ParagraphAlignment = ParagraphAlignment.Left,
-    role: ParagraphRole = ParagraphRole.Body
+    role: ParagraphRole = ParagraphRole.Body,
+    source: Option[ParagraphSource] = None
 ):
-  def plainText: String =
+
+  /** Content equality: where a paragraph was imported from is provenance, not text, so it does not take part. */
+  override def equals(other: Any): Boolean =
+    other match
+      case that: RichTextParagraph => runs == that.runs && alignment == that.alignment && role == that.role
+      case _                       => false
+
+  override def hashCode(): Int =
+    (runs, alignment, role).hashCode()
+
+  /** A paragraph with `runs` that keeps this one's formatting and unmodelled properties but is not the imported
+    * paragraph itself, e.g. the second half of a split.
+    */
+  def derivedWith(newRuns: List[RichTextRun]): RichTextParagraph =
+    copy(runs = newRuns, source = source.map(_.asDerived))
+
+  /** The block this paragraph stands for, when it is a read-only block line. */
+  def opaqueBlock: Option[InlineAtom.Block] =
+    runs match
+      case List(RichTextRun(_, _, Some(block: InlineAtom.Block))) => Some(block)
+      case _                                                      => None
+
+  def isOpaqueBlock: Boolean = opaqueBlock.isDefined
+
+  /** True when a block atom shares its paragraph with other content, which an edit must never produce. */
+  def hasMixedBlock: Boolean =
+    runs.sizeIs > 1 && runs.exists(_.atom.exists(_.isInstanceOf[InlineAtom.Block]))
+
+  lazy val plainText: String =
     runs.map(_.text).mkString
 
+  lazy val plainTextLength: Int =
+    runs.foldLeft(0)(_ + _.text.length)
+
+  def exportText: String =
+    runs.map(_.exportText).mkString
+
+  /** Consecutive runs grouped by link target, in order, for formats that wrap linked text in a container element. */
+  def linkSpans: List[(Option[String], List[RichTextRun])] =
+    runs.foldRight(List.empty[(Option[String], List[RichTextRun])]) {
+      case (run, (target, spanRuns) :: tail) if target == run.style.link => (target, run :: spanRuns) :: tail
+      case (run, acc)                                                    => (run.style.link, List(run)) :: acc
+    }
+
+  /** True when no run is empty and no two adjacent runs share a style -- the fixed point of [[normalized]]. */
+  def isNormalized: Boolean =
+    runs.forall(!_.isEmpty) && runs.zip(runs.drop(1)).forall((left, right) => !left.mergesWith(right))
+
   def normalized: RichTextParagraph =
-    copy(runs = mergeRuns(runs.filterNot(_.isEmpty)))
+    if isNormalized then this else copy(runs = mergeRuns(runs.filterNot(_.isEmpty)))
 
   def applyMark(startOffset: Int, endOffset: Int, mark: InlineMark): RichTextParagraph =
-    val start = startOffset.max(0).min(plainText.length)
-    val end   = endOffset.max(start).min(plainText.length)
+    val start = startOffset.max(0).min(plainTextLength)
+    val end   = endOffset.max(start).min(plainTextLength)
     if start == end then this
     else copy(runs = mergeRuns(splitAndTransform(start, end, _.withMark(mark))))
 
   /** Toggle a mark across a paragraph range, removing it only when every covered run already has it. */
   def toggleMark(startOffset: Int, endOffset: Int, mark: InlineMark): RichTextParagraph =
-    val start = startOffset.max(0).min(plainText.length)
-    val end   = endOffset.max(start).min(plainText.length)
+    val start = startOffset.max(0).min(plainTextLength)
+    val end   = endOffset.max(start).min(plainTextLength)
     if start == end then this
     else setMark(start, end, mark, enabled = !hasMarkThroughout(start, end, mark))
 
   /** Set or clear a mark across a paragraph range. */
   def setMark(startOffset: Int, endOffset: Int, mark: InlineMark, enabled: Boolean): RichTextParagraph =
-    val start = startOffset.max(0).min(plainText.length)
-    val end   = endOffset.max(start).min(plainText.length)
+    val start = startOffset.max(0).min(plainTextLength)
+    val end   = endOffset.max(start).min(plainTextLength)
     if start == end then this
     else
       val transform =
@@ -114,23 +197,23 @@ final case class RichTextParagraph(
 
   /** Replace text inside this paragraph, preserving surrounding inline styles. */
   def replaceRange(startOffset: Int, endOffset: Int, insertedText: String): RichTextParagraph =
-    val start = startOffset.max(0).min(plainText.length)
-    val end   = endOffset.max(start).min(plainText.length)
+    val start = startOffset.max(0).min(plainTextLength)
+    val end   = endOffset.max(start).min(plainTextLength)
     val insertedRun = Option
       .when(insertedText.nonEmpty)(RichTextRun(insertedText, styleAtInsertion(start, end)))
-    copy(runs = mergeRuns(runsInRange(0, start) ++ insertedRun.toList ++ runsInRange(end, plainText.length)))
+    copy(runs = mergeRuns(runsInRange(0, start) ++ insertedRun.toList ++ runsInRange(end, plainTextLength)))
 
   /** Transform inline style across a paragraph range. */
   def updateStyle(startOffset: Int, endOffset: Int)(transform: RichTextStyle => RichTextStyle): RichTextParagraph =
-    val start = startOffset.max(0).min(plainText.length)
-    val end   = endOffset.max(start).min(plainText.length)
+    val start = startOffset.max(0).min(plainTextLength)
+    val end   = endOffset.max(start).min(plainTextLength)
     if start == end then this
     else copy(runs = mergeRuns(splitAndTransform(start, end, transform)))
 
   /** True when the non-empty paragraph range is fully covered by the given mark. */
   def hasMarkThroughout(startOffset: Int, endOffset: Int, mark: InlineMark): Boolean =
-    val start = startOffset.max(0).min(plainText.length)
-    val end   = endOffset.max(start).min(plainText.length)
+    val start = startOffset.max(0).min(plainTextLength)
+    val end   = endOffset.max(start).min(plainTextLength)
     start < end && stylesInRange(start, end).forall(_.marks.contains(mark))
 
   private def splitAndTransform(
@@ -138,44 +221,37 @@ final case class RichTextParagraph(
     endOffset: Int,
     transform: RichTextStyle => RichTextStyle
   ): List[RichTextRun] =
-    runs
-      .foldLeft((0, List.empty[RichTextRun])) {
-        case ((currentOffset, acc), run) =>
-          val runStart   = currentOffset
-          val runEnd     = currentOffset + run.text.length
-          val nextOffset = runEnd
-
-          if runEnd <= startOffset || runStart >= endOffset then (nextOffset, acc :+ run)
-          else
-            val localStart = (startOffset - runStart).max(0).min(run.text.length)
-            val localEnd   = (endOffset - runStart).max(localStart).min(run.text.length)
-            val before     = run.text.take(localStart)
-            val middle     = run.text.slice(localStart, localEnd)
-            val after      = run.text.drop(localEnd)
-            val splitRuns = List(
-              Option.when(before.nonEmpty)(RichTextRun(before, run.style)),
-              Option.when(middle.nonEmpty)(RichTextRun(middle, transform(run.style))),
-              Option.when(after.nonEmpty)(RichTextRun(after, run.style))
-            ).flatten
-            (nextOffset, acc ++ splitRuns)
-      }
-      ._2
+    runsWithStartOffsets.flatMap {
+      case (run, runStart) =>
+        val runEnd = runStart + run.text.length
+        if runEnd <= startOffset || runStart >= endOffset then List(run)
+        else
+          val localStart = (startOffset - runStart).max(0).min(run.text.length)
+          val localEnd   = (endOffset - runStart).max(localStart).min(run.text.length)
+          val before     = run.text.take(localStart)
+          val middle     = run.text.slice(localStart, localEnd)
+          val after      = run.text.drop(localEnd)
+          List(
+            Option.when(before.nonEmpty)(run.copy(text = before)),
+            Option.when(middle.nonEmpty)(run.copy(text = middle, style = transform(run.style))),
+            Option.when(after.nonEmpty)(run.copy(text = after))
+          ).flatten
+    }
 
   private[richtext] def runsInRange(startOffset: Int, endOffset: Int): List[RichTextRun] =
-    runs
-      .foldLeft((0, List.empty[RichTextRun])) {
-        case ((currentOffset, acc), run) =>
-          val runStart   = currentOffset
-          val runEnd     = currentOffset + run.text.length
-          val nextOffset = runEnd
-          if runEnd <= startOffset || runStart >= endOffset then (nextOffset, acc)
-          else
-            val localStart = (startOffset - runStart).max(0).min(run.text.length)
-            val localEnd   = (endOffset - runStart).max(localStart).min(run.text.length)
-            val text       = run.text.slice(localStart, localEnd)
-            (nextOffset, acc ++ Option.when(text.nonEmpty)(RichTextRun(text, run.style)).toList)
-      }
-      ._2
+    runsWithStartOffsets.flatMap {
+      case (run, runStart) =>
+        val runEnd = runStart + run.text.length
+        if runEnd <= startOffset || runStart >= endOffset then Nil
+        else
+          val localStart = (startOffset - runStart).max(0).min(run.text.length)
+          val localEnd   = (endOffset - runStart).max(localStart).min(run.text.length)
+          val text       = run.text.slice(localStart, localEnd)
+          Option.when(text.nonEmpty)(run.copy(text = text)).toList
+    }
+
+  private def runsWithStartOffsets: List[(RichTextRun, Int)] =
+    runs.zip(runs.scanLeft(0)((offset, run) => offset + run.text.length))
 
   private def stylesInRange(startOffset: Int, endOffset: Int): List[RichTextStyle] =
     runs
@@ -192,30 +268,49 @@ final case class RichTextParagraph(
   private[richtext] def styleAtInsertion(startOffset: Int, endOffset: Int): RichTextStyle =
     if startOffset < endOffset then
       stylesInRange(startOffset, endOffset).reverse.headOption.getOrElse(RichTextStyle.empty)
-    else
-      runs
-        .foldLeft((0, Option.empty[RichTextStyle])) {
-          case ((currentOffset, found), run) =>
-            val runStart   = currentOffset
-            val runEnd     = currentOffset + run.text.length
-            val nextOffset = runEnd
-            val containsOffset =
-              (runStart < startOffset && startOffset <= runEnd) ||
-                (startOffset == 0 && runStart == 0)
-            (nextOffset, found.orElse(Option.when(containsOffset)(run.style)))
-        }
-        ._2
-        .getOrElse(RichTextStyle.empty)
+    else withLinkOnlyBetweenLinkedText(startOffset, styleBeforeCaret(startOffset))
+
+  /** Typing continues a link only from inside it, not from its edges, matching word processors. */
+  private def withLinkOnlyBetweenLinkedText(offset: Int, style: RichTextStyle): RichTextStyle =
+    val linkContinues =
+      offset > 0 &&
+        styleOfCharacter(offset - 1).exists(_.link == style.link) &&
+        styleOfCharacter(offset).exists(_.link == style.link)
+    if style.link.isEmpty || linkContinues then style else style.withoutLink
+
+  private def styleOfCharacter(index: Int): Option[RichTextStyle] =
+    runsWithStartOffsets.collectFirst {
+      case (run, runStart) if runStart <= index && index < runStart + run.text.length => run.style
+    }
+
+  private def styleBeforeCaret(startOffset: Int): RichTextStyle =
+    runs
+      .foldLeft((0, Option.empty[RichTextStyle])) {
+        case ((currentOffset, found), run) =>
+          val runStart   = currentOffset
+          val runEnd     = currentOffset + run.text.length
+          val nextOffset = runEnd
+          val containsOffset =
+            (runStart < startOffset && startOffset <= runEnd) ||
+              (startOffset == 0 && runStart == 0)
+          (nextOffset, found.orElse(Option.when(containsOffset)(run.style)))
+      }
+      ._2
+      .getOrElse(RichTextStyle.empty)
 
   private def mergeRuns(input: List[RichTextRun]): List[RichTextRun] =
     input.foldRight(List.empty[RichTextRun]) {
-      case (run, next :: tail) if run.style == next.style =>
+      case (run, next :: tail) if run.mergesWith(next) =>
         run.copy(text = run.text + next.text) :: tail
       case (run, acc) =>
         run :: acc
     }
 
 object RichTextParagraph:
+
+  /** The read-only line for a block of `feature`, which `source` says where it came from. */
+  def block(raw: String, feature: DocumentFeature, source: Option[ParagraphSource] = None): RichTextParagraph =
+    RichTextParagraph(List(RichTextRun.block(raw, feature)), source = source)
 
   def plain(
     text: String,
@@ -235,8 +330,17 @@ object RichTextParagraph:
   * Equality and hashing are defined over [[paragraphs]] (the flattened content), not the tree's internal shape -- two
   * documents holding the same paragraphs in the same order are equal regardless of which tree shape their respective
   * edit histories produced.
+  *
+  * `everyParagraphNormalized` records whether [[normalized]] would be a no-op (#1870). Edits re-check only the
+  * paragraphs they produce, so an edit to an already-normalised document keeps that fact without a whole-document pass,
+  * and [[normalized]] -- which the edit path calls after every keystroke -- returns `this` instead of rebuilding every
+  * paragraph and tree node.
   */
-final class RichTextDocument private (private val tree: ParagraphTree):
+final class RichTextDocument private (
+    private val tree: ParagraphTree,
+    everyParagraphNormalized: Boolean,
+    val source: Option[DocumentSource]
+):
   lazy val paragraphs: List[RichTextParagraph] = tree.toParagraphs
 
   /** Whether this document carries any formatting a plain-text or Markdown save would discard: a non-body paragraph
@@ -247,8 +351,27 @@ final class RichTextDocument private (private val tree: ParagraphTree):
     tree.existsAny { paragraph =>
       paragraph.alignment != ParagraphAlignment.Left ||
       paragraph.role != ParagraphRole.Body ||
-      paragraph.runs.exists(_.style != RichTextStyle.empty)
+      paragraph.runs.exists(run => run.style != RichTextStyle.empty || run.atom.nonEmpty)
     }
+
+  /** Whether a block line is among the paragraphs `from` to `to` inclusive. `O(log n + k)` for `k` paragraphs. */
+  def hasOpaqueBlockBetween(from: Int, to: Int): Boolean =
+    !tree.forallInRange(from, to)((paragraph, _) => !paragraph.isOpaqueBlock)
+
+  def hasOpaqueBlock: Boolean =
+    tree.existsAny(_.isOpaqueBlock)
+
+  /** This document with each block line made an empty paragraph, as a format that cannot hold blocks writes it. */
+  def withoutBlocks: RichTextDocument =
+    new RichTextDocument(
+      tree.mapAll(paragraph => if paragraph.isOpaqueBlock then RichTextParagraph(Nil) else paragraph),
+      everyParagraphNormalized,
+      source
+    )
+
+  /** Whether an edit has put other content beside a block atom. */
+  def hasMixedBlock: Boolean =
+    tree.existsAny(_.hasMixedBlock)
 
   /** Returns a paragraph by line index via `O(log n)` tree descent instead of a full-document index build. */
   def paragraphAt(index: Int): Option[RichTextParagraph] =
@@ -257,13 +380,51 @@ final class RichTextDocument private (private val tree: ParagraphTree):
   def plainText: String =
     paragraphs.map(_.plainText).mkString("\n")
 
+  /** Plain text for formats with no inline atoms: each atom becomes the text it stands for, so a soft break is `'\n'`.
+    */
+  def exportText: String =
+    paragraphs.map(_.exportText).mkString("\n")
+
   /** `O(1)`: the tree already tracks total character count and paragraph count at the root. */
   def plainTextLength: Int =
     if tree.paragraphCount == 0 then 0
     else tree.charCount + tree.paragraphCount - 1
 
+  /** This document attributed to `origin`, the package a save should write the unmodelled parts back from. */
+  def withSource(origin: Option[DocumentSource]): RichTextDocument =
+    new RichTextDocument(tree, everyParagraphNormalized, origin)
+
+  /** This document with `written`, the package a save of it just produced and read back, as its source. Each paragraph
+    * takes the provenance of the one at its position, which is where the save put it; when the save wrote a different
+    * number of paragraphs, none can be linked and each is written afresh from the model next time.
+    */
+  def rebasedOn(written: RichTextDocument): RichTextDocument =
+    val saved = written.paragraphs
+    val linked =
+      if saved.sizeIs == tree.paragraphCount then
+        paragraphs.zip(saved).map((own, onDisk) => own.copy(source = onDisk.source))
+      else paragraphs.map(_.copy(source = None))
+    new RichTextDocument(ParagraphTree.fromParagraphs(linked), everyParagraphNormalized, written.source)
+
+  /** This document, restored from a session that kept only which body block each paragraph came from, linked to
+    * `imported`, the same package read again: each paragraph takes the source of the block it remembers.
+    */
+  def relinkedTo(imported: RichTextDocument): RichTextDocument =
+    val sources = imported.paragraphs.flatMap(_.source).filter(_.blockIndex != ParagraphSource.NoBlock)
+    val byBlock = sources.map(source => source.blockIndex -> source).toMap
+    val linked = tree.mapAll { paragraph =>
+      paragraph.source.fold(paragraph) { remembered =>
+        remembered.originBlock.flatMap(byBlock.get).fold(paragraph) { origin =>
+          paragraph
+            .copy(source = Some(if remembered.blockIndex == ParagraphSource.NoBlock then origin.asDerived else origin))
+        }
+      }
+    }
+    new RichTextDocument(linked, everyParagraphNormalized, imported.source)
+
   def normalized: RichTextDocument =
-    RichTextDocument.fromTree(tree.mapAll(_.normalized))
+    if everyParagraphNormalized then this
+    else new RichTextDocument(tree.mapAll(_.normalized), everyParagraphNormalized = true, source)
 
   def applyMark(range: RichTextRange, mark: InlineMark): RichTextDocument =
     updateRange(range)((paragraph, start, end) => paragraph.applyMark(start, end, mark))
@@ -277,8 +438,8 @@ final class RichTextDocument private (private val tree: ParagraphTree):
           if index == normalizedRange.start.paragraphIndex then normalizedRange.start.offset else 0
         val endOffset =
           if index == normalizedRange.end.paragraphIndex then normalizedRange.end.offset
-          else paragraph.plainText.length
-        paragraph.hasMarkThroughout(startOffset, endOffset, mark)
+          else paragraph.plainTextLength
+        paragraph.isOpaqueBlock || paragraph.hasMarkThroughout(startOffset, endOffset, mark)
     }
     updateRange(range)((paragraph, start, end) => paragraph.setMark(start, end, mark, enabled = !shouldRemove))
 
@@ -313,13 +474,9 @@ final class RichTextDocument private (private val tree: ParagraphTree):
     val normalizedRange = range.normalized
     if normalizedRange.start.paragraphIndex == normalizedRange.end.paragraphIndex && !insertedText.contains('\n') then
       val index = normalizedRange.start.paragraphIndex
-      RichTextDocument
-        .fromTree(
-          tree.updatedRange(index, index) { (paragraph, _) =>
-            paragraph.replaceRange(normalizedRange.start.offset, normalizedRange.end.offset, insertedText)
-          }
-        )
-        .normalized
+      withUpdatedParagraphs(index, index) { (paragraph, _) =>
+        paragraph.replaceRange(normalizedRange.start.offset, normalizedRange.end.offset, insertedText)
+      }.normalized
     else replaceAcrossParagraphs(normalizedRange, insertedText)
 
   /** True when the rich document still represents the provided plain text exactly. */
@@ -340,15 +497,24 @@ final class RichTextDocument private (private val tree: ParagraphTree):
     range: RichTextRange
   )(transform: (RichTextParagraph, Int, Int) => RichTextParagraph): RichTextDocument =
     val normalizedRange = range.normalized
-    val newTree = tree.updatedRange(normalizedRange.start.paragraphIndex, normalizedRange.end.paragraphIndex) {
+    withUpdatedParagraphs(normalizedRange.start.paragraphIndex, normalizedRange.end.paragraphIndex) {
       (paragraph, index) =>
         val startOffset =
           if index == normalizedRange.start.paragraphIndex then normalizedRange.start.offset else 0
         val endOffset =
-          if index == normalizedRange.end.paragraphIndex then normalizedRange.end.offset else paragraph.plainText.length
-        transform(paragraph, startOffset, endOffset)
+          if index == normalizedRange.end.paragraphIndex then normalizedRange.end.offset else paragraph.plainTextLength
+        if paragraph.isOpaqueBlock then paragraph else transform(paragraph, startOffset, endOffset)
     }
-    RichTextDocument.fromTree(newTree)
+
+  private def withUpdatedParagraphs(startIndex: Int, endIndex: Int)(
+    update: (RichTextParagraph, Int) => RichTextParagraph
+  ): RichTextDocument =
+    val newTree = tree.updatedRange(startIndex, endIndex)(update)
+    new RichTextDocument(
+      newTree,
+      everyParagraphNormalized && newTree.forallInRange(startIndex, endIndex)((paragraph, _) => paragraph.isNormalized),
+      source
+    )
 
   private def updateParagraphs(range: RichTextRange)(update: RichTextParagraph => RichTextParagraph): RichTextDocument =
     if tree.paragraphCount == 0 then this
@@ -357,7 +523,9 @@ final class RichTextDocument private (private val tree: ParagraphTree):
       val lastIndex       = tree.paragraphCount - 1
       val startIndex      = normalizedRange.start.paragraphIndex.max(0).min(lastIndex)
       val endIndex        = normalizedRange.end.paragraphIndex.max(startIndex).min(lastIndex)
-      RichTextDocument.fromTree(tree.updatedRange(startIndex, endIndex)((paragraph, _) => update(paragraph)))
+      withUpdatedParagraphs(startIndex, endIndex)((paragraph, _) =>
+        if paragraph.isOpaqueBlock then paragraph else update(paragraph)
+      )
 
   private[serenity] def updateInlineStyle(range: RichTextRange)(
     transform: RichTextStyle => RichTextStyle
@@ -372,27 +540,28 @@ final class RichTextDocument private (private val tree: ParagraphTree):
       val endIndex   = range.end.paragraphIndex.max(startIndex).min(lastIndex)
       (tree.paragraphAt(startIndex), tree.paragraphAt(endIndex)) match
         case (Some(start), Some(end)) =>
-          val startOffset = range.start.offset.max(0).min(start.plainText.length)
-          val endOffset   = range.end.offset.max(0).min(end.plainText.length)
+          val startOffset = range.start.offset.max(0).min(start.plainTextLength)
+          val endOffset   = range.end.offset.max(0).min(end.plainTextLength)
           val style       = start.styleAtInsertion(startOffset, startOffset)
           val parts       = insertedText.split("\n", -1).toList
           val prefix      = start.runsInRange(0, startOffset)
-          val suffix      = end.runsInRange(endOffset, end.plainText.length)
+          val suffix      = end.runsInRange(endOffset, end.plainTextLength)
           val replacement = parts match
             case text :: Nil =>
-              List(
-                RichTextParagraph(prefix ++ styledRun(text, style) ++ suffix, start.alignment, start.role).normalized
-              )
+              List(start.copy(runs = prefix ++ styledRun(text, style) ++ suffix).normalized)
             case first :: rest =>
-              val middle =
-                rest.dropRight(1).map(text => RichTextParagraph(styledRun(text, style), start.alignment, start.role))
-              val last = rest.lastOption.toList.map(text =>
-                RichTextParagraph(styledRun(text, style) ++ suffix, end.alignment, end.role).normalized
-              )
-              RichTextParagraph(prefix ++ styledRun(first, style), start.alignment, start.role).normalized ::
-                middle ++ last
+              val middle = rest.dropRight(1).map(text => start.derivedWith(styledRun(text, style)))
+              val last = rest.lastOption.toList.map { text =>
+                val tail = if endIndex == startIndex then end.derivedWith(Nil) else end
+                tail.copy(runs = styledRun(text, style) ++ suffix).normalized
+              }
+              start.copy(runs = prefix ++ styledRun(first, style)).normalized :: middle ++ last
             case Nil => Nil
-          RichTextDocument.fromTree(tree.replaceSlice(startIndex, endIndex, replacement))
+          new RichTextDocument(
+            tree.replaceSlice(startIndex, endIndex, replacement),
+            everyParagraphNormalized && replacement.forall(_.isNormalized),
+            source
+          )
         case _ => this
 
   private def styledRun(text: String, style: RichTextStyle): List[RichTextRun] =
@@ -411,10 +580,7 @@ final class RichTextDocument private (private val tree: ParagraphTree):
 
 object RichTextDocument:
   def apply(paragraphs: List[RichTextParagraph]): RichTextDocument =
-    new RichTextDocument(ParagraphTree.fromParagraphs(paragraphs))
-
-  private def fromTree(tree: ParagraphTree): RichTextDocument =
-    new RichTextDocument(tree)
+    new RichTextDocument(ParagraphTree.fromParagraphs(paragraphs), paragraphs.forall(_.isNormalized), None)
 
   def unapply(document: RichTextDocument): Some[List[RichTextParagraph]] =
     Some(document.paragraphs)

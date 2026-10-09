@@ -26,18 +26,12 @@ class PanelRegistrySpec extends AnyFlatSpec with Matchers:
     PanelId.forContent(SurfaceContent.Diagnostics(Nil)) shouldBe Some(PanelId.Diagnostics)
     PanelId.forContent(SurfaceContent.MarkdownPreview(BufferId(0), "notes.md")) shouldBe Some(PanelId.MarkdownPreview)
     PanelId.forContent(SurfaceContent.Terminal("done", 0)) shouldBe Some(PanelId.ProjectOutput)
-    PanelId.forContent(SurfaceContent.CompanionSprite) shouldBe Some(PanelId.Companion)
     PanelId.forContent(SurfaceContent.QuickInfo("hover")) shouldBe None
   }
 
   it should "name the panel for every kind of dockable content" in {
     PanelId.of(PanelContent.Terminal("done", 0)) shouldBe PanelId.ProjectOutput
-    PanelId.of(PanelContent.CompanionSprite) shouldBe PanelId.Companion
     PanelId.of(PanelContent.Outline(Nil)) shouldBe PanelId.Outline
-  }
-
-  it should "dock the companion sprite under the surface id the rest of the app already knows it by" in {
-    PanelId.Companion.surfaceId shouldBe SurfaceId.CompanionSprite
   }
 
   "PanelRegistry.default" should "register every panel" in {
@@ -57,15 +51,12 @@ class PanelRegistrySpec extends AnyFlatSpec with Matchers:
       PanelId.Comments        -> PanelPosition.Right,
       PanelId.Diagnostics     -> PanelPosition.Bottom,
       PanelId.MarkdownPreview -> PanelPosition.Right,
-      PanelId.ProjectOutput   -> PanelPosition.Bottom,
-      PanelId.Companion       -> PanelPosition.Right
+      PanelId.ProjectOutput   -> PanelPosition.Bottom
     )
   }
 
-  it should "size project output and the companion as they were sized before they were registered" in {
+  it should "size project output as it was sized before it was registered" in {
     PanelRegistry.registrationFor(PanelId.ProjectOutput).defaultSize(PanelPosition.Bottom) shouldBe 14
-    PanelRegistry.registrationFor(PanelId.Companion).defaultSize(PanelPosition.Right) shouldBe
-      com.serenity.animation.sprite.CompanionSpriteConfig.DefaultSize
   }
 
   it should "put the language-tooling panels in the code family, and the rest everywhere" in {

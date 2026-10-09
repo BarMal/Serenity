@@ -9,7 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -237,12 +237,34 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     getContent(bufferId) shouldBe ""
 
     applyEvent(Paste)
-    getContent(bufferId) shouldBe "original"
+    getContent(bufferId) shouldBe "original\n"
+
+  it should "move a line: cut it, then paste it above another line" in new ClipFixture:
+    val bufferId = setupBuffer("first\nsecond\nthird")
+    setCursor(0, 2)
+
+    applyEvent(Cut)
+    setCursor(1, 3)
+    applyEvent(Paste)
+
+    getContent(bufferId) shouldBe "second\nfirst\nthird"
+    getCursor shouldBe CursorPosition(2, 3)
+
+  it should "paste a copied line above the caret line when copied with no selection" in new ClipFixture:
+    val bufferId = setupBuffer("first\nsecond")
+    setCursor(1, 4)
+
+    applyEvent(Copy)
+    setCursor(0, 1)
+    applyEvent(Paste)
+
+    getContent(bufferId) shouldBe "second\nfirst\nsecond"
+    getCursor shouldBe CursorPosition(1, 1)
 
   trait ClipFixture:
 
     val stateManager: StateManager = StateManager
-      .apply(LoggerFactory[IO].getLogger(using LoggerName("CopyPasteSpec")))
+      .apply(LoggerFactory[IO].getLogger(using LoggerName("CopyPasteSpec")), dictionaryCache = SharedDictionary.default)
       .unsafeRunSync()
 
     private val activePaneId   = AtomicReference[PaneId](PaneId(0))

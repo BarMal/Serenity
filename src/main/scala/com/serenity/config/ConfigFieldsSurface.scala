@@ -1,39 +1,12 @@
 package com.serenity.config
 
-/** Surface material, background, blur, text-area insets and viewport sizing. */
+/** Diagnostic highlight blending, text-area insets and viewport sizing. */
 private[config] object ConfigFieldsSurface:
 
   import ConfigFieldSyntax.*
   import FieldCodec.*
 
   val fields: List[ConfigField[?]] = List(
-    // -- Material and background -----------------------------------------------------------------------------------------
-    named("ui.material", "materialPreset", "ui_material", "material.preset", "material_preset")(materialPreset)(
-      _.surfaceConfig.materialPreset,
-      (config, value) => config.withMaterialPreset(value)
-    ).restoredBy((config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(materialPreset = value))),
-    named("ui.post_processing", "postProcessingEffect")(
-      enumerated(
-        PostProcessingEffect.fromConfigKey,
-        _.configKey,
-        text => PostProcessingEffect.values.find(_.toString == text)
-      )
-    )(
-      _.surfaceConfig.postProcessingEffect,
-      (config, value) => config.withPostProcessingEffect(value)
-    ),
-    named("ui.shadows", "uiShadowsEnabled", "ui_shadows")(boolean)(
-      _.surfaceConfig.uiShadowsEnabled,
-      (config, value) => config.withUiShadowsEnabled(value)
-    ),
-    named("ui.background_style", "backgroundStyle", "ui.background.style", "ui_background_style")(
-      enumerated(BackgroundStyle.fromConfigKey, _.configKey, text => BackgroundStyle.values.find(_.toString == text))
-    )(_.surfaceConfig.backgroundStyle, (config, value) => config.withBackgroundStyle(value))
-      .restoredBy((config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(backgroundStyle = value))),
-    named("ui.blur_radius", "blurRadius", "ui.blur.radius", "ui_blur_radius")(
-      float.filtered(radius => radius >= 0.0f && radius <= 1.0f)
-    )(_.surfaceConfig.blurRadius, (config, value) => config.withBlurRadius(value))
-      .restoredBy((config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(blurRadius = value))),
     // issue #1530/#1529: how strongly a diagnostic's severity colour shows through its highlight, versus the colour
     // it's painted over -- was a hardcoded literal in `RendererHighlights`.
     named("ui.diagnostic_highlight_blend_weight", "diagnosticHighlightBlendWeight")(

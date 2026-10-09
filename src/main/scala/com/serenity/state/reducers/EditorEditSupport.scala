@@ -1,14 +1,12 @@
 package com.serenity.state.reducers
 
-import com.serenity.animation.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.richtext.{RichTextDocument, RichTextPosition, RichTextRange}
 import com.serenity.rope.*
 import com.serenity.state.models.*
-import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
+import com.serenity.state.undo.{BufferSnapshot, EditGrouping, EditKind, HistoryEntry}
 
 /** Low-level infrastructure shared by every family of [[EditorEventReducer]] event handling: applying one or many
-  * [[MultiCursorEdit]]s to a buffer's content, rich text document, comments and animations in lockstep. Extracted from
+  * [[MultiCursorEdit]]s to a buffer's content, rich text document and comments in lockstep. Extracted from
   * `EditorEventReducer` (which grew past its 600-line target) rather than any one event family, since every family that
   * edits content -- text editing, clipboard, deletion -- depends on this pairing being kept consistent.
   */
@@ -29,42 +27,31 @@ private[state] object EditorEditSupport:
 
   final case class MultiCursorEdit(ownerIndex: Int, start: Int, end: Int, insertedText: String)
 
-  def animationRemapEffects(
-    bufferId: BufferId,
-    before: Rope,
-    after: Rope,
-    edits: List[MultiCursorEdit]
-  ): List[AppEffect] =
-    if edits.isEmpty then Nil
-    else
-      List(
-        AppEffect.Animation(
-          AnimationEffect.RemapThroughEdits(bufferId, before, after, edits.map(toTextEdit))
-        )
-      )
-
-  def animationMergeEffects(bufferId: BufferId, delta: Map[CharacterKey, AnimatedCell]): List[AppEffect] =
-    if delta.isEmpty then Nil else List(AppEffect.Animation(AnimationEffect.Merge(bufferId, delta)))
-
   /** Declares the edit(s) just performed as undoable -- see #1016. `before` is the buffer as it stood immediately
-    * before this call's edits; every caller already has it in scope as the receiver it edited. `groupable` mirrors
-    * whether the triggering event was a character/tab insertion, the only two event kinds a consecutive run of which
-    * coalesces into one undo step.
+    * before this call's edits; every caller already has it in scope as the receiver it edited. `grouping` says whether
+    * this edit coalesces into the run before it: only typing at the cursor and one-grapheme deletions do.
     */
   def undoBoundaryEffects(
     bufferId: BufferId,
     paneId: PaneId,
     before: Buffer,
     edits: List[MultiCursorEdit],
-    groupable: Boolean
+    grouping: EditGrouping
   ): List[AppEffect] =
     if edits.isEmpty then Nil
     else
       val entry = HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(before))
-      List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable)))
+      List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, grouping)))
 
-  private def toTextEdit(edit: MultiCursorEdit): TextEdit =
-    TextEdit(edit.start, edit.end, edit.insertedText)
+  val standalone: List[MultiCursorEdit] => EditGrouping = _ => EditGrouping.Standalone
+
+  /** Typing `edits` into `before`: whitespace typed straight after a word opens a new undo step. */
+  def typingGrouping(before: Buffer)(edits: List[MultiCursorEdit]): EditGrouping =
+    edits.headOption.fold(EditGrouping.Standalone)(edit =>
+      EditGrouping.typing(edit.insertedText, before.document.content.index(edit.start - 1))
+    )
+
+  def deletingGrouping(kind: EditKind): List[MultiCursorEdit] => EditGrouping = _ => EditGrouping.deleting(kind)
 
   def backwardGraphemeDeletionRange(content: Rope, offset: Int): Option[(Int, Int)] =
     val beforeOrAt = content.graphemeBoundaryBeforeOrAt(offset)
@@ -82,6 +69,18 @@ private[state] object EditorEditSupport:
       val end = content.nextGraphemeBoundary(offset)
       Option.when(offset < end)(offset -> end)
 
+  /** From the start of the cursor's line up to it; at the start of a line, the line break before it instead. */
+  def lineStartDeletionRange(content: Rope, offset: Int): Option[(Int, Int)] =
+    val (line, _) = content.offsetToLineColumn(offset)
+    val lineStart = content.lineColumnToOffset(line, 0)
+    if lineStart < offset then Some(lineStart -> offset) else backwardGraphemeDeletionRange(content, offset)
+
+  /** From the cursor to the end of its line; at the end of a line, the line break after it instead. */
+  def lineEndDeletionRange(content: Rope, offset: Int): Option[(Int, Int)] =
+    val (line, _) = content.offsetToLineColumn(offset)
+    val lineEnd   = content.lineColumnToOffset(line, content.getLine(line).fold(0)(_.length))
+    if offset < lineEnd then Some(offset -> lineEnd) else forwardGraphemeDeletionRange(content, offset)
+
   /** Folds `edits` over `content` and `richTextDocument` together, so a caller's rich-text document stays remapped in
     * lockstep with the plain-text edits it applies -- edits must already be in the order `applyContentEdit` expects
     * (callers sort descending by offset so earlier edits don't shift later ones). Shared by every multi-edit path
@@ -92,19 +91,60 @@ private[state] object EditorEditSupport:
     buffer: Buffer,
     edits: List[MultiCursorEdit]
   )(applyContentEdit: (Rope, MultiCursorEdit) => Rope): (Rope, Option[RichTextDocument]) =
-    edits.foldLeft((buffer.document.content, buffer.richText.richTextDocument)) {
-      case ((content, document), edit) =>
-        val nextContent = applyContentEdit(content, edit)
-        val nextDocument = richTextDocumentAfterEdit(
-          buffer.copy(
-            document = buffer.document.copy(content = content),
-            richText = buffer.richText.copy(richTextDocument = document)
-          ),
-          edit.start,
-          edit.end,
-          edit.insertedText
+    val folded = foldEditsTracked(buffer, edits)(applyContentEdit)
+    (folded.content, folded.richText)
+
+  /** What a fold of edits left: the text, the remapped rich-text document and the edits that were applied, which are
+    * all of them unless one would have joined a block (see [[joinsBlock]]).
+    */
+  final case class FoldedEdits(content: Rope, richText: Option[RichTextDocument], applied: List[MultiCursorEdit]):
+
+    /** The members of `edits` that were applied, for the adjustments (annotations, cursors, undo) that follow the text:
+      * a skipped edit changed nothing, so it must not move anything.
+      */
+    def appliedAmong(edits: List[MultiCursorEdit]): List[MultiCursorEdit] =
+      edits.filter(edit =>
+        applied.exists(done =>
+          done.start == edit.start && done.end == edit.end && done.insertedText == edit.insertedText
         )
-        (nextContent, nextDocument)
+      )
+
+  def foldEditsTracked(
+    buffer: Buffer,
+    edits: List[MultiCursorEdit]
+  )(applyContentEdit: (Rope, MultiCursorEdit) => Rope): FoldedEdits =
+    // Seeded with the document only while it still describes the content, since each step re-stamps it as matching.
+    val seed = FoldedEdits(
+      buffer.document.content,
+      buffer.richText.richTextDocument.filter(_ => buffer.richTextInSync),
+      Nil
+    )
+    edits.foldLeft(seed) { (folded, edit) =>
+      val nextDocument = richTextDocumentAfterEdit(
+        buffer.withEditedDocument(folded.content, folded.richText),
+        edit.start,
+        edit.end,
+        edit.insertedText
+      )
+      if joinsBlock(folded.content, folded.richText, nextDocument, edit) then folded
+      else FoldedEdits(applyContentEdit(folded.content, edit), nextDocument, folded.applied :+ edit)
+    }
+
+  /** Whether `edit` would leave other content beside a block atom. A block line takes no text, so every path that edits
+    * several ranges at once (replace-all, rename, multi-cursor, Markdown formatting) skips such an edit and applies the
+    * others, leaving the block exactly as it was. The lines around the edit are looked at first, so a document with no
+    * block near the edit costs a lookup.
+    */
+  private def joinsBlock(
+    content: Rope,
+    document: Option[RichTextDocument],
+    next: Option[RichTextDocument],
+    edit: MultiCursorEdit
+  ): Boolean =
+    document.exists { current =>
+      val firstLine = content.offsetToLineColumn(edit.start)._1
+      val lastLine  = content.offsetToLineColumn(edit.end)._1
+      current.hasOpaqueBlockBetween((firstLine - 1).max(0), lastLine + 1) && next.exists(_.hasMixedBlock)
     }
 
   def applyTrackedEdits(
@@ -116,11 +156,12 @@ private[state] object EditorEditSupport:
     else
       val trackedOffsets = initialOffsets.toArray
       val sortedEdits    = edits.sortBy(edit => (-edit.start, -edit.end))
-      val (updatedContent, updatedRichTextDocument) =
-        foldEditsWithRichText(buffer, sortedEdits) { (content, edit) =>
-          insertOrUnchanged(deleteOrUnchanged(content, edit.start, edit.end), edit.start, edit.insertedText)
-        }
-      val finalOffsets = sortedEdits.foldLeft(trackedOffsets) { (offsets, edit) =>
+      val folded = foldEditsTracked(buffer, sortedEdits) { (content, edit) =>
+        insertOrUnchanged(deleteOrUnchanged(content, edit.start, edit.end), edit.start, edit.insertedText)
+      }
+      val (updatedContent, updatedRichTextDocument) = (folded.content, folded.richText)
+      val appliedEdits                              = folded.appliedAmong(edits)
+      val finalOffsets = folded.applied.foldLeft(trackedOffsets) { (offsets, edit) =>
         val delta = edit.insertedText.length - (edit.end - edit.start)
         offsets.indices.foreach { i =>
           val offset = offsets(i)
@@ -142,11 +183,11 @@ private[state] object EditorEditSupport:
           buffer.annotations,
           buffer.document.content,
           updatedContent,
-          edits
+          appliedEdits
         ),
         richTextDocument = updatedRichTextDocument
       )
-      (baseBuffer, edits)
+      (baseBuffer, appliedEdits)
 
   /** Merged-range sibling of [[applyTrackedEdits]] -- deletion-only, so no `insertedText` bookkeeping, but the content
     * and `richTextDocument` folds mirror it exactly: both need each range applied against the content (and rich-text
@@ -165,15 +206,16 @@ private[state] object EditorEditSupport:
       val sortedMergedEdits = mergedRanges
         .sortBy { case (start, end) => (-start, -end) }
         .map { case (start, end) => MultiCursorEdit(0, start, end, "") }
-      val (updatedContent, updatedRichTextDocument) =
-        foldEditsWithRichText(buffer, sortedMergedEdits)((content, edit) =>
-          deleteOrUnchanged(content, edit.start, edit.end)
-        )
-      val mergedEdits = mergedRanges.zipWithIndex.map {
+      val folded =
+        foldEditsTracked(buffer, sortedMergedEdits)((content, edit) => deleteOrUnchanged(content, edit.start, edit.end))
+      val (updatedContent, updatedRichTextDocument) = (folded.content, folded.richText)
+      val appliedRanges =
+        mergedRanges.filter((start, end) => folded.applied.exists(done => done.start == start && done.end == end))
+      val mergedEdits = appliedRanges.zipWithIndex.map {
         case ((start, end), index) =>
           MultiCursorEdit(index, start, end, "")
       }
-      val finalOffsets = initialOffsets.map(offset => remapOffsetAfterDeletions(offset, mergedRanges))
+      val finalOffsets = initialOffsets.map(offset => remapOffsetAfterDeletions(offset, appliedRanges))
       val finalCursors = finalOffsets
         .map(offset => updatedContent.offsetToCursorPosition(offset))
         .distinct
@@ -203,16 +245,20 @@ private[state] object EditorEditSupport:
       }
       .reverse
 
+  /** Maps an offset in the pre-deletion content to the post-deletion content. `deletions` are in original coordinates,
+    * so each is compared against the unshifted offset; an offset inside (or on the edges of) a deletion collapses to
+    * that deletion's start.
+    */
   def remapOffsetAfterDeletions(
     offset: Int,
     deletions: List[(Int, Int)]
   ): Int =
-    deletions.foldLeft(offset) {
-      case (currentOffset, (start, end)) =>
-        if currentOffset < start then currentOffset
-        else if currentOffset > end then currentOffset - (end - start)
-        else start
-    }
+    def removedUpTo(position: Int): Int =
+      deletions.collect { case (start, end) if end <= position => end - start }.sum
+
+    deletions.find { case (start, end) => start <= offset && offset <= end } match
+      case Some((start, _)) => start - removedUpTo(start)
+      case None             => offset - removedUpTo(offset)
 
   def adjustDocumentComments(
     comments: List[DocumentComment],
@@ -231,10 +277,9 @@ private[state] object EditorEditSupport:
         val (startLine, startColumn) = updatedContent.offsetToLineColumn(nextStart)
         val (endLine, endColumn)     = updatedContent.offsetToLineColumn(nextEnd)
 
-        DocumentComment(
-          CursorPosition(startLine, startColumn),
-          CursorPosition(endLine, endColumn),
-          comment.text
+        comment.copy(
+          anchor = CursorPosition(startLine, startColumn),
+          focus = CursorPosition(endLine, endColumn)
         )
       }
 
@@ -292,26 +337,21 @@ private[state] object EditorEditSupport:
 
   /** For a whole-content swap that carries no edit list -- undo and redo restore a snapshot's text outright. The
     * difference is treated as one replaced region (common prefix and suffix trimmed), so annotations keep their place
-    * relative to the text around the change. Inside a run of identical characters the region is ambiguous, and a marker
-    * there may land anywhere within the run.
+    * relative to the text around the change. Found by walking both ropes together and skipping every shared subtree, so
+    * the cost follows the change, not the document. Inside a run of identical characters the region is ambiguous, and a
+    * marker there may land anywhere within the run.
     */
   def adjustAnnotationsAcrossReplacement(annotations: Annotations, before: Rope, after: Rope): Annotations =
     if annotations.bookmarks.isEmpty && annotations.documentComments.isEmpty && annotations.placeholders.isEmpty then
       annotations
     else
-      val beforeText = before.collect()
-      val afterText  = after.collect()
-      val limit      = math.min(beforeText.length, afterText.length)
-      val prefix     = Iterator.range(0, limit).takeWhile(i => beforeText(i) == afterText(i)).size
-      val suffix = Iterator
-        .range(0, limit - prefix)
-        .takeWhile(i => beforeText(beforeText.length - 1 - i) == afterText(afterText.length - 1 - i))
-        .size
-      if prefix == beforeText.length && prefix == afterText.length then annotations
-      else
-        val replacement = afterText.substring(prefix, afterText.length - suffix)
-        val edit        = MultiCursorEdit(0, prefix, beforeText.length - suffix, replacement)
+      // `RopeDiff` wants a `Balance` only for an empty rope on a branch its bounds make unreachable; the ropes compared
+      // carry their own.
+      RopeDiff.changedOffsetRange(before, after)(using Balance.default).fold(annotations) { (start, end) =>
+        val replacedEnd = before.weight - (after.weight - end)
+        val edit        = MultiCursorEdit(0, start, replacedEnd, after.sliceString(start, end))
         adjustAnnotations(annotations, before, after, List(edit))
+      }
 
   private def remapCommentStart(offset: Int, edits: List[MultiCursorEdit]): Int =
     remapEditBoundary(offset, edits, insertionAtBoundaryMoves = true)
@@ -381,24 +421,17 @@ private[state] object EditorEditSupport:
     val replacementEdit = MultiCursorEdit(0, startOffset, endOffset, insertedText)
 
     (
-      buffer.copy(
-        document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-        editing = buffer.editing.withPrimary(Cursor(newCursor)),
-        annotations = adjustAnnotations(
-          buffer.annotations,
-          buffer.document.content,
-          newContent,
-          List(replacementEdit)
+      buffer
+        .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText))
+        .copy(
+          editing = buffer.editing.withPrimary(Cursor(newCursor)),
+          annotations = adjustAnnotations(
+            buffer.annotations,
+            buffer.document.content,
+            newContent,
+            List(replacementEdit)
+          )
         ),
-        // `document` above and `richTextDocument` below both leave `contentVersion`/`richTextSyncedVersion` at
-        // whatever `buffer` already had, rather than updating either: as long as the two only ever move together
-        // (never one without the other), `Buffer.richTextInSync` stays correct without needing either to actually
-        // change on every edit (#1663) -- see `richTextDocumentAfterEdit`, which only ever returns `Some` when
-        // `buffer.richTextInSync` already held.
-        richText = buffer.richText.copy(
-          richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
-        )
-      ),
       replacementEdit
     )
 
@@ -426,17 +459,17 @@ private[state] object EditorEditSupport:
     val endOffset   = EditorCursorMovement.selectionEndOffset(selection, buffer.document.content)
     val newContent  = deleteOrUnchanged(buffer.document.content, startOffset, endOffset)
     val newCursor   = newContent.offsetToCursorPosition(startOffset)
-    val baseBuffer = buffer.copy(
-      document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-      editing = buffer.editing.withPrimary(Cursor(newCursor)),
-      annotations = adjustAnnotations(
-        buffer.annotations,
-        buffer.document.content,
-        newContent,
-        List(MultiCursorEdit(0, startOffset, endOffset, ""))
-      ),
-      richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
-    )
+    val baseBuffer = buffer
+      .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
+      .copy(
+        editing = buffer.editing.withPrimary(Cursor(newCursor)),
+        annotations = adjustAnnotations(
+          buffer.annotations,
+          buffer.document.content,
+          newContent,
+          List(MultiCursorEdit(0, startOffset, endOffset, ""))
+        )
+      )
     (baseBuffer, MultiCursorEdit(0, startOffset, endOffset, ""))
 
   def applyMultiSelectionReplacement(
@@ -491,106 +524,3 @@ private[state] object EditorEditSupport:
   def richTextPositionForOffset(content: Rope, offset: Int): RichTextPosition =
     val (line, column) = content.offsetToLineColumn(offset)
     RichTextPosition(line, column)
-
-  /** Returns the buffer with content/comments/etc. applied but animations untouched, plus the delta of newly animated
-    * cells for the caller to hand to the presentation layer (`#1001`) -- this function never had access to the buffer's
-    * *current* animations beyond merging into them, so it never needed to read them; only the merge itself moves to the
-    * caller.
-    */
-  def addInsertionAnimations(
-    buffer: Buffer,
-    state: AppState,
-    edits: List[MultiCursorEdit]
-  ): (Buffer, Map[CharacterKey, AnimatedCell]) =
-    val sortedEdits = edits
-      .filter(_.insertedText.nonEmpty)
-      .sortBy(edit => (edit.start, edit.end))
-
-    if sortedEdits.isEmpty then (buffer, Map.empty)
-    else
-      val insertedCells = insertedTransitionCells(buffer.document.content, sortedEdits, state)
-      if insertedCells.isEmpty then (buffer, Map.empty)
-      else
-        val plan = ElementTransitionPlanner.plan(
-          ElementTransitionRequest(TransitionScope.EditorInsertion),
-          state.persisted.config.editorInsertionTransitionSettings
-        )
-        if plan.kind == TransitionKind.Disabled then (buffer, Map.empty)
-        else if plan.kind == TransitionKind.Fade then
-          state.persisted.config.scaledCharacterAnimation match
-            case Some(animConfig) =>
-              insertedCells.headOption match
-                case Some((key, cell)) if insertedCells.size == 1 =>
-                  val delta = Map(
-                    key -> AnimatedCell.parametricForeground(
-                      cell.char,
-                      cell.startColor,
-                      cell.endColor,
-                      animConfig.steps
-                    )
-                  )
-                  (buffer, delta)
-                case _ =>
-                  val staggeredCells = insertedCells
-                    .groupBy { case (key, _) => key.line }
-                    .valuesIterator
-                    .flatMap(lineCells =>
-                      FlowAnimationBuilder.build(
-                        cells = lineCells,
-                        direction = FlowDirection.ByColumn,
-                        sweep = SweepDirection.Forward,
-                        steps = animConfig.steps,
-                        staggerFrames = 1
-                      )
-                    )
-                    .toMap
-                  (buffer, staggeredCells)
-            case None =>
-              (buffer, Map.empty)
-        else
-          val animationState = ElementTransitionLowerer.lower(
-            plan,
-            ElementTransitionCells(content = insertedCells),
-            tickRateMs = 16
-          )
-          (buffer, animationState.animations)
-
-  private def insertedTransitionCells(
-    content: Rope,
-    edits: List[MultiCursorEdit],
-    state: AppState,
-    maxAnimatedCells: Int = CellAnimation.DefaultMaxAnimatedCells
-  ): Map[CharacterKey, CellAnimation] =
-    val animationFor =
-      CellAnimation.curriedFor(state.persisted.theme.backgroundColor, state.persisted.theme.foregroundColor)
-    edits.foldLeft(Map.empty[CharacterKey, CellAnimation]) { (cells, edit) =>
-      val remainingBudget = maxAnimatedCells - cells.size
-      if remainingBudget <= 0 then cells
-      else
-        val finalStartOffset = remapEditBoundary(edit.start, edits, insertionAtBoundaryMoves = false)
-        cells ++ insertedCellsFromText(
-          content,
-          finalStartOffset,
-          edit.insertedText.take(remainingBudget),
-          animationFor
-        )
-    }
-
-  private def insertedCellsFromText(
-    content: Rope,
-    startOffset: Int,
-    insertedText: String,
-    animationFor: Char => CellAnimation
-  ): Map[CharacterKey, CellAnimation] =
-    insertedText
-      .foldLeft((Map.empty[CharacterKey, CellAnimation], startOffset)) {
-        case ((cells, offset), char) if char == '\n' =>
-          (cells, offset + 1)
-        case ((cells, offset), char) =>
-          val (line, column) = content.offsetToLineColumn(offset)
-          (
-            cells + (CharacterKey(column, line) -> animationFor(char)),
-            offset + 1
-          )
-      }
-      ._1

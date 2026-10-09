@@ -8,9 +8,9 @@ import com.serenity.config.WindowChromeMode
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.Theme
 
-/** Pure geometry, palette, and control-layout logic for the custom window chrome (title bar, control buttons, rounded
-  * corners). Mixed into [[SwingWindow]]'s companion object so this stays `SwingWindow.XyzMetrics` etc. to every caller,
-  * while living in its own file to keep `SwingWindow.scala` within the architecture ratchet's line target.
+/** Pure geometry, palette, and control-layout logic for the custom window chrome (title bar, control buttons). Mixed
+  * into [[SwingWindow]]'s companion object so this stays `SwingWindow.XyzMetrics` etc. to every caller, while living in
+  * its own file to keep `SwingWindow.scala` within the architecture ratchet's line target.
   */
 private[terminal] trait SwingWindowChromeSupport:
 
@@ -18,7 +18,6 @@ private[terminal] trait SwingWindowChromeSupport:
       titleBarHeight: Int,
       buttonWidth: Int,
       margin: Int,
-      cornerArc: Int,
       minWidth: Int,
       minHeight: Int,
       titleFontSize: Int
@@ -28,7 +27,6 @@ private[terminal] trait SwingWindowChromeSupport:
     private val BaseTitleBarHeight = 32
     private val BaseButtonWidth    = 46
     private val BaseMargin         = 6
-    private val BaseCornerArc      = 12
     private val BaseTitleFontSize  = 13
 
     def fromCellMetrics(metrics: CellMetrics): ChromeMetrics =
@@ -37,7 +35,6 @@ private[terminal] trait SwingWindowChromeSupport:
         titleBarHeight = scaledInt(BaseTitleBarHeight, scale),
         buttonWidth = scaledInt(BaseButtonWidth, scale),
         margin = scaledInt(BaseMargin, scale),
-        cornerArc = scaledInt(BaseCornerArc, scale),
         minWidth = scaledInt(SwingWindow.BaseMinWidth, scale),
         minHeight = scaledInt(SwingWindow.BaseMinHeight, scale),
         titleFontSize = scaledInt(BaseTitleFontSize, scale)
@@ -46,62 +43,54 @@ private[terminal] trait SwingWindowChromeSupport:
     private def scaledInt(value: Int, scale: Double): Int =
       math.round(value.toDouble * scale).toInt.max(1)
 
+  /** Under a tiling compositor `Auto` falls back to native decorations: the compositor manages, borders and rounds (or
+    * deliberately doesn't round) every window itself, and normally draws no title bar at all. So does the native
+    * Wayland toolkit: Wayland never lets a client place its own window, so the custom title bar could not be dragged.
+    */
   private[serenity] def shouldUseCustomChrome(
     chromeMode: WindowChromeMode,
-    osName: String = System.getProperty("os.name", "")
+    osName: String,
+    env: Map[String, String],
+    nativeWaylandToolkit: Boolean = false
   ): Boolean =
     chromeMode == WindowChromeMode.Custom ||
-      (chromeMode == WindowChromeMode.Auto && osName.toLowerCase(java.util.Locale.ROOT).contains("linux"))
+      (chromeMode == WindowChromeMode.Auto &&
+        osName.toLowerCase(java.util.Locale.ROOT).contains("linux") &&
+        !isTilingCompositor(env) &&
+        !nativeWaylandToolkit)
 
-  private[serenity] def shouldUsePerPixelRoundedCorners(
-    usesCustomChrome: Boolean,
-    maximized: Boolean,
-    perPixelTranslucencySupported: Boolean
-  ): Boolean =
-    usesCustomChrome && !maximized && perPixelTranslucencySupported
+  private[serenity] def menuBarPlacement(osName: String, usesCustomChrome: Boolean): MenuBarPlacement =
+    if osName.toLowerCase(java.util.Locale.ROOT).contains("mac") then MenuBarPlacement.ScreenMenuBar
+    else if usesCustomChrome then MenuBarPlacement.UnderCustomTitleBar
+    else MenuBarPlacement.FrameMenuBar
 
-  private[serenity] def roundedCornerMask(
-    usesCustomChrome: Boolean,
-    maximized: Boolean,
-    perPixelTranslucencySupported: Boolean,
-    cornerArc: Int
-  ): Option[Int] =
-    Option.when(shouldUsePerPixelRoundedCorners(usesCustomChrome, maximized, perPixelTranslucencySupported))(
-      cornerArc.max(0)
-    )
+  private[serenity] def isNativeWaylandToolkit(toolkitClassName: String): Boolean =
+    toolkitClassName == "sun.awt.wl.WLToolkit"
 
-  private[serenity] def shouldRefreshRoundedCornerMask(previous: Option[Int], current: Option[Int]): Boolean =
-    previous != current
+  private val TilingCompositorSockets =
+    scala.List("HYPRLAND_INSTANCE_SIGNATURE", "SWAYSOCK", "I3SOCK", "NIRI_SOCKET")
 
-  /** A theme with an alpha-0 background (e.g. the built-in "Transparent" theme) should only make `canvas` paint its own
-    * background as genuinely see-through when the window can actually composite that against the desktop: custom chrome
-    * (the frame itself is undecorated with a transparent `Color` background, see `frame`'s construction) and per-pixel
-    * translucency support from the platform. Anywhere else -- native OS chrome, or a platform/window manager without
-    * translucency -- painting nothing would composite garbage (stale backbuffer pixels, or an opaque-but-undefined
-    * native surface) rather than the desktop, so that combination must fall back to an ordinary opaque paint instead.
+  private val TilingDesktopNames =
+    Set("hyprland", "sway", "i3", "niri", "river", "bspwm", "qtile", "xmonad")
+
+  private[serenity] def isTilingCompositor(env: Map[String, String]): Boolean =
+    TilingCompositorSockets.exists(key => isSet(env, key)) ||
+      env
+        .get("XDG_CURRENT_DESKTOP")
+        .exists(_.split(':').exists(name => TilingDesktopNames.contains(name.trim.toLowerCase(java.util.Locale.ROOT))))
+
+  private def isSet(env: Map[String, String], key: String): Boolean =
+    env.get(key).exists(_.trim.nonEmpty)
+
+  /** Paint `canvas`'s opaque black background into `g`, limited to its clip within `width` x `height`, so a frame whose
+    * own background is alpha 0 still presents opaque pixels.
     */
-  private[serenity] def shouldPaintTransparentContent(
-    usesCustomChrome: Boolean,
-    perPixelTranslucencySupported: Boolean,
-    backgroundAlpha: Int
-  ): Boolean =
-    usesCustomChrome && perPixelTranslucencySupported && backgroundAlpha == 0
-
-  /** Paint `canvas`'s own background into `g` (sized `width` x `height`): genuinely transparent pixels when
-    * `transparent`, replacing whatever the backing buffer already held (`AlphaComposite.Src`, not the default
-    * `SrcOver`, so this actually clears stale opaque pixels rather than leaving a zero-alpha fill's no-op) -- otherwise
-    * an ordinary opaque black fill, the graceful fallback for when [[shouldPaintTransparentContent]] is false. `g`
-    * should be a scratch `Graphics2D` the caller disposes (`Graphics.create()`), since this permanently changes its
-    * composite.
-    */
-  private[serenity] def paintCanvasBackground(g: Graphics2D, width: Int, height: Int, transparent: Boolean): Unit =
-    if transparent then
-      g.setComposite(AlphaComposite.Src)
-      g.setColor(SwingWindow.Transparent)
-      g.fillRect(0, 0, width, height)
-    else
+  private[serenity] def paintCanvasBackground(g: Graphics2D, width: Int, height: Int): Unit =
+    val panel  = new Rectangle(0, 0, width, height)
+    val region = Option(g.getClipBounds).fold(panel)(_.intersection(panel))
+    if !region.isEmpty then
       g.setColor(Color.BLACK)
-      g.fillRect(0, 0, width, height)
+      g.fillRect(region.x, region.y, region.width, region.height)
 
   private[serenity] def setAccessibleNameIfAvailable(component: JComponent, name: String): Unit =
     Option(component.getAccessibleContext).foreach(_.setAccessibleName(name))
@@ -219,26 +208,20 @@ private[terminal] trait SwingWindowChromeSupport:
 
     def fromTheme(theme: Theme): ChromePalette =
       ChromePalette(
-        titleBackground = theme.panel.background,
-        titleForeground = theme.panel.foreground,
-        border = theme.panelBorder,
-        buttonHoverBackground = blend(theme.highlighted.background, theme.panel.background, 0.24),
-        buttonPressedBackground = blend(theme.highlighted.background, theme.panel.background, 0.38),
-        closeHoverBackground = theme.error.foreground,
-        closePressedBackground = blend(theme.error.foreground, theme.background, 0.82),
-        closeHoverForeground = theme.background,
-        focusBorder = theme.highlighted.foreground
+        titleBackground = theme.panel.background.toAwt,
+        titleForeground = theme.panel.foreground.toAwt,
+        border = theme.panelBorder.toAwt,
+        buttonHoverBackground = theme.highlighted.background.mixOver(theme.panel.background, 0.24).toAwt,
+        buttonPressedBackground = theme.highlighted.background.mixOver(theme.panel.background, 0.38).toAwt,
+        closeHoverBackground = theme.error.foreground.toAwt,
+        closePressedBackground = theme.error.foreground.mixOver(theme.background, 0.82).toAwt,
+        closeHoverForeground = theme.background.toAwt,
+        focusBorder = theme.highlighted.foreground.toAwt
       )
 
-    private def blend(foreground: Color, background: Color, foregroundWeight: Double): Color =
-      val clampedWeight    = foregroundWeight.max(0.0).min(1.0)
-      val backgroundWeight = 1.0 - clampedWeight
-      def channel(value: Color => Int): Int =
-        math.round(value(foreground) * clampedWeight + value(background) * backgroundWeight).toInt
-      new Color(channel(_.getRed), channel(_.getGreen), channel(_.getBlue))
-
   /** Avoids redundant native DWM updates while preserving applications for palette changes. */
-  final private[serenity] class NativeChromeThemeCache:
+  /** Remembers the last chrome palette applied, so re-syncing an unchanged theme every frame posts no toolkit work. */
+  final private[serenity] class ChromePaletteCache:
     private val paletteRef = new AtomicReference[Option[ChromePalette]](None)
 
     def recordIfChanged(palette: ChromePalette, supported: Boolean): Boolean =

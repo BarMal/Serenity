@@ -11,8 +11,6 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
     ConfigKeySchema.isKnownKey("ui.density") shouldBe true
     ConfigKeySchema.isKnownKey("ui.element_gap") shouldBe true
     ConfigKeySchema.isKnownKey("ui.element.gap") shouldBe true
-    ConfigKeySchema.isKnownKey("ui.corner_radius") shouldBe true
-    ConfigKeySchema.isKnownKey("ui.corner.radius") shouldBe true
     ConfigKeySchema.isKnownKey("ui.outline_thickness") shouldBe true
     ConfigKeySchema.isKnownKey("ui.outline.thickness") shouldBe true
 
@@ -20,7 +18,6 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
       contain allOf (
         "interface_density"    -> "ui.density",
         "ui_element_gap"       -> "ui.element_gap",
-        "ui_corner_radius"     -> "ui.corner_radius",
         "ui_outline_thickness" -> "ui.outline_thickness"
       )
     )
@@ -31,7 +28,6 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
       InterfaceConfig(
         density = InterfaceDensity.Spacious,
         elementGap = Some(3),
-        cornerRadiusPx = 12,
         outlineThicknessPx = 4
       )
     )
@@ -39,7 +35,6 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
     config.interfaceConfig shouldBe InterfaceConfig(
       density = InterfaceDensity.Spacious,
       elementGap = Some(3),
-      cornerRadiusPx = 12,
       outlineThicknessPx = 4
     )
   }
@@ -57,8 +52,6 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
         .getOrElse(fail("density parse"))
     val gapConfig =
       ConfigRegistry.read(AppConfig.default, "ui.element_gap", "4").getOrElse(fail("gap parse"))
-    val radiusConfig =
-      ConfigRegistry.read(AppConfig.default, "ui_corner_radius", "14").getOrElse(fail("radius parse"))
     val outlineConfig =
       ConfigRegistry
         .read(AppConfig.default, "ui.outline.thickness", "5")
@@ -66,7 +59,6 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
 
     densityConfig.interfaceConfig.density.shouldBe(InterfaceDensity.Spacious)
     gapConfig.interfaceConfig.elementGap.shouldBe(Some(4))
-    radiusConfig.interfaceConfig.cornerRadiusPx.shouldBe(14)
     outlineConfig.interfaceConfig.outlineThicknessPx.shouldBe(5)
     ConfigRegistry.read(AppConfig.default, "ui.density", "unknown").shouldBe(None)
   }
@@ -75,7 +67,6 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
     ConfigRegistry.rejects("ui.density", "compact").shouldBe(false)
     ConfigRegistry.rejects("ui.density", "unknown").shouldBe(true)
     ConfigRegistry.rejects("ui.element_gap", "wide").shouldBe(true)
-    ConfigRegistry.rejects("ui.corner_radius", "14").shouldBe(false)
     ConfigRegistry.rejects("ui.outline.thickness", "").shouldBe(true)
   }
 
@@ -114,33 +105,30 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  // issue #1542: corner radius and outline thickness are configured in pixels, but the pixels a panel actually
+  // issue #1542: outline thickness is configured in pixels, but the pixels a panel actually
   // occupies grow with the UI font size -- so the drawn chrome must scale by the same factor, rather than staying
   // fixed while everything around it grows (which is what made larger fonts look "proportionally tight").
-  it should "draw UI corner radius/outline at their configured pixel values at the baseline font size" in {
+  it should "draw the UI outline at its configured pixel value at the baseline font size" in {
     val config = AppConfig.default.withInterfaceConfig(
-      InterfaceConfig(cornerRadiusPx = 8, outlineThicknessPx = 2)
+      InterfaceConfig(outlineThicknessPx = 2)
     )
 
-    config.scaledUiCornerRadiusPx shouldBe 8
     config.scaledUiOutlineThicknessPx shouldBe 2.0f
   }
 
-  it should "scale UI corner radius and outline thickness up as the UI font size grows" in {
+  it should "scale UI outline thickness up as the UI font size grows" in {
     val config = AppConfig.default
-      .withInterfaceConfig(InterfaceConfig(cornerRadiusPx = 8, outlineThicknessPx = 2))
+      .withInterfaceConfig(InterfaceConfig(outlineThicknessPx = 2))
       .withFontConfig(AppConfig.default.editorConfig.fontConfig.copy(uiFontSize = 24.0f))
 
     config.uiChromeScale shouldBe 2.0
-    config.scaledUiCornerRadiusPx shouldBe 16
     config.scaledUiOutlineThicknessPx shouldBe 4.0f
   }
 
-  it should "scale UI corner radius/outline down as UI font size shrinks, never to zero thickness" in {
+  it should "scale UI outline thickness down as UI font size shrinks, never to zero" in {
     val config = AppConfig.default
-      .withInterfaceConfig(InterfaceConfig(cornerRadiusPx = 0, outlineThicknessPx = 1))
+      .withInterfaceConfig(InterfaceConfig(outlineThicknessPx = 1))
       .withFontConfig(AppConfig.default.editorConfig.fontConfig.copy(uiFontSize = 6.0f))
 
-    config.scaledUiCornerRadiusPx shouldBe 0
     config.scaledUiOutlineThicknessPx should be > 0.0f
   }

@@ -67,7 +67,7 @@ object EditorEventReducer:
             val totalLines    = countLines(buffer.document.content)
             val maxTopLine    = math.max(0, totalLines - buffer.viewport.visibleLines)
             val newTopLine    = math.min(buffer.viewport.topLine + lines, maxTopLine)
-            val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
+            val newViewport   = buffer.viewport.scrolledTo(newTopLine, buffer.viewport.leftColumn, 0)
             val updatedBuffer = buffer.copy(viewport = newViewport)
             ReducerResult.noEffects(
               currentState.copy(persisted =
@@ -80,7 +80,7 @@ object EditorEventReducer:
         pane.bufferId.flatMap(currentState.persisted.buffers.get) match
           case Some(buffer) =>
             val newTopLine    = math.max(0, buffer.viewport.topLine - lines)
-            val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
+            val newViewport   = buffer.viewport.scrolledTo(newTopLine, buffer.viewport.leftColumn, 0)
             val updatedBuffer = buffer.copy(viewport = newViewport)
             ReducerResult.noEffects(
               currentState.copy(persisted =
@@ -101,12 +101,11 @@ object EditorEventReducer:
   /** Horizontal scroll gestures (issue #1568): shift+wheel/trackpad delta pans `leftColumn` the same way the vertical
     * wheel above already pans `topLine`, or -- while column mode and word wrap are both on -- reduces exactly as
     * `ColumnLeft`/`ColumnRight` already do, through the very same `reduceTextEvent` path a keyboard `PageUp`/`PageDown`
-    * remapped to a column move takes. That reuse is what lets a scroll gesture pick up `CursorViewport`'s existing
-    * animated column-sweep transition for free, rather than a separate ad hoc path -- a single discrete column step per
-    * gesture, the same as one `PageUp`/`PageDown`, regardless of how many lines a fast flick reports.
+    * remapped to a column move takes -- a single discrete column step per gesture, the same as one `PageUp`/
+    * `PageDown`, regardless of how many lines a fast flick reports.
     *
-    * Under plain word wrap without column mode, `leftColumn` is always pinned to `0` (`CursorGlideGeometry`'s own
-    * comment), so the gesture is a no-op there rather than moving a viewport field nothing ever reads.
+    * Under plain word wrap without column mode, `leftColumn` is always pinned to `0`, so the gesture is a no-op there
+    * rather than moving a viewport field nothing ever reads.
     *
     * The upper clamp is measured against the longest of the lines currently on screen -- not the whole document, which
     * no reducer here scans, and not the cursor's own line, which `LayoutEngine.clampLeftColumnForBuffer`'s resize-time
@@ -138,7 +137,8 @@ object EditorEventReducer:
           }
           val maxLeftColumn = math.max(0, maxLineLength - viewport.visibleColumns + 1)
           val newLeftColumn = math.max(0, math.min(viewport.leftColumn + columns * direction, maxLeftColumn))
-          val updatedBuffer = buffer.copy(viewport = viewport.copy(leftColumn = newLeftColumn))
+          val updatedBuffer =
+            buffer.copy(viewport = viewport.scrolledTo(viewport.topLine, newLeftColumn, viewport.topVisualLine))
           ReducerResult.noEffects(
             currentState.copy(persisted =
               currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
@@ -170,13 +170,15 @@ object EditorEventReducer:
   ): ReducerResult =
     val result = reduceCursorsTextEvent(event, buffer, paneId, currentState, geometry)
 
-    if refreshesFindResults(event) then result.copy(state = invalidateFindState(result.state, buffer.id))
+    if OpaqueBlockGuard.refuses(event, buffer, result.state) then ReducerResult.noEffects(currentState)
+    else if refreshesFindResults(event) then result.copy(state = invalidateFindState(result.state, buffer.id))
     else result
 
   private def refreshesFindResults(event: TextEntryEvent): Boolean =
     event match
       case InsertChar(_) | TabKey | ReverseTabKey | DeleteBackward | DeleteForward | DeleteWordBackward |
-          DeleteWordForward | NewLine | Enter | Paste | Cut | CutToDarlings | RestoreDarling =>
+          DeleteWordForward | DeleteToLineStart | DeleteToLineEnd | NewLine | Enter | Paste | Cut | CutToDarlings |
+          RestoreDarling | PasteFromHistory(_) =>
         true
       case _ =>
         false
@@ -184,7 +186,8 @@ object EditorEventReducer:
   private def isExtendSelectionEvent(event: TextEntryEvent): Boolean =
     event match
       case ExtendSelectionLeft | ExtendSelectionRight | ExtendSelectionWordLeft | ExtendSelectionWordRight |
-          ExtendSelectionToLineStart | ExtendSelectionToLineEnd | ExtendSelectionPageUp | ExtendSelectionPageDown =>
+          ExtendSelectionSubWordLeft | ExtendSelectionSubWordRight | ExtendSelectionToLineStart |
+          ExtendSelectionToLineEnd | ExtendSelectionPageUp | ExtendSelectionPageDown =>
         true
       case _ => false
 
@@ -227,6 +230,10 @@ object EditorEventReducer:
         case ExtendSelectionRight     => reduceSelectionExtension(buffer, head, currentState)(rightTarget)
         case ExtendSelectionWordLeft  => reduceSelectionExtension(buffer, head, currentState)(wordLeftTarget)
         case ExtendSelectionWordRight => reduceSelectionExtension(buffer, head, currentState)(wordRightTarget)
+        case ExtendSelectionSubWordLeft =>
+          reduceSelectionExtension(buffer, head, currentState)(subWordLeftTarget)
+        case ExtendSelectionSubWordRight =>
+          reduceSelectionExtension(buffer, head, currentState)(subWordRightTarget)
         // The same landing places Home and End move to, rather than the logical line's own bounds: a shifted key
         // selects to where its unshifted form goes, and under word wrap that is the cursor's own visual row. Sharing
         // `homeTarget`/`endTarget` also carries their row affinity, so Shift+End stops at the row's end instead of
@@ -250,7 +257,7 @@ object EditorEventReducer:
         case _ => ReducerResult.noEffects(currentState)
     else
       val rawCursors   = rawBuffer.cursorList
-      val hasSelection = rawCursors.head.selectionAnchor.isDefined
+      val hasSelection = rawCursors.exists(_.selection.isDefined)
       val isMulti      = rawCursors.tail.nonEmpty
       // A single bare cursor is the only shape whose event bodies below don't already clear in-flight multi-cursor
       // vertical state themselves (`applyMultiCursor*`/`applyLine*` all do); clear it here so a later event that
@@ -261,17 +268,18 @@ object EditorEventReducer:
 
       event match
         case InsertChar(_) | TabKey | NewLine | Enter | ReverseTabKey | DeleteBackward | DeleteForward |
-            DeleteWordBackward | DeleteWordForward =>
+            DeleteWordBackward | DeleteWordForward | DeleteToLineStart | DeleteToLineEnd =>
           EditorTextEditReducer.reduce(event, ctx)
 
-        case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveToStart | MoveToEnd | MoveToStartOfFile |
-            PageUp | PageDown | ColumnLeft | ColumnRight | MoveToEndOfFile | SelectAll =>
+        case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveSubWordLeft | MoveSubWordRight | MoveToStart |
+            MoveToEnd | MoveToStartOfFile | PageUp | PageDown | ColumnLeft | ColumnRight | MoveToEndOfFile |
+            SelectAll =>
           EditorNavigationEventReducer.reduce(event, ctx)
 
-        case OpenGotoLine | OpenFind | OpenReplace | FindNext =>
+        case OpenGotoLine | OpenFind | OpenReplace | FindNext | FindPrevious =>
           EditorFindEventReducer.reduce(event, ctx)
 
-        case Copy | Cut | Paste | CutToDarlings | RestoreDarling =>
+        case Copy | Cut | Paste | CutToDarlings | RestoreDarling | PasteFromHistory(_) =>
           EditorClipboardEventReducer.reduce(event, ctx)
 
         case _ =>
@@ -290,22 +298,16 @@ object EditorEventReducer:
         val buffer      = fresh.copy(document = fresh.document.copy(isDirty = true, isNewEmpty = false))
         val newCursor   = CursorPosition(0, 1)
         val updatedPane = pane.copy(bufferId = Some(bufferId), cursors = List(newCursor))
-        val (bufferWithAnimation, delta) = EditorEditSupport.addInsertionAnimations(
-          buffer,
-          currentState,
-          List(EditorEditSupport.MultiCursorEdit(0, 0, 0, char.toString))
-        )
-        ReducerResult(
+        ReducerResult.noEffects(
           currentState.copy(
             persisted = currentState.persisted.copy(
-              buffers = currentState.persisted.buffers + (bufferId -> bufferWithAnimation),
+              buffers = currentState.persisted.buffers + (bufferId -> buffer),
               layout = currentState.persisted.layout.copy(
                 editorPanes = currentState.persisted.layout.editorPanes + (paneId -> updatedPane)
               )
             ),
             runtime = currentState.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
-          ),
-          EditorEditSupport.animationMergeEffects(bufferId, delta)
+          )
         )
 
       case TabKey =>

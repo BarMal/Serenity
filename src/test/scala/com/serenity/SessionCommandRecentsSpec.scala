@@ -4,10 +4,11 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
-import com.serenity.command.{Command, CommandId, CommandIntent, EditIntent}
+import com.serenity.command.{Command, CommandId, CommandRegistry}
 import com.serenity.keystroke.events.{Enter, InsertChar, TabKey, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -18,11 +19,12 @@ import org.scalatest.matchers.should.Matchers
   */
 class SessionCommandRecentsSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
-  private def undoCommand(name: String): Command =
-    Command.typed(name, s"$name for session recents", CommandIntent.Edit(EditIntent.Undo), label = name)
+  // Registry commands: only those are recorded as recents at all (#1877).
+  private def registryCommand(name: String): Command =
+    CommandRegistry.withToggleUI.findCommand(name).getOrElse(fail(s"no registry command $name"))
 
-  private val usedInSavedSession = undoCommand("test-recents-saved-session-command")
-  private val usedAfterSaving    = undoCommand("test-recents-later-command")
+  private val usedInSavedSession = registryCommand("undo")
+  private val usedAfterSaving    = registryCommand("redo")
 
   private def recents(stateManager: StateManager): Map[CommandId, Int] =
     stateManager.getCurrentState.unsafeRunSync().persisted.commandUsage
@@ -39,7 +41,11 @@ class SessionCommandRecentsSpec extends AnyFlatSpec with Matchers with StateMana
     (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
   private def stateManagerAt(root: Path): StateManager =
-    StateManager(testLogger("SessionCommandRecentsSpec"), sessionRootOverride = Some(root)).unsafeRunSync()
+    StateManager(
+      testLogger("SessionCommandRecentsSpec"),
+      sessionRootOverride = Some(root),
+      dictionaryCache = SharedDictionary.default
+    ).unsafeRunSync()
 
   private def currentSessionFile(root: Path): Path =
     root.resolve("sessions").resolve("session.json")

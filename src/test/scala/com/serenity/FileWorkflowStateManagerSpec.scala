@@ -6,18 +6,22 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.{Enter, Event, InsertChar, ModalCreateDirectory, SaveAsFile, SaveFile, TabKey}
 import com.serenity.richtext.{
+  DocumentFeature,
+  FidelityItem,
+  FidelityReport,
   InlineMark,
   RichTextDocument,
-  RichTextFidelity,
   RichTextParagraph,
   RichTextRun,
-  RichTextStyle
+  RichTextStyle,
+  Treatment
 }
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -35,7 +39,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
 
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("FileWorkflowStateManagerSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
   /** Applies `event` and waits for the directory listings, target checks and file loads it started. */
   private def settled(stateManager: StateManager, event: Event): Unit =
@@ -548,7 +552,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
 
   it should "block a lossy rich-document overwrite and open Save As with a visible reason" in {
     val sourceFile = Files.createTempFile("workflow-lossy-save", ".docx")
-    val reason = s"Saving $sourceFile would discard unsupported rich document content. Use Save As to write a new file."
+    val reason     = s"Saving $sourceFile would drop 1 table. Use Save As to write a new file."
 
     try
       val stateManager = createStateManager()
@@ -562,7 +566,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
               isDirty = true
             ),
             richText = existing.richText.copy(
-              richTextFidelity = Some(RichTextFidelity(unsupportedElements = Set("tbl")))
+              richTextFidelity = Some(FidelityReport(List(FidelityItem(DocumentFeature.Tables, Treatment.Dropped, 1))))
             )
           )
           state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(BufferId(0), buffer)))

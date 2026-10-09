@@ -10,7 +10,12 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 given Encoder[SchemaVersion] = Encoder.encodeInt.contramap(_.value)
 given Decoder[SchemaVersion] = Decoder.decodeInt.map(SchemaVersion.apply)
 
-given Encoder[SessionState] = deriveEncoder
+/** The session encoder with the config's encoding left to the caller, so one that remembers it can stand in. */
+def sessionStateEncoder(config: Encoder[AppConfig]): Encoder[SessionState] =
+  given Encoder[AppConfig] = config
+  deriveEncoder
+
+given Encoder[SessionState] = sessionStateEncoder(summon[Encoder[AppConfig]])
 
 given Encoder[SessionLayout] = deriveEncoder
 
@@ -50,9 +55,6 @@ given Decoder[SessionFocus] = deriveDecoder
 
 given Encoder[SessionBuffer] = deriveEncoder
 
-given Encoder[RichTextFidelity] = deriveEncoder
-given Decoder[RichTextFidelity] = deriveDecoder
-
 given Encoder[SessionCursorPosition] = deriveEncoder
 given Decoder[SessionCursorPosition] = deriveDecoder
 
@@ -71,8 +73,24 @@ given Decoder[SessionViewport] = Decoder.instance { cursor =>
 given Encoder[SessionFindResult] = deriveEncoder
 given Decoder[SessionFindResult] = deriveDecoder
 
+given Encoder[SessionCommentReply] = deriveEncoder
+given Decoder[SessionCommentReply] = deriveDecoder
+
 given Encoder[SessionDocumentComment] = deriveEncoder
-given Decoder[SessionDocumentComment] = deriveDecoder
+
+given Decoder[SessionDocumentComment] = Decoder.instance { cursor =>
+  for
+    anchor    <- cursor.get[SessionCursorPosition]("anchor")
+    focus     <- cursor.get[SessionCursorPosition]("focus")
+    text      <- cursor.get[String]("text")
+    id        <- cursor.getOrElse[Option[Int]]("id")(None)
+    author    <- cursor.getOrElse[Option[String]]("author")(None)
+    createdAt <- cursor.getOrElse[Option[Long]]("createdAt")(None)
+    editedAt  <- cursor.getOrElse[Option[Long]]("editedAt")(None)
+    replies   <- cursor.getOrElse[List[SessionCommentReply]]("replies")(Nil)
+    resolved  <- cursor.getOrElse[Boolean]("resolved")(false)
+  yield SessionDocumentComment(anchor, focus, text, id, author, createdAt, editedAt, replies, resolved)
+}
 
 given Encoder[SessionNote] = deriveEncoder
 given Decoder[SessionNote] = deriveDecoder
@@ -109,16 +127,21 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     viewport         <- cursor.get[SessionViewport]("viewport")
     unsavedContent   <- cursor.getOrElse[Option[String]]("unsavedContent")(None)
     richTextDocument <- cursor.getOrElse[Option[RichTextDocument]]("richTextDocument")(None)
-    richTextFidelity <- cursor.getOrElse[Option[RichTextFidelity]]("richTextFidelity")(None)
+    // A session written before the per-feature report holds the old two-set shape; it is read as no report.
+    richTextFidelity = cursor.get[Option[FidelityReport]]("richTextFidelity").toOption.flatten
     findState        <- cursor.getOrElse[Option[SessionFindState]]("findState")(None)
     bookmarks        <- cursor.getOrElse[List[SessionCursorPosition]]("bookmarks")(Nil)
     documentComments <- cursor.getOrElse[List[SessionDocumentComment]]("documentComments")(Nil)
     placeholders     <- cursor.getOrElse[List[SessionPlaceholder]]("placeholders")(Nil)
     darlings         <- cursor.getOrElse[List[SessionDarling]]("darlings")(Nil)
     lineEnding       <- cursor.getOrElse[Option[String]]("lineEnding")(None)
+    encoding         <- cursor.getOrElse[Option[String]]("encoding")(None)
+    hasBom           <- cursor.getOrElse[Boolean]("hasBom")(false)
     revision         <- cursor.getOrElse[Option[String]]("revision")(None)
     hidden           <- cursor.getOrElse[Boolean]("hidden")(false)
     notes            <- cursor.getOrElse[List[SessionNote]]("notes")(Nil)
+    contentRef       <- cursor.getOrElse[Option[String]]("contentRef")(None)
+    nextCommentId    <- cursor.getOrElse[Option[Int]]("nextCommentId")(None)
   yield SessionBuffer(
     id,
     filePath,
@@ -136,9 +159,13 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     placeholders,
     darlings,
     lineEnding,
+    encoding,
+    hasBom,
     revision,
     hidden,
-    notes
+    notes,
+    contentRef,
+    nextCommentId
   )
 }
 

@@ -1,9 +1,8 @@
 package com.serenity.ui.renderer
 
-import java.awt.Color
-
 import scala.annotation.unused
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.PixelRect
 import com.serenity.ui.theme.TextStyle
 
@@ -28,11 +27,16 @@ trait RenderSurface:
     * unknown pixels and everything must be drawn.
     */
   def persistentContentKey: Option[SurfaceContentIdentity] = None
-  def setForegroundColor(color: Color): Unit
-  def setBackgroundColor(color: Color): Unit
-  def getBackgroundColor: Color
 
-  def clearViewport(color: Color): Unit =
+  /** Whose cached modal/panel layers this surface may reuse. Successive frames of one window must agree on it even
+    * though each frame is a fresh surface, or every frame starts a new cache entry (#1798).
+    */
+  def layerCacheOwner: ScreenIdentity = ScreenIdentity(this)
+  def setForegroundColor(color: RenderColor): Unit
+  def setBackgroundColor(color: RenderColor): Unit
+  def getBackgroundColor: RenderColor
+
+  def clearViewport(color: RenderColor): Unit =
     setBackgroundColor(color)
     fillRect(0, 0, viewportWidth, viewportHeight, ' ')
 
@@ -41,7 +45,7 @@ trait RenderSurface:
     * The default clears everything, which is why callers must check [[persistentContentKey]] first: a surface without a
     * persistent key preserves nothing, so its caller has to redraw the content it would otherwise have skipped.
     */
-  def clearViewportExcept(color: Color, @unused preserved: List[PixelRect]): Unit =
+  def clearViewportExcept(color: RenderColor, @unused preserved: List[PixelRect]): Unit =
     clearViewport(color)
 
   def putString(x: Int, y: Int, s: String): Unit
@@ -59,15 +63,15 @@ trait RenderSurface:
     */
   def pixels: PixelDrawing
 
-  /** Alpha compositing, region blur, and post-processing, when this surface supports them. `None` means callers must
-    * skip the effect rather than assume it happened.
+  /** Alpha compositing, when this surface supports it. `None` means callers must skip the effect rather than assume it
+    * happened.
     */
   def effects: Option[Effects] = None
 
-  /** Rounded-rectangle borders, shadows, and clipping, when this surface supports them. `None` means callers must fall
-    * back to drawing without that chrome rather than assume it happened.
+  /** Panel borders and rectangular clipping, when this surface supports them. `None` means callers must fall back to
+    * drawing without that chrome rather than assume it happened.
     */
-  def roundedRects: Option[RoundedRectDrawing] = None
+  def panelOutlines: Option[PanelOutlineDrawing] = None
 
   /** Delegating the caret to this surface's own native cursor, when it has one. `None` means every caret this surface
     * draws is app-painted content -- the default, and what every GUI canvas keeps doing.

@@ -8,6 +8,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.testkit.VirtualTime.runVirtual
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
@@ -42,14 +43,14 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
     state.copy(persisted =
       state.persisted.copy(buffers =
         state.persisted.buffers
-          .updated(editorBufferId, buffer.copy(document = buffer.document.copy(content = Rope(content))))
+          .updated(editorBufferId, buffer.copy(document = buffer.document.withContent(Rope(content))))
       )
     )
 
   private def withFindQuery(state: AppState, query: String): AppState =
     state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
       case surface if surface.id == findSurfaceId =>
-        surface.copy(content = SurfaceContent.ModalWorkflow(Modal.Find(query, Nil, 0)))
+        surface.copy(content = SurfaceContent.ModalWorkflow(Modal.Find(TextField.of(query), Vector.empty, 0)))
       case other => other
     }))
 
@@ -61,7 +62,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
         List(
           UiSurface(
             findSurfaceId,
-            SurfaceContent.ModalWorkflow(Modal.Find("", Nil, 0)),
+            SurfaceContent.ModalWorkflow(Modal.Find(TextField.of(""), Vector.empty, 0)),
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         )
@@ -104,8 +105,8 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
       yield (midBurst, settled)
 
     runVirtual(program) shouldBe (
-      Some(Modal.Find("needle", Nil, 0)),
-      Some(Modal.Find("needle", List(FindResult(0, 0), FindResult(0, 14)), 0))
+      Some(Modal.Find(TextField.of("needle"), Vector.empty, 0)),
+      Some(Modal.Find(TextField.of("needle"), Vector(FindResult(0, 0), FindResult(0, 14)), 0))
     )
   }
 
@@ -120,7 +121,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
         after                  <- stateRef.get
       yield (findModal(after), after.persisted.buffers(editorBufferId).findState)
 
-    runVirtual(program) shouldBe (Some(Modal.Find("noodle", Nil, 0)), None)
+    runVirtual(program) shouldBe (Some(Modal.Find(TextField.of("noodle"), Vector.empty, 0)), None)
   }
 
   private val previewA = BufferId(1)
@@ -215,7 +216,9 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
   private def spellCheckedState(content: String): AppState =
     val enabled = AppState.initial.copy(persisted =
       AppState.initial.persisted.copy(config =
-        AppConfig.default.withSpellCheck(AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = true))
+        AppConfig.default.withSpellCheck(
+          AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = true, languages = List("en"))
+        )
       )
     )
     withEditorContent(enabled, content)
@@ -227,11 +230,11 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
 
   "Document analysis" should "apply only the analysis of the latest edit when an edit supersedes a running one" in {
     val firstEdit  = spellCheckedState(misspelling)
-    val secondEdit = spellCheckedState(s"hello $misspelling")
+    val secondEdit = withEditorContent(firstEdit, s"hello $misspelling")
     val program =
       for
         (stateRef, operations) <- boundaryOver(firstEdit)
-        _                      <- operations.modelCommit.commitState(firstEdit, firstEdit)
+        _                      <- operations.modelCommit.commitState(firstEdit.copy(), firstEdit)
         _                      <- IO.sleep(50.millis)
         _                      <- operations.modelCommit.commitState(secondEdit, firstEdit)
         _                      <- IO.sleep(110.millis)
@@ -250,7 +253,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
         starts                 <- Ref.of[IO, Int](0)
         (stateRef, operations) <- boundaryOver(edited, beforeDocumentAnalysisStart = starts.update(_ + 1))
         _                      <- operations.shutdownEffects()
-        _                      <- operations.modelCommit.commitState(edited, edited)
+        _                      <- operations.modelCommit.commitState(edited.copy(), edited)
         _                      <- IO.sleep(1.second)
         started                <- starts.get
         diagnostics            <- stateRef.get.map(spellingDiagnosticStarts)

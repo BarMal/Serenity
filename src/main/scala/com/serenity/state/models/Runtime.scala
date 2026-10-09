@@ -1,7 +1,5 @@
 package com.serenity.state.models
 
-import com.serenity.animation.sprite.CompanionSpriteState
-import com.serenity.config.{AppConfig, MotionFamily}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.project.ProjectPresence
 import com.serenity.ui.layout.ViewportSize
@@ -17,29 +15,25 @@ final case class Runtime(
     nextBufferId: BufferId = BufferId(0),
     nextPaneId: PaneId = PaneId(0),
     nextSurfaceId: SurfaceIdSupply = SurfaceIdSupply.initial,
-    // Surface/panel/column motion state (issue #1693): the per-surface fade animation, the per-buffer column-to-column
-    // transition, and the per-surface panel scale-in/out geometry are grouped into their own sub-record since all
-    // three are written from the same handful of reducers/effects and read back together by
-    // `DamageProducer.fullRenderDamage`/`StateManagerEditorCapability`'s tick-active check/advance. See
-    // `MotionState`'s own doc comment.
-    motion: MotionState = MotionState(),
     clipboard: Option[String] = None,
+    // Never persisted: recent copies for Paste from History. Its newest entry also says whether `clipboard` still holds
+    // a whole-line copy, which pastes above the caret line (#1962).
+    clipboardHistory: ClipboardHistory = ClipboardHistory.empty,
     focusHistory: List[Focus] = List.empty,
     navigation: NavigationHistory = NavigationHistory(),
     typingActivity: TypingActivity = TypingActivity.idle,
-    // Theme discovery/loading/transition state (issue #1693): grouped into its own sub-record since the available
-    // theme names, the most recently requested theme, and the in-flight transition are all written together from
-    // `ThemeStateReducer`/`StateManagerSurfacePopupEffects`'s theme-listing effect and read back together by the
-    // render/tick paths. See `ThemeDiscoveryState`'s own doc comment.
+    editClock: EditClock = EditClock(),
+    // Theme discovery/loading state (issue #1693): grouped into its own sub-record since the available
+    // theme names and the most recently requested theme are written together from
+    // `ThemeStateReducer`/`StateManagerSurfacePopupEffects`'s theme-listing effect. See `ThemeDiscoveryState`'s own doc comment.
     themeDiscovery: ThemeDiscoveryState = ThemeDiscoveryState(),
-    companionSprite: CompanionSpriteState = CompanionSpriteState.default,
     // LSP diagnostics and semantic tokens (issue #1693): grouped into their own sub-record since both are written
     // from the same `SystemEventReducer` LSP handling and read back together by `AppState.annotationIndex`/
     // `semanticTokensAvailability`.
     languageService: LanguageServiceState = LanguageServiceState(),
     // Never persisted -- set once at startup from the selected `Frontend` (see AppRuntime.run/AppStartup.initializeState,
     // issue #1669) so settings-surface rendering can hide or annotate controls that are inert in cell space
-    // (post-processing effects, typography), geometry can be measured on the right grid, and
+    // (typography), geometry can be measured on the right grid, and
     // `CommandRunnerReducer.assignRecordedBinding` can warn when a just-recorded bare-modifier chord can't fire at the
     // negotiated keyboard tier (issue #1194) -- all without threading a `Frontend` instance itself, or `AppConfig`,
     // into the pure core.
@@ -57,23 +51,30 @@ final case class Runtime(
     // once a later apply has been requested. Cleared when that request resolves.
     pendingUiPresetApply: Option[Long] = None,
     projectTasks: ProjectTasks = ProjectTasks(),
+    // Never persisted: set once at startup when this launch is in safe mode, so the status line can say so.
+    safeMode: Boolean = false,
     // Refreshed each time the command palette opens, which is where project commands are offered.
     projectPresence: ProjectPresence = ProjectPresence.Unchecked,
     // Never persisted: whether a chapter note's overview is painted, faded, under an empty chapter. The notes themselves
     // are untouched by hiding the ghosts.
     chapterGhostsVisible: Boolean = true,
     // Never persisted: the pane showing chapter notes, and whether it follows the cursor's chapter or is pinned.
-    notesPane: Option[NotesPane] = None
+    notesPane: Option[NotesPane] = None,
+    // Never persisted: the paned buffers' indexes as of the last commit (#1864), so the copies made in between reuse
+    // them. See `AppState.withBufferIndexesRefreshed`.
+    bufferIndexMemos: BufferIndexMemos = BufferIndexMemos.empty,
+    // Never persisted: the notes pane's source headings as of its last retarget (#1848). See `NotesPaneSync`.
+    chapterHeadingMemo: ChapterHeadingMemo = ChapterHeadingMemo.empty,
+    // Never persisted: whether resolved comments still show in the lens, the highlights and comment navigation. Resolved
+    // comments stay in the buffer either way.
+    resolvedCommentsVisible: Boolean = false,
+    // Never persisted: the settings value the command runner is previewing, with the config and theme to save instead.
+    pendingSetting: Option[PendingSetting] = None
 ):
 
-  /** A typed character: the quiet window for cursor-adjacent surfaces always restarts; the companion sprite panel
-    * reacts (issue #934 v2, merged in from the retired window sitter) only when its motion family and its own switch
-    * are on.
-    */
-  def observeTyping(nowNanos: Long, config: AppConfig): Runtime =
-    val motion = config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
-    val sprite =
-      if motion.enabled && config.companionSpriteConfig.enabled then
-        companionSprite.observeTyping(nowNanos, config.companionSpriteConfig)
-      else companionSprite
-    copy(companionSprite = sprite, typingActivity = typingActivity.observed)
+  /** A typed character restarts the quiet window for cursor-adjacent surfaces. */
+  def observeTyping(nowNanos: Long): Runtime =
+    copy(typingActivity = typingActivity.observed(nowNanos))
+
+  def observeEditKey(nowNanos: Long): Runtime =
+    copy(editClock = editClock.observed(nowNanos))

@@ -1,18 +1,21 @@
 package com.serenity.lsp.client
 
+import cats.syntax.traverse.*
 import com.serenity.lsp.model.*
+import com.serenity.rope.{Balance, Rope}
 import io.circe.syntax.*
 import io.circe.{HCursor, Json}
 
 /** Every shape an incoming JSON-RPC message can actually take (see
-  * https://www.jsonrpc.org/specification#response_object): a successful response, an error response, or a notification.
-  * `Malformed` is a catch-all for anything else (e.g. a server-to-client request, which this client does not serve) so
-  * it can be logged instead of silently dropped.
+  * https://www.jsonrpc.org/specification#response_object): a successful response, an error response, a notification, or
+  * a request the server sends the client. `Malformed` is a catch-all for anything else so it can be logged instead of
+  * silently dropped.
   */
 enum JsonRpcMessage:
   case Response(id: RequestId, result: Json)
   case ResponseError(id: RequestId, code: Int, message: String)
   case Notification(method: LspMethod, params: Json)
+  case ServerRequest(id: ServerRequestId, method: LspMethod, params: Json)
   case Malformed(raw: Json)
 
 object LspProtocol:
@@ -21,20 +24,34 @@ object LspProtocol:
   final case class JsonRpcNotification(method: LspMethod, params: Json)
   final case class LspLocation(uri: DocumentUri, range: LspRange)
 
+  /** `Json.Null` params are left out rather than sent as `"params": null`: JSON-RPC only allows a structured value
+    * there, and parameterless methods such as `shutdown` and `exit` take none.
+    */
   def request(id: RequestId, method: LspMethod, params: Json): Json =
-    Json.obj(
-      "jsonrpc" -> "2.0".asJson,
-      "id"      -> id.value.asJson,
-      "method"  -> method.value.asJson,
-      "params"  -> params
+    Json.fromFields(
+      List("jsonrpc" -> "2.0".asJson, "id" -> id.value.asJson, "method" -> method.value.asJson) ++ paramsField(params)
     )
 
   def notification(method: LspMethod, params: Json): Json =
+    Json.fromFields(List("jsonrpc" -> "2.0".asJson, "method" -> method.value.asJson) ++ paramsField(params))
+
+  private def paramsField(params: Json): List[(String, Json)] =
+    if params.isNull then Nil else List("params" -> params)
+
+  def response(id: ServerRequestId, result: Json): Json =
+    Json.obj("jsonrpc" -> "2.0".asJson, "id" -> serverRequestIdJson(id), "result" -> result)
+
+  def errorResponse(id: ServerRequestId, code: Int, message: String): Json =
     Json.obj(
       "jsonrpc" -> "2.0".asJson,
-      "method"  -> method.value.asJson,
-      "params"  -> params
+      "id"      -> serverRequestIdJson(id),
+      "error"   -> Json.obj("code" -> code.asJson, "message" -> message.asJson)
     )
+
+  private def serverRequestIdJson(id: ServerRequestId): Json =
+    id match
+      case ServerRequestId.Numeric(value) => value.asJson
+      case ServerRequestId.Text(value)    => value.asJson
 
   /** `$/cancelRequest`: tells the server to stop working on a request whose answer nobody will read.
     *
@@ -51,22 +68,35 @@ object LspProtocol:
     */
   def classify(json: Json): JsonRpcMessage =
     val c      = json.hcursor
-    val idOpt  = c.downField("id").as[Long].toOption
+    val id     = c.downField("id").focus.filterNot(_.isNull)
     val method = c.downField("method").as[String].toOption
-    (idOpt, method) match
-      case (Some(id), None) =>
-        c.downField("error").focus match
-          case Some(error) =>
-            val code    = error.hcursor.downField("code").as[Int].getOrElse(0)
-            val message = error.hcursor.downField("message").as[String].getOrElse("Unknown LSP error")
-            JsonRpcMessage.ResponseError(RequestId(id), code, message)
-          case None =>
-            val result = c.downField("result").focus.getOrElse(Json.Null)
-            JsonRpcMessage.Response(RequestId(id), result)
+    (id, method) match
+      case (Some(rawId), Some(m)) =>
+        serverRequestId(rawId).fold(JsonRpcMessage.Malformed(json)) { requestId =>
+          JsonRpcMessage.ServerRequest(requestId, LspMethod(m), c.downField("params").focus.getOrElse(Json.Null))
+        }
+      case (Some(rawId), None) =>
+        rawId
+          .as[Long]
+          .toOption
+          .fold(JsonRpcMessage.Malformed(json))(responseId => classifyResponse(c, RequestId(responseId)))
       case (None, Some(m)) =>
         val params = c.downField("params").focus.getOrElse(Json.obj())
         JsonRpcMessage.Notification(LspMethod(m), params)
-      case _ => JsonRpcMessage.Malformed(json)
+      case (None, None) => JsonRpcMessage.Malformed(json)
+
+  private def classifyResponse(c: HCursor, id: RequestId): JsonRpcMessage =
+    c.downField("error").focus match
+      case Some(error) =>
+        val code    = error.hcursor.downField("code").as[Int].getOrElse(0)
+        val message = error.hcursor.downField("message").as[String].getOrElse("Unknown LSP error")
+        JsonRpcMessage.ResponseError(id, code, message)
+      case None =>
+        val result = c.downField("result").focus.getOrElse(Json.Null)
+        JsonRpcMessage.Response(id, result)
+
+  private def serverRequestId(raw: Json): Option[ServerRequestId] =
+    raw.as[Long].toOption.map(ServerRequestId.Numeric(_)).orElse(raw.asString.map(ServerRequestId.Text(_)))
 
   def notificationMethod(json: Json): Option[LspMethod] =
     json.hcursor.downField("method").as[String].toOption.map(LspMethod(_))
@@ -79,6 +109,14 @@ object LspProtocol:
       "clientInfo" -> Json.obj("name" -> "Serenity".asJson, "version" -> "0.1.0".asJson),
       "rootUri"    -> rootUri.value.asJson,
       "capabilities" -> Json.obj(
+        "workspace" -> Json.obj(
+          "applyEdit"     -> true.asJson,
+          "configuration" -> true.asJson
+        ),
+        "window" -> Json.obj(
+          "workDoneProgress" -> true.asJson,
+          "showMessage"      -> Json.obj("messageActionItem" -> Json.obj("additionalPropertiesSupport" -> false.asJson))
+        ),
         "textDocument" -> Json.obj(
           "synchronization"    -> Json.obj("dynamicRegistration" -> false.asJson),
           "publishDiagnostics" -> Json.obj("relatedInformation" -> true.asJson),
@@ -93,7 +131,7 @@ object LspProtocol:
             )
           ),
           "semanticTokens" -> Json.obj(
-            "requests"       -> Json.obj("full" -> true.asJson),
+            "requests"       -> Json.obj("full" -> Json.obj("delta" -> true.asJson), "range" -> true.asJson),
             "tokenTypes"     -> ClientSemanticTokenTypes.asJson,
             "tokenModifiers" -> ClientSemanticTokenModifiers.asJson,
             "formats"        -> Json.arr("relative".asJson)
@@ -184,8 +222,21 @@ object LspProtocol:
       case TextDocumentSyncKind.Incremental => incrementalDidChangeParams(uri, version, previousText, newText)
       case _                                => didChangeParams(uri, version, newText)
 
+  /** The notification for an edit between two ropes. Incremental sync reads only what changed, and no sync kind builds
+    * the old document's text; `Full` collects the new text once, here, because this is where it is sent.
+    */
+  def didChangeParams(uri: DocumentUri, version: Int, previous: Rope, next: Rope, syncKind: TextDocumentSyncKind)(using
+    Balance
+  ): Json =
+    syncKind match
+      case TextDocumentSyncKind.Incremental =>
+        incrementalDidChangeParams(uri, version, TextChangeDiff.diff(previous, next))
+      case _ => didChangeParams(uri, version, next.collect())
+
   private def incrementalDidChangeParams(uri: DocumentUri, version: Int, previousText: String, newText: String): Json =
-    val change = TextChangeDiff.diff(previousText, newText)
+    incrementalDidChangeParams(uri, version, TextChangeDiff.diff(previousText, newText))
+
+  private def incrementalDidChangeParams(uri: DocumentUri, version: Int, change: TextChangeDiff.Change): Json =
     Json.obj(
       "textDocument" -> Json.obj("uri" -> uri.value.asJson, "version" -> version.asJson),
       "contentChanges" -> Json.arr(
@@ -225,6 +276,17 @@ object LspProtocol:
 
   def semanticTokensParams(uri: DocumentUri): Json =
     Json.obj("textDocument" -> Json.obj("uri" -> uri.value.asJson))
+
+  def semanticTokensDeltaParams(uri: DocumentUri, previousResultId: String): Json =
+    semanticTokensParams(uri).deepMerge(Json.obj("previousResultId" -> previousResultId.asJson))
+
+  /** The range covers whole lines: from the start of `firstLine` to the start of the line after `lastLine`. */
+  def semanticTokensRangeParams(uri: DocumentUri, firstLine: Int, lastLine: Int): Json =
+    semanticTokensParams(uri).deepMerge(
+      Json.obj(
+        "range" -> rangeJson(LspRange(LspPosition(firstLine, 0), LspPosition(lastLine + 1, 0)))
+      )
+    )
 
   def textDocumentPositionParams(uri: DocumentUri, line: Int, character: Int): Json =
     Json.obj(
@@ -390,36 +452,57 @@ object LspProtocol:
       .focus
       .exists(!_.isNull)
 
-  /** Decodes a `textDocument/semanticTokens/full` result's `data` (LSP 3.17 §3.17.7.4): a flat `uint32` array, five
-    * integers per token -- `deltaLine`, `deltaStartChar`, `length`, `tokenType`, `tokenModifiers` -- each token's
-    * position given relative to the previous token's, not absolute. `deltaLine == 0` means "same line as the previous
-    * token," so `deltaStartChar` is then relative to that token's start column; a nonzero `deltaLine` starts a new
-    * line, so `deltaStartChar` is that line's absolute column.
-    *
-    * Deltas are threaded through every token in the array, including one dropped below for an out-of-range `tokenType`
-    * index -- a server's later deltas are still relative to that dropped token's *position*, not to whatever the last
-    * *kept* token was, so threading must not skip it.
+  /** Which requests the server's `semanticTokensProvider` offers: `full` and `range` are each a boolean or an options
+    * object, and `full.delta` says whether `full/delta` is served. A provider naming neither is read as offering
+    * `full`, the one request this client sent before it knew the others.
     */
-  def parseSemanticTokens(result: Json, legend: SemanticTokensLegend): Option[List[SemanticToken]] =
-    result.hcursor.downField("data").as[List[Int]].toOption.map { data =>
-      case class Acc(line: Int, startCharacter: Int, tokens: List[SemanticToken])
+  def parseSemanticTokensFeatures(initializeResult: Json): SemanticTokensFeatures =
+    val provider = initializeResult.hcursor.downField("capabilities").downField("semanticTokensProvider")
+    val offered = (name: String) =>
+      provider.downField(name).focus.exists(json => json.asBoolean.getOrElse(json.isObject))
+    val full  = offered("full")
+    val range = offered("range")
+    val delta = full && provider.downField("full").downField("delta").as[Boolean].getOrElse(false)
+    if full || range then SemanticTokensFeatures(full, delta, range) else SemanticTokensFeatures.FullOnly
 
-      data
-        .grouped(5)
-        .foldLeft(Acc(0, 0, Nil)) {
-          case (acc, deltaLine :: deltaStartChar :: length :: tokenTypeIndex :: modifiersBitset :: Nil) =>
-            val line           = if deltaLine == 0 then acc.line else acc.line + deltaLine
-            val startCharacter = if deltaLine == 0 then acc.startCharacter + deltaStartChar else deltaStartChar
-            val nextTokens = legend.tokenTypes.lift(tokenTypeIndex) match
-              case None => acc.tokens
-              case Some(tokenType) =>
-                val modifiers = legend.tokenModifiers.zipWithIndex.collect {
-                  case (modifier, index) if (modifiersBitset & (1 << index)) != 0 => modifier
-                }.toSet
-                SemanticToken(line, startCharacter, length, tokenType, modifiers) :: acc.tokens
-            Acc(line, startCharacter, nextTokens)
-          case (acc, _) => acc
-        }
-        .tokens
-        .reverse
+  /** Decodes a semantic tokens response: `data` of a full or range result, or the `edits` of a delta result. Integers
+    * are read straight into a primitive array; a value that is not a non-negative integer rejects the whole response,
+    * since every later token would be mis-placed.
+    */
+  def parseSemanticTokensResult(result: Json): Option[SemanticTokensResult] =
+    val cursor   = result.hcursor
+    val resultId = cursor.downField("resultId").as[String].toOption
+    cursor
+      .downField("data")
+      .focus
+      .flatMap(parseIntegers)
+      .map(SemanticTokensResult.Full(resultId, _))
+      .orElse(
+        cursor
+          .downField("edits")
+          .focus
+          .flatMap(_.asArray)
+          .flatMap(_.toList.traverse(parseSemanticTokensEdit))
+          .map(SemanticTokensResult.Delta(resultId, _))
+      )
+
+  private def parseSemanticTokensEdit(json: Json): Option[SemanticTokensEdit] =
+    val cursor = json.hcursor
+    for
+      start       <- cursor.downField("start").as[Int].toOption
+      deleteCount <- cursor.downField("deleteCount").as[Int].toOption
+      data        <- cursor.downField("data").focus.fold(Some(IArray.empty[Int]))(parseIntegers)
+    yield SemanticTokensEdit(start, deleteCount, data)
+
+  private def parseIntegers(json: Json): Option[IArray[Int]] =
+    json.asArray.flatMap { values =>
+      val integers = IArray.tabulate(values.length)(index => values(index).asNumber.flatMap(_.toInt).getOrElse(-1))
+      Option.when(integers.forall(_ >= 0))(integers)
+    }
+
+  /** Decodes a full or range result's `data` against the server's `legend` (LSP 3.17 §3.17.7.4). */
+  def parseSemanticTokens(result: Json, legend: SemanticTokensLegend): Option[SemanticTokenData] =
+    parseSemanticTokensResult(result).collect {
+      case SemanticTokensResult.Full(_, data) =>
+        SemanticTokenData.decode(data, legend)
     }

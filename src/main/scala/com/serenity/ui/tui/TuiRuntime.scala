@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
-import com.serenity.app.AppRuntime
+import com.serenity.app.{AppRuntime, StartupRecovery}
 import com.serenity.config.AppConfig
 import com.serenity.frontend.{FrontendRuntime, MarkdownPreviewWindowAvailability, TuiFrontend}
 import com.serenity.input.{
@@ -20,10 +20,12 @@ import com.serenity.input.{
 import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{AppState, Buffer, BufferId, Damage}
+import com.serenity.state.models.{AppState, Buffer, BufferId, Damage, RestartMode}
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync, TuiAccessibilityBridge}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{RendererCursorOverlay, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, RendererCursorOverlay, RendererEntryPoints}
+import fs2.Stream
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 /** The TUI capability bundle for `AppRuntime.run` (issue #1112): the terminal-mode counterpart to `Main`'s Swing
@@ -42,7 +44,7 @@ object TuiRuntime:
     * entry points' signatures, which is also why code/text/UI all share the one instance rather than resolving the
     * user's configured (and, in TUI mode, inert) font family/size.
     */
-  private val CellFont: Font = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+  private val CellFont: FontSpec = FontSpec.fromAwt(new Font(Font.MONOSPACED, Font.PLAIN, 12))
 
   private val CellMetricsOne: CellMetrics = CellMetrics.cellUnit
 
@@ -53,7 +55,11 @@ object TuiRuntime:
     configPersistencePath: Option[Path],
     hasDisplay: Boolean,
     sessionRootOverride: Option[Path] = None,
-    configNotice: Option[String] = None
+    configNotice: Option[String] = None,
+    recovery: StartupRecovery.Plan = StartupRecovery.Plan.normal,
+    restarter: Option[RestartMode => IO[Unit]] = None,
+    onFirstFrame: IO[Unit] = IO.unit,
+    forwardedOpens: Stream[IO, List[Path]] = Stream.empty
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     // #1213: a real terminal cannot deliver Cmd/Meta as an ordinary keystroke the way AWT does for a focused Swing
     // window, so any hotkey still at its macOS/Cmd-conditioned platform default (Quit, Save, ...) is rewritten here
@@ -137,7 +143,10 @@ object TuiRuntime:
                 terminalConfig,
                 sessionRootOverride,
                 configPersistencePath,
-                frontend.markdownPreviewWindow
+                frontend.markdownPreviewWindow,
+                projectTasksEnabled = !recovery.safeMode,
+                restarter = restarter,
+                uiPresetStore = recovery.uiPresetStore(sessionRootOverride)
               )
             ),
             awaitExternalQuit = terminalShell.awaitExternalQuit,
@@ -146,7 +155,10 @@ object TuiRuntime:
             openPath = openPath,
             systemClipboard = systemClipboard,
             frontend = frontend,
-            configNotice = configNotice
+            configNotice = configNotice,
+            recovery = recovery,
+            onFirstFrame = onFirstFrame,
+            forwardedOpens = forwardedOpens
           )
         yield ()
     }
@@ -160,11 +172,16 @@ object TuiRuntime:
     terminalConfig: AppConfig,
     sessionRootOverride: Option[Path],
     configPersistencePath: Option[Path],
-    previewWindowAvailability: MarkdownPreviewWindowAvailability
+    previewWindowAvailability: MarkdownPreviewWindowAvailability,
+    projectTasksEnabled: Boolean = true,
+    restarter: Option[RestartMode => IO[Unit]] = None,
+    uiPresetStore: com.serenity.ui.presets.UiPresetStore = com.serenity.ui.presets.UiPresetStore.default,
+    dictionaryCache: com.serenity.spellcheck.DictionaryCache = com.serenity.spellcheck.DictionaryCache()
   )(using LoggerFactory[IO], com.serenity.rope.Balance): Logger[IO] => IO[StateManager] =
     logger =>
       StateManager.apply(
         logger,
+        policy = com.serenity.session.SessionManager.SessionPolicy.interactive,
         initialConfig = terminalConfig,
         sessionRootOverride = sessionRootOverride,
         configPersistencePath = configPersistencePath,
@@ -175,7 +192,11 @@ object TuiRuntime:
         // None: no native dialog exists in a terminal. StateManager's save-as/open workflow already falls back to the
         // in-app form (#1110) whenever fileDialog is None, distinct from a dialog being shown and cancelled.
         fileDialog = None,
-        markdownPreviewWindow = previewWindowAvailability
+        markdownPreviewWindow = previewWindowAvailability,
+        projectTasksEnabled = projectTasksEnabled,
+        restarter = restarter,
+        uiPresetStore = uiPresetStore,
+        dictionaryCache = dictionaryCache
       )
 
   /** Maps #1109's negotiated wire-protocol tier onto the state layer's fidelity concept (issue #1194) --
@@ -221,7 +242,7 @@ object TuiRuntime:
     surface: TerminalRenderSurface,
     size: ViewportSize,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
+    cursorColor: Option[RenderColor],
     damage: Damage,
     caches: com.serenity.state.manager.RenderCaches
   ): Unit =
@@ -262,8 +283,7 @@ object TuiRuntime:
     surface: TerminalRenderSurface,
     size: ViewportSize,
     cursorVisible: Boolean,
-    cursorColor: Option[java.awt.Color],
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState],
+    cursorColor: Option[RenderColor],
     caches: com.serenity.state.manager.RenderCaches
   ): Unit =
     val _ = RendererCursorOverlay.renderCursorOnly(
@@ -277,7 +297,6 @@ object TuiRuntime:
       CellMetricsOne,
       CellMetricsOne,
       cursorColor,
-      bufferAnimations,
       caches
     )
 
@@ -300,8 +319,13 @@ object TuiRuntime:
     accessibilityBridge: TuiAccessibilityBridge
   ): IO[Unit] =
     accessibilitySync
-      .sync(state)(previous => IO(AccessibilitySnapshot.from(state, size, previous)))
-      .flatMap(snapshot => IO(accessibilityBridge.publish(snapshot)))
+      .sync(state)(previous => IO(AccessibilitySnapshot.from(state, size, previous, accessibilitySync.previewCache)))
+      .flatMap(snapshot =>
+        IO {
+          accessibilityBridge.publishTitle(TuiWindowTitle.from(state))
+          accessibilityBridge.publish(snapshot)
+        }
+      )
 
   private def renderFullFn(
     surfaceHolder: SurfaceHolder,
@@ -310,7 +334,7 @@ object TuiRuntime:
     accessibilitySync: AccessibilitySync,
     accessibilityBridge: TuiAccessibilityBridge
   ): AppRuntime.RenderFn =
-    (state, cursorVisible, cursorColor, damage, _, caches) =>
+    (state, cursorVisible, cursorColor, damage, caches) =>
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
@@ -326,11 +350,11 @@ object TuiRuntime:
     accessibilitySync: AccessibilitySync,
     accessibilityBridge: TuiAccessibilityBridge
   ): AppRuntime.RenderFn =
-    (state, cursorVisible, cursorColor, _, bufferAnimations, caches) =>
+    (state, cursorVisible, cursorColor, _, caches) =>
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
-        _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor, bufferAnimations, caches))
+        _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor, caches))
         _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability, caches)
       yield ()

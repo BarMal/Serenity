@@ -3,13 +3,13 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, ViewIntent}
-import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{AppConfig, MotionPreset, PanelEscapeTarget}
+import com.serenity.config.PanelEscapeTarget
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -123,9 +123,9 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val pinned = state.pinnedSurfaces
     pinned should have size 2
     pinned.map(_.content).map {
-      case SurfaceContent.Outline(_, _)     => "outline"
-      case SurfaceContent.Diagnostics(_, _) => "diagnostics"
-      case other                            => fail(s"Unexpected pinned content: $other")
+      case SurfaceContent.Outline(_, _, _)     => "outline"
+      case SurfaceContent.Diagnostics(_, _, _) => "diagnostics"
+      case other                               => fail(s"Unexpected pinned content: $other")
     } shouldBe List("outline", "diagnostics")
     state.persisted.layout.workspaceTree.map(_.dockedSurfaceIds) shouldBe Some(pinned.map(_.id))
 
@@ -156,27 +156,6 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     com.serenity.state.reducers.PanelStateReducer.currentSize(diagnostics.id, updated) shouldBe Some(20)
     updated.persisted.layout.workspaceTree.map(_.dockedSurfaceIds) shouldBe Some(List(diagnostics.id))
 
-  it should "start an element transition animation when pinning a panel" in new UIFixture:
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
-
-    val state     = stateManager.getCurrentState.unsafeRunSync()
-    val panel     = state.pinnedSurfaces.headOption.getOrElse(fail("Expected pinned panel"))
-    val animation = state.runtime.motion.surfaceAnimations.get(panel.id).getOrElse(fail("Expected panel animation"))
-
-    animation.animationState.activeAnimationCount should be > 0
-    animation.overlayHeight should be > 0
-
-  it should "skip panel transition animation when reduced motion is enabled" in new UIFixture:
-    stateManager
-      .updateState(state =>
-        state.copy(persisted = state.persisted.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Reduced)))
-      )
-      .unsafeRunSync()
-
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
-
-    stateManager.getCurrentState.unsafeRunSync().runtime.motion.surfaceAnimations shouldBe empty
-
   it should "hide only the toggled panel, leaving another panel on the same edge" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
     stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30).unsafeRunSync()
@@ -186,8 +165,8 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val after = stateManager.getCurrentState.unsafeRunSync()
     after.pinnedSurfaces should have size 1
     after.pinnedSurfaces.map(_.content).foreach {
-      case SurfaceContent.Outline(_, _) => ()
-      case other                        => fail(s"Unexpected pinned content: $other")
+      case SurfaceContent.Outline(_, _, _) => ()
+      case other                           => fail(s"Unexpected pinned content: $other")
     }
 
   it should "do nothing when unpinning a surface ID that isn't a pinned panel" in new UIFixture:
@@ -198,7 +177,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync() shouldBe before
 
   it should "do nothing when unpinning a surface that exists but isn't pinned" in new UIFixture:
-    stateManager.applyEvent(FileSearch).unsafeRunSync()
+    (stateManager.applyEvent(FileSearch) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
     val floatingSurfaceId = stateManager.getCurrentState
       .unsafeRunSync()
       .searchInOpenFilesSurface
@@ -213,184 +192,6 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     after.searchInOpenFilesSurface.map(_.id) shouldBe Some(floatingSurfaceId)
 
   // ── Panel resize ─────────────────────────────────────────────────────────
-
-  it should "create an exiting ghost overlay when unpinning a panel" in new UIFixture:
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
-    advanceAnimations(80)
-
-    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Outline))).unsafeRunSync()
-
-    val state = stateManager.getCurrentState.unsafeRunSync()
-    val ghost = state.runtime.uiSurfaces.collectFirst {
-      case surface @ UiSurface(_, SurfaceContent.GhostOverlay(SurfaceContent.Outline(_, _), _), _, _) => surface
-    }
-    ghost shouldBe defined
-    ghost.flatMap(surface => state.runtime.motion.surfaceAnimations.get(surface.id).map(_.phase)) shouldBe Some(
-      SurfacePhase.Exiting
-    )
-
-  it should "remove a panel ghost overlay when its close animation completes" in new UIFixture:
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
-    advanceAnimations(80)
-    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Outline))).unsafeRunSync()
-
-    advanceAnimations(120)
-
-    stateManager.getCurrentState.unsafeRunSync().runtime.uiSurfaces.exists {
-      _.content match
-        case SurfaceContent.GhostOverlay(SurfaceContent.Outline(_, _), _) => true
-        case _                                                            => false
-    } shouldBe false
-
-  it should "skip panel close ghosts when reduced motion is enabled" in new UIFixture:
-    stateManager
-      .updateState(state =>
-        state.copy(persisted = state.persisted.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Reduced)))
-      )
-      .unsafeRunSync()
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
-
-    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Outline))).unsafeRunSync()
-
-    val state = stateManager.getCurrentState.unsafeRunSync()
-    state.runtime.motion.surfaceAnimations shouldBe empty
-    state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
-
-  // ── Panel scale-in/out (issue #1085 phase 1) ────────────────────────────────
-
-  it should "seed a panel-geometry scale-in growing from its docked edge when pinning a panel" in new UIFixture:
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
-
-    val state    = stateManager.getCurrentState.unsafeRunSync()
-    val panel    = state.pinnedSurfaces.headOption.getOrElse(fail("Expected pinned panel"))
-    val geometry = state.runtime.motion.panelGeometry.getOrElse(panel.id, fail("Expected panel geometry animation"))
-
-    geometry.isComplete shouldBe false
-    // Left-docked: the collapsed start rect has zero width at the same x as the full rect.
-    geometry.tween.start.x shouldBe geometry.tween.end.x
-    geometry.tween.start.width shouldBe 0
-    geometry.currentRect.width should be < geometry.tween.end.width
-
-  it should "keep the panel-geometry scale-in independent of the PinnedPanels colour fade family" in new UIFixture:
-    stateManager
-      .updateState(state =>
-        state.copy(persisted =
-          state.persisted.copy(config =
-            state.persisted.config.withMotionFamilyConfiguration(
-              com.serenity.config.MotionFamily.PinnedPanels,
-              state.persisted.config.surfaceConfig.effectiveMotionConfiguration
-                .family(com.serenity.config.MotionFamily.PinnedPanels)
-                .disabled
-            )
-          )
-        )
-      )
-      .unsafeRunSync()
-
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
-
-    val state = stateManager.getCurrentState.unsafeRunSync()
-    val panel = state.pinnedSurfaces.headOption.getOrElse(fail("Expected pinned panel"))
-    state.runtime.motion.surfaceAnimations shouldBe empty
-    state.runtime.motion.panelGeometry.get(panel.id) shouldBe defined
-
-  it should "keep the PinnedPanels colour fade independent of the panel-geometry scale-in" in new UIFixture:
-    stateManager
-      .updateState(state =>
-        state.copy(persisted =
-          state.persisted.copy(config =
-            state.persisted.config.withMotionFamilyConfiguration(
-              com.serenity.config.MotionFamily.PanelGeometry,
-              state.persisted.config.surfaceConfig.effectiveMotionConfiguration
-                .family(com.serenity.config.MotionFamily.PanelGeometry)
-                .disabled
-            )
-          )
-        )
-      )
-      .unsafeRunSync()
-
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
-
-    val state = stateManager.getCurrentState.unsafeRunSync()
-    val panel = state.pinnedSurfaces.headOption.getOrElse(fail("Expected pinned panel"))
-    state.runtime.motion.panelGeometry shouldBe empty
-    state.runtime.motion.surfaceAnimations.get(panel.id) shouldBe defined
-
-  it should "skip the panel-geometry scale-in when reduced motion is enabled" in new UIFixture:
-    stateManager
-      .updateState(state =>
-        state.copy(persisted = state.persisted.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Reduced)))
-      )
-      .unsafeRunSync()
-
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
-
-    stateManager.getCurrentState.unsafeRunSync().runtime.motion.panelGeometry shouldBe empty
-
-  it should "advance the panel-geometry scale-in on tick, dropping it once it completes" in new UIFixture:
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
-    val panel = stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.head
-
-    advanceAnimations(200)
-
-    stateManager.getCurrentState.unsafeRunSync().runtime.motion.panelGeometry.get(panel.id) shouldBe None
-
-  it should "shrink the panel back toward its docked edge when unpinning it, independent of the colour fade" in new UIFixture:
-    stateManager
-      .updateState(state =>
-        state.copy(persisted =
-          state.persisted.copy(config =
-            state.persisted.config.withMotionFamilyConfiguration(
-              com.serenity.config.MotionFamily.PinnedPanels,
-              state.persisted.config.surfaceConfig.effectiveMotionConfiguration
-                .family(com.serenity.config.MotionFamily.PinnedPanels)
-                .disabled
-            )
-          )
-        )
-      )
-      .unsafeRunSync()
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
-    advanceAnimations(80)
-
-    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Outline))).unsafeRunSync()
-
-    val afterClose = stateManager.getCurrentState.unsafeRunSync()
-    val ghost = afterClose.runtime.uiSurfaces
-      .collectFirst {
-        case surface @ UiSurface(_, SurfaceContent.GhostOverlay(SurfaceContent.Outline(_, _), _), _, _) => surface
-      }
-      .getOrElse(fail("Expected a closing ghost overlay"))
-    afterClose.runtime.motion.surfaceAnimations shouldBe empty
-    val geometry = afterClose.runtime.motion.panelGeometry.getOrElse(ghost.id, fail("Expected closing panel geometry"))
-    geometry.tween.start.width should be > 0
-    geometry.tween.end.width shouldBe 0
-
-  it should "remove the closing ghost once its geometry-only scale-out completes, with no colour fade to do it" in new UIFixture:
-    stateManager
-      .updateState(state =>
-        state.copy(persisted =
-          state.persisted.copy(config =
-            state.persisted.config.withMotionFamilyConfiguration(
-              com.serenity.config.MotionFamily.PinnedPanels,
-              state.persisted.config.surfaceConfig.effectiveMotionConfiguration
-                .family(com.serenity.config.MotionFamily.PinnedPanels)
-                .disabled
-            )
-          )
-        )
-      )
-      .unsafeRunSync()
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
-    advanceAnimations(80)
-    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Outline))).unsafeRunSync()
-
-    advanceAnimations(200)
-
-    val state = stateManager.getCurrentState.unsafeRunSync()
-    state.runtime.motion.panelGeometry shouldBe empty
-    state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
 
   it should "resize a pinned panel to a new size" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
@@ -551,8 +352,8 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
 
     val stateManager: StateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+        com.serenity.rope.Balance.default,
+        LoggerFactory[IO]
+      )
       .unsafeRunSync()
-
-    def advanceAnimations(ticks: Int): Unit =
-      (1 to ticks).foreach(_ => stateManager.animationTicker.advanceAnimationsOnTick.unsafeRunSync())

@@ -27,7 +27,9 @@ private[config] object ConfigFieldsLanguageAndTypography:
     field("spellcheck.languages", "spellcheck_languages")(stringList)(
       _.languageToolsConfig.spellCheck.normalized.languages,
       (config, value) =>
-        config.withSpellCheck(config.languageToolsConfig.spellCheck.copy(languages = value.map(_.toLowerCase)))
+        config.withSpellCheck(
+          config.languageToolsConfig.spellCheck.copy(languages = value.map(SpellCheckLanguage.canonical))
+        )
     ),
     field("spellcheck.dictionary_paths", "spellcheck.dictionary.paths", "spellcheck_dictionary_paths")(stringList)(
       _.languageToolsConfig.spellCheck.normalized.dictionaryPaths,
@@ -62,6 +64,10 @@ private[config] object ConfigFieldsLanguageAndTypography:
     field("typography.prose.size", "font.text.size", "font.prose.size", "font_text_size", "font_prose_size")(fontSize)(
       _.editorConfig.fontConfig.textFontSize,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(textFontSize = value))
+    ),
+    field("typography.prose.measure", "prose.measure")(proseMeasure)(
+      _.surfaceConfig.proseMeasure,
+      (config, value) => config.withProseMeasure(value)
     ),
     field("typography.ui.size", "font.ui.size", "font_ui_size")(fontSize)(
       _.editorConfig.fontConfig.uiFontSize,

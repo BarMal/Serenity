@@ -9,5 +9,6 @@ import com.serenity.lsp.model.Diagnostic
   */
 final case class DiagnosticsState(
     diagnostics: Map[DocumentUri, List[Diagnostic]] = Map.empty,
-    spellCheckCache: Map[DocumentUri, SpellCheckCacheEntry] = Map.empty
+    spellCheckCache: Map[DocumentUri, SpellCheckCacheEntry] = Map.empty,
+    spellIgnores: SpellIgnores = SpellIgnores.empty
 )

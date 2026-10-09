@@ -4,6 +4,7 @@ import java.awt.{Color, Window}
 
 import scala.util.control.NonFatal
 
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.Theme
 import com.sun.jna.platform.win32.WinDef
 import com.sun.jna.ptr.IntByReference
@@ -32,7 +33,7 @@ object WindowsNativeChrome:
     else
       try
         val hwnd = new WinDef.HWND(Native.getComponentPointer(window))
-        val dark = Theme.luminance(palette.titleBackground) < Theme.EqualContrastLuminanceThreshold
+        val dark = Theme.luminance(RenderColor.fromAwt(palette.titleBackground)) < Theme.EqualContrastLuminanceThreshold
         val colorsApplied =
           setAttribute(hwnd, UseImmersiveDarkMode, if dark then 1 else 0) &&
             setAttribute(hwnd, BorderColor, colorRef(palette.border)) &&

@@ -4,6 +4,7 @@ import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.given
 import io.circe.{Decoder, Encoder}
+import org.slf4j.LoggerFactory
 
 /** What a global hotkey is for -- the section of Settings › Keys › Global it is listed under. */
 enum HotkeyPurpose(val label: String):
@@ -264,29 +265,61 @@ object HotkeyTrigger:
       case _                          => None
 
 final case class HotkeyConfig(
-    bindings: Map[HotkeyAction, List[HotkeyTrigger]] = HotkeyConfig.defaultBindings
+    bindings: Map[HotkeyAction, List[HotkeyTrigger]] = HotkeyConfig.defaultBindings,
+    // Keyed by registry command id (`Command.name`), for commands with no `HotkeyAction` of their own (issue #1922).
+    // An empty list is kept rather than dropped: it records that the user unbound a shipped default, so a reload does
+    // not bring the default back.
+    commandBindings: Map[String, List[HotkeyTrigger]] = HotkeyConfig.defaultCommandBindings,
+    // Set by `forTerminalUse`: the defaults these bindings derive from are the terminal's, not the platform's.
+    terminalAdjusted: Boolean = false
 ):
   def bindingsFor(action: HotkeyAction): List[HotkeyTrigger] =
     bindings.getOrElse(action, Nil)
 
+  def commandBindingsFor(commandId: String): List[HotkeyTrigger] =
+    commandBindings.getOrElse(commandId, Nil)
+
   def withBinding(action: HotkeyAction, trigger: HotkeyTrigger): HotkeyConfig =
-    HotkeyConfig.fromBindings(bindings + (action -> List(trigger))).fold(_ => this, identity)
+    HotkeyConfig.validated(copy(bindings = bindings + (action -> List(trigger)))).getOrElse(this)
 
   def withBinding(action: HotkeyAction, binding: String): HotkeyConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
-  /** Assign a trigger after removing it from every other global action. */
+  /** Refused, like [[withBinding]], when another action or command already holds the trigger. */
+  def withCommandBinding(commandId: String, binding: String): HotkeyConfig =
+    HotkeyTrigger
+      .parse(binding)
+      .flatMap(trigger =>
+        HotkeyConfig.validated(copy(commandBindings = commandBindings + (commandId -> List(trigger)))).toOption
+      )
+      .getOrElse(this)
+
+  /** Assign a trigger after removing it from every other global action and command. */
   def withBindingUnbindingConflicts(action: HotkeyAction, binding: String): HotkeyConfig =
     HotkeyTrigger.parse(binding) match
       case Some(trigger) =>
-        val withoutConflict = bindings.view.mapValues(_.filterNot(_ == trigger)).toMap
-        HotkeyConfig.fromBindings(withoutConflict + (action -> List(trigger))).fold(_ => this, identity)
+        val freed = withoutTrigger(trigger)
+        HotkeyConfig.validated(freed.copy(bindings = freed.bindings + (action -> List(trigger)))).getOrElse(this)
       case None => this
 
-  def resetBinding(action: HotkeyAction): HotkeyConfig =
-    HotkeyConfig
-      .fromBindings(bindings + (action -> HotkeyConfig.defaultBindings.getOrElse(action, Nil)))
-      .fold(_ => this, identity)
+  def resetBinding(action: HotkeyAction, osName: String = HotkeyOverrides.runningOs): HotkeyConfig =
+    val default = HotkeyOverrides.defaultsFor(this, osName).bindings.getOrElse(action, Nil)
+    HotkeyConfig.validated(copy(bindings = bindings + (action -> default))).getOrElse(this)
+
+  /** Strips from the command bindings not in `explicitCommandIds` -- the shipped defaults a file or session did not
+    * mention -- any trigger the user's own bindings already hold. A config written before a default existed may have
+    * given its key to something else, and a conflict would otherwise throw away every hotkey it sets.
+    */
+  def yieldingDefaultCommandBindings(explicitCommandIds: Set[String]): HotkeyConfig =
+    val (explicit, defaulted) = commandBindings.partition(entry => explicitCommandIds.contains(entry._1))
+    val taken                 = (bindings.valuesIterator ++ explicit.valuesIterator).flatten.toSet
+    copy(commandBindings = explicit ++ defaulted.view.mapValues(_.filterNot(taken.contains)).toMap)
+
+  private def withoutTrigger(trigger: HotkeyTrigger): HotkeyConfig =
+    copy(
+      bindings = bindings.view.mapValues(_.filterNot(_ == trigger)).toMap,
+      commandBindings = commandBindings.view.mapValues(_.filterNot(_ == trigger)).toMap
+    )
 
   /** Rewrites every binding still at the macOS/Cmd-conditioned platform default to the Ctrl-based binding every
     * terminal actually forwards (issue #1213): a real terminal cannot deliver Cmd/Meta as an ordinary keystroke the way
@@ -301,21 +334,31 @@ final case class HotkeyConfig(
     * macOS (the case it exists for) or is merely constructing/testing a mac-flavored `HotkeyConfig` from Linux CI.
     */
   def forTerminalUse: HotkeyConfig =
-    val macDefaults = HotkeyConfig.validatedBindings(HotkeyConfig.defaultBindingsFor("Mac OS X"))
-    val standard    = HotkeyConfig.terminalDefaultBindings
-    HotkeyConfig(bindings.map {
-      case (action, triggers) if macDefaults.get(action).contains(triggers) =>
-        action -> standard.getOrElse(action, triggers)
-      case unchanged => unchanged
-    })
+    HotkeyConfig(
+      HotkeyConfig.terminalSafe(
+        bindings,
+        HotkeyConfig.validatedBindings(HotkeyConfig.defaultBindingsFor("Mac OS X")),
+        HotkeyConfig.terminalDefaultBindings
+      ),
+      HotkeyConfig.terminalSafe(
+        commandBindings,
+        HotkeyConfig.defaultCommandBindingsFor("Mac OS X"),
+        HotkeyConfig.defaultCommandBindingsFor("linux")
+      ),
+      terminalAdjusted = true
+    )
 
 object HotkeyConfig:
 
   def forOs(osName: String): HotkeyConfig =
-    HotkeyConfig(validatedBindings(defaultBindingsFor(osName)))
+    HotkeyConfig(platformDefaults(osName), defaultCommandBindingsFor(osName))
 
-  def defaultBindings: Map[HotkeyAction, List[HotkeyTrigger]] =
-    validatedBindings(defaultBindingsFor(System.getProperty("os.name", "")))
+  /** What an action holds on `osName` when the user has changed nothing: the baseline `config.conf` is written against.
+    */
+  def platformDefaults(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
+    validatedBindings(defaultBindingsFor(osName))
+
+  def defaultBindings: Map[HotkeyAction, List[HotkeyTrigger]] = platformDefaults(HotkeyOverrides.runningOs)
 
   /** The Ctrl-based bindings [[defaultBindingsFor]] resolves to on any non-macOS `osName` -- what
     * [[HotkeyConfig.forTerminalUse]] rewrites a still-at-default macOS/Cmd binding to (issue #1213). Any non-mac string
@@ -324,6 +367,23 @@ object HotkeyConfig:
     */
   def terminalDefaultBindings: Map[HotkeyAction, List[HotkeyTrigger]] =
     validatedBindings(defaultBindingsFor("linux"))
+
+  def defaultCommandBindings: Map[String, List[HotkeyTrigger]] =
+    defaultCommandBindingsFor(System.getProperty("os.name", ""))
+
+  /** Keys for registry commands that have no [[HotkeyAction]]: the prose formatting toggles (issue #1858). A terminal
+    * sends Ctrl+I as Tab, and `TerminalInputDecoder` keeps it Tab, so italic's key reaches only the GUI and terminals
+    * that report modified keys distinctly -- the Tab key itself is never taken.
+    */
+  def defaultCommandBindingsFor(osName: String): Map[String, List[HotkeyTrigger]] =
+    val primaryModifier = primaryModifierFor(osName)
+    Map("bold" -> 'b', "italic" -> 'i', "underline" -> 'u').view
+      .mapValues(key => List(HotkeyTrigger(InputKey.Character, Some(key), Set(primaryModifier))))
+      .toMap
+
+  private def isMac(osName: String): Boolean = osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
+
+  private def primaryModifierFor(osName: String): Modifier = if isMac(osName) then Modifier.Meta else Modifier.Ctrl
 
   // Plain Alt rather than the primary modifier, so it is the same on every platform with no terminal rewrite. Nothing
   // else binds Alt+Arrow, and the editor's word moves stay on Ctrl+Arrow.
@@ -351,9 +411,14 @@ object HotkeyConfig:
   private def goToFileBindings(primaryModifier: Modifier): Map[HotkeyAction, List[HotkeyTrigger]] =
     Map(HotkeyAction.GoToFile -> List(HotkeyTrigger(InputKey.Character, Some('e'), Set(primaryModifier))))
 
+  // Cmd+Shift+Z is the macOS convention, so it leads there and Cmd+Y stays as a secondary; Ctrl+Y leads elsewhere.
+  private def redoBindings(osName: String, primaryModifier: Modifier): List[HotkeyTrigger] =
+    val shiftedZ = HotkeyTrigger(InputKey.Character, Some('z'), Set(primaryModifier, Modifier.Shift))
+    val plainY   = HotkeyTrigger(InputKey.Character, Some('y'), Set(primaryModifier))
+    if isMac(osName) then List(shiftedZ, plainY) else List(plainY, shiftedZ)
+
   def defaultBindingsFor(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
-    val isMac           = osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
-    val primaryModifier = if isMac then Modifier.Meta else Modifier.Ctrl
+    val primaryModifier = primaryModifierFor(osName)
     def primary(key: Char, shift: Boolean = false, alt: Boolean = false): HotkeyTrigger =
       HotkeyTrigger(
         InputKey.Character,
@@ -379,7 +444,7 @@ object HotkeyConfig:
         HotkeyTrigger(InputKey.EOF, None, Set.empty)
       ),
       HotkeyAction.Undo      -> List(primary('z')),
-      HotkeyAction.Redo      -> List(primary('y')),
+      HotkeyAction.Redo      -> redoBindings(osName, primaryModifier),
       HotkeyAction.Copy      -> List(primary('c')),
       HotkeyAction.Paste     -> List(primary('v')),
       HotkeyAction.Cut       -> List(primary('x')),
@@ -422,7 +487,7 @@ object HotkeyConfig:
       HotkeyAction.MoveTabLeft  -> List(primaryKey(InputKey.PageUp, shift = true)),
       HotkeyAction.MoveTabRight -> List(primaryKey(InputKey.PageDown, shift = true)),
       HotkeyAction.Find         -> List(primary('f')),
-      HotkeyAction.Replace      -> List(if isMac then primary('f', alt = true) else primary('h')),
+      HotkeyAction.Replace      -> List(if isMac(osName) then primary('f', alt = true) else primary('h')),
       HotkeyAction.GoToLine     -> List(primary('g')),
       HotkeyAction.SaveAs       -> List(primary('s', shift = true)),
       // Plain F1, not primary-modifier-gated: unlike the Cmd/Ctrl bindings above, F1 is delivered identically by
@@ -432,34 +497,68 @@ object HotkeyConfig:
     ) ++ directionalFocusBindings ++ goToFileBindings(primaryModifier) ++ chapterNoteBindings(primaryModifier)
 
   def validate(bindings: Map[HotkeyAction, List[HotkeyTrigger]]): Either[String, Unit] =
-    bindings.toList
-      .flatMap { case (action, triggers) => triggers.map(_ -> action) }
+    conflictIn(actionTargets(bindings))
+
+  /** Actions and commands share one key space: a trigger held by an action and a command, or by two commands, is as
+    * much a conflict as one held by two actions.
+    */
+  def validate(config: HotkeyConfig): Either[String, Unit] =
+    conflictIn(
+      actionTargets(config.bindings) ++
+        config.commandBindings.toList.sortBy(_._1).map((commandId, triggers) => s"command.$commandId" -> triggers)
+    )
+
+  private[config] def actionTargets(
+    bindings: Map[HotkeyAction, List[HotkeyTrigger]]
+  ): List[(String, List[HotkeyTrigger])] =
+    bindings.toList.map((action, triggers) => action.configKey -> triggers)
+
+  private def conflictIn(targets: List[(String, List[HotkeyTrigger])]): Either[String, Unit] =
+    targets
+      .flatMap((target, triggers) => triggers.map(_ -> target))
       .groupMap(_._1)(_._2)
-      .collectFirst { case (trigger, actions) if actions.distinct.size > 1 => trigger -> actions.distinct }
+      .collectFirst { case (trigger, owners) if owners.distinct.size > 1 => trigger -> owners.distinct }
       .toLeft(())
       .left
       .map {
-        case (trigger, actions) =>
-          "Conflicting hotkey binding '" + trigger.render + "' for " + actions.map(_.configKey).mkString(", ")
+        case (trigger, owners) =>
+          "Conflicting hotkey binding '" + trigger.render + "' for " + owners.mkString(", ")
       }
 
-  private[config] def fromBindings(bindings: Map[HotkeyAction, List[HotkeyTrigger]]): Either[String, HotkeyConfig] =
-    validate(bindings).map(_ => HotkeyConfig(bindings))
+  private[config] def validated(config: HotkeyConfig): Either[String, HotkeyConfig] =
+    validate(config).map(_ => config)
 
   private def validatedBindings(
     bindings: Map[HotkeyAction, List[HotkeyTrigger]]
   ): Map[HotkeyAction, List[HotkeyTrigger]] =
-    fromBindings(bindings).fold(_ => Map.empty, _.bindings)
+    validate(bindings).fold(_ => Map.empty, _ => bindings)
+
+  private def terminalSafe[K](
+    current: Map[K, List[HotkeyTrigger]],
+    macDefaults: Map[K, List[HotkeyTrigger]],
+    standard: Map[K, List[HotkeyTrigger]]
+  ): Map[K, List[HotkeyTrigger]] =
+    current.map {
+      case (key, triggers) if macDefaults.get(key).contains(triggers) => key -> standard.getOrElse(key, triggers)
+      case unchanged                                                  => unchanged
+    }
 
   private def addNonConflictingDefaults(
-    bindings: Map[HotkeyAction, List[HotkeyTrigger]]
+    bindings: Map[HotkeyAction, List[HotkeyTrigger]],
+    taken: Set[HotkeyTrigger]
   ): Map[HotkeyAction, List[HotkeyTrigger]] =
     defaultBindings.foldLeft(bindings) {
       case (updated, (action, triggers)) =>
-        val conflicts = triggers.exists(trigger => updated.valuesIterator.flatten.contains(trigger))
+        val conflicts =
+          triggers.exists(trigger => taken.contains(trigger) || updated.valuesIterator.flatten.contains(trigger))
         if updated.contains(action) || conflicts then updated
         else updated + (action -> triggers)
     }
+
+  private val logger = LoggerFactory.getLogger("com.serenity.config.HotkeyConfig")
+
+  // Session files keep command bindings in the same object as the action ones; no action's key contains a dot.
+  private val sessionCommandPrefix = "command."
 
   given Encoder[HotkeyAction] = Encoder.encodeString.contramap(_.configKey)
 
@@ -479,14 +578,23 @@ object HotkeyConfig:
   given Decoder[HotkeyTrigger] = deriveDecoder
 
   given Encoder[HotkeyConfig] = Encoder.instance { config =>
-    config.bindings.map { case (action, triggers) => action.configKey -> triggers }.asJson
+    val actions = config.bindings.map { case (action, triggers) => action.configKey -> triggers }
+    val commands =
+      config.commandBindings.map { case (commandId, triggers) => s"$sessionCommandPrefix$commandId" -> triggers }
+    (actions ++ commands).asJson
   }
 
-  given Decoder[HotkeyConfig] = Decoder.decodeMap[String, List[HotkeyTrigger]].emap { bindings =>
-    val decoded = bindings.toList.map { (key, triggers) =>
-      HotkeyAction.values.find(_.configKey == key).map(_ -> triggers).toRight(s"Unknown hotkey action: $key")
+  given Decoder[HotkeyConfig] = Decoder.decodeMap[String, List[HotkeyTrigger]].emap { entries =>
+    val (commandEntries, actionEntries) = entries.partition { case (key, _) => key.startsWith(sessionCommandPrefix) }
+    val commands = commandEntries.map { case (key, triggers) => key.stripPrefix(sessionCommandPrefix) -> triggers }
+    val (unknown, actions) = actionEntries.toList.partitionMap { (key, triggers) =>
+      HotkeyAction.values.find(_.configKey == key).map(_ -> triggers).toRight(key)
     }
-    decoded.collectFirst { case Left(error) => error } match
-      case Some(error) => Left(error)
-      case None        => fromBindings(addNonConflictingDefaults(decoded.collect { case Right(entry) => entry }.toMap))
+    unknown.foreach(key => logger.warn(s"[SESSION] Ignoring hotkey '$key': there is no hotkey action of that name"))
+    validated(
+      HotkeyConfig(
+        addNonConflictingDefaults(actions.toMap, commands.valuesIterator.flatten.toSet),
+        defaultCommandBindings ++ commands
+      ).yieldingDefaultCommandBindings(commands.keySet)
+    )
   }

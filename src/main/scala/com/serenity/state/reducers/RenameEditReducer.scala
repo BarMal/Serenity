@@ -2,6 +2,7 @@ package com.serenity.state.reducers
 
 import com.serenity.lsp.model.LspTextEdit
 import com.serenity.state.models.*
+import com.serenity.state.undo.EditGrouping
 import com.serenity.ui.layout.PeekContent
 
 /** Applies a `textDocument/rename` response's `WorkspaceEdit` (#1467) to the buffer open in the currently focused
@@ -34,23 +35,30 @@ object RenameEditReducer:
           val (updatedBuffer, appliedEdits) =
             EditorEditSupport.applyTrackedEdits(buffer, initialOffsets, multiCursorEdits)
           val stateWithEdit = Focused.replaceBuffer(state, updatedBuffer)
-          val animationEffects =
-            EditorEditSupport.animationRemapEffects(buffer.id, content, updatedBuffer.document.content, appliedEdits)
           val undoEffects = state.persisted.layout.activeEditorPaneId
             .map(paneId =>
-              EditorEditSupport.undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, groupable = false)
+              EditorEditSupport
+                .undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, grouping = EditGrouping.Standalone)
             )
             .getOrElse(Nil)
-          val summary = summaryPeek(stateWithEdit, anchor, appliedCount = currentEdits.length, skippedUris)
-          ReducerResult(summary.state, animationEffects ++ undoEffects ++ summary.effects)
+          val summary = summaryPeek(
+            stateWithEdit,
+            anchor,
+            appliedCount = appliedEdits.length,
+            skippedUris,
+            heldBack = currentEdits.length - appliedEdits.length
+          )
+          ReducerResult(summary.state, undoEffects ++ summary.effects)
 
   private def summaryPeek(
     state: AppState,
     anchor: CursorPosition,
     appliedCount: Int,
-    skippedUris: Set[String]
+    skippedUris: Set[String],
+    heldBack: Int = 0
   ): ReducerResult =
-    val appliedPart = s"Renamed $appliedCount location(s) in this file."
+    val appliedPart = s"Renamed $appliedCount location(s) in this file." +
+      (if heldBack == 0 then "" else s" $heldBack beside a read-only block were left as they were.")
     val skippedPart =
       if skippedUris.isEmpty then ""
       else s" ${skippedUris.size} other file(s) were not updated -- rename currently applies to the open file only."

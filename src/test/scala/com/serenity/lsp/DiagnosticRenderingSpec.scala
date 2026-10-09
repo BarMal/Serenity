@@ -9,6 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.state.reducers.SystemEventReducer
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.Location
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -21,6 +22,8 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
+  private val openBufferUri = "buffer:0" // AppState.initial's sole buffer (BufferId(0)) has no file path.
+
   private def diag(line: Int, severity: DiagnosticSeverity): Diagnostic =
     Diagnostic(
       range = LspRange(LspPosition(line, 0), LspPosition(line, 10)),
@@ -32,7 +35,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     given Balance = Balance.default
     val state     = AppState.initial
 
-    val uri   = "file:///foo/Bar.scala"
+    val uri   = openBufferUri
     val diags = List(diag(0, DiagnosticSeverity.Error), diag(5, DiagnosticSeverity.Warning))
 
     val result = SystemEventReducer.reduce(LspEvent.LspDiagnosticsReceived(uri, diags), state)
@@ -44,7 +47,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "replace diagnostics for the same URI" in {
     given Balance = Balance.default
-    val uri       = "file:///foo/Bar.scala"
+    val uri       = openBufferUri
     val initial   = AppState.initial
     val state = initial.copy(
       runtime = initial.runtime.copy(
@@ -64,7 +67,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "clear diagnostics when an empty list is received" in {
     given Balance = Balance.default
-    val uri       = "file:///foo/Bar.scala"
+    val uri       = openBufferUri
     val initial   = AppState.initial
     val state = initial.copy(
       runtime = initial.runtime.copy(
@@ -89,7 +92,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     val surface = result.state.runtime.uiSurfaces.headOption.getOrElse(fail("Expected hover surface"))
     surface.content shouldBe SurfaceContent.QuickInfo("def map[B](f: A => B): List[B]")
     surface.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(2, 4)), SurfacePlacement.AboveCursor)
-    result.state.persisted.focus shouldBe Focus.Surface(surface.id)
+    result.state.persisted.focus shouldBe AppState.initial.persisted.focus
   }
 
   it should "show LSP definition locations as symbol-definition peek surfaces" in {
@@ -118,7 +121,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     val surface = result.state.runtime.uiSurfaces.headOption.getOrElse(fail("Expected completion surface"))
     surface.content shouldBe SurfaceContent.QuickInfo("map\nmapValues")
     surface.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(2, 4)), SurfacePlacement.AboveCursor)
-    result.state.persisted.focus shouldBe Focus.Surface(surface.id)
+    result.state.persisted.focus shouldBe AppState.initial.persisted.focus
   }
 
   it should "show an explicit empty state when LSP completion returns no candidates" in {
@@ -135,16 +138,16 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   "Theme" should "have error and warning colors" in {
     val theme = Theme.dark
-    theme.error.foreground should not be null
-    theme.warning.foreground should not be null
+    theme.error.foreground should not be theme.background
+    theme.warning.foreground should not be theme.background
     theme.warning.foreground should not be theme.error.foreground
   }
 
   "StateManager" should "apply LspDiagnosticsReceived and update diagnostics in AppState" in {
     val logger = LoggerFactory[IO].getLogger(using LoggerName("DiagnosticRenderingSpec"))
-    val sm     = StateManager.apply(logger).unsafeRunSync()
+    val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
 
-    val uri   = "file:///foo/Bar.scala"
+    val uri   = openBufferUri
     val diags = List(diag(0, DiagnosticSeverity.Error))
     sm.applyEvent(LspEvent.LspDiagnosticsReceived(uri, diags)).unsafeRunSync()
 

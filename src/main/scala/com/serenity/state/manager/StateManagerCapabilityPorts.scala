@@ -3,8 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.animation.AnimationState
-import com.serenity.config.PreferredWindowSize
+import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.session.{SessionId, SessionPersistence}
@@ -27,6 +26,9 @@ private[manager] trait EffectRuntimePort:
   def onFontConfigChanged: FontConfig => IO[Unit]
   def deviceTextScaleProvider: IO[Double]
   def configPersistencePath: Option[Path]
+
+  /** The config the config file is believed to hold, when this session keeps one and it was just read. */
+  def configOnDisk: Option[AppConfig] = None
   def uiPresetStore: UiPresetStore
   def windowSizeProvider: IO[Option[PreferredWindowSize]]
   def markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability
@@ -55,13 +57,16 @@ private[manager] trait EffectEditorPort extends EffectLanePort:
   def enqueueEvent(event: Event): IO[Unit]
   def commitState(newState: AppState, fallbackState: AppState): IO[Unit]
   def updateModelValidated(transition: Model => Option[Model]): IO[Unit]
-  def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit]
   def scheduleDocumentAnalysis(): IO[Unit]
   def scheduleFindSearch(request: FindSearchRequest): IO[Unit]
+
+  /** Corrections for a misspelled word, searched for when asked (#1939). */
+  def spellingSuggestions: String => IO[List[String]] = _ => IO.pure(Nil)
 
 private[manager] trait EffectSurfacePort:
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
   def showModal(modal: Modal): IO[Unit]
+  def showNotice(notice: Notice): IO[Unit]
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
   def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit]
   def unpinPanel(target: PanelTarget): IO[Unit]
@@ -78,12 +83,17 @@ private[manager] trait EffectFilePort:
   def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit]
   def loadFile(path: Path): IO[Unit]
   def openFromDialog(dialog: com.serenity.io.FileDialog): IO[Unit]
+  def openFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit]
+  def openFileOrFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit]
   def isSaving(path: Path): IO[Boolean]
   // #1623: re-reads the buffer's file from disk in place (same BufferId, cursor/viewport/undo state untouched),
   // replacing only its document/rich-text content and capturing a fresh revision.
   def reloadBuffer(bufferId: BufferId): IO[Unit]
   // #1623: saves over a file that changed on disk since it was read, skipping the stale-save check.
   def forceSaveExistingBuffer(bufferId: BufferId): IO[Unit]
+
+  /** Hands a URL to the desktop browser; fails where there is no browser to hand it to. */
+  def openExternalUrl(uri: java.net.URI): IO[Unit] = com.serenity.io.ExternalBrowser.browse(uri)
 
 private[manager] trait EffectSessionPort:
   def sessionPersistence: SessionPersistence
@@ -108,6 +118,7 @@ private[manager] trait EffectModalWorkflowPort:
   def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit]
   def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState
   def createStartupSession(): IO[Unit]
+  def leaveStartPage(): IO[Unit]
   def restoreStartupSession(): IO[Unit]
   def activeEditorBufferId(state: AppState): Option[BufferId]
   // Named sessions (issue #1390): `openSaveSessionAsPrompt`/`openSessionPicker` show the modal, called directly from

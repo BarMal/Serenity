@@ -38,7 +38,7 @@ object CommandSearcher:
     * highest, then label, then description) -- `None` (no result at all) only when the term fuzzy-matches none of the
     * three.
     */
-  private def relevance(command: Command, term: String): Option[Double] =
+  private[command] def relevance(command: Command, term: String): Option[Double] =
     List(
       CommandRunnerSearch.fuzzyScore(term, command.name).map(_ * 1.0),
       CommandRunnerSearch.fuzzyScore(term, command.label).map(_ * 0.95),

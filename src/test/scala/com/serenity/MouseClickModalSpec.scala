@@ -2,14 +2,16 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -23,7 +25,10 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+        com.serenity.rope.Balance.default,
+        LoggerFactory[IO]
+      )
       .unsafeRunSync()
 
   "MouseClick" should "consume workspace clicks, presses, and drags while a close confirmation is active" in {
@@ -149,7 +154,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
     findManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val findSurface = UiSurface(
       SurfaceId("find-click"),
-      SurfaceContent.ModalWorkflow(Modal.Find("needle", List(FindResult(0, 0), FindResult(1, 0)), 0)),
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("needle"), Vector(FindResult(0, 0), FindResult(1, 0)), 0)),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     findManager
@@ -170,15 +175,15 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
       .forModal(findSurface.content.asInstanceOf[SurfaceContent.ModalWorkflow].modal, findNode.frameRect, 2)
       .get
       .hitRegions
-      .find(_.actionId.contains(SurfaceActionId("find-result-0")))
+      .find(_.action.contains(SurfaceAction.SelectFindResult(0)))
       .getOrElse(fail("Expected find result hit region"))
     findManager.applyEvent(MouseClick(findHit.rect.x.toInt, findHit.rect.y.toInt)).unsafeRunSync()
     findManager.getCurrentState
       .unsafeRunSync()
       .modalSurface
       .flatMap(_.content match
-        case SurfaceContent.ModalWorkflow(Modal.Find(_, _, currentIndex)) => Some(currentIndex)
-        case _                                                            => None) shouldBe Some(0)
+        case SurfaceContent.ModalWorkflow(Modal.Find(_, _, currentIndex, _, _)) => Some(currentIndex)
+        case _                                                                  => None) shouldBe Some(0)
 
     val replaceManager = makeStateManager()
     val replaceBuffer  = replaceManager.createBuffer("needle", None).unsafeRunSync()

@@ -51,7 +51,7 @@ class EditorFindEventReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "be a no-op when the stored find state has no results to advance through" in {
-    val before = stateWith("alpha beta", findState = Some(FindState("zzz", Nil, 0)))
+    val before = stateWith("alpha beta", findState = Some(FindState("zzz", Vector.empty, 0)))
 
     val result = EditorEventReducer.reduce(FindNext, paneId, before)
 
@@ -60,7 +60,7 @@ class EditorFindEventReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   "Every find/goto/replace event" should "never record an undo boundary, since none of them edit the buffer" in {
-    val before = stateWith("alpha beta", findState = Some(FindState("alpha", List(FindResult(0, 0)), 0)))
+    val before = stateWith("alpha beta", findState = Some(FindState("alpha", Vector(FindResult(0, 0)), 0)))
 
     List(OpenGotoLine, OpenFind, OpenReplace, FindNext).foreach { event =>
       withClue(s"$event: ") {

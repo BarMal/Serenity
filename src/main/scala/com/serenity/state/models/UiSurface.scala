@@ -7,6 +7,7 @@ import com.serenity.config.{AppMode, CornerPosition}
 import com.serenity.document.RenderedComment
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.ThemeCreatorState
+import com.serenity.ui.widget.ListScroll
 
 opaque type SurfaceId = String
 
@@ -37,11 +38,6 @@ object SurfaceId:
   val TabList: SurfaceId = SurfaceId("tab-list")
 
   val RecentFilesInMode: SurfaceId = SurfaceId("recent-files-in-mode")
-
-  /** The companion sprite pane's id: the registered panel's own fixed id, since the settings toggle looks it up by id
-    * to decide whether to open or close it.
-    */
-  val CompanionSprite: SurfaceId = PanelId.Companion.surfaceId
 
 /** An executable option displayed on the startup launch surface. */
 enum StartupActionSection:
@@ -241,24 +237,55 @@ enum SurfacePresentation:
   case Docked
 
 /** Whether the above-cursor comment lens is a passive, read-only display or the existing always-editable draft state
-  * (#1222). `ReadOnly` is only reachable by clicking a highlighted comment range in floating display mode; a further
-  * click inside the lens body transitions it to `Editable`. Every keyboard-invoked open (the `comment-lens` command)
-  * still opens directly into `Editable`, unchanged from before this mode existed.
+  * (#1222). `ReadOnly` is reached by clicking a highlighted comment range in floating display mode; a further click
+  * inside the lens body transitions it to `Editable`. Every keyboard-invoked open (the `comment-lens` command) opens
+  * directly into `Editable`. A source-code comment is always `ReadOnly` (see [[CommentLensState.withMode]]). A
+  * `ReadOnly` lens is a [[SurfaceFocusPolicy.Peek]], so it never takes focus from the editor (#1674).
   */
 enum CommentLensMode:
   case ReadOnly
   case Editable
+
+/** The authored comment a lens writes back to. `id` is what identifies it: two comments can be structurally equal, an
+  * edit elsewhere shifts a comment's range, and a deletion shifts its position in the list, but nothing changes its id.
+  * `comment` is the snapshot the draft was opened from.
+  */
+final case class CommentLensTarget(id: CommentId, comment: DocumentComment)
 
 /** Focused draft state for editing an authored document comment from the above-cursor lens. */
 final case class CommentLensState(
     comment: RenderedComment,
     draft: String,
     cursor: Int,
-    target: Option[DocumentComment],
+    target: Option[CommentLensTarget],
     mode: CommentLensMode = CommentLensMode.Editable
 ):
   def clampedCursor: Int =
     math.max(0, math.min(cursor, draft.length))
+
+  /** A source-code comment has no authored target to write a draft back to, so it stays read-only whatever mode is
+    * requested -- an editable lens on it would discard everything typed (#1914).
+    */
+  def withMode(requested: CommentLensMode): CommentLensState =
+    copy(mode = if target.isDefined then requested else CommentLensMode.ReadOnly)
+
+  /** The lens's title row: who wrote the comment and whether it is resolved, when the lens has an authored comment. */
+  def headline: String =
+    val details = target.toList.flatMap { authored =>
+      authored.comment.author.toList ++ Option.when(authored.comment.resolved)("resolved")
+    }
+    (CommentLensState.Title :: details).mkString(" · ")
+
+  /** The replies under the comment, one line each, for display beneath the draft. */
+  def threadLines: List[String] =
+    target.toList.flatMap(_.comment.replies).flatMap { reply =>
+      reply.text.split("\n", -1).toList.zipWithIndex.map { (line, index) =>
+        if index == 0 then s"${reply.author}: $line" else s"  $line"
+      }
+    }
+
+object CommentLensState:
+  val Title: String = "comment"
 
 enum SurfaceContent:
   case StartPage(page: StartupPage)
@@ -267,7 +294,9 @@ enum SurfaceContent:
   case SymbolDefinition(symbol: String, location: Location)
   case StatusLine(text: String)
   case DirectoryListing(path: Path, entries: List[DirEntry], selectedPath: Option[Path] = None)
-  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None)
+
+  /** `scroll` is where the list is scrolled to, kept apart from the selection -- see [[ListScroll]]. */
+  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None, scroll: ListScroll = ListScroll())
   case CommandPalette(runner: CommandRunner)
 
   /** The experimental command-runner cursor-peek prototype's single peek panel (`SurfaceId.CursorPeek`,
@@ -287,9 +316,9 @@ enum SurfaceContent:
   case MarkdownPreview(bufferId: BufferId, title: String)
   case ModalWorkflow(modal: Modal)
   case Terminal(buffer: String, cursor: Int)
-  case Outline(symbols: List[Symbol], activeLocation: Option[Location] = None)
-  case Comments(symbols: List[Symbol], activeLocation: Option[Location] = None)
-  case Diagnostics(issues: List[Diagnostic], activeLocation: Option[Location] = None)
+  case Outline(symbols: List[Symbol], activeLocation: Option[Location] = None, scroll: ListScroll = ListScroll())
+  case Comments(symbols: List[Symbol], activeLocation: Option[Location] = None, scroll: ListScroll = ListScroll())
+  case Diagnostics(issues: List[Diagnostic], activeLocation: Option[Location] = None, scroll: ListScroll = ListScroll())
 
   /** The toggleable keyboard-shortcuts reference (issue #1247) -- a snapshot of `ShortcutsHelpContent.build`, taken
     * when `AppEventReducer.toggleShortcutsHelp` opens the surface, not re-derived on every render.
@@ -314,16 +343,24 @@ enum SurfaceContent:
     */
   case RecentFilesInMode(mode: AppMode, paths: List[java.nio.file.Path])
 
-  /** The companion sprite pane -- a small idling pixel-art character. Carries no payload: the frame it currently shows
-    * lives in `Runtime.companionSprite`, advanced by the same per-tick pass as every other surface animation (see
-    * `AnimationChoreography`), not resolved into cell text here. `SurfaceContentResolver` resolves this to an empty
-    * `ResolvedSurfaceContent` -- painting the sprite bitmap is `Renderer`'s own dedicated paint step, alongside
-    * wherever pinned panels are painted, not the generic text-overlay path every other case here goes through.
+  /** A corner notice (#1717); `expiresAtNanos` is when it leaves by itself, on the monotonic clock -- never, for an
+    * error or a question. See `NoticeReducer`.
     */
-  case CompanionSprite
+  case Notice(notice: com.serenity.state.models.Notice, expiresAtNanos: Option[Long])
 
-  /** Transient ghost surface used during close-fade-out animation; never persisted in sessions. */
-  case GhostOverlay(originalContent: SurfaceContent, cachedRect: LayoutRect)
+/** How a surface shares the keyboard with the editor beneath it (#1940). */
+enum SurfaceFocusPolicy:
+
+  /** Shown without ever taking focus, so every key still reaches what had it. Escape closes it; with `dismissOnMove`,
+    * so does any other key, which then carries on as if the peek were not there.
+    */
+  case Peek
+
+  /** Takes focus; a key it leaves unhandled goes on to the editor pane. */
+  case Focusable
+
+  /** Takes focus and keeps every key, handled or not. */
+  case Modal
 
 final case class UiSurface(
     id: SurfaceId,
@@ -331,6 +368,17 @@ final case class UiSurface(
     presentation: SurfacePresentation,
     dismissOnMove: Boolean = false
 ):
+
+  /** Derived from what the surface shows rather than stored, so a comment lens's policy cannot drift from its mode. */
+  def focusPolicy: SurfaceFocusPolicy =
+    content match
+      case SurfaceContent.CommentLens(lens) if lens.mode == CommentLensMode.ReadOnly => SurfaceFocusPolicy.Peek
+      case SurfaceContent.Notice(notice, _) if notice.prompt.isDefined               => SurfaceFocusPolicy.Focusable
+      case SurfaceContent.Notice(_, _)                                               => SurfaceFocusPolicy.Peek
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.ModalWorkflow(_) | SurfaceContent.ThemeCreator(_) =>
+        SurfaceFocusPolicy.Modal
+      case _ if isFloatingPeek => SurfaceFocusPolicy.Peek
+      case _                   => SurfaceFocusPolicy.Focusable
 
   /** A floating peek (`PeekStateReducer`), recognised by what it shows: the comment lens and the command runner's
     * cursor peek float above the cursor too, and a peek pinned as a docked panel is no longer one.

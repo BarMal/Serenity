@@ -1,9 +1,8 @@
 package com.serenity.state.manager
 
-import com.serenity.config.{CommentDisplayMode, VisualFlairLevel}
+import com.serenity.config.CommentDisplayMode
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
-import com.serenity.state.reducers.CommandRunnerPanelSelections
 import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.{PanelPosition, WorkspaceTree}
 
@@ -46,21 +45,16 @@ private[manager] object PanelTransitions:
         )(upsert)
       case PanelId.ProjectOutput =>
         upsert(ProjectTaskTransitions.terminalContent(state))
-      case PanelId.Companion =>
-        if state.persisted.config.visualFlairLevel == VisualFlairLevel.Off then
-          PanelPinPlan.Report("The companion is hidden while visual flair is off.")
-        else upsert(SurfaceContent.CompanionSprite)
 
   /** `update` applied to the model's state, declared as an undo boundary (#1016 PR4) in the same model when it changed
-    * anything, and followed by a refresh of an open command runner's panel selections when `refreshSelections`. A no-op
-    * records nothing, mirroring `AppEventReducer.closePaneResult`'s guard for pane close.
+    * anything. A no-op records nothing, mirroring `AppEventReducer.closePaneResult`'s guard for pane close.
     */
-  def panelChange(model: Model, update: AppState => AppState, refreshSelections: Boolean): Model =
+  def panelChange(model: Model, update: AppState => AppState): Model =
     val updated = update(model.app)
     val undo =
       if updated == model.app then model.undo
-      else UndoRecording.recorded(model.undo, HistoryEntry.PanelChange.capture(model.app), groupable = false)
-    model.copy(app = if refreshSelections then withCommandRunnerPanelSelections(updated) else updated, undo = undo)
+      else model.undo.pushUndo(HistoryEntry.PanelChange.capture(model.app))
+    model.copy(app = updated, undo = undo)
 
   def removePanel(id: PanelId)(state: AppState): AppState =
     val removedIds = state.runtime.uiSurfaces.collect {
@@ -186,17 +180,6 @@ private[manager] object PanelTransitions:
         case Some(value) =>
           val withoutValue = values.patch(from, Nil, 1)
           withoutValue.patch(to, List(value), 0)
-
-  def withCommandRunnerPanelSelections(state: AppState): AppState =
-    val selections = CommandRunnerPanelSelections.fromState(state)
-    val updatedSurfaces = state.runtime.uiSurfaces.map {
-      case surface @ UiSurface(_, SurfaceContent.CommandPalette(runner), _, _) =>
-        surface.copy(content =
-          SurfaceContent.CommandPalette(runner.copy(optionSelections = runner.optionSelections ++ selections))
-        )
-      case other => other
-    }
-    state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
 
   def withMarkdownPreviewWindowBuffer(state: AppState, bufferId: Option[BufferId]): AppState =
     state.copy(runtime = state.runtime.copy(markdownPreviewWindowBuffer = bufferId))

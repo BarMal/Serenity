@@ -13,8 +13,6 @@ class StateManagerProductionFacadeSpec extends AnyFlatSpec with Matchers:
     typeChecks("(sm: StateManager) => sm.fileService.checkExternalChangesOnFocus") shouldBe true
 
     typeChecks("(sm: StateManager) => sm.updateState(identity)") shouldBe false
-    typeChecks("(sm: StateManager) => sm.getBufferAnimations") shouldBe false
-    typeChecks("(sm: StateManager) => sm.updateBufferAnimations(identity)") shouldBe false
     typeChecks("(sm: StateManager) => sm.sessionService.saveSession") shouldBe false
     typeChecks("(sm: StateManager) => sm.sessionService.clearSession") shouldBe false
     typeChecks("(sm: StateManager) => sm.fileService.setBufferFilePath") shouldBe false

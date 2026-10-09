@@ -1,6 +1,5 @@
 package com.serenity.state.manager
 
-import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey, EasingCurve, Tween}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
 import com.serenity.rope.{Balance, Rope}
@@ -36,7 +35,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(state, state) shouldBe Damage.Nothing
   }
 
-  it should "report the old and new cursor rows for a cursor move, plus Chrome since the active gutter shows it" in {
+  it should "report the old and new caret cells for a cursor move, plus Chrome since the status row shows it" in {
     val before = stateWithContent("alpha\nbeta\ngamma", cursors = List(CursorPosition(0, 0)))
     val after = before.copy(persisted =
       before.persisted.copy(buffers =
@@ -50,7 +49,9 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     )
 
     DamageProducer.forTransition(before, after) shouldBe
-      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 2)), Damage.Chrome))
+      Damage.Combined(
+        Set(Damage.BufferCells(bufferId, 0, 0, Some(1)), Damage.BufferCells(bufferId, 2, 3, Some(4)), Damage.Chrome)
+      )
   }
 
   it should "report no damage when a transition changes nothing about the cursors at all" in {
@@ -58,7 +59,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, before) shouldBe Damage.Nothing
   }
 
-  it should "report every old and new row for a multi-cursor move, plus Chrome since the active gutter shows it" in {
+  it should "report every old and new caret cell for a multi-cursor move, plus Chrome since the status row shows it" in {
     val before = stateWithContent("alpha\nbeta\ngamma", cursors = List(CursorPosition(0, 0), CursorPosition(1, 0)))
     val after = before.copy(persisted =
       before.persisted.copy(buffers =
@@ -72,7 +73,15 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     )
 
     DamageProducer.forTransition(before, after) shouldBe
-      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1, 2)), Damage.Chrome))
+      Damage.Combined(
+        Set(
+          Damage.BufferCells(bufferId, 0, 0, Some(1)),
+          Damage.BufferCells(bufferId, 1, 0, Some(1)),
+          Damage.BufferCells(bufferId, 1, 2, Some(3)),
+          Damage.BufferCells(bufferId, 2, 0, Some(1)),
+          Damage.Chrome
+        )
+      )
   }
 
   it should "report the spanned rows for a selection change" in {
@@ -179,7 +188,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(2))
   }
 
-  it should "report the full buffer extent (plus Chrome, since the active gutter shows the language) on a language change" in {
+  it should "report every row (plus Chrome, since the status row shows the language) on a language change" in {
     val before = stateWithContent("first\nsecond\nthird")
     val after = before.copy(persisted =
       before.persisted.copy(buffers =
@@ -193,11 +202,11 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     )
 
     DamageProducer.forTransition(before, after) shouldBe
-      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1, 2)), Damage.Chrome))
+      Damage.Combined(Set(Damage.BufferAll(bufferId), Damage.Chrome))
   }
 
   it should
-    "report the full buffer extent (plus Chrome, since the active gutter's line numbers follow it) on a scroll" in {
+    "report every row on a scroll, and no Chrome, since line numbers repaint with their rows" in {
       val before = stateWithContent("first\nsecond\nthird")
       val after = before.copy(persisted =
         before.persisted.copy(buffers =
@@ -208,8 +217,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
         )
       )
 
-      DamageProducer.forTransition(before, after) shouldBe
-        Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1, 2)), Damage.Chrome))
+      DamageProducer.forTransition(before, after) shouldBe Damage.BufferAll(bufferId)
     }
 
   it should "report no damage from scrolling when the viewport does not actually change" in {
@@ -231,71 +239,28 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
       DamageProducer.forTransition(before, after) shouldBe Damage.Everything
     }
 
-  private val revealCell = AnimatedCell(
-    Some('x'),
-    foregroundAnimation = Some(Tween(java.awt.Color.WHITE, java.awt.Color.WHITE, EasingCurve.Linear, steps = 1))
-  )
+  private def withConfig(state: AppState, update: com.serenity.config.AppConfig => com.serenity.config.AppConfig) =
+    state.copy(persisted = state.persisted.copy(config = update(state.persisted.config)))
 
-  it should "report the changed rows when a character-reveal animation tick advances" in {
-    val before   = stateWithContent("first\nsecond\nthird")
-    val animated = AnimationState(Map(CharacterKey(0, 1) -> revealCell))
-
-    DamageProducer.forTransition(
-      before,
-      before,
-      beforeAnimations = Map.empty,
-      afterAnimations = Map(bufferId -> animated)
-    ) shouldBe Damage.BufferRows(bufferId, Set(1))
-  }
-
-  it should "report the union of changed rows when several cells across different rows tick at once" in {
-    val before   = stateWithContent("first\nsecond\nthird")
-    val animated = AnimationState(Map(CharacterKey(0, 0) -> revealCell, CharacterKey(2, 2) -> revealCell))
-
-    DamageProducer.forTransition(
-      before,
-      before,
-      beforeAnimations = Map.empty,
-      afterAnimations = Map(bufferId -> animated)
-    ) shouldBe Damage.BufferRows(bufferId, Set(0, 2))
-  }
-
-  it should "report no damage when a transition changes nothing about the buffer's animations" in {
-    val before   = stateWithContent("first\nsecond\nthird")
-    val animated = AnimationState(Map(CharacterKey(0, 1) -> revealCell))
-
-    DamageProducer.forTransition(
-      before,
-      before,
-      beforeAnimations = Map(bufferId -> animated),
-      afterAnimations = Map(bufferId -> animated)
-    ) shouldBe Damage.Nothing
-  }
-
-  it should "report Everything when a theme transition advances, since it cross-fades every visible glyph" in {
+  it should "report only the status row, not Everything, when the pinned status line's segments change (#1934)" in {
     val before = stateWithContent("alpha")
-    val after = before.copy(runtime =
-      before.runtime.copy(themeDiscovery =
-        before.runtime.themeDiscovery
-          .copy(transition = Some(ThemeTransition(before.persisted.theme, currentStep = 1, totalSteps = 10)))
-      )
-    )
+    val after  = withConfig(before, _.withStatusLineSegments(List(com.serenity.config.StatusSegment.WordCount)))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Chrome
+  }
+
+  it should "report Everything when the status line stops being pinned, since the layout changes (#1934)" in {
+    val before = stateWithContent("alpha")
+    val after  = withConfig(before, _.withStatusLinePlacement(com.serenity.config.StatusLinePlacement.Off))
 
     DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }
 
-  it should "report Everything when a surface animation advances, since it composites through the full-render path" in {
+  it should "report nothing when the config is replaced by an equal one (#1934)" in {
     val before = stateWithContent("alpha")
-    val after =
-      before.copy(runtime =
-        before.runtime.copy(motion =
-          before.runtime.motion.copy(surfaceAnimations =
-            before.runtime.motion.surfaceAnimations.updated(SurfaceId("palette"), SurfaceAnimationState())
-          )
-        )
-      )
+    val after  = withConfig(before, identity)
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
+    DamageProducer.forTransition(before, after) shouldBe Damage.Nothing
   }
 
   it should "report Everything when a floating/pinned surface appears" in {
@@ -405,6 +370,27 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     )
 
     DamageProducer.forTransition(before, after) shouldBe Damage.PaneChrome(activePaneId)
+  }
+
+  it should "report the tab strip's Surface damage when a dirty flag toggles with two buffers open" in {
+    val single = stateWithContent("alpha")
+    val other  = Buffer.fromString(BufferId(7), "other")
+    val before = single.copy(persisted =
+      single.persisted.copy(
+        buffers = single.persisted.buffers.updated(other.id, other),
+        bufferOrder = single.persisted.bufferOrder :+ other.id
+      )
+    )
+    val after = before.copy(persisted =
+      before.persisted.copy(buffers =
+        before.persisted.buffers.updated(
+          other.id,
+          other.copy(document = other.document.copy(isDirty = true))
+        )
+      )
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Surface(UiSurface.TabBarSurfaceId)
   }
 
   it should "report PaneChrome and Chrome damage when a buffer's file path changes, since both header and gutter show it" in {

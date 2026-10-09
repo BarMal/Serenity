@@ -1,8 +1,8 @@
 package com.serenity.perf
 
-import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.RenderDamageGranularity
-import com.serenity.keystroke.events.{InsertChar, ScrollDown}
+import com.serenity.config.AppConfigOps.*
+import com.serenity.config.{RenderDamageGranularity, StatusLinePlacement}
+import com.serenity.keystroke.events.{InsertChar, MoveDown, MoveRight, ScrollDown}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.perf.BenchmarkFixtures.{
   deepViewport,
@@ -12,9 +12,12 @@ import com.serenity.perf.BenchmarkFixtures.{
   withCursorsOnConsecutiveLines
 }
 import com.serenity.rope.Balance
-import com.serenity.state.manager.DamageProducer
+import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.{AppState, BufferId, Damage, PaneId}
 import com.serenity.state.reducers.EditorEventReducer
+import com.serenity.ui.layout.{CellMetrics, PixelRect}
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
+import com.serenity.{MockRenderSurface, VerticalNavSupport}
 
 /** #997's Rows-vs-Cells damage-computation comparison, across the five scenarios the issue names. This measures the
   * cost of computing and representing a `Damage` value under each `renderDamageGranularity` setting -- not paint cost,
@@ -32,7 +35,8 @@ private[perf] object DamageBenchmarks:
       shortLine: (AppState, AppState),
       multiCursor: (AppState, AppState),
       markdown: (AppState, AppState),
-      scroll: (AppState, AppState)
+      scroll: (AppState, AppState),
+      largeDocumentCaretMove: (AppState, AppState)
   )
 
   private def scenarios(): DamageScenarios =
@@ -85,12 +89,16 @@ private[perf] object DamageBenchmarks:
     )
     val scrollAfter = EditorEventReducer.reduce(ScrollDown(1), PaneId(0), scrollDeep).state
 
+    val largeDocument = editorState(largeMultilineDocument(lines = 100_000), Some(LanguageId.Scala))
+    val movedDown     = VerticalNavSupport.dispatch(MoveDown, PaneId(0), largeDocument).state
+
     DamageScenarios(
       longLine = editedContentPair("x" * 4_000, insertAt = 2_000, insertion = "y"),
       shortLine = editedContentPair("hi", insertAt = 1, insertion = "y"),
       multiCursor = (multiCursorBefore, multiCursorAfter),
       markdown = (asMarkdown(markdownBefore), asMarkdown(markdownAfter)),
-      scroll = (scrollDeep, scrollAfter)
+      scroll = (scrollDeep, scrollAfter),
+      largeDocumentCaretMove = (largeDocument, movedDown)
     )
 
   private def pair(
@@ -123,6 +131,57 @@ private[perf] object DamageBenchmarks:
         () => verifyCells(DamageProducer.forTransition(cellsBefore, cellsAfter)),
         () => DamageProducer.forTransition(cellsBefore, cellsAfter)
       )
+    )
+
+  /** #1891: the screen area a caret move publishes, with no status row and with the pinned one that shows the caret's
+    * position. `None` from the renderer means the whole canvas; anything else must be strictly smaller. The verify step
+    * prints the share of the canvas the published rects cover.
+    */
+  private def caretMoveRepaint(name: String, placement: StatusLinePlacement): BenchmarkRunner.Benchmark =
+    val font     = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val metrics  = CellMetrics.fromFont(font)
+    val viewport = BenchmarkFixtures.viewportSize
+    val fixture  = editorState(largeMultilineDocument(lines = 200), Some(LanguageId.Scala))
+    val before =
+      fixture.copy(persisted =
+        fixture.persisted.copy(config = fixture.persisted.config.withStatusLinePlacement(placement))
+      )
+    val after  = EditorEventReducer.reduce(MoveRight, PaneId(0), before).state
+    val damage = DamageProducer.forTransition(before, after)
+    def repaintAfterCaretMove(): Option[List[PixelRect]] =
+      val surface = MockRenderSurface(viewport.width, viewport.height, persistentContent = true)
+      val caches  = RenderCaches.create()
+      def frame(state: AppState, frameDamage: Damage) =
+        RendererEntryPoints.renderWithRepaintRects(
+          state,
+          cursorVisible = false,
+          surface,
+          viewport,
+          FontSpec.fromAwt(font),
+          FontSpec.fromAwt(font),
+          FontSpec.fromAwt(font),
+          metrics,
+          metrics,
+          None,
+          frameDamage,
+          caches
+        )
+      val _ = frame(before, Damage.Everything)
+      frame(after, damage)
+    val canvasAreaPx = viewport.width * metrics.charWidth * viewport.height * metrics.lineHeight
+    def verifySmallerThanCanvas(): Unit =
+      val region = repaintAfterCaretMove()
+      val areaPx = region.map(_.map(rect => rect.widthPx * rect.heightPx).sum)
+      assert(areaPx.exists(_ < canvasAreaPx), s"repaint region $region")
+      areaPx.foreach { area =>
+        println(f"$name: ${100.0 * area / canvasAreaPx}%.1f%% of the canvas in ${region.fold(0)(_.size)} rects")
+      }
+    BenchmarkRunner.Benchmark(
+      name,
+      3,
+      BenchmarkIterationCounts.Damage,
+      () => verifySmallerThanCanvas(),
+      () => repaintAfterCaretMove()
     )
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
@@ -161,15 +220,19 @@ private[perf] object DamageBenchmarks:
       "scroll",
       s.scroll._1,
       s.scroll._2,
-      // A scroll changes no buffer *content*, but it does move `viewport.topLine` -- which both `viewportDamage`
-      // (added after this scenario's original "both report Nothing" comment was written; #1453's CI wiring, running
-      // this suite for the first time ever, caught the comment as stale) and the legacy gutter's visible line numbers
-      // (`gutterDamage`) key off. Both settings are still equivalent here, exactly as #997 predicts, just not equal to
-      // `Nothing`: every row of the buffer, plus the gutter's `Chrome` damage.
-      verifyRows = damage =>
-        assert(damage == Damage.Combined(Set(Damage.BufferRows(BufferId(1), (0 until 20_000).toSet), Damage.Chrome))),
-      verifyCells = damage =>
-        assert(damage == Damage.Combined(Set(Damage.BufferRows(BufferId(1), (0 until 20_000).toSet), Damage.Chrome)))
-    )
+      // A scroll changes no buffer *content*, but it does move `viewport.topLine`, which `viewportDamage` keys off.
+      // Both settings are equivalent here, exactly as #997 predicts: every row of the buffer, as one fact whose size
+      // does not grow with the buffer's 20,000 lines (#1891). The status row shows no viewport, so no `Chrome`.
+      verifyRows = damage => assert(damage == Damage.BufferAll(BufferId(1))),
+      verifyCells = damage => assert(damage == Damage.BufferAll(BufferId(1)))
+    ) ++ pair(
+      "caret_move_100k_lines",
+      s.largeDocumentCaretMove._1,
+      s.largeDocumentCaretMove._2,
+      // Whatever the move does to the viewport, no fact may list the 100k lines one by one (#1891).
+      verifyRows = damage => assert(Damage.coarsenToRows(BufferId(1), damage).size <= 2, damage.toString.take(200)),
+      verifyCells = damage => assert(Damage.coarsenToRows(BufferId(1), damage).size <= 2, damage.toString.take(200))
+    ) :+ caretMoveRepaint("damage.caret_move.repaint_region", StatusLinePlacement.Off) :+
+      caretMoveRepaint("damage.caret_move.repaint_region.pinned_status", StatusLinePlacement.Pinned)
 
 end DamageBenchmarks

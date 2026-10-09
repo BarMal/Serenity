@@ -33,11 +33,11 @@ object TerminalInputDecoder:
     final case class Mouse(event: MouseInputEvent) extends DecodedToken
     final case class Pasted(text: String)          extends DecodedToken
 
-    /** One wheel notch. How far a notch scrolls is a setting (`InputConfig.wheelScrollLines`), and this decoder is pure
-      * over bytes with no configuration to consult, so it reports the notch and leaves the distance to
-      * [[TerminalInputHandler]].
+    /** One wheel notch at the pointer's (0-based) cell. How far a notch scrolls is a setting
+      * (`InputConfig.wheelScrollLines`), and this decoder is pure over bytes with no configuration to consult, so it
+      * reports the notch and leaves the distance to [[TerminalInputHandler]].
       */
-    final case class WheelNotch(down: Boolean) extends DecodedToken
+    final case class WheelNotch(col: Int, row: Int, down: Boolean) extends DecodedToken
 
     /** A bare modifier key's own press or release, decoded from a kitty-protocol CSI-u sequence reporting one of its
       * private-use-area modifier codepoints (`57441`-`57452`; see [[BareModifierCodepoints]]). xterm's
@@ -216,7 +216,7 @@ object TerminalInputDecoder:
     // A wheel report's low bits are the direction rather than a button: 64 is up, 65 is down. A release report for a
     // notch (there is no such thing on a real wheel, but 1006 mode permits the `m` form) would otherwise decode as a
     // second notch, so only the press form counts.
-    if isWheel then Option.when(!isRelease)(DecodedToken.WheelNotch(down = (cb & 0x01) != 0))
+    if isWheel then Option.when(!isRelease)(DecodedToken.WheelNotch(cx - 1, cy - 1, down = (cb & 0x01) != 0))
     else
       val col      = cx - 1
       val row      = cy - 1

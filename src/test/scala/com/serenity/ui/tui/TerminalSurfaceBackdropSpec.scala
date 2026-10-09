@@ -3,9 +3,8 @@ package com.serenity.ui.tui
 import java.awt.{Color, Font}
 import java.io.StringWriter
 
-import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey, EasingCurve, Tween}
 import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner, FileIntent}
-import com.serenity.config.{AppConfig, MaterialPreset, StatusLineColors}
+import com.serenity.config.{AppConfig, StatusLineColors}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{
@@ -22,8 +21,10 @@ import com.serenity.state.models.{
   SurfacePresentation,
   UiSurface
 }
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, Layout, LayoutRect, OverlayRow, OverlaySegment, OverlayTone, ViewportSize}
 import com.serenity.ui.renderer.{
+  FontSpec,
   PinnedPanelRenderer,
   RendererEntryPoints,
   TextOverlayRenderer,
@@ -31,13 +32,12 @@ import com.serenity.ui.renderer.{
   TextPanelRow,
   TextPanelView
 }
-import com.serenity.ui.theme.{DefaultThemes, Theme}
+import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** A terminal cannot paint a translucent panel, so under a theme whose background is the terminal's own (alpha 0, SGR
-  * 49) a floating surface or pinned panel shows that same backdrop through its translucent material instead of a solid
-  * block -- while its frame, text, selection highlight and tones keep their own colours.
+/** Panels are opaque: even under a theme whose background is the terminal's own (alpha 0, SGR 49), a floating surface
+  * or pinned panel paints its own panel colour, and its frame, text, selection highlight and tones keep their colours.
   */
 class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
 
@@ -45,8 +45,8 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
 
   private val cellMetrics = CellMetrics.cellUnit
   private val font        = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val transparent = DefaultThemes.transparent
-  private val backdrop    = TerminalEmulator.TransparentBackground
+  private val transparent =
+    Theme.dark.copy(background = RenderColor.fromRgba(0, 0, 0, 0), margin = RenderColor.fromRgba(0, 0, 0, 0))
 
   private def surface(width: Int, height: Int): (TerminalRenderSurface, StringWriter) =
     val writer = new StringWriter()
@@ -56,9 +56,10 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
     rs.flush()
     TerminalEmulator.blank(width, height).consume(writer.toString)
 
-  private def sameRgb(a: Color, b: Color): Boolean = (a.getRGB & 0xffffff) == (b.getRGB & 0xffffff)
+  private def sameRgb(cell: Color, expected: RenderColor): Boolean =
+    (cell.getRGB & 0xffffff) == (expected.argb & 0xffffff)
 
-  private def isBackdrop(color: Color): Boolean = color == backdrop
+  private def isPanel(color: Color): Boolean = sameRgb(color, transparent.panel.background)
 
   private def renderOverlay(
     overlay: TextOverlayView,
@@ -74,7 +75,7 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
   private val rect = LayoutRect(2, 1, 14, 6)
 
   "a floating overlay in the TUI under a transparent theme" should
-    "sit on the terminal's own background, frame and unselected rows included" in {
+    "paint its own opaque panel colour, frame and unselected rows included" in {
       val overlay = TextOverlayView(rect = rect, rows = List(OverlayRow("alpha", selected = true), OverlayRow("beta")))
 
       val screen = renderOverlay(overlay, transparent)
@@ -84,7 +85,7 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
       val selectedFrame = List((rect.x, selectedRow), (rect.right - 1, selectedRow))
       (unselected ++ selectedFrame).foreach { (x, y) =>
         withClue(s"cell ($x, $y) '${screen.cellAt(x, y).text}':\n${screen.render}\n")(
-          isBackdrop(screen.cellAt(x, y).bg) shouldBe true
+          isPanel(screen.cellAt(x, y).bg) shouldBe true
         )
       }
       screen.rowText(rect.y + 2).substring(rect.x + 1, rect.right - 1) should startWith("beta")
@@ -114,45 +115,7 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
 
     val (col, row) = screen.find("oops").getOrElse(fail(screen.render))
     sameRgb(screen.cellAt(col, row).bg, transparent.error.background) shouldBe true
-    isBackdrop(screen.cellAt(rect.right - 2, row).bg) shouldBe true
-  }
-
-  it should "show the backdrop once its fade-in has settled on the panel colour" in {
-    val panelBg = transparent.panel.background
-    val settled = AnimationState(
-      (0 until rect.height).map { row =>
-        CharacterKey(0, row) -> AnimatedCell(
-          content = None,
-          backgroundAnimation = Some(Tween(panelBg, panelBg, EasingCurve.Linear, steps = 1))
-        )
-      }.toMap
-    )
-    val overlay = TextOverlayView(rect = rect, animationState = settled, rows = List(OverlayRow("beta")))
-
-    val screen = renderOverlay(overlay, transparent)
-
-    (rect.y until rect.bottom).flatMap(rowCells(rect, _)).foreach { (x, y) =>
-      withClue(s"cell ($x, $y): ")(isBackdrop(screen.cellAt(x, y).bg) shouldBe true)
-    }
-  }
-
-  it should "paint no glass sheen stripe, which would be a tint of a panel colour the terminal is not showing" in {
-    val overlay = TextOverlayView(rect = rect, rows = List(OverlayRow("beta")))
-
-    val screen = renderOverlay(overlay, transparent, AppConfig.default.withMaterialPreset(MaterialPreset.Crystal))
-
-    (rect.x until rect.right).foreach { x =>
-      withClue(s"cell ($x, ${rect.y + 1}): ")(isBackdrop(screen.cellAt(x, rect.y + 1).bg) shouldBe true)
-    }
-  }
-
-  it should "keep the panel colour under a Solid material, which asks for an opaque panel" in {
-    val overlay = TextOverlayView(rect = rect, rows = List(OverlayRow("beta")))
-
-    val screen = renderOverlay(overlay, transparent, AppConfig.default.withMaterialPreset(MaterialPreset.Solid))
-
-    sameRgb(screen.cellAt(rect.right - 2, rect.y + 1).bg, transparent.panel.background) shouldBe true
-    sameRgb(screen.cellAt(rect.x, rect.y).bg, transparent.panel.background) shouldBe true
+    isPanel(screen.cellAt(rect.right - 2, row).bg) shouldBe true
   }
 
   "a status line in the TUI under a transparent theme" should "keep a background it was explicitly configured with" in {
@@ -167,7 +130,7 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
 
     val screen = renderOverlay(overlay, transparent, config)
 
-    sameRgb(screen.cellAt(15, 1).bg, Color.BLUE) shouldBe true
+    sameRgb(screen.cellAt(15, 1).bg, RenderColor.fromAwt(Color.BLUE)) shouldBe true
   }
 
   "a floating overlay in the TUI under an opaque theme" should "keep painting the theme's panel colour" in {
@@ -181,7 +144,7 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
   }
 
   "a pinned panel in the TUI under a transparent theme" should
-    "sit on the terminal's own background while its selected row keeps the highlight" in {
+    "paint its own opaque panel colour while its selected row keeps the highlight" in {
       val (rs, writer) = surface(20, 9)
       val panelRect    = LayoutRect(1, 1, 14, 5)
       val panel = TextPanelView(
@@ -200,13 +163,13 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
         .flatMap(rowCells(panelRect, _))
         .foreach { (x, y) =>
           withClue(s"cell ($x, $y) '${screen.cellAt(x, y).text}':\n${screen.render}\n")(
-            isBackdrop(screen.cellAt(x, y).bg) shouldBe true
+            isPanel(screen.cellAt(x, y).bg) shouldBe true
           )
         }
     }
 
   "the command runner rendered in the TUI under a transparent theme" should
-    "leave no solid panel-coloured block around its frame" in {
+    "paint its frame on its own opaque panel colour" in {
       val viewport     = ViewportSize(60, 20)
       val (rs, writer) = surface(viewport.width, viewport.height)
 
@@ -215,8 +178,8 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
         cursorVisible = false,
         rs,
         viewport,
-        font,
-        font,
+        FontSpec.fromAwt(font),
+        FontSpec.fromAwt(font),
         cellMetrics,
         None,
         RenderCaches.create()
@@ -227,12 +190,8 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
       val left          = screen.rowText(top).indexOf("╭")
       val right         = screen.rowText(top).indexOf("╮")
       val frameRect     = LayoutRect(left, top, right - left + 1, bottom - top + 1)
-      val panelCells = (frameRect.y until frameRect.bottom).flatMap(rowCells(frameRect, _)).filter { (x, y) =>
-        sameRgb(screen.cellAt(x, y).bg, transparent.panel.background)
-      }
-      withClue(s"panel-coloured cells $panelCells:\n${screen.render}\n")(panelCells shouldBe empty)
       List((frameRect.x, frameRect.y), (frameRect.right - 1, frameRect.bottom - 1)).foreach { (x, y) =>
-        isBackdrop(screen.cellAt(x, y).bg) shouldBe true
+        withClue(s"cell ($x, $y):\n${screen.render}\n")(isPanel(screen.cellAt(x, y).bg) shouldBe true)
       }
     }
 

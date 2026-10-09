@@ -6,6 +6,7 @@ import com.serenity.keystroke.events.{InsertChar, NewTab, PreviousTab}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -20,8 +21,8 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     given com.serenity.rope.Balance = com.serenity.rope.Balance.default
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
     val logger                      = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager                = StateManager.apply(logger).unsafeRunSync()
-    val wideTerminal                = ViewportSize(400, 24) // Wide enough for multiple panes
+    val stateManager = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    val wideTerminal = ViewportSize(400, 24) // Wide enough for multiple panes
 
   it should "maintain cursor position per buffer when switching between buffers" in new CursorTrackingFixture:
     // Given: Wide terminal and two buffers with different content

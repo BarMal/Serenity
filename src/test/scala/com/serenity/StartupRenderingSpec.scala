@@ -9,11 +9,10 @@ import cats.syntax.traverse.*
 import com.serenity.app.AppStartup
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, RendererStartPage}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -30,7 +29,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
         stateManager.sessionService,
         stateManager.sessionStartupInfo,
@@ -57,7 +56,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
         stateManager.sessionService,
         stateManager.sessionStartupInfo,
@@ -87,7 +86,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
         stateManager.sessionService,
         stateManager.sessionStartupInfo,
@@ -138,7 +137,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
         stateManager.sessionService,
         stateManager.sessionStartupInfo,
@@ -157,9 +156,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
         cursorVisible = true,
         surface,
         ViewportSize(100, 30),
-        codeFont,
-        codeFont,
-        uiFont,
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(uiFont),
         codeMetrics,
         uiMetrics,
         None,
@@ -182,7 +181,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
         stateManager.sessionService,
         stateManager.sessionStartupInfo,
@@ -201,9 +200,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
         cursorVisible = true,
         surface,
         ViewportSize(100, 30),
-        codeFont,
-        codeFont,
-        uiFont,
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(uiFont),
         codeMetrics,
         uiMetrics,
         None,
@@ -224,7 +223,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
         stateManager.sessionService,
         stateManager.sessionStartupInfo,
@@ -243,9 +242,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
         cursorVisible = true,
         surface,
         ViewportSize(100, 30),
-        codeFont,
-        codeFont,
-        uiFont,
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(codeFont),
+        FontSpec.fromAwt(uiFont),
         codeMetrics,
         uiMetrics,
         None,
@@ -300,8 +299,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = codeFont,
-      textFont = textFont,
+      codeFont = FontSpec.fromAwt(codeFont),
+      textFont = FontSpec.fromAwt(textFont),
       cellMetrics = codeMetrics,
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -367,8 +366,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = codeFont,
-      textFont = textFont,
+      codeFont = FontSpec.fromAwt(codeFont),
+      textFont = FontSpec.fromAwt(textFont),
       cellMetrics = codeMetrics,
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -413,8 +412,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = codeFont,
-      textFont = textFont,
+      codeFont = FontSpec.fromAwt(codeFont),
+      textFont = FontSpec.fromAwt(textFont),
       cellMetrics = codeMetrics,
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -448,8 +447,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      codeFont = codeFont,
-      textFont = textFont,
+      codeFont = FontSpec.fromAwt(codeFont),
+      textFont = FontSpec.fromAwt(textFont),
       cellMetrics = codeMetrics,
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
@@ -469,8 +468,13 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val promptRun = surface.drawRunPxCalls
       .find(_.s == "Start typing to edit text.")
       .getOrElse(fail("expected welcome prompt draw call"))
+    // The hint names this OS's binding (Cmd+P on macOS), so take it from the same rule the renderer uses.
+    val paletteHint = RendererStartPage
+      .welcomeLines(state.persisted.config.inputConfig.hotkeyConfig, System.getProperty("os.name", ""))
+      .lastOption
+      .getOrElse(fail("expected a command palette hint"))
     val commandRun = surface.drawRunPxCalls
-      .find(_.s == "Press Ctrl+P for command palette")
+      .find(_.s == paletteHint)
       .getOrElse(fail("expected welcome command draw call"))
 
     titleRun.yPx shouldBe expectedTopPx
@@ -483,7 +487,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("Welcome to Serenity!", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
@@ -503,7 +507,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("Hello", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
@@ -526,7 +530,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
@@ -549,7 +553,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
@@ -575,7 +579,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      stateManager <- warmStateManager(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head

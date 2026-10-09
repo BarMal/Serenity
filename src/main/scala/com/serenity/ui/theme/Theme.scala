@@ -1,45 +1,44 @@
 package com.serenity.ui.theme
 
-import java.awt.Color
+import com.serenity.ui.color.RenderColor
 
 final case class Theme(
     name: String,
-    foreground: Color,
-    background: Color,
-    cursor: Color,
+    foreground: RenderColor,
+    background: RenderColor,
+    cursor: RenderColor,
     highlighted: ThemeColor,
     menuItem: ThemeColor,
     panel: ThemeColor,
     error: ThemeColor,
     warning: ThemeColor,
-    border: Color,
-    panelBorder: Color,
-    margin: Color,
-    muted: Color,
-    placeholder: Color,
+    border: RenderColor,
+    panelBorder: RenderColor,
+    margin: RenderColor,
+    muted: RenderColor,
+    placeholder: RenderColor,
     textStyle: TextStyle,
     syntaxColors: Map[SyntaxElement, ThemeColor],
-    // Unconditionally present, like every other field above -- a theme file that doesn't declare either gets a value
-    // derived from colors the theme already has (`InteractionStates.derive`/`ElevationLevels.derive`, applied by
+    // Unconditionally present, like every other field above -- a theme file that doesn't declare it gets a value
+    // derived from colors the theme already has (`InteractionStates.derive`, applied by
     // `ConfigurableThemeManager.configToTheme`); the optionality lives only in `ThemeConfig`, the same split
     // `warning` already uses.
-    interactionStates: InteractionStates,
-    elevation: ElevationLevels
+    interactionStates: InteractionStates
 ):
   /** Accent used for interactive affordances such as the caret and primary controls. */
-  def accent: Color = cursor
+  def accent: RenderColor = cursor
 
   /** Quiet selected-row treatment; selection remains distinguishable from focus outlines. */
   def selection: ThemeColor = highlighted
 
   /** Focus outline colour. Focused controls also retain their border/outline treatment. */
-  def focus: Color = border
+  def focus: RenderColor = border
 
   /** Non-colour focus cue used for selected actions and controls. */
   def focusStyle: TextStyle = TextStyle.bold
 
   /** Active-pane indication, separate from the general focus outline and row selection. */
-  def activePane: Color = panelBorder
+  def activePane: RenderColor = panelBorder
 
   /** Raised surface colour pair used by panels, overlays, and chrome. */
   def surface: ThemeColor = panel
@@ -65,15 +64,14 @@ final case class Theme(
   def colorFor(element: SyntaxElement): ThemeColor =
     syntaxColors.getOrElse(element, ThemeColor(foreground, background, TextStyle.normal))
 
-  def foregroundColor: Color = foreground
-  def backgroundColor: Color = background
-  def cursorColor: Color     = cursor
+  def foregroundColor: RenderColor = foreground
+  def backgroundColor: RenderColor = background
+  def cursorColor: RenderColor     = cursor
 
 final case class ThemeColor(
-    foreground: Color,
-    background: Color,
-    style: TextStyle = TextStyle.normal,
-    alpha: NormalizedAlpha = NormalizedAlpha.Opaque
+    foreground: RenderColor,
+    background: RenderColor,
+    style: TextStyle = TextStyle.normal
 )
 
 /** Semantic status treatments kept distinct from selection, focus, and regular text roles. */
@@ -88,8 +86,8 @@ object Theme:
     * number compared to an unknown real backdrop. Short-circuit to `Double.PositiveInfinity` -- "trivially satisfies
     * any contrast requirement" -- instead of silently reporting a number that only pretends to mean something.
     */
-  def contrastRatio(foreground: Color, background: Color): Double =
-    if foreground.getAlpha == 0 || background.getAlpha == 0 then Double.PositiveInfinity
+  def contrastRatio(foreground: RenderColor, background: RenderColor): Double =
+    if foreground.alpha == 0 || background.alpha == 0 then Double.PositiveInfinity
     else
       val foregroundLuminance = luminance(foreground)
       val backgroundLuminance = luminance(background)
@@ -100,34 +98,18 @@ object Theme:
     * ratios here, or light/dark chrome decisions elsewhere -- should call this rather than approximate it locally,
     * since differently-shaped approximations can disagree on whether the same color reads as light or dark.
     */
-  def luminance(color: Color): Double =
+  def luminance(color: RenderColor): Double =
     def linear(channel: Int): Double =
       val normalized = channel / 255.0
       if normalized <= 0.04045 then normalized / 12.92 else math.pow((normalized + 0.055) / 1.055, 2.4)
 
-    (0.2126 * linear(color.getRed)) + (0.7152 * linear(color.getGreen)) + (0.0722 * linear(color.getBlue))
+    (0.2126 * linear(color.red)) + (0.7152 * linear(color.green)) + (0.0722 * linear(color.blue))
 
   /** The luminance at which a color's WCAG contrast ratio to black equals its contrast ratio to white -- the standard
     * threshold for picking a black-or-white (or dark-mode-or-light-mode) foreground against a background of that
     * luminance. Solves `(L + 0.05) / 0.05 == 1.05 / (L + 0.05)` for `L`.
     */
   val EqualContrastLuminanceThreshold: Double = math.sqrt(1.05 * 0.05) - 0.05
-
-  /** Component-wise linear blend from `from` toward `to`, clamped to `[0, 1]`; keeps `from`'s alpha. The one shared
-    * copy of the technique `InteractionStates.derive` and `ElevationLevels.derive` use for hover/pressed/disabled and
-    * elevation tints -- see `SurfaceMaterials.blend` in the renderer package for the same idiom applied to painting.
-    */
-  private[theme] def blend(from: Color, to: Color, factor: Double): Color =
-    val t = factor.max(0.0).min(1.0)
-    def component(start: Int, end: Int): Int =
-      math.round(start + (end - start) * t).toInt.max(0).min(255)
-
-    new Color(
-      component(from.getRed, to.getRed),
-      component(from.getGreen, to.getGreen),
-      component(from.getBlue, to.getBlue),
-      from.getAlpha
-    )
 
   def dark: Theme = DefaultThemes.defaultDark.copy(name = "dark")
 

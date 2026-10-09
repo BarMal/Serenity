@@ -47,10 +47,66 @@ package com.serenity.perf
   *     runs at both counts showed `p95`/`max` spike sharply (once to 11.66ms against a ~2ms p50), which points at
   *     GC-pause sensitivity as the next thing to check if CI keeps flagging this after the bump -- see
   *     `BenchmarkRunner.AllocationTracked`.
+  *
+  * `laptop.input.state_manager.typing_*` (issues #1798, #1812) take the 20 samples their `laptop.input.*` neighbours
+  * already use; no CV comparison was run for them, so the count is a convention, not a derivation.
+  *
+  * `laptop.input.state_manager.go_to_line_3000_paragraphs` (2 warmups / 10 samples / batch 1 -> 100 / 40 / batch 8):
+  * one invocation is the whole jump-and-back sequence, ~20ms before the JIT has settled, so `BenchmarkRunner`
+  * calibrates batch to 1 and the 500ms warmup budget fits only ~20 invocations -- the samples were still taken while
+  * C1/C2 compiled, and the p50 drifted with it (six runs: 13.5-23.9ms, 1.78x spread; that is what CI flagged at
+  * 2.0-2.7x on unrelated PRs). The minimum warmup count forces enough invocations for the hot path to be compiled; 40
+  * samples and a minimum batch of 8 make each sample span eight sequences, so a GC pause or JIT event is averaged into
+  * it rather than being the sample. The event sequence measured is unchanged.
+  *
+  * `rope.large_json.cursor_offset` (3 -> 10,000 warmups, plus `settleJit`): the timed call is a ~1ms rope build, so
+  * `BenchmarkRunner`'s 500ms warmup budget ran only ~400 invocations, short of the ~5,000 at which HotSpot hands the
+  * whole call to C2. Per-200ms timings over a run show three plateaus -- ~1.8ms, ~1.1ms, ~0.8ms -- with the steps
+  * between them landing at roughly 5,000-6,000 invocations, so the sampled p50 was whichever plateau the run had
+  * reached. Twelve local runs at the old setting: p50 1.06-1.09ms in eight, 1.76-2.68ms in four (2.5x spread). CI
+  * compared the base's slowest run with the head's fastest, so a base on 0.97ms against a head on 1.98ms read as a 2x
+  * regression (#2054). Twelve at the new setting: 0.80-0.88ms in nine, 1.12-1.23ms in three (1.55x spread); the slow
+  * plateau is gone. The 1.1ms outcome that remains is a steady state, not a warmup transient: it held for 14s with the
+  * compile queue empty, so more warmup does not remove it and the gate's 2.0x ratio still clears it.
+  *
+  * The 2026-10-08 audit of every benchmark (ten JVMs per variant at 1x and 2x, tables in
+  * docs/performance-benchmarks.md) found two causes behind most of the remaining run-to-run spread. First, the timed
+  * phase was `iterations x sample`: 22ms for `render.full_frame.java2d`, under 200ms for most others, so one stall of
+  * that length moved the whole median. `BenchmarkRunner` now samples until the samples span 400ms; the counts above are
+  * its minimum. The three benchmarks that type without deleting keep their count, as every extra sample grows their
+  * document (`typing_random_letters` went from 1.30 to 2.05ms). Second, eight benchmarks sit on a JIT plateau that the
+  * 500ms warmup ends before C2 has finished (`lsp.framer.large_batch` 1.83ms before, 0.62ms settled); they are listed
+  * in `JitSettled` and run the settle phase. Settling every benchmark was measured and rejected: it added 170s to a 72s
+  * run, and for `laptop.input.state_manager.*` it widened the spread (4 to 6x) rather than narrowing it.
+  *
+  * `laptop.present.*` (8 -> 24) went with fixing what they measured, after `swing_paint_window` failed the gate on an
+  * unrelated PR at 2.19x: it timed an X-pixmap cache hit, bimodal within one run. More samples cannot fix a bimodal
+  * measurement and were not the fix; at about 3ms (1x) to 11ms (2x) per synced frame they cost under a second, and give
+  * the p50 more than eight points to sit among.
   */
 private[perf] object BenchmarkIterationCounts:
-  val Damage                = 60
-  val Reducer               = 60
-  val LspFramer             = 48
-  val RenderMarkdown        = 24
-  val LayoutVisibleViewport = 60
+  val Damage                  = 60
+  val Reducer                 = 60
+  val LspFramer               = 48
+  val RenderMarkdown          = 24
+  val LayoutVisibleViewport   = 60
+  val RandomTyping            = 20
+  val Present                 = 24
+  val GoToLineWarmups         = 100
+  val GoToLine                = 40
+  val GoToLineBatch           = 8
+  val RopeCursorOffsetWarmups = 10_000
+
+  /** Benchmarks that, like `rope.large_json.cursor_offset` (which opts in on its own definition), run the settle phase
+    * before sampling. See the derivation above.
+    */
+  val JitSettled: Set[String] = Set(
+    "rope.large_json.search",
+    "lsp.framer.large_batch",
+    "richdoc.open.docx",
+    "command_runner.palette.keystroke",
+    "reducer.multi_cursor_move_down",
+    "damage.caret_move.repaint_region.pinned_status",
+    "render.cursor_only.scene_reuse.java2d_overlay",
+    "render.diagnostics_and_comments.java2d"
+  )

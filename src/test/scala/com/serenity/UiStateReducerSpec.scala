@@ -5,8 +5,9 @@ import java.nio.file.Paths
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalStateReducer, PanelStateReducer, PeekStateReducer, UndoEffect}
-import com.serenity.state.undo.HistoryEntry
+import com.serenity.state.undo.{EditGrouping, HistoryEntry}
 import com.serenity.ui.layout.*
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -63,7 +64,7 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val findShown    = ModalStateReducer.show(Modal.Find("", Nil, 0), state).state
+    val findShown    = ModalStateReducer.show(Modal.Find(TextField.of(""), Vector.empty, 0), state).state
     val findSurface  = findShown.modalSurface.getOrElse(fail("Expected find modal surface"))
     val replaceShown = ModalStateReducer.show(Modal.ReplaceWorkflow(ReplaceWorkflowState()), state).state
     val replaceSurface =
@@ -96,7 +97,7 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     val peekSurface = shown.state.runtime.uiSurfaces.find(_.content == SurfaceContent.QuickInfo("signature"))
 
     peekSurface shouldBe defined
-    shown.state.persisted.focus shouldBe Focus.Surface(peekSurface.get.id)
+    shown.state.persisted.focus shouldBe Focus.EditorPane(paneId)
     peekSurface.get.presentation shouldBe SurfacePresentation.Floating(
       Some(CursorPosition(3, 4)),
       SurfacePlacement.AboveCursor
@@ -165,12 +166,12 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
 
     val pinned = PanelStateReducer.pin(content, PanelPosition.Left, 24, baseState)
     pinned.effects shouldBe List(
-      AppEffect.Undo(UndoEffect.RecordBoundary(HistoryEntry.PanelChange.capture(baseState), groupable = false))
+      AppEffect.Undo(UndoEffect.RecordBoundary(HistoryEntry.PanelChange.capture(baseState), EditGrouping.Standalone))
     )
 
     val unpinned = PanelStateReducer.unpin(PanelPosition.Left, pinned.state)
     unpinned.effects shouldBe List(
-      AppEffect.Undo(UndoEffect.RecordBoundary(HistoryEntry.PanelChange.capture(pinned.state), groupable = false))
+      AppEffect.Undo(UndoEffect.RecordBoundary(HistoryEntry.PanelChange.capture(pinned.state), EditGrouping.Standalone))
     )
   }
 

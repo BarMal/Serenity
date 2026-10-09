@@ -1,18 +1,18 @@
 package com.serenity.frontend
 
-import java.awt.Color
-
-import cats.effect.IO
+import cats.effect.{IO, Resource}
+import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.{InputHandler, InputRouter}
 import com.serenity.keystroke.events.Event
-import com.serenity.state.manager.RenderCaches
-import com.serenity.state.models.{AppState, BufferId, Damage}
+import com.serenity.state.manager.{Model, RenderCaches}
+import com.serenity.state.models.{AppState, Damage, PointerShape}
+import com.serenity.ui.color.RenderColor
 
 object FrontendRuntime:
 
   /** Paints one frame: the current state, whether the caret is visible this tick, the caret's colour override (if any),
-    * the damage accumulated since the last frame, the buffer animations in flight, and the `RenderCaches` instance to
-    * paint with. Owned here rather than inline in `AppRuntime` because it is exactly the shape
+    * the damage accumulated since the last frame, and the `RenderCaches` instance to paint with. Owned here rather than
+    * inline in `AppRuntime` because it is exactly the shape
     * [[FrontendRuntime.renderFull]]/[[FrontendRuntime.renderCursorOnly]] share -- moved from `AppRuntime.RenderFn`
     * alongside the rest of this issue's remaining #1669 scope. `RenderCaches` itself stays a call-time argument rather
     * than something closed over when a concrete `FrontendRuntime` is built (`Main.runGui`/`TuiRuntime.run`, both before
@@ -23,11 +23,23 @@ object FrontendRuntime:
     (
       AppState,
       Boolean,
-      Option[Color],
+      Option[RenderColor],
       Damage,
-      Map[BufferId, com.serenity.animation.AnimationState],
       RenderCaches
     ) => IO[Unit]
+
+  /** Draws into a surface that is never presented, so the startup warm-up can exercise the renderer without touching
+    * the visible frame.
+    */
+  final case class OffscreenFrames(
+      full: (AppState, Damage, RenderCaches) => IO[Unit],
+      cursorOnly: (AppState, RenderCaches) => IO[Unit]
+  )
+
+  /** What a frontend's menus need of the running application: the model to read when one opens, and a way to run an
+    * effect from a UI callback that is not itself inside the runtime.
+    */
+  final case class MenuHost(readModel: IO[Model], runAsync: IO[Unit] => Unit)
 
 /** The rendering/input bundle a concrete launch builds once its real Swing or terminal resource is acquired
   * (`Main.runGui`/`TuiRuntime.run`), and `AppRuntime.run` takes to get its rendering and input behaviour from -- issue
@@ -50,5 +62,12 @@ object FrontendRuntime:
 final case class FrontendRuntime(
     inputHandler: InputRouter[IO, Event] => IO[InputHandler[IO]],
     renderFull: FrontendRuntime.RenderFn,
-    renderCursorOnly: FrontendRuntime.RenderFn
-)
+    renderCursorOnly: FrontendRuntime.RenderFn,
+    frameTimings: FrameTimings = FrameTimings(),
+    offscreenFrames: Option[Resource[IO, FrontendRuntime.OffscreenFrames]] = None,
+    menus: Option[FrontendRuntime.MenuHost => Resource[IO, Unit]] = None,
+    applyPointerShape: PointerShape => IO[Unit] = _ => IO.unit
+):
+
+  def menuResource(readModel: IO[Model], runAsync: IO[Unit] => Unit): Resource[IO, Unit] =
+    menus.fold(Resource.unit[IO])(_(FrontendRuntime.MenuHost(readModel, runAsync)))

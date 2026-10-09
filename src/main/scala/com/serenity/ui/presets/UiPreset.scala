@@ -17,7 +17,7 @@ import io.circe.syntax.*
 final case class UiPreset(
     name: String,
     config: AppConfig,
-    themeName: String,
+    themeName: Option[String] = None,
     dockedPanels: List[SessionDockedPanel] = Nil,
     targetEditorPaneCount: Option[Int] = None,
     workspaceTree: Option[SessionWorkspaceNode] = None,
@@ -26,6 +26,10 @@ final case class UiPreset(
     unknownFields: JsonObject = JsonObject.empty,
     configUnknownFields: JsonObject = JsonObject.empty
 ):
+
+  /** This preset naming `theme` -- none when blank, as the codec reads a blank name -- or no theme at all. */
+  def withThemeName(theme: Option[String]): UiPreset =
+    copy(themeName = theme.map(_.trim).filter(_.nonEmpty))
 
   /** Flat view of the persisted panel content, independent of workspace-tree topology. */
   def pinnedPanels: List[SessionPinnedPanel] = dockedPanels.map(_.panel)
@@ -58,7 +62,6 @@ object UiPreset:
     case Appearance(config: AppConfig, themeName: Option[String] = None)
     case DocumentDefaults(config: AppConfig)
     case LanguageTools(config: AppConfig)
-    case Motion(config: AppConfig)
     case TextDisplay(config: AppConfig)
     case Typography(config: AppConfig)
 
@@ -67,14 +70,12 @@ object UiPreset:
         case Appearance(config, themeName) =>
           preset.copy(
             config = patchAppearanceConfig(preset.config, config),
-            themeName = themeName.getOrElse(preset.themeName)
+            themeName = themeName.orElse(preset.themeName)
           )
         case DocumentDefaults(config) =>
           preset.copy(config = patchDocumentDefaultsConfig(preset.config, config))
         case LanguageTools(config) =>
           preset.copy(config = patchLanguageToolsConfig(preset.config, config))
-        case Motion(config) =>
-          preset.copy(config = patchMotionConfig(preset.config, config))
         case TextDisplay(config) =>
           preset.copy(config = patchTextDisplayConfig(preset.config, config))
         case Typography(config) =>
@@ -82,13 +83,6 @@ object UiPreset:
 
   private def patchAppearanceConfig(base: AppConfig, source: AppConfig): AppConfig =
     base
-      .withSurfaceConfig(
-        base.surfaceConfig.copy(
-          blurRadius = source.surfaceConfig.blurRadius,
-          backgroundStyle = source.surfaceConfig.backgroundStyle,
-          materialPreset = source.surfaceConfig.materialPreset
-        )
-      )
       .withInterfaceConfig(source.interfaceConfig)
       .withCursorConfig(source.cursorConfig)
 
@@ -98,27 +92,6 @@ object UiPreset:
   private def patchLanguageToolsConfig(base: AppConfig, source: AppConfig): AppConfig =
     base.withLanguageToolsConfig(source.languageToolsConfig)
 
-  private def patchMotionConfig(base: AppConfig, source: AppConfig): AppConfig =
-    base
-      .withEditorConfig(base.editorConfig.copy(characterAnimation = source.editorConfig.characterAnimation))
-      .withSurfaceConfig(
-        base.surfaceConfig.copy(
-          motionPreset = source.surfaceConfig.motionPreset,
-          elementTransitionSpeedScale = source.surfaceConfig.elementTransitionSpeedScale,
-          editorTextTransitionSpeedScale = source.surfaceConfig.editorTextTransitionSpeedScale,
-          commandRunnerTransitionSpeedScale = source.surfaceConfig.commandRunnerTransitionSpeedScale,
-          uiTransitionSpeedScale = source.surfaceConfig.uiTransitionSpeedScale,
-          cursorTransitionSpeedScale = source.surfaceConfig.cursorTransitionSpeedScale,
-          commandRunnerAnimation = source.surfaceConfig.commandRunnerAnimation,
-          uiAnimation = source.surfaceConfig.uiAnimation,
-          editorInsertionTransitionKind = source.surfaceConfig.editorInsertionTransitionKind,
-          commandRunnerTransitionKind = source.surfaceConfig.commandRunnerTransitionKind,
-          panelOpenTransitionKind = source.surfaceConfig.panelOpenTransitionKind,
-          panelCloseTransitionKind = source.surfaceConfig.panelCloseTransitionKind,
-          motionConfiguration = source.surfaceConfig.motionConfiguration
-        )
-      )
-
   private def patchTextDisplayConfig(base: AppConfig, source: AppConfig): AppConfig =
     base
       .withStatusLine(source.statusLine)
@@ -127,6 +100,7 @@ object UiPreset:
           showLineNumbers = source.surfaceConfig.showLineNumbers,
           wordWrapEnabled = source.surfaceConfig.wordWrapEnabled,
           textAreaInsets = source.surfaceConfig.textAreaInsets,
+          proseMeasure = source.surfaceConfig.proseMeasure,
           viewportSizing = source.surfaceConfig.viewportSizing
         )
       )
@@ -153,9 +127,23 @@ object UiPreset:
             if includeContextualToolbar then source.surfaceConfig.contextualToolbarEnabled
             else base.surfaceConfig.contextualToolbarEnabled,
           textAreaInsets =
-            if includeTextAreaInsets then source.surfaceConfig.textAreaInsets else base.surfaceConfig.textAreaInsets
+            if includeTextAreaInsets then source.surfaceConfig.textAreaInsets else base.surfaceConfig.textAreaInsets,
+          proseMeasure =
+            if includeTextAreaInsets then source.surfaceConfig.proseMeasure else base.surfaceConfig.proseMeasure
         )
       )
+
+  /** The writing aids a prose workflow turns on, keeping the rest of the user's spell-check setup. */
+  private def patchProseWriting(base: AppConfig, source: AppConfig): AppConfig =
+    base
+      .withSmartPunctuation(source.languageToolsConfig.smartPunctuationEnabled)
+      .withSpellCheck(base.languageToolsConfig.spellCheck.copy(enabled = source.languageToolsConfig.spellCheck.enabled))
+      .withTypewriterScrolling(source.surfaceConfig.typewriterScrollingEnabled)
+      .withFocusedTextBody(source.surfaceConfig.focusedTextBodyEnabled)
+
+  /** A built-in workflow is one of [[builtInNames]], matched by name. */
+  private[presets] def isBuiltInWorkflow(preset: UiPreset): Boolean =
+    builtInNames.exists(name => nameKey(name) == nameKey(preset.name))
 
   /** Exposed at `presets` visibility so [[UiPresetDiff]] can reuse this exact resolution rather than reimplementing it
     * -- the "would apply" side of a built-in workflow's diff has to be the same merge `applyBuiltInWorkflowToState`
@@ -166,20 +154,12 @@ object UiPreset:
     // The workflow's app mode travels with it: a prose workflow on a code workspace would otherwise leave the
     // settings tree filtering out exactly the prose groups the workflow just made relevant.
     val withMode       = base.withAppMode(source.appMode)
-    val withMotion     = patchMotionConfig(withMode, source)
-    val withTypography = patchTypographyConfig(withMotion, source)
+    val withTypography = patchTypographyConfig(withMode, source)
 
     nameKey(preset.name) match
       case "writing" =>
         val withChrome = patchWorkflowChrome(withTypography, source, includeTextAreaInsets = true)
-        withChrome
-          .withSurfaceConfig(
-            withChrome.surfaceConfig.copy(
-              blurRadius = source.surfaceConfig.blurRadius,
-              backgroundStyle = source.surfaceConfig.backgroundStyle,
-              materialPreset = source.surfaceConfig.materialPreset
-            )
-          )
+        patchProseWriting(withChrome, source)
           .withDocumentConfig(source.documentConfig)
           .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
       case "documentation" =>
@@ -245,19 +225,46 @@ object UiPreset:
           preferredSize = preferredWindowSize.orElse(state.persisted.config.preferredWindowSize)
         )
       ),
-      themeName = state.persisted.theme.name,
+      themeName = Some(state.persisted.theme.name),
       dockedPanels = dockedPanels,
       targetEditorPaneCount = Option(state.persisted.layout.editorPanes.size).filter(_ > 0),
       workspaceTree = workspaceTree,
       maximizedWorkspaceNodeId = SessionWorkspaceNode.captureMaximizedNodeId(state, workspaceTree)
     )
 
-  def applyToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
-    applyToState(preset.withPanelIds, state, theme, preset.config)
+  def applyToState(preset: UiPreset, state: AppState, presetTheme: Option[Theme]): AppState =
+    applyToState(
+      preset.withPanelIds,
+      state,
+      appliedTheme(state.persisted.config, state.persisted.theme, presetTheme),
+      appliedConfig(state.persisted.config, preset)
+    )
 
-  /** Apply a built-in workflow without replacing unrelated persisted configuration. */
-  def applyBuiltInWorkflowToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
-    applyToState(preset.withPanelIds, state, theme, mergeBuiltInWorkflowConfig(state.persisted.config, preset))
+  /** The theme `running` ends up with after a preset that carries `presetTheme` (none when the preset names no theme)
+    * is applied. While `running` follows the OS the OS-chosen theme stays: the preset's theme is neither applied nor
+    * written into the light, dark or high-contrast slot -- those slots are the person's own mapping, kept like the rest
+    * of `theme.*` (see [[appliedConfig]]), and a preset is not the place to rewrite it.
+    */
+  private[presets] def appliedTheme(running: AppConfig, current: Theme, presetTheme: Option[Theme]): Theme =
+    if running.themeFollowConfig.followSystem then current else presetTheme.getOrElse(current)
+
+  /** `preset`'s config as it takes over from `running`: hotkeys read the way `running` holds its own, and the
+    * `theme.follow_system` settings stay as `running` has them -- whether the theme tracks the OS is not part of how a
+    * workspace looks, so a preset (captured with it off, or on someone else's machine) neither switches it off nor on.
+    */
+  private[presets] def appliedConfig(running: AppConfig, preset: UiPreset): AppConfig =
+    HotkeyOverrides.likeRunning(running, preset.config).withThemeFollowConfig(running.themeFollowConfig)
+
+  /** Apply a built-in workflow without replacing unrelated persisted configuration -- the theme included: a workflow is
+    * about how the workspace behaves, and the user's colours are theirs (#1880).
+    */
+  def applyBuiltInWorkflowToState(preset: UiPreset, state: AppState): AppState =
+    applyToState(
+      preset.withPanelIds,
+      state,
+      state.persisted.theme,
+      mergeBuiltInWorkflowConfig(state.persisted.config, preset)
+    )
 
   private def applyToState(preset: UiPreset, state: AppState, theme: Theme, config: AppConfig): AppState =
     val unpinnedSurfaces = state.runtime.uiSurfaces.filter {
@@ -328,12 +335,7 @@ object UiPreset:
       ),
       runtime = state.runtime.copy(
         uiSurfaces = unpinnedSurfaces ++ restoredPanels,
-        nextSurfaceId = reservedNextSurfaceId,
-        motion = state.runtime.motion.copy(surfaceAnimations =
-          state.runtime.motion.surfaceAnimations.filterNot((surfaceId, _) =>
-            state.pinnedSurfaces.exists(_.id == surfaceId)
-          )
-        )
+        nextSurfaceId = reservedNextSurfaceId
       )
     )
 
@@ -406,6 +408,7 @@ object UiPreset:
       .encodeObject(preset)
       .remove("unknownFields")
       .remove("configUnknownFields")
+      .filter((key, value) => key != "themeName" || !value.isNull)
       .add("config", encodedConfig)
     preset.unknownFields.deepMerge(encodedPreset)
   }
@@ -427,10 +430,13 @@ object UiPreset:
     */
   private def decodeDockedPanels(cursor: HCursor): Decoder.Result[List[SessionDockedPanel]] =
     cursor.downField("dockedPanels").focus match
+      // A panel whose content no longer decodes (a kind since removed) is dropped, as session restore does, rather
+      // than losing the whole preset.
       case Some(_) =>
-        cursor.get[List[SessionDockedPanel]]("dockedPanels")
+        cursor.get[List[Json]]("dockedPanels").map(_.flatMap(_.as[SessionDockedPanel].toOption))
       case None =>
-        cursor.getOrElse[List[SessionPinnedPanel]]("pinnedPanels")(Nil).map { legacyPanels =>
+        cursor.getOrElse[List[Json]]("pinnedPanels")(Nil).map { legacyJson =>
+          val legacyPanels = legacyJson.flatMap(_.as[SessionPinnedPanel].toOption)
           legacyPanels.zipWithIndex.map { case (panel, index) => SessionDockedPanel(s"legacy-panel-$index", panel) }
         }
 
@@ -438,7 +444,7 @@ object UiPreset:
     for
       name                     <- cursor.get[String]("name")
       config                   <- cursor.get[AppConfig]("config")
-      themeName                <- cursor.get[String]("themeName")
+      themeName                <- cursor.getOrElse[Option[String]]("themeName")(None).map(_.filter(_.nonEmpty))
       dockedPanels             <- decodeDockedPanels(cursor)
       targetEditorPaneCount    <- cursor.get[Option[Int]]("targetEditorPaneCount")
       workspaceTree            <- cursor.getOrElse[Option[SessionWorkspaceNode]]("workspaceTree")(None)

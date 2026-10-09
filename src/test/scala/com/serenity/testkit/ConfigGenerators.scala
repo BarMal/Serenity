@@ -2,17 +2,11 @@ package com.serenity.testkit
 
 import java.awt.Color
 
-import scala.concurrent.duration.DurationInt
-
-import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig, SpriteFrameCycle}
-import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.PanelPosition
 import org.scalacheck.Gen
 
 /** Generators over [[AppConfig]], for properties about the config file format.
@@ -56,12 +50,6 @@ object ConfigGenerators:
       Gen.alphaStr.suchThat(_.nonEmpty)
     )
 
-  val genAnimationConfig: Gen[AnimationConfig] =
-    for
-      steps      <- Gen.choose(1, 60)
-      durationMs <- Gen.choose(1, 5000)
-    yield AnimationConfig(steps, durationMs.milliseconds)
-
   val genFontConfig: Gen[FontConfig] =
     for
       codeFamily <- genFontFamily
@@ -95,10 +83,9 @@ object ConfigGenerators:
 
   val genEditorConfig: Gen[EditorConfig] =
     for
-      animation <- Gen.option(genAnimationConfig)
       fonts     <- genFontConfig
       paneWidth <- Gen.choose(1, 200)
-    yield EditorConfig(characterAnimation = animation, fontConfig = fonts, minimumPaneWidth = paneWidth)
+    yield EditorConfig(fontConfig = fonts, minimumPaneWidth = paneWidth)
 
   val genSpellCheckConfig: Gen[SpellCheckConfig] =
     for
@@ -113,7 +100,28 @@ object ConfigGenerators:
       mode     <- oneOfEnum(CursorMode.values)
       active   <- Gen.option(genColor)
       inactive <- Gen.option(genColor)
-    yield CursorConfig(mode, CursorColorConfig(active, inactive))
+      timeout  <- Gen.chooseNum(0L, 60000L)
+    yield CursorConfig(mode, CursorColorConfig(active, inactive), timeout)
+
+  private def genPoints(range: (Float, Float)): Gen[Option[Float]] =
+    Gen.option(Gen.choose((range._1 * 2).toInt, (range._2 * 2).toInt).map(_ / 2f))
+
+  val genExportTypographyConfig: Gen[ExportTypographyConfig] =
+    for
+      paper    <- oneOfEnum(com.serenity.manuscript.PaperSize.values)
+      fontSize <- genPoints(ExportTypographyConfig.FontSizeRange)
+      lineSpacing <- Gen.option(
+        double(ExportTypographyConfig.LineSpacingRange._1, ExportTypographyConfig.LineSpacingRange._2)
+      )
+      margin          <- genPoints(ExportTypographyConfig.MarginRange)
+      firstLineIndent <- genPoints(ExportTypographyConfig.FirstLineIndentRange)
+    yield ExportTypographyConfig(
+      paper = paper,
+      fontSize = fontSize,
+      lineSpacing = lineSpacing,
+      margin = margin,
+      firstLineIndent = firstLineIndent
+    )
 
   val genStatusLineConfig: Gen[StatusLineConfig] =
     for
@@ -131,34 +139,23 @@ object ConfigGenerators:
       size <- Gen.option(for w <- Gen.choose(400, 4000); h <- Gen.choose(300, 4000) yield PreferredWindowSize(w, h))
     yield WindowConfig(chrome, size)
 
-  val genCompanionSpriteConfig: Gen[CompanionSpriteConfig] =
-    for
-      enabled         <- Gen.oneOf(true, false)
-      character       <- oneOfEnum(CompanionCharacter.values)
-      position        <- oneOfEnum(PanelPosition.values)
-      size            <- Gen.choose(CompanionSpriteConfig.MinSize, CompanionSpriteConfig.MaxSize)
-      typingCycle     <- oneOfEnum(SpriteFrameCycle.values)
-      typingTicks     <- Gen.choose(1, 120)
-      typingFastTicks <- Gen.choose(1, 240)
-      typingThreshold <- Gen.choose(1, 5000)
-    yield CompanionSpriteConfig(
-      enabled,
-      character,
-      position,
-      size,
-      typingCycle,
-      typingTicks,
-      typingFastTicks,
-      typingThreshold
-    )
-
   val genDocumentConfig: Gen[DocumentConfig] =
     for
       markdown <- oneOfEnum(MarkdownViewMode.values)
       default  <- oneOfEnum(DefaultDocumentMode.values)
       goal     <- Gen.option(Gen.choose(1, 100000))
       dropCaps <- Gen.oneOf(true, false)
-    yield DocumentConfig(markdown, default, goal, dropCaps)
+      // "auto" and "default" are how the file spells no author, so they cannot be one.
+      author <- Gen.option(
+        Gen.alphaNumStr.suchThat(name => name.nonEmpty && !Set("auto", "default").contains(name.toLowerCase))
+      )
+    yield DocumentConfig(markdown, default, goal, dropCaps, author)
+
+  val genAutoSaveConfig: Gen[AutoSaveConfig] =
+    for
+      mode  <- oneOfEnum(AutoSaveMode.values)
+      delay <- Gen.choose(AutoSaveConfig.MinDelayMillis, 600000L)
+    yield AutoSaveConfig(mode, delay)
 
   val genAppModeConfig: Gen[AppModeConfig] =
     for
@@ -170,9 +167,17 @@ object ConfigGenerators:
     for
       density   <- oneOfEnum(InterfaceDensity.values)
       gap       <- Gen.option(double(AppConfig.MinUiElementGap, AppConfig.MaxUiElementGap))
-      radius    <- Gen.choose(AppConfig.MinUiCornerRadiusPx, AppConfig.MaxUiCornerRadiusPx)
       thickness <- Gen.choose(AppConfig.MinUiOutlineThicknessPx, AppConfig.MaxUiOutlineThicknessPx)
-    yield InterfaceConfig(density, gap, radius, thickness)
+    yield InterfaceConfig(density, gap, thickness)
+
+  val genThemeFollowConfig: Gen[ThemeFollowConfig] =
+    val themeName = Gen.oneOf("light", "dark", "paper", "ink", "high-contrast", "solar")
+    for
+      follow       <- Gen.oneOf(true, false)
+      light        <- themeName
+      dark         <- themeName
+      highContrast <- themeName
+    yield ThemeFollowConfig(follow, light, dark, highContrast)
 
   val genInputConfig: Gen[InputConfig] =
     for
@@ -203,40 +208,7 @@ object ConfigGenerators:
       max     <- Gen.option(Gen.choose(1, 500))
     yield ViewportAxisSizing(percent, max)
 
-  val genMotionFamilyConfig: Gen[MotionFamilyConfig] =
-    for
-      transition <- oneOfEnum(TransitionKind.values)
-      animation  <- Gen.option(genAnimationConfig)
-      speed      <- double(AppConfig.MinElementTransitionSpeedScale, AppConfig.MaxElementTransitionSpeedScale)
-    yield MotionFamilyConfig(transition, animation, speed)
-
-  val genMotionConfig: Gen[MotionConfig] =
-    for
-      accessibility <- oneOfEnum(MotionAccessibility.values)
-      baseline      <- oneOfEnum(MotionPreset.values)
-      families <- Gen.sequence[List[(MotionFamily, MotionFamilyConfig)], (MotionFamily, MotionFamilyConfig)](
-        MotionFamily.values.toList.map(family => genMotionFamilyConfig.map(family -> _))
-      )
-      panelOpen  <- oneOfEnum(TransitionKind.values)
-      panelClose <- oneOfEnum(TransitionKind.values)
-    yield
-      val withOverrides = families.map {
-        case (MotionFamily.PinnedPanels, settings) =>
-          MotionFamily.PinnedPanels -> settings.copy(transitionOverrides =
-            Map(TransitionScope.PanelOpen -> panelOpen, TransitionScope.PanelClose -> panelClose)
-          )
-        case other => other
-      }
-      MotionConfig(accessibility, baseline, withOverrides.toMap)
-
-  /** Surface settings that are independent of one another, constructed directly.
-    *
-    * The motion settings are deliberately *not* here: `motionConfiguration` and the legacy fields it supersedes
-    * (`motionPreset`, the transition kinds, the animations, the speed scales) are kept in step by `AppConfig`'s own
-    * setters, so setting them independently would describe a config the application can never be in -- and a round-trip
-    * property over unreachable states tests the generator, not the format. They are applied through those setters in
-    * [[genAppConfig]] instead.
-    */
+  /** Surface settings that are independent of one another, constructed directly. */
   val genSurfaceConfig: Gen[SurfaceConfig] =
     for
       lineNumbers         <- Gen.oneOf(true, false)
@@ -248,8 +220,6 @@ object ConfigGenerators:
       focusedTextBody     <- Gen.oneOf(true, false)
       toolbar             <- Gen.oneOf(true, false)
       toolbarMode         <- oneOfEnum(ToolbarDisplayMode.values)
-      postProcessing      <- oneOfEnum(PostProcessingEffect.values)
-      shadows             <- Gen.oneOf(true, false)
       visibleRows <- Gen.option(
         Gen.choose(AppConfig.MinCommandRunnerVisibleRows, AppConfig.MaxCommandRunnerVisibleRows)
       )
@@ -279,6 +249,10 @@ object ConfigGenerators:
         AppConfig.MinRendererFrameStateCacheCapacity,
         AppConfig.MaxRendererFrameStateCacheCapacity
       )
+      layerCaching <- Gen.oneOf(true, false)
+      frameTiming  <- Gen.oneOf(true, false)
+      latencyTrace <- Gen.oneOf(true, false)
+      warmUp       <- Gen.oneOf(true, false)
       diagnosticBlendWeight <- double(
         AppConfig.MinDiagnosticHighlightBlendWeight,
         AppConfig.MaxDiagnosticHighlightBlendWeight
@@ -287,6 +261,7 @@ object ConfigGenerators:
       columnTargetWidth <- Gen.choose(1, 400)
       columnGap         <- Gen.choose(0, 40)
       columnCount       <- Gen.option(Gen.choose(1, 20))
+      proseMeasure      <- Gen.option(Gen.choose(ProseMeasure.Min, ProseMeasure.Max))
     yield SurfaceConfig(
       showLineNumbers = lineNumbers,
       showPaneHeaders = paneHeaders,
@@ -297,8 +272,6 @@ object ConfigGenerators:
       focusedTextBodyEnabled = focusedTextBody,
       contextualToolbarEnabled = toolbar,
       contextualToolbarDisplayMode = toolbarMode,
-      postProcessingEffect = postProcessing,
-      uiShadowsEnabled = shadows,
       commandRunnerVisibleRows = visibleRows,
       commandRunnerItemGapRows = itemGap,
       commandRunnerCursorGapRows = cursorGap,
@@ -313,64 +286,17 @@ object ConfigGenerators:
       lineNumberLayout = lineNumberLayout,
       viewportSizing = ViewportSizing(width, height),
       rendererFrameStateCacheCapacity = frameStateCacheCapacity,
+      layerCachingEnabled = layerCaching,
+      frameTimingEnabled = frameTiming,
+      latencyTraceEnabled = latencyTrace,
+      startupWarmUpEnabled = warmUp,
       diagnosticHighlightBlendWeight = diagnosticBlendWeight,
       columnModeEnabled = columnMode,
       columnTargetWidthCells = columnTargetWidth,
       columnGap = columnGap,
-      columnCount = columnCount
+      columnCount = columnCount,
+      proseMeasure = proseMeasure
     )
-
-  /** The material settings, applied through the setters for the same reason as the motion ones: choosing a blur or a
-    * background style of your own is what makes the material preset `Custom`, so setting them independently of the
-    * preset describes a config the application never produces.
-    */
-  val genMaterialEdit: Gen[AppConfig => AppConfig] =
-    for
-      preset     <- oneOfEnum(MaterialPreset.values)
-      blur       <- double(0.0, 1.0).map(_.toFloat)
-      background <- oneOfEnum(BackgroundStyle.values)
-      custom     <- Gen.oneOf(true, false)
-    yield (config: AppConfig) =>
-      val withPreset = config.withMaterialPreset(preset)
-      if custom then withPreset.withBlurRadius(blur).withBackgroundStyle(background) else withPreset
-
-  /** The motion settings, applied the way the settings surface applies them: through `AppConfig`'s setters, which keep
-    * the authoritative hierarchy and the legacy fields that mirror it in step.
-    */
-  val genMotionEdit: Gen[AppConfig => AppConfig] =
-    for
-      preset         <- oneOfEnum(MotionPreset.values.filterNot(_ == MotionPreset.Custom))
-      accessibility  <- oneOfEnum(MotionAccessibility.values)
-      family         <- oneOfEnum(MotionFamily.values)
-      settings       <- genMotionFamilyConfig
-      elementSpeed   <- double(AppConfig.MinElementTransitionSpeedScale, AppConfig.MaxElementTransitionSpeedScale)
-      insertion      <- oneOfEnum(TransitionKind.values)
-      runnerKind     <- Gen.option(oneOfEnum(TransitionKind.values))
-      panelOpenKind  <- Gen.option(oneOfEnum(TransitionKind.values))
-      panelCloseKind <- Gen.option(oneOfEnum(TransitionKind.values))
-      editorSpeed    <- Gen.option(double(0.1, 4.0))
-      runnerSpeed    <- Gen.option(double(0.1, 4.0))
-      uiSpeed        <- Gen.option(double(0.1, 4.0))
-      cursorSpeed    <- Gen.option(double(0.1, 4.0))
-    yield (config: AppConfig) =>
-      // Preset first, then the finer settings -- the order the settings surface applies them in. The other way round,
-      // `withElementTransitionSpeedScale` writes only its legacy field (`updateAuthoritativeMotion` propagates into the
-      // hierarchy only when one already exists), and the preset then installs a hierarchy that does not carry it: a
-      // config whose effective speed and whose hierarchy disagree, which is not a state worth holding the file format
-      // to.
-      config
-        .withMotionPreset(preset)
-        .withMotionAccessibility(accessibility)
-        .withElementTransitionSpeedScale(elementSpeed)
-        .withEditorInsertionTransitionKind(insertion)
-        .withCommandRunnerTransitionKind(runnerKind)
-        .withPanelOpenTransitionKind(panelOpenKind)
-        .withPanelCloseTransitionKind(panelCloseKind)
-        .withMotionFamilyConfiguration(family, settings)
-        .withEditorTextTransitionSpeedScale(editorSpeed)
-        .withCommandRunnerTransitionSpeedScale(runnerSpeed)
-        .withUiTransitionSpeedScale(uiSpeed)
-        .withCursorTransitionSpeedScale(cursorSpeed)
 
   val genAppConfig: Gen[AppConfig] =
     for
@@ -378,35 +304,33 @@ object ConfigGenerators:
       surface          <- genSurfaceConfig
       cursor           <- genCursorConfig
       window           <- genWindowConfig
-      companion        <- genCompanionSpriteConfig
-      flair            <- oneOfEnum(VisualFlairLevel.values)
       document         <- genDocumentConfig
       interface        <- genInterfaceConfig
+      themeFollow      <- genThemeFollowConfig
       input            <- genInputConfig
       syntax           <- Gen.oneOf(true, false)
       smartPunctuation <- Gen.oneOf(true, false)
       spell            <- genSpellCheckConfig
       appMode          <- genAppModeConfig
       status           <- genStatusLineConfig
-      motion           <- genMotionEdit
-      material         <- genMaterialEdit
-    yield (motion andThen material)(
-      AppConfig(
-        editorConfig = editor,
-        inputConfig = input,
-        surfaceConfig = surface,
-        cursorConfig = cursor,
-        windowConfig = window,
-        companionSpriteConfig = companion,
-        visualFlairLevel = flair,
-        documentConfig = document,
-        interfaceConfig = interface,
-        languageToolsConfig = LanguageToolsConfig(
-          syntaxHighlightingEnabled = syntax,
-          spellCheck = spell,
-          smartPunctuationEnabled = smartPunctuation
-        ),
-        appModeConfig = appMode,
-        statusLine = status
-      )
+      exportTypography <- genExportTypographyConfig
+      autoSave         <- genAutoSaveConfig
+    yield AppConfig(
+      editorConfig = editor,
+      inputConfig = input,
+      surfaceConfig = surface,
+      cursorConfig = cursor,
+      windowConfig = window,
+      documentConfig = document,
+      interfaceConfig = interface,
+      themeFollowConfig = themeFollow,
+      languageToolsConfig = LanguageToolsConfig(
+        syntaxHighlightingEnabled = syntax,
+        spellCheck = spell,
+        smartPunctuationEnabled = smartPunctuation
+      ),
+      appModeConfig = appMode,
+      statusLine = status,
+      exportTypographyConfig = exportTypography,
+      autoSaveConfig = autoSave
     )

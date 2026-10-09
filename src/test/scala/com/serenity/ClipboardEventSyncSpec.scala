@@ -10,6 +10,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -38,6 +39,26 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
 
     stateManager.getCurrentState.unsafeRunSync().runtime.clipboard shouldBe Some("existing")
 
+  it should "keep a line copy a line across the system clipboard" in new ClipboardFixture:
+    val bufferId = setupBuffer("alpha\nbeta")
+    setCursor(0, 2)
+    stateManager.applyEvent(Copy).unsafeRunSync()
+    ClipboardEventSync.afterEvent(Copy, stateManager, clipboard.instance).unsafeRunSync()
+    setCursor(1, 1)
+
+    ClipboardEventSync.beforeEvent(Paste, stateManager, clipboard.instance).unsafeRunSync()
+    stateManager.applyEvent(Paste).unsafeRunSync()
+
+    getContent(bufferId) shouldBe "alpha\nalpha\nbeta"
+
+  it should "normalise CRLF and CR line endings from the system clipboard to LF" in new ClipboardFixture:
+    setupBuffer("world")
+    clipboard.seed("a\r\nb\rc")
+
+    ClipboardEventSync.beforeEvent(Paste, stateManager, clipboard.instance).unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().runtime.clipboard shouldBe Some("a\nb\nc")
+
   "ClipboardEventSync.afterEvent" should "export copied text to the system clipboard" in new ClipboardFixture:
     setupBuffer("copied line")
 
@@ -49,7 +70,10 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
   trait ClipboardFixture:
 
     val stateManager: StateManager = StateManager
-      .apply(LoggerFactory[IO].getLogger(using LoggerName("ClipboardEventSyncSpec")))
+      .apply(
+        LoggerFactory[IO].getLogger(using LoggerName("ClipboardEventSyncSpec")),
+        dictionaryCache = SharedDictionary.default
+      )
       .unsafeRunSync()
 
     private val paneId = PaneId(0)

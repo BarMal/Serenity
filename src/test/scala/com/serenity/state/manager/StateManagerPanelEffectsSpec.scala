@@ -38,7 +38,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     initialState: AppState = AppState.initial,
     markdownPreviewWindow: MarkdownPreviewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
   ): Harness =
-    val modelRef  = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
+    val modelRef  = Ref.of[IO, Model](Model(initialState, UndoState())).unsafeRunSync()
     val stateRef  = ModelViews.appRef(modelRef)
     val committed = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
     val events    = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
@@ -72,7 +72,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
         () => calls.update(_ :+ "collapse"),
         target => calls.update(_ :+ s"switch:$target"),
         (target, size) => calls.update(_ :+ s"resize:$target:$size"),
-        enabled => calls.update(_ :+ s"companion-enabled:$enabled")
+        _ => IO.unit
       )
     )
 
@@ -176,56 +176,6 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.calls.get.unsafeRunSync() shouldBe List(s"unpin:${PanelTarget.ById(PanelId.ProjectOutput.surfaceId)}")
     fixture.stateRef.get.unsafeRunSync().runtime.projectTasks shouldBe state.runtime.projectTasks
-  }
-
-  it should "turn the companion on and dock it at the chosen edge when it is pinned" in {
-    val fixture = harness()
-
-    fixture.panels
-      .interpret(ViewIntent.SetPanelPin(PanelId.Companion, Some(PanelPosition.Left)), AppState.initial)
-      .unsafeRunSync()
-
-    fixture.calls.get.unsafeRunSync() shouldBe List("companion-enabled:true")
-    val state = fixture.stateRef.get.unsafeRunSync()
-    state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(PanelId.Companion.surfaceId)) shouldBe
-      Some(PanelPosition.Left)
-  }
-
-  it should "turn the companion off when it is hidden" in {
-    val state   = pinnedState(PanelId.Companion.surfaceId, SurfaceContent.CompanionSprite, PanelPosition.Right, 10)
-    val fixture = harness(state)
-
-    fixture.panels.interpret(ViewIntent.SetPanelPin(PanelId.Companion, None), state).unsafeRunSync()
-
-    fixture.calls.get.unsafeRunSync() shouldBe List("companion-enabled:false")
-    fixture.currentSurfaces.map(_.id) should not contain PanelId.Companion.surfaceId
-  }
-
-  it should "turn the companion off when it is toggled hidden" in {
-    val state   = pinnedState(PanelId.Companion.surfaceId, SurfaceContent.CompanionSprite, PanelPosition.Right, 10)
-    val fixture = harness(state)
-
-    fixture.panels.interpret(ViewIntent.TogglePanelShown(PanelId.Companion), state).unsafeRunSync()
-
-    fixture.calls.get.unsafeRunSync() shouldBe
-      List(s"unpin:${PanelTarget.ById(PanelId.Companion.surfaceId)}", "companion-enabled:false")
-  }
-
-  it should "not show the companion while visual flair is off" in {
-    val flairOff = AppState.initial.copy(persisted =
-      AppState.initial.persisted
-        .copy(config = AppState.initial.persisted.config.withVisualFlairLevel(com.serenity.config.VisualFlairLevel.Off))
-    )
-    val fixture = harness(flairOff)
-
-    fixture.panels
-      .interpret(ViewIntent.SetPanelPin(PanelId.Companion, Some(PanelPosition.Left)), flairOff)
-      .unsafeRunSync()
-
-    fixture.currentSurfaces.map(_.id) should not contain PanelId.Companion.surfaceId
-    fixture.peeks.get.unsafeRunSync() shouldBe List(
-      PeekContent.QuickInfo("The companion is hidden while visual flair is off.")
-    )
   }
 
   it should "show a hidden panel at its default edge when it is toggled" in {
@@ -361,7 +311,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.peeks.get.unsafeRunSync() shouldBe List(PeekContent.QuickInfo("Focus a panel to maximise it."))
   }
 
-  it should "hide panels whose family doesn't fit the mode being switched to" in {
+  it should "leave the panels of the mode being left to the mode transition in the commit" in {
     val withPanels =
       pinnedState(PanelId.Diagnostics.surfaceId, SurfaceContent.Diagnostics(Nil), PanelPosition.Bottom, 10)
     val state =
@@ -376,7 +326,9 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.panels.interpret(ViewIntent.SetAppMode(com.serenity.config.AppMode.Prose), state).unsafeRunSync()
 
-    fixture.currentSurfaces.map(_.id) shouldBe List(PanelId.Outline.surfaceId)
+    fixture.stateRef.get.unsafeRunSync().persisted.config.appMode shouldBe com.serenity.config.AppMode.Prose
+    fixture.currentSurfaces.map(_.id) should contain theSameElementsAs
+      List(PanelId.Diagnostics.surfaceId, PanelId.Outline.surfaceId)
   }
 
   it should "raise the tab list as an event rather than mutating state directly" in {

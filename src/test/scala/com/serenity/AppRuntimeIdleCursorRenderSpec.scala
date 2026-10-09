@@ -1,17 +1,19 @@
 package com.serenity
 
-import java.awt.Color
-
 import scala.concurrent.duration.*
 
+import cats.effect.testkit.TestControl
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
-import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.CursorMode
+import com.serenity.config.AppConfig
 import com.serenity.frontend.GuiFrontend
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, Damage}
+import com.serenity.testkit.VirtualTime.runVirtual
+import com.serenity.ui.color.RenderColor
+import fs2.Stream
+import fs2.concurrent.SignallingRef
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
@@ -40,36 +42,11 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
   "AppRuntime" should "toggle blink cursor visibility for idle frames" in {
     val program = for
       cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
-      first         <- AppRuntimeRenderLoops.computeIdleCursorFrame(AppState.initial, cursorVisible, breathIndex)
-      second        <- AppRuntimeRenderLoops.computeIdleCursorFrame(AppState.initial, cursorVisible, breathIndex)
+      first         <- AppRuntimeRenderLoops.computeIdleCursorFrame(cursorVisible)
+      second        <- AppRuntimeRenderLoops.computeIdleCursorFrame(cursorVisible)
     yield
       first shouldBe ((false, None))
       second shouldBe ((true, None))
-
-    program.unsafeRunTimed(10.seconds) shouldBe defined
-  }
-
-  it should "derive breathing cursor colours for idle frames" in {
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(config = AppState.initial.persisted.config.withCursorMode(CursorMode.Breathe))
-    )
-    val expectedBaseColor = state.persisted.config.cursorColors.activeOr(state.persisted.theme.cursor)
-    val expectedAlpha     = ((math.sin(math.Pi / 24) + 1.0) / 2.0 * 255).toInt
-
-    val program = for
-      cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
-      frame         <- AppRuntimeRenderLoops.computeIdleCursorFrame(state, cursorVisible, breathIndex)
-      nextIndex     <- breathIndex.get
-    yield
-      frame._1 shouldBe true
-      nextIndex shouldBe 1
-      val cursor = frame._2.getOrElse(fail("Expected breathing cursor colour"))
-      cursor.getRed shouldBe expectedBaseColor.getRed
-      cursor.getGreen shouldBe expectedBaseColor.getGreen
-      cursor.getBlue shouldBe expectedBaseColor.getBlue
-      cursor.getAlpha shouldBe expectedAlpha
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
@@ -102,35 +79,28 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "skip idle cursor rendering when the cursor idle interval is disabled" in {
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        config = AppState.initial.persisted.config.withCursorTransitionSpeedScale(Some(0.0))
-      )
-    )
+    val state = AppState.initial
 
     val program = for
       cursorVisible      <- Ref.of[IO, Boolean](true)
-      breathIndex        <- Ref.of[IO, Int](0)
       pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
       renderCalls        <- Ref.of[IO, Int](0)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntimeRenderLoops.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
-        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
+        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState())),
         pendingPaintDamage = pendingPaintDamage,
         checkResizeAndHandle = IO.unit,
         cursorVisible = cursorVisible,
-        breathIndex = breathIndex,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => renderCalls.update(_ + 1),
         requestFastRender = IO.unit,
-        cursorIdleInterval = GuiFrontend.cursorIdleInterval,
+        cursorIdleInterval = _ => None,
         renderCaches = com.serenity.state.manager.RenderCaches.create()
       )
       calls <- renderCalls.get
@@ -145,22 +115,19 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       cursorVisible      <- Ref.of[IO, Boolean](true)
-      breathIndex        <- Ref.of[IO, Int](0)
       pendingPaintDamage <- Ref.of[IO, Damage](damage)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntimeRenderLoops.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
-        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
+        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState())),
         pendingPaintDamage = pendingPaintDamage,
         checkResizeAndHandle = IO.unit,
         cursorVisible = cursorVisible,
-        breathIndex = breathIndex,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
-          _: Option[Color],
+          _: Option[RenderColor],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         requestFastRender = IO.unit,
@@ -178,23 +145,20 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       cursorVisible      <- Ref.of[IO, Boolean](true)
-      breathIndex        <- Ref.of[IO, Int](0)
       pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
-      rendered           <- Ref.of[IO, Vector[(Boolean, Option[Color])]](Vector.empty)
+      rendered           <- Ref.of[IO, Vector[(Boolean, Option[RenderColor])]](Vector.empty)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntimeRenderLoops.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
-        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
+        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState())),
         pendingPaintDamage = pendingPaintDamage,
         checkResizeAndHandle = IO.unit,
         cursorVisible = cursorVisible,
-        breathIndex = breathIndex,
         renderCursorOnly = (
           _: AppState,
           visible: Boolean,
-          cursor: Option[Color],
+          cursor: Option[RenderColor],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => rendered.update(_ :+ (visible -> cursor)),
         requestFastRender = IO.unit,
@@ -205,4 +169,118 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
     yield frames shouldBe Vector(false -> None)
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  /** The idle phase as `AppRuntime.run` wires it, recording the visibility of every caret frame it paints. */
+  private def recordingIdlePhase(
+    config: AppConfig,
+    fastModeSignal: SignallingRef[IO, Boolean],
+    cursorVisible: Ref[IO, Boolean],
+    painted: Ref[IO, Vector[Boolean]]
+  ): Stream[IO, Unit] =
+    val state        = AppState.initial(config)
+    given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+    Stream
+      .eval(SignallingRef.of[IO, Boolean](true))
+      .flatMap(windowFocused =>
+        AppRuntimeRenderLoops.idleRenderPhase(
+          loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState())),
+          fastModeSignal = fastModeSignal,
+          windowFocused = windowFocused,
+          pendingPaintDamage = Ref.unsafe[IO, Damage](Damage.Nothing),
+          currentStateForDiagnostics = IO.pure(Some(state)),
+          checkResizeAndHandle = IO.unit,
+          cursorVisible = cursorVisible,
+          renderCursorOnly = (
+            _: AppState,
+            visible: Boolean,
+            _: Option[RenderColor],
+            _: Damage,
+            _: com.serenity.state.manager.RenderCaches
+          ) => painted.update(_ :+ visible),
+          requestFastRender = IO.unit,
+          cursorIdleInterval = GuiFrontend.cursorIdleInterval,
+          renderCaches = com.serenity.state.manager.RenderCaches.create()
+        )
+      )
+
+  private val twoSecondBlinkTimeout = AppConfig.default.withCursorBlinkTimeoutMillis(2000L)
+
+  "The idle render phase" should "hold the caret solid once the blink timeout passes without input" in {
+    val program = for
+      fastModeSignal <- SignallingRef.of[IO, Boolean](false)
+      cursorVisible  <- Ref.of[IO, Boolean](true)
+      painted        <- Ref.of[IO, Vector[Boolean]](Vector.empty)
+      idlePhase = recordingIdlePhase(twoSecondBlinkTimeout, fastModeSignal, cursorVisible, painted)
+      fiber   <- idlePhase.compile.drain.start
+      _       <- IO.sleep(30.seconds)
+      frames  <- painted.get
+      visible <- cursorVisible.get
+      _       <- fiber.cancel
+    yield
+      // Blinks at 0.5s, 1s and 1.5s; at 2s the timeout has passed and the hidden caret is painted solid.
+      frames shouldBe Vector(false, true, false, true)
+      visible shouldBe true
+
+    runVirtual(program)
+  }
+
+  it should "schedule no further wakeups once the caret holds solid" in {
+    val program = for
+      fastModeSignal <- SignallingRef.of[IO, Boolean](false)
+      cursorVisible  <- Ref.of[IO, Boolean](true)
+      painted        <- Ref.of[IO, Vector[Boolean]](Vector.empty)
+      _              <- recordingIdlePhase(twoSecondBlinkTimeout, fastModeSignal, cursorVisible, painted).compile.drain
+    yield ()
+
+    val parked = (for
+      control  <- TestControl.execute(program)
+      _        <- control.tickFor(1.minute)
+      finished <- control.results
+      idle     <- control.isDeadlocked
+    yield (finished, idle)).unsafeRunSync()
+
+    parked shouldBe ((None, true))
+  }
+
+  it should "blink again, for a fresh timeout, after input wakes the render loop" in {
+    val program = for
+      fastModeSignal <- SignallingRef.of[IO, Boolean](false)
+      cursorVisible  <- Ref.of[IO, Boolean](true)
+      painted        <- Ref.of[IO, Vector[Boolean]](Vector.empty)
+      idlePhase = recordingIdlePhase(twoSecondBlinkTimeout, fastModeSignal, cursorVisible, painted)
+      fiber <- AppRuntimeRenderLoops
+        .renderLoop(idlePhase, Stream.exec(fastModeSignal.set(false)))
+        .compile
+        .drain
+        .start
+      _           <- IO.sleep(30.seconds)
+      beforeInput <- painted.getAndSet(Vector.empty)
+      // What a real input batch does: AppRuntime.resetCursorActivity, then emitDamage raising fast mode.
+      _          <- AppRuntime.resetCursorActivity(cursorVisible) >> fastModeSignal.set(true)
+      _          <- IO.sleep(30.seconds)
+      afterInput <- painted.get
+      _          <- fiber.cancel
+    yield
+      beforeInput shouldBe Vector(false, true, false, true)
+      afterInput shouldBe Vector(false, true, false, true)
+
+    runVirtual(program)
+  }
+
+  it should "keep blinking for as long as the window is focused when the blink timeout is 0" in {
+    val neverTimingOut = AppConfig.default.withCursorBlinkTimeoutMillis(0L)
+
+    val program = for
+      fastModeSignal <- SignallingRef.of[IO, Boolean](false)
+      cursorVisible  <- Ref.of[IO, Boolean](true)
+      painted        <- Ref.of[IO, Vector[Boolean]](Vector.empty)
+      idlePhase = recordingIdlePhase(neverTimingOut, fastModeSignal, cursorVisible, painted)
+      fiber  <- idlePhase.compile.drain.start
+      _      <- IO.sleep(59900.millis)
+      frames <- painted.get
+      _      <- fiber.cancel
+    yield frames should have size 119
+
+    runVirtual(program)
   }

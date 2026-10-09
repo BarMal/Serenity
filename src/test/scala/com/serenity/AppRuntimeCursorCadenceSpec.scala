@@ -1,9 +1,11 @@
 package com.serenity
 
+import java.nio.file.Files
+
 import scala.concurrent.duration.*
 
+import com.serenity.app.AppRuntime
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.frontend.{GuiFrontend, TuiFrontend}
 import com.serenity.keystroke.KeyboardFidelityTier
 import org.scalatest.flatspec.AnyFlatSpec
@@ -13,18 +15,8 @@ class AppRuntimeCursorCadenceSpec extends AnyFlatSpec with Matchers:
 
   private val tui = TuiFrontend(KeyboardFidelityTier.Full)
 
-  "GuiFrontend.cursorIdleInterval" should "derive cursor idle cadence from the cursor motion speed scale" in {
+  "GuiFrontend.cursorIdleInterval" should "blink at the fixed interval" in {
     GuiFrontend.cursorIdleInterval(AppConfig.default) shouldBe Some(500.millis)
-    GuiFrontend.cursorIdleInterval(AppConfig.default.withElementTransitionSpeedScale(2.0)) shouldBe Some(1000.millis)
-    GuiFrontend.cursorIdleInterval(
-      AppConfig.default
-        .withElementTransitionSpeedScale(2.0)
-        .withCursorTransitionSpeedScale(Some(0.5))
-    ) shouldBe Some(250.millis)
-    GuiFrontend.cursorIdleInterval(AppConfig.default.withCursorTransitionSpeedScale(Some(0.0))) shouldBe None
-    GuiFrontend.cursorIdleInterval(
-      AppConfig.default.withMotionAccessibility(MotionAccessibility.Off)
-    ) shouldBe None
   }
 
   it should "never delegate the caret to a hardware cursor, since a GUI canvas paints its own caret" in {
@@ -34,7 +26,7 @@ class AppRuntimeCursorCadenceSpec extends AnyFlatSpec with Matchers:
 
   "TuiFrontend.cursorIdleInterval" should
     "delegate the caret to the terminal's own cursor in TUI blink mode, eliding the idle cadence entirely" in {
-      // #1170: the terminal owns blink timing for the normal (non-breathe) caret in TUI mode, so the idle phase has
+      // #1170: the terminal owns blink timing for the caret in TUI mode, so the idle phase has
       // nothing left to tick for -- outside TUI mode the same config still ticks, since a GUI caret is always
       // app-painted.
       tui.cursorIdleInterval(AppConfig.default) shouldBe None
@@ -42,8 +34,36 @@ class AppRuntimeCursorCadenceSpec extends AnyFlatSpec with Matchers:
       tui.cursorIdleInterval(AppConfig.default.withCursorMode(CursorMode.Blink)) shouldBe None
     }
 
-  it should "keep the cursor idle cadence in TUI breathe mode, since breathe genuinely needs app ticks" in {
-    // Breathe animates color/opacity over time -- a terminal cursor style can't represent that -- so it stays the
-    // documented, explicit exception to #1170's terminal-delegated caret.
-    tui.cursorIdleInterval(AppConfig.default.withCursorMode(CursorMode.Breathe)) shouldBe Some(500.millis)
+  "AppConfig.cursorBlinkTimeout" should "default to ten seconds, after GTK's gtk-cursor-blink-timeout" in {
+    AppConfig.default.cursorBlinkTimeout shouldBe Some(10.seconds)
+  }
+
+  it should "be absent, so the caret blinks for as long as the window is focused, when set to 0" in {
+    AppConfig.default.withCursorBlinkTimeoutMillis(0L).cursorBlinkTimeout shouldBe None
+    AppConfig.default.withCursorBlinkTimeoutMillis(-1L).cursorBlinkTimeout shouldBe None
+  }
+
+  it should "load from and write to the config file" in {
+    val configFile = Files.createTempFile("serenity-cursor-blink-timeout-config", ".conf")
+    Files.writeString(
+      configFile,
+      """editor.cursor.blink_timeout_ms = 3000
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.cursorBlinkTimeout shouldBe Some(3.seconds)
+    ConfigManager.configToString(config) should include("editor.cursor.blink_timeout_ms = 3000")
+  }
+
+  "AppRuntime.keepsBlinking" should "blink until the time spent blinking reaches the timeout" in {
+    val config = AppConfig.default.withCursorBlinkTimeoutMillis(2000L)
+
+    AppRuntime.keepsBlinking(config, 500.millis, 3) shouldBe true
+    AppRuntime.keepsBlinking(config, 500.millis, 4) shouldBe false
+  }
+
+  it should "never stop blinking when the timeout is 0" in {
+    AppRuntime.keepsBlinking(AppConfig.default.withCursorBlinkTimeoutMillis(0L), 500.millis, 10000) shouldBe true
   }

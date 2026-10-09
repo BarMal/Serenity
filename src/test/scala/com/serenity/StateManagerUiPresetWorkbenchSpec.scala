@@ -6,12 +6,12 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.Theme
@@ -38,7 +38,8 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
         uiPresetStore = store,
         windowSizeProvider = windowSize,
         onPreferredWindowSizeChanged = onWindowSizeChanged,
-        sessionRootOverride = sessionRoot
+        sessionRootOverride = sessionRoot,
+        dictionaryCache = SharedDictionary.default
       )
       .unsafeRunSync()
 
@@ -67,9 +68,8 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Drafting",
       config = AppConfig.default
-        .withMotionPreset(com.serenity.config.MotionPreset.Reduced)
-        .withMaterialPreset(com.serenity.config.MaterialPreset.Solid),
-      themeName = Theme.dark.name,
+        .withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact),
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(
         SessionDockedPanel(
           "panel-1",
@@ -81,7 +81,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     )
     store.upsert(preset).unsafeRunSync()
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     val runner = sm.getCurrentState
       .map(
@@ -108,7 +108,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Drafting"))
     )
     presetPicker.options.find(_.label == "Drafting").flatMap(_.hint) shouldBe Some(
-      "plain text default; dark; reduced motion; fade text reveal; solid material; solid background; comfortable density; SansSerif 12pt prose; Right outline 34"
+      "plain text default; dark; compact density; SansSerif 12pt prose; Right outline 34"
     )
   }
 
@@ -117,7 +117,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "save-drafting-preset",
@@ -160,12 +160,12 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Drafting",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = Nil
     )
     store.upsert(preset).unsafeRunSync()
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "duplicate-drafting-preset",
@@ -209,7 +209,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "ui-preset-save-as-new",
@@ -240,7 +240,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "ui-preset-save-as-new",
@@ -253,9 +253,8 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
 
     List(
       CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown)),
-      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Subtle))),
       CommandIntent.Settings(
-        SettingsIntent.General(GeneralSettingsIntent.SetBackgroundStyle(BackgroundStyle.GlassLike))
+        SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
       ),
       CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextFontSize(18.0f))),
       CommandIntent.View(ViewIntent.TogglePanelShown(com.serenity.state.models.PanelId.Outline))
@@ -267,8 +266,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     state.persisted.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    state.persisted.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
-    state.persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    state.persisted.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     state.persisted.config.editorConfig.fontConfig.textFontSize shouldBe 18.0f
     store.find("Drafting").unsafeRunSync() shouldBe Some(savedBefore)
   }
@@ -278,7 +276,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "ui-preset-save-as-new",
@@ -316,7 +314,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     saved.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    saved.themeName shouldBe Theme.light.name
+    saved.themeName shouldBe Some(Theme.light.name)
     saved.pinnedPanels.map(_.position) shouldBe List(PanelPosition.Right)
   }
 
@@ -325,7 +323,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "ui-preset-save-as-new",
@@ -374,7 +372,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "ui-preset-save-as-new",

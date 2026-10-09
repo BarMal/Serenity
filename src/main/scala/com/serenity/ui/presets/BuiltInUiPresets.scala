@@ -2,12 +2,9 @@ package com.serenity.ui.presets
 
 import java.awt.Font
 
-import com.serenity.animation.TransitionKind
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.{withEditorInsertionTransitionKind, withMotionPreset}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
-import com.serenity.ui.theme.Theme
 
 /** The five concrete built-in `UiPreset` definitions and their name-based lookup. */
 private[presets] object BuiltInUiPresets:
@@ -27,14 +24,17 @@ private[presets] object BuiltInUiPresets:
       config = AppConfig.default
         .withAppMode(AppMode.Prose)
         .withLineNumbers(false)
-        .withStatusLine(StatusLineConfig(List(StatusSegment.Position), StatusLinePlacement.Floating))
+        .withStatusLine(
+          StatusLineConfig(List(StatusSegment.WordCount, StatusSegment.WordGoal), StatusLinePlacement.Floating)
+        )
         .withPaneHeaders(false)
-        .withMotionPreset(MotionPreset.Subtle)
-        .withEditorInsertionTransitionKind(TransitionKind.TypedText)
-        .withMaterialPreset(MaterialPreset.Frosted)
         .withDefaultDocumentMode(DefaultDocumentMode.RichText)
         .withInterfaceDensity(InterfaceDensity.Spacious)
-        .withTextAreaInsets(TextAreaInsets.fromPercent(22.0, 22.0))
+        .withProseMeasure(Some(ProseMeasure.Default))
+        .withSmartPunctuation(true)
+        .withSpellCheck(AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = true))
+        .withTypewriterScrolling(true)
+        .withFocusedTextBody(true)
         .withFontConfig(
           AppConfig.default.editorConfig.fontConfig.copy(
             textFontFamily = Font.SERIF,
@@ -42,7 +42,6 @@ private[presets] object BuiltInUiPresets:
             uiFontSize = 13.0f
           )
         ),
-      themeName = Theme.dark.name,
       targetEditorPaneCount = Some(1)
     )
 
@@ -54,8 +53,6 @@ private[presets] object BuiltInUiPresets:
         .withLineNumbers(true)
         .withoutStatusLine
         .withPaneHeaders(false)
-        .withMotionPreset(MotionPreset.Subtle)
-        .withEditorInsertionTransitionKind(TransitionKind.LineAndCharacterTandem)
         .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
         .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
         .withFontConfig(
@@ -65,7 +62,6 @@ private[presets] object BuiltInUiPresets:
             fontSize = 13.0f
           )
         ),
-      themeName = Theme.dark.name,
       targetEditorPaneCount = Some(1)
     )
 
@@ -75,12 +71,9 @@ private[presets] object BuiltInUiPresets:
       config = AppConfig.default
         .withAppMode(AppMode.Code)
         .withLineNumbers(true)
-        .withMotionPreset(MotionPreset.Reduced)
-        .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Compact)
         .withSyntaxHighlighting(true)
         .withFontConfig(FontConfig()),
-      themeName = Theme.dark.name,
       dockedPanels = List(
         SessionDockedPanel(
           "code-directory-tree",
@@ -102,12 +95,9 @@ private[presets] object BuiltInUiPresets:
         .withPaneHeaders(true)
         .withWordWrap(false)
         .withContextualToolbarEnabled(false)
-        .withMotionPreset(MotionPreset.Reduced)
-        .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Compact)
         .withSyntaxHighlighting(true)
         .withFontConfig(FontConfig()),
-      themeName = Theme.dark.name,
       targetEditorPaneCount = Some(1)
     )
 
@@ -117,11 +107,8 @@ private[presets] object BuiltInUiPresets:
       config = AppConfig.default
         .withAppMode(AppMode.Code)
         .withLineNumbers(true)
-        .withMotionPreset(MotionPreset.Reduced)
-        .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Comfortable)
         .withStatusLineSegments(List(StatusSegment.Position, StatusSegment.Title, StatusSegment.Mode)),
-      themeName = Theme.dark.name,
       dockedPanels = List(
         SessionDockedPanel(
           "review-outline",

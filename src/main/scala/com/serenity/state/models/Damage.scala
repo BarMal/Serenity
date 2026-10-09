@@ -15,12 +15,18 @@ enum Damage:
   case Nothing
   case BufferCells(bufferId: BufferId, row: Int, fromColumn: Int, toColumn: Option[Int])
   case BufferRows(bufferId: BufferId, rows: Set[Int])
+
+  /** Every row of one buffer. The same fact as `BufferRows(bufferId, (0 until lineCount).toSet)`, but its size does not
+    * grow with the buffer, so a scroll or a reclassification of a 100k-line buffer costs no more than of a short one.
+    */
+  case BufferAll(bufferId: BufferId)
   case PaneChrome(paneId: PaneId)
   case Surface(surfaceId: SurfaceId)
 
-  /** Pixels outside every pane's own content -- the gutter and line numbers -- and nothing else. A change that also
-    * recolors or reshapes pane content itself (a theme, a font, syntax highlighting) is `Everything`, not `Chrome`: a
-    * consumer that reuses pane content pixels on `Chrome` alone would leave them stale for anything broader.
+  /** The pinned status row, and nothing else. Line numbers are not part of it: each is repainted with its own row, so
+    * row damage carries them. A change that also recolors or reshapes pane content itself (a theme, a font, syntax
+    * highlighting) is `Everything`, not `Chrome`: a consumer that reuses pane content pixels on `Chrome` alone would
+    * leave them stale for anything broader.
     */
   case Chrome
   case Everything
@@ -38,8 +44,8 @@ object Damage:
     * so this is the one place granularity gets thrown away -- callers that want cell precision read the `Damage` value
     * directly instead of going through this projection.
     *
-    * Meaningless when [[isEverything]] holds for `damage` -- callers must check that first, since "every row" cannot be
-    * expressed without knowing the buffer's current row count.
+    * Meaningless when [[isEverything]] or [[damagesEveryRow]] holds for `damage` -- callers must check those first,
+    * since "every row" cannot be expressed without knowing the buffer's current row count.
     */
   def coarsenToRows(bufferId: BufferId, damage: Damage): Set[Int] =
     flatten(damage).flatMap {
@@ -47,6 +53,29 @@ object Damage:
       case BufferCells(id, row, _, _) if id == bufferId => Set(row)
       case _                                            => Set.empty[Int]
     }
+
+  /** What `damage` says about one buffer's rows: whether it names them all ([[BufferAll]]), the whole lines it names,
+    * and the [[BufferCells]] spans kept apart from those, so a caller that knows how a line wraps can dirty only the
+    * visual rows a span falls on.
+    */
+  final case class BufferRowFacts(everyRow: Boolean, lines: Set[Int], spans: List[BufferCells])
+
+  def rowFactsFor(bufferId: BufferId, damage: Damage): BufferRowFacts =
+    flatten(damage).foldLeft(BufferRowFacts(everyRow = false, Set.empty, Nil)) {
+      case (facts, BufferAll(id)) if id == bufferId                    => facts.copy(everyRow = true)
+      case (facts, BufferRows(id, rows)) if id == bufferId             => facts.copy(lines = facts.lines ++ rows)
+      case (facts, cells @ BufferCells(id, _, _, _)) if id == bufferId => facts.copy(spans = cells :: facts.spans)
+      case (facts, _)                                                  => facts
+    }
+
+  def damagesEveryRow(bufferId: BufferId, damage: Damage): Boolean =
+    rowFactsFor(bufferId, damage).everyRow
+
+  def damagedLines(bufferId: BufferId, damage: Damage): Set[Int] =
+    rowFactsFor(bufferId, damage).lines
+
+  def damagedSpans(bufferId: BufferId, damage: Damage): Set[BufferCells] =
+    rowFactsFor(bufferId, damage).spans.toSet
 
   /** Whether `damage` requires a full repaint regardless of buffer, pane or surface -- the escape hatch for changes (a
     * resize, a config change touching every glyph) too broad to reason about per target.
@@ -62,9 +91,25 @@ object Damage:
     */
   def isBufferRowsOnly(damage: Damage): Boolean =
     flatten(damage).forall {
-      case BufferRows(_, _) | BufferCells(_, _, _, _) => true
-      case _                                          => false
+      case BufferRows(_, _) | BufferCells(_, _, _, _) | BufferAll(_) => true
+      case _                                                         => false
     }
+
+  /** As [[isBufferRowsOnly]], also allowing [[Chrome]] and [[PaneChrome]]: the status row and each pane's header have a
+    * known rect of their own, so they can join a bounded repaint rather than force the whole canvas.
+    */
+  def isBufferRowsOrChromeOnly(damage: Damage): Boolean =
+    flatten(damage).forall {
+      case BufferRows(_, _) | BufferCells(_, _, _, _) | BufferAll(_) | Chrome | PaneChrome(_) => true
+      case _                                                                                  => false
+    }
+
+  def touchesChrome(damage: Damage): Boolean =
+    flatten(damage).contains(Chrome)
+
+  /** The panes whose header a [[PaneChrome]] fact anywhere in `damage` names. */
+  def paneChromeIds(damage: Damage): Set[PaneId] =
+    flatten(damage).collect { case PaneChrome(id) => id }
 
   /** The surfaces named by a `Surface(id)` fact anywhere in `damage`, flattening `Combined`. `Everything` reports none
     * here -- its lack of per-target detail is what `isEverything` is for, and a caller that needs to treat it as
@@ -84,47 +129,69 @@ object Damage:
     else if flatten(damage).contains(Surface(surfaceId)) then Surface(surfaceId)
     else Nothing
 
+  /** A `Combined` that `normalize` built already holds only leaves, so it is returned as is rather than rebuilt. */
   private def flatten(damage: Damage): Set[Damage] =
     damage match
-      case Nothing         => Set.empty
-      case Combined(items) => items.flatMap(flatten)
-      case leaf            => Set(leaf)
+      case Nothing                                 => Set.empty
+      case Combined(items) if items.forall(isLeaf) => items
+      case Combined(items)                         => items.flatMap(flatten)
+      case leaf                                    => Set(leaf)
+
+  private def isLeaf(damage: Damage): Boolean =
+    damage match
+      case Nothing | Combined(_) => false
+      case _                     => true
 
   private def normalize(items: Set[Damage]): Damage =
     if items.contains(Everything) then Everything
     else
+      val everyRow: Set[BufferId] = items.collect { case BufferAll(id) => id }
+
       val bufferRows: Map[BufferId, Set[Int]] =
-        items
-          .collect { case BufferRows(id, rows) => id -> rows }
-          .groupMapReduce(_._1)(_._2)(_ ++ _)
+        items.foldLeft(Map.empty[BufferId, Set[Int]]) {
+          case (acc, BufferRows(id, rows)) if !everyRow.contains(id) =>
+            acc.updated(id, acc.get(id).fold(rows)(_ ++ rows))
+          case (acc, _) => acc
+        }
 
-      val bufferCells: Map[(BufferId, Int), (Int, Option[Int])] =
-        items
-          .collect { case BufferCells(id, row, from, to) => (id, row) -> (from, to) }
-          .groupMapReduce(_._1)(_._2)(mergeSpans)
+      val cellsNotSubsumedByRows: Map[(BufferId, Int), List[BufferCells]] =
+        items.foldLeft(Map.empty[(BufferId, Int), List[BufferCells]]) {
+          case (acc, cells @ BufferCells(id, row, _, _))
+              if !everyRow.contains(id) && !bufferRows.get(id).exists(_.contains(row)) =>
+            acc.updated((id, row), cells :: acc.getOrElse((id, row), Nil))
+          case (acc, _) => acc
+        }
 
-      val cellsNotSubsumedByRows =
-        bufferCells.filterNot { case ((id, row), _) => bufferRows.get(id).exists(_.contains(row)) }
-
-      val panes     = items.collect { case PaneChrome(id) => id }
-      val surfaces  = items.collect { case Surface(id) => id }
-      val hasChrome = items.contains(Chrome)
+      val chromeAndSurfaces = items.filter {
+        case PaneChrome(_) | Surface(_) | Chrome => true
+        case _                                   => false
+      }
 
       val leaves: Set[Damage] =
-        bufferRows.map { case (id, rows) => BufferRows(id, rows) }.toSet ++
-          cellsNotSubsumedByRows.map { case ((id, row), (from, to)) => BufferCells(id, row, from, to) }.toSet ++
-          panes.map(PaneChrome.apply) ++
-          surfaces.map(Surface.apply) ++
-          (if hasChrome then Set(Chrome) else Set.empty)
+        chromeAndSurfaces ++
+          everyRow.map(BufferAll.apply) ++
+          bufferRows.map { case (id, rows) => BufferRows(id, rows) } ++
+          cellsNotSubsumedByRows.valuesIterator.flatMap(mergeSpans)
 
       leaves.headOption match
         case None                           => Nothing
         case Some(only) if leaves.size == 1 => only
         case Some(_)                        => Combined(leaves)
 
-  private def mergeSpans(first: (Int, Option[Int]), second: (Int, Option[Int])): (Int, Option[Int]) =
-    val from = math.min(first._1, second._1)
-    val to = (first._2, second._2) match
-      case (Some(firstTo), Some(secondTo)) => Some(math.max(firstTo, secondTo))
-      case _                               => None
-    (from, to)
+  /** Overlapping or touching spans on one row merge; disjoint ones stay apart, so an old and a new caret on the same
+    * long line stay two narrow facts instead of one span covering everything between them. Sorting first makes the
+    * result depend only on the set of spans, which keeps `combine` associative. A row with one span, the usual case,
+    * keeps it as is.
+    */
+  private def mergeSpans(spans: List[BufferCells]): List[Damage] =
+    spans match
+      case List(only) => List(only)
+      case _ =>
+        spans.sortBy(_.fromColumn).foldLeft(List.empty[BufferCells]) {
+          case (last :: earlier, next) if last.toColumn.forall(_ >= next.fromColumn) =>
+            val mergedTo = (last.toColumn, next.toColumn) match
+              case (Some(lastEnd), Some(end)) => Some(math.max(lastEnd, end))
+              case _                          => None
+            last.copy(toColumn = mergedTo) :: earlier
+          case (merged, next) => next :: merged
+        }

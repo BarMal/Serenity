@@ -9,7 +9,7 @@ import com.serenity.richtext.{RichTextDocument, RichTextParagraph}
 import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{RendererEntryPoints, RendererPaneSetup}
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, RendererPaneSetup}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -174,8 +174,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      monoFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -208,8 +208,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      monoFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -285,8 +285,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      monoFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -321,8 +321,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      monoFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -358,8 +358,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      monoFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -395,8 +395,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      monoFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -440,8 +440,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      monoFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -486,8 +486,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      monoFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -530,8 +530,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      monoFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -572,8 +572,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      monoFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()
@@ -618,8 +618,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewportSize,
-      monoFont,
-      monoFont,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
       com.serenity.state.manager.RenderCaches.create()

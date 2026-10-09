@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.rope.Balance
 import com.serenity.ui.fonts.FontLoader
 import org.scalatest.flatspec.AnyFlatSpec
@@ -33,28 +33,11 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       .find(_.id == id)
       .getOrElse(fail(s"missing group $id"))
 
-  "CommandRunner state" should "surface visual appearance settings as an expandable group in settings browsing" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-
-    val appearanceGroup = groupByIdRecursive(runner.settingsGroups, "settings-surface-appearance")
-
-    appearanceGroup.label shouldBe "Surface Appearance"
-    appearanceGroup.children.map(_.id) shouldBe List(
-      "background-style",
-      "material-preset",
-      "post-processing",
-      "ui-shadows"
-    )
-  }
-
   // issue #931: category tabs are retired -- browsing settings groups with no search now only happens via the
   // dedicated Settings surface (`.openSettings`), not by switching the palette's category. `visibleItems` still
   // routes to `settingsSurfaceItems` once `isSettingsSurface` is true, so this fixture change is the only one
   // needed.
-  it should "group related settings into expandable submenu rows" in {
+  "CommandRunner state" should "group related settings into expandable submenu rows" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     // "Show all settings" is on: this test inspects the full taxonomy, mode filtering (issue #1297) aside.
@@ -69,7 +52,6 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "settings-editor",
       "settings-typography",
       "settings-look",
-      "settings-animation",
       "settings-language-tools",
       "settings-keymap"
     )
@@ -102,6 +84,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "settings-status-line",
       "settings-text-area",
       "settings-document-defaults",
+      "settings-saving",
       "settings-navigation"
     )
     nestedGroup("settings-navigation").label shouldBe "Comments"
@@ -115,7 +98,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     group("settings-look").label shouldBe "Look"
     group("settings-look").children.map(_.id) shouldBe List(
       "theme",
-      "settings-surface-appearance",
+      "settings-follow-system",
       "settings-interface-layout",
       "settings-cursor",
       "settings-look-advanced"
@@ -124,13 +107,6 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-cursor").children.map(_.id) shouldBe List("cursor-mode")
     nestedGroup("settings-status-line").label shouldBe "Status Line"
     nestedGroup("settings-status-line").children.map(_.id) should contain allOf ("status-placement", "status-title")
-    nestedGroup("settings-surface-appearance").label shouldBe "Surface Appearance"
-    nestedGroup("settings-surface-appearance").children.map(_.id) shouldBe List(
-      "background-style",
-      "material-preset",
-      "post-processing",
-      "ui-shadows"
-    )
     // issue #1046: command-runner visible-rows/item-gap-rows/cursor-gap-rows are no longer separate rows here --
     // Interface Density above is the one control governing all three now.
     nestedGroup("settings-interface-layout").label shouldBe "Interface Layout"
@@ -142,37 +118,10 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     // Blur, spacing, corners, outlines, render cadence and decorative extras are one Advanced leaf, not five groups.
     nestedGroup("settings-look-advanced").label shouldBe "Advanced"
     nestedGroup("settings-look-advanced").children.map(_.id) shouldBe List(
-      "blur-radius",
       "ui-element-gap",
-      "ui-corner-radius",
       "ui-outline-thickness",
       "render-fps",
-      "render-damage-granularity",
-      "visual-flair-level",
-      "companion-sprite-enabled",
-      "companion-sprite-typing-cycle"
-    )
-    group("settings-animation").label shouldBe "Motion"
-    group("settings-animation").children.map(_.id) shouldBe List(
-      "motion-accessibility",
-      "motion-preset",
-      "editor-text-transition",
-      "panel-open-transition",
-      "panel-close-transition",
-      "command-runner-transition",
-      "command-runner-fade",
-      "ui-animation",
-      "settings-motion-advanced"
-    )
-    nestedGroup("settings-motion-advanced").children.map(_.id) shouldBe List(
-      "cursor-speed-scale",
-      "element-transition-speed-scale",
-      "editor-text-speed-scale",
-      "command-runner-speed-scale",
-      "ui-speed-scale",
-      "companion-sprite-typing-active-ticks",
-      "companion-sprite-typing-fast-active-ticks",
-      "companion-sprite-typing-fast-threshold-ms"
+      "render-damage-granularity"
     )
     group("settings-language-tools").children.map(_.id) shouldBe List("buffer-language", "settings-spellcheck")
     nestedGroup("settings-text-display").label shouldBe "Text Display"
@@ -251,6 +200,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-keymap-command-runner").children.map(_.id) should contain("keymap-command-runner-submit")
     nestedGroup("settings-keymap-dialogs").children.map(_.id) should contain("keymap-modal-dismiss")
     nestedGroup("settings-keymap-panels").children.map(_.id) should contain("keymap-panel-navigate_up")
+    nestedGroup("settings-saving").label shouldBe "Saving"
+    nestedGroup("settings-saving").children.map(_.id) shouldBe List("auto-save-mode", "auto-save-delay")
     nestedGroup("settings-document-defaults").label shouldBe "Document Defaults"
     nestedGroup("settings-document-defaults").children.map(_.id) should contain allOf (
       "default-document-mode",

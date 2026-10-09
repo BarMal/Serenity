@@ -2,12 +2,15 @@ package com.serenity.config
 
 import java.awt.Color
 
-import com.serenity.animation.AnimationConfig
 import com.serenity.ui.fonts.FontLoader.FontConfig
 
 final case class PreferredWindowSize(width: Int, height: Int):
   def normalized: PreferredWindowSize =
     PreferredWindowSize(width.max(400), height.max(300))
+
+object PreferredWindowSize:
+  /** The size of the window when the config states none. */
+  val Default: PreferredWindowSize = PreferredWindowSize(1024, 768)
 
 final case class WindowConfig(
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
@@ -27,13 +30,17 @@ final case class CursorColorConfig(
   def inactiveOr(activeColor: Color): Color =
     inactive.getOrElse(activeColor)
 
+/** `blinkTimeoutMillis` is how long a focused caret keeps blinking without input before it holds solid, so an idle
+  * editor stops waking to redraw it (#1883, after GTK's `gtk-cursor-blink-timeout`); 0 blinks for as long as the window
+  * stays focused.
+  */
 final case class CursorConfig(
     mode: CursorMode = CursorMode.Blink,
-    colors: CursorColorConfig = CursorColorConfig()
+    colors: CursorColorConfig = CursorColorConfig(),
+    blinkTimeoutMillis: Long = 10000L
 )
 
 final case class EditorConfig(
-    characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
     fontConfig: FontConfig = FontConfig(),
     minimumPaneWidth: Int = 50
 ):
@@ -51,7 +58,9 @@ final case class DocumentConfig(
     // Gates the multi-line drop cap paragraph role (issue: "Drop caps"). When false, a paragraph already tagged
     // ParagraphRole.DropCap keeps that role in the document (no data loss), but rendering/layout treats it as plain
     // Body -- see RichTextStyling/TextLayoutSnapshot's drop-cap gating.
-    dropCapsEnabled: Boolean = true
+    dropCapsEnabled: Boolean = true,
+    // Who new comments and replies are written as; `None` means the operating system's user name (`CommentAuthor`).
+    commentAuthor: Option[String] = None
 )
 
 final case class AppModeConfig(

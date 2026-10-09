@@ -1,12 +1,19 @@
 package com.serenity.command
 
-import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
 import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.session.SessionId
-import com.serenity.state.models.{BufferId, CloseWorkflowChoice, PanelId, SurfaceId}
+import com.serenity.state.models.{
+  BufferId,
+  ClipboardEntry,
+  CloseWorkflowChoice,
+  CommentId,
+  PanelId,
+  RestartMode,
+  SurfaceId
+}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.layout.PanelPosition
 
@@ -20,6 +27,8 @@ enum CommandCategory:
 
 enum LifecycleIntent:
   case QuitApp
+  // Quits like QuitApp (unsaved work is still asked about), then starts again; see SafeModeCommands.
+  case Restart(mode: RestartMode)
   // What the "save changes before closing?" prompt's answers run; see CloseCommands.
   case ResolveClose(choice: CloseWorkflowChoice)
 
@@ -31,6 +40,8 @@ enum EditIntent:
   case Copy
   case Cut
   case Paste
+  case ChoosePasteFromHistory
+  case PasteFromHistory(entry: ClipboardEntry)
   case SelectAll
   case Undo
   case Redo
@@ -50,6 +61,13 @@ enum CommentsIntent:
   case ToggleCommentLens
   case AddDocumentComment(text: String)
   case DeleteDocumentComment
+  case ReplyToDocumentComment(text: String)
+
+  /** What the comment lens writes when its draft is saved: an empty `text` deletes the comment. */
+  case SaveCommentDraft(id: CommentId, text: String)
+  case ResolveDocumentComment
+  case ReopenDocumentComment
+  case ToggleResolvedComments
   case NextDocumentComment
   case PreviousDocumentComment
 
@@ -77,6 +95,8 @@ enum LspIntent:
 enum ThemeIntent:
   case ToggleTheme
   case ApplyTheme(name: String)
+  case SetFollowSystem(enabled: Boolean)
+  case SetFollowSystemTheme(slot: AppearanceSlot, name: String)
   case ReloadTheme
   case OpenThemeChooser
   case OpenThemeCreator
@@ -124,6 +144,10 @@ enum ViewIntent:
   case SetMarkdownViewMode(mode: MarkdownViewMode)
   case SetDefaultDocumentMode(mode: DefaultDocumentMode)
   case SetAppMode(mode: AppMode)
+
+  /** [[SetAppMode]] once the writer has agreed to the project task it would stop: the answer to the prompt that asks.
+    */
+  case SetAppModeStoppingProjectTask(mode: AppMode)
   case SetShowAllSettingsRegardlessOfMode(value: Boolean)
   case ToggleShortcutsHelp
   case ToggleTabList
@@ -145,6 +169,8 @@ enum SessionIntent:
   case StartupNewSession
   case StartupRestoreSession
   case StartupOpenFile
+  case StartupOpenFolder
+  case StartupOpenFileOrFolder
   case ReturnToStartPage
   // Named sessions (issue #1390): `SaveSession`/`RestoreSession`/`ClearSession` above all operate implicitly on the
   // "current" session (`SessionManager`'s own notion of the one on `SessionIndex.currentSessionId`) -- these three
@@ -181,6 +207,9 @@ enum UiPresetsIntent:
   case RenameUiPreset(sourceName: String, targetName: String)
   case DeleteUiPreset(name: String)
   case ResetUiPreset(name: String)
+  case SetUiPresetTheme(name: String, themeName: String)
+  case UseCurrentThemeForUiPreset(name: String)
+  case ClearUiPresetTheme(name: String)
   // `ApplyUiPreset` (the splash's workflow shortcuts, the top-level searchable "Apply <Name> Preset" commands) stays
   // a one-shot, apply-everything action -- ReviewUiPreset is the deliberate alternative reached from a preset's own
   // settings group ("Apply Preset" there), which opens the diff-toggle review instead of applying immediately.
@@ -207,25 +236,6 @@ enum FontIntent:
   case SetTextLigatures(enabled: Boolean)
   case SetUiLigatures(enabled: Boolean)
   case ToggleLigatures
-
-/** Motion presets, transition speeds/kinds, and command-runner animation tuning. */
-enum MotionIntent:
-  case SetMotionPreset(preset: MotionPreset)
-  case SetMotionAccessibility(accessibility: MotionAccessibility)
-  case SetElementTransitionSpeedScale(scale: Double)
-  case SetEditorTextTransitionSpeedScale(scale: Double)
-  case SetCommandRunnerTransitionSpeedScale(scale: Double)
-  case SetUiTransitionSpeedScale(scale: Double)
-  case SetCursorTransitionSpeedScale(scale: Double)
-  case SetCommandRunnerAnimation(animation: Option[AnimationConfig])
-  case SetUiAnimation(animation: Option[AnimationConfig])
-  case SetCommandRunnerVisibleRows(rows: Option[Int])
-  case SetCommandRunnerItemGapRows(rows: Option[Double])
-  case SetCommandRunnerCursorGapRows(rows: Option[Double])
-  case SetEditorInsertionTransitionKind(kind: TransitionKind)
-  case SetCommandRunnerTransitionKind(kind: TransitionKind)
-  case SetPanelOpenTransitionKind(kind: TransitionKind)
-  case SetPanelCloseTransitionKind(kind: TransitionKind)
 
 /** Cursor rendering mode and its info-bar presentation. */
 enum CursorIntent:
@@ -276,30 +286,17 @@ enum TextDisplayIntent:
   case SetTextAreaBottomInset(value: Double)
   case SetDropCapsEnabled(enabled: Boolean)
 
-/** How interface surfaces are sized and spaced -- density, gaps, corner radius, window chrome, key hints -- and where
-  * Escape from a focused panel returns focus.
+/** How interface surfaces are sized and spaced -- density, gaps, outlines, window chrome, key hints -- and where Escape
+  * from a focused panel returns focus.
   */
 enum InterfaceChromeIntent:
   case SetCommandRunnerShowKeyHints(enabled: Boolean)
   case SetUiElementGap(gap: Double)
-  case SetUiCornerRadiusPx(radius: Int)
   case SetUiOutlineThicknessPx(thickness: Int)
   case SetInterfaceDensity(density: InterfaceDensity)
   case SetWindowChromeMode(mode: WindowChromeMode)
   case SetWheelScrollLines(lines: Int)
   case SetPanelEscapeTarget(mode: AppMode, target: PanelEscapeTarget)
-
-/** Purely decorative extras (companion sprite, flair tier) that never change what is edited. The companion sprite panel
-  * absorbed the retired window sitter's typing-reactivity (issue #934 v2), so its typing-cadence settings live here
-  * alongside the panel's own enabled toggle instead of a separate sitter config surface.
-  */
-enum DecorationIntent:
-  case SetCompanionSpriteEnabled(enabled: Boolean)
-  case SetCompanionSpriteTypingCycle(cycle: com.serenity.animation.sprite.SpriteFrameCycle)
-  case SetCompanionSpriteTypingActiveTicks(ticks: Int)
-  case SetCompanionSpriteTypingFastActiveTicks(ticks: Int)
-  case SetCompanionSpriteTypingFastThresholdMs(ms: Int)
-  case SetVisualFlairLevel(level: VisualFlairLevel)
 
 enum SpellCheckIntent:
   case SetSpellCheckEnabled(enabled: Boolean)
@@ -311,33 +308,41 @@ enum SpellCheckIntent:
   // threaded through the command.
   case AddWordAtCursorToDictionary
 
-/** Settings with no more specific home: material/post-processing/shadows, render tuning, background, and the settings
-  * surface's own open/save commands.
+/** What the writer does with a misspelling (#1939). The menu and popup act on a word they have already resolved, so
+  * those cases carry it rather than looking at the cursor, which a right-click leaves where it was.
   */
+enum SpellingIntent:
+  case ShowSuggestions
+  case Replace(line: Int, start: Int, end: Int, misspelled: String, replacement: String)
+  case AddToDictionary(word: String)
+  case IgnoreOnce(line: Int, start: Int, end: Int, word: String)
+  case IgnoreEverywhere(word: String)
+  case IgnoreOnceAtCursor
+  case IgnoreEverywhereAtCursor
+
+/** Settings with no more specific home: render tuning and the settings surface's own open/save commands. */
 enum GeneralSettingsIntent:
   case OpenSettings
   case SaveConfig
-  case SetMaterialPreset(preset: MaterialPreset)
-  case SetPostProcessingEffect(effect: PostProcessingEffect)
-  case SetUiShadowsEnabled(enabled: Boolean)
+  // Moves config.conf aside to a timestamped backup, then restores every setting to its default.
+  case ResetSettings
   case SetRenderFpsTarget(target: RenderFpsTarget)
   case SetRenderDamageGranularity(granularity: RenderDamageGranularity)
-  case SetBackgroundStyle(style: BackgroundStyle)
-  case SetBlurRadius(r: Float)
-  case SetAnimationDuration(ms: Int)
-  case SetAnimationSteps(n: Int)
+  case SetCommandRunnerVisibleRows(rows: Option[Int])
+  case SetCommandRunnerItemGapRows(rows: Option[Double])
+  case SetCommandRunnerCursorGapRows(rows: Option[Double])
+  case SetAutoSaveMode(mode: AutoSaveMode)
+  case SetAutoSaveDelayMillis(millis: Long)
 
 /** The `Settings` family of [[CommandIntent]], split one level deeper than the other groups because it is by far the
   * largest (~85 cases) — mirrors the domain split already established on `AppConfig`.
   */
 enum SettingsIntent:
   case Font(intent: FontIntent)
-  case Motion(intent: MotionIntent)
   case Cursor(intent: CursorIntent)
   case StatusLine(intent: StatusLineIntent)
   case TextDisplay(intent: TextDisplayIntent)
   case InterfaceChrome(intent: InterfaceChromeIntent)
-  case Decoration(intent: DecorationIntent)
   case SpellCheck(intent: SpellCheckIntent)
   case General(intent: GeneralSettingsIntent)
 
@@ -346,12 +351,14 @@ enum SettingsIntent:
   */
 enum CommandIntent:
   case Lifecycle(intent: LifecycleIntent)
+  case Diagnostics(intent: DiagnosticsIntent)
   case File(intent: FileIntent)
   case Edit(intent: EditIntent)
   case RichText(intent: RichTextIntent)
   case Comments(intent: CommentsIntent)
   case Placeholders(intent: PlaceholderIntent)
   case Darlings(intent: DarlingIntent)
+  case Spelling(intent: SpellingIntent)
   case Navigation(intent: NavigationIntent)
   case Lsp(intent: LspIntent)
   case Theme(intent: ThemeIntent)

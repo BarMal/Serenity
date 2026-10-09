@@ -5,14 +5,15 @@ import com.serenity.config.PanelEscapeTarget
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.{AppState, Focus, SurfaceContent, SurfacePresentation, UiSurface}
 import com.serenity.state.reducers.PanelFocusHistory
-import com.serenity.ui.layout.{LayoutEngine, PanelPosition, ViewportSize}
+import com.serenity.ui.layout.{LayoutEngine, ListPanelScrolling, PanelPosition, ViewportSize, WrappedLineCache}
 
 /** Keys for the panel focused at one edge: typing returns to the editor, Escape to wherever the app mode's setting
   * says, and Ctrl+Up/Down resize it, while moving within it depends on what it shows -- see [[ExplorerPanelKeys]],
   * [[ListPanelKeys]] and [[OutputPanelKeys]].
   */
 class PinnedPanelComponent(
-    position: PanelPosition
+    position: PanelPosition,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
 ) extends TypedFocusedComponent[PanelInputEvent]:
 
   protected def decodeEvent(event: Event): Option[PanelInputEvent] =
@@ -38,10 +39,11 @@ class PinnedPanelComponent(
       case movement =>
         val rows = visibleRows(surface, currentState)
         val handled = surface.content match
-          case SurfaceContent.DirectoryTree(tree, selectedPath) =>
-            ExplorerPanelKeys.handle(movement, surface, tree, selectedPath, currentState, rows)
-          case SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) | SurfaceContent.Diagnostics(_, _) =>
-            ListPanelKeys.handle(movement, surface, currentState, rows)
+          case SurfaceContent.DirectoryTree(tree, selectedPath, scroll) =>
+            ExplorerPanelKeys.handle(movement, surface, tree, selectedPath, scroll, currentState, rows)
+          case SurfaceContent.Outline(_, _, _) | SurfaceContent.Comments(_, _, _) |
+              SurfaceContent.Diagnostics(_, _, _) =>
+            ListPanelKeys.handle(movement, surface, currentState, rows, wrapCache)
           case SurfaceContent.Terminal(text, cursor) =>
             OutputPanelKeys.handle(movement, surface, text, cursor, rows)
           case _ => None
@@ -68,7 +70,7 @@ class PinnedPanelComponent(
   /** How many rows the panel shows -- what a page is. */
   private def visibleRows(surface: UiSurface, state: AppState): Int =
     val layout = LayoutEngine.calculateLayoutWithUI(state, state.runtime.viewportSize.getOrElse(ViewportSize(80, 24)))
-    layout.pinnedSurfaceRects.get(surface.id).map(rect => math.max(1, rect.height - 2)).getOrElse(1)
+    layout.pinnedSurfaceRects.get(surface.id).map(ListPanelScrolling.viewportRows(surface.content, _)).getOrElse(1)
 
   /** The focused panel at this edge, or failing that the one most recently used there. */
   private def activeSurface(currentState: AppState): Option[UiSurface] =

@@ -1,7 +1,8 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.InterfaceDensityMetrics
+import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.models.*
 import com.serenity.ui.layout.LayoutContractChecks.*
 
@@ -323,7 +324,7 @@ object EditorLayoutContract:
         None
 
   def overlayRectFor(surfaceId: SurfaceId, calculatedLayout: CalculatedLayout): Option[LayoutRect] =
-    calculatedLayout.aboveCursorOverlayStack
+    (calculatedLayout.cornerOverlayStack ++ calculatedLayout.aboveCursorOverlayStack)
       .find(_._1 == surfaceId)
       .map(_._2)
       .orElse(calculatedLayout.belowCursorOverlayStack.find(_._1 == surfaceId).map(_._2))
@@ -341,7 +342,8 @@ object EditorLayoutContract:
   def from(
     state: AppState,
     viewportSize: ViewportSize,
-    calculatedLayout: CalculatedLayout
+    calculatedLayout: CalculatedLayout,
+    previewCache: MarkdownPreviewCache = MarkdownPreviewCache()
   ): EditorLayoutContract =
     val viewportRect = LayoutRect(0, 0, viewportSize.width, viewportSize.height)
     val contentAreaRect = calculatedLayout.gutterRect match
@@ -353,7 +355,9 @@ object EditorLayoutContract:
       math.ceil(math.max(0.0, state.effectiveUiElementGap)).toInt
     )
     val panelGeometryById = state.pinnedSurfaces.flatMap { surface =>
-      panelRectFor(surface, state, calculatedLayout).map(rect => surface.id -> pinnedGeometry(surface, rect, state))
+      panelRectFor(surface, state, calculatedLayout).map(rect =>
+        surface.id -> pinnedGeometry(surface, rect, state, previewCache)
+      )
     }.toMap
     val maximizedSurfaceIds = state.expandedPanelSurface.toSet.map(_.id)
     val pinnedSurfaceIds    = calculatedLayout.pinnedSurfaceRects.keySet -- maximizedSurfaceIds
@@ -427,29 +431,42 @@ object EditorLayoutContract:
       floatingOverlayRowSlots = floatingOverlayRowSlots
     )
 
-  private def pinnedGeometry(surface: UiSurface, frameRect: LayoutRect, state: AppState): SurfaceGeometry =
+  private def pinnedGeometry(
+    surface: UiSurface,
+    frameRect: LayoutRect,
+    state: AppState,
+    previewCache: MarkdownPreviewCache
+  ): SurfaceGeometry =
     val resolved = surface.content match
       case SurfaceContent.MarkdownPreview(bufferId, title) =>
-        val content = state.persisted.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
-        SurfaceContentResolver.resolveMarkdownPreview(title, content, frameRect, SurfaceRenderMode.Pinned)
-      case SurfaceContent.Outline(symbols, activeLocation) =>
+        val content = state.persisted.buffers.get(bufferId).map(_.document.content)
+        SurfaceContentResolver.resolveBufferMarkdownPreview(
+          title,
+          content,
+          frameRect,
+          SurfaceRenderMode.Pinned,
+          previewCache
+        )
+      case SurfaceContent.Outline(symbols, activeLocation, scroll) =>
         val resolvedOutline = SurfaceContent.Outline(
           symbols,
           activeLocation.orElse(
             state.activeCursorPosition.flatMap(cursor =>
               com.serenity.document.DocumentNavigation.currentSymbol(symbols, cursor).map(_.location)
             )
-          )
+          ),
+          scroll
         )
         SurfaceContentResolver.resolve(resolvedOutline, frameRect, SurfaceRenderMode.Pinned)
-      case SurfaceContent.Comments(symbols, activeLocation) =>
+      case SurfaceContent.Comments(symbols, activeLocation, scroll) =>
         val resolvedComments = SurfaceContent.Comments(
           symbols,
           activeLocation.orElse(
             state.activeCursorPosition.flatMap(cursor =>
               com.serenity.document.DocumentNavigation.currentSymbol(symbols, cursor).map(_.location)
             )
-          )
+          ),
+          scroll
         )
         SurfaceContentResolver.resolve(resolvedComments, frameRect, SurfaceRenderMode.Pinned)
       case content =>
@@ -463,9 +480,6 @@ object EditorLayoutContract:
     calculatedLayout: CalculatedLayout
   ): Option[SurfaceGeometry] =
     val collapsed = calculatedLayout.collapsedFloatingSurfaceIds.contains(surface.id)
-    val geometryFrame = surface.content match
-      case SurfaceContent.GhostOverlay(_, cachedRect) => cachedRect
-      case _                                          => frameRect
     val resolved =
       if collapsed then collapsedFloatingContent(surface.content)
       else
@@ -474,22 +488,13 @@ object EditorLayoutContract:
             SurfaceContentResolver.resolveContextualToolbar(
               toolbarState,
               state,
-              geometryFrame,
+              frameRect,
               SurfaceRenderMode.Floating
-            )
-          case SurfaceContent.GhostOverlay(originalContent, _) =>
-            SurfaceContentResolver.resolve(
-              originalContent,
-              geometryFrame,
-              SurfaceRenderMode.Floating,
-              itemGapRowsFor(originalContent, state),
-              itemTargetRowsFor(originalContent, state),
-              showKeyHintsFor(originalContent, state)
             )
           case content =>
             SurfaceContentResolver.resolve(
               content,
-              geometryFrame,
+              frameRect,
               SurfaceRenderMode.Floating,
               itemGapRowsFor(content, state),
               itemTargetRowsFor(content, state),
@@ -500,7 +505,7 @@ object EditorLayoutContract:
     )(
       surfaceGeometry(
         surface.content,
-        geometryFrame,
+        frameRect,
         resolved,
         itemGapRowsFor(surface.content, state),
         itemTargetRowsFor(surface.content, state)
@@ -554,11 +559,7 @@ object EditorLayoutContract:
         state.persisted.config.effectiveCommandRunnerItemGapRows
       case SurfaceContent.ContextualToolbar(_) =>
         state.effectiveUiElementGap
-      case SurfaceContent.GhostOverlay(originalContent, _) =>
-        itemGapRowsFor(originalContent, state)
       case _ => 0.0
 
   private def itemTargetRowsFor(content: SurfaceContent, state: AppState): Int =
-    content match
-      case SurfaceContent.GhostOverlay(originalContent, _) => itemTargetRowsFor(originalContent, state)
-      case other => SurfaceFrameLayout.itemTargetRowsFor(other, state.persisted.config.interfaceDensity)
+    SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)

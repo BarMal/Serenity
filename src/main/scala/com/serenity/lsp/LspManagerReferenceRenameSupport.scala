@@ -11,7 +11,7 @@ import org.typelevel.log4cats.Logger
 
 /** `textDocument/references` and `textDocument/rename` request handling, split out of [[LspManager]] to keep that file
   * under the architecture ratchet's file-length target. Both follow [[LspManager.startRequest]]'s shared request
-  * lifecycle exactly like [[LspManager.requestSemanticTokens]] does, just kept out of `LspManager` itself.
+  * lifecycle exactly like [[LspManagerSemanticTokens]] does, just kept out of `LspManager` itself.
   */
 private[lsp] object LspManagerReferenceRenameSupport:
 
@@ -22,14 +22,13 @@ private[lsp] object LspManagerReferenceRenameSupport:
     character: Int,
     anchor: CursorPosition,
     symbol: String,
-    connectionsRef: Ref[IO, Map[LspManager.ConnectionIdentity, LspManager.ManagedConnection]],
+    pool: LspConnectionPool,
     documentVersions: Ref[IO, Map[DocumentUri, Int]],
     requestContexts: Ref[IO, Map[LspManager.RequestKey, LspManager.RequestContext]],
     requestFibers: Ref[IO, Map[LspManager.RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]],
     supervisor: Supervisor[IO],
     applyEvent: Event => IO[Unit],
-    logger: Logger[IO],
-    connectionProvider: LspManager.ConnectionProvider
+    logger: Logger[IO]
   ): IO[Unit] =
     given Logger[IO] = logger
     val uri          = DocumentUri(rawUri)
@@ -38,14 +37,12 @@ private[lsp] object LspManagerReferenceRenameSupport:
       uri,
       languageId,
       LspManager.RequestAnchor.CursorAnchored(anchor),
-      connectionsRef,
+      pool,
       documentVersions,
       requestContexts,
       requestFibers,
       supervisor,
-      applyEvent,
-      logger,
-      connectionProvider
+      applyEvent
     ) { (conn, context) =>
       Trace
         .timed(s"lsp.references.$rawUri")(
@@ -82,14 +79,13 @@ private[lsp] object LspManagerReferenceRenameSupport:
     character: Int,
     anchor: CursorPosition,
     newName: String,
-    connectionsRef: Ref[IO, Map[LspManager.ConnectionIdentity, LspManager.ManagedConnection]],
+    pool: LspConnectionPool,
     documentVersions: Ref[IO, Map[DocumentUri, Int]],
     requestContexts: Ref[IO, Map[LspManager.RequestKey, LspManager.RequestContext]],
     requestFibers: Ref[IO, Map[LspManager.RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]],
     supervisor: Supervisor[IO],
     applyEvent: Event => IO[Unit],
-    logger: Logger[IO],
-    connectionProvider: LspManager.ConnectionProvider
+    logger: Logger[IO]
   ): IO[Unit] =
     given Logger[IO] = logger
     val uri          = DocumentUri(rawUri)
@@ -98,14 +94,12 @@ private[lsp] object LspManagerReferenceRenameSupport:
       uri,
       languageId,
       LspManager.RequestAnchor.CursorAnchored(anchor),
-      connectionsRef,
+      pool,
       documentVersions,
       requestContexts,
       requestFibers,
       supervisor,
-      applyEvent,
-      logger,
-      connectionProvider
+      applyEvent
     ) { (conn, context) =>
       Trace
         .timed(s"lsp.rename.$rawUri")(

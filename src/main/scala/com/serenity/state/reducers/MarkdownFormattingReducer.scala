@@ -1,9 +1,10 @@
 package com.serenity.state.reducers
 
 import com.serenity.command.RichTextIntent
-import com.serenity.markdown.{Emphasis, MarkdownFormatting, Reformatted}
+import com.serenity.markdown.{Emphasis, MarkdownFormatting, Reformatted, SourceRange}
 import com.serenity.richtext.ParagraphRole
 import com.serenity.state.models.*
+import com.serenity.state.undo.EditGrouping
 
 /** Formatting commands on a Markdown file, applied by editing its source -- `**`, `*`, `<u>` and `#` -- as one undoable
   * edit, so the formatting is in the text the file saves rather than in a model a save would drop.
@@ -44,13 +45,30 @@ private[reducers] object MarkdownFormattingReducer:
         else applied(state, paneId, buffer, reformatted)
     )
 
+  /** The ranges as the edits left them. When an edit was skipped to protect a block the ranges the formatter computed
+    * no longer fit, so the selection is carried through the edits that were made instead.
+    */
+  private def rangesAfter(buffer: Buffer, reformatted: Reformatted, applied: List[MultiCursorEdit]): List[SourceRange] =
+    if applied.sizeIs == reformatted.edits.size then reformatted.ranges
+    else
+      val ascending = applied.sortBy(edit => (edit.start, edit.end))
+      MarkdownSelection
+        .ranges(buffer)
+        .map(range =>
+          SourceRange(
+            remapEditBoundary(range.anchor, ascending, insertionAtBoundaryMoves = false),
+            remapEditBoundary(range.focus, ascending, insertionAtBoundaryMoves = false)
+          )
+        )
+
   private def applied(state: AppState, paneId: PaneId, buffer: Buffer, reformatted: Reformatted): ReducerResult =
     // Applied last to first so each edit's offsets still describe the text it was computed against.
     val edits = reformatted.edits.reverse.map(edit => MultiCursorEdit(0, edit.start, edit.end, edit.text))
-    val (content, richTextDocument) = foldEditsWithRichText(buffer, edits) { (current, edit) =>
+    val folded = foldEditsTracked(buffer, edits) { (current, edit) =>
       insertOrUnchanged(deleteOrUnchanged(current, edit.start, edit.end), edit.start, edit.insertedText)
     }
-    val cursors = reformatted.ranges.map { range =>
+    val (content, richTextDocument) = (folded.content, folded.richText)
+    val cursors = rangesAfter(buffer, reformatted, folded.applied).map { range =>
       val focus = content.offsetToCursorPosition(range.focus)
       Cursor(focus, Option.when(range.anchor != range.focus)(content.offsetToCursorPosition(range.anchor)))
     }
@@ -62,13 +80,12 @@ private[reducers] object MarkdownFormattingReducer:
           buffer.annotations,
           buffer.document.content,
           content,
-          edits
+          folded.applied
         ),
         richTextDocument = richTextDocument
       )
       .copy(editing = EditingState.fromCursors(cursors))
     ReducerResult(
       state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(buffer.id, edited))),
-      animationRemapEffects(buffer.id, buffer.document.content, content, edits) ++
-        undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+      undoBoundaryEffects(buffer.id, paneId, buffer, folded.applied, grouping = EditGrouping.Standalone)
     )

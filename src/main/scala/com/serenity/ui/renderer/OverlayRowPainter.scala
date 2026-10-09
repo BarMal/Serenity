@@ -1,9 +1,7 @@
 package com.serenity.ui.renderer
 
-import java.awt.Color
-
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
-import com.serenity.ui.theme.ColorFormat.withAlpha
 import com.serenity.ui.theme.Theme
 
 /** Paints one row of a floating surface: the row's background, then its glyphs in whatever arrangement its
@@ -22,8 +20,8 @@ private[renderer] object OverlayRowPainter:
     row: OverlayRow,
     theme: Theme,
     cursorVisible: Boolean,
-    defaultForeground: Option[Color],
-    defaultBackground: Option[Color],
+    defaultForeground: Option[RenderColor],
+    defaultBackground: Option[RenderColor],
     font: java.awt.Font,
     cellMetrics: CellMetrics,
     textInsetPx: Double,
@@ -57,8 +55,8 @@ private[renderer] object OverlayRowPainter:
     row: OverlayRow,
     theme: Theme,
     cursorVisible: Boolean,
-    defaultForeground: Option[Color],
-    defaultBackground: Option[Color],
+    defaultForeground: Option[RenderColor],
+    defaultBackground: Option[RenderColor],
     font: java.awt.Font,
     cellMetrics: CellMetrics,
     textInsetPx: Double,
@@ -70,15 +68,15 @@ private[renderer] object OverlayRowPainter:
     val baseBg  = defaultBackground.getOrElse(theme.panel.background)
     val rowBackground =
       rowView.row.backgroundColor
-        .map(SurfaceMaterials.fadedWith(_, baseBg, theme))
+        .map(_.withAlpha(baseBg.alpha))
         .getOrElse(
-          if rowView.row.selected then SurfaceMaterials.fadedWith(theme.highlighted.background, baseBg, theme)
+          if rowView.row.selected then theme.highlighted.background.withAlpha(baseBg.alpha)
           else baseBg
         )
     val rowForeground =
       rowView.row.foregroundColor
-        .map(_.withAlpha(baseFg.getAlpha))
-        .getOrElse(if rowView.row.selected then theme.highlighted.foreground.withAlpha(baseFg.getAlpha) else baseFg)
+        .map(_.withAlpha(baseFg.alpha))
+        .getOrElse(if rowView.row.selected then theme.highlighted.foreground.withAlpha(baseFg.alpha) else baseFg)
     val rowLeftXPx  = cellMetrics.toPixelX(x)
     val rowRightXPx = cellMetrics.toPixelX(x + width)
 
@@ -126,8 +124,8 @@ private[renderer] object OverlayRowPainter:
     rowView: OverlayRowView,
     theme: Theme,
     cursorVisible: Boolean,
-    rowForeground: Color,
-    rowBackground: Color,
+    rowForeground: RenderColor,
+    rowBackground: RenderColor,
     font: java.awt.Font,
     cellMetrics: CellMetrics,
     pixelY: Option[Int]

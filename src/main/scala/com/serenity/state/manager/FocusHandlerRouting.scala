@@ -4,7 +4,7 @@ import com.serenity.command.CommandRegistry
 import com.serenity.state.components.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalEventReducer
-import com.serenity.ui.layout.PanelPosition
+import com.serenity.ui.layout.{PanelPosition, WrappedLineCache}
 
 /** The `SurfaceContent -> LocalEventHandler` and `PanelPosition -> LocalEventHandler` associations that
   * [[StateManagerEventPipeline.getLocalHandlerForFocus]] dispatches focused input through.
@@ -14,9 +14,10 @@ import com.serenity.ui.layout.PanelPosition
   *
   * Components are stateless apart from their constructor arguments (verified by inspection: none of the
   * `state.components` classes hold a `var` or mutable field), so every handler built from fixed, constructor-time data
-  * is a `val`, built once and reused across every dispatch.
+  * is a `val`, built once per event pipeline and reused across every dispatch. The modal and pinned-panel handlers can
+  * move the cursor and place the viewport, so they measure through the pipeline's `wrapCache`.
   */
-private[manager] object FocusHandlerRouting:
+final private[manager] class FocusHandlerRouting(wrapCache: WrappedLineCache):
 
   private val registry = CommandRegistry.withToggleUI
 
@@ -29,25 +30,27 @@ private[manager] object FocusHandlerRouting:
   /** Handler for floating "peek" content: read-only info popups and previews that only respond to dismiss/navigate (see
     * `PeekOverlayComponent`), plus content that is only ever presented Docked (`DirectoryTree`, `Terminal`, `Outline`,
     * `Comments`, `Diagnostics` -- see `UiSurface.fromPanelContent`, which is their only construction site) and so never
-    * actually reaches this table in practice, and the transient `GhostOverlay` fade-out surface, which is allocated
-    * under a fresh id that is never pushed onto the focus stack. All are routed here to match this codebase's prior
-    * behaviour, where every one of them fell through a wildcard to `PeekOverlayComponent`.
+    * actually reaches this table in practice. All are routed here to match this codebase's prior behaviour, where every
+    * one of them fell through a wildcard to `PeekOverlayComponent`.
     */
-  private val peekOverlay: LocalEventHandler = new PeekOverlayComponent()
-  private val contextMenu: LocalEventHandler = new ContextMenuComponent()
+  private val peekOverlay: LocalEventHandler  = new PeekOverlayComponent()
+  private val contextMenu: LocalEventHandler  = new ContextMenuComponent()
+  private val noticePrompt: LocalEventHandler = new NoticePromptComponent()
 
-  private val modalTextPrompt: LocalEventHandler       = new ModalComponent(ModalType.TextPrompt)
-  private val modalFind: LocalEventHandler             = new ModalComponent(ModalType.Find)
-  private val modalFileWorkflow: LocalEventHandler     = new ModalComponent(ModalType.FileWorkflow)
-  private val modalReplaceWorkflow: LocalEventHandler  = new ModalComponent(ModalType.ReplaceWorkflow)
-  private val modalConfirm: LocalEventHandler          = new ModalComponent(ModalType.Confirm)
-  private val modalListPicker: LocalEventHandler       = new ModalComponent(ModalType.ListPicker)
-  private val modalPanelArrangement: LocalEventHandler = new ModalComponent(ModalType.PanelArrangement)
+  private val modalTextPrompt: LocalEventHandler   = new ModalComponent(ModalType.TextPrompt, wrapCache = wrapCache)
+  private val modalFind: LocalEventHandler         = new ModalComponent(ModalType.Find, wrapCache = wrapCache)
+  private val modalFileWorkflow: LocalEventHandler = new ModalComponent(ModalType.FileWorkflow, wrapCache = wrapCache)
+  private val modalReplaceWorkflow: LocalEventHandler =
+    new ModalComponent(ModalType.ReplaceWorkflow, wrapCache = wrapCache)
+  private val modalConfirm: LocalEventHandler    = new ModalComponent(ModalType.Confirm, wrapCache = wrapCache)
+  private val modalListPicker: LocalEventHandler = new ModalComponent(ModalType.ListPicker, wrapCache = wrapCache)
+  private val modalPanelArrangement: LocalEventHandler =
+    new ModalComponent(ModalType.PanelArrangement, wrapCache = wrapCache)
 
-  private val pinnedLeft: LocalEventHandler   = new PinnedPanelComponent(PanelPosition.Left)
-  private val pinnedRight: LocalEventHandler  = new PinnedPanelComponent(PanelPosition.Right)
-  private val pinnedBottom: LocalEventHandler = new PinnedPanelComponent(PanelPosition.Bottom)
-  private val pinnedTop: LocalEventHandler    = new PinnedPanelComponent(PanelPosition.Top)
+  private val pinnedLeft: LocalEventHandler   = new PinnedPanelComponent(PanelPosition.Left, wrapCache = wrapCache)
+  private val pinnedRight: LocalEventHandler  = new PinnedPanelComponent(PanelPosition.Right, wrapCache = wrapCache)
+  private val pinnedBottom: LocalEventHandler = new PinnedPanelComponent(PanelPosition.Bottom, wrapCache = wrapCache)
+  private val pinnedTop: LocalEventHandler    = new PinnedPanelComponent(PanelPosition.Top, wrapCache = wrapCache)
 
   private[manager] def forPinnedPanel(position: PanelPosition): LocalEventHandler =
     position match
@@ -87,13 +90,11 @@ private[manager] object FocusHandlerRouting:
       case SurfaceContent.DirectoryListing(_, _, _) => peekOverlay
       case SurfaceContent.ContextMenu(_)            => contextMenu
       case SurfaceContent.MarkdownPreview(_, _)     => peekOverlay
-      case SurfaceContent.DirectoryTree(_, _)       => peekOverlay
+      case SurfaceContent.DirectoryTree(_, _, _)    => peekOverlay
       case SurfaceContent.Terminal(_, _)            => peekOverlay
-      case SurfaceContent.Outline(_, _)             => peekOverlay
-      case SurfaceContent.Comments(_, _)            => peekOverlay
-      case SurfaceContent.Diagnostics(_, _)         => peekOverlay
-      case SurfaceContent.GhostOverlay(_, _)        => peekOverlay
-      case SurfaceContent.CompanionSprite           => peekOverlay
+      case SurfaceContent.Outline(_, _, _)          => peekOverlay
+      case SurfaceContent.Comments(_, _, _)         => peekOverlay
+      case SurfaceContent.Diagnostics(_, _, _)      => peekOverlay
       // Cursor-peek prototype: never focused in practice (look-but-don't-touch), but routed as a read-only peek
       // overlay rather than left unhandled, matching every other passive preview content case above.
       case SurfaceContent.CommandRunnerPeek(_) => peekOverlay
@@ -110,3 +111,5 @@ private[manager] object FocusHandlerRouting:
       // dispatch. Close/reorder (#1078/#1079/#1081) remain out of scope. Routed here only so this table stays
       // exhaustive, same "look but don't touch" pattern as TabList.
       case SurfaceContent.TabBar(_, _) => peekOverlay
+      // A notice (#1717) never takes focus, unless it asks a question: then its actions answer to the keyboard.
+      case SurfaceContent.Notice(notice, _) => if notice.prompt.isDefined then noticePrompt else peekOverlay
