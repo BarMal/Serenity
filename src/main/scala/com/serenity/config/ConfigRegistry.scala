@@ -22,6 +22,7 @@ object ConfigRegistry:
       ConfigFieldsStatusLine.fields ++
       ConfigFieldsDocumentsAndCommandRunner.fields ++
       ConfigFieldsDisplay.fields ++
+      ConfigFieldsTheme.fields ++
       ConfigFieldsSurface.fields ++
       ConfigFieldsExport.fields
 

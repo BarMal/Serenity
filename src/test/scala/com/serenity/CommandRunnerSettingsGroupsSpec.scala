@@ -100,7 +100,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "theme",
       "settings-interface-layout",
       "settings-cursor",
-      "settings-look-advanced"
+      "settings-look-advanced",
+      "settings-follow-system"
     )
     nestedGroup("settings-cursor").label shouldBe "Cursor"
     nestedGroup("settings-cursor").children.map(_.id) shouldBe List("cursor-mode")

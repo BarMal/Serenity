@@ -14,6 +14,7 @@ import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.models.RestartMode
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
+import com.serenity.ui.theme.appearance.OsAppearanceDetector
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.Logger
@@ -142,6 +143,7 @@ final private[manager] case class StateManagerRuntime(
     renderCaches: RenderCaches,
     restarter: Option[RestartMode => IO[Unit]] = None,
     dictionaryCache: DictionaryCache = DictionaryCache(),
+    appearanceDetector: OsAppearanceDetector = OsAppearanceDetector.system,
     configOnDisk: Option[AppConfig] = None
 )
 
@@ -172,6 +174,7 @@ private[manager] object StateManagerRuntime:
     projectTasksEnabled: Boolean = true,
     restarter: Option[RestartMode => IO[Unit]] = None,
     dictionaryCache: DictionaryCache = DictionaryCache(),
+    appearanceDetector: OsAppearanceDetector = OsAppearanceDetector.system,
     configOnDisk: Option[AppConfig] = None
   )(using Balance): StateManagerRuntime =
     val sessionManager = sessionRootOverride
@@ -203,5 +206,6 @@ private[manager] object StateManagerRuntime:
       renderCaches = renderCaches,
       restarter = restarter,
       dictionaryCache = dictionaryCache,
+      appearanceDetector = appearanceDetector,
       configOnDisk = configOnDisk
     )

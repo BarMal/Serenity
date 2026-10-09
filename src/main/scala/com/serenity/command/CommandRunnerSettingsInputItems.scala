@@ -161,6 +161,7 @@ object CommandRunnerSettingsInputItems:
       ) ++
       CommandRunnerSettingsInputItemsInputAndFont.inputItems(v.inputConfig.wheelScrollLines) ++
       CommandRunnerSettingsInputItemsInputAndFont.autoSaveItems(config.autoSaveConfig.delayMillis) ++
+      CommandRunnerSettingsInputItemsFollowSystem.items(config.themeFollowConfig) ++
       CommandRunnerSettingsInputItemsInputAndFont.fontSizeItems(
         v.codeFontSizeValue,
         v.textFontSizeValue,

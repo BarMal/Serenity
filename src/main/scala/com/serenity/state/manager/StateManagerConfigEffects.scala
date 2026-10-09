@@ -41,7 +41,8 @@ final private[manager] class StateManagerConfigEffects(
     saveConfig: (AppConfig, java.nio.file.Path) => IO[Either[ConfigError, Unit]] = ConfigManager.saveConfigIO,
     showNotice: Notice => IO[Unit] = _ => IO.unit,
     configOnDisk: Option[AppConfig] = None,
-    loadConfig: java.nio.file.Path => IO[Either[ConfigError, ConfigLoadResult]] = ConfigFileSync.defaultLoad
+    loadConfig: java.nio.file.Path => IO[Either[ConfigError, ConfigLoadResult]] = ConfigFileSync.defaultLoad,
+    followSystemAppearance: IO[Unit] = IO.unit
 )(using balance: com.serenity.rope.Balance):
 
   private val writes = WriteCoalescer.unsafe
@@ -452,7 +453,8 @@ final private[manager] class StateManagerConfigEffects(
       ) >>
       IO.whenA(config.languageToolsConfig.spellCheck != before.languageToolsConfig.spellCheck)(
         editor.scheduleDocumentAnalysis()
-      )
+      ) >>
+      IO.whenA(config.themeFollowConfig != before.themeFollowConfig)(followSystemAppearance)
 
   private def showConfigNotice(messages: List[String]): IO[Unit] =
     IO.whenA(messages.nonEmpty)(
