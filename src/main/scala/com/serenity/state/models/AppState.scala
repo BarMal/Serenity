@@ -5,6 +5,7 @@ import com.serenity.lsp.client.DocumentUri
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.text.TextStatistics
 import com.serenity.ui.layout.{Layout, SpacingScale, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.theme.Theme
 
 final case class AppState(
     persisted: Persisted,
@@ -56,6 +57,12 @@ final case class AppState(
 
   def syntaxHighlightingEnabled: Boolean = persisted.config.languageToolsConfig.syntaxHighlightingEnabled
   def isValid: Boolean                   = AppStateValidation.validationErrors(this).isEmpty
+
+  /** The config that is saved: a setting still being previewed has not changed it. */
+  def committedConfig: AppConfig = runtime.pendingSetting.fold(persisted.config)(_.committedConfig)
+
+  /** The theme that is saved: a theme still being previewed has not replaced it. */
+  def committedTheme: Theme = runtime.pendingSetting.fold(persisted.theme)(_.committedTheme)
 
   /** `InterfaceConfig.elementGap`, resolved for this state's surface. `AppConfig` alone can't make this call --
     * `runtime.capabilities` lives only here -- and it must not: the config is shared and persisted across both
@@ -172,7 +179,8 @@ final case class AppState(
       themeNames = runtime.themeDiscovery.availableThemeNames,
       currentThemeName = Some(persisted.theme.name),
       editingContext = Some(editingContext),
-      projectPresence = runtime.projectPresence
+      projectPresence = runtime.projectPresence,
+      opensFileOrFolder = runtime.capabilities.opensFileOrFolder
     )
 
   /** The active editor pane's buffer, if any. */

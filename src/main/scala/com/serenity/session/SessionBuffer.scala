@@ -4,7 +4,7 @@ import java.nio.file.Paths
 import java.time.Instant
 
 import cats.effect.IO
-import com.serenity.io.{DocumentRevision, FileManager}
+import com.serenity.io.{DocumentRevision, FileManager, FileType}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.rope.Rope
@@ -22,7 +22,7 @@ final case class SessionBuffer(
     // Persist buffer text so restore does not depend on disk reads
     unsavedContent: Option[String] = None,
     richTextDocument: Option[RichTextDocument] = None,
-    richTextFidelity: Option[RichTextFidelity] = None,
+    richTextFidelity: Option[FidelityReport] = None,
     findState: Option[SessionFindState] = None,
     bookmarks: List[SessionCursorPosition] = Nil,
     documentComments: List[SessionDocumentComment] = Nil,
@@ -195,12 +195,46 @@ object SessionBuffer:
     * read captures the revision a later save checks against. A dirty one keeps the session's unsaved text and the
     * revision it was edited from. Anything unreadable falls back to what the session recorded.
     */
-  def toBufferIO(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): IO[Buffer] =
+  def toBufferIO(sessionBuffer: SessionBuffer, files: FileManager)(using com.serenity.rope.Balance): IO[Buffer] =
     val recorded = recordedBuffer(sessionBuffer)
-    sessionBuffer.filePath.map(Paths.get(_)) match
+    val restored = sessionBuffer.filePath.map(Paths.get(_)) match
       case Some(path) if !(sessionBuffer.isDirty && sessionBuffer.unsavedContent.isDefined) =>
-        FileManager().loadFile(path, recorded.id).map(fromDisk(recorded, _)).handleError(_ => recorded)
+        files.loadFile(path, recorded.id).map(fromDisk(recorded, _)).handleError(_ => recorded)
       case _ => IO.pure(recorded)
+    restored.flatMap(withSourcePackage(_, files))
+
+  /** A restored rich document keeps no package bytes, so a DOCX or ODT one is linked to its file read again. The file
+    * counts only when it is still at the revision the buffer was read or written at (the stat check): a file changed
+    * since has other body blocks than the ones the document remembers. A document that cannot be linked is saved with a
+    * warning that the rest of the original package would be lost, never silently.
+    */
+  private def withSourcePackage(buffer: Buffer, files: FileManager): IO[Buffer] =
+    (buffer.richText.richTextDocument, buffer.document.filePath) match
+      case (Some(document), Some(path)) if document.source.isEmpty && keepsPackage(path) =>
+        files
+          .importPackage(path, buffer.document.revision)
+          .map(_.fold(detached(buffer, document, path))(imported => linked(buffer, document.relinkedTo(imported))))
+          .handleError(_ => detached(buffer, document, path))
+      case _ => IO.pure(buffer)
+
+  private def keepsPackage(path: java.nio.file.Path): Boolean =
+    FileType.saveTarget(FileType.fromPath(path)).packageFormat.isDefined
+
+  private def linked(buffer: Buffer, document: RichTextDocument): Buffer =
+    buffer.copy(richText = buffer.richText.copy(richTextDocument = Some(document)))
+
+  private def detached(buffer: Buffer, document: RichTextDocument, path: java.nio.file.Path): Buffer =
+    buffer.copy(richText =
+      buffer.richText.copy(richTextFidelity =
+        Some(
+          FidelityReport.forDetached(
+            document,
+            FileType.saveTarget(FileType.fromPath(path)),
+            buffer.richText.richTextFidelity
+          )
+        )
+      )
+    )
 
   private def recordedBuffer(sessionBuffer: SessionBuffer)(using com.serenity.rope.Balance): Buffer =
     val buffer = toBuffer(sessionBuffer)
@@ -210,7 +244,14 @@ object SessionBuffer:
 
   private def fromDisk(recorded: Buffer, disk: Buffer): Buffer =
     if disk.document.content.collect() == recorded.document.content.collect() then
-      recorded.copy(document = recorded.document.copy(revision = disk.document.revision, isDirty = false))
+      recorded.copy(
+        document = recorded.document.copy(revision = disk.document.revision, isDirty = false),
+        // The file just read is the package the unchanged document came from, with every paragraph's source.
+        richText =
+          if recorded.richText.richTextDocument == disk.richText.richTextDocument then
+            recorded.richText.copy(richTextDocument = disk.richText.richTextDocument)
+          else recorded.richText
+      )
     else
       recorded
         .copy(

@@ -4,7 +4,7 @@ import cats.effect.IO
 import com.serenity.command.LineEndingCommands
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
-import com.serenity.state.undo.HistoryEntry
+import com.serenity.state.undo.{EditGrouping, HistoryEntry}
 import com.serenity.text.{LineEnding, LineEndingCounts}
 
 /** The decisions behind line endings (#1964): the picker, applying a choice, and telling the user when a file they
@@ -43,8 +43,9 @@ object LineEndingChoice:
       .get(bufferId)
       .filter(before => before.document.withLineEnding(ending) ne before.document)
       .fold(model) { before =>
-        val undo = UndoRecording.recorded(model.undo, HistoryEntry.LineEndingChange.capture(before), groupable = false)
-        model.copy(app = withLineEnding(model.app, bufferId, ending), undo = undo)
+        val recorded =
+          UndoRecording.recorded(model, HistoryEntry.LineEndingChange.capture(before), EditGrouping.Standalone)
+        recorded.copy(app = withLineEnding(model.app, bufferId, ending))
       }
 
   /** The mixed-line-endings prompt for the first buffer still owed one. Held back while a modal has the focus, so the

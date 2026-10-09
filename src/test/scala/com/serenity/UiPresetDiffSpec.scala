@@ -254,3 +254,36 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
     untouched.persisted.config.inputConfig.hotkeyConfig shouldBe current.inputConfig.hotkeyConfig
     applied.persisted.config.inputConfig.hotkeyConfig shouldBe preset.config.inputConfig.hotkeyConfig
   }
+
+  // The terminal on macOS holds the Ctrl rewrite of the Cmd defaults (`forTerminalUse`); a preset is stored with the
+  // platform's own, so applying it must not bring the Cmd bindings, or lose the terminal adjustment, with it.
+  private val macTerminalConfig =
+    AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X").forTerminalUse)
+
+  private val macPlatformPreset = UiPreset(
+    name = "Custom",
+    config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X")),
+    themeName = Theme.dark.name
+  )
+
+  private def terminalState: AppState = AppState.initial(macTerminalConfig)
+
+  private def saveBinding(state: AppState): (List[String], Boolean) =
+    val hotkeys = state.persisted.config.inputConfig.hotkeyConfig
+    (hotkeys.bindingsFor(HotkeyAction.Save).map(_.render), hotkeys.terminalAdjusted)
+
+  "UiPresetDiff in the terminal on macOS" should "report no keyboard change for a preset at the platform defaults" in {
+    UiPresetDiff.changes(macTerminalConfig, Theme.dark.name, false, false, macPlatformPreset) shouldBe Nil
+  }
+
+  it should "keep the Ctrl bindings and the terminal adjustment when the keyboard group is applied" in {
+    val applied = UiPresetDiff.applySelected(terminalState, Theme.dark, macPlatformPreset, Set("hotkey"))
+
+    saveBinding(applied) shouldBe (List("ctrl+s"), true)
+  }
+
+  it should "keep the Ctrl bindings and the terminal adjustment when the whole preset is applied" in {
+    val applied = UiPreset.applyToState(macPlatformPreset, terminalState, Theme.dark)
+
+    saveBinding(applied) shouldBe (List("ctrl+s"), true)
+  }

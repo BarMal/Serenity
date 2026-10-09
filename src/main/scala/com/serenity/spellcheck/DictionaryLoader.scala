@@ -137,55 +137,6 @@ object DictionaryLoader:
 
   private val DefaultDictionaryCharset: Charset = StandardCharsets.UTF_8
 
-  /** The fallback word lists used when no external dictionary is configured, or when every configured one failed to
-    * contribute a word -- enough vocabulary to keep spell-check useful out of the box without shipping a dictionary.
-    */
-  private val BuiltInDictionaries: Map[String, Set[String]] = Map(
-    "en" -> Set(
-      "a",
-      "an",
-      "and",
-      "are",
-      "as",
-      "be",
-      "buffer",
-      "code",
-      "document",
-      "editor",
-      "for",
-      "hello",
-      "in",
-      "is",
-      "json",
-      "language",
-      "markdown",
-      "of",
-      "ok",
-      "parse",
-      "prose",
-      "serenity",
-      "spell",
-      "text",
-      "the",
-      "to",
-      "with",
-      "world"
-    ),
-    "fr" -> Set(
-      "bonjour",
-      "café",
-      "français",
-      "langue",
-      "monde",
-      "résumé",
-      "texte"
-    ),
-    "el" -> Set(
-      "γειά",
-      "κόσμος"
-    )
-  )
-
   /** `osDictionaryDirectories` is a parameter, as in `SpellCheckConfig.discoverDictionarySourcePaths`, so tests can
     * keep an installed system dictionary out of the result.
     *
@@ -244,9 +195,6 @@ object DictionaryLoader:
     val externalReplacements =
       mergeReplacementMaps(externalResults.map(_.replacements))
     val failures = externalResults.flatMap(_.failures)
-    val fallbackWords =
-      if normalized.dictionaryPaths.nonEmpty && stems.nonEmpty then Set.empty[String]
-      else normalized.languages.flatMap(language => BuiltInDictionaries.getOrElse(language, Set.empty)).toSet
 
     val compoundWordFlags = mergeCompoundWordFlags(externalResults.map(_.compoundWordFlags))
     val compoundRules     = externalResults.flatMap(_.compoundRules).distinct
@@ -274,7 +222,7 @@ object DictionaryLoader:
     val compoundCheckRules = mergeCompoundCheckRules(externalResults.map(_.compoundCheckRules))
 
     val context = DictionaryContext(
-      words = (fallbackWords ++ normalized.additionalWords).map(DictionaryWord.normalize),
+      words = normalized.additionalWords.toSet.map(DictionaryWord.normalize),
       stems = stems,
       tryCharacters = externalResults.map(_.tryCharacters).mkString,
       breaksAtHyphens = externalResults.forall(_.breaksAtHyphens),

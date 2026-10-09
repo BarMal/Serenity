@@ -18,7 +18,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
 import com.serenity.state.manager.*
-import com.serenity.state.models.{AppState, Damage}
+import com.serenity.state.models.{AppState, Damage, PointerShape}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import fs2.Stream
@@ -34,8 +34,9 @@ object AppRuntime:
 
   /** Issue #1669's remaining scope moved this onto [[FrontendRuntime]], the frontend-owned render/input bundle; kept as
     * an alias so callers outside this file (`AppRuntimeRenderLoops`, `TuiRuntime`) don't need to know it moved.
-    * `FrontendRuntime.RenderFn` still carries the `RenderCaches` as its final argument (#1677's remaining scope),
-    * supplied by callers from `stateManager.renderCaches`.
+    * `FrontendRuntime.RenderFn` itself still carries the `RenderCaches` instance as its final argument (#1677's
+    * remaining scope), supplied by callers from `stateManager.renderCaches` rather than closed over when the
+    * `FrontendRuntime` bundle is built.
     */
   private[serenity] type RenderFn = FrontendRuntime.RenderFn
 
@@ -63,17 +64,19 @@ object AppRuntime:
     * loop was in its own cadence. Regaining focus flips the signal the idle loop is waiting on --
     * `awaitFocusedIdleTick` picks that up and resumes the normal cadence on its own -- and runs `onFocusGained` (#1623:
     * re-checking the focused buffer's file for external changes), defaulted to a no-op for callers that don't need it
-    * (most existing tests).
+    * (most existing tests). Losing focus runs `onFocusLost` last (#1992: the auto-save modes that write when the window
+    * is left), after the caret and render are settled.
     */
   private[serenity] def onWindowFocusChanged(
     focused: Boolean,
     windowFocused: SignallingRef[IO, Boolean],
     cursorVisible: Ref[IO, Boolean],
     requestFastRender: IO[Unit],
-    onFocusGained: IO[Unit] = IO.unit
+    onFocusGained: IO[Unit] = IO.unit,
+    onFocusLost: IO[Unit] = IO.unit
   ): IO[Unit] =
     if focused then windowFocused.set(true) >> onFocusGained
-    else windowFocused.set(false) >> resetCursorActivity(cursorVisible) >> requestFastRender
+    else windowFocused.set(false) >> resetCursorActivity(cursorVisible) >> requestFastRender >> onFocusLost
 
   /** The idle loop's per-tick wait: the normal cursor idle cadence while the window is focused, or an indefinite,
     * wakeup-free wait otherwise -- the mechanism that actually stops idle wakeups, rather than merely skipping the
@@ -147,7 +150,8 @@ object AppRuntime:
     recovery: StartupRecovery.Plan = StartupRecovery.Plan.normal,
     onFirstFrame: IO[Unit] = IO.unit,
     forwardedOpens: Stream[IO, List[Path]] = Stream.empty,
-    quitRequests: Stream[IO, QuitResponse] = Stream.empty
+    quitRequests: Stream[IO, QuitResponse] = Stream.empty,
+    fileOrFolderOpen: Boolean = false
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     (Dispatcher.parallel[IO], Supervisor[IO](await = false)).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
       for
@@ -164,7 +168,7 @@ object AppRuntime:
           initialViewportSize,
           appConfig,
           openPath,
-          frontend.capabilities,
+          frontend.capabilities.copy(opensFileOrFolder = fileOrFolderOpen),
           configNotice,
           recovery
         )
@@ -192,7 +196,10 @@ object AppRuntime:
         observeTransition = (before: AppState, after: AppState) =>
           typingQuietTimer.onCommit(before, after) >> followFrameTimingSetting(frameTimingEnabled)(before, after) >>
             followLatencyTraceSetting(latencyTraceEnabled)(before, after) >>
-            IO.whenA(watchInputsChanged(before, after))(watchInputs.update(_ + 1))
+            IO.whenA(watchInputsChanged(before, after))(watchInputs.update(_ + 1)) >>
+            IO.whenA(PointerShape.shown(before) != PointerShape.shown(after))(
+              runtime.applyPointerShape(PointerShape.shown(after))
+            )
         _ <- stateManager.runtimeLifecycle.observeCommits((before, after) =>
           wakeOnCommit(before, after) >> observeTransition(before, after)
         )
@@ -206,7 +213,8 @@ object AppRuntime:
               cursorVisible,
               requestFastRender,
               resizeCallbackDispatcher,
-              stateManager.fileService.checkExternalChangesOnFocus
+              stateManager.fileService.checkExternalChangesOnFocus,
+              stateManager.fileService.autoSaveOnWindowFocusLost
             )
           )
         )
@@ -290,7 +298,8 @@ object AppRuntime:
                       watchInputs.discrete.as(()),
                       windowFocused,
                       forwardedOpens,
-                      quitRequests
+                      quitRequests,
+                      recovery.crashRecorder
                     )
                   )
                 }
@@ -313,25 +322,26 @@ object AppRuntime:
     watchInputsChanges: Stream[IO, Unit],
     windowFocused: Signal[IO, Boolean],
     forwardedOpens: Stream[IO, List[Path]],
-    quitRequests: Stream[IO, QuitResponse]
+    quitRequests: Stream[IO, QuitResponse],
+    recordCrash: StartupRecovery.CrashRecorder
   )(using logger: Logger[IO]): IO[Unit] =
     val (lifecycle, quitSignal) = (stateManager.runtimeLifecycle, stateManager.runtimeLifecycle.awaitQuit.attempt)
     (
       awaitInputLoop,
-      AppRuntimeRenderLoops.superviseLoop("render loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("render loop", lifecycle.forceQuit, recordCrash)(
         renderLoop.interruptWhen(quitSignal).compile.drain
       ),
       lifecycle.awaitQuit,
-      AppRuntimeRenderLoops.superviseLoop("interval save loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("interval save loop", lifecycle.forceQuit, recordCrash)(
         lifecycle.intervalSaveStream.compile.drain
       ),
-      AppRuntimeRenderLoops.superviseLoop("external quit coordinator", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("external quit coordinator", lifecycle.forceQuit, recordCrash)(
         coordinateExternalQuit(awaitExternalQuit, lifecycle.forceQuit, lifecycle.awaitQuit)
       ),
-      AppRuntimeRenderLoops.superviseLoop("input shutdown", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("input shutdown", lifecycle.forceQuit, recordCrash)(
         shutdownInputAfterQuit(lifecycle.awaitQuit, inputHandler.shutdown)
       ),
-      AppRuntimeRenderLoops.superviseLoop("LSP loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("LSP loop", lifecycle.forceQuit, recordCrash)(
         LspManager.run(
           stateManager.lspEffectSource.lspEffectStream,
           stateManager.applyEvent,
@@ -340,7 +350,7 @@ object AppRuntime:
           stateManager.lspEffectSource.notices
         )
       ),
-      AppRuntimeRenderLoops.superviseLoop("external change watch loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("external change watch loop", lifecycle.forceQuit, recordCrash)(
         externalChangeWatchLoop(
           fileChangeWatcher,
           stateManager.fileService.openBufferPaths,
@@ -349,38 +359,44 @@ object AppRuntime:
           stateManager.fileService.refreshDictionaryFingerprints,
           stateManager.fileService.explorerWatchDirectories,
           stateManager.fileService.markExplorerDirectoriesStale,
+          stateManager.fileService.configWatch,
           watchInputsChanges,
           windowFocused = windowFocused
         ).interruptWhen(quitSignal).compile.drain
       ),
-      AppRuntimeRenderLoops.superviseLoop("frame timing report", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("frame timing report", lifecycle.forceQuit, recordCrash)(
         FrameTimingReport
           .stream(frameTimings, frameTimingEnabled.discrete, line => logger.info(line))
           .interruptWhen(quitSignal)
           .compile
           .drain
       ),
-      AppRuntimeRenderLoops.superviseLoop("latency trace report", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("latency trace report", lifecycle.forceQuit, recordCrash)(
         KeyLatencyReport
           .stream(frameTimings.keyLatency, latencyTraceEnabled.discrete, line => logger.info(line))
           .interruptWhen(quitSignal)
           .compile
           .drain
       ),
-      AppRuntimeRenderLoops.superviseLoop("forwarded open loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("forwarded open loop", lifecycle.forceQuit, recordCrash)(
         forwardedOpens.evalMap(openForwarded(stateManager.fileOpener)).interruptWhen(quitSignal).compile.drain
       ),
-      AppRuntimeRenderLoops.superviseLoop("desktop quit request loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("desktop quit request loop", lifecycle.forceQuit, recordCrash)(
         DesktopHooks.serveQuitRequests(quitRequests.interruptWhen(quitSignal), lifecycle.requestQuit)
       )
     ).parMapN((_, _, _, _, _, _, _, _, _, _, _, _) => ())
 
-  /** Opens what a later launch handed over (#2023). A file that fails to open must not take the editor down with it. */
+  /** Opens what a later launch handed over (#2023). A path that fails to open must not take the editor down with it. A
+    * folder becomes the Explorer root, as Open Folder makes it.
+    */
   private[serenity] def openForwarded(fileOpener: FileOpener)(paths: List[Path])(using logger: Logger[IO]): IO[Unit] =
-    paths.traverse_ { path =>
-      fileOpener
-        .openFile(path)
-        .handleErrorWith(error => logger.error(error)(s"[INSTANCE] Could not open forwarded file $path"))
+    def attempt(path: Path, open: Path => IO[Unit]): IO[Unit] =
+      open(path).handleErrorWith(error => logger.error(error)(s"[INSTANCE] Could not open forwarded path $path"))
+    LaunchOpens.resolve(paths).flatMap { opens =>
+      opens.notice.traverse_(logger.warn(_)) >>
+        opens.root.traverse_(attempt(_, fileOpener.openFolder)) >> opens.files.traverse_(
+          attempt(_, fileOpener.openFile)
+        )
     }
 
   /** Runs [[StartupWarmUp]] in the background for as long as the main loop does, if the frontend can draw off-screen
@@ -447,10 +463,11 @@ object AppRuntime:
     cursorVisible: Ref[IO, Boolean],
     requestFastRender: IO[Unit],
     dispatcher: Dispatcher[IO],
-    onFocusGained: IO[Unit] = IO.unit
+    onFocusGained: IO[Unit] = IO.unit,
+    onFocusLost: IO[Unit] = IO.unit
   )(using logger: Logger[IO]): Boolean => Unit =
     focused =>
       dispatchIfRunning(dispatcher)(
-        onWindowFocusChanged(focused, windowFocused, cursorVisible, requestFastRender, onFocusGained)
+        onWindowFocusChanged(focused, windowFocused, cursorVisible, requestFastRender, onFocusGained, onFocusLost)
           .handleErrorWith(error => logger.error(error)("[RUNTIME] focus callback failed"))
       )

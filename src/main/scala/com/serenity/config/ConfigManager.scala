@@ -123,10 +123,13 @@ object ConfigManager:
     * key written at a path that also has children -- costs the user that one setting just as silently, so it is refused
     * on the same terms.
     */
-  private[config] def renderedConfig(config: AppConfig): Either[String, String] =
-    ConfigFileFormat.unwritableSettings(config) match
+  private[config] def renderedConfig(
+    config: AppConfig,
+    osName: String = HotkeyOverrides.runningOs
+  ): Either[String, String] =
+    ConfigFileFormat.unwritableSettings(config, osName) match
       case Nil =>
-        val text = ConfigFileFormat.render(config)
+        val text = ConfigFileFormat.render(config, osName)
         Try(ConfigFactory.parseString(text)).toEither
           .map(_ => text)
           .left
@@ -181,7 +184,7 @@ object ConfigManager:
           logger.info(s"[CONFIG] Backed up $path to $backup before changing it")
           write(text)
 
-    renderedConfig(config) match
+    renderedConfig(config, plan.osName) match
       case Left(problem) => failure(problem)
       case Right(text) =>
         existingConfig(path, plan) match
@@ -217,9 +220,13 @@ object ConfigManager:
     config: AppConfig,
     plan: ConfigMigrations.Plan
   ): Edit =
-    val before = ConfigFileFormat.settings(existing.loaded.config).map((key, value) => key -> value.rendered).toMap
-    val after  = ConfigFileFormat.settings(config)
-    val kept   = after.map(_._1).toSet
+    val before =
+      ConfigFileFormat
+        .settings(HotkeyOverrides.likeRunning(config, existing.loaded.config), plan.osName)
+        .map((key, value) => key -> value.rendered)
+        .toMap
+    val after                                 = ConfigFileFormat.settings(config, plan.osName)
+    val kept                                  = after.map(_._1).toSet
     def spellingsOf(key: String): Set[String] = ConfigRegistry.find(key).fold(Set(key))(_.spellings)
     val settingChanges =
       after.collect {
@@ -232,7 +239,7 @@ object ConfigManager:
     val changes = settingChanges ++ ConfigVersioning.stampChange(existing.loaded.report, plan.target)
 
     def unmet(text: String, wanted: List[ConfigTextPatch.Change]): Option[List[ConfigTextPatch.Change]] =
-      settingsOfText(path, text).map(loaded => wanted.filterNot(change => loaded.get(change.key) == change.value))
+      settingsOfText(path, text, plan).map(loaded => wanted.filterNot(change => loaded.get(change.key) == change.value))
 
     if changes.isEmpty then Edit.Unchanged
     else if existing.loaded.report.migratedFrom.nonEmpty then Edit.Whole
@@ -248,14 +255,16 @@ object ConfigManager:
 
   /** The settings a text would load as, read the way the file will be: from a sibling file, so relative includes work.
     */
-  private def settingsOfText(path: Path, text: String): Option[Map[String, String]] =
+  private def settingsOfText(path: Path, text: String, plan: ConfigMigrations.Plan): Option[Map[String, String]] =
     val directory = Option(path.toAbsolutePath.getParent)
     val probe     = directory.map(dir => Files.createTempFile(dir, ".config-check", ".conf"))
     probe.flatMap { file =>
       try
         Files.writeString(file, text, StandardCharsets.UTF_8)
-        Try(parseConfigResult(file).config).toOption
-          .map(loaded => ConfigFileFormat.settings(loaded).map((key, value) => key -> value.rendered).toMap)
+        Try(parseConfigResult(file, plan).config).toOption
+          .map(loaded =>
+            ConfigFileFormat.settings(loaded, plan.osName).map((key, value) => key -> value.rendered).toMap
+          )
       catch case NonFatal(_) => None
       finally Files.deleteIfExists(file): Unit
     }
@@ -464,7 +473,7 @@ object ConfigManager:
           key match
             case "config.version" =>
               Option.when(value.trim.toIntOption.forall(_ <= 0))(
-                "not a whole number above zero, read as the current version"
+                "not a whole number above zero, read as an unversioned file"
               )
             case key if LegacyStatusLineKeys.handles(key) =>
               Option.when(LegacyStatusLineKeys.rejects(key, value))("not a recognised value, using the default")
@@ -492,8 +501,8 @@ object ConfigManager:
 
     reason.map(InvalidConfigEntry(key, value, _))
 
-  /** One `hotkey.<action>` or `hotkey.command.<command id>` entry. An action needs at least one key; a command's empty
-    * list is kept, because it is how a shipped default is unbound.
+  /** One `hotkey.<action>` or `hotkey.command.<command id>` entry, applied over the defaults already in `config`. An
+    * empty list unbinds. A name that is no action is ignored, so a file from a newer build costs only that line.
     */
   private def parseHotkeyEntry(config: AppConfig, key: String, value: String): Option[AppConfig] =
     val hotkeys  = config.inputConfig.hotkeyConfig
@@ -505,10 +514,9 @@ object ConfigManager:
           case Some(commandId) =>
             Some(hotkeys.copy(commandBindings = hotkeys.commandBindings + (commandId -> parsed)))
           case None =>
-            HotkeyAction.values
-              .find(action => s"hotkey.${action.configKey}" == key)
-              .filter(_ => parsed.nonEmpty)
-              .map(action => hotkeys.copy(bindings = hotkeys.bindings + (action -> parsed)))
+            val action = HotkeyAction.values.find(action => s"hotkey.${action.configKey}" == key)
+            if action.isEmpty then logger.warn(s"[CONFIG] Ignoring $key: there is no hotkey action of that name")
+            action.map(named => hotkeys.copy(bindings = hotkeys.bindings + (named -> parsed)))
       }
       .map(config.withHotkeyConfig)
 

@@ -5,9 +5,13 @@ import java.nio.file.{Files, Path}
 import java.time.Instant
 import java.util.zip.ZipInputStream
 
+import scala.util.Using
+
 import cats.effect.unsafe.implicits.global
 import com.serenity.manuscript.{CompileError, ManuscriptFileFormat, SourceDocument}
 import com.serenity.richtext.{DocxDocumentCodec, RichTextDocument}
+import org.apache.pdfbox.Loader
+import org.apache.pdfbox.text.PDFTextStripper
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -28,6 +32,14 @@ class ManuscriptExportSpec extends AnyFlatSpec with Matchers with EitherValues:
       "novel-manuscript.epub"
     ManuscriptExport.suggestedFileName(None, ManuscriptFileFormat.Epub) shouldBe "manuscript.epub"
   }
+
+  it should "suggest a .pdf name for a PDF export" in {
+    ManuscriptExport.suggestedFileName(Some(Path.of("books", "novel.md")), ManuscriptFileFormat.Pdf) shouldBe
+      "novel-manuscript.pdf"
+  }
+
+  private def pdfText(bytes: Array[Byte]): String =
+    Using.resource(Loader.loadPDF(bytes))(doc => PDFTextStripper().getText(doc))
 
   private def epubEntries(bytes: Array[Byte]): List[(String, String)] =
     val input = ZipInputStream(ByteArrayInputStream(bytes))
@@ -71,6 +83,44 @@ class ManuscriptExportSpec extends AnyFlatSpec with Matchers with EitherValues:
     val entries = epubEntries(Files.readAllBytes(target))
     entries.headOption shouldBe Some("mimetype" -> "application/epub+zip")
     entries.collectFirst { case ("OEBPS/content.opf", text) => text }.getOrElse("") should include("dcterms:modified")
+  }
+
+  it should "paginate and paint a PDF from the conf's title and sources, stamped with the given date" in {
+    val directory = Files.createTempDirectory("manuscript-export-pdf")
+    Files.writeString(directory.resolve("01.md"), "# Arrival\n\nFrom disk.")
+    Files.writeString(
+      directory.resolve("manuscript.conf"),
+      "title = \"The Long Night\"\nauthor = \"Jane Q. Writer\"\nsources = [{ path = \"01.md\" }]\n"
+    )
+    val origin = ExportOrigin(Some(directory.resolve("01.md")), SourceDocument.Markdown("Edited, unsaved."))
+    val date   = Instant.parse("2026-10-05T12:30:00Z")
+
+    val bytes = ManuscriptExport.compiledPdf(origin, date).unsafeRunSync()
+
+    new String(bytes.take(5), "ISO-8859-1") shouldBe "%PDF-"
+    val text = pdfText(bytes)
+    text should include("The Long Night")
+    text should include("Edited, unsaved.")
+    text should include("Writer / ")
+    Using.resource(Loader.loadPDF(bytes))(_.getDocumentInformation.getCreationDate.toInstant) shouldBe date
+    ManuscriptExport.compiledPdf(origin, date).unsafeRunSync().toSeq shouldBe bytes.toSeq
+  }
+
+  it should "fail with the layout error, naming the character, when a face has no glyph for the text" in {
+    val origin = ExportOrigin(None, SourceDocument.Markdown("Text with \u4e2d in it."))
+
+    val failure = ManuscriptExport.compiledPdf(origin, Instant.EPOCH).attempt.unsafeRunSync().left.value
+
+    failure shouldBe a[ManuscriptLayoutException]
+    failure.getMessage should include("U+4E2D")
+  }
+
+  it should "write the PDF to the target" in {
+    val target = Files.createTempDirectory("manuscript-export-pdf-write").resolve("out.pdf")
+
+    ManuscriptExport.writePdf(ExportOrigin(None, SourceDocument.Markdown("Text.")), target).unsafeRunSync()
+
+    pdfText(Files.readAllBytes(target)) should include("Text.")
   }
 
   it should "export the snapshot alone, titled after its file, when there is no manuscript.conf" in {

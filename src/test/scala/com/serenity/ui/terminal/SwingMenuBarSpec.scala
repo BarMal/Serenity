@@ -1,6 +1,7 @@
 package com.serenity.ui.terminal
 
 import java.awt.event.{InputEvent, KeyEvent}
+import java.nio.file.{Path, Paths}
 import java.util.concurrent.ConcurrentLinkedQueue
 import javax.accessibility.{AccessibleRole, AccessibleState}
 import javax.swing.{JCheckBoxMenuItem, JMenu, JMenuBar, JMenuItem, JPanel, KeyStroke, SwingUtilities}
@@ -9,15 +10,25 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
-import com.serenity.command.menu.{MenuAccelerators, MenuDispatch, MenuModel, MenuSpec, MenuTitle, ResolvedEntry}
+import com.serenity.command.menu.{
+  DynamicMenu,
+  DynamicSource,
+  MenuAccelerators,
+  MenuDispatch,
+  MenuModel,
+  MenuSpec,
+  MenuTitle,
+  ResolvedEntry
+}
 import com.serenity.command.{CommandId, CommandRegistry}
 import com.serenity.config.{AppConfig, AppMode, HotkeyAction, HotkeyConfig}
 import com.serenity.input.{InputRouter, MenuActivationGuard, SwingInputHandler}
-import com.serenity.keystroke.events.Event
+import com.serenity.keystroke.events.{ActivateBuffer, Event, OpenRecentPath, RunCommand}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
+import com.serenity.state.core.EditorState
 import com.serenity.state.manager.Model
-import com.serenity.state.models.{AppState, BufferId, PaneId, Shell}
+import com.serenity.state.models.{AppState, Buffer, BufferId, PaneId, Shell}
 import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, UndoState}
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.Theme
@@ -127,8 +138,9 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
         .toList
         .flatMap(_.entries)
         .collect:
-          case ResolvedEntry.Item(command)     => command.label
-          case ResolvedEntry.Submenu(title, _) => title.text
+          case ResolvedEntry.Item(command)                      => command.label
+          case ResolvedEntry.Submenu(title, _)                  => title.text
+          case ResolvedEntry.Dynamic(DynamicSource.RecentFiles) => DynamicMenu.OpenRecentTitle
 
     items(fixture.open(MenuTitle.File)).map(_.getText) shouldBe expected
     expected should contain(label("save"))
@@ -345,6 +357,138 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
     SwingMenuBar.viaAcceleratorKey(Some(ctrlS), press(KeyEvent.VK_ENTER, 0)) shouldBe false
     SwingMenuBar.viaAcceleratorKey(None, press(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK)) shouldBe false
     SwingMenuBar.viaAcceleratorKey(Some(ctrlS), null) shouldBe false
+  }
+
+  private def absolute(path: String): String = Paths.get(path).toAbsolutePath.normalize.toString
+
+  private def withRecent(model: Model, paths: List[Path]): Model =
+    model.copy(app = model.app.copy(persisted = model.app.persisted.copy(recentFiles = paths)))
+
+  private def withExtraBuffer(model: Model, id: BufferId, file: String, dirty: Boolean = false): Model =
+    val base   = Buffer.fromString(id, "more")
+    val buffer = base.copy(document = base.document.copy(filePath = Some(Paths.get(file)), isDirty = dirty))
+    val added =
+      model.app.copy(persisted = model.app.persisted.copy(buffers = model.app.persisted.buffers.updated(id, buffer)))
+    model.copy(app = EditorState.insertBufferInOrder(added, id))
+
+  private def openRecent(fixture: Fixture): JMenu =
+    items(fixture.open(MenuTitle.File))
+      .collectFirst { case menu: JMenu if menu.getText == "Open Recent" => menu }
+      .getOrElse(fail("the File menu has no Open Recent submenu"))
+
+  "The Open Recent submenu" should "list the recent files, most recent first, with the directory as description" in {
+    val fixture = new Fixture(withRecent(modelOf(config()), List(Paths.get("/w/new.md"), Paths.get("/h/old.txt"))))
+    val recent  = items(openRecent(fixture))
+
+    recent.take(2).map(_.getText) shouldBe List("new.md", "old.txt")
+    recent.take(2).map(_.getAccessibleContext.getAccessibleDescription) shouldBe List(absolute("/w"), absolute("/h"))
+    recent.take(2).map(_.getToolTipText) shouldBe List(absolute("/w"), absolute("/h"))
+    items(openRecent(fixture)).last.getText shouldBe label("clear-recent-files")
+  }
+
+  it should "show a disabled placeholder when there are no recent files" in {
+    val recent = items(openRecent(new Fixture(modelOf(config()))))
+
+    recent.map(_.getText) shouldBe List("(No recent files)")
+    recent.map(_.isEnabled) shouldBe List(false)
+  }
+
+  it should "be rebuilt from the model each time the File menu opens" in {
+    val fixture = new Fixture(modelOf(config()))
+
+    items(openRecent(fixture)).map(_.getText) shouldBe List("(No recent files)")
+
+    fixture.model.set(withRecent(modelOf(config()), List(Paths.get("/w/fresh.md")))).unsafeRunSync()
+
+    items(openRecent(fixture)).map(_.getText).head shouldBe "fresh.md"
+
+    fixture.model.set(modelOf(config())).unsafeRunSync()
+
+    items(openRecent(fixture)).map(_.getText) shouldBe List("(No recent files)")
+  }
+
+  it should "show the seeded recent files at once, with no model read to wait for" in {
+    val seeded  = withRecent(modelOf(config()), List(Paths.get("/w/seed.md")))
+    val fixture = new Fixture(seeded, readsModel = false)
+
+    items(openRecent(fixture)).map(_.getText).head shouldBe "seed.md"
+  }
+
+  it should "send exactly one OpenRecentPath when a file is chosen" in {
+    val fixture = new Fixture(withRecent(modelOf(config()), List(Paths.get("/w/new.md"), Paths.get("/h/old.txt"))))
+
+    items(openRecent(fixture)).find(_.getText == "old.txt").foreach(_.doClick(0))
+
+    fixture.sent.asScala.toList shouldBe List(OpenRecentPath(Paths.get(absolute("/h/old.txt"))))
+  }
+
+  it should "send RunCommand for Clear Recent Files" in {
+    val fixture = new Fixture(withRecent(modelOf(config()), List(Paths.get("/w/new.md"))))
+
+    items(openRecent(fixture)).find(_.getText == label("clear-recent-files")).foreach(_.doClick(0))
+
+    fixture.sent.asScala.toList shouldBe List(RunCommand("clear-recent-files"))
+  }
+
+  "The Window menu" should "list the open buffers after its commands, checking the active one" in {
+    val two     = withExtraBuffer(modelOf(config()), BufferId(7), "/p/seven.md", dirty = true)
+    val fixture = new Fixture(two)
+    val buffers = items(fixture.open(MenuTitle.Window)).filter(_.getText.matches("\\d .*"))
+
+    buffers.map(_.getText.drop(2)) shouldBe List("Buffer 0", "seven.md ●")
+    buffers.map(_.getMnemonic) shouldBe List(KeyEvent.VK_1, KeyEvent.VK_2)
+    buffers.map(_.isSelected) shouldBe List(true, false)
+    buffers.map(_.getToolTipText) shouldBe List(null, s"${Paths.get("/p/seven.md")} (unsaved changes)")
+  }
+
+  it should "rebuild its buffers each time it opens, as the model changes" in {
+    val fixture = new Fixture(modelOf(config()))
+    def buffers = items(fixture.open(MenuTitle.Window)).filter(_.getText.matches("\\d .*")).map(_.getText)
+
+    buffers shouldBe List("1 Buffer 0")
+
+    fixture.model.set(withExtraBuffer(modelOf(config()), BufferId(7), "/p/seven.md")).unsafeRunSync()
+
+    buffers shouldBe List("1 Buffer 0", "2 seven.md")
+  }
+
+  it should "send exactly one ActivateBuffer when a buffer is chosen" in {
+    val fixture = new Fixture(withExtraBuffer(modelOf(config()), BufferId(7), "/p/seven.md"))
+
+    fixture.itemLabelled(MenuTitle.Window, "2 seven.md").doClick(0)
+
+    fixture.sent.asScala.toList shouldBe List(ActivateBuffer(BufferId(7)))
+  }
+
+  it should "keep its ticks as they were when a buffer is chosen, until the model changes" in {
+    val before  = withExtraBuffer(modelOf(config()), BufferId(7), "/p/seven.md")
+    val fixture = new Fixture(before)
+    def ticks   = items(fixture.open(MenuTitle.Window)).filter(_.getText.matches("\\d .*")).map(_.isSelected)
+
+    ticks shouldBe List(true, false)
+
+    val seven = fixture.itemLabelled(MenuTitle.Window, "2 seven.md")
+    seven.doClick(0)
+
+    seven.isSelected shouldBe false
+    seven.getAccessibleContext.getAccessibleStateSet.contains(AccessibleState.CHECKED) shouldBe false
+    fixture.sent.asScala.toList shouldBe List(ActivateBuffer(BufferId(7)))
+
+    fixture.model.set(before.copy(app = EditorState.switchToBuffer(before.app, BufferId(7)))).unsafeRunSync()
+
+    ticks shouldBe List(false, true)
+  }
+
+  it should "not leave a separator last when no buffer is open" in {
+    val empty  = modelOf(config())
+    val noTabs = empty.copy(app = empty.app.copy(persisted = empty.app.persisted.copy(bufferOrder = Nil)))
+    val kinds = new Fixture(noTabs)
+      .open(MenuTitle.Window)
+      .getMenuComponents
+      .toList
+      .map(_.isInstanceOf[javax.swing.JPopupMenu.Separator])
+
+    kinds.lastOption should not be Some(true)
   }
 
   "Accessibility" should "give the bar, menus and items their roles" in {

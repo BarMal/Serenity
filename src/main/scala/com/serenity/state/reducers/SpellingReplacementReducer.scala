@@ -1,6 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.state.models.*
+import com.serenity.state.undo.EditGrouping
 
 /** Replaces a misspelled word in the focused buffer with a chosen suggestion as one undoable edit (#1939). */
 object SpellingReplacementReducer:
@@ -29,5 +30,5 @@ object SpellingReplacementReducer:
       val (edited, applied) = EditorEditSupport.applyTrackedEdits(buffer, cursorOffsets, List(edit))
       ReducerResult(
         Focused.replaceBuffer(state, edited),
-        EditorEditSupport.undoBoundaryEffects(buffer.id, paneId, buffer, applied, groupable = false)
+        EditorEditSupport.undoBoundaryEffects(buffer.id, paneId, buffer, applied, grouping = EditGrouping.Standalone)
       )

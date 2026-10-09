@@ -33,7 +33,7 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
     parsed(List("a.md", "b.md", "c.md")).openPaths shouldBe List("a.md", "b.md", "c.md").map(Path.of(_))
   }
 
-  it should "put the --open path ahead of the bare paths" in {
+  it should "put the --open and --file path ahead of the bare paths" in {
     parsed(List("--open", "a.md", "b.md", "c.md")).openPaths shouldBe List("a.md", "b.md", "c.md").map(Path.of(_))
     parsed(List("b.md", "--file", "a.md")).openPaths shouldBe List("a.md", "b.md").map(Path.of(_))
   }
@@ -45,7 +45,7 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
     options.eco shouldBe true
   }
 
-  it should "treat the first path as the one opened at startup and the rest as extra" in {
+  it should "open the first path as part of startup and leave the rest as extra" in {
     val options = parsed(List("a.md", "b.md"))
     options.openPath shouldBe Some(Path.of("a.md"))
     options.extraOpenPaths shouldBe List(Path.of("b.md"))

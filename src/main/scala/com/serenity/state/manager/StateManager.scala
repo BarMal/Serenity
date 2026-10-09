@@ -106,12 +106,12 @@ final case class SessionStartupInfo(
     setAsideUnreadableSession: IO[Option[UnreadableSession]] = IO.none
 )
 
-/** Opens a file into editor state.
+/** Opens a file into editor state, or a folder as the Explorer root.
   *
   * A capability record per #1017 -- see `FileService` below for the shape rationale. `StateManager` holds one of these
   * as a field instead of mixing this trait in directly.
   */
-final case class FileOpener(openFile: Path => IO[Unit])
+final case class FileOpener(openFile: Path => IO[Unit], openFolder: Path => IO[Unit])
 
 /** Reads the persisted editor session.
   *
@@ -145,7 +145,12 @@ final case class FileService(
     refreshDictionaryFingerprints: IO[Unit],
     // The directories docked explorers show, and a way to have them re-listed after a change made outside the editor.
     explorerWatchDirectories: IO[Set[Path]],
-    markExplorerDirectoriesStale: Set[Path] => IO[Unit]
+    markExplorerDirectoriesStale: Set[Path] => IO[Unit],
+    // #1934: the config file the same loop watches, absent when this session keeps no config file.
+    configWatch: Option[ConfigFileWatch],
+    // #1992: AppRuntime's focus callback calls this when the window loses focus, for the auto-save modes that write
+    // then; it does nothing under the others.
+    autoSaveOnWindowFocusLost: IO[Unit]
 )
 
 trait StateManager extends StateEngine:
@@ -241,6 +246,7 @@ object StateManager:
         onFontConfigChanged = onFontConfigChanged,
         deviceTextScaleProvider = deviceTextScaleProvider,
         configPersistencePath = configPersistencePath,
+        configOnDisk = configPersistencePath.map(_ => initialConfig),
         uiPresetStore = uiPresetStore,
         windowSizeProvider = windowSizeProvider,
         onPreferredWindowSizeChanged = onPreferredWindowSizeChanged,
@@ -269,9 +275,13 @@ object StateManager:
         ),
         announceClosedDocuments = LspDocumentSync.announceClosed(runtime.lspQueue),
         forgetClosedBuffers = ClosedBufferRetention.forgetRenderCaches(runtime.renderCaches),
+        announceModeChange = ModeTransition.announceLsp(runtime.lspQueue),
         dictionaryCache = runtime.dictionaryCache
       )
-      .map(operations => new StateManagerImpl(runtime, operations))
+      .flatMap { operations =>
+        val manager = new StateManagerImpl(runtime, operations)
+        operations.installAutoSave(manager.composition.autoSave.saveBuffer).as(manager)
+      }
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
     // issue #931: category tabs (and the `activeCategory` field they drove) are retired, so this no longer names a
@@ -333,7 +343,8 @@ object StateManager:
       runtime.sessionPersistence,
       runtime.renderCaches,
       operations,
-      runtime.restarter
+      runtime.restarter,
+      runtime.configOnDisk
     )
 
     export composition.*

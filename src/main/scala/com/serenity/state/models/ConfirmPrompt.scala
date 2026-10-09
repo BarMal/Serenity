@@ -3,9 +3,11 @@ package com.serenity.state.models
 import java.nio.file.Path
 
 import com.serenity.command.{
+  AppModeCommands,
   CloseCommands,
   Command,
   CommandIntent,
+  DiagnosticsCommands,
   ExternalChangeCommands,
   FileIntent,
   LineEndingCommands,
@@ -14,6 +16,8 @@ import com.serenity.command.{
   RichTextIntent,
   SafeModeCommands
 }
+import com.serenity.config.AppMode
+import com.serenity.diagnostics.RuntimeIdentity
 import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
 import com.serenity.ui.widget.{ButtonEmphasis, EndBehaviour, SelectableList}
 
@@ -62,6 +66,67 @@ object ConfirmPrompt:
       choices = List(
         ConfirmChoice("Restart normally", ConfirmAction.Run(SafeModeCommands.restartNormally), ButtonEmphasis.Primary),
         ConfirmChoice("Stay in safe mode", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** The last run ended without a clean exit (#2020). The report is what the log folder would show, ready to paste. */
+  def closedUnexpectedly(report: String): ConfirmPrompt =
+    of(
+      title = "Serenity closed unexpectedly",
+      message = List(
+        "The last session did not end cleanly. Files you had saved are untouched.",
+        "Serenity keeps unsaved edits in its session about a second after you stop typing and restores them when " +
+          "it starts normally, so the last moments before the crash may be missing.",
+        "The log folder holds what happened; copy the report to include it when asking for help."
+      ),
+      choices = List(
+        ConfirmChoice(
+          "Copy report",
+          ConfirmAction.Run(DiagnosticsCommands.copyToClipboard(report)),
+          ButtonEmphasis.Primary
+        ),
+        ConfirmChoice("Open Logs Folder", ConfirmAction.Run(DiagnosticsCommands.openLogsFolder)),
+        ConfirmChoice("Dismiss", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** Which build this is, with the ways to share it or find the logs. */
+  def about(identity: RuntimeIdentity): ConfirmPrompt =
+    of(
+      title = "About Serenity",
+      message = identity.lines,
+      choices = List(
+        ConfirmChoice(
+          "Copy details",
+          ConfirmAction.Run(DiagnosticsCommands.copyToClipboard(identity.summary)),
+          ButtonEmphasis.Primary
+        ),
+        ConfirmChoice("Open Logs Folder", ConfirmAction.Run(DiagnosticsCommands.openLogsFolder)),
+        ConfirmChoice("Dismiss", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** Switching to `target` would stop the project task that is running, as it has no home outside code mode. Staying
+    * stops nothing, so it is the first choice and what Escape does.
+    */
+  def stopProjectTaskToLeaveCode(task: RunningProjectTask, target: AppMode): ConfirmPrompt =
+    val targetName = target.configKey.capitalize
+    of(
+      title = "Project task running",
+      message = List(
+        s"A ${task.command.kind.lowerLabel} task for ${task.command.ecosystemLabel} is still running.",
+        s"$targetName mode has no project tools, so switching stops it."
+      ),
+      choices = List(
+        ConfirmChoice("Stay in Code mode", ConfirmAction.Dismiss, ButtonEmphasis.Primary),
+        ConfirmChoice(
+          s"Stop task and switch to $targetName",
+          ConfirmAction.Run(AppModeCommands.switchStoppingProjectTask(target)),
+          ButtonEmphasis.Danger
+        )
       ),
       blocking = true
     )

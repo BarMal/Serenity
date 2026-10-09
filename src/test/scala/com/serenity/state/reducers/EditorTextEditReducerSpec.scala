@@ -4,7 +4,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.undo.HistoryEntry
+import com.serenity.state.undo.{EditGrouping, EditKind, HistoryEntry}
 import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -248,7 +248,10 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
     }
     val snapshotTexts =
       boundaries.map(_.entry).collect { case edit: HistoryEntry.BufferEdit => edit.snapshot.content.collect() }
-    boundaries.map(_.groupable) shouldBe List(true, false)
+    boundaries.map(_.grouping) shouldBe List(
+      EditGrouping.Coalescing(EditKind.Typing, afterWord = false),
+      EditGrouping.Standalone
+    )
     snapshotTexts shouldBe List("a-", "a--")
   }
 

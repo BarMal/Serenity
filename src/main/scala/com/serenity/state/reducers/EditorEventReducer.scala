@@ -67,7 +67,7 @@ object EditorEventReducer:
             val totalLines    = countLines(buffer.document.content)
             val maxTopLine    = math.max(0, totalLines - buffer.viewport.visibleLines)
             val newTopLine    = math.min(buffer.viewport.topLine + lines, maxTopLine)
-            val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
+            val newViewport   = buffer.viewport.scrolledTo(newTopLine, buffer.viewport.leftColumn, 0)
             val updatedBuffer = buffer.copy(viewport = newViewport)
             ReducerResult.noEffects(
               currentState.copy(persisted =
@@ -80,7 +80,7 @@ object EditorEventReducer:
         pane.bufferId.flatMap(currentState.persisted.buffers.get) match
           case Some(buffer) =>
             val newTopLine    = math.max(0, buffer.viewport.topLine - lines)
-            val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
+            val newViewport   = buffer.viewport.scrolledTo(newTopLine, buffer.viewport.leftColumn, 0)
             val updatedBuffer = buffer.copy(viewport = newViewport)
             ReducerResult.noEffects(
               currentState.copy(persisted =
@@ -137,7 +137,8 @@ object EditorEventReducer:
           }
           val maxLeftColumn = math.max(0, maxLineLength - viewport.visibleColumns + 1)
           val newLeftColumn = math.max(0, math.min(viewport.leftColumn + columns * direction, maxLeftColumn))
-          val updatedBuffer = buffer.copy(viewport = viewport.copy(leftColumn = newLeftColumn))
+          val updatedBuffer =
+            buffer.copy(viewport = viewport.scrolledTo(viewport.topLine, newLeftColumn, viewport.topVisualLine))
           ReducerResult.noEffects(
             currentState.copy(persisted =
               currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
@@ -169,13 +170,15 @@ object EditorEventReducer:
   ): ReducerResult =
     val result = reduceCursorsTextEvent(event, buffer, paneId, currentState, geometry)
 
-    if refreshesFindResults(event) then result.copy(state = invalidateFindState(result.state, buffer.id))
+    if OpaqueBlockGuard.refuses(event, buffer, result.state) then ReducerResult.noEffects(currentState)
+    else if refreshesFindResults(event) then result.copy(state = invalidateFindState(result.state, buffer.id))
     else result
 
   private def refreshesFindResults(event: TextEntryEvent): Boolean =
     event match
       case InsertChar(_) | TabKey | ReverseTabKey | DeleteBackward | DeleteForward | DeleteWordBackward |
-          DeleteWordForward | NewLine | Enter | Paste | Cut | CutToDarlings | RestoreDarling | PasteFromHistory(_) =>
+          DeleteWordForward | DeleteToLineStart | DeleteToLineEnd | NewLine | Enter | Paste | Cut | CutToDarlings |
+          RestoreDarling | PasteFromHistory(_) =>
         true
       case _ =>
         false
@@ -254,7 +257,7 @@ object EditorEventReducer:
         case _ => ReducerResult.noEffects(currentState)
     else
       val rawCursors   = rawBuffer.cursorList
-      val hasSelection = rawCursors.head.selectionAnchor.isDefined
+      val hasSelection = rawCursors.exists(_.selection.isDefined)
       val isMulti      = rawCursors.tail.nonEmpty
       // A single bare cursor is the only shape whose event bodies below don't already clear in-flight multi-cursor
       // vertical state themselves (`applyMultiCursor*`/`applyLine*` all do); clear it here so a later event that
@@ -265,7 +268,7 @@ object EditorEventReducer:
 
       event match
         case InsertChar(_) | TabKey | NewLine | Enter | ReverseTabKey | DeleteBackward | DeleteForward |
-            DeleteWordBackward | DeleteWordForward =>
+            DeleteWordBackward | DeleteWordForward | DeleteToLineStart | DeleteToLineEnd =>
           EditorTextEditReducer.reduce(event, ctx)
 
         case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveSubWordLeft | MoveSubWordRight | MoveToStart |

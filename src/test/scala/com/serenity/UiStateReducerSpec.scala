@@ -5,7 +5,7 @@ import java.nio.file.Paths
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalStateReducer, PanelStateReducer, PeekStateReducer, UndoEffect}
-import com.serenity.state.undo.HistoryEntry
+import com.serenity.state.undo.{EditGrouping, HistoryEntry}
 import com.serenity.ui.layout.*
 import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
@@ -166,12 +166,12 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
 
     val pinned = PanelStateReducer.pin(content, PanelPosition.Left, 24, baseState)
     pinned.effects shouldBe List(
-      AppEffect.Undo(UndoEffect.RecordBoundary(HistoryEntry.PanelChange.capture(baseState), groupable = false))
+      AppEffect.Undo(UndoEffect.RecordBoundary(HistoryEntry.PanelChange.capture(baseState), EditGrouping.Standalone))
     )
 
     val unpinned = PanelStateReducer.unpin(PanelPosition.Left, pinned.state)
     unpinned.effects shouldBe List(
-      AppEffect.Undo(UndoEffect.RecordBoundary(HistoryEntry.PanelChange.capture(pinned.state), groupable = false))
+      AppEffect.Undo(UndoEffect.RecordBoundary(HistoryEntry.PanelChange.capture(pinned.state), EditGrouping.Standalone))
     )
   }
 

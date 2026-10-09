@@ -12,7 +12,10 @@ enum FileIntent:
   // #1206: compile the focused document, or the book its manuscript.conf lists, to a manuscript file.
   case ExportManuscript(request: ManuscriptExportRequest)
   case OpenFile
+  case OpenFolder
+  case OpenFileOrFolder
   case OpenRecentFile(path: Path)
+  case ClearRecentFiles
   case OpenFileSearch
   case GoToFile
   case CloseAll
@@ -21,6 +24,10 @@ enum FileIntent:
   case NewFile
   // #2019: the GPL-3.0-or-later licence and third-party notices bundled in the jar, opened read-only.
   case ShowLicenceAndNotices
+  // The About Serenity document; show-licence-and-notices opens the same document.
+  case ShowAbout
+  // Option B of the update notice: the browser makes the request, Serenity opens no socket.
+  case OpenReleasesPage
   // The privacy statement (docs/PRIVACY.md) bundled in the jar, opened read-only.
   case ShowPrivacyStatement
   case SetBufferLanguage(language: Option[LanguageId])

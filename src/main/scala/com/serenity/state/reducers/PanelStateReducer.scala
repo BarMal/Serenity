@@ -1,7 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.state.models.*
-import com.serenity.state.undo.HistoryEntry
+import com.serenity.state.undo.{EditGrouping, HistoryEntry}
 import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition, PanelTarget}
 
 object PanelStateReducer:
@@ -33,7 +33,7 @@ object PanelStateReducer:
         ),
         runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ panel)
       ),
-      AppEffect.Undo(UndoEffect.RecordBoundary(undoEntry, groupable = false))
+      AppEffect.Undo(UndoEffect.RecordBoundary(undoEntry, EditGrouping.Standalone))
     )
 
   /** Every panel docks under its own fixed id, replacing any instance of it already docked (keeping focus on it). */
@@ -135,7 +135,7 @@ object PanelStateReducer:
             ),
             runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id))
           ),
-          AppEffect.Undo(UndoEffect.RecordBoundary(undoEntry, groupable = false))
+          AppEffect.Undo(UndoEffect.RecordBoundary(undoEntry, EditGrouping.Standalone))
         )
       case None =>
         ReducerResult.noEffects(state)

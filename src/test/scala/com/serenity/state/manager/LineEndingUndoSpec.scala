@@ -19,8 +19,10 @@ class LineEndingUndoSpec extends AnyFlatSpec with Matchers:
   private val mixed = LineEndingCounts.of("a\r\nb\r\nc\n")
 
   private def modelWith(document: Document => Document): (Model, BufferId) =
-    val (opened, bufferId) = EditorState.createNewEmptyBuffer(AppState.initial)
-    val buffer             = opened.persisted.buffers(bufferId)
+    // Undo acts on the buffer being worked in (#1930), so the buffer is open in the focused pane.
+    val opened   = EditorState.openNewTab(AppState.initial)
+    val bufferId = opened.focusedBufferId.getOrElse(fail("expected the new tab to be focused"))
+    val buffer   = opened.persisted.buffers(bufferId)
     val onDisk = document(
       buffer.document.copy(filePath = Some(Paths.get("/notes/draft.txt")), isNewEmpty = false, isDirty = false)
     )

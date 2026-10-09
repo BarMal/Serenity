@@ -1,8 +1,8 @@
 package com.serenity.state.manager
 
-import com.serenity.keystroke.events.{Event, InsertChar, ResizeEvent}
+import com.serenity.keystroke.events.{Event, InsertChar, ResizeEvent, TextEntryEvent}
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, BufferId, Focus}
+import com.serenity.state.models.{AppState, BufferId, Focus, Runtime}
 import com.serenity.state.reducers.{AppEventReducer, ReducerResult, SystemEventReducer}
 import com.serenity.ui.layout.{SplitAxis, WrappedLineCache}
 
@@ -39,13 +39,20 @@ private[manager] object EventPipelineTransitions:
       )
     else state
 
-  /** A typed character opens the typing quiet window. Folded into the state the event's own handler builds on, so it
-    * lands in that event's commit rather than costing a commit of its own per keystroke.
+  /** A typed character opens the typing quiet window, and a text-entry key pressed in an editor pane stamps the edit
+    * clock undo grouping reads. Folded into the state the event's own handler builds on, so it lands in that event's
+    * commit rather than costing a commit of its own per keystroke. The clock is left alone anywhere else -- Enter on
+    * the start page edits nothing, so it must not change the state.
     */
   def typingObserved(event: Event, nowNanos: Long)(state: AppState): AppState =
+    val inEditor = state.persisted.focus match
+      case Focus.EditorPane(_) => true
+      case _                   => false
+    def stamped(runtime: Runtime): Runtime = if inEditor then runtime.observeEditKey(nowNanos) else runtime
     event match
-      case _: InsertChar => state.copy(runtime = state.runtime.observeTyping(nowNanos))
-      case _             => state
+      case _: InsertChar     => state.copy(runtime = stamped(state.runtime.observeTyping(nowNanos)))
+      case _: TextEntryEvent => if inEditor then state.copy(runtime = stamped(state.runtime)) else state
+      case _                 => state
 
   /** Advances each buffer's `markdownPreviewEditGeneration`, marking an edit burst the preview has not caught up with.
     */

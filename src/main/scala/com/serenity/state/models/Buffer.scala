@@ -7,7 +7,7 @@ import cats.Order
 import cats.data.NonEmptyList
 import com.serenity.io.{DocumentFormat, DocumentRevision, FileType}
 import com.serenity.lsp.config.LanguageId
-import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
+import com.serenity.richtext.{FidelityReport, InlineAtom, RichTextDocument, RichTextStyle}
 import com.serenity.rope.Rope
 import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
 
@@ -113,6 +113,9 @@ final case class Document(
     // so `Buffer.richTextInSync` can tell in O(1) whether a stored `richTextDocument` still describes this
     // `content`, instead of re-deriving and comparing the whole plain text on every check.
     contentVersion: Long = 0L,
+    // Advanced whenever the buffer stops matching what an undo snapshot taken while it was clean would restore: a save
+    // or reload, which moves what "clean" means, or a change undo does not record (#1930).
+    savedGeneration: Long = 0L,
     // Set on load when the file mixed terminators and cleared once a save has made it uniform or the user has chosen
     // `lineEnding` (#1964): until then a save rewrites lines the user never touched, which the editor has to say.
     mixedLineEndings: Option[LineEndingCounts] = None,
@@ -133,6 +136,15 @@ final case class Document(
     */
   def withContent(newContent: Rope): Document =
     copy(content = newContent, contentVersion = contentVersion + 1, isDirty = true, isNewEmpty = false)
+
+  /** This document as just written to (or read from) its file. */
+  def markedSaved: Document =
+    copy(isDirty = false, savedGeneration = savedGeneration + 1)
+
+  /** This document after a change undo cannot reverse, such as a comment edit: undo can no longer return it to clean.
+    */
+  def withUnrecordedChange: Document =
+    copy(isDirty = true, savedGeneration = savedGeneration + 1)
 
 /** A buffer's cursor/selection state: one entry per live cursor, each carrying its own position, in-flight selection
   * anchor and preferred vertical-navigation column/pixel-x (`#1577`). Before `#1577` this was five separate parallel
@@ -209,7 +221,7 @@ final case class Annotations(
 /** Rich-text authoring state layered on top of the buffer's plain-text `Rope` content. */
 final case class RichTextState(
     richTextDocument: Option[RichTextDocument] = None,
-    richTextFidelity: Option[RichTextFidelity] = None,
+    richTextFidelity: Option[FidelityReport] = None,
     insertionRichTextStyle: Option[RichTextStyle] = None,
     // The `Document.contentVersion` `richTextDocument` is known to match, or `None` if it either isn't set or
     // wasn't stamped as verified against the buffer's current content (#1663). `None` is always the safe default:
@@ -286,7 +298,8 @@ final case class Buffer(
     val lineCount                         = document.content.lineCount
     def inRange(position: CursorPosition) = position.line < lineCount
     def clamp(position: CursorPosition) =
-      if inRange(position) then position
+      if inRange(position) then
+        CursorPosition(position.line, position.column.min(document.content.getLine(position.line).fold(0)(_.length)))
       else
         val lastLine = (lineCount - 1).max(0)
         CursorPosition(lastLine, document.content.getLine(lastLine).fold(0)(_.length))
@@ -303,6 +316,13 @@ final case class Buffer(
         placeholders = annotations.placeholders.filter(placeholder => inRange(placeholder.position))
       )
     )
+
+  /** This buffer with its text replaced by `newContent` in a way that is not an edit: it stays as clean or dirty as it
+    * was, the content version moves so a stale rich-text document is recognised, and the cursors are brought back
+    * inside the new text.
+    */
+  def withSettledContent(newContent: Rope): Buffer =
+    copy(document = document.copy(content = newContent, contentVersion = document.contentVersion + 1)).clampedToContent
 
   /** True when closing this buffer may lose user-authored content. A hidden buffer is never closed on its own, and the
     * session keeps its text, so it never asks to be saved.
@@ -361,6 +381,14 @@ final case class Buffer(
     */
   def richTextInSync: Boolean =
     richText.richTextDocument.isDefined && richText.richTextSyncedVersion.contains(document.contentVersion)
+
+  /** `text` taken from this buffer's content, as plain text outside the editor: a rich document's inline atoms (its
+    * rope placeholder) become the text they stand for, so a soft break is a newline.
+    */
+  def plainTextExport(text: String): String =
+    if holdsRichText then InlineAtom.asPlainText(text) else text
+
+  def holdsRichText: Boolean = richText.richTextDocument.isDefined
 
 object Buffer:
   def empty(id: BufferId)(using com.serenity.rope.Balance): Buffer =

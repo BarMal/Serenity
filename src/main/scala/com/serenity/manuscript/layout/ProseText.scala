@@ -71,7 +71,7 @@ private[layout] object ProseText:
   private def regroup(glyphs: Vector[Item.Glyph]): List[RichTextRun] =
     glyphs
       .foldLeft(List.empty[RichTextRun]) {
-        case (RichTextRun(text, style) :: earlier, Item.Glyph(char, next)) if style == next =>
+        case (RichTextRun(text, style, None) :: earlier, Item.Glyph(char, next)) if style == next =>
           RichTextRun(text + char, style) :: earlier
         case (runs, Item.Glyph(char, style)) => RichTextRun(char.toString, style) :: runs
       }

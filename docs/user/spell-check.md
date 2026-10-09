@@ -60,8 +60,7 @@ Install a Hunspell dictionary (for example hunspell-fr) or set spellcheck.dictio
 
 The folders listed are your `spellcheck.dictionary_paths` when that is set, otherwise the folders in the table above.
 Languages that do have a dictionary are still checked, so a missing language does not switch spell check off for the
-rest. If no language has a dictionary, nothing is flagged until one is found. The tiny built-in word lists for `en`,
-`fr` and `el` are too small to check prose with, so they do not count as a dictionary and do not suppress the notice.
+rest. If no language has a dictionary, nothing is flagged until one is found.
 
 British English never counts as missing, and neither does a bare `en`: with no `en` dictionary installed, `en` is
 checked against the bundled British English one. An installed `en_US.dic` is not picked up for `en`; use

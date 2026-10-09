@@ -70,6 +70,9 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
     "languageToolsConfig.lspUserConfig.servers",
     "inputConfig.hotkeyConfig.bindings",
     "inputConfig.hotkeyConfig.commandBindings",
+    // Records that the bindings were adjusted for a terminal at startup; it is a property of the running frontend,
+    // never written to the file (HotkeyOverridesSpec).
+    "inputConfig.hotkeyConfig.terminalAdjusted",
     "inputConfig.hotkeyConfig.overrides",
     "inputConfig.focusedKeymapConfig.editor.bindings",
     "inputConfig.focusedKeymapConfig.commandRunner.bindings",

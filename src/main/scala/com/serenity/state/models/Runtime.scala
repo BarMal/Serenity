@@ -22,6 +22,7 @@ final case class Runtime(
     focusHistory: List[Focus] = List.empty,
     navigation: NavigationHistory = NavigationHistory(),
     typingActivity: TypingActivity = TypingActivity.idle,
+    editClock: EditClock = EditClock(),
     // Theme discovery/loading state (issue #1693): grouped into its own sub-record since the available
     // theme names and the most recently requested theme are written together from
     // `ThemeStateReducer`/`StateManagerSurfacePopupEffects`'s theme-listing effect. See `ThemeDiscoveryState`'s own doc comment.
@@ -66,9 +67,14 @@ final case class Runtime(
     chapterHeadingMemo: ChapterHeadingMemo = ChapterHeadingMemo.empty,
     // Never persisted: whether resolved comments still show in the lens, the highlights and comment navigation. Resolved
     // comments stay in the buffer either way.
-    resolvedCommentsVisible: Boolean = false
+    resolvedCommentsVisible: Boolean = false,
+    // Never persisted: the settings value the command runner is previewing, with the config and theme to save instead.
+    pendingSetting: Option[PendingSetting] = None
 ):
 
   /** A typed character restarts the quiet window for cursor-adjacent surfaces. */
   def observeTyping(nowNanos: Long): Runtime =
     copy(typingActivity = typingActivity.observed(nowNanos))
+
+  def observeEditKey(nowNanos: Long): Runtime =
+    copy(editClock = editClock.observed(nowNanos))

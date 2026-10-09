@@ -32,6 +32,8 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
     .withColumnTargetWidth(60)
     .withCursorBlinkTimeoutMillis(4000L)
     .withWordGoal(Some(50000))
+    .withAutoSaveMode(AutoSaveMode.AfterDelay)
+    .withAutoSaveDelayMillis(2500L)
     .withMinimumPaneWidth(24)
     .withWheelScrollLines(5)
     .withPreferredWindowSize(PreferredWindowSize(1280, 800))
@@ -39,6 +41,8 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
     .withHotkeyConfig(HotkeyConfig().withCommandBinding("toggle-line-numbers", "ctrl+alt+l"))
 
   private val baselineText: String = ConfigManager.configToString(baseline)
+
+  private val currentVersionLine = s"config.version = ${ConfigVersion.Current.value}\n"
 
   private def tempFile(content: String): Path =
     val file = Files.createTempFile("serenity-tolerance", ".conf")
@@ -278,7 +282,7 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
 
   "a config from a newer version" should "be reported, backed up before a save, and keep its unknown keys" in {
     val original = s"$baselineText\nconfig.version = 7\nfuture.key = 1\n"
-    val file     = tempFile(original.replace("config.version = 1\n", ""))
+    val file     = tempFile(original.replace(currentVersionLine, ""))
     val result   = load(file)
 
     result.report.version.value shouldBe 7
@@ -295,10 +299,10 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
     ConfigFactory.parseFile(file.toFile).getInt("future.key") shouldBe 1
   }
 
-  "a config with an unusable version" should "be read as the current version and flagged" in {
+  "a config with an unusable version" should "be read as an unversioned file and flagged" in {
     val result = load(tempFile("config.version = soon\n"))
 
-    result.report.version shouldBe ConfigVersion.Current
+    result.report.version shouldBe ConfigVersionStatus.legacy
     result.report.invalidEntries.map(_.key) should contain("config.version")
   }
 
@@ -339,7 +343,7 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
 
   "saving into a hand-written config" should "change only the line of the changed setting" in {
     val original =
-      """# My Serenity setup -- keep this note
+      currentVersionLine + """# My Serenity setup -- keep this note
         |
         |editor.word_wrap = false   # I prefer long lines
         |  display.line_numbers = true
@@ -357,7 +361,7 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
   }
 
   it should "write nothing when nothing changed" in {
-    val original = "# comment\neditor.word_wrap = false\n"
+    val original = currentVersionLine + "# comment\neditor.word_wrap = false\n"
     val file     = tempFile(original)
     val before   = Files.getLastModifiedTime(file)
 
@@ -368,7 +372,7 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
   }
 
   it should "add a setting the file did not state at the end, leaving the rest alone" in {
-    val original = "# comment\neditor.word_wrap = false\n"
+    val original = currentVersionLine + "# comment\neditor.word_wrap = false\n"
     val file     = tempFile(original)
 
     save(load(file).config.withLineNumbers(false), file) shouldBe Right(())
@@ -377,20 +381,20 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
   }
 
   it should "keep the user's spelling of a key and their line endings" in {
-    val original = "# note\r\ndisplay.word.wrap = false\r\n"
+    val original = currentVersionLine.replace("\n", "\r\n") + "# note\r\ndisplay.word.wrap = false\r\n"
     val file     = tempFile(original)
 
     save(load(file).config.withWordWrap(true), file) shouldBe Right(())
 
-    Files.readString(file) shouldBe "# note\r\ndisplay.word.wrap = true\r\n"
+    Files.readString(file) shouldBe currentVersionLine.replace("\n", "\r\n") + "# note\r\ndisplay.word.wrap = true\r\n"
   }
 
   it should "still take effect when the setting is also written as a block further down" in {
-    val original = "editor.word_wrap = true\neditor {\n  word_wrap = true\n}\n"
+    val original = currentVersionLine + "editor.word_wrap = true\neditor {\n  word_wrap = true\n}\n"
     val file     = tempFile(original)
 
     save(load(file).config.withWordWrap(false), file) shouldBe Right(())
 
     load(file).config.surfaceConfig.wordWrapEnabled shouldBe false
-    Files.readString(file) should startWith("editor.word_wrap = ")
+    Files.readString(file) should startWith(currentVersionLine + "editor.word_wrap = ")
   }

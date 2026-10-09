@@ -189,7 +189,9 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "write tabs and line breaks as native ODT text elements" in {
-    val source = RichTextDocument.oneParagraph("alpha\tbeta\ngamma")
+    val source = RichTextDocument(
+      List(RichTextParagraph(List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))))
+    )
 
     val bytes      = OdtDocumentCodec.writeBytes(source)
     val contentXml = zipEntryText(bytes, "content.xml")
@@ -197,7 +199,9 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
 
     contentXml should include("<text:tab/>")
     contentXml should include("<text:line-break/>")
-    singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
+    singleParagraph(decoded).runs shouldBe
+      List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))
+    decoded.exportText shouldBe "alpha\tbeta\ngamma"
   }
 
   it should "write repeated spaces as native ODT spacing elements" in {
@@ -210,14 +214,15 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
     singleParagraph(OdtDocumentCodec.readBytes(bytes).value).plainText shouldBe "alpha  beta"
   }
 
-  it should "report unsupported ODT structures before a lossy save" in {
+  it should "keep a table as a read-only line and report it as preserved" in {
     val xml = fixture("odt-unsupported-table.xml")
 
     val imported = OdtDocumentCodec.readBytesWithFidelity(odtBytes(xml)).value
 
-    imported.document.plainText shouldBe "kept text"
-    imported.fidelity.isLossless shouldBe false
-    imported.fidelity.unsupportedElements should contain("table")
+    imported.document.exportText shouldBe "kept text\n"
+    imported.document.paragraphAt(1).exists(_.isOpaqueBlock) shouldBe true
+    imported.fidelity.wouldDrop shouldBe empty
+    imported.fidelity.summary shouldBe "1 table preserved read-only"
   }
 
   it should "read and write ODT files through IO" in {
@@ -358,6 +363,24 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
     server.start()
     try test(s"http://127.0.0.1:${server.getAddress.getPort}/resource", requests)
     finally server.stop(0)
+
+  it should "round-trip hyperlink targets as text:a elements" in {
+    val link   = RichTextStyle.empty.withLink("https://example.com/a?x=1&y=2")
+    val anchor = RichTextStyle.empty.withLink("#chapter-1")
+    val source = RichTextDocument(
+      List(
+        RichTextParagraph(List(RichTextRun("see "), RichTextRun("the guide", link), RichTextRun(" and "))),
+        RichTextParagraph(List(RichTextRun("again", link), RichTextRun("up", anchor)))
+      )
+    )
+
+    val bytes   = OdtDocumentCodec.writeBytes(source)
+    val decoded = OdtDocumentCodec.readBytesWithFidelity(bytes).value
+
+    decoded.document shouldBe source
+    decoded.fidelity.wouldDrop shouldBe empty
+    zipEntryText(bytes, "content.xml") should include("""xlink:href="https://example.com/a?x=1&amp;y=2"""")
+  }
 
   private def zipEntryText(bytes: Array[Byte], name: String): String =
     val input = ZipInputStream(java.io.ByteArrayInputStream(bytes))

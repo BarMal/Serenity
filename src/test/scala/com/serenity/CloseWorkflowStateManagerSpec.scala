@@ -26,7 +26,8 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   private def testFileDialog(saveSelection: Option[java.nio.file.Path]): FileDialog =
     FileDialog(
       chooseOpenFile = _ => IO.pure(None),
-      chooseSaveFile = (_, _) => IO.pure(saveSelection)
+      chooseSaveFile = (_, _) => IO.pure(saveSelection),
+      chooseFolder = _ => IO.pure(None)
     )
 
   private def createStateManager(fileDialog: Option[FileDialog] = None): StateManager =

@@ -1,3 +1,4 @@
+import java.io.PrintStream
 import java.nio.file.Path
 import java.time.Instant
 
@@ -7,7 +8,6 @@ import scala.concurrent.duration.{Duration, DurationInt}
 import cats.effect.*
 import cats.effect.unsafe.IORuntimeConfig
 import cats.syntax.all.*
-import com.serenity.BuildInfo
 import com.serenity.app.*
 import com.serenity.app.LaunchReset.Moved
 import com.serenity.app.instance.{LaunchRole, SingleInstance}
@@ -20,7 +20,19 @@ import com.serenity.config.{
   ConfigMigrationWarning,
   ConfigNotice
 }
-import com.serenity.diagnostics.{FrameKind, FramePhase, FrameTimings, Trace, TuiConsoleLogFilter}
+import com.serenity.diagnostics.{
+  CrashRecord,
+  CrashReport,
+  FrameKind,
+  FramePhase,
+  FrameTimings,
+  LogLocation,
+  LogMigration,
+  PreviousRun,
+  RuntimeIdentity,
+  Trace,
+  TuiConsoleLogFilter
+}
 import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
@@ -31,7 +43,7 @@ import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.renderer.{FontSpec, PaintExecutionContext, RendererCursorOverlay, RendererEntryPoints}
-import com.serenity.ui.terminal.{SwingMenuBar, SwingWindow}
+import com.serenity.ui.terminal.{SwingFailureDialog, SwingMenuBar, SwingWindow}
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
 import fs2.Stream
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -50,17 +62,43 @@ object Main extends IOApp:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   def run(args: List[String]): IO[ExitCode] =
+    // The terminal stream as it is now: a TUI launch silences System.err, and a failure must still reach a person.
+    val console = System.err
     // Before anything else: the toolkit is fixed the moment the first java.awt class initialises.
-    ToolkitSelection.install.flatMap { toolkit =>
-      // An unparseable command line is reported and nothing is started. `Help.errors` is empty for a `--help` request
-      // and non-empty for a rejected argument, which is the difference between exiting zero and exiting non-zero.
-      LaunchOptions.parse(args) match
-        case Left(help) =>
-          IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
-        case Right(options) if options.showVersion =>
-          IO(println(s"Serenity ${BuildInfo.version} (${BuildInfo.commit})")).as(ExitCode.Success)
-        case Right(options) => launchUntilSettled(options, toolkit, MacDesktopIntegration())
-    }
+    ToolkitSelection.install
+      .flatTap(toolkit =>
+        IO(System.setProperty(RuntimeIdentity.ToolkitProperty, s"${toolkit.choice} (${toolkit.reason})")).void
+      )
+      .flatMap { toolkit =>
+        // An unparseable command line is reported and nothing is started. `Help.errors` is empty for a `--help` request
+        // and non-empty for a rejected argument, which is the difference between exiting zero and exiting non-zero.
+        LaunchOptions.parse(args) match
+          case Left(help) =>
+            IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
+          case Right(options) if options.showVersion =>
+            IO(println(VersionBanner.current)).as(ExitCode.Success)
+          case Right(options) =>
+            launchUntilSettled(options, toolkit, MacDesktopIntegration()).handleErrorWith(reportStartupFailure(options, console))
+      }
+
+  /** Anything that ends the launch before or outside the editor's own supervision: a crash file and, for a window
+    * launch, a native dialog, since a packaged app has no terminal to print to.
+    */
+  private def reportStartupFailure(options: LaunchOptions, console: PrintStream)(error: Throwable): IO[ExitCode] =
+    val display: StartupFailure.Notice => IO[Unit] =
+      if LaunchOptions.resolveTuiMode(options) then _ => IO.unit else SwingFailureDialog.show
+    for
+      at <- IO.realTimeInstant
+      _  <- LoggerFactory[IO].getLogger(using LoggerName("Main")).error(error)("[STARTUP] Failed before the editor ran")
+      _ <- StartupFailure.report(
+        error,
+        RuntimeIdentity.current,
+        CrashRecord(LogLocation.current),
+        at,
+        display,
+        line => IO(console.println(line))
+      )
+    yield ExitCode.Error
 
   /** A restart ends the running editor and starts the next one in this same JVM, so the terminal and the toolkit choice
     * carry straight over; the single-instance lock is released and taken again by the next launch. It drops the
@@ -101,10 +139,14 @@ object Main extends IOApp:
 
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
 
+    val build = RuntimeIdentity.current
     for
+      _         <- BuildLogLines.announce
       _         <- logger.info(s"[TOOLKIT] ${toolkit.choice} (${toolkit.reason})")
+      _         <- logger.info(s"[LOGS] Writing to ${LogLocation.current}")
+      _         <- migrateEarlierLogs
       _         <- Java2DPipeline.installSafeDefaults()
-      _         <- IO(CrashReporter.install())
+      _         <- IO(CrashReporter.install(CrashRecord(LogLocation.current), build))
       requested <- IO(launchOptionsForLogging.openPaths.map(_.toAbsolutePath.normalize))
       // #2023: settled before anything reads or writes the session, which only one process may own.
       instances = SingleInstance.forConfigDirectory(SessionManager.defaultSessionRoot(), logger)
@@ -124,6 +166,12 @@ object Main extends IOApp:
   /** How long a launch that stepped aside waits for the desktop to deliver the file it was launched for. */
   private val DesktopGrace = 500.millis
 
+  /** Logs used to go to `~/.serenity`; they move once, so the new folder holds the whole history. */
+  private def migrateEarlierLogs(using logger: Logger[IO]): IO[Unit] =
+    LogMigration.migrate(LogLocation.currentLegacy, LogLocation.current).flatMap { moved =>
+      moved.traverse_(path => logger.info(s"[LOGS] Moved an earlier log to $path"))
+    }
+
   private def reportForwarded(paths: List[Path])(using logger: Logger[IO]): IO[Unit] =
     val message =
       if paths.isEmpty then "Serenity is already running; its window was brought forward."
@@ -141,16 +189,49 @@ object Main extends IOApp:
   )(using
     logger: Logger[IO]
   ): IO[Unit] =
+    val store = CrashRecord(LogLocation.current)
+    role match
+      case LaunchRole.Primary(_) =>
+        // Leaving by any route but a lost process clears the marker; a crash caught on the way leaves its own file.
+        recordRun(store)
+          .flatMap(runPlanned(role, launchOptions, requestRestart, store, _))
+          .guarantee(store.markCleanExit)
+      case _ => runPlanned(role, launchOptions, requestRestart, store, PreviousRun.Clean)
+
+  /** How the last run ended, read before this one marks itself as running. */
+  private def recordRun(store: CrashRecord): IO[PreviousRun] =
+    for
+      at       <- IO.realTimeInstant
+      previous <- store.previousRun(RuntimeIdentity.current, at)
+      _        <- store.acknowledge >> store.markRunning(RuntimeIdentity.current, at)
+    yield previous
+
+  private def crashRecorderFor(store: CrashRecord): StartupRecovery.CrashRecorder =
+    (message, error) =>
+      IO.realTimeInstant.flatMap { at =>
+        store.recordCrash(CrashReport.render(RuntimeIdentity.current, at, message, Some(error), store.directory)).void
+      }
+
+  private def runPlanned(
+    role: LaunchRole,
+    launchOptions: LaunchOptions,
+    requestRestart: RestartMode => IO[Unit],
+    store: CrashRecord,
+    previousRun: PreviousRun
+  )(using logger: Logger[IO]): IO[Unit] =
     for
       startedAt                   <- IO.realTimeInstant
       (configMoved, sessionMoved) <- applyResets(role, launchOptions, startedAt)
       unfinishedStarts            <- countUnfinishedStarts(launchOptions)
-      plan = StartupRecovery.plan(
-        launchOptions,
-        StartupCrashGuard.decide(unfinishedStarts, launchOptions.safeMode),
-        configMoved,
-        sessionMoved
-      )
+      plan = StartupRecovery
+        .plan(
+          launchOptions,
+          StartupCrashGuard.decide(unfinishedStarts, launchOptions.safeMode),
+          configMoved,
+          sessionMoved,
+          previousRun
+        )
+        .copy(crashRecorder = crashRecorderFor(store))
       // Safe mode never reads the user's config, so a file it cannot parse is not even set aside.
       configResult <-
         if plan.safeMode then IO.pure(Right(ConfigLoadResult(SafeMode.config, ConfigMigrationReport.empty)))
@@ -171,19 +252,25 @@ object Main extends IOApp:
             _: ConfigDiagnostic.Migrated) =>
           logger.warn(s"[CONFIG] ${diagnostic.message}")
       }.sequence_
+      opens <- LaunchOpens.resolve(launchOptions.openPaths)
+      _     <- opens.notice.traverse_(logger.warn(_))
       appConfig = resolveAppConfig(loaded.config, launchOptions)
       startup   = Startup(plan, requestRestart, StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker))
       // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
       instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten
-      notice         = plan.noticeWith(Option((configNotice.toList ++ instanceNotice).mkString(" ")).filter(_.nonEmpty))
+      notice = plan.noticeWith(
+        Option((configNotice.toList ++ instanceNotice ++ opens.notice).mkString(" ")).filter(_.nonEmpty)
+      )
+      // The first file opens as part of startup; the folder and the other files open as a later launch's would.
+      startupOptions = launchOptions.copy(openPaths = opens.files)
       _ <- safeModeSessionRoot(plan).use { scratchRoot =>
         val session = SessionChoice(
           scratchRoot.orElse(role.sessionRootOverride),
-          launchOpens(launchOptions, hooks.opensFor(role)),
+          Stream.emit(opens.root.toList ++ startupOptions.extraOpenPaths).filter(_.nonEmpty) ++ hooks.opensFor(role),
           hooks.quitRequests
         )
-        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, launchOptions, notice, startup, session)
-        else runGui(appConfig, launchOptions, notice, startup, session)
+        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, startupOptions, notice, startup, session)
+        else runGui(appConfig, startupOptions, notice, startup, session)
       }
       _ <- startup.markStarted
     yield ()
@@ -224,10 +311,6 @@ object Main extends IOApp:
       forwardedOpens: Stream[IO, List[Path]],
       quitRequests: Stream[IO, QuitResponse]
   )
-
-  /** Only the first path is opened as part of startup; the others are opened as the editor would a forwarded launch. */
-  private def launchOpens(options: LaunchOptions, later: Stream[IO, List[Path]]): Stream[IO, List[Path]] =
-    Stream.emit(options.extraOpenPaths).filter(_.nonEmpty) ++ later
 
   /** The TUI launch path (issue #1112): a real system terminal via [[TerminalShell.resource]], restored on every exit
     * path by that `Resource`'s release. This branch never references `SwingWindow` -- the terminal capability bundle
@@ -293,6 +376,7 @@ object Main extends IOApp:
         .use { (swingWin, paintEc) =>
           val actualAppConfig =
             resolveAutoTextScale(appConfig, swingWin.detectedDeviceTextScale)
+          val fileDialog = SwingFileDialog(swingWin.canvas)
           val initialScaleSync =
             if actualAppConfig.editorConfig.fontConfig != appConfig.editorConfig.fontConfig then
               displayState.update(actualAppConfig.editorConfig.fontConfig) >>
@@ -384,7 +468,8 @@ object Main extends IOApp:
                     () => swingWin.viewportSize,
                     () => displayState.snapshot
                   )
-                )
+                ),
+                applyPointerShape = shape => IO(swingWin.updatePointerShape(shape))
               )
 
               initialScaleSync >> AppRuntime.run(
@@ -414,7 +499,7 @@ object Main extends IOApp:
                     uiPresetStore = startup.plan.uiPresetStore(session.rootOverride),
                     windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
                     onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
-                    fileDialog = Some(SwingFileDialog(swingWin.canvas))
+                    fileDialog = Some(fileDialog)
                   )
                 ),
                 awaitExternalQuit =
@@ -425,7 +510,8 @@ object Main extends IOApp:
                 openPath = launchOptions.openPath,
                 frontend = GuiFrontend,
                 forwardedOpens = session.forwardedOpens.evalTap(_ => IO(swingWin.bringToFront())),
-                quitRequests = session.quitRequests
+                quitRequests = session.quitRequests,
+                fileOrFolderOpen = fileDialog.supportsFileOrFolder
               )
             }
         }

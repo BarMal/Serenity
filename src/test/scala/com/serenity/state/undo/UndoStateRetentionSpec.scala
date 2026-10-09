@@ -19,27 +19,30 @@ class UndoStateRetentionSpec extends AnyFlatSpec with Matchers:
 
   private def liveOnly(ids: Int*): BufferId => Boolean = id => ids.contains(id.value)
 
-  "retainingBuffers" should "drop buffer edits of closed buffers from the undo and redo stacks, keeping the order" in {
-    val state = UndoState(
-      undoStack = Vector(edit(1), edit(2), edit(1), edit(3)),
-      redoStack = Vector(edit(2), edit(3))
-    )
+  private def bufferIds(entries: Vector[HistoryEntry]): Vector[BufferId] =
+    entries.collect { case edit: HistoryEntry.BufferEdit => edit.bufferId }
+
+  private def undoing(entries: HistoryEntry*): UndoState =
+    entries.reverse.foldLeft(UndoState())(_.pushUndo(_))
+
+  "retainingBuffers" should "drop the steps of closed buffers from the undo and redo stacks, keeping the order" in {
+    val state = undoing(edit(1), edit(2), edit(1), edit(3)).pushRedo(edit(3)).pushRedo(edit(2))
 
     val retained = state.retainingBuffers(liveOnly(1, 3))
 
-    retained.undoStack shouldBe Vector(edit(1), edit(1), edit(3))
-    retained.redoStack shouldBe Vector(edit(3))
+    bufferIds(retained.undoStack) shouldBe Vector(BufferId(1), BufferId(1), BufferId(3))
+    bufferIds(retained.redoStack) shouldBe Vector(BufferId(3))
   }
 
-  it should "drop the pending group of a closed buffer and keep a live one" in {
-    val pending = UndoState(pendingGroup = Some(edit(2)))
+  it should "forget the history of a closed buffer and keep a live one" in {
+    val state = UndoState().pushUndo(edit(2))
 
-    pending.retainingBuffers(liveOnly(1)).pendingGroup shouldBe None
-    pending.retainingBuffers(liveOnly(2)).pendingGroup shouldBe Some(edit(2))
+    state.retainingBuffers(liveOnly(1)).buffers.keySet shouldBe Set.empty
+    state.retainingBuffers(liveOnly(2)).buffers.keySet shouldBe Set(BufferId(2))
   }
 
-  it should "keep entries that belong to no buffer" in {
-    val state = UndoState(undoStack = Vector(paneClose, edit(2)), redoStack = Vector(paneClose))
+  it should "keep steps that belong to no buffer" in {
+    val state = UndoState().pushUndo(edit(2)).pushUndo(paneClose).pushRedo(paneClose)
 
     val retained = state.retainingBuffers(liveOnly())
 
@@ -47,13 +50,12 @@ class UndoStateRetentionSpec extends AnyFlatSpec with Matchers:
     retained.redoStack shouldBe Vector(paneClose)
   }
 
-  it should "return the same instance when every entry is live" in {
-    val state =
-      UndoState(undoStack = Vector(edit(1), paneClose), redoStack = Vector(edit(1)), pendingGroup = Some(edit(1)))
+  it should "return the same instance when every history is live" in {
+    val state = UndoState().pushUndo(edit(1)).pushUndo(paneClose).pushRedo(edit(1))
 
     state.retainingBuffers(liveOnly(1)) should be theSameInstanceAs state
   }
 
   it should "keep the depth limit" in {
-    UndoState(maxUndoDepth = 7).retainingBuffers(liveOnly()).maxUndoDepth shouldBe 7
+    UndoState(maxUndoDepth = 7).pushUndo(edit(1)).retainingBuffers(liveOnly()).maxUndoDepth shouldBe 7
   }

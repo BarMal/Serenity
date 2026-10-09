@@ -20,7 +20,8 @@ final case class AppConfig(
     languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig(),
     appModeConfig: AppModeConfig = AppModeConfig(),
     statusLine: StatusLineConfig = StatusLineConfig.default,
-    exportTypographyConfig: ExportTypographyConfig = ExportTypographyConfig()
+    exportTypographyConfig: ExportTypographyConfig = ExportTypographyConfig(),
+    autoSaveConfig: AutoSaveConfig = AutoSaveConfig()
 ):
 
   def withEditorConfig(config: EditorConfig): AppConfig =
@@ -296,6 +297,15 @@ final case class AppConfig(
   /** Create a new config with the multi-line drop cap paragraph role's rendering enabled or disabled. */
   def withDropCapsEnabled(enabled: Boolean): AppConfig =
     withDocumentConfig(documentConfig.copy(dropCapsEnabled = enabled))
+
+  def withAutoSaveConfig(config: AutoSaveConfig): AppConfig =
+    copy(autoSaveConfig = config)
+
+  def withAutoSaveMode(mode: AutoSaveMode): AppConfig =
+    withAutoSaveConfig(autoSaveConfig.copy(mode = mode))
+
+  def withAutoSaveDelayMillis(delayMillis: Long): AppConfig =
+    withAutoSaveConfig(autoSaveConfig.copy(delayMillis = delayMillis))
 
   def withAppModeConfig(config: AppModeConfig): AppConfig =
     copy(appModeConfig = config)

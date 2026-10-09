@@ -8,7 +8,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.{ConfigManagerTestSupport, SpellCheckConfig}
+import com.serenity.config.{ConfigManagerTestSupport, ConfigVersion, SpellCheckConfig}
 import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.client.DocumentUri
@@ -36,7 +36,8 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
   ): FileDialog =
     FileDialog(
       chooseOpenFile = _ => IO.pure(openSelection),
-      chooseSaveFile = (_, _) => IO.pure(saveSelection)
+      chooseSaveFile = (_, _) => IO.pure(saveSelection),
+      chooseFolder = _ => IO.pure(None)
     )
 
   private def createStateManager(
@@ -203,7 +204,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "save-config", "save-config")
 
     val saved = Files.readString(configFile)
-    saved should include("config.version = 1")
+    saved should include(s"config.version = ${ConfigVersion.Current.value}")
     saved should include("editor.word_wrap = true")
     stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface shouldBe None
   }

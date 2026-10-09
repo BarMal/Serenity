@@ -4,6 +4,7 @@ import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.given
 import io.circe.{Decoder, Encoder}
+import org.slf4j.LoggerFactory
 
 /** What a global hotkey is for -- the section of Settings › Keys › Global it is listed under. */
 enum HotkeyPurpose(val label: String):
@@ -266,7 +267,9 @@ final case class HotkeyConfig(
     // Keyed by registry command id (`Command.name`), for commands with no `HotkeyAction` of their own (issue #1922).
     // An empty list is kept rather than dropped: it records that the user unbound a shipped default, so a reload does
     // not bring the default back.
-    commandBindings: Map[String, List[HotkeyTrigger]] = HotkeyConfig.defaultCommandBindings
+    commandBindings: Map[String, List[HotkeyTrigger]] = HotkeyConfig.defaultCommandBindings,
+    // Set by `forTerminalUse`: the defaults these bindings derive from are the terminal's, not the platform's.
+    terminalAdjusted: Boolean = false
 ):
   def bindingsFor(action: HotkeyAction): List[HotkeyTrigger] =
     bindings.getOrElse(action, Nil)
@@ -297,10 +300,9 @@ final case class HotkeyConfig(
         HotkeyConfig.validated(freed.copy(bindings = freed.bindings + (action -> List(trigger)))).getOrElse(this)
       case None => this
 
-  def resetBinding(action: HotkeyAction): HotkeyConfig =
-    HotkeyConfig
-      .validated(copy(bindings = bindings + (action -> HotkeyConfig.defaultBindings.getOrElse(action, Nil))))
-      .getOrElse(this)
+  def resetBinding(action: HotkeyAction, osName: String = HotkeyOverrides.runningOs): HotkeyConfig =
+    val default = HotkeyOverrides.defaultsFor(this, osName).bindings.getOrElse(action, Nil)
+    HotkeyConfig.validated(copy(bindings = bindings + (action -> default))).getOrElse(this)
 
   /** Strips from the command bindings not in `explicitCommandIds` -- the shipped defaults a file or session did not
     * mention -- any trigger the user's own bindings already hold. A config written before a default existed may have
@@ -340,16 +342,21 @@ final case class HotkeyConfig(
         commandBindings,
         HotkeyConfig.defaultCommandBindingsFor("Mac OS X"),
         HotkeyConfig.defaultCommandBindingsFor("linux")
-      )
+      ),
+      terminalAdjusted = true
     )
 
 object HotkeyConfig:
 
   def forOs(osName: String): HotkeyConfig =
-    HotkeyConfig(validatedBindings(defaultBindingsFor(osName)), defaultCommandBindingsFor(osName))
+    HotkeyConfig(platformDefaults(osName), defaultCommandBindingsFor(osName))
 
-  def defaultBindings: Map[HotkeyAction, List[HotkeyTrigger]] =
-    validatedBindings(defaultBindingsFor(System.getProperty("os.name", "")))
+  /** What an action holds on `osName` when the user has changed nothing: the baseline `config.conf` is written against.
+    */
+  def platformDefaults(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
+    validatedBindings(defaultBindingsFor(osName))
+
+  def defaultBindings: Map[HotkeyAction, List[HotkeyTrigger]] = platformDefaults(HotkeyOverrides.runningOs)
 
   /** The Ctrl-based bindings [[defaultBindingsFor]] resolves to on any non-macOS `osName` -- what
     * [[HotkeyConfig.forTerminalUse]] rewrites a still-at-default macOS/Cmd binding to (issue #1213). Any non-mac string
@@ -545,6 +552,8 @@ object HotkeyConfig:
         else updated + (action -> triggers)
     }
 
+  private val logger = LoggerFactory.getLogger("com.serenity.config.HotkeyConfig")
+
   // Session files keep command bindings in the same object as the action ones; no action's key contains a dot.
   private val sessionCommandPrefix = "command."
 
@@ -575,17 +584,14 @@ object HotkeyConfig:
   given Decoder[HotkeyConfig] = Decoder.decodeMap[String, List[HotkeyTrigger]].emap { entries =>
     val (commandEntries, actionEntries) = entries.partition { case (key, _) => key.startsWith(sessionCommandPrefix) }
     val commands = commandEntries.map { case (key, triggers) => key.stripPrefix(sessionCommandPrefix) -> triggers }
-    val decoded = actionEntries.toList.map { (key, triggers) =>
-      HotkeyAction.values.find(_.configKey == key).map(_ -> triggers).toRight(s"Unknown hotkey action: $key")
+    val (unknown, actions) = actionEntries.toList.partitionMap { (key, triggers) =>
+      HotkeyAction.values.find(_.configKey == key).map(_ -> triggers).toRight(key)
     }
-    decoded.collectFirst { case Left(error) => error } match
-      case Some(error) => Left(error)
-      case None =>
-        val actions = decoded.collect { case Right(entry) => entry }.toMap
-        validated(
-          HotkeyConfig(
-            addNonConflictingDefaults(actions, commands.valuesIterator.flatten.toSet),
-            defaultCommandBindings ++ commands
-          ).yieldingDefaultCommandBindings(commands.keySet)
-        )
+    unknown.foreach(key => logger.warn(s"[SESSION] Ignoring hotkey '$key': there is no hotkey action of that name"))
+    validated(
+      HotkeyConfig(
+        addNonConflictingDefaults(actions.toMap, commands.valuesIterator.flatten.toSet),
+        defaultCommandBindings ++ commands
+      ).yieldingDefaultCommandBindings(commands.keySet)
+    )
   }
