@@ -1,13 +1,14 @@
 package com.serenity.lsp
 
 import scala.annotation.unused
+import scala.concurrent.duration.FiniteDuration
 
 import cats.effect.std.Supervisor
 import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
 import com.serenity.diagnostics.Trace
 import com.serenity.keystroke.events.{Event, LspEvent}
-import com.serenity.lsp.OpenDocument.{changedWithoutConnection, served, unserved}
+import com.serenity.lsp.OpenDocument.{changedWithoutConnection, served, textOf, unserved}
 import com.serenity.lsp.client.{DocumentUri, LspConnection, LspMethod, LspProtocol, WorkspaceRootUri}
 import com.serenity.lsp.config.*
 import com.serenity.state.models.CursorPosition
@@ -23,6 +24,12 @@ object LspManager:
 
   private[lsp] enum RequestKind:
     case Hover, Definition, References, Rename, Completion, SemanticTokens
+
+    /** The visible-lines request that runs beside [[SemanticTokens]], or alone for a server offering only `range`. */
+    case SemanticTokensRange
+
+    /** The timer a refresh waits on, kept as a request so a newer edit cancels it with the rest. */
+    case SemanticTokensDebounce
 
   final private[lsp] case class RequestKey(uri: DocumentUri, kind: RequestKind)
 
@@ -64,6 +71,9 @@ object LspManager:
       */
     def evictResolution(@unused languageId: LanguageId, @unused fileUri: DocumentUri): IO[Unit] = IO.unit
 
+    /** Drop every cached resolution, for the editor letting every server go. No-op by default, like the above. */
+    def evictAllResolutions: IO[Unit] = IO.unit
+
   def run(
     effects: Stream[IO, LspEffect],
     applyEvent: Event => IO[Unit],
@@ -87,7 +97,8 @@ object LspManager:
     logger: Logger[IO],
     connectionProvider: ConnectionProvider,
     policy: LspSupervisionPolicy = LspSupervisionPolicy.Default,
-    notices: LspNotices = LspNotices.ignoring
+    notices: LspNotices = LspNotices.ignoring,
+    semanticTokensDebounce: FiniteDuration = LspManagerSemanticTokens.DefaultDebounce
   ): IO[Unit] =
     Supervisor[IO].allocated.flatMap {
       case (supervisor, releaseRequests) =>
@@ -108,6 +119,19 @@ object LspManager:
               applyEvent,
               logger
             )
+          semanticTokensSession <- SemanticTokensSession.create
+          semanticTokens = LspManagerSemanticTokens(
+            pool,
+            documentVersions,
+            openDocuments,
+            requestContexts,
+            requestFibers,
+            supervisor,
+            applyEvent,
+            logger,
+            semanticTokensSession,
+            semanticTokensDebounce
+          )
           runEffects = effects
             .evalMap(effect =>
               pool.serialized(
@@ -119,6 +143,7 @@ object LspManager:
                   requestContexts,
                   requestFibers,
                   supervisor,
+                  semanticTokens,
                   applyEvent,
                   logger
                 )
@@ -138,6 +163,7 @@ object LspManager:
     requestContexts: Ref[IO, Map[RequestKey, RequestContext]],
     requestFibers: Ref[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]],
     supervisor: Supervisor[IO],
+    semanticTokens: LspManagerSemanticTokens,
     applyEvent: Event => IO[Unit],
     logger: Logger[IO]
   ): IO[Unit] =
@@ -146,6 +172,7 @@ object LspManager:
       case LspEffect.FileOpened(rawUri, languageId, text) =>
         val uri = DocumentUri(rawUri)
         invalidateDocument(uri, requestContexts, requestFibers) >>
+          semanticTokens.documentOpened(uri) >>
           documentVersions.update(_ + (uri -> 1)) >>
           openDocuments.update(_.served(uri, text)) >>
           pool.attach(languageId, uri).flatMap {
@@ -157,17 +184,7 @@ object LspManager:
                     LspProtocol.didOpenParams(uri, languageId.id, 1, text.collect())
                   )
                   .handleErrorWith(ex => logger.error(ex)(s"[LSP] didOpen failed: $rawUri")) >>
-                requestSemanticTokens(
-                  rawUri,
-                  languageId,
-                  pool,
-                  documentVersions,
-                  requestContexts,
-                  requestFibers,
-                  supervisor,
-                  applyEvent,
-                  logger
-                )
+                semanticTokens.refreshNow(rawUri, languageId)
             case LspAttachment.Suspended(identity) =>
               // Its server is down; the restart reopens every associated document with its latest text.
               pool.associate(uri, identity) >> applyEvent(LspEvent.LspSemanticTokensUnavailable(rawUri))
@@ -188,21 +205,14 @@ object LspManager:
             .connectionFor(uri)
             .flatMap {
               case Some(connection) =>
-                LspDidChange.send(connection, uri, version, text, openDocuments, logger).flatMap {
-                  case true  => openDocuments.update(_.served(uri, text))
-                  case false => IO.unit
-                } >>
-                  requestSemanticTokens(
-                    rawUri,
-                    languageId,
-                    pool,
-                    documentVersions,
-                    requestContexts,
-                    requestFibers,
-                    supervisor,
-                    applyEvent,
-                    logger
-                  )
+                openDocuments.get.map(_.textOf(uri)).flatMap { previous =>
+                  LspDidChange.send(connection, uri, version, text, openDocuments, logger).flatMap {
+                    case true =>
+                      openDocuments.update(_.served(uri, text)) >>
+                        previous.traverse_(semanticTokens.documentEdited(rawUri, _, text))
+                    case false => IO.unit
+                  }
+                } >> semanticTokens.refreshAfterQuiet(rawUri, languageId)
               case None =>
                 // Already reported by FileOpened or this document's first edit; a repeat is a commit per keystroke.
                 pool.hasServer(uri).flatMap { awaitsServer =>
@@ -215,6 +225,7 @@ object LspManager:
       case LspEffect.FileClosed(rawUri, languageId) =>
         val uri = DocumentUri(rawUri)
         invalidateDocument(uri, requestContexts, requestFibers) >>
+          semanticTokens.documentClosed(uri) >>
           documentVersions.update(_ - uri) >>
           openDocuments.update(_ - uri) >>
           pool.evictResolution(languageId, uri) >>
@@ -348,74 +359,13 @@ object LspManager:
         pool.notices.answer(prompt, choice)
 
       case LspEffect.SemanticTokensRequested(rawUri, languageId) =>
-        requestSemanticTokens(
-          rawUri,
-          languageId,
-          pool,
-          documentVersions,
-          requestContexts,
-          requestFibers,
-          supervisor,
-          applyEvent,
-          logger
-        )
+        semanticTokens.refreshNow(rawUri, languageId)
 
-  /** Requests `textDocument/semanticTokens/full` for `rawUri` if its connection's server declared the capability during
-    * its handshake, decodes the response against the legend it captured then, and emits
-    * [[LspEvent.LspSemanticTokensReceived]] -- discarding a stale response exactly like [[RequestKind.Definition]]'s
-    * `isCurrent` check. Shared by the [[LspEffect.SemanticTokensRequested]] effect and the automatic re-request this
-    * manager makes on every `FileOpened`/`FileChanged` (issue #859/#1177's rendering slice needs semantic tokens
-    * refreshed on every edit, not only when something explicitly asks for them). The "no connection" case is handled by
-    * [[startRequest]]'s shared fallback via [[noServerEvent]], which emits [[LspEvent.LspSemanticTokensUnavailable]]
-    * for this request kind -- see that function's doc comment.
-    */
-  private def requestSemanticTokens(
-    rawUri: String,
-    languageId: LanguageId,
-    pool: LspConnectionPool,
-    documentVersions: Ref[IO, Map[DocumentUri, Int]],
-    requestContexts: Ref[IO, Map[RequestKey, RequestContext]],
-    requestFibers: Ref[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]],
-    supervisor: Supervisor[IO],
-    applyEvent: Event => IO[Unit],
-    logger: Logger[IO]
-  ): IO[Unit] =
-    given Logger[IO] = logger
-    val uri          = DocumentUri(rawUri)
-    startRequest(
-      RequestKind.SemanticTokens,
-      uri,
-      languageId,
-      anchor = RequestAnchor.WholeDocument,
-      pool,
-      documentVersions,
-      requestContexts,
-      requestFibers,
-      supervisor,
-      applyEvent
-    ) { (conn, context) =>
-      Trace
-        .timed(s"lsp.semanticTokens.$rawUri")(
-          conn.semanticTokensLegend.flatMap {
-            case None => IO.unit // server never declared semanticTokensProvider during its handshake
-            case Some(legend) =>
-              conn
-                .sendRequest(LspMethod("textDocument/semanticTokens/full"), LspProtocol.semanticTokensParams(uri))
-                .flatMap(response =>
-                  LspProtocol.parseSemanticTokens(response, legend).fold(IO.unit) { tokens =>
-                    isCurrent(
-                      RequestKey(uri, RequestKind.SemanticTokens),
-                      context,
-                      documentVersions,
-                      requestContexts
-                    )
-                      .ifM(applyEvent(LspEvent.LspSemanticTokensReceived(rawUri, tokens)), IO.unit)
-                  }
-                )
-          }
-        )
-        .handleErrorWith(ex => logger.error(ex)(s"[LSP] semanticTokens failed: $rawUri"))
-    }
+      case LspEffect.VisibleRangeChanged(rawUri, languageId, firstLine, lastLine) =>
+        semanticTokens.visibleRangeChanged(rawUri, languageId, firstLine, lastLine)
+
+      case LspEffect.ReleaseAll =>
+        releaseAll(pool, documentVersions, openDocuments, requestContexts, requestFibers, semanticTokens)
 
   private[lsp] def startRequest(
     kind: RequestKind,
@@ -488,8 +438,9 @@ object LspManager:
       case RequestKind.Definition => None
       case RequestKind.References => None
       case RequestKind.Rename     => None
-      case RequestKind.SemanticTokens =>
+      case RequestKind.SemanticTokens | RequestKind.SemanticTokensRange =>
         Some(LspEvent.LspSemanticTokensUnavailable(uri.value))
+      case RequestKind.SemanticTokensDebounce => None
 
   private[lsp] def isCurrent(
     key: RequestKey,
@@ -500,6 +451,23 @@ object LspManager:
     (documentVersions.get, requestContexts.get).mapN { (versions, contexts) =>
       versions.get(key.uri).contains(context.version) && contexts.get(key).contains(context)
     }
+
+  private def releaseAll(
+    pool: LspConnectionPool,
+    documentVersions: Ref[IO, Map[DocumentUri, Int]],
+    openDocuments: Ref[IO, OpenDocument.Registry],
+    requestContexts: Ref[IO, Map[RequestKey, RequestContext]],
+    requestFibers: Ref[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]],
+    semanticTokens: LspManagerSemanticTokens
+  ): IO[Unit] =
+    for
+      known <- (openDocuments.get.map(_.keySet), documentVersions.get.map(_.keySet)).mapN(_ ++ _)
+      _     <- requestFibers.getAndSet(Map.empty).flatMap(_.values.toList.traverse_(_.cancel))
+      _     <- requestContexts.set(Map.empty)
+      _     <- known.toList.traverse_(semanticTokens.documentClosed)
+      _     <- documentVersions.set(Map.empty) >> openDocuments.set(Map.empty)
+      _     <- pool.releaseEverything
+    yield ()
 
   private def invalidateDocument(
     uri: DocumentUri,
@@ -546,6 +514,8 @@ object LspManager:
 
       override def evictResolution(languageId: LanguageId, fileUri: DocumentUri): IO[Unit] =
         resolutionCache.evict(languageId, fileUri)
+
+      override def evictAllResolutions: IO[Unit] = resolutionCache.evictAll
 
   private def uriToPath(uri: DocumentUri): String =
     val s = uri.value

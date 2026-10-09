@@ -15,6 +15,8 @@ class CheckedFileStampsSpec extends AnyFlatSpec with Matchers:
   private val fineTick = 100_123_456L
   private val coarse   = 100_000_000L
 
+  private val longEnoughToVouch = 5_000_000_000L
+
   /** A stamp taken `afterModified` nanoseconds after its file was last modified, the way `FileStamp.observe` makes one.
     */
   private def observed(size: Long, modifiedNanos: Long, afterModified: Long): Option[FileStamp.Observed] =
@@ -25,14 +27,14 @@ class CheckedFileStampsSpec extends AnyFlatSpec with Matchers:
     CheckedFileStamps.create(_ => IO(onDisk.get))
 
   "CheckedFileStamps" should "claim a file once until its size or modification time moves" in {
-    val onDisk = new AtomicReference(observed(10L, fineTick, 0L))
+    val onDisk = new AtomicReference(observed(10L, fineTick, longEnoughToVouch))
     val program = for
       stamps <- stampsOver(onDisk)
       first  <- stamps.claimIfChanged(file)
       again  <- stamps.claimIfChanged(file)
-      _      <- IO(onDisk.set(observed(10L, fineTick + 1L, 0L)))
+      _      <- IO(onDisk.set(observed(10L, fineTick + 1L, longEnoughToVouch)))
       moved  <- stamps.claimIfChanged(file)
-      _      <- IO(onDisk.set(observed(11L, fineTick + 1L, 0L)))
+      _      <- IO(onDisk.set(observed(11L, fineTick + 1L, longEnoughToVouch)))
       grown  <- stamps.claimIfChanged(file)
     yield (first, again, moved, grown)
 
@@ -45,7 +47,7 @@ class CheckedFileStampsSpec extends AnyFlatSpec with Matchers:
       stamps  <- stampsOver(onDisk)
       first   <- stamps.claimIfChanged(file)
       again   <- stamps.claimIfChanged(file)
-      _       <- IO(onDisk.set(observed(10L, coarse, 5_000_000_000L)))
+      _       <- IO(onDisk.set(observed(10L, coarse, longEnoughToVouch)))
       vouched <- stamps.claimIfChanged(file)
       settled <- stamps.claimIfChanged(file)
     yield (first, again, vouched, settled)
@@ -54,14 +56,14 @@ class CheckedFileStampsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "always claim a file it cannot read, and again once it reappears unchanged" in {
-    val onDisk = new AtomicReference(observed(10L, fineTick, 0L))
+    val onDisk = new AtomicReference(observed(10L, fineTick, longEnoughToVouch))
     val program = for
       stamps  <- stampsOver(onDisk)
       _       <- stamps.claimIfChanged(file)
       _       <- IO(onDisk.set(None))
       missing <- stamps.claimIfChanged(file)
       gone    <- stamps.claimIfChanged(file)
-      _       <- IO(onDisk.set(observed(10L, fineTick, 0L)))
+      _       <- IO(onDisk.set(observed(10L, fineTick, longEnoughToVouch)))
       back    <- stamps.claimIfChanged(file)
     yield (missing, gone, back)
 

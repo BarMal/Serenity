@@ -9,34 +9,48 @@ import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{
   AppConfig,
   ConfigError,
+  ConfigLoadResult,
   ConfigManager,
+  ConfigNotice,
+  ConfigRestart,
   LineNumberLayout,
   SpellCheckLanguage,
   StatusLinePlacement,
   StatusSegment
 }
-import com.serenity.io.TimestampedBackup
-import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
+import com.serenity.io.{FileStamp, TimestampedBackup}
 import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.CommandRunnerReducer
 
 /** Config-update infrastructure and the settings-intent dispatch that drives it: appearance, cursor, panel chrome,
   * spell-check, and general settings all funnel through the same commit-then-persist path. The state change commits
-  * once, validated, on the dispatcher; the config file write and the session auto-save run FIFO on the Config lane
-  * (#1697).
+  * once, validated, on the dispatcher; the config file write runs on the Config lane (#1697), once per burst of changes
+  * and skipped when nothing in the file would change. An outside edit of the file is reloaded on that same lane
+  * (#1934). The session is not involved: it keeps no settings.
   */
 final private[manager] class StateManagerConfigEffects(
     currentState: IO[AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     configPersistencePath: Option[java.nio.file.Path],
-    sessionPersistence: SessionPersistence,
     onFontConfigChanged: com.serenity.ui.fonts.FontLoader.FontConfig => IO[Unit],
     deviceTextScaleProvider: IO[Double],
     editor: EffectEditorPort,
     renderCaches: RenderCaches,
-    saveConfig: (AppConfig, java.nio.file.Path) => IO[Either[ConfigError, Unit]] = ConfigManager.saveConfigIO
+    saveConfig: (AppConfig, java.nio.file.Path) => IO[Either[ConfigError, Unit]] = ConfigManager.saveConfigIO,
+    showNotice: Notice => IO[Unit] = _ => IO.unit,
+    configOnDisk: Option[AppConfig] = None,
+    loadConfig: java.nio.file.Path => IO[Either[ConfigError, ConfigLoadResult]] = ConfigFileSync.defaultLoad
 )(using balance: com.serenity.rope.Balance):
+
+  private val writes = WriteCoalescer.unsafe
+
+  private val configFile: Option[ConfigFileSync] =
+    configPersistencePath.map(ConfigFileSync.unsafe(_, configOnDisk, saveConfig, loadConfig))
+
+  /** The config file to watch for outside edits, absent when this session has none to keep. */
+  val watch: Option[ConfigFileWatch] =
+    configFile.map(file => ConfigFileWatch(file.path.toAbsolutePath.normalize, reloadFromDisk(file)))
 
   private[manager] def updateConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
@@ -47,8 +61,8 @@ final private[manager] class StateManagerConfigEffects(
   private[manager] def updateTextDisplayConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
 
-  /** Commits `update` (plus `syncState`) as one validated model write, then queues the config write and session
-    * auto-save on the Config lane. Returns the config live afterwards -- the old one if validation rejected the change.
+  /** Commits `update` (plus `syncState`) as one validated model write, then asks for the config file to be written.
+    * Returns the config live afterwards -- the old one if validation rejected the change.
     */
   private def applyConfigUpdate(
     update: AppConfig => AppConfig,
@@ -60,15 +74,7 @@ final private[manager] class StateManagerConfigEffects(
         .flatTap(config =>
           IO(renderCaches.frameState.configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity))
         )
-        .flatTap(config =>
-          editor.submitEffect(
-            PersistenceLanes.Config,
-            writeConfigFile(config) >>
-              currentState
-                .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
-                .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after config change failed"))
-          )
-        )
+        .flatTap(_ => requestConfigWrite)
 
   private[manager] def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
@@ -311,8 +317,8 @@ final private[manager] class StateManagerConfigEffects(
             case Left(error) =>
               logger.warn(error)("[CONFIG] Settings were not reset: the config file could not be backed up")
             case Right(backup) =>
-              backup
-                .traverse_(kept => logger.info(s"[CONFIG] Previous settings kept at $kept")) >> restoreDefaultSettings
+              backup.traverse_(kept => logger.info(s"[CONFIG] Previous settings kept at $kept")) >>
+                configFile.traverse_(_.forget) >> restoreDefaultSettings
           }
     }
 
@@ -345,21 +351,89 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withCommandRunnerItemGapRows(rows)).void
       case GeneralSettingsIntent.SetCommandRunnerCursorGapRows(rows) =>
         updateAppearanceConfig(_.withCommandRunnerCursorGapRows(rows)).void
+      case GeneralSettingsIntent.SetAutoSaveMode(mode) =>
+        applyConfigUpdate(_.withAutoSaveMode(mode)).void
+      case GeneralSettingsIntent.SetAutoSaveDelayMillis(millis) =>
+        applyConfigUpdate(_.withAutoSaveDelayMillis(millis)).void
 
-  /** Queues a write of `config` to the config file, behind any config write already queued. */
+  /** Queues a write of `config` to the config file, behind any config write already queued, whether or not it looks
+    * changed.
+    */
   private[manager] def persistConfigFile(config: AppConfig): IO[Unit] =
-    editor.submitEffect(PersistenceLanes.Config, writeConfigFile(config))
+    configFile.traverse_(file =>
+      editor.submitEffect(PersistenceLanes.Config, file.write(config).flatMap(_.fold(reportSaveFailure, _ => IO.unit)))
+    )
 
-  private def writeConfigFile(config: AppConfig): IO[Unit] =
-    configPersistencePath match
-      case Some(path) =>
-        saveConfig(config, path).flatMap {
-          case Right(_) => IO.unit
-          case Left(error) =>
-            logger.warn(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}")
+  private def requestConfigWrite: IO[Unit] =
+    writes.request(editor.submitEffect(PersistenceLanes.Config, _), writeLatestConfig)
+
+  private def writeLatestConfig: IO[Unit] =
+    configFile.traverse_(file =>
+      currentState
+        .flatMap(state => file.writeIfChanged(state.persisted.config))
+        .flatMap(_.fold(reportSaveFailure, _ => IO.unit))
+    )
+
+  private def reportSaveFailure(error: ConfigError): IO[Unit] =
+    logger.warn(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}")
+
+  private def reloadFromDisk(file: ConfigFileSync): IO[Unit] =
+    editor.submitEffect(
+      PersistenceLanes.Config,
+      file.externalChange
+        .flatMap(_.traverse_(applyExternalChange(file, _)))
+        .handleErrorWith(error => logger.warn(error)(s"[CONFIG] Reloading ${file.path} failed"))
+    )
+
+  private def applyExternalChange(file: ConfigFileSync, change: ConfigFileChange): IO[Unit] =
+    change match
+      case ConfigFileChange.Unreadable(error, stamp) =>
+        file.noteSeen(stamp) >> showConfigNotice(List(ConfigNotice.unparseableOnReload(file.path, error)))
+      case ConfigFileChange.Edited(loaded, stamp) =>
+        (deviceTextScaleProvider, file.onDisk, currentState.map(_.persisted.config)).flatMapN { (scale, disk, live) =>
+          val config   = loaded.config.withFontConfig(loaded.config.editorConfig.fontConfig.resolveAutoTextScale(scale))
+          val unseen   = !disk.flatMap(_.stamp).contains(stamp)
+          val problems = Option.when(unseen)(ConfigNotice.forLoad(file.path, loaded.report)).flatten.toList
+          if disk.exists(_.encoded == ConfigManager.configToString(config)) then
+            file.noteSeen(stamp) >> showConfigNotice(problems)
+          else reloadInto(file, disk.map(_.config), live, config, stamp, problems)
         }
-      case None =>
-        IO.unit
+
+  private def reloadInto(
+    file: ConfigFileSync,
+    base: Option[AppConfig],
+    before: AppConfig,
+    config: AppConfig,
+    stamp: FileStamp,
+    problems: List[String]
+  ): IO[Unit] =
+    editor.dispatchEffectResult(EffectResult.ConfigReloaded(base, config), _ => IO.unit) >>
+      currentState.map(_.persisted.config).flatMap { now =>
+        if now == config then
+          file.adopt(config, stamp) >> configApplied(before, config) >> logger.info(
+            s"[CONFIG] Reloaded ${file.path}"
+          ) >>
+            showConfigNotice(problems ++ ConfigRestart.notice(ConfigRestart.changed(before, config)))
+        else
+          showConfigNotice(
+            problems :+ s"${file.path.getFileName} was edited while a setting was being changed here, so the " +
+              "settings from this session were kept."
+          )
+      }
+
+  private def configApplied(before: AppConfig, config: AppConfig): IO[Unit] =
+    IO(renderCaches.frameState.configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity)) >>
+      IO.whenA(config.editorConfig.fontConfig != before.editorConfig.fontConfig)(
+        onFontConfigChanged(config.editorConfig.fontConfig)
+      ) >>
+      IO.whenA(config.languageToolsConfig.spellCheck != before.languageToolsConfig.spellCheck)(
+        editor.scheduleDocumentAnalysis()
+      )
+
+  private def showConfigNotice(messages: List[String]): IO[Unit] =
+    IO.whenA(messages.nonEmpty)(
+      showNotice(Notice(NoticeLevel.Warning, messages.mkString(" "), topic = Some(NoticeTopic.ConfigFile)))
+    )
 
 private[manager] object StateManagerConfigEffects:
 
@@ -373,6 +447,11 @@ private[manager] object StateManagerConfigEffects:
   ): Model =
     val config = update(model.app.persisted.config)
     model.copy(app = syncState(configUpdated(model.app, _ => config), config))
+
+  /** `loaded` as the live config, unless it already is or a change made here since `base` would be undone by it. */
+  def reloaded(state: AppState, base: Option[AppConfig], loaded: AppConfig): AppState =
+    val live = state.persisted.config
+    if live == loaded || base.exists(_ != live) then state else configUpdated(state, _ => loaded)
 
   def configUpdated(state: AppState, update: AppConfig => AppConfig): AppState =
     val config = update(state.persisted.config)

@@ -39,9 +39,20 @@ private[config] object ConfigFieldsDocumentsAndCommandRunner:
       _.documentConfig.wordGoal,
       (config, value) => config.withWordGoal(value)
     ),
+    field("document.comment_author")(string.filtered(_.nonEmpty).orAuto)(
+      _.documentConfig.commentAuthor,
+      (config, value) => config.withCommentAuthor(value)
+    ),
     field("document.drop_caps_enabled", "drop_caps_enabled")(boolean)(
       _.documentConfig.dropCapsEnabled,
       (config, value) => config.withDropCapsEnabled(value)
+    ),
+    field("files.auto_save")(
+      enumerated(AutoSaveMode.fromConfigKey, _.configKey, text => AutoSaveMode.values.find(_.toString == text))
+    )(_.autoSaveConfig.mode, (config, value) => config.withAutoSaveMode(value)),
+    field("files.auto_save_delay_ms")(long.filtered(_ >= AutoSaveConfig.MinDelayMillis))(
+      _.autoSaveConfig.delayMillis,
+      (config, value) => config.withAutoSaveDelayMillis(value)
     ),
     named("workspace.mode", "appMode", "app.mode")(
       enumerated(AppMode.fromConfigKey, _.configKey, text => AppMode.values.find(_.toString == text))

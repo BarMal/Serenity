@@ -109,12 +109,12 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
     extended.primarySelection shouldBe Some(Selection(CursorPosition(0, 10), CursorPosition(0, 3)))
   }
 
-  "Extending a selection by word" should "hold the anchor when the direction reverses" in {
+  "Extending a selection by word" should "leave no selection when the direction reverses back onto the anchor" in {
     val extended =
       reduce(bufferOf("foo bar baz", CursorPosition(0, 4)), ExtendSelectionWordRight, ExtendSelectionWordLeft)
 
     extended.editing.cursorPositions shouldBe List(CursorPosition(0, 4))
-    extended.primarySelection shouldBe Some(Selection(CursorPosition(0, 4), CursorPosition(0, 4)))
+    extended.primarySelection shouldBe None
   }
 
   it should "drop secondary selections rather than extending each of them" in {
@@ -136,10 +136,18 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
   }
 
   "Extending a selection" should "hold the anchor when the direction reverses" in {
+    val extended =
+      reduce(bufferOf("abcdef", CursorPosition(0, 2)), ExtendSelectionRight, ExtendSelectionRight, ExtendSelectionLeft)
+
+    extended.editing.cursorPositions shouldBe List(CursorPosition(0, 3))
+    extended.primarySelection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(0, 3)))
+  }
+
+  it should "leave no selection when the direction reverses back onto the anchor" in {
     val extended = reduce(bufferOf("abcdef", CursorPosition(0, 2)), ExtendSelectionRight, ExtendSelectionLeft)
 
     extended.editing.cursorPositions shouldBe List(CursorPosition(0, 2))
-    extended.primarySelection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(0, 2)))
+    extended.primarySelection shouldBe None
   }
 
   it should "drop secondary selections rather than extending each of them" in {
@@ -189,7 +197,7 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
     val selected = reduce(bufferOf("", CursorPosition(0, 0)), SelectAll)
 
     selected.editing.cursorPositions shouldBe List(CursorPosition(0, 0))
-    selected.primarySelection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(0, 0)))
+    selected.primarySelection shouldBe None
   }
 
   /** The single-cursor arms read the buffer back out of the state, so anything the dispatcher adjusted on the way in --

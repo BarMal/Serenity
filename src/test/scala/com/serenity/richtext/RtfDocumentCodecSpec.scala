@@ -72,11 +72,15 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
 
     val decoded = decode(rtf.getBytes(StandardCharsets.UTF_8))
 
-    singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
+    singleParagraph(decoded).runs shouldBe
+      List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))
+    decoded.exportText shouldBe "alpha\tbeta\ngamma"
   }
 
   it should "write tabs and line breaks as native RTF controls" in {
-    val source = RichTextDocument.oneParagraph("alpha\tbeta\ngamma")
+    val source = RichTextDocument(
+      List(RichTextParagraph(List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))))
+    )
 
     val bytes   = RtfDocumentCodec.writeBytes(source)
     val rtfText = String(bytes, StandardCharsets.UTF_8)
@@ -84,7 +88,9 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
 
     rtfText should include("\\tab")
     rtfText should include("\\line")
-    singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
+    singleParagraph(decoded).runs shouldBe
+      List(RichTextRun("alpha\tbeta"), RichTextRun.softBreak(), RichTextRun("gamma"))
+    decoded.exportText shouldBe "alpha\tbeta\ngamma"
   }
 
   it should "round-trip a heading paragraph as a heading, not as bold enlarged text" in {
@@ -210,7 +216,7 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
 
     rtf should include("\\line")
     rtf should not include "57344"
-    decode(bytes).plainText shouldBe "alpha\ngamma"
+    decode(bytes).exportText shouldBe "alpha\ngamma"
   }
 
   it should "report tables as unsupported while keeping their cell text" in {
@@ -221,6 +227,8 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
     )
 
     result.fidelity.unsupportedElements should contain("table")
+    result.fidelity.count(DocumentFeature.Tables, Treatment.Dropped) shouldBe 1
+    result.fidelity.dropSummary shouldBe "1 table"
     result.fidelity.isLossless shouldBe false
     result.document.plainText should include("first")
     result.document.plainText should include("second")
@@ -233,6 +241,8 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
     )
 
     result.fidelity.unsupportedElements should contain("picture")
+    result.fidelity.count(DocumentFeature.Images, Treatment.Dropped) shouldBe 1
+    result.fidelity.dropSummary shouldBe "1 image"
     result.fidelity.isLossless shouldBe false
     result.document.plainText shouldBe "before  after"
   }
@@ -243,6 +253,9 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
     ).fidelity
 
     fidelity.unsupportedElements should contain allOf ("strikethrough", "superscript", "field", "footnote")
+    fidelity.count(DocumentFeature.Fields, Treatment.Dropped) shouldBe 1
+    fidelity.count(DocumentFeature.Notes, Treatment.Dropped) shouldBe 1
+    fidelity.count(DocumentFeature.Other("strikethrough"), Treatment.Dropped) shouldBe 1
   }
 
   it should "skip unknown destinations as opaque groups and report them by name" in {
@@ -263,7 +276,7 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
       RtfDocumentCodec.readBytesWithFidelity(fixture("word-sample.rtf")).fold(e => fail(e.getMessage), identity)
     val document = result.document
 
-    document.paragraphs.map(_.plainText) shouldBe List(
+    document.paragraphs.map(_.exportText) shouldBe List(
       "Quarterly Report",
       "Caf\u00e9 na\u00efve bold and italic and under\nnext line with \u20ac",
       "Centered red",
@@ -363,7 +376,7 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
       .readBytesWithFidelity(rtf.getBytes(StandardCharsets.ISO_8859_1))
       .fold(error => fail(error.getMessage), identity)
 
-  private def textOf(rtf: String): String = imported(rtf).document.plainText
+  private def textOf(rtf: String): String = imported(rtf).document.exportText
 
   private def fixture(name: String): Array[Byte] =
     Files.readAllBytes(Paths.get(getClass.getResource(s"/richtext/$name").toURI))

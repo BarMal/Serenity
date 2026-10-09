@@ -133,11 +133,12 @@ private[reducers] object ModalFileWorkflowReducer:
 
   /** Fires unconditionally for an Open workflow, exactly like `handleSubmit` -- the reducer can't tell from
     * `FileWorkflowState` alone whether `path` is really a directory, so that check (and the resulting status message or
-    * dismiss-and-pin) happens in IO (issue #1525). A no-op for Save As, which has no project-root concept.
+    * dismiss-and-pin) happens in IO (issue #1525). The confirm action of both the Open and Open Folder forms; a no-op
+    * for Save As, which has no project-root concept.
     */
   private def handleOpenAsProjectRoot(currentState: AppState): ReducerResult =
     currentModal(currentState) match
-      case Some((id, Modal.FileWorkflow(workflow))) if workflow.mode == FileWorkflowMode.Open =>
+      case Some((id, Modal.FileWorkflow(workflow))) if workflow.canOpenAsProjectRoot =>
         ReducerResult.withEffect(currentState, AppEffect.Workflow(WorkflowEffect.OpenFileWorkflowAsProjectRoot(id)))
       case _ =>
         ReducerResult.noEffects(currentState)
@@ -154,9 +155,10 @@ private[reducers] object ModalFileWorkflowReducer:
               .map(index => workflow.updated(selectedSuggestionIndex = index, statusMessage = None))
           case _ => None
         val fieldUpdated = focusId match
-          case "filename" => Some(workflow.updated(activeField = FileWorkflowField.Filename, statusMessage = None))
-          case "path"     => Some(workflow.updated(activeField = FileWorkflowField.Path, statusMessage = None))
-          case _          => None
+          case "filename" if workflow.mode != FileWorkflowMode.OpenFolder =>
+            Some(workflow.updated(activeField = FileWorkflowField.Filename, statusMessage = None))
+          case "path" => Some(workflow.updated(activeField = FileWorkflowField.Path, statusMessage = None))
+          case _      => None
         val nextState =
           updateModal(currentState, id, Modal.FileWorkflow(updated.orElse(fieldUpdated).getOrElse(workflow)))
         if fieldUpdated.nonEmpty then

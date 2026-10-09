@@ -3,7 +3,7 @@ package com.serenity.state.models
 import java.nio.file.Path
 
 import com.serenity.lsp.client.DocumentUri
-import com.serenity.lsp.model.{Diagnostic, SemanticToken}
+import com.serenity.lsp.model.{Diagnostic, SemanticTokenData}
 import com.serenity.spellcheck.SpellChecker
 
 /** The per-buffer indexes the renderer reads every frame, declared as derived values (#1864) so they are recomputed
@@ -18,7 +18,7 @@ object BufferIndexes:
 
   final case class AnnotationInputs(comments: List[DocumentComment], diagnostics: List[Diagnostic])
 
-  final case class SemanticTokenInputs(tokens: Option[List[SemanticToken]], unavailable: Boolean)
+  final case class SemanticTokenInputs(tokens: Option[SemanticTokenData], unavailable: Boolean)
 
   // `Nil` is a real, empty response, so the two answers that carry no token list are stood in for by these.
   private object AwaitingTokens
@@ -52,7 +52,7 @@ object BufferIndexes:
         inputs => List(inputs.tokens.getOrElse(if inputs.unavailable then NoTokensComing else AwaitingTokens)),
       compute = inputs =>
         inputs.tokens match
-          case Some(tokens) => SemanticTokensAvailability.Available(tokens.groupBy(_.line))
+          case Some(tokens) => SemanticTokensAvailability.Available(tokens.byLine)
           case None =>
             if inputs.unavailable then SemanticTokensAvailability.Unavailable
             else SemanticTokensAvailability.Pending

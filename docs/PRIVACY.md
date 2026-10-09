@@ -28,6 +28,8 @@ Delete the folder to remove all of it.
 - The Markdown preview does not load remote or `data:` images; only image files under the previewed document's own
   folder are drawn.
 - Opening a remote (for example `sftp://`) location is not supported; Serenity does not connect to it.
+- The Open Releases Page command hands the releases URL to your default browser. The browser makes the request;
+  Serenity opens no connection.
 
 ## What other programs can do
 

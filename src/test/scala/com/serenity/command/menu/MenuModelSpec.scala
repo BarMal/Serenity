@@ -37,6 +37,17 @@ class MenuModelSpec extends AnyFlatSpec with Matchers:
     for spec <- List(linux, mac) do specIds(spec).distinct shouldBe specIds(spec)
   }
 
+  "The File menu" should "list Open File and Open Folder next to each other, on every platform" in {
+    for spec <- List(linux, mac) do
+      val ids = specIds(spec).map(_.value)
+      ids.indexOf("open-folder") shouldBe ids.indexOf("open") + 1
+  }
+
+  it should "offer Open Folder in both modes" in {
+    namesFor(AppMode.Code) should contain("open-folder")
+    namesFor(AppMode.Prose) should contain("open-folder")
+  }
+
   "The macOS menu bar" should "leave quit and open-settings to the application menu" in {
     specIds(mac).map(_.value).toSet.intersect(Set("quit", "open-settings", "about")) shouldBe empty
     specIds(linux).map(_.value) should contain allOf ("quit", "open-settings")

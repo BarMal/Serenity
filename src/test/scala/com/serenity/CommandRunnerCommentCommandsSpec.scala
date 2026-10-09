@@ -176,7 +176,7 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "add-document-comment", "add-document-comment")
 
     val commentedBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    commentedBuffer.annotations.documentComments shouldBe List(
+    commentedBuffer.annotations.documentComments.map(withoutMetadata) shouldBe List(
       DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Comment")
     )
     commentedBuffer.document.isDirty shouldBe true
@@ -193,8 +193,8 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
       }
       .getOrElse(fail("Expected comment lens"))
     lens.draft shouldBe "Comment"
-    lens.target shouldBe Some(
-      CommentLensTarget(0, DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Comment"))
+    lens.target.map(target => (target.id, withoutMetadata(target.comment))) shouldBe Some(
+      CommentId(1) -> DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Comment")
     )
 
     stateManager
@@ -238,8 +238,8 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
               .annotations
               .copy(
                 documentComments = List(
-                  DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Revise opening"),
-                  DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
+                  DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Revise opening", id = CommentId(1)),
+                  DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this", id = CommentId(2))
                 )
               )
           )
@@ -256,7 +256,10 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected the comment lens to open after previous-document-comment"))
     previousLens.draft shouldBe "Revise opening"
     previousLens.target shouldBe Some(
-      CommentLensTarget(0, DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Revise opening"))
+      CommentLensTarget(
+        CommentId(1),
+        DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Revise opening", id = CommentId(1))
+      )
     )
 
     executeCommandThroughRunner(stateManager, "next-document-comment", "next-document-comment")
@@ -268,7 +271,10 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected the comment lens to open after next-document-comment"))
     nextLens.draft shouldBe "Tighten this"
     nextLens.target shouldBe Some(
-      CommentLensTarget(1, DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this"))
+      CommentLensTarget(
+        CommentId(2),
+        DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this", id = CommentId(2))
+      )
     )
   }
 
@@ -303,7 +309,13 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).annotations.documentComments shouldBe List(
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .buffers(bufferId)
+      .annotations
+      .documentComments
+      .map(withoutMetadata) shouldBe List(
       DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Tighten this opening")
     )
 
@@ -329,7 +341,13 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).annotations.documentComments shouldBe List(
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .buffers(bufferId)
+      .annotations
+      .documentComments
+      .map(withoutMetadata) shouldBe List(
       DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Make this quieter")
     )
   }
@@ -364,7 +382,13 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).annotations.documentComments shouldBe List(
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .buffers(bufferId)
+      .annotations
+      .documentComments
+      .map(withoutMetadata) shouldBe List(
       DocumentComment(CursorPosition(0, 3), CursorPosition(0, 5), "Accent")
     )
 
@@ -398,7 +422,8 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
       .persisted
       .buffers(bufferId)
       .annotations
-      .documentComments should contain(
+      .documentComments
+      .map(withoutMetadata) should contain(
       DocumentComment(CursorPosition(0, 3), CursorPosition(0, 3), "Point")
     )
 
@@ -434,7 +459,13 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
       .persisted
       .buffers(bufferId)
       .annotations
-      .documentComments should contain(
+      .documentComments
+      .map(withoutMetadata) should contain(
       DocumentComment(CursorPosition(0, 5), CursorPosition(0, 5), "Flag point")
     )
   }
+
+  // The id, author and times a command stamps depend on the clock and the machine; these specs are about the range and
+  // text a command writes.
+  private def withoutMetadata(comment: DocumentComment): DocumentComment =
+    comment.copy(id = CommentId.Unassigned, author = None, createdAt = None, editedAt = None)
