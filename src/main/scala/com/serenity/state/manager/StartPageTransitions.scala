@@ -11,7 +11,12 @@ private[manager] object StartPageTransitions:
     * a buffer was opened, closed or edited since `saved` was taken: the page would offer to resume a session that is no
     * longer the one on screen.
     */
-  def withStartPageShown(live: AppState, saved: AppState, readableRecentFiles: List[Path]): AppState =
+  def withStartPageShown(
+    live: AppState,
+    saved: AppState,
+    readableRecentFiles: List[Path],
+    readableRecentFolders: List[Path] = Nil
+  ): AppState =
     if !sameBuffers(live, saved) then live
     else
       startPageStateFrom(
@@ -20,7 +25,8 @@ private[manager] object StartPageTransitions:
           sessionExists = true,
           recentFiles = readableRecentFiles,
           resumeIdentifier = Some(StartupPageContent.sessionResumeIdentifier(saved)),
-          fileOrFolderOpen = live.runtime.capabilities.opensFileOrFolder
+          fileOrFolderOpen = live.runtime.capabilities.opensFileOrFolder,
+          recentFolders = readableRecentFolders
         )
       )
 

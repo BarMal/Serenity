@@ -23,7 +23,7 @@ import com.serenity.command.menu.{
 import com.serenity.command.{CommandId, CommandRegistry}
 import com.serenity.config.{AppConfig, AppMode, HotkeyAction, HotkeyConfig}
 import com.serenity.input.{InputRouter, MenuActivationGuard, SwingInputHandler}
-import com.serenity.keystroke.events.{ActivateBuffer, Event, OpenRecentPath, RunCommand}
+import com.serenity.keystroke.events.{ActivateBuffer, Event, OpenRecentFolder, OpenRecentPath, RunCommand}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.core.EditorState
@@ -138,9 +138,10 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
         .toList
         .flatMap(_.entries)
         .collect:
-          case ResolvedEntry.Item(command)                      => command.label
-          case ResolvedEntry.Submenu(title, _)                  => title.text
-          case ResolvedEntry.Dynamic(DynamicSource.RecentFiles) => DynamicMenu.OpenRecentTitle
+          case ResolvedEntry.Item(command)                        => command.label
+          case ResolvedEntry.Submenu(title, _)                    => title.text
+          case ResolvedEntry.Dynamic(DynamicSource.RecentFiles)   => DynamicMenu.OpenRecentTitle
+          case ResolvedEntry.Dynamic(DynamicSource.RecentFolders) => DynamicMenu.OpenRecentFolderTitle
 
     items(fixture.open(MenuTitle.File)).map(_.getText) shouldBe expected
     expected should contain(label("save"))
@@ -371,6 +372,14 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
       model.app.copy(persisted = model.app.persisted.copy(buffers = model.app.persisted.buffers.updated(id, buffer)))
     model.copy(app = EditorState.insertBufferInOrder(added, id))
 
+  private def withRecentFolders(model: Model, paths: List[Path]): Model =
+    model.copy(app = model.app.copy(persisted = model.app.persisted.copy(recentFolders = paths)))
+
+  private def openRecentFolder(fixture: Fixture): JMenu =
+    items(fixture.open(MenuTitle.File))
+      .collectFirst { case menu: JMenu if menu.getText == "Open Recent Folder" => menu }
+      .getOrElse(fail("the File menu has no Open Recent Folder submenu"))
+
   private def openRecent(fixture: Fixture): JMenu =
     items(fixture.open(MenuTitle.File))
       .collectFirst { case menu: JMenu if menu.getText == "Open Recent" => menu }
@@ -426,6 +435,38 @@ class SwingMenuBarSpec extends AnyFlatSpec with Matchers:
     val fixture = new Fixture(withRecent(modelOf(config()), List(Paths.get("/w/new.md"))))
 
     items(openRecent(fixture)).find(_.getText == label("clear-recent-files")).foreach(_.doClick(0))
+
+    fixture.sent.asScala.toList shouldBe List(RunCommand("clear-recent-files"))
+  }
+
+  "The Open Recent Folder submenu" should "list the recent folders, most recent first, with the parent as description" in {
+    val fixture = new Fixture(withRecentFolders(modelOf(config()), List(Paths.get("/w/book"), Paths.get("/h/notes"))))
+    val recent  = items(openRecentFolder(fixture))
+
+    recent.take(2).map(_.getText) shouldBe List("book", "notes")
+    recent.take(2).map(_.getAccessibleContext.getAccessibleDescription) shouldBe List(absolute("/w"), absolute("/h"))
+    recent.last.getText shouldBe label("clear-recent-files")
+  }
+
+  it should "show a disabled placeholder when there are no recent folders" in {
+    val recent = items(openRecentFolder(new Fixture(modelOf(config()))))
+
+    recent.map(_.getText) shouldBe List("(No recent folders)")
+    recent.map(_.isEnabled) shouldBe List(false)
+  }
+
+  it should "send exactly one OpenRecentFolder when a folder is chosen" in {
+    val fixture = new Fixture(withRecentFolders(modelOf(config()), List(Paths.get("/w/book"), Paths.get("/h/notes"))))
+
+    items(openRecentFolder(fixture)).find(_.getText == "notes").foreach(_.doClick(0))
+
+    fixture.sent.asScala.toList shouldBe List(OpenRecentFolder(Paths.get(absolute("/h/notes"))))
+  }
+
+  it should "send RunCommand for Clear Recent" in {
+    val fixture = new Fixture(withRecentFolders(modelOf(config()), List(Paths.get("/w/book"))))
+
+    items(openRecentFolder(fixture)).find(_.getText == label("clear-recent-files")).foreach(_.doClick(0))
 
     fixture.sent.asScala.toList shouldBe List(RunCommand("clear-recent-files"))
   }

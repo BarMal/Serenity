@@ -329,6 +329,8 @@ final private[manager] class StateManagerEffectHandlers(
         requestOpenFileOrFolderDialog
       case FileIntent.OpenRecentFile(path) =>
         loadFile(path)
+      case FileIntent.OpenRecentFolder(folder) =>
+        openFolderAsProjectRoot(folder)
       case FileIntent.ClearRecentFiles =>
         currentState.flatMap(current => commitState(FileResults.withoutRecentFiles(current), current))
       case FileIntent.OpenFileSearch =>
@@ -499,15 +501,22 @@ final private[manager] class StateManagerEffectHandlers(
       case Some(dialog) => openFileOrFolderFromDialog(dialog, openFolderAsProjectRoot)
       case None         => requestOpenFileDialog
 
-  /** The one route a chosen folder takes, whether it came from a native dialog or the in-app form's "Open as root":
-    * leave the start page, then pin the Explorer on it.
+  /** The one route a chosen folder takes, whether it came from a native dialog, the in-app form's "Open as root", the
+    * command line, a later launch or Open Recent Folder: leave the start page, pin the Explorer on it, and remember it.
     */
   private[manager] def openFolderAsProjectRoot(folder: Path): IO[Unit] =
     leaveStartPage() >> panelEffects.pinExplorerPanelEffect(
       PanelPosition.Left,
       folder,
       PanelRegistry.registrationFor(PanelId.Explorer).defaultSize(PanelPosition.Left)
-    )
+    ) >> recordRecentFolder(folder)
+
+  private def recordRecentFolder(folder: Path): IO[Unit] =
+    IO.blocking(java.nio.file.Files.isDirectory(folder))
+      .flatMap(isFolder =>
+        updateModelValidated(model => Some(model.copy(app = FileResults.withRecentFolder(model.app, folder))))
+          .whenA(isFolder)
+      )
 
   // With no native dialog the in-app Open Folder form is the picker; its confirm action goes through the same sink.
   protected def requestOpenFolderDialog: IO[Unit] =
