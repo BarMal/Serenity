@@ -108,7 +108,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Main"))
     val initialViewportSize = ViewportSize(120, 40)
 
-    val file = java.nio.file.Files.createTempFile("main-startup-tui-mode-spec", ".md")
+    val file = TestTemp.file("main-startup-tui-mode-spec", ".md")
 
     val result = for
       themeManager <- IO.pure(AppThemeManager.create)
@@ -163,7 +163,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
 
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("MainLaunchPathSpec"))
-    val selectedFile        = Files.createTempFile("serenity-launch-open", ".txt")
+    val selectedFile        = TestTemp.file("serenity-launch-open", ".txt")
     val initialViewportSize = ViewportSize(120, 30)
 
     try
@@ -229,7 +229,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
 
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("MainStartupThemeSpec"))
-    val sessionRoot         = Files.createTempDirectory("serenity-startup-theme")
+    val sessionRoot         = TestTemp.directory("serenity-startup-theme")
     val initialViewportSize = ViewportSize(120, 30)
 
     val program = for

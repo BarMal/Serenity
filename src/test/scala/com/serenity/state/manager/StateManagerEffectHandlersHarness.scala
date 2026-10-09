@@ -1,9 +1,10 @@
 package com.serenity.state.manager
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.*
 import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.io.{FileDialog, FileManager}
@@ -62,7 +63,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
     val eventsVar          = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
     val callsVar           = Ref.of[IO, List[String]](Nil).unsafeRunSync()
     val fontConfigsVar     = Ref.of[IO, List[com.serenity.ui.fonts.FontLoader.FontConfig]](Nil).unsafeRunSync()
-    val sessionRoot        = Files.createTempDirectory("effect-handlers-spec")
+    val sessionRoot        = TestTemp.directory("effect-handlers-spec")
     val sessionTriggersVar = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
     val themeNamesRefVar   = Ref.of[IO, List[String]](Nil).unsafeRunSync()
     val quitSignalVar      = Deferred[IO, Unit].unsafeRunSync()

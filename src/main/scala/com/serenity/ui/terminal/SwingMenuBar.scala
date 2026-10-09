@@ -261,8 +261,8 @@ object SwingMenuBar:
 
     private def choiceItem(choose: DynamicMenu.Item.Choose): JMenuItem =
       val item = choose.choice match
-        case _: MenuDispatch.Choice.Buffer     => tickedItem(choose)
-        case _: MenuDispatch.Choice.RecentFile => new JMenuItem(choose.label)
+        case _: MenuDispatch.Choice.Buffer                                          => tickedItem(choose)
+        case _: (MenuDispatch.Choice.RecentFile | MenuDispatch.Choice.RecentFolder) => new JMenuItem(choose.label)
       item.setToolTipText(choose.description.orNull)
       item.getAccessibleContext.setAccessibleDescription(choose.description.orNull)
       item.addActionListener(_ => env.host.guard.activate(MenuDispatch.eventFor(choose.choice), None, false))

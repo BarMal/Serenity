@@ -248,7 +248,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render local images only when they are below the preview resource root" in {
-    val root       = Files.createTempDirectory("serenity-markdown-preview-root")
+    val root       = TestTemp.directory("serenity-markdown-preview-root")
     val localImage = root.resolve("local.png")
     writeSolidImage(localImage, Color(220, 30, 40), width = 8, height = 8)
 
@@ -267,8 +267,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "deny images outside the preview resource root" in {
-    val root        = Files.createTempDirectory("serenity-markdown-preview-root")
-    val outsideRoot = Files.createTempDirectory("serenity-markdown-preview-outside")
+    val root        = TestTemp.directory("serenity-markdown-preview-root")
+    val outsideRoot = TestTemp.directory("serenity-markdown-preview-outside")
     val outside     = outsideRoot.resolve("outside.png")
     writeSolidImage(outside, Color(30, 220, 40), width = 8, height = 8)
 
@@ -287,8 +287,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "deny relative traversal outside the preview resource root" in {
-    val root        = Files.createTempDirectory("serenity-markdown-preview-root")
-    val outsideRoot = Files.createTempDirectory("serenity-markdown-preview-outside")
+    val root        = TestTemp.directory("serenity-markdown-preview-root")
+    val outsideRoot = TestTemp.directory("serenity-markdown-preview-outside")
     val outside     = outsideRoot.resolve("outside.png")
     writeSolidImage(outside, Color(30, 220, 40), width = 8, height = 8)
 
@@ -307,8 +307,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "deny symlinked images that resolve outside the preview resource root" in {
-    val root        = Files.createTempDirectory("serenity-markdown-preview-root")
-    val outsideRoot = Files.createTempDirectory("serenity-markdown-preview-outside")
+    val root        = TestTemp.directory("serenity-markdown-preview-root")
+    val outsideRoot = TestTemp.directory("serenity-markdown-preview-outside")
     val outside     = outsideRoot.resolve("outside.png")
     writeSolidImage(outside, Color(30, 220, 40), width = 8, height = 8)
     val link = Try(Files.createSymbolicLink(root.resolve("linked.png"), outside)).toOption
@@ -393,7 +393,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "bound image bytes and decoded dimensions" in {
-    val root       = Files.createTempDirectory("serenity-markdown-preview-bounds")
+    val root       = TestTemp.directory("serenity-markdown-preview-bounds")
     val largeBytes = root.resolve("large.bin")
     Files.write(largeBytes, Array.fill[Byte](3 * 1024 * 1024)(1))
     val largeImage = root.resolve("large.png")

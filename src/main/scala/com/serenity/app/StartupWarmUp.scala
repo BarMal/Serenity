@@ -1,7 +1,6 @@
 package com.serenity.app
 
 import java.nio.file.{Files, Path}
-import java.util.Comparator
 import java.util.concurrent.Executors
 
 import scala.concurrent.ExecutionContext
@@ -11,6 +10,7 @@ import cats.syntax.all.*
 import com.serenity.config.AppConfig
 import com.serenity.frontend.FrontendRuntime
 import com.serenity.input.PendingInput
+import com.serenity.io.DirectoryTree
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
@@ -181,7 +181,9 @@ object StartupWarmUp:
     given LoggerFactory[IO] = NoOpFactory[IO]
     val noSessionWrites     = SessionManager.SessionPolicy(saveOnFileChange = false, saveOnAppClose = false)
     for
-      sessionRoot <- Resource.make(IO.blocking(Files.createTempDirectory(scratchRoot, "serenity-warm-up")))(deleteTree)
+      sessionRoot <- Resource.make(IO.blocking(Files.createTempDirectory(scratchRoot, "serenity-warm-up")))(
+        DirectoryTree.deleteRecursively
+      )
       editor <- Resource.make(
         StateManager(NoOpLogger[IO], noSessionWrites, sessionRootOverride = Some(sessionRoot), initialConfig = config)
       )(_.runtimeLifecycle.forceQuit)
@@ -191,13 +193,6 @@ object StartupWarmUp:
           editor.updateStateValidated(state => seeded(state, content).getOrElse(state))
       )
     yield editor
-
-  private def deleteTree(root: Path): IO[Unit] =
-    IO.blocking {
-      val paths = Files.walk(root)
-      try paths.sorted(Comparator.reverseOrder[Path]()).forEach(path => Files.deleteIfExists(path): Unit)
-      finally paths.close()
-    }
 
   // Linux ignores Java thread priorities unless the JVM is started with -XX:ThreadPriorityPolicy=1; stopping at the
   // first real input is what actually keeps this out of the way.

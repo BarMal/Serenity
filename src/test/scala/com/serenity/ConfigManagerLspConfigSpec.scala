@@ -14,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
 class ConfigManagerLspConfigSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "ConfigManager" should "load and write LSP language server overrides" in {
-    val configFile = Files.createTempFile("serenity-lsp-config", ".conf")
+    val configFile = TestTemp.file("serenity-lsp-config", ".conf")
     Files.writeString(
       configFile,
       """lsp.scala.enabled = false
@@ -43,7 +43,7 @@ class ConfigManagerLspConfigSpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "preserve commas inside HOCON LSP argument list values" in {
-    val configFile = Files.createTempFile("serenity-lsp-comma-args", ".conf")
+    val configFile = TestTemp.file("serenity-lsp-comma-args", ".conf")
     Files.writeString(configFile, "lsp.python.args = [\"--define=A,B\", \"--stdio\"]\n")
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
@@ -65,7 +65,7 @@ class ConfigManagerLspConfigSpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "round-trip an empty HOCON LSP argument list through structured loading" in {
-    val configFile = Files.createTempFile("serenity-lsp-empty-args", ".conf")
+    val configFile = TestTemp.file("serenity-lsp-empty-args", ".conf")
     val config = AppConfig.default.withLspUserConfig(
       LspUserConfig(
         servers = Some(

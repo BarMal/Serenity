@@ -62,7 +62,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "pin a terminal status when no project task can be detected" in {
-    val tempRoot = Files.createTempDirectory("no-project-workflow")
+    val tempRoot = TestTemp.directory("no-project-workflow")
     try
       val stateManager = createStateManager()
       val bufferPath   = tempRoot.resolve("notes.txt")
@@ -129,7 +129,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   private def withTempRoot[A](prefix: String)(use: Path => A): A =
-    val root = Files.createTempDirectory(prefix)
+    val root = TestTemp.directory(prefix)
     try use(root)
     finally
       val stream = Files.walk(root)

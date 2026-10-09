@@ -27,7 +27,7 @@ class SessionRestoreRevisionSpec extends AnyFlatSpec with Matchers:
     initial.copy(persisted = initial.persisted.copy(buffers = Map(buffer.id -> buffer), bufferOrder = List(buffer.id)))
 
   "A restored clean file-backed buffer" should "take its revision from a read made on the session manager's clock" in {
-    val root = Files.createTempDirectory("session-restore-revision")
+    val root = TestTemp.directory("session-restore-revision")
     val manager = SessionManager(
       root,
       AppThemeManager.create,
@@ -35,7 +35,7 @@ class SessionRestoreRevisionSpec extends AnyFlatSpec with Matchers:
       SessionManager.SessionPolicy(persistUnsavedBuffers = false),
       clock = SettledClock.aMinuteAhead
     )
-    val path = Files.createTempFile("session-restore-revision", ".txt")
+    val path = TestTemp.file("session-restore-revision", ".txt")
     Files.writeString(path, "just written")
     // Ahead of the real clock but behind the manager's, so only a read on the manager's clock finds the stamp old enough.
     Files.setLastModifiedTime(path, FileTime.from(Instant.now.plusSeconds(30)))

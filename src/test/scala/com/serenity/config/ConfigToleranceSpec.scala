@@ -6,6 +6,7 @@ import java.time.Instant
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.config.AppConfigOps.*
 import com.typesafe.config.ConfigFactory
 import org.scalacheck.Gen
@@ -45,7 +46,7 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
   private val currentVersionLine = s"config.version = ${ConfigVersion.Current.value}\n"
 
   private def tempFile(content: String): Path =
-    val file = Files.createTempFile("serenity-tolerance", ".conf")
+    val file = TestTemp.file("serenity-tolerance", ".conf")
     Files.writeString(file, content)
     file
 

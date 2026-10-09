@@ -114,7 +114,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   }
 
   "UiPresetStore" should "persist named presets to disk and replace an existing preset by name" in {
-    val path  = Files.createTempDirectory("ui-preset-store").resolve("ui-presets.json")
+    val path  = TestTemp.directory("ui-preset-store").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val first = UiPreset(
       name = "Focus",
@@ -136,7 +136,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "delete, rename, and duplicate custom presets" in {
-    val path  = Files.createTempDirectory("ui-preset-store-management").resolve("ui-presets.json")
+    val path  = TestTemp.directory("ui-preset-store-management").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val focus = UiPreset(
       name = "Focus",
@@ -163,7 +163,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reject built-in and path-like preset names before writing" in {
-    val path   = Files.createTempDirectory("ui-preset-store-validation").resolve("ui-presets.json")
+    val path   = TestTemp.directory("ui-preset-store-validation").resolve("ui-presets.json")
     val store  = UiPresetStore(path)
     val preset = UiPreset("Writing", AppConfig.default, Some(Theme.dark.name), Nil)
 
@@ -173,7 +173,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve unknown compatible preset and index fields when saving" in {
-    val path   = Files.createTempDirectory("ui-preset-store-future-fields").resolve("ui-presets.json")
+    val path   = TestTemp.directory("ui-preset-store-future-fields").resolve("ui-presets.json")
     val store  = UiPresetStore(path)
     val preset = UiPreset("Future", AppConfig.default, Some(Theme.dark.name), Nil)
     val input = Json.obj(
@@ -190,7 +190,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve unknown compatible config fields when saving" in {
-    val path   = Files.createTempDirectory("ui-preset-store-future-config-fields").resolve("ui-presets.json")
+    val path   = TestTemp.directory("ui-preset-store-future-config-fields").resolve("ui-presets.json")
     val store  = UiPresetStore(path)
     val preset = UiPreset("Future", AppConfig.default, Some(Theme.dark.name), Nil)
     val config = preset.asJson.hcursor.downField("config").focus.getOrElse(fail("preset config should encode"))
@@ -227,7 +227,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reject renaming a preset to an existing normalized name" in {
-    val path  = Files.createTempDirectory("ui-preset-store-rename-collision").resolve("ui-presets.json")
+    val path  = TestTemp.directory("ui-preset-store-rename-collision").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val foo   = UiPreset("Foo", AppConfig.default, Some(Theme.dark.name), Nil)
     val bar   = UiPreset("Bar", AppConfig.default.withLineNumbers(false), Some(Theme.dark.name), Nil)
@@ -239,7 +239,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "treat canonically equivalent Unicode names as one preset identity" in {
-    val path       = Files.createTempDirectory("ui-preset-store-unicode").resolve("ui-presets.json")
+    val path       = TestTemp.directory("ui-preset-store-unicode").resolve("ui-presets.json")
     val store      = UiPresetStore(path)
     val composed   = UiPreset("Caf\u00e9", AppConfig.default, Some(Theme.dark.name), Nil)
     val decomposed = composed.copy(name = "Cafe\u0301")
@@ -250,7 +250,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve compatible unknown fields when overwriting a preset" in {
-    val path  = Files.createTempDirectory("ui-preset-store-overwrite-unknown").resolve("ui-presets.json")
+    val path  = TestTemp.directory("ui-preset-store-overwrite-unknown").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val source = UiPreset(
       "Focus",
@@ -277,7 +277,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
 
   it should "keep the last write when two overwrites race for the same preset" in
     (1 to 20).foreach { attempt =>
-      val path = Files.createTempDirectory(s"ui-preset-store-concurrent-overwrite-$attempt").resolve("ui-presets.json")
+      val path   = TestTemp.directory(s"ui-preset-store-concurrent-overwrite-$attempt").resolve("ui-presets.json")
       val source = UiPreset("Focus", AppConfig.default, Some(Theme.dark.name), Nil)
       val storeA = UiPresetStore(path)
       val storeB = UiPresetStore(path)
@@ -294,7 +294,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
 
   it should "serialize an overwrite with a concurrent deletion" in
     (1 to 20).foreach { attempt =>
-      val path   = Files.createTempDirectory(s"ui-preset-store-overwrite-delete-$attempt").resolve("ui-presets.json")
+      val path   = TestTemp.directory(s"ui-preset-store-overwrite-delete-$attempt").resolve("ui-presets.json")
       val source = UiPreset("Focus", AppConfig.default, Some(Theme.dark.name), Nil)
       val storeA = UiPresetStore(path)
       val storeB = UiPresetStore(path)
@@ -313,7 +313,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
 
   it should "serialize an overwrite with a concurrent rename" in
     (1 to 20).foreach { attempt =>
-      val path   = Files.createTempDirectory(s"ui-preset-store-overwrite-rename-$attempt").resolve("ui-presets.json")
+      val path   = TestTemp.directory(s"ui-preset-store-overwrite-rename-$attempt").resolve("ui-presets.json")
       val source = UiPreset("Focus", AppConfig.default, Some(Theme.dark.name), Nil)
       val storeA = UiPresetStore(path)
       val storeB = UiPresetStore(path)

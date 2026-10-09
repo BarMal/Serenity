@@ -404,7 +404,8 @@ final private[manager] class StateManagerEventPipeline(
       case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab | NextTab |
           PreviousTab | FileSearch | GoToFile | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane |
           _: CloseTabById | MoveTabLeft | MoveTabRight | _: FocusInDirection | ToggleChapterGhosts | OpenChapterNote |
-          ToggleNotesPin | _: RunCommand | SettingsPreviewAbandoned | _: ActivateBuffer | _: OpenRecentPath =>
+          OpenKeywordNote | ToggleNotesPin | _: RunCommand | SettingsPreviewAbandoned | _: ActivateBuffer |
+          _: OpenRecentPath | _: OpenRecentFolder =>
         reduced
       case _: CursorPeekModifierPressed | _: CursorPeekModifierReleased | CursorPeekOtherKeyPressed =>
         applyReducerResult(EventPipelineTransitions.withCursorPeekAnchorResolved(result), prevState)

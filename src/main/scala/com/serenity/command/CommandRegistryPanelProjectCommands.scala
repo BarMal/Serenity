@@ -71,6 +71,13 @@ private[command] object CommandRegistryPanelProjectCommands:
       label = "Open Chapter Note"
     ),
     Command.typed(
+      "open-term-note",
+      "Open the note for the term under the cursor, or the one selected, beside the manuscript.",
+      CommandIntent.View(ViewIntent.OpenKeywordNote),
+      CommandCategory.View,
+      label = "Open Term Note"
+    ),
+    Command.typed(
       "toggle-chapter-ghosts",
       "Show or hide the faded overview under empty chapters. The notes themselves are untouched.",
       CommandIntent.View(ViewIntent.ToggleChapterGhosts),

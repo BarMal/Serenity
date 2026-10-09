@@ -7,6 +7,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.command.{CommandIntent, CommandRegistry, FileIntent}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -36,7 +37,7 @@ class PrivacyStatementSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "be written read-only under its document name" in {
-    val directory = Files.createTempDirectory("privacy-statement-spec")
+    val directory = TestTemp.directory("privacy-statement-spec")
     val written   = PrivacyStatement.writeReadOnly(directory).unsafeRunSync()
 
     written.getFileName.toString shouldBe PrivacyStatement.documentName

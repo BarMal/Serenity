@@ -1,11 +1,10 @@
 package com.serenity.state.manager
 
-import java.nio.file.Files
-
 import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
@@ -53,7 +52,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
     }
 
   "Document analysis with no dictionary to check against" should "show one notice naming where it looked" in {
-    val emptyDirectory = Files.createTempDirectory("serenity-no-dictionary")
+    val emptyDirectory = TestTemp.directory("serenity-no-dictionary")
     val spellCheck =
       SpellCheckConfig(enabled = true, languages = List("en-US"), dictionaryPaths = List(emptyDirectory.toString))
     val first  = stateWith(spellCheck, "hello")
@@ -78,7 +77,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "show no notice when spell check is off" in {
-    val emptyDirectory = Files.createTempDirectory("serenity-no-dictionary")
+    val emptyDirectory = TestTemp.directory("serenity-no-dictionary")
     val state = stateWith(SpellCheckConfig(enabled = false, dictionaryPaths = List(emptyDirectory.toString)), "hello")
 
     val program = for
@@ -94,7 +93,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "show no notice while there is nothing to check" in {
-    val emptyDirectory = Files.createTempDirectory("serenity-no-dictionary")
+    val emptyDirectory = TestTemp.directory("serenity-no-dictionary")
     val state = stateWith(
       SpellCheckConfig(enabled = true, languages = List("en-US"), dictionaryPaths = List(emptyDirectory.toString)),
       ""
@@ -113,7 +112,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave a peek that is already showing alone, and announce once that is gone" in {
-    val emptyDirectory = Files.createTempDirectory("serenity-no-dictionary")
+    val emptyDirectory = TestTemp.directory("serenity-no-dictionary")
     val spellCheck =
       SpellCheckConfig(enabled = true, languages = List("en-US"), dictionaryPaths = List(emptyDirectory.toString))
     val plain = stateWith(spellCheck, "hello")

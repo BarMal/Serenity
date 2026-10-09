@@ -61,6 +61,9 @@ object AppEventReducer:
       case OpenChapterNote =>
         ReducerResult.noEffects(ChapterNoteTransitions.openCurrentChapterNote(state, SplitAxis.Horizontal))
 
+      case OpenKeywordNote =>
+        ReducerResult.noEffects(ChapterNoteTransitions.openCurrentKeywordNote(state, SplitAxis.Horizontal))
+
       case ToggleNotesPin =>
         ReducerResult.noEffects(ChapterNoteTransitions.toggleNotesPin(state))
 
@@ -99,6 +102,9 @@ object AppEventReducer:
         ReducerResult.noEffects(
           if state.persisted.buffers.contains(bufferId) then EditorState.switchToBuffer(state, bufferId) else state
         )
+
+      case OpenRecentFolder(path) =>
+        ReducerResult.withEffect(state, AppEffect.ExecuteCommand(FileFinderCommands.openFolder(path)))
 
       case OpenRecentPath(path) =>
         ReducerResult.withEffect(state, AppEffect.ExecuteCommand(FileFinderCommands.openFile(path)))

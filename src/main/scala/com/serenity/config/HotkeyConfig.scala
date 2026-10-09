@@ -48,6 +48,7 @@ enum HotkeyAction:
   case FocusDown
   case ToggleChapterGhosts
   case OpenChapterNote
+  case OpenKeywordNote
   case ToggleNotesPin
 
   def configKey: String =
@@ -86,6 +87,7 @@ enum HotkeyAction:
       case FocusDown                => "focus_down"
       case ToggleChapterGhosts      => "toggle_chapter_ghosts"
       case OpenChapterNote          => "open_chapter_note"
+      case OpenKeywordNote          => "open_keyword_note"
       case ToggleNotesPin           => "toggle_notes_pin"
 
   def purpose: HotkeyPurpose =
@@ -96,7 +98,7 @@ enum HotkeyAction:
           SplitPaneHorizontal | SplitPaneVertical | ClosePane | FocusLeft | FocusRight | FocusUp | FocusDown =>
         HotkeyPurpose.Navigation
       case ToggleShortcutsHelp | ToggleContextualToolbar | ToggleSyntaxHighlighting | ToggleChapterGhosts |
-          OpenChapterNote | ToggleNotesPin =>
+          OpenChapterNote | OpenKeywordNote | ToggleNotesPin =>
         HotkeyPurpose.View
 
 final case class HotkeyTrigger(
@@ -401,6 +403,7 @@ object HotkeyConfig:
     Map(
       HotkeyAction.ToggleChapterGhosts -> shifted('g'),
       HotkeyAction.OpenChapterNote     -> shifted('n'),
+      HotkeyAction.OpenKeywordNote     -> shifted('k'),
       HotkeyAction.ToggleNotesPin      -> shifted('l')
     )
 

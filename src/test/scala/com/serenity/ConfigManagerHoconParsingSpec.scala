@@ -15,7 +15,7 @@ import org.scalatest.matchers.should.Matchers
 class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "ConfigManager" should "close loaded config files and save using UTF-8" in {
-    val configFile = Files.createTempFile("serenity-config-utf8", ".conf")
+    val configFile = TestTemp.file("serenity-config-utf8", ".conf")
     Files.writeString(
       configFile,
       """typography.prose.family = Sérif
@@ -33,7 +33,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
   }
 
   it should "round-trip HOCON quoting, comments, substitutions, lists, and commas" in {
-    val configFile = Files.createTempFile("serenity-hocon-config", ".conf")
+    val configFile = TestTemp.file("serenity-hocon-config", ".conf")
     Files.writeString(
       configFile,
       """typography.prose.family = "Text Font #1" # trailing comment
@@ -62,7 +62,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
   }
 
   it should "preserve inline slash comments without including them in unquoted values" in {
-    val configFile = Files.createTempFile("serenity-hocon-slash-comment", ".conf")
+    val configFile = TestTemp.file("serenity-hocon-slash-comment", ".conf")
     Files.writeString(
       configFile,
       """typography.prose.family = SansSerif // use the platform sans-serif font
@@ -77,7 +77,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
   }
 
   it should "resolve substitutions inside brace-nested HOCON objects" in {
-    val configFile = Files.createTempFile("serenity-hocon-nested-substitution", ".conf")
+    val configFile = TestTemp.file("serenity-hocon-nested-substitution", ".conf")
     Files.writeString(
       configFile,
       """font {
@@ -94,7 +94,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
   }
 
   it should "load supported settings from inline HOCON objects" in {
-    val configFile = Files.createTempFile("serenity-hocon-inline-object", ".conf")
+    val configFile = TestTemp.file("serenity-hocon-inline-object", ".conf")
     Files.writeString(
       configFile,
       """font = { text = { family = "Inline Serif" }, ui = { family = ${font.text.family} } }
@@ -111,7 +111,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
   }
 
   it should "load legacy values through parser fallback without changing valid HOCON" in {
-    val configFile = Files.createTempFile("serenity-hocon-legacy-path", ".conf")
+    val configFile = TestTemp.file("serenity-hocon-legacy-path", ".conf")
     Files.writeString(
       configFile,
       """typography.prose.family = Legacy Serif
@@ -129,7 +129,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
   }
 
   it should "resolve HOCON substitutions alongside legacy Windows path values" in {
-    val configFile = Files.createTempFile("serenity-mixed-legacy-hocon", ".conf")
+    val configFile = TestTemp.file("serenity-mixed-legacy-hocon", ".conf")
     Files.writeString(
       configFile,
       """typography.prose.family = "Text Font"
@@ -149,7 +149,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
   }
 
   it should "resolve file-relative includes and substitutions from the config path" in {
-    val directory = Files.createTempDirectory("serenity-hocon-include")
+    val directory = TestTemp.directory("serenity-hocon-include")
     val included  = directory.resolve("included.conf")
     val root      = directory.resolve("application.conf")
     Files.writeString(

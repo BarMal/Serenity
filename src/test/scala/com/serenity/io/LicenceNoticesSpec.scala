@@ -7,6 +7,7 @@ import scala.io.Source
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -62,7 +63,7 @@ class LicenceNoticesSpec extends AnyFlatSpec with Matchers:
   }
 
   "The licence document" should "combine the licence and the notices under one read-only file" in {
-    val directory = Files.createTempDirectory("licence-notices-spec")
+    val directory = TestTemp.directory("licence-notices-spec")
     val written   = LicenceNotices.writeReadOnly(directory).unsafeRunSync()
     val rewritten = LicenceNotices.writeReadOnly(directory).unsafeRunSync()
 

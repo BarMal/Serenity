@@ -1,10 +1,11 @@
 package com.serenity.state.manager
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.command.{Command, CommandCategory, CommandIntent, EditIntent}
 import com.serenity.config.{AppConfig, MarkdownViewMode, PreferredWindowSize}
 import com.serenity.lsp.config.LanguageId
@@ -46,7 +47,7 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
 
   private def stateManagerOver(modelRef: Ref[IO, Model]): IO[StateManager] =
     for
-      directory           <- IO.blocking(Files.createTempDirectory("validated-writes-spec"))
+      directory           <- IO.blocking(TestTemp.directory("validated-writes-spec"))
       themeNamesRef       <- Ref.of[IO, List[String]](Nil)
       quitSignal          <- Deferred[IO, Unit]
       lspQueue            <- LspEffectQueue.create
@@ -199,7 +200,7 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
       seen       <- Ref.of[IO, List[AppState]](Nil)
       cacheRef   <- Ref.of[IO, Option[MouseTargetCache]](None)
       operations <- StateManagerOperationBoundary.create(model, quietLogger)
-      directory  <- IO.blocking(Files.createTempDirectory("validated-writes-pipeline"))
+      directory  <- IO.blocking(TestTemp.directory("validated-writes-pipeline"))
     yield
       val stateRef = ModelViews.appRef(model)
       val statePort = new EventStatePort:

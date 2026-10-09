@@ -20,7 +20,7 @@ import org.scalatest.matchers.should.Matchers
 class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "ConfigManager" should "load configuration through the effectful blocking-safe API" in {
-    val configFile = Files.createTempFile("serenity-config-io", ".conf")
+    val configFile = TestTemp.file("serenity-config-io", ".conf")
     Files.writeString(
       configFile,
       """editor.syntax_highlighting = true
@@ -35,7 +35,7 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "load configuration with a structured migration report" in {
-    val configFile = Files.createTempFile("serenity-config-result", ".conf")
+    val configFile = TestTemp.file("serenity-config-result", ".conf")
     Files.writeString(
       configFile,
       """font_code_size = 18.0
@@ -55,7 +55,7 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "fall back to defaults without throwing when a config file cannot be parsed" in {
-    val configFile = Files.createTempFile("serenity-unparseable-sync-config", ".conf")
+    val configFile = TestTemp.file("serenity-unparseable-sync-config", ".conf")
     Files.writeString(configFile, "this is not = valid = hocon {\n")
 
     val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
@@ -65,7 +65,7 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "return default config result with an empty report when the config file is missing" in {
-    val missingConfig = Files.createTempDirectory("serenity-missing-config-result").resolve("missing.conf")
+    val missingConfig = TestTemp.directory("serenity-missing-config-result").resolve("missing.conf")
 
     val result = ConfigManagerTestSupport.loadConfigResult(Some(missingConfig.toString))
 
@@ -74,21 +74,21 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "return defaults through the effectful API when the config file is missing" in {
-    val missingConfig = Files.createTempDirectory("serenity-missing-config").resolve("missing.conf")
+    val missingConfig = TestTemp.directory("serenity-missing-config").resolve("missing.conf")
 
     ConfigManager.loadConfigIO(Some(missingConfig.toString)).unsafeRunSync() shouldBe AppConfig.default
   }
 
   it should "report an invalid value at the effectful configuration boundary without failing the load" in {
     // Issue #2024: one unusable value used to fail the whole load, so every other setting reset to its default.
-    val invalidFile = Files.createTempFile("serenity-invalid-hocon", ".conf")
+    val invalidFile = TestTemp.file("serenity-invalid-hocon", ".conf")
     Files.writeString(invalidFile, "typography.code.size = [not-a-number]\n")
 
     ConfigManager.loadConfigResultIO(Some(invalidFile.toString)).unsafeRunSync() match
       case Right(result) => result.report.invalidEntries.map(_.key) should contain("typography.code.size")
       case Left(error)   => fail(s"expected the load to keep going past one invalid value, received $error")
 
-    val directoryPath = Files.createTempDirectory("serenity-save-error")
+    val directoryPath = TestTemp.directory("serenity-save-error")
     ConfigManager.saveConfigIO(AppConfig.default, directoryPath).unsafeRunSync() match
       case Left(error) => error.path shouldBe directoryPath
       case Right(_)    => fail("expected a structured save error")
@@ -102,7 +102,7 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
     appender.start()
     logger.addAppender(appender)
     try
-      val directoryPath = Files.createTempDirectory("serenity-sync-save-error")
+      val directoryPath = TestTemp.directory("serenity-sync-save-error")
 
       ConfigManagerTestSupport.saveConfig(AppConfig.default, directoryPath) shouldBe false
 
@@ -116,7 +116,7 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "narrow the synchronous load's catch to non-fatal failures, matching the IO-based load path" in {
-    val configFile = Files.createTempFile("serenity-sync-load-error", ".conf")
+    val configFile = TestTemp.file("serenity-sync-load-error", ".conf")
     // Not "key = value" shaped, so the legacy-format reader (which never throws -- see `parseLegacyConfig`) declines
     // it, and it falls through to a real HOCON parse of unparseable syntax, which does throw.
     Files.writeString(configFile, "this is not valid hocon at all {{{\n")
@@ -139,7 +139,7 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "validate hotkey, keymap, and LSP entries through the structured load API" in {
-    val invalidFile = Files.createTempFile("serenity-invalid-bindings", ".conf")
+    val invalidFile = TestTemp.file("serenity-invalid-bindings", ".conf")
     Files.writeString(
       invalidFile,
       """hotkey.save = [not-a-real-trigger]

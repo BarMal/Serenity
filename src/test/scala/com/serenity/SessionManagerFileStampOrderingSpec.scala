@@ -50,7 +50,7 @@ class SessionManagerFileStampOrderingSpec extends AnyFlatSpec with Matchers:
     manager.listSessions().unsafeRunSync().map(_.displayName)
 
   "readIndex" should "not cache an index an in-tick rewrite has since replaced" in {
-    val root = Files.createTempDirectory("session-stamp-ordering")
+    val root = TestTemp.directory("session-stamp-ordering")
     managerOver(root, CoarseTickWorld(root.resolve("unused"), identity)).saveSession(state).unsafeRunSync()
     val world   = CoarseTickWorld(root.resolve("session-index.json"), renameInIndex)
     val manager = managerOver(root, world)
@@ -62,7 +62,7 @@ class SessionManagerFileStampOrderingSpec extends AnyFlatSpec with Matchers:
   }
 
   "remember" should "not cache the index a save wrote once an in-tick rewrite has replaced it" in {
-    val root    = Files.createTempDirectory("session-stamp-ordering")
+    val root    = TestTemp.directory("session-stamp-ordering")
     val world   = CoarseTickWorld(root.resolve("session-index.json"), renameInIndex)
     val manager = managerOver(root, world)
 
@@ -73,7 +73,7 @@ class SessionManagerFileStampOrderingSpec extends AnyFlatSpec with Matchers:
   }
 
   "commitCurrent" should "not skip the next save because of a stamp an in-tick rewrite has outlived" in {
-    val root        = Files.createTempDirectory("session-stamp-ordering")
+    val root        = TestTemp.directory("session-stamp-ordering")
     val sessionFile = root.resolve("sessions").resolve("session.json")
     val world       = CoarseTickWorld(sessionFile, fillWithX)
     val manager     = managerOver(root, world)

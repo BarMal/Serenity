@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.state.manager.FileOpener
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -35,8 +36,8 @@ class ForwardedOpenSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "pin a forwarded folder as the root, once, and open the files beside it" in {
-    val folder = Files.createTempDirectory("forwarded-open")
-    val other  = Files.createTempDirectory("forwarded-open-other")
+    val folder = TestTemp.directory("forwarded-open")
+    val other  = TestTemp.directory("forwarded-open-other")
     val file   = Paths.get("/work/a.md")
     val program = for
       files   <- Ref.of[IO, List[Path]](Nil)

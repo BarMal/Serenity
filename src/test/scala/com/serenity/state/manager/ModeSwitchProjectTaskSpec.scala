@@ -7,13 +7,13 @@ import scala.concurrent.duration.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO}
 import cats.syntax.all.*
-import com.serenity.StateManagerTestSupport
 import com.serenity.command.*
 import com.serenity.config.{AppConfig, AppMode, ConfigManager}
 import com.serenity.project.{ProjectTaskKind, ProjectTaskResult}
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.AwaitCondition.awaitValue
+import com.serenity.{StateManagerTestSupport, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -94,7 +94,7 @@ class ModeSwitchProjectTaskSpec extends AnyFlatSpec with Matchers with StateMana
     def close(): Unit = manager.runtimeLifecycle.forceQuit.timeout(10.seconds).attempt.unsafeRunSync(): Unit
 
   private def withRig(test: Rig => Unit): Unit =
-    val directory = Files.createTempDirectory("mode-switch-project-task")
+    val directory = TestTemp.directory("mode-switch-project-task")
     Files.writeString(directory.resolve("Makefile"), "all:\n\ttrue\n")
     val rig =
       (for

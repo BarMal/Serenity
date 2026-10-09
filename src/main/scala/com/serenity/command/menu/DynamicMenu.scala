@@ -28,8 +28,10 @@ object DynamicMenu:
 
   val RecentFilesLimit: Int = StartupPageContent.RecentFilesLimit
 
-  val OpenRecentTitle: String = "Open Recent"
-  val NoRecentFiles: String   = "(No recent files)"
+  val OpenRecentTitle: String       = "Open Recent"
+  val NoRecentFiles: String         = "(No recent files)"
+  val OpenRecentFolderTitle: String = "Open Recent Folder"
+  val NoRecentFolders: String       = "(No recent folders)"
 
   private val clearRecentFiles = "clear-recent-files"
 
@@ -40,23 +42,30 @@ object DynamicMenu:
 
   def expand(source: DynamicSource, app: AppState, registry: CommandRegistry): Section =
     source match
-      case DynamicSource.RecentFiles => Section(Some(OpenRecentTitle), recentFiles(app, registry))
-      case DynamicSource.OpenBuffers => Section(None, openBuffers(app))
+      case DynamicSource.RecentFiles   => Section(Some(OpenRecentTitle), recentFiles(app, registry))
+      case DynamicSource.RecentFolders => Section(Some(OpenRecentFolderTitle), recentFolders(app, registry))
+      case DynamicSource.OpenBuffers   => Section(None, openBuffers(app))
 
   private def recentFiles(app: AppState, registry: CommandRegistry): List[Item] =
-    val paths = app.persisted.recentFiles.map(_.toAbsolutePath.normalize).distinct.take(RecentFilesLimit)
-    if paths.isEmpty then List(Item.Placeholder(NoRecentFiles))
-    else
-      paths.map(recentItem) ++ registry
-        .findCommand(clearRecentFiles)
-        .toList
-        .flatMap(c => List(Item.Separator, Item.Run(c)))
+    recentEntries(app.persisted.recentFiles, NoRecentFiles, Choice.RecentFile.apply) ++ clearItems(app, registry)
 
-  private def recentItem(path: Path): Item =
+  private def recentFolders(app: AppState, registry: CommandRegistry): List[Item] =
+    recentEntries(app.persisted.recentFolders, NoRecentFolders, Choice.RecentFolder.apply) ++ clearItems(app, registry)
+
+  private def recentEntries(recent: List[Path], none: String, choice: Path => Choice): List[Item] =
+    val paths = recent.map(_.toAbsolutePath.normalize).distinct.take(RecentFilesLimit)
+    if paths.isEmpty then List(Item.Placeholder(none)) else paths.map(recentItem(_, choice))
+
+  /** One Clear Recent serves both menus, so either offers it while there is anything to forget. */
+  private def clearItems(app: AppState, registry: CommandRegistry): List[Item] =
+    if app.persisted.recentFiles.isEmpty && app.persisted.recentFolders.isEmpty then Nil
+    else registry.findCommand(clearRecentFiles).toList.flatMap(c => List(Item.Separator, Item.Run(c)))
+
+  private def recentItem(path: Path, choice: Path => Choice): Item =
     Item.Choose(
       label = Option(path.getFileName).getOrElse(path).toString,
       description = Option(path.getParent).map(_.toString),
-      choice = Choice.RecentFile(path),
+      choice = choice(path),
       checked = false,
       mnemonic = None
     )

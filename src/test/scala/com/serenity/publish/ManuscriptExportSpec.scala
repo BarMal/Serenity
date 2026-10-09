@@ -8,6 +8,7 @@ import java.util.zip.ZipInputStream
 import scala.util.Using
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.manuscript.{CompileError, ManuscriptFileFormat, SourceDocument}
 import com.serenity.richtext.{DocxDocumentCodec, RichTextDocument}
 import org.apache.pdfbox.Loader
@@ -53,7 +54,7 @@ class ManuscriptExportSpec extends AnyFlatSpec with Matchers with EitherValues:
     finally input.close()
 
   "ManuscriptExport" should "compile an EPUB from the same sources, language and identifier a manuscript.conf sets" in {
-    val directory = Files.createTempDirectory("manuscript-export-epub")
+    val directory = TestTemp.directory("manuscript-export-epub")
     Files.writeString(directory.resolve("01.md"), "# Arrival\n\nFrom disk.")
     Files.writeString(
       directory.resolve("manuscript.conf"),
@@ -75,7 +76,7 @@ class ManuscriptExportSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "write the EPUB to the target, stamped with the time of the export" in {
-    val directory = Files.createTempDirectory("manuscript-export-epub-write")
+    val directory = TestTemp.directory("manuscript-export-epub-write")
     val target    = directory.resolve("out.epub")
 
     ManuscriptExport.writeEpub(ExportOrigin(None, SourceDocument.Markdown("Text.")), target).unsafeRunSync()
@@ -86,7 +87,7 @@ class ManuscriptExportSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "paginate and paint a PDF from the conf's title and sources, stamped with the given date" in {
-    val directory = Files.createTempDirectory("manuscript-export-pdf")
+    val directory = TestTemp.directory("manuscript-export-pdf")
     Files.writeString(directory.resolve("01.md"), "# Arrival\n\nFrom disk.")
     Files.writeString(
       directory.resolve("manuscript.conf"),
@@ -116,7 +117,7 @@ class ManuscriptExportSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "write the PDF to the target" in {
-    val target = Files.createTempDirectory("manuscript-export-pdf-write").resolve("out.pdf")
+    val target = TestTemp.directory("manuscript-export-pdf-write").resolve("out.pdf")
 
     ManuscriptExport.writePdf(ExportOrigin(None, SourceDocument.Markdown("Text.")), target).unsafeRunSync()
 
@@ -124,7 +125,7 @@ class ManuscriptExportSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "export the snapshot alone, titled after its file, when there is no manuscript.conf" in {
-    val directory = Files.createTempDirectory("manuscript-export-single")
+    val directory = TestTemp.directory("manuscript-export-single")
     val origin    = ExportOrigin(Some(directory.resolve("novel.md")), SourceDocument.Markdown("# One\n\nUnsaved text."))
 
     val paragraphs = readBack(ManuscriptExport.compiledDocx(origin).unsafeRunSync())
@@ -133,7 +134,7 @@ class ManuscriptExportSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "compile the included sources a manuscript.conf lists, in order, taking the origin from its snapshot" in {
-    val directory = Files.createTempDirectory("manuscript-export-set")
+    val directory = TestTemp.directory("manuscript-export-set")
     Files.writeString(directory.resolve("01.md"), "# Arrival\n\nFrom disk.")
     Files.writeString(directory.resolve("02.md"), "Stale text on disk.")
     Files.writeString(directory.resolve("notes.md"), "# Notes\n\nNever exported.")
@@ -166,7 +167,7 @@ class ManuscriptExportSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "fail with the compile error when manuscript.conf is invalid" in {
-    val directory = Files.createTempDirectory("manuscript-export-invalid")
+    val directory = TestTemp.directory("manuscript-export-invalid")
     Files.writeString(directory.resolve("manuscript.conf"), "format = fancy")
     val origin = ExportOrigin(Some(directory.resolve("novel.md")), SourceDocument.Markdown("Text."))
 
@@ -177,7 +178,7 @@ class ManuscriptExportSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "write the DOCX to the target" in {
-    val directory = Files.createTempDirectory("manuscript-export-write")
+    val directory = TestTemp.directory("manuscript-export-write")
     val target    = directory.resolve("out.docx")
 
     ManuscriptExport.writeDocx(ExportOrigin(None, SourceDocument.Markdown("Text.")), target).unsafeRunSync()

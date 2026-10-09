@@ -17,6 +17,7 @@ case object ToggleShortcutsHelp     extends GlobalAppEvent // F1 (issue #1247)
 case object ToggleTabList           extends GlobalAppEvent // issue #1307
 case object ToggleChapterGhosts     extends GlobalAppEvent // Ctrl+Shift+G
 case object OpenChapterNote         extends GlobalAppEvent // Ctrl+Shift+N
+case object OpenKeywordNote         extends GlobalAppEvent // Ctrl+Shift+K
 case object ToggleNotesPin          extends GlobalAppEvent // Ctrl+Shift+L
 case object ToggleRecentFilesInMode extends GlobalAppEvent // issue #1307
 
@@ -50,6 +51,9 @@ final case class ActivateBuffer(bufferId: BufferId) extends GlobalAppEvent
 
 /** Opens a file chosen from the Open Recent menu, as choosing it on the start page does. */
 final case class OpenRecentPath(path: Path) extends GlobalAppEvent
+
+/** Opens a folder chosen from the Open Recent Folder menu as the project root, as Open Folder does. */
+final case class OpenRecentFolder(path: Path) extends GlobalAppEvent
 
 /** Moves focus to the editor pane or docked panel next to the focused one on screen (Alt+Arrow by default). */
 final case class FocusInDirection(direction: Direction) extends GlobalAppEvent

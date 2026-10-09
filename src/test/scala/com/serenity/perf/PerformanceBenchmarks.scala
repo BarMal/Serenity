@@ -3,6 +3,7 @@ package com.serenity.perf
 import java.nio.file.{Files, Path}
 
 import cats.effect.{IO, Resource}
+import com.serenity.TestTemp
 import com.serenity.lsp.client.LspFramer
 import com.serenity.perf.BenchmarkFixtures.largeSingleLineJson
 import com.serenity.project.{ProjectTaskDetector, ProjectTaskKind, ProjectTaskTerminal}
@@ -115,7 +116,7 @@ object PerformanceBenchmarks:
   private def projectTaskFixtureResource: Resource[IO, Path] =
     Resource.make(
       IO.blocking {
-        val root = Files.createTempDirectory("serenity-performance-project-")
+        val root = TestTemp.directory("serenity-performance-project-")
         val _    = Files.writeString(root.resolve("build.sbt"), "// deterministic benchmark fixture\n")
         root
       }

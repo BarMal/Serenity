@@ -5,6 +5,7 @@ import java.time.Instant
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.diagnostics.{CrashRecord, PreviousRun, RuntimeIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -15,7 +16,7 @@ class StartupFailureSpec extends AnyFlatSpec with Matchers:
   private val at       = Instant.parse("2026-10-06T08:30:00Z")
   private val failure  = IllegalStateException("no fonts could be loaded")
 
-  private def record(): CrashRecord = CrashRecord(Files.createTempDirectory("serenity-startup-failure").resolve("logs"))
+  private def record(): CrashRecord = CrashRecord(TestTemp.directory("serenity-startup-failure").resolve("logs"))
 
   final private case class Outcome(notices: List[StartupFailure.Notice], console: List[String])
 
@@ -77,7 +78,7 @@ class StartupFailureSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "still show the notice when the crash file cannot be written" in {
-    val blocker = Files.createTempFile("serenity-not-a-directory", ".txt")
+    val blocker = TestTemp.file("serenity-not-a-directory", ".txt")
     val outcome = run(CrashRecord(blocker.resolve("logs")), _ => IO.unit)
 
     outcome.notices.map(_.crashFile) shouldBe List(None)

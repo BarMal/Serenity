@@ -6,7 +6,7 @@ import java.nio.file.{FileSystems, Files, Path}
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.BuildInfo
+import com.serenity.{BuildInfo, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -84,7 +84,7 @@ class AboutDocumentSpec extends AnyFlatSpec with Matchers:
   }
 
   "AboutDocument.writeReadOnly" should "write the about block, licence and notices, read-only and rewritable" in {
-    val directory = Files.createTempDirectory("about-document-spec")
+    val directory = TestTemp.directory("about-document-spec")
     val written   = AboutDocument.writeReadOnly(directory).unsafeRunSync()
     val rewritten = AboutDocument.writeReadOnly(directory).unsafeRunSync()
 

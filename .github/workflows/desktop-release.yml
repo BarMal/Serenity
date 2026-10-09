@@ -57,7 +57,7 @@ jobs:
 
       - name: Build runnable JAR
         shell: bash
-        run: sbt -v clean assembly
+        run: sbt -v clean assembly writePackageVersion
 
       - name: Verify assembled JAR service providers
         shell: bash
@@ -78,7 +78,7 @@ jobs:
             --input package-input
             --main-jar Serenity.jar
             --main-class Main
-            --app-version "1.0.${GITHUB_RUN_NUMBER:-0}"
+            --app-version "$(cat target/package/app-version.txt)"
             --vendor "BarMal"
             --dest dist
           )

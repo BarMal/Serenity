@@ -3,6 +3,7 @@ package com.serenity.spellcheck
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 
+import com.serenity.TestTemp
 import com.serenity.config.SpellCheckConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -11,7 +12,7 @@ import org.scalatest.matchers.should.Matchers
 class PartialMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
 
   private def dictionaryDirectory(prefix: String, names: String*): Path =
-    val directory = Files.createTempDirectory(prefix)
+    val directory = TestTemp.directory(prefix)
     names.foreach { name =>
       Files.writeString(directory.resolve(s"$name.dic"), "1\ncolour", StandardCharsets.UTF_8)
       Files.writeString(directory.resolve(s"$name.aff"), "SET UTF-8", StandardCharsets.UTF_8)
@@ -46,7 +47,7 @@ class PartialMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "never name the bundled British English as missing" in {
-    val emptyOsDirectory = Files.createTempDirectory("serenity-partial-bundled")
+    val emptyOsDirectory = TestTemp.directory("serenity-partial-bundled")
 
     val notice = snapshot(List("en-GB", "fr"), emptyOsDirectory).context.missingDictionary
       .getOrElse(fail("expected a notice for fr"))
@@ -64,7 +65,7 @@ class PartialMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
   }
 
   "A language set with no dictionary at all" should "still produce a notice naming each language" in {
-    val emptyOsDirectory = Files.createTempDirectory("serenity-none")
+    val emptyOsDirectory = TestTemp.directory("serenity-none")
 
     val notice = snapshot(List("en-US", "de"), emptyOsDirectory).context.missingDictionary
       .getOrElse(fail("expected a notice"))
@@ -86,19 +87,19 @@ class PartialMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
   }
 
   "A language with no dictionary" should "still be named in the notice" in {
-    val notice = snapshot(List("fr"), Files.createTempDirectory("serenity-fallback-fr")).context.missingDictionary
+    val notice = snapshot(List("fr"), TestTemp.directory("serenity-fallback-fr")).context.missingDictionary
       .getOrElse(fail("expected a notice for fr"))
 
     notice should (include("fr") and include("hunspell-fr"))
   }
 
   it should "not name English when only the generic en is configured, as the bundled dictionary stands in" in {
-    snapshot(List("en"), Files.createTempDirectory("serenity-fallback-en")).context.missingDictionary shouldBe None
+    snapshot(List("en"), TestTemp.directory("serenity-fallback-en")).context.missingDictionary shouldBe None
   }
 
   it should "name only the language that has no dictionary when en is configured beside it" in {
     val notice =
-      snapshot(List("en", "fr"), Files.createTempDirectory("serenity-fallback-both")).context.missingDictionary
+      snapshot(List("en", "fr"), TestTemp.directory("serenity-fallback-both")).context.missingDictionary
         .getOrElse(fail("expected a notice"))
 
     notice should (include("hunspell-fr") and not include "hunspell-en")
@@ -106,7 +107,7 @@ class PartialMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
 
   it should "not check any word" in {
     val config  = SpellCheckConfig(languages = List("fr"))
-    val context = snapshot(config.languages, Files.createTempDirectory("serenity-fallback-check")).context
+    val context = snapshot(config.languages, TestTemp.directory("serenity-fallback-check")).context
 
     SpellChecker.analyzeText("bonjour monde wurld", config, context) shouldBe Nil
   }
@@ -115,11 +116,11 @@ class PartialMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
     val config = SpellCheckConfig(enabled = false, languages = List("fr"))
 
     DictionaryLoader
-      .loadSnapshot(config, DictionaryCache(), List(Files.createTempDirectory("serenity-fallback-off").toString))
+      .loadSnapshot(config, DictionaryCache(), List(TestTemp.directory("serenity-fallback-off").toString))
       .context
       .missingDictionary shouldBe None
   }
 
   "The bundled British English dictionary" should "serve en-GB, so no notice names it with an empty system" in {
-    snapshot(List("en-GB"), Files.createTempDirectory("serenity-bundled-only")).context.missingDictionary shouldBe None
+    snapshot(List("en-GB"), TestTemp.directory("serenity-bundled-only")).context.missingDictionary shouldBe None
   }

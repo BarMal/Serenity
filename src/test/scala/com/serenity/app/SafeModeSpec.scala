@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.command.{CommandRegistry, SafeModeCommands}
 import com.serenity.config.AppConfig
 import com.serenity.lsp.config.{LanguageId, LspServerRegistry}
@@ -49,7 +50,7 @@ class SafeModeSpec extends AnyFlatSpec with Matchers:
   }
 
   "StartupRecovery.Plan.configPersistencePath" should "never write the config file in safe mode" in {
-    val path = Files.createTempDirectory("serenity-safe").resolve("config.conf")
+    val path = TestTemp.directory("serenity-safe").resolve("config.conf")
     StartupRecovery.Plan(safeMode = true, notices = Nil).configPersistencePath(path) shouldBe None
     StartupRecovery.Plan(safeMode = false, notices = Nil).configPersistencePath(path) shouldBe Some(path)
   }
@@ -117,7 +118,7 @@ class SafeModeSpec extends AnyFlatSpec with Matchers:
   }
 
   "StartupRecovery.Plan.uiPresetStore" should "keep presets beside the scratch session so the user's file is never written" in {
-    val root   = Files.createTempDirectory("serenity-safe-presets")
+    val root   = TestTemp.directory("serenity-safe-presets")
     val plan   = StartupRecovery.Plan(safeMode = true, notices = Nil)
     val preset = UiPreset.builtIns.head.copy(name = "Mine")
 

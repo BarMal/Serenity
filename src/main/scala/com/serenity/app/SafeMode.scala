@@ -1,13 +1,10 @@
 package com.serenity.app
 
 import java.nio.file.{Files, Path}
-import java.util.Comparator
-
-import scala.jdk.CollectionConverters.*
-import scala.util.Using
 
 import cats.effect.{IO, Resource}
 import com.serenity.config.{AppConfig, SpellCheckConfig}
+import com.serenity.io.DirectoryTree
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.state.models.StatusLineText
 
@@ -36,12 +33,4 @@ object SafeMode:
 
   /** Where safe mode keeps the session it writes while running, so the real one is neither read nor replaced. */
   def scratchSessionRoot: Resource[IO, Path] =
-    Resource.make(IO.blocking(Files.createTempDirectory("serenity-safe-mode")))(root =>
-      IO.blocking(Using.resource(Files.walk(root))(_.sorted(Comparator.reverseOrder[Path]()).iterator().asScala.toList))
-        .flatMap(paths =>
-          IO.blocking(paths.foreach { path =>
-            val _ = Files.deleteIfExists(path)
-          })
-        )
-        .handleError(_ => ())
-    )
+    Resource.make(IO.blocking(Files.createTempDirectory("serenity-safe-mode")))(DirectoryTree.deleteRecursively)

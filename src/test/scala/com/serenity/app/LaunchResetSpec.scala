@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import java.time.Instant
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.app.LaunchReset.Moved
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -25,7 +26,7 @@ class LaunchResetSpec extends AnyFlatSpec with Matchers:
   }
 
   "LaunchReset.backUpConfig" should "move the config file aside to a timestamped sibling, keeping its content" in {
-    val root   = Files.createTempDirectory("serenity-reset-config")
+    val root   = TestTemp.directory("serenity-reset-config")
     val config = write(root.resolve("config.conf"), "theme = \"light\"\n")
 
     val moved = LaunchReset.backUpConfig(config, at).unsafeRunSync()
@@ -37,13 +38,13 @@ class LaunchResetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "do nothing when there is no config file" in {
-    val root = Files.createTempDirectory("serenity-reset-config")
+    val root = TestTemp.directory("serenity-reset-config")
     LaunchReset.backUpConfig(root.resolve("config.conf"), at).unsafeRunSync() shouldBe Nil
     Files.list(root).count() shouldBe 0L
   }
 
   it should "fail rather than overwrite an existing backup of the same name" in {
-    val root     = Files.createTempDirectory("serenity-reset-config")
+    val root     = TestTemp.directory("serenity-reset-config")
     val config   = write(root.resolve("config.conf"), "new")
     val existing = write(root.resolve("config.conf.reset-1790000000123"), "older backup")
 
@@ -53,7 +54,7 @@ class LaunchResetSpec extends AnyFlatSpec with Matchers:
   }
 
   "LaunchReset.backUpSession" should "move every session file into one timestamped folder, keeping their content" in {
-    val root    = Files.createTempDirectory("serenity-reset-session")
+    val root    = TestTemp.directory("serenity-reset-session")
     val index   = write(root.resolve("session-index.json"), "{\"index\":1}")
     val pending = write(root.resolve("session-write.pending.json"), "{\"pending\":1}")
     val session = write(root.resolve("sessions").resolve("session.json"), "{\"session\":1}")
@@ -73,7 +74,7 @@ class LaunchResetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave everything that is not session state where it is" in {
-    val root   = Files.createTempDirectory("serenity-reset-session")
+    val root   = TestTemp.directory("serenity-reset-session")
     val config = write(root.resolve("config.conf"), "kept")
     val preset = write(root.resolve("ui-presets.json"), "kept")
     val theme  = write(root.resolve("themes").resolve("mine.conf"), "kept")
@@ -85,7 +86,7 @@ class LaunchResetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "move only what exists, and create no backup folder when there is no session" in {
-    val root = Files.createTempDirectory("serenity-reset-session")
+    val root = TestTemp.directory("serenity-reset-session")
     LaunchReset.backUpSession(root, at).unsafeRunSync() shouldBe Nil
     Files.exists(root.resolve("session-reset-1790000000123")) shouldBe false
 

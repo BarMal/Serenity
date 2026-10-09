@@ -466,7 +466,7 @@ object UiScenarioDriver:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger
     for
-      configuredSessionRoot <- sessionRoot.fold(IO.blocking(Files.createTempDirectory(s"$name-ui-scenario")))(IO.pure)
+      configuredSessionRoot <- sessionRoot.fold(IO.blocking(TestTemp.directory(s"$name-ui-scenario")))(IO.pure)
       configuredInitialConfig <-
         if isolatedConfig then IO.blocking(ConfigManagerTestSupport.loadConfig(Some(isolatedConfigPath.toString)))
         else IO.pure(initialConfig)

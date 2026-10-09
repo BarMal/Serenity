@@ -1,6 +1,6 @@
 package com.serenity.state.core
 
-import com.serenity.document.{DocumentNavigation, DocumentOutline}
+import com.serenity.document.{DocumentNavigation, DocumentOutline, KeywordMatches}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{SplitAxis, Symbol}
@@ -16,11 +16,22 @@ object ChapterNoteTransitions:
     * of its own.
     */
   def openCurrentChapterNote(state: AppState, axis: SplitAxis)(using Balance): AppState =
+    openNote(state, axis)(buffer => chapterKeyAt(buffer, buffer.editing.cursors.head.position))
+
+  /** Shows the note for the word under the cursor (or the words selected on one line) the same way, creating it the
+    * first time. The note is keyed by the words' normalised text, so every spelling and every occurrence reaches it.
+    * Does nothing when the cursor is not on a word, and inside a note.
+    */
+  def openCurrentKeywordNote(state: AppState, axis: SplitAxis)(using Balance): AppState =
+    openNote(state, axis)(keywordUnderCursor)
+
+  private def openNote(state: AppState, axis: SplitAxis)(keyFor: Buffer => Option[NoteKey])(using
+    Balance
+  ): AppState =
     val opened =
       for
         buffer <- state.activeBuffer.filterNot(_.hidden)
-        cursor <- state.activeCursorPosition
-        key    <- chapterKeyAt(buffer, cursor)
+        key    <- keyFor(buffer)
       yield
         val sourcePane         = state.persisted.layout.activeEditorPaneId
         val (withNote, noteId) = noteBuffer(state, buffer.id, key)
@@ -36,6 +47,18 @@ object ChapterNoteTransitions:
       state.runtime.copy(notesPane = state.runtime.notesPane.map(pane => pane.copy(pinned = !pane.pinned)))
     )
 
+  /** The keyword note a position touches: the longest of the buffer's keywords occurring there. */
+  def keywordKeyAt(buffer: Buffer, cursor: CursorPosition): Option[NoteKey] =
+    val terms = buffer.annotations.notes.keys.collect { case NoteKey.Keyword(term) => term }
+    Option
+      .when(terms.nonEmpty)(terms)
+      .flatMap(listed =>
+        buffer.document.content
+          .getLine(cursor.line)
+          .flatMap(line => KeywordMatches.termAt(line, cursor.column, listed))
+      )
+      .map(NoteKey.Keyword(_))
+
   /** A buffer's chapter headings in document order, parsed again only when its text changes (#1848). */
   val chapterHeadings: DerivedValue[Buffer, Buffer, List[(HeadingIdentity, Symbol)]] =
     DerivedValue(
@@ -44,7 +67,7 @@ object ChapterNoteTransitions:
       compute = buffer => HeadingIdentity.forHeadings(DocumentOutline.forBuffer(buffer))
     )
 
-  /** The note a position in `buffer` belongs to: the chapter whose heading is the last at or before it. */
+  /** The note of the chapter whose heading is the last at or before a position in `buffer`. */
   def chapterKeyAt(buffer: Buffer, cursor: CursorPosition): Option[NoteKey] =
     chapterKeyIn(chapterHeadings.compute(buffer), cursor)
 
@@ -54,6 +77,26 @@ object ChapterNoteTransitions:
       .flatMap(current =>
         headings.collectFirst { case (found, heading) if heading == current => NoteKey.Chapter(found) }
       )
+
+  private def keywordUnderCursor(buffer: Buffer): Option[NoteKey] =
+    val cursor = buffer.editing.cursors.head
+    buffer.document.content
+      .getLine(cursor.position.line)
+      .flatMap { line =>
+        val selected = cursor.selection
+          .filter(selection => selection.anchor.line == selection.focus.line)
+          .map { selection =>
+            val start = selection.anchor.column.min(selection.focus.column)
+            val end   = selection.anchor.column.max(selection.focus.column)
+            line.slice(start, end)
+          }
+        selected
+          .map(KeywordMatches.normalized)
+          .filter(_.nonEmpty)
+          .orElse(KeywordMatches.wordAt(line, cursor.position.column).map(KeywordMatches.normalized))
+      }
+      .filter(_.nonEmpty)
+      .map(NoteKey.Keyword(_))
 
   private def noteBuffer(state: AppState, ownerId: BufferId, key: NoteKey)(using Balance): (AppState, BufferId) =
     val existing = state.persisted.buffers.get(ownerId).flatMap(_.annotations.notes.get(key))

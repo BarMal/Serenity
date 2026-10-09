@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -20,7 +21,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
   private val PollWindow = 3.seconds
 
   "pollChangedFiles" should "report a file written into a synced directory" in {
-    val directory = Files.createTempDirectory("file-change-watcher")
+    val directory = TestTemp.directory("file-change-watcher")
     val file      = directory.resolve("watched.txt")
     Files.writeString(file, "initial")
 
@@ -36,7 +37,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report nothing when no synced directory changes within the poll window" in {
-    val directory = Files.createTempDirectory("file-change-watcher-quiet")
+    val directory = TestTemp.directory("file-change-watcher-quiet")
 
     FileChangeWatcher.create
       .use { watcher =>
@@ -49,7 +50,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "stop reporting changes in a directory once it is dropped from the synced set" in {
-    val directory = Files.createTempDirectory("file-change-watcher-drop")
+    val directory = TestTemp.directory("file-change-watcher-drop")
     val file      = directory.resolve("watched.txt")
     Files.writeString(file, "initial")
 
@@ -66,8 +67,8 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "track changes across multiple synced directories independently" in {
-    val directoryA = Files.createTempDirectory("file-change-watcher-a")
-    val directoryB = Files.createTempDirectory("file-change-watcher-b")
+    val directoryA = TestTemp.directory("file-change-watcher-a")
+    val directoryB = TestTemp.directory("file-change-watcher-b")
     val fileA      = directoryA.resolve("a.txt")
     val fileB      = directoryB.resolve("b.txt")
     Files.writeString(fileA, "initial")
@@ -85,7 +86,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
   }
 
   "awaitChangedFiles" should "report a burst of writes within the settle window as one change (#1885)" in {
-    val directory = Files.createTempDirectory("file-change-watcher-burst")
+    val directory = TestTemp.directory("file-change-watcher-burst")
     val file      = directory.resolve("watched.txt")
     Files.writeString(file, "initial")
 
@@ -105,7 +106,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
   }
 
   "The polling fallback" should "report a file written into a synced directory" in {
-    val directory = Files.createTempDirectory("file-change-watcher-polling")
+    val directory = TestTemp.directory("file-change-watcher-polling")
     val file      = directory.resolve("watched.txt")
     Files.writeString(file, "initial")
 
@@ -122,7 +123,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report nothing when no synced directory changes" in {
-    val directory = Files.createTempDirectory("file-change-watcher-polling-quiet")
+    val directory = TestTemp.directory("file-change-watcher-polling-quiet")
     Files.writeString(directory.resolve("watched.txt"), "initial")
 
     FileChangeWatcher
@@ -132,7 +133,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report a burst of writes within the settle window as one change (#1885)" in {
-    val directory = Files.createTempDirectory("file-change-watcher-polling-burst")
+    val directory = TestTemp.directory("file-change-watcher-polling-burst")
     val file      = directory.resolve("watched.txt")
     Files.writeString(file, "initial")
 
@@ -166,7 +167,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
   }
 
   "sync" should "be idempotent when called repeatedly with the same directory" in {
-    val directory = Files.createTempDirectory("file-change-watcher-idempotent")
+    val directory = TestTemp.directory("file-change-watcher-idempotent")
     val file      = directory.resolve("watched.txt")
     Files.writeString(file, "initial")
 

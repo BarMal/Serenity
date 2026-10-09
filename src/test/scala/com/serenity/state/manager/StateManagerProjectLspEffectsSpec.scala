@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.{LspIntent, ProjectIntent}
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
@@ -116,7 +117,7 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report no task found when no project marker is detected from the focused buffer's directory" in {
-    val directory = Files.createTempDirectory("project-lsp-spec-empty")
+    val directory = TestTemp.directory("project-lsp-spec-empty")
     try
       val fixture      = harness()
       val filePath     = directory.resolve("notes.txt")
@@ -133,7 +134,7 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "detect and start the project task for the ecosystem marker found in the buffer's directory" in {
-    val directory = Files.createTempDirectory("project-lsp-spec-make")
+    val directory = TestTemp.directory("project-lsp-spec-make")
     val makefile  = directory.resolve("Makefile")
     try
       Files.writeString(makefile, "all:\n\ttrue\n")

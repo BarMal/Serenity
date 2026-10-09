@@ -29,7 +29,7 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
   // A polling watcher lists the whole directory on every poll, so a file directly in the shared temp directory makes
   // each poll scan every other suite's leftovers; each test watches a directory of its own.
   private def ownFile(prefix: String): Path =
-    Files.createFile(Files.createTempDirectory(prefix).resolve("notes.md"))
+    Files.createFile(TestTemp.directory(prefix).resolve("notes.md"))
 
   private def removeOwn(file: Path): Unit =
     Files.deleteIfExists(file)
@@ -94,7 +94,7 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
     // #1691: a dictionary directory is watched the same way an open buffer's parent directory is -- via
     // FileChangeWatcher.sync/pollChangedFiles -- with no open buffers at all, proving the invalidation path doesn't
     // depend on any buffer being open (unlike the pre-existing focus-in-only backstop).
-    val dictionaryDirectory = Files.createTempDirectory("external-change-watch-dictionary")
+    val dictionaryDirectory = TestTemp.directory("external-change-watch-dictionary")
 
     val program = for
       refreshCount <- Ref.of[IO, Int](0)
@@ -122,7 +122,7 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not call refreshDictionaryFingerprints when nothing changes under the watched dictionary directory" in {
-    val dictionaryDirectory = Files.createTempDirectory("external-change-watch-dictionary-quiet")
+    val dictionaryDirectory = TestTemp.directory("external-change-watch-dictionary-quiet")
 
     val program = for
       refreshCount <- Ref.of[IO, Int](0)
@@ -194,7 +194,7 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "mark an explorer directory stale when a file is added to or removed from it" in {
-    val directory = Files.createTempDirectory("external-change-watch-explorer")
+    val directory = TestTemp.directory("external-change-watch-explorer")
     val added     = directory.resolve("new.md")
 
     val program = for
@@ -435,7 +435,7 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
   }
 
   "watchInputsChanged" should "announce an opened file but not an edit to one already open (#1938)" in {
-    val file    = Files.createTempFile("external-change-watch-inputs", ".md")
+    val file    = TestTemp.file("external-change-watch-inputs", ".md")
     val initial = com.serenity.state.models.AppState.initial
     val opened = initial.copy(persisted =
       initial.persisted.copy(buffers =
@@ -455,7 +455,7 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
   "externalChangeWatchLoop" should "start watching a file once a change to the watched set announces it (#1938)" in {
     // Its own directory: the shared temp directory sees every other process's files, and any of them would count as
     // the first change.
-    val file     = Files.createFile(Files.createTempDirectory("external-change-watch-opened").resolve("notes.md"))
+    val file     = Files.createFile(TestTemp.directory("external-change-watch-opened").resolve("notes.md"))
     val bufferId = BufferId(1)
 
     val program = for
