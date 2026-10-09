@@ -5,8 +5,9 @@ in a terminal, and can export a manuscript as DOCX or EPUB.
 
 ## Install
 
-Builds come from the [`desktop-latest` release](https://github.com/BarMal/Serenity/releases/tag/desktop-latest), which
-is rebuilt from `master` and marked as a pre-release. Each build is one of:
+Download the newest versioned build from the [releases page](https://github.com/BarMal/Serenity/releases/latest) and
+check it against the `SHA256SUMS` file beside it. The [`desktop-latest` nightly](https://github.com/BarMal/Serenity/releases/tag/desktop-latest)
+is rebuilt from `master` on every push and marked as a pre-release; use it to try unreleased changes. Each build is one of:
 
 | File | Contents |
 | --- | --- |
