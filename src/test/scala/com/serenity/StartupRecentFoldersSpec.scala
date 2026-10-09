@@ -12,23 +12,13 @@ import com.serenity.state.models.*
 import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
-import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** The start page lists the recent folders after the recent files, and leaves out any that have gone. */
-class StartupRecentFoldersSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll with StateManagerTestSupport:
+class StartupRecentFoldersSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
-  private val root = Files.createTempDirectory("startup-recent-folders-spec")
-
-  override protected def afterAll(): Unit =
-    try super.afterAll()
-    finally deleteRecursively(root)
-
-  private def deleteRecursively(directory: Path): Unit =
-    val paths = Files.walk(directory)
-    try paths.sorted(java.util.Comparator.reverseOrder[Path]()).forEach(path => Files.delete(path))
-    finally paths.close()
+  private val root = TestTemp.directory("startup-recent-folders-spec")
 
   private def folderActions(page: StartupPage): List[StartupAction] =
     page.actions.filter(_.id.startsWith("recent-folder:"))

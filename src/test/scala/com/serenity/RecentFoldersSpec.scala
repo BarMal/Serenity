@@ -10,23 +10,13 @@ import com.serenity.io.FileDialog
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{AppState, Persisted, SurfaceContent}
-import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Every route that opens a folder as the project root records it, as opening a file records the file. */
-class RecentFoldersSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll with StateManagerTestSupport:
+class RecentFoldersSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
-  private val root = Files.createTempDirectory("recent-folders-spec")
-
-  override protected def afterAll(): Unit =
-    try super.afterAll()
-    finally deleteRecursively(root)
-
-  private def deleteRecursively(directory: Path): Unit =
-    val paths = Files.walk(directory)
-    try paths.sorted(java.util.Comparator.reverseOrder[Path]()).forEach(path => Files.delete(path))
-    finally paths.close()
+  private val root = TestTemp.directory("recent-folders-spec")
 
   private def folder(name: String): Path = Files.createDirectories(root.resolve(name))
 
