@@ -67,7 +67,9 @@ final case class Runtime(
     chapterHeadingMemo: ChapterHeadingMemo = ChapterHeadingMemo.empty,
     // Never persisted: whether resolved comments still show in the lens, the highlights and comment navigation. Resolved
     // comments stay in the buffer either way.
-    resolvedCommentsVisible: Boolean = false
+    resolvedCommentsVisible: Boolean = false,
+    // Never persisted: the settings value the command runner is previewing, with the config and theme to save instead.
+    pendingSetting: Option[PendingSetting] = None
 ):
 
   /** A typed character restarts the quiet window for cursor-adjacent surfaces. */

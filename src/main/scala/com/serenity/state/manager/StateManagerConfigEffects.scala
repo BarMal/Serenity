@@ -21,7 +21,7 @@ import com.serenity.config.{
 import com.serenity.io.{FileStamp, TimestampedBackup}
 import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.CommandRunnerReducer
+import com.serenity.state.reducers.{CommandRunnerReducer, SettingsPreviewReducer}
 
 /** Config-update infrastructure and the settings-intent dispatch that drives it: appearance, cursor, panel chrome,
   * spell-check, and general settings all funnel through the same commit-then-persist path. The state change commits
@@ -74,7 +74,27 @@ final private[manager] class StateManagerConfigEffects(
         .flatTap(config =>
           IO(renderCaches.frameState.configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity))
         )
-        .flatTap(_ => requestConfigWrite)
+        .flatTap(_ => requestUnlessPreviewing)
+
+  // A previewed value stays in memory: the config file keeps the committed one until the preview is accepted.
+  private def requestUnlessPreviewing: IO[Unit] =
+    currentState.flatMap(live => requestConfigWrite.unlessA(live.runtime.pendingSetting.isDefined))
+
+  /** Pushes the live config into the parts of the runtime that learn of a change only when told, after the state's own
+    * config was put back without going through an update.
+    */
+  private[manager] def reapplyConfig: IO[Unit] =
+    editor.updateModelValidated(model =>
+      Some(
+        model.copy(app = StateManagerConfigEffects.withUpdatedRunnerConfig(model.app, model.app.persisted.config))
+      )
+    ) >>
+      currentState
+        .map(_.persisted.config)
+        .flatMap(config =>
+          IO(renderCaches.frameState.configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity)) >>
+            onFontConfigChanged(config.editorConfig.fontConfig)
+        )
 
   private[manager] def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
@@ -338,7 +358,7 @@ final private[manager] class StateManagerConfigEffects(
           editor.commitState(newState, current)
         }
       case GeneralSettingsIntent.SaveConfig =>
-        persistConfigFile(state.persisted.config)
+        persistConfigFile(state.committedConfig)
       case GeneralSettingsIntent.ResetSettings =>
         resetSettings
       case GeneralSettingsIntent.SetRenderFpsTarget(target) =>
@@ -370,7 +390,7 @@ final private[manager] class StateManagerConfigEffects(
   private def writeLatestConfig: IO[Unit] =
     configFile.traverse_(file =>
       currentState
-        .flatMap(state => file.writeIfChanged(state.persisted.config))
+        .flatMap(state => file.writeIfChanged(state.committedConfig))
         .flatMap(_.fold(reportSaveFailure, _ => IO.unit))
     )
 
@@ -448,10 +468,22 @@ private[manager] object StateManagerConfigEffects:
     val config = update(model.app.persisted.config)
     model.copy(app = syncState(configUpdated(model.app, _ => config), config))
 
-  /** `loaded` as the live config, unless it already is or a change made here since `base` would be undone by it. */
+  /** `loaded` as the live config, unless it already is or a change made here since `base` would be undone by it.
+    *
+    * A preview is not a change made here: the file is compared with the config the preview began from. If it differs,
+    * the preview ends and `loaded` replaces both, so that Escape has nothing stale to put back and the file's edit is
+    * not lost. Re-running the previewed command against a config it was not chosen over would be a guess.
+    */
   def reloaded(state: AppState, base: Option[AppConfig], loaded: AppConfig): AppState =
-    val live = state.persisted.config
-    if live == loaded || base.exists(_ != live) then state else configUpdated(state, _ => loaded)
+    state.runtime.pendingSetting match
+      case Some(pending) =>
+        if pending.committedConfig == loaded || base.exists(_ != pending.committedConfig) then state
+        else
+          val rebased = pending.copy(committedConfig = loaded)
+          SettingsPreviewReducer.revert(state.copy(runtime = state.runtime.copy(pendingSetting = Some(rebased)))).state
+      case None =>
+        val live = state.persisted.config
+        if live == loaded || base.exists(_ != live) then state else configUpdated(state, _ => loaded)
 
   def configUpdated(state: AppState, update: AppConfig => AppConfig): AppState =
     val config = update(state.persisted.config)
