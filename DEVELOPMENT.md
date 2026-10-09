@@ -197,4 +197,31 @@ codex
 
 Sign in with ChatGPT when prompted, or add `OPENAI_API_KEY` as a Codespaces secret before creating or rebuilding the Codespace if you prefer API-key auth.
 
-Desktop package checks run in GitHub Actions on PRs. Release publishing is handled by the dedicated desktop publish workflow on `master` or manual dispatch.
+Desktop package checks run in GitHub Actions on PRs. Publishing is handled by `desktop-publish.yml`, which has two channels.
+
+### Releasing
+
+The `vX.Y.Z` tag is the one source of truth for a version: sbt-dynver derives `BuildInfo.version` (what `--version` and
+About report) from it, `PackageVersion` derives the numeric jpackage `--app-version` from it (`sbt writePackageVersion`
+writes `target/package/app-version.txt`), and the workflow fails if they disagree. A first component of 0 is rejected
+because macOS packaging refuses it, so the first release is `v1.0.0` or later.
+
+To cut a release:
+
+1. In `CHANGELOG.md`, rename `## [Unreleased]` to `## X.Y.Z — YYYY-MM-DD` and add a fresh empty `## [Unreleased]` above it
+   (see [Changelog](#changelog)), then merge that to `master`.
+2. Tag the merge commit and push the tag: `git tag -a vX.Y.Z -m "Serenity X.Y.Z" && git push origin vX.Y.Z`.
+
+Pushing the tag runs the full three-OS build and test, then publishes a release named `Serenity X.Y.Z` carrying
+`Serenity.jar`, the three app-image zips and `SHA256SUMS`, with that version's CHANGELOG section as the notes. A plain
+`X.Y.Z` is published as the latest release; `X.Y.Z-rc.N` is published as a pre-release. The run fails, and publishes
+nothing, if the tag is not `vX.Y.Z[-pre]`, is not on `master`, has no non-empty CHANGELOG section, the release already
+exists, or the tag, jpackage version and `--version` output disagree. Releases are never rewritten; fix forward with a
+new tag.
+
+To verify a download, put it beside `SHA256SUMS` and run `sha256sum --check --ignore-missing SHA256SUMS`
+(`shasum -a 256 -c` on macOS).
+
+Every push to `master` also republishes the `desktop-latest` pre-release, titled "Nightly desktop build". It is a
+rolling channel, not a version: it is replaced in place and carries the unreleased changes. macOS builds are signed
+ad hoc, and Developer ID signing and notarization switch on when the `MACOS_*` secrets in `desktop-publish.yml` are set.
