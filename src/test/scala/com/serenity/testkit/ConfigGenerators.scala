@@ -170,6 +170,15 @@ object ConfigGenerators:
       thickness <- Gen.choose(AppConfig.MinUiOutlineThicknessPx, AppConfig.MaxUiOutlineThicknessPx)
     yield InterfaceConfig(density, gap, thickness)
 
+  val genThemeFollowConfig: Gen[ThemeFollowConfig] =
+    val themeName = Gen.oneOf("light", "dark", "paper", "ink", "high-contrast", "solar")
+    for
+      follow       <- Gen.oneOf(true, false)
+      light        <- themeName
+      dark         <- themeName
+      highContrast <- themeName
+    yield ThemeFollowConfig(follow, light, dark, highContrast)
+
   val genInputConfig: Gen[InputConfig] =
     for
       lines       <- Gen.choose(1, 50)
@@ -297,6 +306,7 @@ object ConfigGenerators:
       window           <- genWindowConfig
       document         <- genDocumentConfig
       interface        <- genInterfaceConfig
+      themeFollow      <- genThemeFollowConfig
       input            <- genInputConfig
       syntax           <- Gen.oneOf(true, false)
       smartPunctuation <- Gen.oneOf(true, false)
@@ -313,6 +323,7 @@ object ConfigGenerators:
       windowConfig = window,
       documentConfig = document,
       interfaceConfig = interface,
+      themeFollowConfig = themeFollow,
       languageToolsConfig = LanguageToolsConfig(
         syntaxHighlightingEnabled = syntax,
         spellCheck = spell,

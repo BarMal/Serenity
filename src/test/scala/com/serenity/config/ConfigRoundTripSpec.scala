@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfigOps.*
-import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment}
+import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment, ThemeFollowConfig}
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader
@@ -111,6 +111,9 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withUiElementGap(Some(2.0))
     .withUiOutlineThicknessPx(3)
+    .withThemeFollowConfig(
+      ThemeFollowConfig(followSystem = true, lightTheme = "paper", darkTheme = "ink", highContrastTheme = "contrast")
+    )
     .withTextAreaLeftInset(12.0)
     .withTextAreaRightInset(13.0)
     .withTextAreaTopInset(4.0)

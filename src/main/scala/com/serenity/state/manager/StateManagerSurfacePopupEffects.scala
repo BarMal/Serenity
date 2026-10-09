@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
 import com.serenity.command.ThemeIntent
+import com.serenity.config.{AppConfig, ThemeFollowConfig}
 import com.serenity.io.FileUtils
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
@@ -29,7 +30,9 @@ final private[manager] class StateManagerSurfacePopupEffects(
     fileDialog: Option[com.serenity.io.FileDialog],
     commitState: (AppState, AppState) => IO[Unit],
     lanes: EffectLanePort,
-    interpretEffect: AppEffect => IO[Unit]
+    interpretEffect: AppEffect => IO[Unit],
+    updateConfig: (AppConfig => AppConfig) => IO[AppConfig],
+    followSystemAppearance: IO[Unit]
 ):
 
   private val ThemeLoadLane: Lane.Keyed = Lane.Keyed(LaneKey.Theme, LanePolicy.SwitchLatest)
@@ -44,12 +47,20 @@ final private[manager] class StateManagerSurfacePopupEffects(
 
   // The chooser and creator go through `SurfaceEffect`, which reads the live state: `state` predates the command-usage
   // record `interpretCommand` commits just before, and committing from it would drop that record (#1714).
-  private[manager] def interpretThemeIntent(intent: ThemeIntent, state: AppState): IO[Unit] =
+  //
+  // `chosen` is false for a preview or a restore (`AppEffect.ExecuteCommandUnrecorded`): only a theme the person has
+  // accepted ends following, so looking at one in the settings palette or the picker leaves it on.
+  private[manager] def interpretThemeIntent(intent: ThemeIntent, state: AppState, chosen: Boolean = true): IO[Unit] =
     intent match
       case ThemeIntent.ToggleTheme =>
-        interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(ThemeStateReducer.toggleTarget(state))))
+        stopFollowingSystem(state).whenA(chosen) >>
+          interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(ThemeStateReducer.toggleTarget(state))))
       case ThemeIntent.ApplyTheme(name) =>
-        interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(name)))
+        stopFollowingSystem(state).whenA(chosen) >> interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(name)))
+      case ThemeIntent.SetFollowSystem(enabled) =>
+        updateFollowConfig(_.copy(followSystem = enabled))
+      case ThemeIntent.SetFollowSystemTheme(slot, name) =>
+        updateFollowConfig(_.withTheme(slot, name))
       case ThemeIntent.ReloadTheme =>
         interpretEffect(AppEffect.Theme(ThemeEffect.ReloadTheme(state.persisted.theme.name)))
       case ThemeIntent.OpenThemeChooser =>
@@ -60,6 +71,16 @@ final private[manager] class StateManagerSurfacePopupEffects(
         interpretEffect(AppEffect.Theme(ThemeEffect.ExportCurrentTheme))
       case ThemeIntent.ReloadThemes =>
         interpretEffect(AppEffect.Theme(ThemeEffect.RefreshThemeNames))
+
+  /** Follows the OS straight away, so turning following on or changing the theme for the current appearance is seen. */
+  private def updateFollowConfig(update: ThemeFollowConfig => ThemeFollowConfig): IO[Unit] =
+    updateConfig(config => config.withThemeFollowConfig(update(config.themeFollowConfig))) >> followSystemAppearance
+
+  /** A theme chosen by hand would be undone by the next window focus regain, so choosing one ends following. */
+  private def stopFollowingSystem(state: AppState): IO[Unit] =
+    IO.whenA(state.persisted.config.themeFollowConfig.followSystem)(
+      updateConfig(config => config.withThemeFollowConfig(config.themeFollowConfig.copy(followSystem = false))).void
+    )
 
   private[manager] def interpretThemeEffect(effect: ThemeEffect): IO[Unit] =
     effect match

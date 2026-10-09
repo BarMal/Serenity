@@ -34,6 +34,7 @@ object CommandRunnerOptionSelections:
       "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
       "drop-caps-enabled"          -> enabledIndex(documentConfig.dropCapsEnabled),
       "auto-save-mode"             -> autoSaveModeIndex(config.autoSaveConfig.mode),
+      "follow-system-theme"        -> enabledIndex(config.themeFollowConfig.followSystem),
       "spellcheck-enabled"         -> enabledIndex(languageToolsConfig.spellCheck.enabled),
       "app-mode"                   -> appModeIndex(config.appMode),
       "settings-show-all"          -> enabledIndex(config.showAllSettingsRegardlessOfMode),

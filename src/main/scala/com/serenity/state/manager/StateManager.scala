@@ -17,6 +17,7 @@ import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
+import com.serenity.ui.theme.appearance.OsAppearanceDetector
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
@@ -154,6 +155,12 @@ trait StateManager extends StateEngine:
   def fileOpener: FileOpener
   def fileService: FileService
 
+  /** Switches theme to match the OS appearance when `theme.follow_system` is on; returns once the switch has settled.
+    */
+  def followSystemAppearance: IO[Unit]
+
+  def followSystemAppearanceWithin(bound: scala.concurrent.duration.FiniteDuration): IO[Unit]
+
   /** The instance-scoped render/mouse-hit-testing cache bundle for this manager (issue #1677): threaded down through
     * [[com.serenity.ui.renderer.RenderContext]] to every render entry point, and via [[EventStatePort]] to every
     * mouse-hit-testing capability, so nothing in the render/hit-testing call graph reaches a JVM-wide singleton cache.
@@ -205,7 +212,8 @@ object StateManager:
       com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable,
     projectTasksEnabled: Boolean = true,
     restarter: Option[RestartMode => IO[Unit]] = None,
-    dictionaryCache: DictionaryCache = DictionaryCache()
+    dictionaryCache: DictionaryCache = DictionaryCache(),
+    appearanceDetector: OsAppearanceDetector = OsAppearanceDetector.system
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     val renderCaches = RenderCaches.create(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity)
@@ -248,7 +256,8 @@ object StateManager:
         renderCaches = renderCaches,
         projectTasksEnabled = projectTasksEnabled,
         restarter = restarter,
-        dictionaryCache = dictionaryCache
+        dictionaryCache = dictionaryCache,
+        appearanceDetector = appearanceDetector
       )
       stateManager <- fromRuntime(runtime)
     yield stateManager
@@ -337,6 +346,7 @@ object StateManager:
       runtime.renderCaches,
       operations,
       runtime.restarter,
+      runtime.appearanceDetector,
       runtime.configOnDisk
     )
 

@@ -30,7 +30,7 @@ object UiPresetDiff:
   ): List[PresetChange] =
     val resolvedConfig =
       if isBuiltInWorkflow(preset) then UiPreset.mergeBuiltInWorkflowConfig(currentConfig, preset)
-      else HotkeyOverrides.likeRunning(currentConfig, preset.config)
+      else UiPreset.appliedConfig(currentConfig, preset)
 
     themeChange(currentThemeName, preset).toList :::
       scalarChanges(currentConfig, resolvedConfig) :::
@@ -136,7 +136,7 @@ object UiPresetDiff:
     val builtIn = isBuiltInWorkflow(preset)
     val resolved =
       if builtIn then UiPreset.mergeBuiltInWorkflowConfig(current, preset)
-      else HotkeyOverrides.likeRunning(current, preset.config)
+      else UiPreset.appliedConfig(current, preset)
 
     val selectedConfig = mergeSelected(current, resolved, selectedKeys)
     val selectedTheme  = if selectedKeys.contains("theme") then theme else state.persisted.theme

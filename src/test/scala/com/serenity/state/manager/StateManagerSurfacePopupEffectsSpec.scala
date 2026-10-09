@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.command.{ThemeCommands, ThemeIntent}
+import com.serenity.config.AppConfig
 import com.serenity.io.FileDialog
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -79,7 +80,9 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
         case AppEffect.Surface(SurfaceEffect.OpenThemePicker)  => stateRef.get.flatMap(popups.openThemePickerEffect)
         case AppEffect.Surface(SurfaceEffect.OpenThemeCreator) => stateRef.get.flatMap(popups.openThemeCreatorEffect)
         case _                                                 => IO.unit
-      }
+      },
+      update => IO.pure(update(AppConfig.default)),
+      IO.unit
     )
     popups
 

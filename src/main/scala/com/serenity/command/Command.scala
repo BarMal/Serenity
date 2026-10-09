@@ -95,6 +95,8 @@ enum LspIntent:
 enum ThemeIntent:
   case ToggleTheme
   case ApplyTheme(name: String)
+  case SetFollowSystem(enabled: Boolean)
+  case SetFollowSystemTheme(slot: AppearanceSlot, name: String)
   case ReloadTheme
   case OpenThemeChooser
   case OpenThemeCreator

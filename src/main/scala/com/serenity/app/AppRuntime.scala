@@ -160,7 +160,7 @@ object AppRuntime:
           logger
         )
         startupTheme <- AppStartup.startupTheme(stateManager.sessionStartupInfo, themeManager)
-        initialState <- AppStartup.initializeState(
+        _ <- AppStartup.initializeState(
           stateManager,
           stateManager.sessionStartupInfo,
           startupTheme,
@@ -171,6 +171,9 @@ object AppRuntime:
           configNotice,
           recovery
         )
+        // The first frame is drawn from this state, so the OS appearance is applied to it before it exists, within a bound.
+        _            <- stateManager.followSystemAppearanceWithin(AppStartup.AppearanceDetectionBound)
+        initialState <- stateManager.getCurrentState
         surfaceConfig = initialState.persisted.config.surfaceConfig
         inputRouter    <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
         inputHandler   <- runtime.inputHandler(inputRouter)
@@ -212,7 +215,7 @@ object AppRuntime:
               cursorVisible,
               requestFastRender,
               resizeCallbackDispatcher,
-              stateManager.fileService.checkExternalChangesOnFocus,
+              stateManager.fileService.checkExternalChangesOnFocus >> stateManager.followSystemAppearance,
               stateManager.fileService.autoSaveOnWindowFocusLost
             )
           )
