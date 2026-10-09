@@ -1,5 +1,7 @@
 package com.serenity.state.manager
 
+import java.nio.file.Path
+
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -21,4 +23,14 @@ class StartPageTransitionsSpec extends AnyFlatSpec with Matchers:
 
   it should "offer Open file and Open folder otherwise" in {
     returnedTo(FrontendCapabilities.gui) shouldBe List("New document", "Open file", "Open folder")
+  }
+
+  it should "list the recent folders it is given, after the fixed actions" in {
+    val live  = AppState.empty
+    val shown = StartPageTransitions.withStartPageShown(live, live, Nil, List(Path.of("/work/book")))
+
+    shown.startPageSurface
+      .map(_.content)
+      .collect { case SurfaceContent.StartPage(page) => page.actions.map(_.id).last }
+      .getOrElse(fail("no start page")) shouldBe "recent-folder:/work/book"
   }

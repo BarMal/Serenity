@@ -21,7 +21,7 @@ class ThemeCreatorSpec extends AnyFlatSpec with Matchers:
 
   "ThemeConfigWriter" should "write user theme configs that the loader can read" in {
     val config = ThemeConfigWriter.themeToConfig(DefaultThemes.defaultDark.copy(name = "quiet-focus"))
-    val file   = Files.createTempFile("serenity-theme", ".conf")
+    val file   = TestTemp.file("serenity-theme", ".conf")
 
     try
       ThemeConfigWriter.write(config, file).unsafeRunSync()

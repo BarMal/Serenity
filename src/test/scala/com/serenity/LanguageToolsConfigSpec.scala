@@ -106,7 +106,7 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
   // temp directory instead of depending on what is actually installed on the machine running the suite.
   "SpellCheckConfig.discoverDictionarySourcePaths" should
     "fall back to a language-matching dictionary in an OS-standard directory when dictionaryPaths is unconfigured" in {
-      val osDirectory = Files.createTempDirectory("serenity-os-hunspell")
+      val osDirectory = TestTemp.directory("serenity-os-hunspell")
       val enDic       = osDirectory.resolve("en.dic")
       Files.writeString(enDic, "1\nhello", StandardCharsets.UTF_8)
 
@@ -119,7 +119,7 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
 
   it should
     "resolve no candidates when neither dictionaryPaths nor any OS-standard directory has a matching dictionary" in {
-      val emptyOsDirectory = Files.createTempDirectory("serenity-os-hunspell-empty")
+      val emptyOsDirectory = TestTemp.directory("serenity-os-hunspell-empty")
 
       val paths = SpellCheckConfig.discoverDictionarySourcePaths(
         SpellCheckConfig(),
@@ -131,9 +131,9 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
 
   it should
     "leave an already-configured dictionaryPaths resolution unchanged, never consulting OS-standard directories" in {
-      val osDirectory       = Files.createTempDirectory("serenity-os-hunspell-ignored")
+      val osDirectory       = TestTemp.directory("serenity-os-hunspell-ignored")
       val osDic             = osDirectory.resolve("en.dic")
-      val explicitDirectory = Files.createTempDirectory("serenity-explicit")
+      val explicitDirectory = TestTemp.directory("serenity-explicit")
       val explicitDic       = explicitDirectory.resolve("en.dic")
       Files.writeString(osDic, "1\nhello", StandardCharsets.UTF_8)
       Files.writeString(explicitDic, "1\nworld", StandardCharsets.UTF_8)
@@ -148,7 +148,7 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
   // Hunspell packages name their files `en_GB.dic` while language tags are lowercased, so a case-sensitive filesystem
   // (Linux) would never match `hunspell-en-gb` without a case-insensitive lookup.
   it should "find an OS dictionary whose filename differs from the language tag only in case" in {
-    val osDirectory = Files.createTempDirectory("serenity-os-hunspell-case")
+    val osDirectory = TestTemp.directory("serenity-os-hunspell-case")
     val enGbDic     = osDirectory.resolve("en_GB.dic")
     Files.writeString(enGbDic, "1\ncolour", StandardCharsets.UTF_8)
 
@@ -161,7 +161,7 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "find a dictionary in a configured directory whose filename differs from the language tag only in case" in {
-    val directory = Files.createTempDirectory("serenity-explicit-case")
+    val directory = TestTemp.directory("serenity-explicit-case")
     val enGbDic   = directory.resolve("en_GB.dic")
     Files.writeString(enGbDic, "1\ncolour", StandardCharsets.UTF_8)
 
@@ -208,7 +208,7 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
     SpellCheckConfig.dictionaryWatchDirectories(SpellCheckConfig(enabled = false)).shouldBe(Set.empty)
 
   it should "offer both a configured directory entry and its parent as watch candidates" in {
-    val configuredDirectory = Files.createTempDirectory("serenity-watch-dictionary-dir")
+    val configuredDirectory = TestTemp.directory("serenity-watch-dictionary-dir")
 
     val directories = SpellCheckConfig.dictionaryWatchDirectories(
       SpellCheckConfig(enabled = true, dictionaryPaths = List(configuredDirectory.toString))
@@ -219,7 +219,7 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "offer both a configured file entry and its parent directory as watch candidates" in {
-    val configuredDirectory = Files.createTempDirectory("serenity-watch-dictionary-file")
+    val configuredDirectory = TestTemp.directory("serenity-watch-dictionary-file")
     val configuredFile      = configuredDirectory.resolve("en.dic")
 
     val directories = SpellCheckConfig.dictionaryWatchDirectories(
@@ -231,7 +231,7 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fall back to the OS-standard directories in the zero-config case" in {
-    val osDirectory = Files.createTempDirectory("serenity-watch-dictionary-os")
+    val osDirectory = TestTemp.directory("serenity-watch-dictionary-os")
 
     val directories = SpellCheckConfig.dictionaryWatchDirectories(
       SpellCheckConfig(enabled = true),

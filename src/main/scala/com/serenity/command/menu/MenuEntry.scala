@@ -14,6 +14,7 @@ enum MenuTitle(val text: String):
 /** Menu content that depends on the running session, so the shell fills it in when the menu opens. */
 enum DynamicSource:
   case RecentFiles
+  case RecentFolders
   case OpenBuffers
 
 /** Actions the window manager performs, so they are not commands. */

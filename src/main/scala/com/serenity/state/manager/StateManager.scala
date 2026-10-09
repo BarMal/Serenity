@@ -185,16 +185,20 @@ trait StateManager extends StateEngine:
 
 object StateManager:
 
-  private val EphemeralSessionProperty = "serenity.test.ephemeralSessions"
+  /** Names a directory the test build owns and removes after the run; each `StateManager` made without an explicit
+    * session root gets its own folder inside it, so a suite never touches the user's real session.
+    */
+  private val TestTempRootProperty = "serenity.test.tempRoot"
+
+  private[manager] def ephemeralSessionRoot(tempRoot: Option[Path]): IO[Option[Path]] =
+    tempRoot.fold(IO.pure(Option.empty[Path]))(root =>
+      IO.blocking(Some(Files.createTempDirectory(root, "serenity-state-manager-test")))
+    )
 
   private def resolveSessionRootOverride(sessionRootOverride: Option[Path]): IO[Option[Path]] =
     sessionRootOverride match
-      case some @ Some(_) =>
-        IO.pure(some)
-      case None if java.lang.Boolean.getBoolean(EphemeralSessionProperty) =>
-        IO.blocking(Some(Files.createTempDirectory("serenity-state-manager-test")))
-      case None =>
-        IO.pure(None)
+      case some @ Some(_) => IO.pure(some)
+      case None           => ephemeralSessionRoot(sys.props.get(TestTempRootProperty).map(Path.of(_)))
 
   def apply(
     @unused parentLogger: Logger[IO],

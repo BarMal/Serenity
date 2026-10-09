@@ -2,7 +2,6 @@ package com.serenity.perf
 
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font, Rectangle, Toolkit}
-import java.nio.file.Files
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import javax.swing.SwingUtilities
 
@@ -37,7 +36,7 @@ import com.serenity.ui.renderer.{
   ScreenIdentity
 }
 import com.serenity.ui.terminal.SwingWindow
-import com.serenity.{DockedPanelFixtures, setBufferForPane, setCursorPosition}
+import com.serenity.{DockedPanelFixtures, TestTemp, setBufferForPane, setCursorPosition}
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.{NoOpFactory, NoOpLogger}
 
@@ -187,7 +186,7 @@ private[perf] object LaptopFrameBenchmarks:
     cursorColumn: Int = 0
   )(using IORuntime): (StateManager, BufferId) =
     given LoggerFactory[IO] = NoOpFactory[IO]
-    val sessionRoot         = Files.createTempDirectory("serenity-laptop-benchmarks")
+    val sessionRoot         = TestTemp.directory("serenity-laptop-benchmarks")
     val stateManager = StateManager
       .apply(
         NoOpLogger[IO],

@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path}
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.io.SettledClock
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -47,7 +48,7 @@ class StateManagerExternalChangeEffectHandlersSpec
     )
 
   "The focus-gain external-change check" should "silently reload a clean buffer whose file changed on disk (#1623)" in {
-    val path = Files.createTempFile("focus-check-clean", ".md")
+    val path = TestTemp.file("focus-check-clean", ".md")
     Files.writeString(path, "original")
     val opened  = SettledClock.fileManager.loadFile(path, bufferId).unsafeRunSync()
     val fixture = harness(focusedBufferState(opened))
@@ -61,7 +62,7 @@ class StateManagerExternalChangeEffectHandlersSpec
   }
 
   it should "prompt instead of reloading a dirty buffer whose file changed on disk" in {
-    val path = Files.createTempFile("focus-check-dirty", ".md")
+    val path = TestTemp.file("focus-check-dirty", ".md")
     Files.writeString(path, "original")
     val opened = SettledClock.fileManager.loadFile(path, bufferId).unsafeRunSync()
     val dirty =
@@ -77,7 +78,7 @@ class StateManagerExternalChangeEffectHandlersSpec
   }
 
   it should "do nothing when the focused buffer's file has not changed" in {
-    val path = Files.createTempFile("focus-check-unchanged", ".md")
+    val path = TestTemp.file("focus-check-unchanged", ".md")
     Files.writeString(path, "original")
     val opened  = SettledClock.fileManager.loadFile(path, bufferId).unsafeRunSync()
     val fixture = harness(focusedBufferState(opened))
@@ -88,7 +89,7 @@ class StateManagerExternalChangeEffectHandlersSpec
   }
 
   it should "confirm an unchanged file from its stat alone, without reading its content (#1873)" in {
-    val path = Files.createTempFile("focus-check-stat-only", ".md")
+    val path = TestTemp.file("focus-check-stat-only", ".md")
     Files.writeString(path, "original")
     val opened  = SettledClock.fileManager.loadFile(path, bufferId).unsafeRunSync()
     val fixture = harness(focusedBufferState(opened))
@@ -101,7 +102,7 @@ class StateManagerExternalChangeEffectHandlersSpec
   }
 
   it should "not report a file whose stat changed while its content did not (#1873)" in {
-    val path = Files.createTempFile("focus-check-touched", ".md")
+    val path = TestTemp.file("focus-check-touched", ".md")
     Files.writeString(path, "original")
     val opened  = SettledClock.fileManager.loadFile(path, bufferId).unsafeRunSync()
     val fixture = harness(focusedBufferState(opened))
@@ -122,7 +123,7 @@ class StateManagerExternalChangeEffectHandlersSpec
   }
 
   "The watcher external-change check" should "check any given buffer, not only the focused one (#1623)" in {
-    val path = Files.createTempFile("watch-check-unfocused", ".md")
+    val path = TestTemp.file("watch-check-unfocused", ".md")
     Files.writeString(path, "original")
     val opened = SettledClock.fileManager.loadFile(path, bufferId).unsafeRunSync()
     val dirty =
@@ -139,7 +140,7 @@ class StateManagerExternalChangeEffectHandlersSpec
   }
 
   it should "not re-read a file this process has just saved (#1873, #1885)" in {
-    val path = Files.createTempFile("watch-check-own-save", ".md")
+    val path = TestTemp.file("watch-check-own-save", ".md")
     Files.writeString(path, "original")
     val opened = SettledClock.fileManager.loadFile(path, bufferId).unsafeRunSync()
     val edited =
@@ -155,7 +156,7 @@ class StateManagerExternalChangeEffectHandlersSpec
   }
 
   it should "not stack a second reload-conflict prompt when one is already open (code review finding, PR #1664)" in {
-    val path = Files.createTempFile("watch-check-already-prompted", ".md")
+    val path = TestTemp.file("watch-check-already-prompted", ".md")
     Files.writeString(path, "original")
     val opened = SettledClock.fileManager.loadFile(path, bufferId).unsafeRunSync()
     val dirty =
@@ -182,7 +183,7 @@ class StateManagerExternalChangeEffectHandlersSpec
   }
 
   it should "drop an observation made before the buffer recorded a newer revision, such as its own save's (#1564)" in {
-    val path = Files.createTempFile("watch-check-stale", ".md")
+    val path = TestTemp.file("watch-check-stale", ".md")
     Files.writeString(path, "original")
     val opened = SettledClock.fileManager.loadFile(path, bufferId).unsafeRunSync()
     val dirty =
@@ -200,8 +201,8 @@ class StateManagerExternalChangeEffectHandlersSpec
   }
 
   "openBufferPathsEffect" should "report every open buffer's file path keyed by its buffer id" in {
-    val pathA   = Files.createTempFile("open-paths-a", ".md")
-    val pathB   = Files.createTempFile("open-paths-b", ".md")
+    val pathA   = TestTemp.file("open-paths-a", ".md")
+    val pathB   = TestTemp.file("open-paths-b", ".md")
     val bufferA = Buffer.fromFile(BufferId(1), pathA, "a")
     val bufferB = Buffer.fromFile(BufferId(2), pathB, "b")
     val unsaved = Buffer.fromString(BufferId(3), "no path yet")

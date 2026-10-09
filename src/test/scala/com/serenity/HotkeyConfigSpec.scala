@@ -175,7 +175,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
       case (updated, (action, binding)) =>
         updated.withHotkeyOverride(action, binding)
     }
-    val configFile = Files.createTempFile("serenity-hotkeys", ".conf")
+    val configFile = TestTemp.file("serenity-hotkeys", ".conf")
 
     ConfigManagerTestSupport.saveConfig(config, configFile) shouldBe true
 
@@ -188,7 +188,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "load a double modifier tap from the text configuration" in {
-    val configFile = Files.createTempFile("serenity-double-tap-hotkey", ".conf")
+    val configFile = TestTemp.file("serenity-double-tap-hotkey", ".conf")
     Files.writeString(
       configFile,
       s"config.version = ${ConfigVersion.Current.value}\nhotkey.command_palette = ctrl+ctrl\n"
@@ -201,7 +201,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
 
   it should "round-trip all command palette bindings through config persistence" in {
     val config     = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux"))
-    val configFile = Files.createTempFile("serenity-multi-hotkey", ".conf")
+    val configFile = TestTemp.file("serenity-multi-hotkey", ".conf")
 
     ConfigManagerTestSupport.saveConfig(config, configFile) shouldBe true
 
@@ -278,7 +278,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     }
 
   it should "round-trip a rebound directional focus key" in {
-    val configFile = Files.createTempFile("serenity-focus-left", ".conf")
+    val configFile = TestTemp.file("serenity-focus-left", ".conf")
     Files.writeString(configFile, "hotkey.focus_left = ctrl+alt+h\n")
 
     val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
@@ -290,7 +290,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "round-trip the toggle_shortcuts_help config key" in {
-    val configFile = Files.createTempFile("serenity-toggle-shortcuts-help", ".conf")
+    val configFile = TestTemp.file("serenity-toggle-shortcuts-help", ".conf")
     Files.writeString(configFile, "hotkey.toggle_shortcuts_help = ctrl+alt+k\n")
 
     val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
@@ -301,7 +301,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "round-trip multi-bindings for every serialized hotkey action" in {
-    val configFile = Files.createTempFile("serenity-multi-hotkey-actions", ".conf")
+    val configFile = TestTemp.file("serenity-multi-hotkey-actions", ".conf")
     Files.writeString(
       configFile,
       """hotkey.file_search = ctrl+shift+f,alt+shift+f

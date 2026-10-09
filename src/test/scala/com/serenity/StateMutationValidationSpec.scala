@@ -52,7 +52,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
   "StateManager.openFile" should "not commit a duplicate buffer-order entry when nextBufferId has drifted" in {
     val stateManager = stateManagerWithDriftedNextBufferId()
 
-    val tempFile = Files.createTempFile("state-mutation-validation", ".txt")
+    val tempFile = TestTemp.file("state-mutation-validation", ".txt")
     try
       Files.writeString(tempFile, "loaded from disk")
 
@@ -75,7 +75,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     "not commit a duplicate buffer-order entry when nextBufferId has drifted" in {
       val validStateManager = createStateManager()
 
-      val tempRoot   = Files.createTempDirectory("state-mutation-validation-workflow")
+      val tempRoot   = TestTemp.directory("state-mutation-validation-workflow")
       val targetFile = tempRoot.resolve("notes.scala")
       Files.writeString(targetFile, "val answer = 42")
 

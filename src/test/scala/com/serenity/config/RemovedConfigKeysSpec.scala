@@ -2,6 +2,7 @@ package com.serenity.config
 
 import java.nio.file.{Files, Paths}
 
+import com.serenity.TestTemp
 import com.serenity.session.given
 import com.serenity.session.{SessionConfigCodec, SessionState}
 import io.circe.Json
@@ -25,7 +26,7 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
   private val linuxWrittenDefault = AppConfig.default.withHotkeyConfig(linuxWrittenHotkeys)
 
   private def load(lines: Seq[String]): ConfigLoadResult =
-    val file = Files.createTempFile("serenity-removed-keys", ".conf")
+    val file = TestTemp.file("serenity-removed-keys", ".conf")
     Files.writeString(file, lines.mkString("", "\n", "\n"))
     ConfigManagerTestSupport.loadConfigResult(Some(file.toString))
 
@@ -248,7 +249,7 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
   it should "load the old default config, motion block included, as the default config" in {
     val oldDefault =
       scala.io.Source.fromResource("compat/default-config-with-motion.conf")(using scala.io.Codec.UTF8).mkString
-    val file = Files.createTempFile("serenity-old-default", ".conf")
+    val file = TestTemp.file("serenity-old-default", ".conf")
     Files.writeString(file, oldDefault)
     val result = ConfigManagerTestSupport.loadConfigResult(Some(file.toString))
 

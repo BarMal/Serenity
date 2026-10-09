@@ -109,7 +109,7 @@ private[manager] enum EffectResult:
   /** The session as `saved` has been written; the start page replaces the editor if it is still what was saved. See
     * StartPageTransitions.
     */
-  case StartPageReady(saved: AppState, readableRecentFiles: List[Path])
+  case StartPageReady(saved: AppState, readableRecentFiles: List[Path], readableRecentFolders: List[Path])
 
   // Project tasks (#1697 Wave 3): posted by `LaneKey.Project` jobs; see ProjectTaskTransitions.
   /** Output the task wrote since its previous batch. */
@@ -203,8 +203,8 @@ private[manager] object EffectResult:
         CommandRunnerOpening.withPresetsListed(state, surfaceId, previews)
       case ProjectPresenceDetected(surfaceId, presence) =>
         CommandRunnerOpening.withPresenceDetected(state, surfaceId, presence)
-      case StartPageReady(saved, readableRecentFiles) =>
-        StartPageTransitions.withStartPageShown(state, saved, readableRecentFiles)
+      case StartPageReady(saved, readableRecentFiles, readableRecentFolders) =>
+        StartPageTransitions.withStartPageShown(state, saved, readableRecentFiles, readableRecentFolders)
 
       case projectTask @ (ProjectTaskOutput(_, _) | ProjectTaskFinished(_, _)) =>
         reduce(state, projectTask, wrapCache).state

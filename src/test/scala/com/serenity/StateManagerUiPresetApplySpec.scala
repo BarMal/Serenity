@@ -1,7 +1,7 @@
 package com.serenity
 
 import java.awt.Font
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
@@ -46,7 +46,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
   "StateManager UI presets" should "save the current UI preset to the preset store" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-save").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-save").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val size  = PreferredWindowSize(1500, 950)
     val sm    = managerWithStore(store, IO.pure(Some(size)))
@@ -79,7 +79,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "apply a named preset without resizing the live runtime window" in {
-    val path               = Files.createTempDirectory("state-manager-ui-preset-apply").resolve("ui-presets.json")
+    val path               = TestTemp.directory("state-manager-ui-preset-apply").resolve("ui-presets.json")
     val store              = UiPresetStore(path)
     val observedWindowSize = Ref.of[IO, Option[PreferredWindowSize]](None).unsafeRunSync()
     val sm = managerWithStore(
@@ -134,7 +134,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "apply a built-in writing preset when no custom preset exists" in {
-    val path  = Files.createTempDirectory("state-manager-built-in-ui-preset").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-built-in-ui-preset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -187,7 +187,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep Writing's new session in its single editor pane" in {
-    val path  = Files.createTempDirectory("state-manager-writing-new-session").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-writing-new-session").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -218,7 +218,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve unrelated persisted configuration when applying a built-in workflow" in {
-    val path  = Files.createTempDirectory("state-manager-built-in-workflow-config").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-built-in-workflow-config").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
     val lspConfig = LspUserConfig(
@@ -267,7 +267,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "give Writing its prose defaults while keeping the user's own theme" in {
-    val path  = Files.createTempDirectory("state-manager-writing-prose-defaults").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-writing-prose-defaults").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -308,7 +308,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "apply the built-in documentation preset to the active empty buffer" in {
-    val path  = Files.createTempDirectory("state-manager-documentation-empty-ui-preset").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-documentation-empty-ui-preset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -336,7 +336,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "apply the built-in documentation preset with a live markdown preview for the active markdown buffer" in {
-    val path  = Files.createTempDirectory("state-manager-documentation-ui-preset").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-documentation-ui-preset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -381,7 +381,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave the documentation outline optional for the active markdown buffer" in {
-    val path  = Files.createTempDirectory("state-manager-documentation-outline-ui-preset").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-documentation-outline-ui-preset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -422,7 +422,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "hydrate the review preset outline from active bookmarks and headings" in {
-    val path  = Files.createTempDirectory("state-manager-review-outline-ui-preset").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-review-outline-ui-preset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 

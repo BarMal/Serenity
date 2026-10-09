@@ -2,6 +2,7 @@ package com.serenity.command
 
 import java.nio.file.Files
 
+import com.serenity.TestTemp
 import com.serenity.config.*
 import com.serenity.config.HotkeyConfig.given
 import com.serenity.keystroke.events.RunCommand
@@ -34,7 +35,7 @@ class CommandKeyBindingsSpec extends AnyFlatSpec with Matchers:
     linux.withHotkeyConfig(linux.inputConfig.hotkeyConfig.withCommandBinding(lineNumbers, "ctrl+alt+l"))
 
   private def loaded(text: String): AppConfig =
-    val file = Files.createTempFile("serenity-command-keys", ".conf")
+    val file = TestTemp.file("serenity-command-keys", ".conf")
     try
       Files.writeString(file, text)
       ConfigManagerTestSupport.loadConfig(Some(file.toString))
@@ -147,7 +148,7 @@ class CommandKeyBindingsSpec extends AnyFlatSpec with Matchers:
   }
 
   "Command key bindings in the config file" should "survive a save and reload" in {
-    val file = Files.createTempFile("serenity-command-keys", ".conf")
+    val file = TestTemp.file("serenity-command-keys", ".conf")
     try
       ConfigManagerTestSupport.saveConfig(withLineKeys, file) shouldBe true
       Files.readString(file) should include(s"""hotkey.command.$lineNumbers = ["ctrl+alt+l"]""")

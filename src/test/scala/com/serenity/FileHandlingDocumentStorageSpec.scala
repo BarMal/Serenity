@@ -20,7 +20,7 @@ class FileHandlingDocumentStorageSpec extends AnyFlatSpec with Matchers:
   private def bytes(content: String): Array[Byte] = content.getBytes(java.nio.charset.StandardCharsets.UTF_8)
 
   "LocalDocumentStorageProvider" should "open, list, save, and copy local documents through the provider boundary" in {
-    val directory   = Files.createTempDirectory("serenity-document-storage")
+    val directory   = TestTemp.directory("serenity-document-storage")
     val source      = directory.resolve("source.txt")
     val destination = directory.resolve("copy.txt")
     val provider    = LocalDocumentStorageProvider()
@@ -49,7 +49,7 @@ class FileHandlingDocumentStorageSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reject stale local saves with a conflict at the provider boundary" in {
-    val path     = Files.createTempFile("serenity-document-storage-conflict", ".txt")
+    val path     = TestTemp.file("serenity-document-storage-conflict", ".txt")
     val provider = LocalDocumentStorageProvider()
 
     try
@@ -68,7 +68,7 @@ class FileHandlingDocumentStorageSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "carry binary content that is not valid UTF-8 through open, save, and copy unmodified" in {
-    val directory   = Files.createTempDirectory("serenity-document-storage-binary")
+    val directory   = TestTemp.directory("serenity-document-storage-binary")
     val source      = directory.resolve("source.bin")
     val destination = directory.resolve("copy.bin")
     val provider    = LocalDocumentStorageProvider()
@@ -89,7 +89,7 @@ class FileHandlingDocumentStorageSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not conflict-check a save when no expected revision is supplied" in {
-    val path     = Files.createTempFile("serenity-document-storage-no-check", ".txt")
+    val path     = TestTemp.file("serenity-document-storage-no-check", ".txt")
     val provider = LocalDocumentStorageProvider()
 
     try
@@ -163,7 +163,7 @@ class FileHandlingDocumentStorageSpec extends AnyFlatSpec with Matchers:
 
   "FileManager" should "capture a revision on load and refresh it on save, for #1623 external-change detection" in {
     val fileManager = new FileManager()
-    val file        = Files.createTempFile("serenity-revision-capture", ".md")
+    val file        = TestTemp.file("serenity-revision-capture", ".md")
 
     try
       Files.writeString(file, "original")
@@ -182,7 +182,7 @@ class FileHandlingDocumentStorageSpec extends AnyFlatSpec with Matchers:
 
   it should "reject a save with a conflict instead of silently overwriting a file that changed on disk since it was opened" in {
     val fileManager = new FileManager()
-    val file        = Files.createTempFile("serenity-revision-conflict", ".md")
+    val file        = TestTemp.file("serenity-revision-conflict", ".md")
 
     try
       Files.writeString(file, "original")
@@ -204,8 +204,8 @@ class FileHandlingDocumentStorageSpec extends AnyFlatSpec with Matchers:
 
   it should "not conflict-check a Save As to a different path, even when the buffer carries a revision from its original file" in {
     val fileManager = new FileManager()
-    val original    = Files.createTempFile("serenity-revision-save-as-source", ".md")
-    val destination = Files.createTempFile("serenity-revision-save-as-dest", ".md")
+    val original    = TestTemp.file("serenity-revision-save-as-source", ".md")
+    val destination = TestTemp.file("serenity-revision-save-as-dest", ".md")
 
     try
       Files.writeString(original, "original")

@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.*
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ProjectIntent, ViewIntent}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.lsp.LspEffect
@@ -40,7 +41,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       quitSignal          <- Deferred[IO, Unit]
       lspQueue            <- LspEffectQueue.create
       mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
-      sessionRoot         <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
+      sessionRoot         <- IO.blocking(TestTemp.directory("serenity-runtime-spec"))
     yield StateManagerRuntime.create(
       modelRef = modelRef,
       themeNamesRef = themeNamesRef,
@@ -95,7 +96,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
     tasks: List[EndlessTask]
   ): IO[(StateManagerComposition, StateManagerOperationBoundary)] =
     for
-      directory <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec-project"))
+      directory <- IO.blocking(TestTemp.directory("serenity-runtime-spec-project"))
       _         <- IO.blocking(Files.writeString(directory.resolve("Makefile"), "all:\n\ttrue\n"))
       initial = AppState.initial
       buffer  = initial.persisted.buffers(BufferId(0))
@@ -144,7 +145,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       lspQueue            <- LspEffectQueue.create
       mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
-      sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
+      sessionRoot <- IO.blocking(TestTemp.directory("serenity-runtime-spec"))
       runtime = StateManagerRuntime.create(
         modelRef = modelRef,
         themeNamesRef = themeNamesRef,

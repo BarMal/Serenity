@@ -36,7 +36,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "emit semantic diagnostics and a PNG for a controlled red/green regression" in {
-    val artifacts = Files.createTempDirectory("ui-scenario-artifacts")
+    val artifacts = TestTemp.directory("ui-scenario-artifacts")
     val driver = UiScenarioDriver
       .create("controlled-regression", artifactDirectory = Some(artifacts))
       .unsafeRunSync()

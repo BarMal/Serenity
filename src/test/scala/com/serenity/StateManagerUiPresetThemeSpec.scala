@@ -27,7 +27,7 @@ class StateManagerUiPresetThemeSpec extends AnyFlatSpec with Matchers with Befor
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-  private val root: Path = Files.createTempDirectory("state-manager-ui-preset-theme")
+  private val root: Path = TestTemp.directory("state-manager-ui-preset-theme")
 
   override protected def afterAll(): Unit =
     try

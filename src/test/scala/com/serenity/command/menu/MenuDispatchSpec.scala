@@ -10,6 +10,7 @@ import com.serenity.keystroke.events.{
   Direction,
   FocusInDirection,
   OpenFile,
+  OpenRecentFolder,
   OpenRecentPath,
   Paste,
   Redo,
@@ -48,6 +49,12 @@ class MenuDispatchSpec extends AnyFlatSpec with Matchers:
     MenuDispatch.eventFor(MenuDispatch.Choice.RecentFile(path)) shouldBe OpenRecentPath(path)
   }
 
+  it should "open a recent folder as the project root" in {
+    val path = Paths.get("/tmp/book")
+
+    MenuDispatch.eventFor(MenuDispatch.Choice.RecentFolder(path)) shouldBe OpenRecentFolder(path)
+  }
+
   "Every resolved menu entry" should "map to an event only when choosing it needs no further input" in {
     val resolved = MenuModel.resolve(MenuSpec.forOs("Linux"), registry, AppMode.Code, Shell.Gui)
     val entries  = resolved.flatMap(menu => flatten(menu.entries))
@@ -59,7 +66,7 @@ class MenuDispatchSpec extends AnyFlatSpec with Matchers:
     }
     entries.filterNot(items.contains).foreach(entry => MenuDispatch.eventFor(entry) shouldBe None)
     entries.collect { case ResolvedEntry.Dynamic(source) => source }.toSet shouldBe
-      Set(DynamicSource.RecentFiles, DynamicSource.OpenBuffers)
+      Set(DynamicSource.RecentFiles, DynamicSource.RecentFolders, DynamicSource.OpenBuffers)
   }
 
   private def flatten(entries: List[ResolvedEntry]): List[ResolvedEntry] =

@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -18,7 +19,7 @@ class FileStampOrderingSpec extends AnyFlatSpec with Matchers:
   private def externalRewrite(content: Array[Byte]): Array[Byte] = Array.fill(content.length)('x'.toByte)
 
   private def worldOver(text: String) =
-    val path = Files.createTempFile("file-stamp-ordering", ".txt")
+    val path = TestTemp.file("file-stamp-ordering", ".txt")
     Files.write(path, bytes(text))
     val world = CoarseTickWorld(path, externalRewrite)
     (

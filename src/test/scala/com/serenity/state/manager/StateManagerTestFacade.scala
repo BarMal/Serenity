@@ -1,8 +1,9 @@
 package com.serenity.state.manager
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.{Command, CommandCategory, CommandIntent, SessionIntent}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileManager
@@ -56,7 +57,7 @@ object StateManagerTestFacade:
     adjust: StateManagerRuntime => StateManagerRuntime = identity
   )(using Balance): IO[StateManager] =
     for
-      directory           <- IO.blocking(Files.createTempDirectory("seeded-state-manager"))
+      directory           <- IO.blocking(TestTemp.directory("seeded-state-manager"))
       modelRef            <- Ref.of[IO, Model](model)
       themeNamesRef       <- Ref.of[IO, List[String]](Nil)
       quitSignal          <- Deferred[IO, Unit]

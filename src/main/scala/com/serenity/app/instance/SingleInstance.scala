@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 import cats.effect.{IO, Resource}
+import com.serenity.io.DirectoryTree
 import fs2.Stream
 import org.typelevel.log4cats.Logger
 
@@ -88,7 +89,7 @@ object SingleInstance:
                 claimWithAttemptsLeft(coordination, paths, logger, attemptsLeft - 1)
               }
             case Step.StepAside   => Resource.pure(LaunchRole.Forwarded)
-            case Step.RunIsolated => Resource.eval(isolate(coordination, delivery, logger))
+            case Step.RunIsolated => isolate(coordination, delivery, logger)
         }
       // Without the lock this launch cannot know it is alone, so it must not take a socket another instance may own.
       case Left(error) =>
@@ -108,9 +109,16 @@ object SingleInstance:
           .as(LaunchRole.Primary(Stream.empty))
     }
 
-  private def isolate(coordination: InstanceCoordination, undelivered: Delivery, logger: Logger[IO]): IO[LaunchRole] =
-    coordination.isolatedSessionRoot
-      .flatTap { sessionRoot =>
-        logger.warn(s"[INSTANCE] Could not reach the running instance ($undelivered); using session $sessionRoot")
-      }
+  // The root belongs to this launch alone, so it goes when the launch does: nothing else would ever clear it.
+  private def isolate(
+    coordination: InstanceCoordination,
+    undelivered: Delivery,
+    logger: Logger[IO]
+  ): Resource[IO, LaunchRole] =
+    Resource
+      .make(
+        coordination.isolatedSessionRoot.flatTap { sessionRoot =>
+          logger.warn(s"[INSTANCE] Could not reach the running instance ($undelivered); using session $sessionRoot")
+        }
+      )(DirectoryTree.deleteRecursively)
       .map(LaunchRole.Isolated(_))

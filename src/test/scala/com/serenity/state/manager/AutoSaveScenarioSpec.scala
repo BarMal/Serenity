@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.config.{AppConfig, AutoSaveMode, PreferredWindowSize}
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.{Event, InsertChar, NewTab}
@@ -75,7 +76,7 @@ class AutoSaveScenarioSpec extends AnyFlatSpec with Matchers:
     def notices: List[Notice] = NoticeReducer.visible(state)
 
   private def fixture(failingNames: Set[String] = Set.empty): Fixture =
-    val directory = Files.createTempDirectory("auto-save-scenario-spec")
+    val directory = TestTemp.directory("auto-save-scenario-spec")
     val program =
       for
         modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))

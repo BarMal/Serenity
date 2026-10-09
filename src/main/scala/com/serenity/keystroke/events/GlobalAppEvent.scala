@@ -52,6 +52,9 @@ final case class ActivateBuffer(bufferId: BufferId) extends GlobalAppEvent
 /** Opens a file chosen from the Open Recent menu, as choosing it on the start page does. */
 final case class OpenRecentPath(path: Path) extends GlobalAppEvent
 
+/** Opens a folder chosen from the Open Recent Folder menu as the project root, as Open Folder does. */
+final case class OpenRecentFolder(path: Path) extends GlobalAppEvent
+
 /** Moves focus to the editor pane or docked panel next to the focused one on screen (Alt+Arrow by default). */
 final case class FocusInDirection(direction: Direction) extends GlobalAppEvent
 

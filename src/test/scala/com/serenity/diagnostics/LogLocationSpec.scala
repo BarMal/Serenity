@@ -3,6 +3,7 @@ package com.serenity.diagnostics
 import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -64,8 +65,8 @@ class LogLocationSpec extends AnyFlatSpec with Matchers:
   }
 
   "LogMigration.migrate" should "move the old log and its archives into the new directory, leaving other files" in {
-    val legacy = Files.createTempDirectory("serenity-legacy")
-    val target = Files.createTempDirectory("serenity-new").resolve("logs")
+    val legacy = TestTemp.directory("serenity-legacy")
+    val target = TestTemp.directory("serenity-new").resolve("logs")
     Files.writeString(legacy.resolve("serenity.log"), "current")
     Files.writeString(legacy.resolve("serenity.2026-10-01.0.log.gz"), "archive")
     Files.writeString(legacy.resolve("config.conf"), "settings")
@@ -83,8 +84,8 @@ class LogLocationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "never overwrite a file already in the new directory" in {
-    val legacy = Files.createTempDirectory("serenity-legacy")
-    val target = Files.createDirectories(Files.createTempDirectory("serenity-new").resolve("logs"))
+    val legacy = TestTemp.directory("serenity-legacy")
+    val target = Files.createDirectories(TestTemp.directory("serenity-new").resolve("logs"))
     Files.writeString(legacy.resolve("serenity.log"), "old")
     Files.writeString(target.resolve(LogMigration.MigratedLogName), "kept")
 
@@ -95,7 +96,7 @@ class LogLocationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "do nothing when there is no old directory or both are the same" in {
-    val target = Files.createTempDirectory("serenity-new")
+    val target = TestTemp.directory("serenity-new")
     LogMigration.migrate(target.resolve("missing"), target).unsafeRunSync() shouldBe Nil
     Files.writeString(target.resolve("serenity.log"), "same")
     LogMigration.migrate(target, target).unsafeRunSync() shouldBe Nil

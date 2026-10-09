@@ -3,6 +3,7 @@ package com.serenity.config
 import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.config.AppConfigOps.*
 import com.typesafe.config.ConfigFactory
 import io.circe.parser.decode
@@ -30,7 +31,7 @@ class HotkeyOverridesSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigFileFormat.render(config, osName).linesIterator.filter(_.startsWith("hotkey.")).toList
 
   private def tempFile(content: String): Path =
-    val file = Files.createTempFile("serenity-hotkeys", ".conf")
+    val file = TestTemp.file("serenity-hotkeys", ".conf")
     Files.writeString(file, content)
     file
 
@@ -275,7 +276,7 @@ class HotkeyOverridesSpec extends AnyFlatSpec with Matchers with OptionValues:
   // Reset
 
   "resetting an action" should "delete its override from the file rather than write the default" in {
-    val file = Files.createTempFile("serenity-hotkeys", ".conf")
+    val file = TestTemp.file("serenity-hotkeys", ".conf")
     Files.delete(file)
     val customised = AppConfig.default.withHotkeyConfig(
       AppConfig.default.inputConfig.hotkeyConfig.withBinding(HotkeyAction.Redo, "ctrl+alt+r")
@@ -309,7 +310,7 @@ class HotkeyOverridesSpec extends AnyFlatSpec with Matchers with OptionValues:
   }
 
   it should "not reach config.conf when an unrelated setting is saved from the terminal" in {
-    val file = Files.createTempFile("serenity-terminal-hotkeys", ".conf")
+    val file = TestTemp.file("serenity-terminal-hotkeys", ".conf")
     Files.delete(file)
     val plan = ConfigMigrations.Plan(Nil, ConfigVersion.Current, mac)
 

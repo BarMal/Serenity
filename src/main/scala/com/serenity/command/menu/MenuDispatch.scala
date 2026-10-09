@@ -3,7 +3,7 @@ package com.serenity.command.menu
 import java.nio.file.Path
 
 import com.serenity.command.{CommandId, CommandKeyBindings}
-import com.serenity.keystroke.events.{ActivateBuffer, Event, OpenRecentPath, RunCommand}
+import com.serenity.keystroke.events.{ActivateBuffer, Event, OpenRecentFolder, OpenRecentPath, RunCommand}
 import com.serenity.keystroke.translators.TextHotkeyConverters
 import com.serenity.state.models.BufferId
 
@@ -13,6 +13,7 @@ object MenuDispatch:
   enum Choice:
     case Buffer(id: BufferId)
     case RecentFile(path: Path)
+    case RecentFolder(path: Path)
 
   /** The event of the hotkey action that performs the command, so a menu Paste behaves exactly like the key (clipboard
     * sync included); otherwise `RunCommand`, which applies the same availability gate as a key bound to the command.
@@ -22,8 +23,9 @@ object MenuDispatch:
 
   def eventFor(choice: Choice): Event =
     choice match
-      case Choice.Buffer(id)       => ActivateBuffer(id)
-      case Choice.RecentFile(path) => OpenRecentPath(path)
+      case Choice.Buffer(id)         => ActivateBuffer(id)
+      case Choice.RecentFile(path)   => OpenRecentPath(path)
+      case Choice.RecentFolder(path) => OpenRecentFolder(path)
 
   /** Only a command item has an event of its own: the other entries lay out the menu or need a [[Choice]] first. */
   def eventFor(entry: ResolvedEntry): Option[Event] =

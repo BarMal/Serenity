@@ -21,6 +21,9 @@ class DynamicMenuSpec extends AnyFlatSpec with Matchers:
   private def withRecent(paths: List[Path]): AppState =
     AppState.initial.copy(persisted = AppState.initial.persisted.copy(recentFiles = paths))
 
+  private def withRecentFolders(paths: List[Path], files: List[Path] = Nil): AppState =
+    AppState.initial.copy(persisted = AppState.initial.persisted.copy(recentFolders = paths, recentFiles = files))
+
   private def buffer(id: Int, file: Option[String], dirty: Boolean = false): Buffer =
     val base = Buffer.fromString(BufferId(id), "text")
     base.copy(document = base.document.copy(filePath = file.map(Paths.get(_)), isDirty = dirty))
@@ -42,7 +45,10 @@ class DynamicMenuSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  private def recent(app: AppState): DynamicMenu.Section  = DynamicMenu.expand(DynamicSource.RecentFiles, app, registry)
+  private def recent(app: AppState): DynamicMenu.Section = DynamicMenu.expand(DynamicSource.RecentFiles, app, registry)
+  private def folders(app: AppState): DynamicMenu.Section =
+    DynamicMenu.expand(DynamicSource.RecentFolders, app, registry)
+
   private def windows(app: AppState): DynamicMenu.Section = DynamicMenu.expand(DynamicSource.OpenBuffers, app, registry)
 
   private def chosen(section: DynamicMenu.Section): List[DynamicMenu.Item.Choose] =
@@ -91,6 +97,65 @@ class DynamicMenuSpec extends AnyFlatSpec with Matchers:
 
     files.map(_.mnemonic) shouldBe List(None)
     files.map(_.checked) shouldBe List(false)
+  }
+
+  "Open Recent Folder" should "be a submenu of its own, apart from Open Recent" in {
+    folders(withRecentFolders(List(Paths.get("/a/one")))).submenuTitle shouldBe Some("Open Recent Folder")
+  }
+
+  it should "list the most recent folder first, labelled by its name with the parent as its description" in {
+    val section = folders(withRecentFolders(List(Paths.get("/work/book"), Paths.get("/home/me/notes"))))
+
+    chosen(section).map(c => (c.label, c.description)) shouldBe
+      List(("book", Some(absolute("/work").toString)), ("notes", Some(absolute("/home/me").toString)))
+    chosen(section).map(_.choice) shouldBe
+      List(Choice.RecentFolder(Paths.get("/work/book")), Choice.RecentFolder(Paths.get("/home/me/notes")))
+  }
+
+  it should "show a folder once, at its most recent place" in {
+    val section = folders(withRecentFolders(List(Paths.get("/a/x"), Paths.get("/b/y"), Paths.get("/a/./x"))))
+
+    chosen(section).map(_.label) shouldBe List("x", "y")
+  }
+
+  it should "show no more than the start page's recent list does" in {
+    val many    = (1 to 20).map(i => Paths.get(s"/dir/folder$i")).toList
+    val section = folders(withRecentFolders(many))
+
+    chosen(section).map(_.label) shouldBe many.take(StartupPageContent.RecentFilesLimit).map(_.getFileName.toString)
+  }
+
+  it should "end with the Clear Recent command after a separator" in {
+    val section = folders(withRecentFolders(List(Paths.get("/a/one"))))
+    val clear   = registry.findCommand("clear-recent-files").getOrElse(fail("clear-recent-files is not registered"))
+
+    section.items.takeRight(2) shouldBe List(DynamicMenu.Item.Separator, DynamicMenu.Item.Run(clear))
+  }
+
+  it should "show only a disabled placeholder when no folder was opened recently" in {
+    folders(withRecentFolders(Nil)).items shouldBe List(DynamicMenu.Item.Placeholder("(No recent folders)"))
+  }
+
+  it should "give folders no mnemonic and never check one" in {
+    val entries = chosen(folders(withRecentFolders(List(Paths.get("/a/one")))))
+
+    entries.map(_.mnemonic) shouldBe List(None)
+    entries.map(_.checked) shouldBe List(false)
+  }
+
+  "Open Recent" should "not list folders" in {
+    chosen(recent(withRecentFolders(List(Paths.get("/a/one"))))) shouldBe Nil
+  }
+
+  it should "offer Clear Recent when only folders are remembered, so the menu can be emptied" in {
+    val section = recent(withRecentFolders(List(Paths.get("/a/one"))))
+    val clear   = registry.findCommand("clear-recent-files").getOrElse(fail("clear-recent-files is not registered"))
+
+    section.items shouldBe List(
+      DynamicMenu.Item.Placeholder("(No recent files)"),
+      DynamicMenu.Item.Separator,
+      DynamicMenu.Item.Run(clear)
+    )
   }
 
   "Window" should "list the open buffers in tab order, inline" in {

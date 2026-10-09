@@ -6,11 +6,11 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.StateManagerTestSupport
 import com.serenity.command.ReopenWithEncodingCommands
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.state.models.*
 import com.serenity.text.TextEncoding
+import com.serenity.{StateManagerTestSupport, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -19,7 +19,7 @@ class ReopenWithEncodingStateManagerSpec extends AnyFlatSpec with Matchers with 
 
   /** Detected as UTF-8 "é"; read as windows-1252 it is "Ã©". */
   private def ambiguousFile: Path =
-    val file = Files.createTempDirectory("reopen-with-encoding").resolve("draft.txt")
+    val file = TestTemp.directory("reopen-with-encoding").resolve("draft.txt")
     Files.write(file, Array(0xc3.toByte, 0xa9.toByte))
 
   private def opened(file: Path): (StateManager, BufferId) =
@@ -85,7 +85,7 @@ class ReopenWithEncodingStateManagerSpec extends AnyFlatSpec with Matchers with 
   }
 
   it should "leave the buffer alone and say so when the file is not valid in the picked encoding" in {
-    val file = Files.createTempDirectory("reopen-with-encoding").resolve("latin.txt")
+    val file = TestTemp.directory("reopen-with-encoding").resolve("latin.txt")
     Files.write(file, Array('c'.toByte, 0xe9.toByte))
     val (editor, bufferId) = opened(file)
     val before             = bufferOf(editor, bufferId).document.content.collect()

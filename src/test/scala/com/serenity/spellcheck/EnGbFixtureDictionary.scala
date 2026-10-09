@@ -3,6 +3,7 @@ package com.serenity.spellcheck
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 
+import com.serenity.TestTemp
 import com.serenity.config.SpellCheckConfig
 
 /** A small `en_GB` Hunspell dictionary written to a temp directory. It reproduces the structure of the real LibreOffice
@@ -196,7 +197,7 @@ object EnGbFixtureDictionary:
   )
 
   def write(extraAffix: String = ""): Path =
-    val directory = Files.createTempDirectory("serenity-en-gb-fixture")
+    val directory = TestTemp.directory("serenity-en-gb-fixture")
     Files.writeString(directory.resolve("en_GB.aff"), affix + extraAffix, StandardCharsets.UTF_8)
     Files.writeString(
       directory.resolve("en_GB.dic"),
