@@ -290,3 +290,49 @@ class HotkeyOverridesSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     Files.readString(file).linesIterator.filter(_.startsWith("hotkey.")).toList shouldBe Nil
   }
+
+  // The terminal on macOS: `forTerminalUse` rewrites the Cmd defaults to Ctrl, and that rewritten config is the one
+  // the state manager saves, so what counts as a change is measured from the rewritten defaults.
+
+  private val macTerminal = HotkeyConfig.forOs(mac).forTerminalUse
+
+  "the terminal's rewrite of the macOS defaults" should "not be written back as the user's overrides" in {
+    macTerminal.bindingsFor(HotkeyAction.Save).map(_.render) shouldBe List("ctrl+s")
+
+    hotkeyLines(withHotkeys(macTerminal), mac) shouldBe Nil
+  }
+
+  it should "still let a change made in the terminal through" in {
+    val changed = macTerminal.withBinding(HotkeyAction.Find, "ctrl+alt+f")
+
+    hotkeyLines(withHotkeys(changed), mac) shouldBe List("""hotkey.find = ["ctrl+alt+f"]""")
+  }
+
+  it should "not reach config.conf when an unrelated setting is saved from the terminal" in {
+    val file = Files.createTempFile("serenity-terminal-hotkeys", ".conf")
+    Files.delete(file)
+    val plan = ConfigMigrations.Plan(Nil, ConfigVersion.Current, mac)
+
+    val saved =
+      ConfigManager.saveConfigWith(withHotkeys(macTerminal).withWheelScrollLines(7), file, plan).unsafeRunSync()
+
+    saved shouldBe Right(())
+    Files.readString(file).linesIterator.filter(_.startsWith("hotkey.")).toList shouldBe Nil
+  }
+
+  it should "leave an override already in the file alone when the terminal saves" in {
+    val file = tempFile(s"${currentVersion}hotkey.save = [\"ctrl+s\"]\nhotkey.find = [\"meta+alt+f\"]\n")
+    val plan = ConfigMigrations.Plan(Nil, ConfigVersion.Current, mac)
+
+    val saved = ConfigManager
+      .saveConfigWith(
+        withHotkeys(macTerminal.withBinding(HotkeyAction.Find, "meta+alt+f")).withWheelScrollLines(7),
+        file,
+        plan
+      )
+      .unsafeRunSync()
+
+    saved shouldBe Right(())
+    Files.readString(file).linesIterator.filter(_.startsWith("hotkey.")).toList shouldBe
+      List("""hotkey.save = ["ctrl+s"]""", """hotkey.find = ["meta+alt+f"]""")
+  }

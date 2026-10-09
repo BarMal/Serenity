@@ -99,6 +99,16 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.configPath.map(path => Files.exists(path)) shouldBe Some(true)
   }
 
+  it should "keep the terminal's hotkey adjustment on the config it commits, so the writer measures from the right defaults" in {
+    val terminalConfig =
+      AppConfig.default.withHotkeyConfig(com.serenity.config.HotkeyConfig.forOs("Mac OS X").forTerminalUse)
+    val fixture = harness(initialState = AppState.initial(terminalConfig))
+
+    fixture.config.updateConfig(_.withWheelScrollLines(7)).unsafeRunSync()
+
+    fixture.currentConfig.inputConfig.hotkeyConfig.terminalAdjusted shouldBe true
+  }
+
   it should "apply a config update to state when no config file is configured" in {
     val fixture = harness(persistConfig = false)
 

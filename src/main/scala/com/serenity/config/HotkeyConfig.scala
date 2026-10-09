@@ -267,7 +267,9 @@ final case class HotkeyConfig(
     // Keyed by registry command id (`Command.name`), for commands with no `HotkeyAction` of their own (issue #1922).
     // An empty list is kept rather than dropped: it records that the user unbound a shipped default, so a reload does
     // not bring the default back.
-    commandBindings: Map[String, List[HotkeyTrigger]] = HotkeyConfig.defaultCommandBindings
+    commandBindings: Map[String, List[HotkeyTrigger]] = HotkeyConfig.defaultCommandBindings,
+    // Set by `forTerminalUse`: the defaults these bindings derive from are the terminal's, not the platform's.
+    terminalAdjusted: Boolean = false
 ):
   def bindingsFor(action: HotkeyAction): List[HotkeyTrigger] =
     bindings.getOrElse(action, Nil)
@@ -341,7 +343,8 @@ final case class HotkeyConfig(
         commandBindings,
         HotkeyConfig.defaultCommandBindingsFor("Mac OS X"),
         HotkeyConfig.defaultCommandBindingsFor("linux")
-      )
+      ),
+      terminalAdjusted = true
     )
 
 object HotkeyConfig:

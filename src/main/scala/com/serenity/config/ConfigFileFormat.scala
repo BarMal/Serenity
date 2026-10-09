@@ -36,8 +36,8 @@ object ConfigFileFormat:
       .mkString("", "\n", "\n")
 
   /** Every setting [[render]] would write, in the order it writes them. */
-  def settings(config: AppConfig): List[(String, HoconValue)] =
-    lines(config).collect { case Right(setting) => setting }
+  def settings(config: AppConfig, osName: String = HotkeyOverrides.runningOs): List[(String, HoconValue)] =
+    lines(config, osName).collect { case Right(setting) => setting }
 
   /** The settings [[render]] would emit that reading the file back would not return, empty when there are none.
     *
@@ -45,8 +45,8 @@ object ConfigFileFormat:
     * library -- the later assignment simply replaces the earlier value with an object -- so assembling the settings
     * into a `Config` and counting what survives is what reveals it. A duplicated key shows up the same way.
     */
-  def unwritableSettings(config: AppConfig): List[String] =
-    val settings  = lines(config).collect { case Right((key, value)) => key -> value.config }
+  def unwritableSettings(config: AppConfig, osName: String = HotkeyOverrides.runningOs): List[String] =
+    val settings  = lines(config, osName).collect { case Right((key, value)) => key -> value.config }
     val assembled = settings.foldLeft(ConfigFactory.empty()) { case (acc, (key, value)) => acc.withValue(key, value) }
     if assembled.entrySet().size == settings.size then Nil
     else
@@ -62,10 +62,7 @@ object ConfigFileFormat:
   def unknownInLayout: List[String] =
     layout.collect { case Entry.Field(key) if ConfigRegistry.find(key).isEmpty => key }
 
-  private def lines(
-    config: AppConfig,
-    osName: String = HotkeyOverrides.runningOs
-  ): List[Either[String, (String, HoconValue)]] =
+  private def lines(config: AppConfig, osName: String): List[Either[String, (String, HoconValue)]] =
     layout.flatMap {
       case Entry.Comment(text)   => List(Left(s"# $text"))
       case Entry.Blank           => List(Left(""))

@@ -167,7 +167,8 @@ object ConfigMigrations:
       notes: List[MigrationNote] = Nil
   )
 
-  final case class Plan(steps: List[Step], target: ConfigVersion)
+  /** `osName` is the platform whose hotkey defaults the file is written against. */
+  final case class Plan(steps: List[Step], target: ConfigVersion, osName: String = HotkeyOverrides.runningOs)
 
   val steps: List[Step] = List(droppingDefaultHotkeys(HotkeyOverrides.runningOs))
 
