@@ -172,7 +172,9 @@ final private[manager] class StateManagerUiPresetEffects(
   /** Records the request on the dispatcher, then loads the preset and its theme on the Presets lane. The loaded preset
     * is applied only if no later apply was requested meanwhile.
     */
-  private def requestApply(name: String)(restoreWith: (UiPreset, Boolean, Theme) => AppState => AppState): IO[Unit] =
+  private def requestApply(name: String)(
+    restoreWith: (UiPreset, Boolean, Option[Theme]) => AppState => AppState
+  ): IO[Unit] =
     normalizedPresetName(name) match
       case None =>
         logger.warn("[PRESET] Ignoring empty UI preset name")
@@ -203,7 +205,7 @@ final private[manager] class StateManagerUiPresetEffects(
 
   private def loadPresetResolution(
     presetName: String,
-    restoreWith: (UiPreset, Boolean, Theme) => AppState => AppState
+    restoreWith: (UiPreset, Boolean, Option[Theme]) => AppState => AppState
   ): IO[UiPresetApplyResolution] =
     resolveUiPreset(presetName).flatMap {
       case None =>
@@ -327,16 +329,20 @@ final private[manager] class StateManagerUiPresetEffects(
         lanes.dispatchEffectResult(EffectResult.UiPresetFeedback(Some(previews), context), _ => IO.unit)
       )
 
-  private def loadUiPresetResources(preset: UiPreset): IO[Either[String, Theme]] =
+  private def loadUiPresetResources(preset: UiPreset): IO[Either[String, Option[Theme]]] =
     FontLoader.missingFamilies(preset.config.editorConfig.fontConfig) match
       case missing :: _ => IO.pure(Left(s"Preset requires unavailable $missing."))
       case Nil =>
-        themeManager.loadTheme(preset.themeName).attempt.map {
-          case Right(theme) => Right(theme)
-          case Left(error) =>
-            val detail = Option(error.getMessage).filter(_.nonEmpty).getOrElse(error.getClass.getSimpleName)
-            Left(s"Theme '${preset.themeName}' could not be loaded: $detail")
-        }
+        preset.themeName
+          .traverse { themeName =>
+            themeManager.loadTheme(themeName).attempt.map {
+              case Right(theme) => Right(theme)
+              case Left(error) =>
+                val detail = Option(error.getMessage).filter(_.nonEmpty).getOrElse(error.getClass.getSimpleName)
+                Left(s"Theme '$themeName' could not be loaded: $detail")
+            }
+          }
+          .map(_.sequence)
 
   private def updateCommandRunnerPresetContext(presetName: Option[String], statusMessage: String): IO[Unit] =
     commitValidated(UiPresetTransitions.withPresetContext(_, presetName, statusMessage))

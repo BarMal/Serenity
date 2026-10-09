@@ -32,7 +32,7 @@ object UiPresetDiff:
       if isBuiltInWorkflow(preset) then UiPreset.mergeBuiltInWorkflowConfig(currentConfig, preset)
       else UiPreset.appliedConfig(currentConfig, preset)
 
-    themeChange(currentThemeName, preset).toList :::
+    themeChange(currentConfig, currentThemeName, preset).toList :::
       scalarChanges(currentConfig, resolvedConfig) :::
       groupChanges(currentConfig, resolvedConfig) :::
       dockedPanelsChange(currentHasDockedPanels, preset).toList :::
@@ -40,11 +40,14 @@ object UiPresetDiff:
 
   private def isBuiltInWorkflow(preset: UiPreset): Boolean = UiPreset.isBuiltInWorkflow(preset)
 
-  /** Built-in workflows keep the user's theme, so they never offer to change it. */
-  private def themeChange(currentThemeName: String, preset: UiPreset): Option[PresetChange] =
-    Option.when(!isBuiltInWorkflow(preset) && currentThemeName != preset.themeName)(
-      PresetChange("theme", "Theme", currentThemeName, preset.themeName)
-    )
+  /** Offered only when applying would change the theme: built-in workflows keep the user's theme, a preset naming no
+    * theme leaves it alone, and while the theme follows the OS the preset's does not apply (see
+    * [[UiPreset.appliedTheme]]).
+    */
+  private def themeChange(current: AppConfig, currentThemeName: String, preset: UiPreset): Option[PresetChange] =
+    preset.themeName
+      .filter(name => !isBuiltInWorkflow(preset) && !current.themeFollowConfig.followSystem && name != currentThemeName)
+      .map(PresetChange("theme", "Theme", currentThemeName, _))
 
   private def scalarChanges(current: AppConfig, resolved: AppConfig): List[PresetChange] =
     ConfigRegistry.fields.flatMap(scalarChange(_, current, resolved))
@@ -120,9 +123,8 @@ object UiPresetDiff:
     key.split("[._]").filter(_.nonEmpty).map(_.capitalize).mkString(" ")
 
   /** Applies only the changes named by `selectedKeys` (`PresetChange.key`s from [[changes]]) rather than the whole
-    * preset -- the toggle-off path of the preset diff-toggle UI. `theme` is the already-loaded `Theme` for
-    * `preset.themeName`, exactly as `UiPreset.applyToState`/`applyBuiltInWorkflowToState` expect it; it is only
-    * actually used when `"theme"` is selected.
+    * preset -- the toggle-off path of the preset diff-toggle UI. `presetTheme` is the already-loaded `Theme` for
+    * `preset.themeName`, if the preset names one; it is only actually used when `"theme"` is selected.
     *
     * Docked panels and workspace layout (`"dockedPanels"`/`"workspaceTree"`) are the one pair applied together,
     * all-or-nothing: `UiPreset.applyToState`'s panel/tree restore (pruning, redocking, the editor-pane target) is one
@@ -131,7 +133,12 @@ object UiPresetDiff:
     * other selected key is layered on top of that result's config afterward, so a layout-only selection still gets
     * exactly the config values it asked for, not the preset's full resolved config.
     */
-  def applySelected(state: AppState, theme: Theme, preset: UiPreset, selectedKeys: Set[String]): AppState =
+  def applySelected(
+    state: AppState,
+    presetTheme: Option[Theme],
+    preset: UiPreset,
+    selectedKeys: Set[String]
+  ): AppState =
     val current = state.persisted.config
     val builtIn = isBuiltInWorkflow(preset)
     val resolved =
@@ -139,13 +146,15 @@ object UiPresetDiff:
       else UiPreset.appliedConfig(current, preset)
 
     val selectedConfig = mergeSelected(current, resolved, selectedKeys)
-    val selectedTheme  = if selectedKeys.contains("theme") then theme else state.persisted.theme
-    val appliesLayout  = selectedKeys.contains("dockedPanels") || selectedKeys.contains("workspaceTree")
+    val selectedTheme =
+      if selectedKeys.contains("theme") then UiPreset.appliedTheme(current, state.persisted.theme, presetTheme)
+      else state.persisted.theme
+    val appliesLayout = selectedKeys.contains("dockedPanels") || selectedKeys.contains("workspaceTree")
 
     val base =
       if !appliesLayout then state
       else if builtIn then UiPreset.applyBuiltInWorkflowToState(preset, state)
-      else UiPreset.applyToState(preset, state, selectedTheme)
+      else UiPreset.applyToState(preset, state, Some(selectedTheme))
 
     base.copy(persisted = base.persisted.copy(config = selectedConfig, theme = selectedTheme))
 
