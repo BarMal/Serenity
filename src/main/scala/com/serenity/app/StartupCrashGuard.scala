@@ -39,6 +39,10 @@ object StartupCrashGuard:
       )
     ).handleError(_ => 0)
 
+  /** A launch already in safe mode only reads the marker: a safe start that dies must not push the next one further. */
+  def countStart(safeMode: Boolean): IO[Int] =
+    if safeMode then peekUnfinishedStarts(defaultMarker) else recordStartAttempt(defaultMarker)
+
   /** Returns the unfinished starts before this one and leaves the marker one higher. A marker that cannot be read or
     * written must never stop the editor starting, so failure counts as no history.
     */

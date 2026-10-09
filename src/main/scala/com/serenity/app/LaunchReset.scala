@@ -4,6 +4,7 @@ import java.nio.file.{Files, LinkOption, Path}
 import java.time.Instant
 
 import cats.effect.IO
+import cats.syntax.foldable.*
 import com.serenity.io.TimestampedBackup
 
 /** `--reset-config` and `--reset-session`: the files are moved to timestamped backups, never deleted, so a reset can
@@ -39,3 +40,19 @@ object LaunchReset:
         val folder = Files.createDirectory(sessionRoot.resolve(s"session-${backupSuffix(at)}"))
         present.map(entry => Moved(entry, TimestampedBackup.moveAside(entry, folder.resolve(entry.getFileName))))
     }
+
+  /** An isolated launch does not own the session folder, so a reset must not move what the running instance writes. */
+  def applyRequested(
+    options: LaunchOptions,
+    ownsSession: Boolean,
+    config: Path,
+    sessionRoot: Path,
+    at: Instant
+  ): IO[(List[Moved], List[Moved])] =
+    for
+      configMoved  <- if options.resetConfig then backUpConfig(config, at) else IO.pure(Nil)
+      sessionMoved <- if options.resetSession && ownsSession then backUpSession(sessionRoot, at) else IO.pure(Nil)
+      _ <- (configMoved ++ sessionMoved).traverse_(moved =>
+        IO(System.err.println(s"Moved ${moved.from} to ${moved.to}"))
+      )
+    yield (configMoved, sessionMoved)

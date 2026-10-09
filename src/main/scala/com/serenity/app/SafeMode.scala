@@ -34,6 +34,10 @@ object SafeMode:
       )
     )
 
+  /** Safe mode writes its session into a scratch folder, so the real one is neither read nor replaced. */
+  def sessionRootFor(plan: StartupRecovery.Plan): Resource[IO, Option[Path]] =
+    if plan.safeMode then scratchSessionRoot.map(Some(_)) else Resource.pure(None)
+
   /** Where safe mode keeps the session it writes while running, so the real one is neither read nor replaced. */
   def scratchSessionRoot: Resource[IO, Path] =
     Resource.make(IO.blocking(Files.createTempDirectory("serenity-safe-mode")))(root =>

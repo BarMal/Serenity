@@ -2,7 +2,7 @@ package com.serenity.app
 
 import java.nio.file.Path
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 import cats.effect.std.{Dispatcher, Queue}
 import cats.effect.{IO, Resource}
@@ -35,6 +35,9 @@ final case class DesktopHooks(openedFiles: Stream[IO, List[Path]], quitRequests:
       case LaunchRole.Forwarded               => Stream.empty
 
 object DesktopHooks:
+
+  /** How long a launch that stepped aside waits for the desktop to deliver the file it was launched for. */
+  val Grace: FiniteDuration = 500.millis
 
   val none: DesktopHooks = DesktopHooks(Stream.empty, Stream.empty)
 

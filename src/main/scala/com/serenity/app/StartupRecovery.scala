@@ -5,7 +5,7 @@ import java.nio.file.Path
 import cats.effect.IO
 import com.serenity.app.LaunchReset.Moved
 import com.serenity.app.StartupCrashGuard.Decision
-import com.serenity.diagnostics.PreviousRun
+import com.serenity.diagnostics.{CrashRecord, CrashReport, PreviousRun, RuntimeIdentity}
 import com.serenity.state.manager.StartupRecoveryState
 import com.serenity.state.models.AppState
 import com.serenity.ui.presets.UiPresetStore
@@ -20,6 +20,12 @@ object StartupRecovery:
   type CrashRecorder = (String, Throwable) => IO[Unit]
 
   val ignoreCrashes: CrashRecorder = (_, _) => IO.unit
+
+  def crashRecorderFor(store: CrashRecord): CrashRecorder =
+    (message, error) =>
+      IO.realTimeInstant.flatMap { at =>
+        store.recordCrash(CrashReport.render(RuntimeIdentity.current, at, message, Some(error), store.directory)).void
+      }
 
   /** @param notices
     *   Shown on the start page, since a terminal launch has nowhere else to say them.
