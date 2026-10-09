@@ -146,6 +146,13 @@ private[command] object CommandRegistryFileCommands:
       label = "New File"
     ),
     Command.typed(
+      "clear-recent-files",
+      "Forget the recently opened files, which empties the Open Recent menu.",
+      CommandIntent.File(FileIntent.ClearRecentFiles),
+      CommandCategory.File,
+      label = "Clear Recent Files"
+    ),
+    Command.typed(
       "show-licence-and-notices",
       "Open the Serenity licence (GPL-3.0-or-later) and the third-party notices, read-only.",
       CommandIntent.File(FileIntent.ShowLicenceAndNotices),

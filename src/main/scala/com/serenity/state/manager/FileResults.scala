@@ -133,6 +133,9 @@ private[manager] object FileResults:
       )
     withRecentFile(resized, path)
 
+  def withoutRecentFiles(state: AppState): AppState =
+    state.copy(persisted = state.persisted.copy(recentFiles = Nil, recentFilesByMode = Map.empty))
+
   private def withBuffer(state: AppState, buffer: Buffer): AppState =
     state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(buffer.id, buffer)))
 
