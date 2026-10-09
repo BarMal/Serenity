@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-10-09
+
+- Added recent folders to Open Recent: every folder opened as the project root, by Open Folder, on the command line or handed over by a later launch, is remembered (most recent first, once however its path is spelt, twenty at most) in an Open Recent Folder submenu beside Open Recent and on the start page after the recent files, and choosing one opens it in the Explorer as Open Folder does. They are saved with the session (schema version 6; an older session loads with none), the start page leaves out a folder that has gone, and Clear Recent now forgets the folders as well as the files.
+
 ### 2026-10-08
 
 - Made the start page and Cmd+O on macOS offer one "Open..." that takes a file or a folder, through the native open panel with both choices on, as VS Code, Zed and Pulsar do: a folder opens in the Explorer and leaves the start page, a file opens in a buffer, and cancelling changes nothing. Windows, Linux and the terminal keep Open file and Open folder, the palette lists Open File..., Open Folder... and, on macOS, Open..., and if the macOS panel cannot be shown the dialog failure notice says why. The macOS File menu is not built yet, so its Open... entry is ready but not visible.

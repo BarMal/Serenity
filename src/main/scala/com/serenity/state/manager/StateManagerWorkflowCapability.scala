@@ -114,8 +114,8 @@ final private[manager] class StateManagerWorkflowCapability(
       case Right(_) =>
         modelCommit.currentState.flatMap { live =>
           if StartPageTransitions.sameBuffers(live, snapshot) then
-            readableRecentFiles(snapshot).flatMap(recent =>
-              lanes.dispatchEffectResult(EffectResult.StartPageReady(snapshot, recent), _ => IO.unit)
+            (readableRecentFiles(snapshot), existingRecentFolders(snapshot)).flatMapN((files, folders) =>
+              lanes.dispatchEffectResult(EffectResult.StartPageReady(snapshot, files, folders), _ => IO.unit)
             )
           else if rewritesLeft > 0 then saveThenShowStartPage(live, rewritesLeft - 1)
           else operations.showNotice(FileFailureNotice.stayedInEditor)
@@ -127,6 +127,9 @@ final private[manager] class StateManagerWorkflowCapability(
 
   private def readableRecentFiles(committed: AppState): IO[List[Path]] =
     IO.blocking(committed.persisted.recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path)))
+
+  private def existingRecentFolders(committed: AppState): IO[List[Path]] =
+    IO.blocking(committed.persisted.recentFolders.filter(Files.isDirectory(_)))
 
   /** Answers the close waiting on the action stack -- what the close prompt's choices run. */
   private[manager] def resolveClose(choice: CloseWorkflowChoice): IO[Unit] =

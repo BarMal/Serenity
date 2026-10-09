@@ -31,9 +31,17 @@ object AppStartup:
     recentFiles: List[Path] = Nil,
     configNotice: Option[String] = None,
     resumeIdentifier: Option[String] = None,
-    fileOrFolderOpen: Boolean = false
+    fileOrFolderOpen: Boolean = false,
+    recentFolders: List[Path] = Nil
   ): StartupPage =
-    StartupPageContent.createStartPage(sessionExists, recentFiles, configNotice, resumeIdentifier, fileOrFolderOpen)
+    StartupPageContent.createStartPage(
+      sessionExists,
+      recentFiles,
+      configNotice,
+      resumeIdentifier,
+      fileOrFolderOpen,
+      recentFolders
+    )
 
   def startPageState(
     sessionService: SessionService,
@@ -51,13 +59,17 @@ object AppStartup:
       readableRecentFiles <- IO.blocking(
         recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
       )
+      existingRecentFolders <- IO.blocking(
+        loadedSession.fold(List.empty[Path])(_.persisted.recentFolders).filter(Files.isDirectory(_))
+      )
       resumeIdentifier = loadedSession.map(StartupPageContent.sessionResumeIdentifier)
       startPage = createStartPage(
         sessionExists,
         readableRecentFiles,
         configNotice,
         resumeIdentifier,
-        capabilities.opensFileOrFolder
+        capabilities.opensFileOrFolder,
+        existingRecentFolders
       )
     yield
       val startPageSurfaceId = SurfaceId("surface-0")

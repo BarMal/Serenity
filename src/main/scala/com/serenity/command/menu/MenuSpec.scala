@@ -23,7 +23,8 @@ object MenuSpec:
 
   private def file(isMac: Boolean, fileOrFolderOpen: Boolean): List[MenuEntry] =
     (if fileOrFolderOpen then items("new", "open-file-or-folder") else items("new", "open", "open-folder")) ++ List(
-      MenuEntry.Dynamic(DynamicSource.RecentFiles)
+      MenuEntry.Dynamic(DynamicSource.RecentFiles),
+      MenuEntry.Dynamic(DynamicSource.RecentFolders)
     ) ++ items(
       "go-to-file",
       "file-search"
