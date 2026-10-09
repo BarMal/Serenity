@@ -4,6 +4,8 @@ import java.awt.Font
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.concurrent.duration.FiniteDuration
+
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import com.serenity.app.{AppRuntime, StartupRecovery}
@@ -59,7 +61,8 @@ object TuiRuntime:
     recovery: StartupRecovery.Plan = StartupRecovery.Plan.normal,
     restarter: Option[RestartMode => IO[Unit]] = None,
     onFirstFrame: IO[Unit] = IO.unit,
-    forwardedOpens: Stream[IO, List[Path]] = Stream.empty
+    forwardedOpens: Stream[IO, List[Path]] = Stream.empty,
+    escDeadline: FiniteDuration = TerminalInputHandler.EscDisambiguationDeadline
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     // #1213: a real terminal cannot deliver Cmd/Meta as an ordinary keystroke the way AWT does for a focused Swing
     // window, so any hotkey still at its macOS/Cmd-conditioned platform default (Quit, Save, ...) is rewritten here
@@ -99,6 +102,7 @@ object TuiRuntime:
                     systemClipboard,
                     terminalShell.pendingInputPrefix,
                     terminalConfig.inputConfig.wheelScrollLines,
+                    escDeadline = escDeadline,
                     metrics = metrics
                   )
                   .flatTap { handler =>
