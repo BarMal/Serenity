@@ -57,8 +57,9 @@ final case class SessionField[A](key: String, get: AppConfig => A, set: (AppConf
   *
   * Everything written comes from [[ConfigRegistry]] plus [[composites]], so a setting cannot be saved to the config
   * file and dropped from session state -- which is what had happened to sixteen of them, `showPaneHeaders` and the
-  * viewport margins among them. Because the restored session's config replaces the running one wholesale, those
-  * settings went back to their defaults on every restore no matter what the config file said.
+  * viewport margins among them. Those settings went back to their defaults on every restore. A restore now keeps the
+  * running config and takes only the session's own state (`SessionWorkflowTransitions.restoredIntoViewport`, #1934), so
+  * the config file stays the source of truth for the settings it holds.
   *
   * The composites set `SurfaceConfig` fields directly rather than through `AppConfig`'s own setters: a restore should
   * put back exactly what was saved, and several of those setters deliberately adjust neighbouring settings.

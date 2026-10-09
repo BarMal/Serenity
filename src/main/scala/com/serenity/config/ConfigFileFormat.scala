@@ -24,10 +24,11 @@ object ConfigFileFormat:
     case Comment(text: String)
     case Blank
     case Field(key: String)
-    case Group(settings: AppConfig => List[(String, HoconValue)])
+    case Group(settings: (AppConfig, String) => List[(String, HoconValue)])
 
-  def render(config: AppConfig): String =
-    lines(config)
+  /** `osName` picks the platform defaults that hotkeys are compared against, so the file holds only what differs. */
+  def render(config: AppConfig, osName: String = HotkeyOverrides.runningOs): String =
+    lines(config, osName)
       .map {
         case Left(comment)       => comment
         case Right((key, value)) => s"$key = ${value.rendered}"
@@ -35,8 +36,8 @@ object ConfigFileFormat:
       .mkString("", "\n", "\n")
 
   /** Every setting [[render]] would write, in the order it writes them. */
-  def settings(config: AppConfig): List[(String, HoconValue)] =
-    lines(config).collect { case Right(setting) => setting }
+  def settings(config: AppConfig, osName: String = HotkeyOverrides.runningOs): List[(String, HoconValue)] =
+    lines(config, osName).collect { case Right(setting) => setting }
 
   /** The settings [[render]] would emit that reading the file back would not return, empty when there are none.
     *
@@ -44,8 +45,8 @@ object ConfigFileFormat:
     * library -- the later assignment simply replaces the earlier value with an object -- so assembling the settings
     * into a `Config` and counting what survives is what reveals it. A duplicated key shows up the same way.
     */
-  def unwritableSettings(config: AppConfig): List[String] =
-    val settings  = lines(config).collect { case Right((key, value)) => key -> value.config }
+  def unwritableSettings(config: AppConfig, osName: String = HotkeyOverrides.runningOs): List[String] =
+    val settings  = lines(config, osName).collect { case Right((key, value)) => key -> value.config }
     val assembled = settings.foldLeft(ConfigFactory.empty()) { case (acc, (key, value)) => acc.withValue(key, value) }
     if assembled.entrySet().size == settings.size then Nil
     else
@@ -61,11 +62,11 @@ object ConfigFileFormat:
   def unknownInLayout: List[String] =
     layout.collect { case Entry.Field(key) if ConfigRegistry.find(key).isEmpty => key }
 
-  private def lines(config: AppConfig): List[Either[String, (String, HoconValue)]] =
+  private def lines(config: AppConfig, osName: String): List[Either[String, (String, HoconValue)]] =
     layout.flatMap {
       case Entry.Comment(text)   => List(Left(s"# $text"))
       case Entry.Blank           => List(Left(""))
-      case Entry.Group(settings) => settings(config).map(Right.apply)
+      case Entry.Group(settings) => settings(config, osName).map(Right.apply)
       case Entry.Field(key) => ConfigRegistry.find(key).toList.map(configField => Right(configField.setting(config)))
     }
 
@@ -73,7 +74,10 @@ object ConfigFileFormat:
   private def comment(text: String): Entry = Entry.Comment(text)
   private def blank: Entry                 = Entry.Blank
 
-  private def group(settings: AppConfig => List[(String, HoconValue)]): Entry = Entry.Group(settings)
+  private def group(settings: AppConfig => List[(String, HoconValue)]): Entry =
+    Entry.Group((config, _) => settings(config))
+
+  private def platformGroup(settings: (AppConfig, String) => List[(String, HoconValue)]): Entry = Entry.Group(settings)
 
   private val layout: List[Entry] = List(
     comment("Serenity Editor Configuration"),
@@ -243,11 +247,12 @@ object ConfigFileFormat:
     field("spellcheck.dictionary_paths"),
     field("spellcheck.words"),
     blank,
-    comment("Hotkey overrides"),
-    group(ConfigGroups.hotkeys),
+    comment("Hotkey overrides: only the bindings you changed are listed, as hotkey.<action> = [\"ctrl+alt+k\"];"),
+    comment("anything not listed keeps its default, and [] unbinds an action"),
+    platformGroup((config, osName) => ConfigGroups.hotkeys(config, osName)),
     blank,
     comment("Keys for any palette command, by its id: hotkey.command.<id> = [\"ctrl+alt+k\"]; [] unbinds it"),
-    group(ConfigGroups.commandHotkeys),
+    platformGroup((config, osName) => ConfigGroups.commandHotkeys(config, osName)),
     blank,
     comment("Focused keymap overrides"),
     group(ConfigGroups.keymaps)
