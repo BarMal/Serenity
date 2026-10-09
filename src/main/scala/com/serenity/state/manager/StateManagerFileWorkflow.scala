@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.IO
 import com.serenity.io.{FileManager, FileUtils, StorageLocation}
+import com.serenity.richtext.{FidelityReport, SaveTarget}
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
@@ -50,11 +51,20 @@ final private[manager] class StateManagerFileWorkflow(
     val filename = mode match
       case FileWorkflowMode.SaveAs =>
         focusedPath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("")
-      case FileWorkflowMode.Open => ""
+      case FileWorkflowMode.Open | FileWorkflowMode.OpenFolder => ""
     // Captured once at open time, not re-derived live: the buffer being saved cannot change out from under an open
     // save dialog, and `Open` never saves anything so it stays false regardless (issue #1253).
     val bufferHasRichFormatting =
       mode == FileWorkflowMode.SaveAs && targetBuffer.flatMap(_.richText.richTextDocument).exists(_.hasFormatting)
+
+    val saveReports =
+      if mode == FileWorkflowMode.SaveAs then
+        targetBuffer
+          .flatMap(_.richText.richTextDocument)
+          .fold(Map.empty[SaveTarget, FidelityReport])(document =>
+            SaveTarget.values.map(target => target -> FidelityReport.forSave(document, target)).toMap
+          )
+      else Map.empty[SaveTarget, FidelityReport]
 
     val pathIO =
       mode match
@@ -63,7 +73,7 @@ final private[manager] class StateManagerFileWorkflow(
             .flatMap(path => Option(path.getParent))
             .map(IO.pure)
             .getOrElse(FileUtils.getCurrentDirectory)
-        case FileWorkflowMode.Open =>
+        case FileWorkflowMode.Open | FileWorkflowMode.OpenFolder =>
           FileUtils.getCurrentDirectory
 
     pathIO.flatMap { basePath =>
@@ -71,9 +81,10 @@ final private[manager] class StateManagerFileWorkflow(
         mode = mode,
         filename = filename,
         path = basePath.toString,
-        activeField = if mode == FileWorkflowMode.Open then FileWorkflowField.Path else FileWorkflowField.Filename,
+        activeField = if mode == FileWorkflowMode.SaveAs then FileWorkflowField.Filename else FileWorkflowField.Path,
         statusMessage = statusMessage,
-        bufferHasRichFormatting = bufferHasRichFormatting
+        bufferHasRichFormatting = bufferHasRichFormatting,
+        saveReports = saveReports
       )
       currentState.flatMap { current =>
         val shown = ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state
@@ -82,7 +93,7 @@ final private[manager] class StateManagerFileWorkflow(
             s"surfaceId=${shown.topModal.map(_.id).getOrElse("none")} focus=${shown.persisted.focus}"
         ) >> commitState(shown, current) >>
           // Populate the open dialog's directory listing immediately so it never appears as an empty, hung modal (#1289).
-          IO.whenA(mode == FileWorkflowMode.Open)(
+          IO.whenA(mode != FileWorkflowMode.SaveAs)(
             currentState.flatMap(_.topModal.fold(IO.unit)(dialog => refreshFileWorkflowEffect(dialog.id)))
           )
       }
@@ -112,6 +123,8 @@ final private[manager] class StateManagerFileWorkflow(
       fileDialog(state, surfaceId) match
         case Some(openWorkflow: OpenFileWorkflowState) =>
           completeOpenWorkflow(surfaceId, openWorkflow)
+        case Some(folderWorkflow: OpenFolderFileWorkflowState) =>
+          completeOpenFolderWorkflow(surfaceId, folderWorkflow)
         case Some(saveAsWorkflow: SaveAsFileWorkflowState) =>
           completeSaveAsWorkflow(surfaceId, saveAsWorkflow, state)
         case None =>
@@ -127,6 +140,10 @@ final private[manager] class StateManagerFileWorkflow(
             case FileWorkflowField.Path     => pathSuggestions(openWorkflow.path, includeFiles = true)
             case FileWorkflowField.Filename => filenameSuggestions(openWorkflow)
             case FileWorkflowField.Format   => IO.pure(Nil)
+        case folderWorkflow: OpenFolderFileWorkflowState =>
+          folderWorkflow.activeField match
+            case FileWorkflowField.Path => pathSuggestions(folderWorkflow.path)
+            case _                      => IO.pure(Nil)
         case saveAsWorkflow: SaveAsFileWorkflowState =>
           saveAsWorkflow.activeField match
             case FileWorkflowField.Path     => pathSuggestions(saveAsWorkflow.path)
@@ -136,7 +153,8 @@ final private[manager] class StateManagerFileWorkflow(
     yield FileWorkflowListing(suggestions, missingSegments)
 
   // `includeFiles` makes the open dialog a full directory browser (files listed alongside directories); save-as lists
-  // directories only, since its filename is typed separately (#1289).
+  // directories only, since its filename is typed separately (#1289), and so does Open Folder, where a file is never
+  // a valid choice.
   private def pathSuggestions(pathInput: String, includeFiles: Boolean = false): IO[List[FileWorkflowSuggestion]] =
     for
       currentDirectory <- FileUtils.getCurrentDirectory
@@ -223,6 +241,33 @@ final private[manager] class StateManagerFileWorkflow(
           )
         }
 
+  /** Enter in Open Folder only browses: the folder the Path names is listed, and anything else is reported in place.
+    * Choosing a folder is the separate confirm action ([[openAsProjectRoot]]).
+    */
+  private def completeOpenFolderWorkflow(surfaceId: SurfaceId, workflow: OpenFolderFileWorkflowState): IO[Unit] =
+    remoteWorkflowTarget(workflow) match
+      case Some(remoteTarget) =>
+        commit(withStatus(_, surfaceId, workflow, remoteStorageMessage(remoteTarget)))
+      case None =>
+        workflowTargetPath(workflow).flatMap { targetPath =>
+          lanes.submitEffect(
+            targetLane(targetPath),
+            folderTarget(targetPath).flatMap { target =>
+              lanes.dispatchEffectResult(
+                EffectResult.FileWorkflowTargetResolved(surfaceId, workflow, target),
+                committed => afterTargetResolved(surfaceId, target, committed)
+              )
+            }
+          )
+        }
+
+  private def folderTarget(targetPath: Path): IO[FileWorkflowTarget] =
+    IO.blocking(
+      if Files.isDirectory(targetPath) then FileWorkflowTarget.Directory(targetPath)
+      else if Files.exists(targetPath) then FileWorkflowTarget.NotADirectory(targetPath)
+      else FileWorkflowTarget.Missing(targetPath)
+    )
+
   private def openTarget(targetPath: Path): IO[FileWorkflowTarget] =
     IO.blocking(
       if FileUtils.isReadableFile(targetPath) then FileWorkflowTarget.ReadableFile(targetPath)
@@ -238,16 +283,18 @@ final private[manager] class StateManagerFileWorkflow(
         fileDialog(committed, surfaceId).fold(IO.unit)(requestListing(surfaceId, _))
       case FileWorkflowTarget.Missing(path)   => logger.debug(s"[FILE-WORKFLOW] Open target is not readable: $path")
       case FileWorkflowTarget.ReadableFile(_) => IO.unit
+      case FileWorkflowTarget.NotADirectory(path) =>
+        logger.debug(s"[FILE-WORKFLOW] Open Folder target is not a directory: $path")
 
-  /** Opens the directory an Open dialog is targeting as a project root (issue #1525), reporting back into the
-    * still-open dialog -- exactly like `completeOpenWorkflow` -- when the target is remote storage or isn't actually a
-    * directory. On a confirmed directory the dialog closes and `openProjectRoot`, which the owner supplies, takes the
-    * path.
+  /** Opens the directory an Open or Open Folder dialog is targeting as a project root (issue #1525), reporting back
+    * into the still-open dialog -- exactly like `completeOpenWorkflow` -- when the target is remote storage or isn't
+    * actually a directory. On a confirmed directory the dialog closes and `openProjectRoot`, which the owner supplies,
+    * takes the path.
     */
   private[manager] def openAsProjectRoot(surfaceId: SurfaceId, openProjectRoot: Path => IO[Unit]): IO[Unit] =
     currentState.flatMap { state =>
       fileDialog(state, surfaceId) match
-        case Some(openWorkflow: OpenFileWorkflowState) =>
+        case Some(openWorkflow) if openWorkflow.canOpenAsProjectRoot =>
           remoteWorkflowTarget(openWorkflow) match
             case Some(remoteTarget) =>
               commit(withStatus(_, surfaceId, openWorkflow, remoteStorageMessage(remoteTarget)))

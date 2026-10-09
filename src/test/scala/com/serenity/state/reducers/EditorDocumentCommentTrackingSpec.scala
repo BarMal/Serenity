@@ -55,6 +55,28 @@ class EditorDocumentCommentTrackingSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "keep a comment's id, author, thread and resolved state while its range moves with an edit" in {
+    val at = java.time.Instant.parse("2026-10-06T10:00:00Z")
+    val comment = DocumentComment(
+      CursorPosition(0, 4),
+      CursorPosition(0, 7),
+      "note",
+      id = CommentId(3),
+      author = Some("Ada"),
+      createdAt = Some(at),
+      replies = List(CommentReply("Grace", at, "reply")),
+      resolved = true
+    )
+    val (paneId, bufferId, initialState) =
+      stateWithCommentedText("abc def", CursorPosition(0, 0), comment)
+
+    val updatedState = EditorEventReducer.reduce(InsertChar('X'), paneId, initialState).state
+
+    updatedState.persisted.buffers(bufferId).annotations.documentComments shouldBe List(
+      comment.copy(anchor = CursorPosition(0, 5), focus = CursorPosition(0, 8))
+    )
+  }
+
   it should "move document comments after inserted text without materialising the buffer" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)

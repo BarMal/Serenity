@@ -67,10 +67,23 @@ class CursorListSpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matc
     }
   }
 
-  property("a single cursor's selection round-trips through Cursor.selection") {
+  private def samePlace(a: CursorPosition, b: CursorPosition): Boolean =
+    a.line == b.line && a.column == b.column
+
+  property("a single cursor's non-empty selection round-trips through Cursor.selection") {
     forAll(Generators.genCursorPosition, Generators.genCursorPosition) { (anchor, focus) =>
-      val cursor = Cursor(Selection(anchor, focus))
-      cursor.selection shouldBe Some(Selection(anchor, focus))
-      cursor.position shouldBe focus
+      whenever(!samePlace(anchor, focus)) {
+        val cursor = Cursor(Selection(anchor, focus))
+        cursor.selection shouldBe Some(Selection(anchor, focus))
+        cursor.position shouldBe focus
+      }
+    }
+  }
+
+  property("a cursor whose anchor is at its position has no selection") {
+    forAll(Generators.genCursorPosition) { position =>
+      val cursor = Cursor(Selection(position, position))
+      cursor.selection shouldBe None
+      cursor.position shouldBe position
     }
   }

@@ -21,7 +21,8 @@ final private[manager] class ManuscriptExportEffects(
     currentState: IO[AppState],
     commitState: (AppState, AppState) => IO[Unit],
     writeDocx: (ExportOrigin, Path) => IO[Unit] = ManuscriptExport.writeDocx,
-    writeEpub: (ExportOrigin, Path) => IO[Unit] = ManuscriptExport.writeEpub
+    writeEpub: (ExportOrigin, Path) => IO[Unit] = ManuscriptExport.writeEpub,
+    writePdf: (ExportOrigin, Path) => IO[Unit] = ManuscriptExport.writePdf
 ):
 
   def run(request: ManuscriptExportRequest, state: AppState): IO[Unit] =
@@ -49,6 +50,7 @@ final private[manager] class ManuscriptExportEffects(
     format match
       case ManuscriptFileFormat.Docx => writeDocx
       case ManuscriptFileFormat.Epub => writeEpub
+      case ManuscriptFileFormat.Pdf  => writePdf
 
   private def chooseAndWrite(dialog: FileDialog, origin: ExportOrigin, format: ManuscriptFileFormat): IO[Unit] =
     origin.path

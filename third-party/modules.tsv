@@ -41,5 +41,6 @@ org.jline:jline-terminal-jni	BSD-3-Clause	BSD-3-Clause-jline	the original JLine 
 org.jline:jline-native	BSD-3-Clause	BSD-3-Clause-jline	the original JLine authors	https://github.com/jline/jline3
 com.ibm.icu:icu4j	Unicode-3.0	Unicode-3.0-icu4j	Unicode, Inc. and others	https://icu.unicode.org/
 org.apache.pdfbox:fontbox	Apache-2.0	Apache-2.0, NOTICE-pdfbox	The Apache Software Foundation	https://pdfbox.apache.org/
+org.apache.pdfbox:pdfbox	Apache-2.0	Apache-2.0, NOTICE-pdfbox	The Apache Software Foundation	https://pdfbox.apache.org/
 org.apache.pdfbox:pdfbox-io	Apache-2.0	Apache-2.0, NOTICE-pdfbox	The Apache Software Foundation	https://pdfbox.apache.org/
 commons-logging:commons-logging	Apache-2.0	Apache-2.0, NOTICE-commons-logging	The Apache Software Foundation	https://commons.apache.org/proper/commons-logging/

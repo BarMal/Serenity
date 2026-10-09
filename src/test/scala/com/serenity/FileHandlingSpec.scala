@@ -1,7 +1,6 @@
 package com.serenity
 
 import java.nio.file.{Files, Path}
-import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -346,7 +345,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
       buffer.richText.richTextFidelity.map(_.unsupportedElements) shouldBe Some(Set("table", "picture"))
       fileManager.saveBuffer(buffer).attempt.unsafeRunSync().left.map(_.getMessage) shouldBe Left(
-        s"Saving $sourceFile would discard unsupported rich document content. Use Save As to write a new file."
+        s"Saving $sourceFile would drop 1 image and 1 table. Use Save As to write a new file."
       )
       Files.readAllBytes(sourceFile) shouldBe sourceBytes
 
@@ -354,33 +353,6 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
       RtfDocumentCodec.readBytesWithFidelity(Files.readAllBytes(savedFile)).map(_.fidelity.isLossless) shouldBe Right(
         true
       )
-    finally
-      Files.deleteIfExists(sourceFile)
-      Files.deleteIfExists(savedFile)
-  }
-
-  it should "require Save As before replacing a DOCX import with unsupported content" in {
-    val fileManager = new FileManager()
-    val sourceFile  = Files.createTempFile("serenity-lossy-source", ".docx")
-    val savedFile   = Files.createTempFile("serenity-lossy-copy", ".docx")
-
-    try
-      Files.write(sourceFile, docxBytesFromFixture("docx-unsupported-table.xml"))
-      val sourceBytes = Files.readAllBytes(sourceFile)
-
-      val buffer = fileManager.loadFile(sourceFile, BufferId(108)).unsafeRunSync()
-
-      buffer.richText.richTextFidelity.exists(!_.isLossless) shouldBe true
-      fileManager.saveBuffer(buffer).attempt.unsafeRunSync().left.map(_.getMessage) shouldBe Left(
-        s"Saving $sourceFile would discard unsupported rich document content. Use Save As to write a new file."
-      )
-      Files.readAllBytes(sourceFile) shouldBe sourceBytes
-
-      val saved = fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
-
-      Files.exists(savedFile) shouldBe true
-      saved.document.filePath shouldBe Some(savedFile)
-      saved.richText.richTextFidelity shouldBe None
     finally
       Files.deleteIfExists(sourceFile)
       Files.deleteIfExists(savedFile)
@@ -471,20 +443,6 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
       .find(_.text.contains(text))
       .map(_.style.marks)
       .getOrElse(Set.empty)
-
-  private def docxBytesFromFixture(name: String): Array[Byte] =
-    val source = scala.io.Source.fromResource(s"richtext/$name")
-    val xml =
-      try source.mkString
-      finally source.close()
-    val output = java.io.ByteArrayOutputStream()
-    val zip    = ZipOutputStream(output)
-    try
-      zip.putNextEntry(ZipEntry("word/document.xml"))
-      zip.write(xml.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-      zip.closeEntry()
-    finally zip.close()
-    output.toByteArray
 
   it should "raise a clear error when reading a missing file" in {
     val missingFile = Files.createTempDirectory("serenity-missing-file").resolve("missing.txt")

@@ -8,8 +8,14 @@ import com.serenity.state.reducers.ModalStateReducer
   */
 object StartupRecoveryState:
 
-  def applied(state: AppState, safeMode: Boolean, crashLoopAfter: Option[Int]): AppState =
+  def applied(
+    state: AppState,
+    safeMode: Boolean,
+    crashLoopAfter: Option[Int],
+    unexpectedExit: Option[String] = None
+  ): AppState =
     val flagged = state.copy(runtime = state.runtime.copy(safeMode = safeMode))
-    crashLoopAfter.fold(flagged) { unfinished =>
-      ModalStateReducer.show(Modal.Confirm(ConfirmPrompt.startedInSafeMode(unfinished)), flagged).state
-    }
+    val prompt = crashLoopAfter
+      .map(ConfirmPrompt.startedInSafeMode)
+      .orElse(unexpectedExit.map(ConfirmPrompt.closedUnexpectedly))
+    prompt.fold(flagged)(shown => ModalStateReducer.show(Modal.Confirm(shown), flagged).state)

@@ -39,16 +39,24 @@ object RenameEditReducer:
               EditorEditSupport.undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, groupable = false)
             )
             .getOrElse(Nil)
-          val summary = summaryPeek(stateWithEdit, anchor, appliedCount = currentEdits.length, skippedUris)
+          val summary = summaryPeek(
+            stateWithEdit,
+            anchor,
+            appliedCount = appliedEdits.length,
+            skippedUris,
+            heldBack = currentEdits.length - appliedEdits.length
+          )
           ReducerResult(summary.state, undoEffects ++ summary.effects)
 
   private def summaryPeek(
     state: AppState,
     anchor: CursorPosition,
     appliedCount: Int,
-    skippedUris: Set[String]
+    skippedUris: Set[String],
+    heldBack: Int = 0
   ): ReducerResult =
-    val appliedPart = s"Renamed $appliedCount location(s) in this file."
+    val appliedPart = s"Renamed $appliedCount location(s) in this file." +
+      (if heldBack == 0 then "" else s" $heldBack beside a read-only block were left as they were.")
     val skippedPart =
       if skippedUris.isEmpty then ""
       else s" ${skippedUris.size} other file(s) were not updated -- rename currently applies to the open file only."

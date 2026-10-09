@@ -10,7 +10,7 @@ import scala.util.Try
 
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
-import com.serenity.io.{AtomicFileWriter, FileStamp}
+import com.serenity.io.{AtomicFileWriter, FileManager, FileStamp, LocalDocumentStorageProvider}
 import com.serenity.state.models.AppState
 import com.serenity.ui.theme.config.AppThemeManager
 import org.typelevel.log4cats.Logger
@@ -36,6 +36,9 @@ class SessionManager(
   private val sessionsRootAbsolute = sessionsDirectory.toAbsolutePath.normalize
 
   private val stateEncoder = new SessionStateEncoder
+
+  private def restoreFiles(using com.serenity.rope.Balance): FileManager =
+    FileManager(LocalDocumentStorageProvider(clock = clock, attributes = attributes))
 
   private val journal = new SessionWriteJournal(pendingFile, indexFile, safeSessionPath, logger)
 
@@ -245,7 +248,7 @@ class SessionManager(
                     logger.warn(s"[SESSION] Theme '${sessionState.themeName}' not found, using default") >>
                       themeManager.initializeWithTheme("dark")
                   )
-                restored <- SessionState.toAppStateIO(sessionState, theme)
+                restored <- SessionState.toAppStateIO(sessionState, theme, restoreFiles)
                 _ <- logger.info(s"[SESSION] Session loaded successfully with ${sessionState.buffers.size} buffers")
               yield Some(restored)
           }

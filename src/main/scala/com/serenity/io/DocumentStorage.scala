@@ -24,8 +24,14 @@ object FileStamp:
   // whose tick can hide a second same-size write; while the file is that young its stamp cannot stand in for its
   // content -- git's "racily clean" case, https://git-scm.com/docs/racy-git. Fine-grained filesystems keep the
   // stamp: their tick is a few milliseconds, the same risk Vim, Emacs and VS Code accept.
+  //
+  // That holds only while the tick is shorter than the stamp's age. Linux ext4/xfs before 6.13 stamp from a coarse
+  // kernel clock ticking every 1-10 ms (CONFIG_HZ 100..1000) whose values look unrounded, so such a stamp must also
+  // be older than FineWindowNanos at observation: 20 ms is twice the 10 ms worst tick, and a stamp younger than that
+  // forces a re-read rather than being trusted as unchanged.
   private val CoarseTickNanos   = 1_000_000L
   private val CoarseWindowNanos = 2_000_000_000L
+  private val FineWindowNanos   = 20_000_000L
 
   /** How a stat is taken; a seam so a test can model a filesystem with a coarse timestamp tick. */
   type Attributes = Path => BasicFileAttributes
@@ -45,7 +51,8 @@ object FileStamp:
     * and is never noticed.
     */
   def vouchesForContent(stamp: FileStamp, observedAtNanos: Long): Boolean =
-    stamp.modifiedNanos % CoarseTickNanos != 0L || observedAtNanos - stamp.modifiedNanos >= CoarseWindowNanos
+    val window = if stamp.modifiedNanos % CoarseTickNanos != 0L then FineWindowNanos else CoarseWindowNanos
+    observedAtNanos - stamp.modifiedNanos >= window
 
   final case class Observed(stamp: FileStamp, vouches: Boolean)
 

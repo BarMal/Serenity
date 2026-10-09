@@ -121,6 +121,12 @@ class CommandScopeSpec extends AnyFlatSpec with Matchers:
     registry.findCommand("save").map(_.bufferRequirement) shouldBe Some(BufferRequirement.AnyBuffer)
   }
 
+  "The open-folder command" should "be Core and offered in every mode and frontend" in {
+    registry.findCommand("open-folder").map(_.scope) shouldBe Some(CommandScope.core)
+    for mode <- AppMode.values.toList; shell <- List(Shell.Gui, Shell.Tui) do
+      registry.availableCommands(mode, shell).map(_.name) should contain("open-folder")
+  }
+
   "CommandRegistry.availableCommands" should "offer code commands but no prose commands in code mode" in {
     val names = registry.availableCommands(AppMode.Code, Shell.Gui).map(_.name).toSet
 

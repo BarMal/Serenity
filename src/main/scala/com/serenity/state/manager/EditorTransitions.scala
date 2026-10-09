@@ -2,7 +2,9 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
+import com.serenity.io.FileType
 import com.serenity.lsp.config.LanguageId
+import com.serenity.richtext.{FidelityReport, RichTextDocument, RichTextReplacement}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEditSupport
@@ -103,23 +105,27 @@ private[manager] object EditorTransitions:
     )
     BufferCreation(idAdvanced, created, bufferId)
 
+  /** `content` as the buffer's whole text, as a formatter or any other bulk rewrite gives it. The rich document is
+    * carried onto the new text line by line ([[RichTextReplacement]]), so formatting and read-only blocks survive where
+    * the text did; a block whose line the rewrite removed is reported as removed when the document is next saved. A
+    * rewrite that cannot be carried (it writes an atom character where the document has none) detaches the document,
+    * with the warning a session restore gives for a document it cannot link: the save would otherwise drop the blocks
+    * unannounced.
+    */
   def bufferContentReplaced(state: AppState, bufferId: BufferId, content: String)(using
     Balance
   ): Option[BufferContentReplacement] =
     state.persisted.buffers.get(bufferId).map { buffer =>
-      // A bulk external replacement (e.g. an LSP formatter, or a file-watch reload) can't cheaply carry the old
-      // richTextDocument's formatting onto entirely new text, so it's dropped here rather than left to be caught,
-      // lazily, the next time something checks `richTextInSync` (#1663) -- there is no "old content" here for a
-      // paragraph-by-paragraph diff to apply against.
       val replacement = Rope(content)
+      val document    = buffer.document.withContent(replacement)
       val updatedBuffer = buffer.copy(
-        document = buffer.document.withContent(replacement),
+        document = document,
         annotations = EditorEditSupport.adjustAnnotationsAcrossReplacement(
           buffer.annotations,
           buffer.document.content,
           replacement
         ),
-        richText = RichTextState()
+        richText = richTextAfterReplacement(buffer, document.contentVersion, content)
       )
       val documentChange =
         if buffer.document.content.collect() == content then None
@@ -134,3 +140,24 @@ private[manager] object EditorTransitions:
         documentChange
       )
     }
+
+  private def richTextAfterReplacement(buffer: Buffer, contentVersion: Long, content: String): RichTextState =
+    buffer.richText.richTextDocument.fold(RichTextState()) { document =>
+      Option
+        .when(buffer.richTextInSync)(document)
+        .flatMap(RichTextReplacement.carried(_, content))
+        .fold(RichTextState(richTextFidelity = detachedFidelity(buffer, document)))(carried =>
+          buffer.richText.withSyncedDocument(Some(carried), contentVersion).copy(insertionRichTextStyle = None)
+        )
+    }
+
+  private def detachedFidelity(buffer: Buffer, document: RichTextDocument): Option[FidelityReport] =
+    buffer.document.filePath
+      .map(path =>
+        FidelityReport.forDetached(
+          document,
+          FileType.saveTarget(FileType.fromPath(path)),
+          buffer.richText.richTextFidelity
+        )
+      )
+      .orElse(buffer.richText.richTextFidelity)

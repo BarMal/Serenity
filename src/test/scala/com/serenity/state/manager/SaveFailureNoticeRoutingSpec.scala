@@ -7,9 +7,16 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.command.{Command, CommandRegistry, ExternalChangeCommands}
+import com.serenity.command.{
+  Command,
+  CommandCategory,
+  CommandIntent,
+  CommandRegistry,
+  ExternalChangeCommands,
+  FileIntent
+}
 import com.serenity.config.PreferredWindowSize
-import com.serenity.io.FileManager
+import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.keystroke.events.{CloseTab, Enter, Escape, Event, InsertChar}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
@@ -20,8 +27,10 @@ import com.serenity.testkit.{AwaitCondition, SharedDictionary}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
+import org.scalatest.concurrent.Eventually.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.time.{Seconds, Span}
 import org.typelevel.log4cats.noop.NoOpLogger
 
 /** Every way a save, open or reload can fail ends in a notice the user can see (#1717, #2015) -- not only a log line.
@@ -58,8 +67,14 @@ class SaveFailureNoticeRoutingSpec extends AnyFlatSpec with Matchers:
     // `executeCommand` returns once the lanes settle, and a notice's expiry timer is a lane job: a command that raises
     // a self-dismissing notice returns only after the notice has gone.
     def runWithoutWaiting(commandName: String): Unit =
-      val command: Command = CommandRegistry.default.findCommand(commandName).getOrElse(fail(s"no $commandName"))
+      runWithoutWaiting(CommandRegistry.default.findCommand(commandName).getOrElse(fail(s"no $commandName")))
+
+    def runWithoutWaiting(command: Command): Unit =
       stateManager.executeCommand(command).timeout(20.seconds).unsafeRunAndForget()
+
+    def expectNotice(message: String): Notice =
+      eventually(timeout(Span(5, Seconds)))(notices.map(_.message) should contain(message))
+      notices.find(_.message == message).getOrElse(fail(s"no notice $message"))
 
     def notices: List[Notice] = NoticeReducer.visible(state)
 
@@ -73,7 +88,8 @@ class SaveFailureNoticeRoutingSpec extends AnyFlatSpec with Matchers:
   private def fixture(
     failingNames: Set[String] = Set.empty,
     unwritableSession: Boolean = false,
-    policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()
+    policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy(),
+    fileDialog: Option[FileDialog] = None
   ): Fixture =
     val directory = Files.createTempDirectory("save-failure-notice-spec")
     // A regular file where the session directory should be: every session write fails to create its folder.
@@ -104,7 +120,7 @@ class SaveFailureNoticeRoutingSpec extends AnyFlatSpec with Matchers:
             uiPresetStore = UiPresetStore(directory.resolve("presets.json")),
             windowSizeProvider = IO.pure(None),
             onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-            fileDialog = None,
+            fileDialog = fileDialog,
             dictionaryCache = SharedDictionary.default
           )
           .copy(fileManager = new FailingFileManager(failingNames.map(directory.resolve)))
@@ -238,6 +254,56 @@ class SaveFailureNoticeRoutingSpec extends AnyFlatSpec with Matchers:
     f.stateManager.fileOpener.openFile(f.directory.resolve("missing.txt")).unsafeRunSync()
 
     f.awaitNotice(_.message == "Couldn't open missing.txt: it doesn't exist or can't be read.")
+  }
+
+  it should "say a folder is a folder and point at Open Folder, rather than claim it does not exist" in {
+    val f      = fixture()
+    val folder = Files.createDirectory(f.directory.resolve("drafts"))
+
+    f.stateManager.fileOpener.openFile(folder).unsafeRunSync()
+
+    f.expectNotice("drafts is a folder. Use Open Folder to open it.").level shouldBe NoticeLevel.Error
+  }
+
+  it should "say the same when a folder reaches the background load, as a recent-file entry would" in {
+    val f      = fixture()
+    val folder = Files.createDirectory(f.directory.resolve("drafts"))
+
+    f.runWithoutWaiting(
+      Command.typed(
+        "open-recent",
+        "Open a recent file.",
+        CommandIntent.File(FileIntent.OpenRecentFile(folder)),
+        CommandCategory.File
+      )
+    )
+
+    f.expectNotice("drafts is a folder. Use Open Folder to open it.")
+  }
+
+  private def failingDialog(failure: Throwable): FileDialog =
+    FileDialog(
+      chooseOpenFile = _ => IO.raiseError(failure),
+      chooseSaveFile = (_, _) => IO.pure(None),
+      chooseFolder = _ => IO.raiseError(failure)
+    )
+
+  "A native dialog that cannot be shown" should "tell the user when opening a file, not only log it" in {
+    val f = fixture(fileDialog = Some(failingDialog(new IllegalStateException("no display"))))
+
+    f.runWithoutWaiting(CommandRegistry.default.findCommand("open").getOrElse(fail("no open")))
+
+    f.expectNotice("Couldn't show the file dialog: no display.").level shouldBe NoticeLevel.Error
+  }
+
+  it should "tell the user when opening a folder, not only log it" in {
+    val f = fixture(fileDialog = Some(failingDialog(new IllegalStateException("no display"))))
+
+    f.runWithoutWaiting(
+      Command.typed("open-folder", "Open a folder.", CommandIntent.File(FileIntent.OpenFolder), CommandCategory.File)
+    )
+
+    f.expectNotice("Couldn't show the file dialog: no display.").level shouldBe NoticeLevel.Error
   }
 
   "Reloading a file from disk" should "show an error when the file has gone" in {

@@ -256,7 +256,7 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
   it should "paint the open dialog as a modal over the startup page" in {
     val startPage = StartupPage(
       title = "Welcome to Serenity",
-      options = List("New document", "Open file or folder"),
+      options = List("New document", "Open file", "Open folder"),
       selectedIndex = 1
     )
     val workflow = FileWorkflowState(

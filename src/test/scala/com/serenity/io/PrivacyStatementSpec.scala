@@ -52,7 +52,11 @@ class PrivacyStatementSpec extends AnyFlatSpec with Matchers:
       "com/serenity/markdown/MarkdownPreviewImageResources.scala",
       "com/serenity/lsp/LspManager.scala",
       "com/serenity/io/StorageLocation.scala",
-      "com/serenity/app/instance/InstanceMessenger.scala"
+      "com/serenity/app/instance/InstanceMessenger.scala",
+      "com/serenity/io/ExternalBrowser.scala",
+      "com/serenity/io/ReleasesPage.scala",
+      "com/serenity/state/manager/ReleasesPageEffect.scala",
+      "com/serenity/state/manager/StateManagerCapabilityPorts.scala"
     )
     val networking =
       """java\.net\.|HttpClient|HttpURLConnection|\bURL\(|InetSocketAddress|InetAddress|DatagramSocket|\bnew Socket\(|\bServerSocket\(|WebSocket""".r

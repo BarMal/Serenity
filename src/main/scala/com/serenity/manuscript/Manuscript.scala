@@ -5,7 +5,7 @@ import java.util.Locale
 import com.serenity.richtext.RichTextRun
 import com.serenity.text.TextStatistics
 
-/** A compiled book, independent of any output format. Writers (DOCX now; EPUB and PDF later) consume only this. */
+/** A compiled book, independent of any output format. Writers (DOCX, EPUB and PDF) consume only this. */
 final case class Manuscript(
     meta: ManuscriptMeta,
     front: List[FrontMatter],
@@ -65,6 +65,7 @@ object WordCountRounding:
 enum ManuscriptFileFormat(val key: String, val extension: String, val label: String):
   case Docx extends ManuscriptFileFormat("docx", "docx", "Word document (DOCX)")
   case Epub extends ManuscriptFileFormat("epub", "epub", "E-book (EPUB 3)")
+  case Pdf  extends ManuscriptFileFormat("pdf", "pdf", "Print-ready PDF")
 
 enum FrontMatter:
   case TitlePage

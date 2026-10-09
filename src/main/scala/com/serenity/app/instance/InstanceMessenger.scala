@@ -28,6 +28,10 @@ enum Delivery:
   *
   * The request ends at its newline rather than at the sender's half-close: a half-closed AF_UNIX stream is not reliably
   * seen as end-of-input by its peer on Windows, which left the listener reading until its timeout.
+  *
+  * Channel calls use `interruptibleMany`, not `interruptible`: cancelling a blocked channel call leaves
+  * `ClosedByInterruptException`'s interrupt flag on the thread, only `interruptibleMany` clears it, and Cats Effect can
+  * recycle that thread as a compute worker that then shuts the whole pool down when it parks.
   */
 object InstanceMessenger:
 
@@ -51,10 +55,10 @@ object InstanceMessenger:
     Resource
       .fromAutoCloseable(IO.blocking(SocketChannel.open(StandardProtocolFamily.UNIX)))
       .use { channel =>
-        IO.interruptible(channel.connect(UnixDomainSocketAddress.of(socketPath))).attempt.flatMap {
+        IO.interruptibleMany(channel.connect(UnixDomainSocketAddress.of(socketPath))).attempt.flatMap {
           case Left(_) => IO.pure(Delivery.Unreachable)
           case Right(_) =>
-            IO.interruptible(exchange(channel, encode(paths)))
+            IO.interruptibleMany(exchange(channel, encode(paths)))
               .map(acknowledged => if acknowledged then Delivery.Delivered else Delivery.Failed)
         }
       }
@@ -78,7 +82,7 @@ object InstanceMessenger:
     * `Resource` because a resource's acquire is uncancelable, which would leave shutdown waiting for the next client.
     */
   private def acceptOne(server: ServerSocketChannel, requests: Queue[IO, List[Path]], logger: Logger[IO]): IO[Unit] =
-    IO.interruptible(server.accept()).flatMap { connection =>
+    IO.interruptibleMany(server.accept()).flatMap { connection =>
       Resource.fromAutoCloseable(IO.pure(connection)).use(serveConnection(_, requests, logger))
     }
 
@@ -87,10 +91,10 @@ object InstanceMessenger:
     requests: Queue[IO, List[Path]],
     logger: Logger[IO]
   ): IO[Unit] =
-    IO.interruptible(readRequest(connection))
+    IO.interruptibleMany(readRequest(connection))
       .timeout(ConnectionTimeout)
       .flatMap {
-        case Some(paths) => requests.offer(paths) >> IO.interruptible(acknowledge(connection))
+        case Some(paths) => requests.offer(paths) >> IO.interruptibleMany(acknowledge(connection))
         case None        => logger.warn("[INSTANCE] Ignored a malformed request on the instance socket")
       }
       .handleErrorWith(error => logger.warn(error)("[INSTANCE] Could not read a request from another launch"))

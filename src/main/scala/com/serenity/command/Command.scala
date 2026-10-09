@@ -5,7 +5,15 @@ import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.session.SessionId
-import com.serenity.state.models.{BufferId, ClipboardEntry, CloseWorkflowChoice, PanelId, RestartMode, SurfaceId}
+import com.serenity.state.models.{
+  BufferId,
+  ClipboardEntry,
+  CloseWorkflowChoice,
+  CommentId,
+  PanelId,
+  RestartMode,
+  SurfaceId
+}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.layout.PanelPosition
 
@@ -53,6 +61,13 @@ enum CommentsIntent:
   case ToggleCommentLens
   case AddDocumentComment(text: String)
   case DeleteDocumentComment
+  case ReplyToDocumentComment(text: String)
+
+  /** What the comment lens writes when its draft is saved: an empty `text` deletes the comment. */
+  case SaveCommentDraft(id: CommentId, text: String)
+  case ResolveDocumentComment
+  case ReopenDocumentComment
+  case ToggleResolvedComments
   case NextDocumentComment
   case PreviousDocumentComment
 
@@ -126,6 +141,10 @@ enum ViewIntent:
   case SetMarkdownViewMode(mode: MarkdownViewMode)
   case SetDefaultDocumentMode(mode: DefaultDocumentMode)
   case SetAppMode(mode: AppMode)
+
+  /** [[SetAppMode]] once the writer has agreed to the project task it would stop: the answer to the prompt that asks.
+    */
+  case SetAppModeStoppingProjectTask(mode: AppMode)
   case SetShowAllSettingsRegardlessOfMode(value: Boolean)
   case ToggleShortcutsHelp
   case ToggleTabList
@@ -147,6 +166,7 @@ enum SessionIntent:
   case StartupNewSession
   case StartupRestoreSession
   case StartupOpenFile
+  case StartupOpenFolder
   case ReturnToStartPage
   // Named sessions (issue #1390): `SaveSession`/`RestoreSession`/`ClearSession` above all operate implicitly on the
   // "current" session (`SessionManager`'s own notion of the one on `SessionIndex.currentSessionId`) -- these three
@@ -304,6 +324,8 @@ enum GeneralSettingsIntent:
   case SetCommandRunnerVisibleRows(rows: Option[Int])
   case SetCommandRunnerItemGapRows(rows: Option[Double])
   case SetCommandRunnerCursorGapRows(rows: Option[Double])
+  case SetAutoSaveMode(mode: AutoSaveMode)
+  case SetAutoSaveDelayMillis(millis: Long)
 
 /** The `Settings` family of [[CommandIntent]], split one level deeper than the other groups because it is by far the
   * largest (~85 cases) — mirrors the domain split already established on `AppConfig`.
@@ -322,6 +344,7 @@ enum SettingsIntent:
   */
 enum CommandIntent:
   case Lifecycle(intent: LifecycleIntent)
+  case Diagnostics(intent: DiagnosticsIntent)
   case File(intent: FileIntent)
   case Edit(intent: EditIntent)
   case RichText(intent: RichTextIntent)

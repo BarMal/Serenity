@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, AutoSaveConfig}
 import com.serenity.ui.fonts.FontLoader
 
 /** Mouse-input and font-size input items. Split out of `CommandRunnerSettingsInputItems.build` to keep both under the
@@ -24,6 +24,24 @@ private[command] object CommandRunnerSettingsInputItemsInputAndFont:
           ),
       category = CommandCategory.Settings,
       defaultValue = Some(AppConfig.default.inputConfig.wheelScrollLines.toString)
+    )
+  )
+
+  private[command] def autoSaveItems(delayMillis: Long): List[CommandSurfaceItem.InputItem] = List(
+    CommandSurfaceItem.InputItem(
+      id = "auto-save-delay",
+      label = "Auto Save Delay",
+      hint = s"Milliseconds after the last edit before After Delay saves (at least ${AutoSaveConfig.MinDelayMillis})",
+      currentValue = delayMillis.toString,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
+      parse = text =>
+        text.trim.toLongOption
+          .filter(_ >= AutoSaveConfig.MinDelayMillis)
+          .map(millis =>
+            CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAutoSaveDelayMillis(millis)))
+          ),
+      category = CommandCategory.Settings,
+      defaultValue = Some(AutoSaveConfig.DefaultDelayMillis.toString)
     )
   )
 

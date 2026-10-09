@@ -91,6 +91,12 @@ object ConfigNotice:
       load => (load, forLoad(path, load.report))
     )
 
+  /** What a reload says about a file that cannot be parsed: unlike at startup, the settings in use are kept. */
+  def unparseableOnReload(path: java.nio.file.Path, error: ConfigError): String =
+    s"${path.getFileName} could not be parsed (${error.cause.map(_.getMessage).getOrElse(error.message)}), so the " +
+      "settings already in use were kept. Your file is untouched and settings changes will not be saved until it is " +
+      "fixed."
+
   private def unparseable(path: java.nio.file.Path, error: ConfigError): String =
     s"${path.getFileName} could not be parsed (${error.cause.map(_.getMessage).getOrElse(error.message)}), so this " +
       "session is using defaults. Your file is untouched and settings changes will not be saved until it is fixed."

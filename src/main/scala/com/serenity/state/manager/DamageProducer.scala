@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
 import cats.syntax.all.*
-import com.serenity.config.RenderDamageGranularity
+import com.serenity.config.{AppConfig, RenderDamageGranularity}
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.rope.{Balance, RopeDiff}
 import com.serenity.spellcheck.SpellChecker
@@ -259,9 +259,21 @@ object DamageProducer:
     * having to enumerate what every field does to a rendered frame.
     */
   private def chromeDamage(before: AppState, after: AppState): Damage =
-    if before.persisted.theme != after.persisted.theme || before.persisted.config != after.persisted.config then
-      Damage.Everything
+    if before.persisted.theme != after.persisted.theme ||
+        !(before.persisted.config == after.persisted.config || statusRowOnly(
+          before.persisted.config,
+          after.persisted.config
+        ))
+    then Damage.Everything
     else Damage.Nothing
+
+  /** Which segments the pinned status row shows, and the word goal one of them reports against, change nothing but that
+    * row's text, which [[gutterDamage]] already compares. Anything else about the status line -- placement, colors, or
+    * the row stopping being pinned, which moves the layout -- is not this.
+    */
+  private def statusRowOnly(before: AppConfig, after: AppConfig): Boolean =
+    before.statusLine.isPinned && after.statusLine.isPinned &&
+      after.withStatusLineSegments(before.statusLine.segments).withWordGoal(before.documentConfig.wordGoal) == before
 
   /** Transitions that touch every visible glyph rather than any one buffer's rows.
     *

@@ -101,7 +101,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
     val sm       = managerWithStore(store)
     store.upsert(existing).unsafeRunSync()
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "save-as-new",
@@ -134,7 +134,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "rename-writing-preset",
@@ -157,7 +157,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
     val sm    = managerWithStore(store)
     store.upsert(UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Theme.dark.name, Nil)).unsafeRunSync()
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "set-markdown-default",
@@ -227,7 +227,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "apply",
@@ -259,7 +259,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
     val path  = Files.createTempDirectory("state-manager-ui-preset-delete-built-in").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
         "delete-writing-preset",

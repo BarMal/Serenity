@@ -36,7 +36,8 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
   ): FileDialog =
     FileDialog(
       chooseOpenFile = _ => IO.pure(openSelection),
-      chooseSaveFile = (_, _) => IO.pure(saveSelection)
+      chooseSaveFile = (_, _) => IO.pure(saveSelection),
+      chooseFolder = _ => IO.pure(None)
     )
 
   private def createStateManager(

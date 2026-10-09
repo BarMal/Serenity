@@ -433,10 +433,11 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
 
   // ── SemanticTokens (issue #859 / #1177) ──────────────────────────────────────
 
-  it should "declare a semanticTokens client capability with a full-request legend" in {
+  it should "declare a semanticTokens client capability with full/delta and range requests and a legend" in {
     val params = LspProtocol.initializeParams(12345, WorkspaceRootUri("file:///workspace"))
     val semTok = params.hcursor.downField("capabilities").downField("textDocument").downField("semanticTokens")
-    semTok.downField("requests").downField("full").as[Boolean].toOption shouldBe Some(true)
+    semTok.downField("requests").downField("full").downField("delta").as[Boolean].toOption shouldBe Some(true)
+    semTok.downField("requests").downField("range").as[Boolean].toOption shouldBe Some(true)
     semTok.downField("tokenTypes").as[List[String]].toOption shouldBe Some(LspProtocol.ClientSemanticTokenTypes)
     semTok.downField("tokenModifiers").as[List[String]].toOption shouldBe Some(LspProtocol.ClientSemanticTokenModifiers)
   }
@@ -486,7 +487,7 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     )
     val result = Json.obj("data" -> data.map(_.asJson).asJson)
 
-    LspProtocol.parseSemanticTokens(result, legend) shouldBe Some(
+    LspProtocol.parseSemanticTokens(result, legend).map(_.tokens) shouldBe Some(
       List(
         SemanticToken(line = 0, startCharacter = 0, length = 3, tokenType = "keyword", tokenModifiers = Set.empty),
         SemanticToken(
@@ -505,7 +506,7 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     val legend = SemanticTokensLegend(List("keyword"), Nil)
     val result = Json.obj("data" -> Json.arr())
 
-    LspProtocol.parseSemanticTokens(result, legend) shouldBe Some(Nil)
+    LspProtocol.parseSemanticTokens(result, legend).map(_.tokens) shouldBe Some(Nil)
   }
 
   it should "return None when a semantic tokens result has no data field" in {
@@ -519,7 +520,7 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     val data   = List(0, 0, 3, 5, 0, 0, 4, 2, 0, 0)
     val result = Json.obj("data" -> data.map(_.asJson).asJson)
 
-    LspProtocol.parseSemanticTokens(result, legend) shouldBe Some(
+    LspProtocol.parseSemanticTokens(result, legend).map(_.tokens) shouldBe Some(
       List(SemanticToken(line = 0, startCharacter = 4, length = 2, tokenType = "keyword", tokenModifiers = Set.empty))
     )
   }
