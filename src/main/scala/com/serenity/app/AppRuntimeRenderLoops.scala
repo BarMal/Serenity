@@ -388,7 +388,8 @@ private[serenity] object AppRuntimeRenderLoops:
 
   private[serenity] def superviseLoop(
     name: String,
-    forceQuit: IO[Unit]
+    forceQuit: IO[Unit],
+    recordCrash: (String, Throwable) => IO[Unit] = (_, _) => IO.unit
   )(effect: IO[Unit])(using logger: Logger[IO]): IO[Unit] =
     effect.handleErrorWith { error =>
       val (phase, diagnostics, loggedError) = error match
@@ -396,8 +397,9 @@ private[serenity] object AppRuntimeRenderLoops:
           (s" phase=$failedPhase", s"; $failureDiagnostics", cause)
         case other =>
           ("", "", other)
-      logger.error(loggedError)(s"[RUNTIME] $name failed$phase$diagnostics; forcing safe shutdown") >>
-        forceQuit.attempt.void
+      val summary = s"[RUNTIME] $name failed$phase$diagnostics"
+      logger.error(loggedError)(s"$summary; forcing safe shutdown") >>
+        recordCrash(summary, loggedError).attempt >> forceQuit.attempt.void
     }
 
   private[serenity] def computeIdleCursorFrame(cursorVisible: Ref[IO, Boolean]): IO[(Boolean, Option[RenderColor])] =

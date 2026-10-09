@@ -5,12 +5,14 @@ import cats.syntax.traverse.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.diagnostics.Trace
 import com.serenity.keystroke.events.*
+import com.serenity.project.ProjectPresence
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.components.*
+import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.WrappedLineCache
-import com.serenity.ui.presets.{UiPreset, UiPresetStore}
+import com.serenity.ui.presets.UiPresetStore
 
 /** Minimal state boundary for resize routing. */
 private[manager] trait ResizeEventPort:
@@ -50,7 +52,8 @@ final private[manager] class StateManagerEventPipeline(
     ],
     resizePinnedPanel: (com.serenity.ui.layout.PanelTarget, Int) => cats.effect.IO[Unit],
     operations: StateManagerOperationBoundary,
-    undoRecording: UndoRecording
+    undoRecording: UndoRecording,
+    detectProjectPresence: AppState => cats.effect.IO[ProjectPresence] = ProjectTaskStart.presence
 )(using balance: com.serenity.rope.Balance):
 
   import state.*
@@ -83,6 +86,15 @@ final private[manager] class StateManagerEventPipeline(
 
   private def interpretCommand(command: com.serenity.command.Command, state: AppState): cats.effect.IO[Unit] =
     effects.interpretCommand(command, state) >> drainPendingOperations
+
+  // Called from lane jobs, off the dispatcher: the result is applied there, and what it enqueues replayed.
+  private val lanePort = new EffectLanePort:
+    def submitEffect(lane: Lane.Keyed, job: cats.effect.IO[Unit]): cats.effect.IO[Unit] =
+      operations.submitEffect(lane, job)
+    def dispatchEffectResult(result: EffectResult, onApplied: AppState => cats.effect.IO[Unit]): cats.effect.IO[Unit] =
+      dispatch(modelCommit.applyResult(result, onApplied, effects.interpretEffect))
+
+  private val commandRunnerLoads = new CommandRunnerOpeningLoads(uiPresetStore, detectProjectPresence, lanePort, logger)
 
   private val resizePort = new ResizeEventPort:
     def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
@@ -386,19 +398,9 @@ final private[manager] class StateManagerEventPipeline(
     def result   = AppEventReducer.reduce(event, prevState, registry)(using balance)
     def reduced  = applyReducerResult(result, prevState)
     event match
-      case CloseTab => beginCloseAction(CloseScope.Current, prevState)
-      case Quit     => beginCloseAction(CloseScope.Quit, prevState)
-      case ToggleCommandRunner =>
-        for
-          previews <- uiPresetPreviews
-          presence <- ProjectTaskStart.presence(prevState)
-          detected = prevState.copy(runtime = prevState.runtime.copy(projectPresence = presence))
-          _ <- commitReducerResult(
-            AppEventReducer.reduce(event, detected, registry)(using balance),
-            prevState,
-            EventPipelineTransitions.withCommandRunnerUiPresetPreviews(_, previews)
-          )
-        yield ()
+      case CloseTab            => beginCloseAction(CloseScope.Current, prevState)
+      case Quit                => beginCloseAction(CloseScope.Quit, prevState)
+      case ToggleCommandRunner => openCommandRunner(event, prevState, registry)
       case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab | NextTab |
           PreviousTab | FileSearch | GoToFile | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane |
           _: CloseTabById | MoveTabLeft | MoveTabRight | _: FocusInDirection | ToggleChapterGhosts | OpenChapterNote |
@@ -406,6 +408,21 @@ final private[manager] class StateManagerEventPipeline(
         reduced
       case _: CursorPeekModifierPressed | _: CursorPeekModifierReleased | CursorPeekOtherKeyPressed =>
         applyReducerResult(EventPipelineTransitions.withCursorPeekAnchorResolved(result), prevState)
+
+  /** Commits the toggle with project presence `Unchecked` and no presets listed, then starts the reads that fill them
+    * in on their lanes (#1911): none of that disk work holds up the key that opened the palette. The project is probed
+    * from the state before the toggle, since the palette takes focus from the buffer whose file locates it.
+    */
+  private def openCommandRunner(
+    event: GlobalAppEvent,
+    prevState: AppState,
+    registry: CommandRegistry
+  ): cats.effect.IO[Unit] =
+    val unchecked = prevState.copy(runtime = prevState.runtime.copy(projectPresence = ProjectPresence.Unchecked))
+    applyReducerResult(AppEventReducer.reduce(event, unchecked, registry)(using balance), prevState) >>
+      modelCommit.currentState.flatMap(opened =>
+        CommandRunnerOpening.openedBy(prevState, opened).traverse_(commandRunnerLoads.request(_, prevState))
+      )
 
   /** Bumps `markdownPreviewEditGeneration` synchronously for any buffer this event's dispatch changed the content of,
     * provided that buffer currently has a live markdown preview -- and schedules a debounced commit of that generation
@@ -494,13 +511,6 @@ final private[manager] class StateManagerEventPipeline(
       )
       _ <- result.effects.filterNot(ModelCommit.isModelEffect).traverse_(interpretEffect)
     yield ()
-
-  // Listed before the toggle commits so the runner opens with its previews in the same write.
-  private def uiPresetPreviews: cats.effect.IO[List[UiPreset.Preview]] =
-    uiPresetStore
-      .list()
-      .map(_.map(UiPreset.Preview.fromPreset))
-      .handleErrorWith(error => logger.error(error)("[PRESET] Failed to list UI presets").map(_ => Nil))
 
   private[manager] def applyComponentResult(result: ComponentResult, state: AppState): cats.effect.IO[AppState] =
     result match

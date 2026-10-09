@@ -24,6 +24,11 @@ class FrontendCapabilitiesSpec extends AnyFlatSpec with Matchers:
     FrontendCapabilities.gui.keyboardFidelityTier shouldBe KeyboardFidelityTier.Full
   }
 
+  it should "not claim a combined file-or-folder dialog until the shell wiring says it has one" in {
+    FrontendCapabilities.gui.opensFileOrFolder shouldBe false
+    FrontendCapabilities.tui().opensFileOrFolder shouldBe false
+  }
+
   "FrontendCapabilities.tui" should "measure on the terminal's fixed cell grid" in {
     FrontendCapabilities.tui().grid shouldBe MetricGrid.Cells
     FrontendCapabilities.tui().isCellGrid shouldBe true

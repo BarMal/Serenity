@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.*
 import cats.syntax.foldable.*
-import com.serenity.config.PreferredWindowSize
+import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.{LspEffect, LspNotices}
@@ -42,7 +42,8 @@ private[manager] class StateManagerComposition(
     val sessionPersistence: SessionPersistence,
     val renderCaches: RenderCaches,
     operations: StateManagerOperationBoundary,
-    val restarter: Option[RestartMode => IO[Unit]] = None
+    val restarter: Option[RestartMode => IO[Unit]] = None,
+    configOnDisk: Option[AppConfig] = None
 )(using providedBalance: Balance):
 
   private val modelCommit = operations.modelCommit
@@ -57,6 +58,7 @@ private[manager] class StateManagerComposition(
   private val runtimeOnFontConfigChanged     = onFontConfigChanged
   private val runtimeDeviceTextScaleProvider = deviceTextScaleProvider
   private val runtimeConfigPersistencePath   = configPersistencePath
+  private val runtimeConfigOnDisk            = configOnDisk
   private val runtimeUiPresetStore           = uiPresetStore
   private val runtimeWindowSizeProvider      = windowSizeProvider
   private val runtimeFileDialog              = fileDialog
@@ -77,6 +79,14 @@ private[manager] class StateManagerComposition(
       operations.showNotice,
       wrapCache = runtimeRenderCaches.wrappedLines
     )
+
+  private[manager] val autoSave = new StateManagerAutoSave(
+    modelCommit.currentState,
+    filePersistence.isSaving,
+    filePersistence.submitSave,
+    operations.showNotice,
+    runtimeLogger
+  )
 
   // Built here, before `effects` and `events`, `StateManagerPanelEffects`
   // (owned by `effects`) and `StateManagerSurfaceCapability` (`surfaces`, below) both need to record undo boundaries
@@ -100,6 +110,7 @@ private[manager] class StateManagerComposition(
     val onFontConfigChanged        = runtimeOnFontConfigChanged
     val deviceTextScaleProvider    = runtimeDeviceTextScaleProvider
     val configPersistencePath      = runtimeConfigPersistencePath
+    override val configOnDisk      = runtimeConfigOnDisk
     val uiPresetStore              = runtimeUiPresetStore
     val windowSizeProvider         = runtimeWindowSizeProvider
     val markdownPreviewWindow      = runtimeMarkdownPreviewWindow
@@ -173,7 +184,11 @@ private[manager] class StateManagerComposition(
     def forceSaveExistingBuffer(bufferId: BufferId): IO[Unit]        = filePersistence.forceSaveExistingBuffer(bufferId)
     def loadFile(path: Path): IO[Unit]                               = filePersistence.loadFile(path)
     def openFromDialog(dialog: com.serenity.io.FileDialog): IO[Unit] = filePersistence.openFromDialog(dialog)
-    def isSaving(path: Path): IO[Boolean]                            = filePersistence.isSaving(path)
+    def openFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
+      filePersistence.openFolderFromDialog(dialog, openFolder)
+    def openFileOrFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
+      filePersistence.openFileOrFolderFromDialog(dialog, openFolder)
+    def isSaving(path: Path): IO[Boolean] = filePersistence.isSaving(path)
 
   private val effectSessionPort: EffectSessionPort = new EffectSessionPort:
     val sessionPersistence = runtimeSessionPersistence
@@ -217,6 +232,7 @@ private[manager] class StateManagerComposition(
     def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
       workflow.restoreSessionIntoCurrentViewport(restoredState, currentState)
     def createStartupSession(): IO[Unit]                        = workflow.createStartupSession()
+    def leaveStartPage(): IO[Unit]                              = workflow.leaveStartPage()
     def restoreStartupSession(): IO[Unit]                       = workflow.restoreStartupSession()
     def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
     def openSaveSessionAsPrompt(state: AppState): IO[Unit]      = workflow.openSaveSessionAsPrompt()
@@ -279,7 +295,9 @@ private[manager] class StateManagerComposition(
     operations.refreshDictionaryFingerprints(),
     operations.dictionaryWatchDirectories,
     operations.explorerWatchDirectories,
-    operations.markExplorerDirectoriesStale
+    operations.markExplorerDirectoriesStale,
+    effects.configWatch,
+    autoSave
   )
 
   // PaneManager's/PanelManager's methods are excluded from the facade export (#1017/#1724): they have no real

@@ -13,7 +13,8 @@ private[command] object CommandRunnerSettingsStatusLineItems:
     (StatusSegment.WordCount, "Word Count", "status-word-count"),
     (StatusSegment.CharCount, "Char Count", "status-char-count"),
     (StatusSegment.ReadingTime, "Reading Time", "status-reading-time"),
-    (StatusSegment.WordGoal, "Word Goal", "status-word-goal")
+    (StatusSegment.WordGoal, "Word Goal", "status-word-goal"),
+    (StatusSegment.LineEnding, "Line Ending", "status-line-ending")
   )
 
   private[command] def placementOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =

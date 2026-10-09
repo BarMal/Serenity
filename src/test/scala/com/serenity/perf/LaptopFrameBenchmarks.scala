@@ -216,7 +216,7 @@ private[perf] object LaptopFrameBenchmarks:
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(id, placed)))
       case None => state
 
-  private def inputBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
+  private[perf] def inputBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
     val (stateManager, proseBufferId) = proseStateManager()
     def buffer: Option[Buffer] = stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(proseBufferId)
     def cursor: Option[CursorPosition] = buffer.flatMap(_.editing.cursorPositions.headOption)
@@ -264,7 +264,8 @@ private[perf] object LaptopFrameBenchmarks:
           stateManager.applyEvent(InsertChar(typedLetters.next())).unsafeRunSync()
           assert(length == before.map(_ + 1) && cursorOnScreen, s"typing did not grow the document: $before -> $length")
         ,
-        () => stateManager.applyEvent(InsertChar(typedLetters.next())).unsafeRunSync()
+        () => stateManager.applyEvent(InsertChar(typedLetters.next())).unsafeRunSync(),
+        fixedSampleCount = true
       ),
       BenchmarkRunner.Benchmark(
         "laptop.input.state_manager.page_down_up",
@@ -322,7 +323,8 @@ private[perf] object LaptopFrameBenchmarks:
         stateManager.applyEvent(InsertChar(letters.next())).unsafeRunSync()
         assert(length == before.map(_ + 1) && cursorOnScreen, s"typing did not grow the document: $before -> $length")
       ,
-      () => stateManager.applyEvent(InsertChar(letters.next())).unsafeRunSync()
+      () => stateManager.applyEvent(InsertChar(letters.next())).unsafeRunSync(),
+      fixedSampleCount = true
     )
 
   private def typewriterBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =

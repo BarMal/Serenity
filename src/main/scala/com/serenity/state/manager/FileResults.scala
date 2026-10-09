@@ -39,12 +39,17 @@ private[manager] object FileResults:
         .filter(_.document.filePath == save.snapshot.document.filePath)
         .fold(state) { current =>
           val unchanged = current.document.content == save.snapshot.document.content
-          val document = current.document.copy(
+          // A save in a format that cannot hold blocks turns them into empty lines, so the saved text differs.
+          val converted = unchanged && saved.document.content != current.document.content
+          val base      = if converted then current.document.withContent(saved.document.content) else current.document
+          val document = base.copy(
             filePath = saved.document.filePath,
             language = saved.document.language,
             revision = saved.document.revision,
             encoding = saved.document.encoding,
             hasBom = saved.document.hasBom,
+            mixedLineEndings = None,
+            mixedNoticePending = false,
             isDirty = current.document.isDirty && !unchanged,
             savedGeneration = current.document.savedGeneration + 1
           )
@@ -54,12 +59,19 @@ private[manager] object FileResults:
               // `current`'s *current* content version -- which may have moved since `save.snapshot` was taken (e.g.
               // an edit undone back to the saved text bumps `contentVersion` without changing the text) (#1663).
               current.richText
-                .withSyncedDocument(saved.richText.richTextDocument, current.document.contentVersion)
+                .withSyncedDocument(saved.richText.richTextDocument, document.contentVersion)
                 .copy(richTextFidelity = None)
             else current.richText.copy(richTextFidelity = None)
-          withBuffer(state, current.copy(document = document, richText = richText))
+          val updated = current.copy(document = document, richText = richText)
+          withBuffer(state, if converted then updated.clampedToContent else updated)
         }
-    val settled = NoticeReducer.withoutTopic(merged, NoticeTopic.FileSave(save.bufferId))
+    val told =
+      save.snapshot.document.mixedLineEndings
+        .filter(_ => merged ne state)
+        .fold(merged)(counts =>
+          LineEndingChoice.withSavedMixedNotice(merged, save.bufferId, save.snapshot.document.lineEnding, counts)
+        )
+    val settled = NoticeReducer.withoutTopic(told, NoticeTopic.FileSave(save.bufferId))
     if save.kind == SaveKind.SaveAs then withRecentFile(settled, save.target) else settled
 
   /** Replaces the buffer's content with the disk's, unless it was edited after the reload was requested. */

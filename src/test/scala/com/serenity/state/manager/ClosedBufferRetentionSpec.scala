@@ -9,7 +9,7 @@ import cats.effect.{Deferred, IO, Ref}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.keystroke.events.{CloseTab, Enter, Event, InsertChar, LspEvent}
 import com.serenity.lsp.client.DocumentUri
-import com.serenity.lsp.model.{Diagnostic, LspPosition, LspRange, SemanticToken}
+import com.serenity.lsp.model.{Diagnostic, LspPosition, LspRange, SemanticToken, SemanticTokenData}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
@@ -72,7 +72,12 @@ class ClosedBufferRetentionSpec extends AnyFlatSpec with Matchers:
     def publishSemanticTokens(id: BufferId): Unit = publishSemanticTokensFor(uriOf(id))
 
     def publishSemanticTokensFor(uri: DocumentUri): Unit =
-      send(LspEvent.LspSemanticTokensReceived(uri.value, List(SemanticToken(0, 0, 1, "variable", Set.empty))))
+      send(
+        LspEvent.LspSemanticTokensReceived(
+          uri.value,
+          SemanticTokenData.from(List(SemanticToken(0, 0, 1, "variable", Set.empty)))
+        )
+      )
 
     def seedChapterGhosts(id: BufferId): Unit =
       val buffer = state.persisted.buffers.getOrElse(id, fail("no such buffer"))

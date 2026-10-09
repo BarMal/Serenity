@@ -465,12 +465,18 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     )
     val openFileCommand = Command.typed(
       "startup.open-file",
-      "Open an existing file or directory",
+      "Open an existing file",
       com.serenity.command.CommandIntent.Session(com.serenity.command.SessionIntent.StartupOpenFile)
+    )
+    val openFolderCommand = Command.typed(
+      "startup.open-folder",
+      "Open an existing folder",
+      com.serenity.command.CommandIntent.Session(com.serenity.command.SessionIntent.StartupOpenFolder)
     )
     val actions = List(
       StartupAction("new-session", "Start a new session", newSessionCommand),
-      StartupAction("open-file", "Open a file", openFileCommand)
+      StartupAction("open-file", "Open a file", openFileCommand),
+      StartupAction("open-folder", "Open a folder", openFolderCommand)
     )
     val page = StartupPage(title = "Welcome", actions = actions, selectedIndex = selectedIndex)
     val surface = UiSurface(

@@ -48,6 +48,25 @@ class SessionSalvageSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "keep unsaved text from a session whose buffers carry comment threads" in {
+    val threadedBuffer = buffer(Some("/work/notes.md"), isDirty = true, Some("edited notes")).mapObject(
+      _.add(
+        "documentComments",
+        Json.arr(
+          Json.obj(
+            "text"     -> Json.fromString("unsavedContent in a comment"),
+            "id"       -> Json.fromInt(1),
+            "author"   -> Json.fromString("Ada"),
+            "replies"  -> Json.arr(Json.obj("author" -> Json.fromString("Grace"), "text" -> Json.fromString("hi"))),
+            "resolved" -> Json.fromBoolean(true)
+          )
+        )
+      )
+    )
+
+    SessionSalvage.salvage(session(current, threadedBuffer)) shouldBe List(SalvagedText("notes.md", "edited notes"))
+  }
+
   it should "scan a truncated session for every complete unsaved text, unescaping it" in {
     val truncated =
       """{ "schemaVersion": 3, "buffers": [ { "id": 1, "unsavedContent": "line one\nsaid \"hi\"" },""" +

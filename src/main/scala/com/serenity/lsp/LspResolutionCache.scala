@@ -33,6 +33,8 @@ final private[lsp] class LspResolutionCache private (
   def evict(languageId: LanguageId, fileUri: DocumentUri): IO[Unit] =
     ref.update(_ - Key(languageId, fileUri))
 
+  def evictAll: IO[Unit] = ref.set(Map.empty)
+
 private[lsp] object LspResolutionCache:
   final private case class Key(languageId: LanguageId, fileUri: DocumentUri)
 

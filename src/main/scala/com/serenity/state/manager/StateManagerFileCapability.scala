@@ -74,7 +74,9 @@ final private[manager] class StateManagerFileCapability(
     refreshDictionaryFingerprints: IO[Unit],
     dictionaryWatchDirectories: IO[Set[Path]],
     explorerWatchDirectories: IO[Set[Path]],
-    markExplorerDirectoriesStale: Set[Path] => IO[Unit]
+    markExplorerDirectoriesStale: Set[Path] => IO[Unit],
+    configWatch: Option[ConfigFileWatch],
+    autoSave: StateManagerAutoSave
 ):
 
   // The disk read runs here, off the dispatcher; the decision re-reads state on it, after any in-flight save has
@@ -111,5 +113,7 @@ final private[manager] class StateManagerFileCapability(
     dictionaryWatchDirectories = dictionaryWatchDirectories,
     refreshDictionaryFingerprints = refreshDictionaryFingerprints,
     explorerWatchDirectories = explorerWatchDirectories,
-    markExplorerDirectoriesStale = markExplorerDirectoriesStale
+    markExplorerDirectoriesStale = markExplorerDirectoriesStale,
+    configWatch = configWatch,
+    autoSaveOnWindowFocusLost = autoSave.saveOnWindowFocusLost
   )

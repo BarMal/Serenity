@@ -31,7 +31,9 @@ private[reducers] object EditorClipboardEventReducer:
     if hasSelection then ClipboardEntry(selectedTexts(buffer).mkString("\n"), wholeLine = false)
     else
       ClipboardEntry(
-        distinctCursorLines(buffer).map(line => buffer.document.content.getLine(line).getOrElse("")).mkString("\n"),
+        distinctCursorLines(buffer)
+          .map(line => buffer.plainTextExport(buffer.document.content.getLine(line).getOrElse("")))
+          .mkString("\n"),
         wholeLine = true
       )
 
@@ -197,14 +199,14 @@ private[reducers] object EditorClipboardEventReducer:
       val sortedLineEdits = lineEdits
         .sortBy { case (_, start, end) => (-start, -end) }
         .map { case (_, start, end) => MultiCursorEdit(0, start, end, "") }
-      val (updatedContent, updatedRichTextDocument) =
-        foldEditsWithRichText(buffer, sortedLineEdits)((content, edit) =>
-          deleteOrUnchanged(content, edit.start, edit.end)
-        )
-      val edits = lineEdits.zipWithIndex.map {
-        case ((_, start, end), index) =>
-          MultiCursorEdit(index, start, end, "")
-      }
+      val folded =
+        foldEditsTracked(buffer, sortedLineEdits)((content, edit) => deleteOrUnchanged(content, edit.start, edit.end))
+      val (updatedContent, updatedRichTextDocument) = (folded.content, folded.richText)
+      val edits = folded
+        .appliedAmong(lineEdits.zipWithIndex.map {
+          case ((_, start, end), index) =>
+            MultiCursorEdit(index, start, end, "")
+        })
       val maxFinalLine = math.max(0, updatedContent.lineCount - 1)
       val finalCursors = targetLines.distinct.sorted.map { line =>
         val deletedBefore = targetLines.count(_ < line)

@@ -4,8 +4,17 @@ import scala.concurrent.duration.DurationInt
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
-import com.serenity.keystroke.events.{CloseTabById, DeleteBackward, Event, InsertChar, Redo, Undo}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, CommentsIntent, ViewIntent}
+import com.serenity.keystroke.events.{
+  CloseTabById,
+  DeleteBackward,
+  DeleteToLineEnd,
+  DeleteToLineStart,
+  Event,
+  InsertChar,
+  Redo,
+  Undo
+}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, createPane, markBufferSaved, switchToPane}
@@ -191,3 +200,79 @@ class UndoHistoryScenarioSpec extends AnyFlatSpec with Matchers:
 
     in(paneA)(Redo)
     text(bufferA) shouldBe Some("alphaab cd")
+
+  behavior of "Undo of line deletions and unrecorded changes"
+
+  it should "undo Delete to line start as one step that returns the buffer to clean" in new TwoBuffers:
+    in(paneA)(DeleteToLineStart)
+    (text(bufferA), dirty(bufferA)) shouldBe (Some(""), Some(true))
+
+    in(paneA)(Undo)
+    (text(bufferA), dirty(bufferA)) shouldBe (Some("alpha"), Some(false))
+
+  it should "undo Delete to line end as one step that returns the buffer to clean" in new TwoBuffers:
+    stateManager.setCursorPosition(paneA, 0, 2).unsafeRunSync()
+    in(paneA)(DeleteToLineEnd)
+    (text(bufferA), dirty(bufferA)) shouldBe (Some("al"), Some(true))
+
+    in(paneA)(Undo)
+    (text(bufferA), dirty(bufferA)) shouldBe (Some("alpha"), Some(false))
+
+  it should "keep a line deletion apart from the backspaces before it" in new TwoBuffers:
+    in(paneA)(DeleteBackward, DeleteBackward, DeleteToLineStart)
+    text(bufferA) shouldBe Some("")
+
+    in(paneA)(Undo)
+    text(bufferA) shouldBe Some("alp")
+
+    in(paneA)(Undo)
+    text(bufferA) shouldBe Some("alpha")
+
+  it should "record one step for each of two successive line deletions" in new TwoBuffers:
+    in(paneA)(typed("xy")*)
+    in(paneA)(DeleteToLineStart)
+    in(paneA)(typed("z")*)
+    in(paneA)(DeleteToLineStart)
+    text(bufferA) shouldBe Some("")
+
+    in(paneA)(Undo)
+    text(bufferA) shouldBe Some("z")
+
+    in(paneA)(Undo)
+    text(bufferA) shouldBe Some("")
+
+    in(paneA)(Undo)
+    text(bufferA) shouldBe Some("alphaxy")
+
+  it should "record no step for a line deletion that changes nothing" in new TwoBuffers:
+    stateManager.setCursorPosition(paneA, 0, 0).unsafeRunSync()
+    in(paneA)(DeleteToLineStart)
+
+    dirty(bufferA) shouldBe Some(false)
+    stateManager.getModel.unsafeRunSync().undo.undoStack shouldBe empty
+
+  it should "not return to clean through undo once a comment was added, as the comment is not undoable" in new TwoBuffers:
+    in(paneA)(typed("!")*)
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "add-comment",
+          "Adds a comment.",
+          CommandIntent.Comments(CommentsIntent.AddDocumentComment("note")),
+          CommandCategory.Edit
+        )
+      )
+      .unsafeRunSync()
+
+    in(paneA)(Undo)
+    (text(bufferA), dirty(bufferA)) shouldBe (Some("alpha"), Some(true))
+
+  it should "stay dirty at the pre-save text after a save the undo history predates" in new TwoBuffers:
+    in(paneA)(DeleteToLineStart)
+    stateManager.markBufferSaved(bufferA).unsafeRunSync()
+
+    in(paneA)(Undo)
+    (text(bufferA), dirty(bufferA)) shouldBe (Some("alpha"), Some(true))
+
+    in(paneA)(Redo)
+    (text(bufferA), dirty(bufferA)) shouldBe (Some(""), Some(false))

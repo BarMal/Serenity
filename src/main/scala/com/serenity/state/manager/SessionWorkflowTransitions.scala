@@ -14,12 +14,14 @@ import com.serenity.ui.widget.Loadable
   */
 private[manager] object SessionWorkflowTransitions:
 
-  /** `restoredState` with this run's runtime chrome: viewport, terminal mode and keyboard tier. Every floating surface
-    * is dropped, the one the restore was chosen from included; docked panels stay, since the restored workspace tree
-    * names them and would fail validation without them.
+  /** `restoredState` with this run's runtime chrome: viewport, terminal mode and keyboard tier, and this run's config:
+    * config.conf is the one source of truth for settings, so the config a session was saved with never overrides it
+    * (#1934). Every floating surface is dropped, the one the restore was chosen from included; docked panels stay,
+    * since the restored workspace tree names them and would fail validation without them.
     */
   def restoredIntoViewport(restoredState: AppState, currentState: AppState): AppState =
     val restored = restoredState.copy(
+      persisted = restoredState.persisted.copy(config = currentState.persisted.config),
       runtime = restoredState.runtime.copy(
         uiSurfaces = restoredState.runtime.uiSurfaces.filter(_.presentation == SurfacePresentation.Docked),
         viewportSize = currentState.runtime.viewportSize,

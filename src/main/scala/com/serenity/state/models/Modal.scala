@@ -1,6 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.io.{DocumentFormat, FileType, SaveFormat}
+import com.serenity.richtext.{FidelityReport, SaveTarget}
 import com.serenity.session.SessionId
 import com.serenity.text.TextEditing
 import com.serenity.ui.widget.TextField
@@ -12,6 +13,7 @@ final case class FileWorkflowSuggestion(
 
 enum FileWorkflowMode:
   case Open
+  case OpenFolder
   case SaveAs
 
 enum FileWorkflowField:
@@ -147,8 +149,12 @@ sealed trait FileWorkflowState:
 
   /** Derived from the concrete subtype rather than stored, so it can never disagree with which subtype this is. */
   def mode: FileWorkflowMode = this match
-    case _: OpenFileWorkflowState   => FileWorkflowMode.Open
-    case _: SaveAsFileWorkflowState => FileWorkflowMode.SaveAs
+    case _: OpenFileWorkflowState       => FileWorkflowMode.Open
+    case _: OpenFolderFileWorkflowState => FileWorkflowMode.OpenFolder
+    case _: SaveAsFileWorkflowState     => FileWorkflowMode.SaveAs
+
+  /** Whether the folder this form shows can be taken as the project root: both ways of opening, not Save As. */
+  def canOpenAsProjectRoot: Boolean = mode != FileWorkflowMode.SaveAs
 
   def filename: String
   def path: String
@@ -165,6 +171,17 @@ sealed trait FileWorkflowState:
     * and for a brand-new/never-imported buffer.
     */
   def bufferHasRichFormatting: Boolean
+
+  /** What saving the buffer as each format would do with each feature of a rich document, captured with
+    * [[bufferHasRichFormatting]] when the workflow opens.
+    */
+  def saveReports: Map[SaveTarget, FidelityReport]
+
+  /** One line on what saving at the currently-typed extension keeps read-only, converts, drops or removes (for example
+    * "1 table preserved read-only"), when that is anything.
+    */
+  def fidelityNote: Option[String] =
+    saveReports.get(FileType.saveTarget(detectedFileType)).map(_.summary).filter(_.nonEmpty)
 
   /** The format the currently-typed `filename` would save as, detected from its extension exactly like a completed save
     * would (`FileType.fromExtension`). A filename with no extension -- notably a brand-new buffer's first Save As,
@@ -305,13 +322,53 @@ final case class OpenFileWorkflowState(
     missingPathSegments: List[String] = Nil,
     confirmCreateDirectories: Boolean = false,
     statusMessage: Option[String] = None,
-    bufferHasRichFormatting: Boolean = false
+    bufferHasRichFormatting: Boolean = false,
+    saveReports: Map[SaveTarget, FidelityReport] = Map.empty
 ) extends FileWorkflowState:
   val operationLabel: String               = "Open"
   val supportsFilenameSuggestions: Boolean = true
 
   // The open dialog is a directory browser: Tab/Shift-Tab stay on the Path field rather than cycling into a filename
   // input, so the whole flow is "type/navigate a path, pick from the listing" (#1289).
+  override def cyclableFields: List[FileWorkflowField] = List(FileWorkflowField.Path)
+
+  protected def rebuild(
+    filename: String,
+    path: String,
+    activeField: FileWorkflowField,
+    suggestions: List[FileWorkflowSuggestion],
+    selectedSuggestionIndex: Int,
+    missingPathSegments: List[String],
+    confirmCreateDirectories: Boolean,
+    statusMessage: Option[String]
+  ): FileWorkflowState =
+    copy(
+      filename = filename,
+      path = path,
+      activeField = activeField,
+      suggestions = suggestions,
+      selectedSuggestionIndex = selectedSuggestionIndex,
+      missingPathSegments = missingPathSegments,
+      confirmCreateDirectories = confirmCreateDirectories,
+      statusMessage = statusMessage
+    )
+
+final case class OpenFolderFileWorkflowState(
+    filename: String = "",
+    path: String = "",
+    activeField: FileWorkflowField = FileWorkflowField.Path,
+    suggestions: List[FileWorkflowSuggestion] = Nil,
+    selectedSuggestionIndex: Int = 0,
+    missingPathSegments: List[String] = Nil,
+    confirmCreateDirectories: Boolean = false,
+    statusMessage: Option[String] = None,
+    bufferHasRichFormatting: Boolean = false,
+    saveReports: Map[SaveTarget, FidelityReport] = Map.empty
+) extends FileWorkflowState:
+  val operationLabel: String               = "Open Folder"
+  val supportsFilenameSuggestions: Boolean = false
+
+  // A folder has no filename to type: the form is the Path field and the directories listed under it.
   override def cyclableFields: List[FileWorkflowField] = List(FileWorkflowField.Path)
 
   protected def rebuild(
@@ -344,7 +401,8 @@ final case class SaveAsFileWorkflowState(
     missingPathSegments: List[String] = Nil,
     confirmCreateDirectories: Boolean = false,
     statusMessage: Option[String] = None,
-    bufferHasRichFormatting: Boolean = false
+    bufferHasRichFormatting: Boolean = false,
+    saveReports: Map[SaveTarget, FidelityReport] = Map.empty
 ) extends FileWorkflowState:
   val operationLabel: String               = "Save As"
   val supportsFilenameSuggestions: Boolean = false
@@ -399,7 +457,8 @@ object FileWorkflowState:
     missingPathSegments: List[String] = Nil,
     confirmCreateDirectories: Boolean = false,
     statusMessage: Option[String] = None,
-    bufferHasRichFormatting: Boolean = false
+    bufferHasRichFormatting: Boolean = false,
+    saveReports: Map[SaveTarget, FidelityReport] = Map.empty
   ): FileWorkflowState =
     mode match
       case FileWorkflowMode.Open =>
@@ -412,7 +471,21 @@ object FileWorkflowState:
           missingPathSegments = missingPathSegments,
           confirmCreateDirectories = confirmCreateDirectories,
           statusMessage = statusMessage,
-          bufferHasRichFormatting = bufferHasRichFormatting
+          bufferHasRichFormatting = bufferHasRichFormatting,
+          saveReports = saveReports
+        )
+      case FileWorkflowMode.OpenFolder =>
+        OpenFolderFileWorkflowState(
+          filename = filename,
+          path = path,
+          activeField = activeField,
+          suggestions = suggestions,
+          selectedSuggestionIndex = selectedSuggestionIndex,
+          missingPathSegments = missingPathSegments,
+          confirmCreateDirectories = confirmCreateDirectories,
+          statusMessage = statusMessage,
+          bufferHasRichFormatting = bufferHasRichFormatting,
+          saveReports = saveReports
         )
       case FileWorkflowMode.SaveAs =>
         SaveAsFileWorkflowState(
@@ -424,7 +497,8 @@ object FileWorkflowState:
           missingPathSegments = missingPathSegments,
           confirmCreateDirectories = confirmCreateDirectories,
           statusMessage = statusMessage,
-          bufferHasRichFormatting = bufferHasRichFormatting
+          bufferHasRichFormatting = bufferHasRichFormatting,
+          saveReports = saveReports
         )
 
 /** What a session-name [[TextPrompt]] is collecting a name for -- naming a brand-new session (issue #1390's

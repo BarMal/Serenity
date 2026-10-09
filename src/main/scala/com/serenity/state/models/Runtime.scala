@@ -64,7 +64,10 @@ final case class Runtime(
     // them. See `AppState.withBufferIndexesRefreshed`.
     bufferIndexMemos: BufferIndexMemos = BufferIndexMemos.empty,
     // Never persisted: the notes pane's source headings as of its last retarget (#1848). See `NotesPaneSync`.
-    chapterHeadingMemo: ChapterHeadingMemo = ChapterHeadingMemo.empty
+    chapterHeadingMemo: ChapterHeadingMemo = ChapterHeadingMemo.empty,
+    // Never persisted: whether resolved comments still show in the lens, the highlights and comment navigation. Resolved
+    // comments stay in the buffer either way.
+    resolvedCommentsVisible: Boolean = false
 ):
 
   /** A typed character restarts the quiet window for cursor-adjacent surfaces. */

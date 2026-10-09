@@ -1,5 +1,7 @@
 package com.serenity.state.manager
 
+import java.time.Instant
+
 import com.serenity.command.{CommentsIntent, NavigationIntent, PlaceholderIntent}
 import com.serenity.document.{CommentRendering, DocumentNavigation}
 import com.serenity.rope.*
@@ -20,18 +22,26 @@ private[manager] object NavigationTransitions:
 
   private type SymbolChooser = (List[Symbol], CursorPosition) => Option[Symbol]
 
+  /** `now` stamps whatever the intent writes: a new comment, an edit to one, a reply. */
   def comments(
     intent: CommentsIntent,
     state: AppState,
+    now: Instant,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): NavigationOutcome =
     given WrappedLineCache = wrapCache
     intent match
-      case CommentsIntent.ToggleCommentLens        => toggleCommentLens(state)
-      case CommentsIntent.AddDocumentComment(text) => addDocumentComment(state, text)
-      case CommentsIntent.DeleteDocumentComment    => deleteDocumentComment(state)
-      case CommentsIntent.NextDocumentComment      => navigateDocumentComment(state, DocumentNavigation.nextSymbol)
-      case CommentsIntent.PreviousDocumentComment  => navigateDocumentComment(state, DocumentNavigation.previousSymbol)
+      case CommentsIntent.ToggleCommentLens            => toggleCommentLens(state)
+      case CommentsIntent.AddDocumentComment(text)     => addDocumentComment(state, text, now)
+      case CommentsIntent.DeleteDocumentComment        => deleteDocumentComment(state)
+      case CommentsIntent.SaveCommentDraft(id, text)   => saveCommentDraft(state, id, text, now)
+      case CommentsIntent.ReplyToDocumentComment(text) => replyToDocumentComment(state, text, now)
+      case CommentsIntent.ResolveDocumentComment       => setCommentResolved(state, resolved = true)
+      case CommentsIntent.ReopenDocumentComment        => setCommentResolved(state, resolved = false)
+      case CommentsIntent.ToggleResolvedComments       => toggleResolvedComments(state)
+      case CommentsIntent.NextDocumentComment          => navigateDocumentComment(state, DocumentNavigation.nextSymbol)
+      case CommentsIntent.PreviousDocumentComment =>
+        navigateDocumentComment(state, DocumentNavigation.previousSymbol)
 
   def placeholders(
     intent: PlaceholderIntent,
@@ -109,7 +119,8 @@ private[manager] object NavigationTransitions:
   ): NavigationOutcome =
     navigateSymbols(
       state,
-      buffer => DocumentNavigation.commentSymbols(buffer.annotations.documentComments),
+      buffer =>
+        DocumentNavigation.commentSymbols(buffer.annotations.shownComments(state.runtime.resolvedCommentsVisible)),
       chooseSymbol,
       "Document comment",
       onTargetResolved = Some(CommentRendering.openLensAtCursor)
@@ -265,7 +276,7 @@ private[manager] object NavigationTransitions:
       case None =>
         ignored("[CMD] Toggle bookmark requested without an active editor buffer")
 
-  private def addDocumentComment(state: AppState, text: String): NavigationOutcome =
+  private def addDocumentComment(state: AppState, text: String, now: Instant): NavigationOutcome =
     activeEditorBuffer(state) match
       case Some((_, buffer)) =>
         val normalizedCursor = snapCursorAfterGrapheme(buffer, primaryCursor(buffer))
@@ -273,24 +284,101 @@ private[manager] object NavigationTransitions:
           .map(selection => normalizedCommentSelectionRange(buffer, selection))
           .getOrElse(normalizedCursor -> normalizedCursor)
         val commentText             = Option(text.trim).filter(_.nonEmpty).getOrElse("Comment")
-        val existingComments        = buffer.annotations.documentComments
-        val existingCommentAtCursor = existingComments.find(_.contains(normalizedCursor))
-        val updatedComment =
-          existingCommentAtCursor.fold(DocumentComment(start, end, commentText))(_.copy(text = commentText))
-        val comments = (updatedComment :: existingComments.filterNot(existing =>
-          existingCommentAtCursor.contains(existing) || (existing.start == start && existing.end == end)
-        )).sortBy(existing => (existing.start.line, existing.start.column, existing.text))
-        applied(
-          withBuffer(
-            state,
-            buffer.copy(
-              annotations = buffer.annotations.copy(documentComments = comments),
-              document = buffer.document.withUnrecordedChange
+        val shown                   = buffer.annotations.shownComments(state.runtime.resolvedCommentsVisible)
+        val existingCommentAtCursor = shown.find(_.contains(normalizedCursor))
+        val sameRange = shown.filter(existing =>
+          existing.start == start && existing.end == end && !existingCommentAtCursor.exists(_.id == existing.id)
+        )
+        val withoutSameRange =
+          sameRange.foldLeft(buffer.annotations)((annotations, existing) => annotations.withoutComment(existing.id))
+        val written = existingCommentAtCursor.fold(
+          withoutSameRange.withNewComment(
+            DocumentComment(
+              start,
+              end,
+              commentText,
+              author = Some(state.persisted.config.commentAuthor),
+              createdAt = Some(now)
             )
           )
-        )
+        )(existing => withoutSameRange.withUpdatedComment(existing.id)(_.withText(commentText, now)))
+        applied(withDocumentComments(state, buffer, sortedByPosition(written)))
       case None =>
         ignored("[CMD] Add document comment requested without an active editor buffer")
+
+  private def sortedByPosition(annotations: Annotations): Annotations =
+    annotations.copy(documentComments =
+      annotations.documentComments.sortBy(existing => (existing.start.line, existing.start.column, existing.text))
+    )
+
+  private def withDocumentComments(state: AppState, buffer: Buffer, annotations: Annotations): AppState =
+    withBuffer(state, buffer.copy(annotations = annotations, document = buffer.document.withUnrecordedChange))
+
+  /** An emptied draft deletes the comment. A comment the buffer no longer holds is left alone. */
+  private def saveCommentDraft(state: AppState, id: CommentId, text: String, now: Instant): NavigationOutcome =
+    activeEditorBuffer(state) match
+      case Some((_, buffer)) =>
+        buffer.annotations.comment(id) match
+          case Some(_) =>
+            val draft = text.trim
+            val saved =
+              if draft.isEmpty then buffer.annotations.withoutComment(id)
+              else buffer.annotations.withUpdatedComment(id)(_.withText(draft, now))
+            applied(if saved == buffer.annotations then state else withDocumentComments(state, buffer, saved))
+          case None =>
+            ignored("[CMD] Save comment draft requested for a comment that is no longer in the buffer")
+      case None =>
+        ignored("[CMD] Save comment draft requested without an active editor buffer")
+
+  private def replyToDocumentComment(state: AppState, text: String, now: Instant): NavigationOutcome =
+    val replyText = text.trim
+    if replyText.isEmpty then ignored("[CMD] Reply to document comment requested without any text")
+    else
+      updatingCommentAtCursor(
+        state,
+        "Reply to document comment",
+        _.annotations.shownComments(state.runtime.resolvedCommentsVisible)
+      )(_.withReply(CommentReply(state.persisted.config.commentAuthor, now, replyText)))
+
+  private def setCommentResolved(state: AppState, resolved: Boolean): NavigationOutcome =
+    updatingCommentAtCursor(
+      state,
+      if resolved then "Resolve document comment" else "Reopen document comment",
+      _.annotations.documentComments.filter(_.resolved != resolved)
+    )(comment => if resolved then comment.resolve else comment.reopen)
+
+  private def toggleResolvedComments(state: AppState): NavigationOutcome =
+    val toggled =
+      state.copy(runtime = state.runtime.copy(resolvedCommentsVisible = !state.runtime.resolvedCommentsVisible))
+    applied(dismissLensOnHiddenComment(toggled))
+
+  /** Applies `change` to the comment at the cursor among `candidates`, naming it by id from there on. */
+  private def updatingCommentAtCursor(state: AppState, action: String, candidates: Buffer => List[DocumentComment])(
+    change: DocumentComment => DocumentComment
+  ): NavigationOutcome =
+    activeEditorBuffer(state) match
+      case Some((_, buffer)) =>
+        val cursor = primaryCursor(buffer)
+        candidates(buffer).find(_.contains(cursor)) match
+          case Some(target) =>
+            val changed = withDocumentComments(state, buffer, buffer.annotations.withUpdatedComment(target.id)(change))
+            applied(dismissLensOnHiddenComment(changed))
+          case None =>
+            ignored(s"[CMD] $action requested without a document comment at the cursor")
+      case None =>
+        ignored(s"[CMD] $action requested without an active editor buffer")
+
+  /** A lens left open on a comment that is now resolved and hidden would keep showing what the user just put away. */
+  private def dismissLensOnHiddenComment(state: AppState): AppState =
+    val lensOnHiddenComment = state.commentLensSurface.exists { surface =>
+      surface.content match
+        case SurfaceContent.CommentLens(CommentLensState(_, _, _, Some(target), _)) =>
+          activeEditorBuffer(state).flatMap((_, buffer) => buffer.annotations.comment(target.id)).exists { comment =>
+            comment.resolved && !state.runtime.resolvedCommentsVisible
+          }
+        case _ => false
+    }
+    if lensOnHiddenComment then dismissCommentLens(state) else state
 
   private def normalizedCommentSelectionRange(
     buffer: Buffer,
@@ -315,8 +403,10 @@ private[manager] object NavigationTransitions:
   private def deleteDocumentComment(state: AppState): NavigationOutcome =
     activeEditorBuffer(state) match
       case Some((_, buffer)) =>
-        val cursor   = primaryCursor(buffer)
-        val comments = buffer.annotations.documentComments.filterNot(_.contains(cursor))
+        val cursor = primaryCursor(buffer)
+        val comments = buffer.annotations.documentComments.filterNot { comment =>
+          comment.contains(cursor) && (!comment.resolved || state.runtime.resolvedCommentsVisible)
+        }
         applied(
           withBuffer(
             state,

@@ -189,7 +189,8 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
     try
       val dialog = FileDialog(
         chooseOpenFile = _ => IO.pure(None),
-        chooseSaveFile = (_, suggestedFileName) => IO.pure(suggestedFileName.map(directory.resolve))
+        chooseSaveFile = (_, suggestedFileName) => IO.pure(suggestedFileName.map(directory.resolve)),
+        chooseFolder = _ => IO.pure(None)
       )
 
       val fixture = harness(fileDialog = Some(dialog))

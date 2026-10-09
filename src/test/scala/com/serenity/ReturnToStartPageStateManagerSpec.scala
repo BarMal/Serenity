@@ -113,7 +113,7 @@ class ReturnToStartPageStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.executeCommand(returnCommand).unsafeRunSync()
     // Save -> Close Anyway, then submit the Close Anyway choice.
     stateManager.applyEvent(TabKey).unsafeRunSync()
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     val afterDiscard = stateManager.getCurrentState.unsafeRunSync()
     afterDiscard.startPageSurface.isDefined shouldBe true

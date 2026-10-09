@@ -20,7 +20,8 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
   private def testFileDialog(openSelection: Option[java.nio.file.Path]): FileDialog =
     FileDialog(
       chooseOpenFile = _ => IO.pure(openSelection),
-      chooseSaveFile = (_, _) => IO.pure(None)
+      chooseSaveFile = (_, _) => IO.pure(None),
+      chooseFolder = _ => IO.pure(None)
     )
 
   it should "handle available startup actions correctly" in {
