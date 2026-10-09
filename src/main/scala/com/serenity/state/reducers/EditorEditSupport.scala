@@ -60,6 +60,18 @@ private[state] object EditorEditSupport:
       val end = content.nextGraphemeBoundary(offset)
       Option.when(offset < end)(offset -> end)
 
+  /** From the start of the cursor's line up to it; at the start of a line, the line break before it instead. */
+  def lineStartDeletionRange(content: Rope, offset: Int): Option[(Int, Int)] =
+    val (line, _) = content.offsetToLineColumn(offset)
+    val lineStart = content.lineColumnToOffset(line, 0)
+    if lineStart < offset then Some(lineStart -> offset) else backwardGraphemeDeletionRange(content, offset)
+
+  /** From the cursor to the end of its line; at the end of a line, the line break after it instead. */
+  def lineEndDeletionRange(content: Rope, offset: Int): Option[(Int, Int)] =
+    val (line, _) = content.offsetToLineColumn(offset)
+    val lineEnd   = content.lineColumnToOffset(line, content.getLine(line).fold(0)(_.length))
+    if offset < lineEnd then Some(offset -> lineEnd) else forwardGraphemeDeletionRange(content, offset)
+
   /** Folds `edits` over `content` and `richTextDocument` together, so a caller's rich-text document stays remapped in
     * lockstep with the plain-text edits it applies -- edits must already be in the order `applyContentEdit` expects
     * (callers sort descending by offset so earlier edits don't shift later ones). Shared by every multi-edit path

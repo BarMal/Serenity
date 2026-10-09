@@ -38,6 +38,34 @@ class EditorNavigationInputTranslatorSpec extends AnyFlatSpec with Matchers:
     translator.translate(KeyStrokeInfo(InputKey.Delete, None, Set(Modifier.Ctrl))) shouldBe DeleteWordForward
   }
 
+  it should "treat Cmd+Backspace and Cmd+Delete as deleting to the line start and line end in editor focus" in {
+    val translator = FocusedInputTranslator.forState(editorState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Backspace, None, Set(Modifier.Meta))) shouldBe DeleteToLineStart
+    translator.translate(KeyStrokeInfo(InputKey.Delete, None, Set(Modifier.Meta))) shouldBe DeleteToLineEnd
+  }
+
+  it should "treat Option+Delete as deleting the word forward and Option+Backspace as the word backward" in {
+    val translator = FocusedInputTranslator.forState(editorState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Delete, None, Set(Modifier.Alt))) shouldBe DeleteWordForward
+    translator.translate(KeyStrokeInfo(InputKey.Backspace, None, Set(Modifier.Alt))) shouldBe DeleteWordBackward
+  }
+
+  it should "treat Shift+Backspace as Backspace and Shift+Delete as Delete in editor focus" in {
+    val translator = FocusedInputTranslator.forState(editorState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Backspace, None, Set(Modifier.Shift))) shouldBe DeleteBackward
+    translator.translate(KeyStrokeInfo(InputKey.Delete, None, Set(Modifier.Shift))) shouldBe DeleteForward
+  }
+
+  it should "keep Shift significant: Ctrl+Shift+Backspace is not a plain Backspace" in {
+    val translator = FocusedInputTranslator.forState(editorState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Backspace, None, Set(Modifier.Shift, Modifier.Ctrl))) should not be
+      DeleteBackward
+  }
+
   it should "treat PageUp, PageDown, Ctrl+Home, and Ctrl+End as file navigation in editor focus" in {
     val translator = FocusedInputTranslator.forState(editorState)
 
