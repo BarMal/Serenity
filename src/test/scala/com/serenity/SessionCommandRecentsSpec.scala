@@ -64,7 +64,7 @@ class SessionCommandRecentsSpec extends AnyFlatSpec with Matchers with StateMana
   }
 
   it should "leave no recents when the restored session file predates saving them" in {
-    val root         = Files.createTempDirectory("session-command-recents-legacy")
+    val root         = TestTemp.directory("session-command-recents-legacy")
     val stateManager = stateManagerAt(root)
     runFromPalette(stateManager, "save-session")
     val legacyJson = _root_.io.circe.parser
@@ -79,7 +79,7 @@ class SessionCommandRecentsSpec extends AnyFlatSpec with Matchers with StateMana
   }
 
   "Open Session" should "take the opened session's recents only, not the ones used in the session it replaces" in {
-    val root     = Files.createTempDirectory("session-command-recents-named")
+    val root     = TestTemp.directory("session-command-recents-named")
     val sessionB = stateManagerAt(root)
     run(sessionB, usedInSavedSession)
     runFromPalette(sessionB, "save-session-as")
@@ -97,7 +97,7 @@ class SessionCommandRecentsSpec extends AnyFlatSpec with Matchers with StateMana
   }
 
   "Startup session restore" should "bring back the recents saved by the previous run" in {
-    val root     = Files.createTempDirectory("session-command-recents-startup")
+    val root     = TestTemp.directory("session-command-recents-startup")
     val previous = stateManagerAt(root)
     run(previous, usedInSavedSession)
     runFromPalette(previous, "save-session")

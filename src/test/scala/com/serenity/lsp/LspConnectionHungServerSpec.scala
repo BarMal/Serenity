@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.lsp.client.{LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -47,7 +48,7 @@ class LspConnectionHungServerSpec extends AnyFlatSpec with Matchers:
     * whatever happened, so a release that hangs fails this spec instead of hanging it.
     */
   private def releaseOutcome(mode: String): (Boolean, Boolean) =
-    val pidFile = Files.createTempFile("hung-lsp-server", ".pid")
+    val pidFile = TestTemp.file("hung-lsp-server", ".pid")
     try
       val release = for
         connected <- LspConnection(

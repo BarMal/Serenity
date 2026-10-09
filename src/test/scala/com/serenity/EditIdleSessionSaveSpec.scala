@@ -1,6 +1,6 @@
 package com.serenity
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import scala.concurrent.duration.*
 
@@ -58,7 +58,7 @@ class EditIdleSessionSaveSpec extends AnyFlatSpec with Matchers with StateManage
       .flatMap(_.sessionService.loadSession)
       .map(bufferTexts)
 
-  private val tempSessionRoot: IO[Path] = IO.blocking(Files.createTempDirectory("edit-idle-session-save"))
+  private val tempSessionRoot: IO[Path] = IO.blocking(TestTemp.directory("edit-idle-session-save"))
 
   behavior of "Saving the session once edits pause"
 

@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.{CommandRegistry, RichTextCommands}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.keystroke.events.{CloseTab, Enter, InsertChar}
@@ -65,7 +66,7 @@ class FormattingLossSaveSpec extends AnyFlatSpec with Matchers:
         .unsafeRunSync()
 
   private def fixture(): Fixture =
-    val directory = Files.createTempDirectory("formatting-loss-save-spec")
+    val directory = TestTemp.directory("formatting-loss-save-spec")
     val program =
       for
         modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))

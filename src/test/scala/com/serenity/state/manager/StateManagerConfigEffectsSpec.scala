@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.*
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{AppConfig, AppMode, ConfigManager, PanelEscapeTarget, PerMode, WindowChromeMode}
@@ -42,7 +43,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     deviceTextScale: Double = 1.0,
     configOnDisk: Option[AppConfig] = None
   ): Harness =
-    val root       = Files.createTempDirectory("config-effects-spec")
+    val root       = TestTemp.directory("config-effects-spec")
     val configPath = Option.when(persistConfig)(root.resolve("config.json"))
     val modelRef   = Ref.of[IO, Model](Model(initialState, UndoState())).unsafeRunSync()
     val stateRef   = ModelViews.appRef(modelRef)

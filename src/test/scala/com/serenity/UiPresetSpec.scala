@@ -1,7 +1,6 @@
 package com.serenity
 
 import java.awt.Font
-import java.nio.file.Files
 
 import com.serenity.config.*
 import com.serenity.rope.Balance
@@ -18,7 +17,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "UiPreset" should "capture config, theme, preferred window size, and pinned panels from app state" in {
-    val root = Files.createTempDirectory("ui-preset-root")
+    val root = TestTemp.directory("ui-preset-root")
     val config = AppConfig.default
       .withFontConfig(FontConfig(codeFontFamily = "Monospaced", fontSize = 18.0f))
       .withInterfaceDensity(InterfaceDensity.Spacious)
@@ -45,7 +44,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "restore captured config, theme, and pinned panels onto app state" in {
-    val root = Files.createTempDirectory("ui-preset-restore")
+    val root = TestTemp.directory("ui-preset-restore")
     val initial = DockedPanelFixtures.dock(
       AppState.initial,
       SurfaceId("old-panel"),

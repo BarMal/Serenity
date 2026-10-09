@@ -9,6 +9,7 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.state.models.{Buffer, BufferId, CursorPosition, EditingState, Viewport}
@@ -85,9 +86,9 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     new LiveHarness(terminal, reader, out)
 
   "TuiRuntime.run" should "run a full edit/save session in a terminal and restore it on Ctrl+Q quit" in {
-    val file = Files.createTempFile("tui-runtime-spec", ".md")
+    val file = TestTemp.file("tui-runtime-spec", ".md")
     Files.writeString(file, "")
-    val sessionRoot = Files.createTempDirectory("tui-runtime-spec-session")
+    val sessionRoot = TestTemp.directory("tui-runtime-spec-session")
     val harness     = liveInputTerminal()
 
     val program = TuiRuntime.run(
@@ -116,9 +117,9 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
   }
 
   it should "keep editing working across a terminal focus-out/focus-in round trip (CSI O / CSI I, #1171)" in {
-    val file = Files.createTempFile("tui-runtime-focus-spec", ".md")
+    val file = TestTemp.file("tui-runtime-focus-spec", ".md")
     Files.writeString(file, "")
-    val sessionRoot = Files.createTempDirectory("tui-runtime-focus-spec-session")
+    val sessionRoot = TestTemp.directory("tui-runtime-focus-spec-session")
     val harness     = liveInputTerminal()
 
     val program = TuiRuntime.run(
@@ -152,9 +153,9 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
   }
 
   it should "quit and restore the terminal on EOF alone, with no explicit Ctrl+Q" in {
-    val file = Files.createTempFile("tui-runtime-eof-spec", ".md")
+    val file = TestTemp.file("tui-runtime-eof-spec", ".md")
     Files.writeString(file, "hello")
-    val sessionRoot = Files.createTempDirectory("tui-runtime-eof-spec-session")
+    val sessionRoot = TestTemp.directory("tui-runtime-eof-spec-session")
     val harness     = staticInputTerminal(Array.emptyByteArray)
 
     val program = TuiRuntime.run(
@@ -172,7 +173,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
   }
 
   it should "restore the terminal even when the runtime fails" in {
-    val sessionRoot = Files.createTempDirectory("tui-runtime-failure-spec-session")
+    val sessionRoot = TestTemp.directory("tui-runtime-failure-spec-session")
     val harness     = staticInputTerminal(Array.emptyByteArray)
 
     val program = TuiRuntime.run(
@@ -202,9 +203,9 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     TerminalEmulator.blank(80, 24).consume(harness.written)
 
   it should "paint the opened file, the gutter and the status bar onto the real terminal" in {
-    val file = Files.createTempFile("tui-runtime-screen-spec", ".md")
+    val file = TestTemp.file("tui-runtime-screen-spec", ".md")
     Files.writeString(file, "alpha\nbeta")
-    val sessionRoot = Files.createTempDirectory("tui-runtime-screen-spec-session")
+    val sessionRoot = TestTemp.directory("tui-runtime-screen-spec-session")
     val harness     = liveInputTerminal()
 
     val program = TuiRuntime.run(
@@ -231,9 +232,9 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
   }
 
   it should "repaint typed characters and move the terminal's own caret with them" in {
-    val file = Files.createTempFile("tui-runtime-typing-spec", ".md")
+    val file = TestTemp.file("tui-runtime-typing-spec", ".md")
     Files.writeString(file, "")
-    val sessionRoot = Files.createTempDirectory("tui-runtime-typing-spec-session")
+    val sessionRoot = TestTemp.directory("tui-runtime-typing-spec-session")
     val harness     = liveInputTerminal()
 
     val program = TuiRuntime.run(
@@ -274,9 +275,9 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
   }
 
   it should "retitle the terminal with the file name only, never the document text (#1447)" in {
-    val file = Files.createTempFile("tui-runtime-accessibility-spec", ".md")
+    val file = TestTemp.file("tui-runtime-accessibility-spec", ".md")
     Files.writeString(file, "alpha")
-    val sessionRoot = Files.createTempDirectory("tui-runtime-accessibility-spec-session")
+    val sessionRoot = TestTemp.directory("tui-runtime-accessibility-spec-session")
     val harness     = liveInputTerminal()
 
     val program = TuiRuntime.run(

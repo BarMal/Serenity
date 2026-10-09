@@ -3,13 +3,14 @@ package com.serenity.io
 import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class ProjectFileWalkerSpec extends AnyFlatSpec with Matchers:
 
   private def tree(paths: String*): Path =
-    val root = Files.createTempDirectory("project-file-walker")
+    val root = TestTemp.directory("project-file-walker")
     paths.foreach { relative =>
       val file = root.resolve(relative)
       Files.createDirectories(file.getParent)
@@ -60,7 +61,7 @@ class ProjectFileWalkerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fail when the root cannot be listed" in {
-    val missing = Files.createTempDirectory("project-file-walker").resolve("missing")
+    val missing = TestTemp.directory("project-file-walker").resolve("missing")
 
     ProjectFileWalker.list(missing, limit = 10).attempt.unsafeRunSync().isLeft shouldBe true
   }

@@ -1,10 +1,9 @@
 package com.serenity.state.manager
 
-import java.nio.file.Files
-
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.command.{Command, CommandIntent, ThemeIntent}
 import com.serenity.config.{AppConfig, AppearanceSlot, ThemeFollowConfig}
 import com.serenity.rope.Balance
@@ -32,7 +31,7 @@ class StateManagerSystemAppearanceSpec extends AnyFlatSpec with Matchers:
     (Ref.of[IO, OsAppearance](initial), Ref.of[IO, Int](0)).mapN(new Appearance(_, _))
 
   private def managerWith(followSystem: Boolean, detector: OsAppearanceDetector): IO[StateManager] =
-    IO.blocking(Files.createTempDirectory("system-appearance-state-manager")).flatMap { root =>
+    IO.blocking(TestTemp.directory("system-appearance-state-manager")).flatMap { root =>
       StateManager(
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
         sessionRootOverride = Some(root),

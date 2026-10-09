@@ -27,7 +27,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
   it should "handle available startup actions correctly" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-    val selectedFile = java.nio.file.Files.createTempFile("serenity-startup-options-open", ".txt")
+    val selectedFile = TestTemp.file("serenity-startup-options-open", ".txt")
     java.nio.file.Files.writeString(selectedFile, "opened from startup options")
 
     val program = for

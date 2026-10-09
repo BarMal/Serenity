@@ -87,7 +87,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      sessionRoot <- IO.blocking(Files.createTempDirectory("startup-page-empty-session-restore"))
+      sessionRoot <- IO.blocking(TestTemp.directory("startup-page-empty-session-restore"))
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
@@ -150,8 +150,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      sessionRoot <- IO.blocking(Files.createTempDirectory("startup-page-open-recent"))
-      recentFile  <- IO.blocking(Files.createTempFile("startup-recent", ".md"))
+      sessionRoot <- IO.blocking(TestTemp.directory("startup-page-open-recent"))
+      recentFile  <- IO.blocking(TestTemp.file("startup-recent", ".md"))
       _           <- IO.blocking(Files.writeString(recentFile, "recent file body"))
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)

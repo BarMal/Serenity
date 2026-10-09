@@ -24,7 +24,7 @@ class SessionPackageRestoreSpec extends AnyFlatSpec with Matchers with OptionVal
   private val original = GoldenFixtures.zip(GoldenFixtures.wordReport.entries)
 
   private def withDocx[A](body: (Path, FileManager) => A): A =
-    val file = Files.createTempFile("session-package", ".docx")
+    val file = TestTemp.file("session-package", ".docx")
     try
       Files.write(file, original)
       body(file, new FileManager())

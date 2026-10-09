@@ -2,6 +2,7 @@ package com.serenity.config
 
 import java.nio.file.Files
 
+import com.serenity.TestTemp
 import com.serenity.testkit.ConfigGenerators
 import com.typesafe.config.ConfigFactory
 import org.scalacheck.Gen
@@ -24,14 +25,14 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
   given generatorConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 60)
 
   private def savedText(config: AppConfig): String =
-    val file = Files.createTempFile("serenity-config-property", ".conf")
+    val file = TestTemp.file("serenity-config-property", ".conf")
     try
       ConfigManagerTestSupport.saveConfig(config, file) shouldBe true
       Files.readString(file)
     finally Files.deleteIfExists(file): Unit
 
   private def savedAndReloaded(config: AppConfig): AppConfig =
-    val file = Files.createTempFile("serenity-config-property", ".conf")
+    val file = TestTemp.file("serenity-config-property", ".conf")
     try
       ConfigManagerTestSupport.saveConfig(config, file) shouldBe true
       ConfigManagerTestSupport.loadConfig(Some(file.toString))

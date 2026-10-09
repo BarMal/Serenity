@@ -90,7 +90,7 @@ class SessionDowngradeSpec extends AnyFlatSpec with Matchers with OptionValues w
   /** A real saved session holding `unsaved` as unsaved text, then rewritten by `damage`. */
   private def newerSession(damage: JsonObject => JsonObject): IO[Path] =
     for
-      root <- IO.blocking(Files.createTempDirectory("session-downgrade"))
+      root <- IO.blocking(TestTemp.directory("session-downgrade"))
       _    <- managerAt(root).saveSession(dirtyState(unsaved))
       _    <- edited(sessionFile(root))(damage)
     yield root
@@ -156,7 +156,7 @@ class SessionDowngradeSpec extends AnyFlatSpec with Matchers with OptionValues w
 
   it should "not be overwritten by a save when it appears after the older build has already saved" in {
     val program = for
-      root <- IO.blocking(Files.createTempDirectory("session-downgrade-late"))
+      root <- IO.blocking(TestTemp.directory("session-downgrade-late"))
       manager = managerAt(root)
       _        <- manager.saveSession(dirtyState("first save"))
       _        <- manager.saveSession(dirtyState("second save"))
@@ -246,7 +246,7 @@ class SessionDowngradeSpec extends AnyFlatSpec with Matchers with OptionValues w
   /** A default session and a named one the newer build saved, the index also carrying a field this build lacks. */
   private def indexedNewerNamedSession(makeCurrent: Boolean): IO[(Path, String)] =
     for
-      root <- IO.blocking(Files.createTempDirectory("session-downgrade-index"))
+      root <- IO.blocking(TestTemp.directory("session-downgrade-index"))
       manager = managerAt(root)
       _  <- manager.saveSession(dirtyState("the default session"))
       id <- manager.saveSessionAs(futureIndexed, dirtyState(unsaved))

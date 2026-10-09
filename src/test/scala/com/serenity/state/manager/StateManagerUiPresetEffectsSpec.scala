@@ -1,9 +1,10 @@
 package com.serenity.state.manager
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.{CommandRunner, SettingsPage, SettingsSurfaceState, UiPresetsIntent}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.rope.Balance
@@ -69,7 +70,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
     initialState: AppState = AppState.initial,
     windowSize: Option[PreferredWindowSize] = None
   ): Harness =
-    val root      = Files.createTempDirectory("ui-preset-effects-spec")
+    val root      = TestTemp.directory("ui-preset-effects-spec")
     val store     = UiPresetStore(root.resolve("ui-presets.json"))
     val stateRef  = Ref.of[IO, AppState](initialState).unsafeRunSync()
     val triggers  = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()

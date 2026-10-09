@@ -2,6 +2,7 @@ package com.serenity.ui.fonts
 
 import java.awt.Font
 import java.awt.font.TextAttribute
+import java.nio.file.Paths
 
 import com.serenity.text.fallback.{FallbackItemiser, FallbackRun, FontSlot}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -10,9 +11,9 @@ import org.scalatest.matchers.should.Matchers
 class Java2DGlyphCoverageSpec extends AnyFlatSpec with Matchers:
 
   private def bundled(resource: String): Font =
-    val stream = getClass.getResourceAsStream(resource)
-    try Font.createFont(Font.TRUETYPE_FONT, stream).deriveFont(Font.BOLD, 14.0f)
-    finally stream.close()
+    Font
+      .createFont(Font.TRUETYPE_FONT, Paths.get(getClass.getResource(resource).toURI).toFile)
+      .deriveFont(Font.BOLD, 14.0f)
 
   private val codeFont  = bundled("/fonts/MonaspaceNeon-Regular.otf")
   private val iconFont  = bundled("/fonts/MaterialIconsRound-Regular.otf").deriveFont(Font.PLAIN, 9.0f)

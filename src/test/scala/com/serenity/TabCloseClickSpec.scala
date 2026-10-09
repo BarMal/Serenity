@@ -42,7 +42,7 @@ class TabCloseClickSpec extends AnyFlatSpec with Matchers:
     (first, second)
 
   private def withTempRoot(test: Path => Unit): Unit =
-    val root = Files.createTempDirectory("tab-close-click")
+    val root = TestTemp.directory("tab-close-click")
     try test(root)
     finally
       Files.list(root).forEach(path => Files.deleteIfExists(path): Unit)

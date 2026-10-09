@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path}
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.app.StartupCrashGuard.Decision
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -13,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
 class StartupCrashGuardSpec extends AnyFlatSpec with Matchers:
 
   private def tempMarker(): Path =
-    Files.createTempDirectory("serenity-crash-guard").resolve("nested").resolve("startup-in-progress")
+    TestTemp.directory("serenity-crash-guard").resolve("nested").resolve("startup-in-progress")
 
   "StartupCrashGuard.unfinishedStarts" should "count no unfinished starts when there is no marker" in {
     StartupCrashGuard.unfinishedStarts(None) shouldBe 0

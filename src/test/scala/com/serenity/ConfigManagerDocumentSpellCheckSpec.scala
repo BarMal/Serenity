@@ -13,7 +13,7 @@ import org.scalatest.matchers.should.Matchers
 class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "ConfigManager" should "report invalid language-tool config values through the language-tools schema" in {
-    val configFile = Files.createTempFile("serenity-language-tools-invalid-config", ".conf")
+    val configFile = TestTemp.file("serenity-language-tools-invalid-config", ".conf")
     Files.writeString(
       configFile,
       """editor.syntax_highlighting = maybe
@@ -28,7 +28,7 @@ class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with
   }
 
   it should "load and write the default document mode" in {
-    val configFile = Files.createTempFile("serenity-default-document-mode", ".conf")
+    val configFile = TestTemp.file("serenity-default-document-mode", ".conf")
     Files.writeString(
       configFile,
       """editor.default_document_mode = markdown
@@ -42,7 +42,7 @@ class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with
   }
 
   it should "report invalid document config values through the document schema" in {
-    val configFile = Files.createTempFile("serenity-document-invalid-config", ".conf")
+    val configFile = TestTemp.file("serenity-document-invalid-config", ".conf")
     Files.writeString(
       configFile,
       """editor.default_document_mode = wordperfect
@@ -57,7 +57,7 @@ class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with
   }
 
   it should "load and write the markdown view mode" in {
-    val configFile = Files.createTempFile("serenity-markdown-view-mode", ".conf")
+    val configFile = TestTemp.file("serenity-markdown-view-mode", ".conf")
     Files.writeString(
       configFile,
       """editor.markdown_view = inline-lens
@@ -71,7 +71,7 @@ class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with
   }
 
   it should "load and write spell-check configuration" in {
-    val configFile = Files.createTempFile("serenity-spell-config", ".conf")
+    val configFile = TestTemp.file("serenity-spell-config", ".conf")
     Files.writeString(
       configFile,
       """spellcheck.enabled = true

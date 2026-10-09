@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.command.*
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
@@ -41,7 +42,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
   "lspEffectStream" should "emit FileOpened when a Scala file is loaded" in {
     val sm       = makeStateManager()
-    val tempFile = Files.createTempFile("test-lsp", ".scala")
+    val tempFile = TestTemp.file("test-lsp", ".scala")
     Files.writeString(tempFile, "object Foo")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
@@ -67,7 +68,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
   it should "emit FileClosed when the tab holding an LSP document is closed" in {
     val sm       = makeStateManager()
-    val tempFile = Files.createTempFile("test-lsp-close-tab", ".scala")
+    val tempFile = TestTemp.file("test-lsp-close-tab", ".scala")
     Files.writeString(tempFile, "object Closed")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
@@ -88,7 +89,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
   it should "not emit FileOpened for files without a known language" in {
     val sm       = makeStateManager()
-    val tempFile = Files.createTempFile("test-lsp-unknown", ".xyz")
+    val tempFile = TestTemp.file("test-lsp-unknown", ".xyz")
     Files.writeString(tempFile, "some content")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
@@ -107,7 +108,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
   it should "rebind the LSP stream when the buffer language changes" in {
     val sm       = makeStateManager()
-    val tempFile = Files.createTempFile("test-lsp-rebind", ".scala")
+    val tempFile = TestTemp.file("test-lsp-rebind", ".scala")
     Files.writeString(tempFile, "object Baz")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
@@ -133,7 +134,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
   it should "emit the latest full-text change with the next document version" in {
     val sm       = makeStateManager()
-    val tempFile = Files.createTempFile("test-lsp-change", ".scala")
+    val tempFile = TestTemp.file("test-lsp-change", ".scala")
     Files.writeString(tempFile, "object Change")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
@@ -164,7 +165,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
   it should "not emit document changes for cursor-only events" in {
     val sm       = makeStateManager()
-    val tempFile = Files.createTempFile("test-lsp-no-change", ".scala")
+    val tempFile = TestTemp.file("test-lsp-no-change", ".scala")
     Files.writeString(tempFile, "object Still")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
@@ -180,7 +181,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
   it should "coalesce rapid changes without blocking editor input when no consumer is running" in {
     val sm       = makeStateManager()
-    val tempFile = Files.createTempFile("test-lsp-stalled", ".scala")
+    val tempFile = TestTemp.file("test-lsp-stalled", ".scala")
     Files.writeString(tempFile, "object Stalled")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
@@ -209,8 +210,8 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
   it should "open the saved location after save as changes the LSP document URI" in {
     val sm     = makeStateManager()
-    val source = Files.createTempFile("test-lsp-save-as-source", ".scala")
-    val target = Files.createTempFile("test-lsp-save-as-target", ".md")
+    val source = TestTemp.file("test-lsp-save-as-source", ".scala")
+    val target = TestTemp.file("test-lsp-save-as-target", ".md")
     Files.writeString(source, "object Saved")
     try
       sm.applyEvent(LoadFile(source)).unsafeRunSync()

@@ -96,7 +96,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   // exists-check) already tolerate a crash landing between the two writes, without needing the two writes
   // to be merged into one atomic operation.
   "SessionManager" should "tolerate an index entry left pointing at a session file removed by an interim crash" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-index-ahead-of-file")
+    val sessionRoot    = TestTemp.directory("session-manager-index-ahead-of-file")
     val sessionManager = createManagerAt(sessionRoot)
     writeIndex(
       sessionRoot,
@@ -114,7 +114,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "tolerate an orphaned session file left on disk by an interim crash before the index was written" in {
-    val sessionRoot       = Files.createTempDirectory("session-manager-file-ahead-of-index")
+    val sessionRoot       = TestTemp.directory("session-manager-file-ahead-of-index")
     val sessionManager    = createManagerAt(sessionRoot)
     val sessionsDirectory = sessionRoot.resolve("sessions")
 
@@ -134,7 +134,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "replay a pending session write left behind by a crash between recording it and applying it" in {
-    val sessionRoot       = Files.createTempDirectory("session-manager-pending-write")
+    val sessionRoot       = TestTemp.directory("session-manager-pending-write")
     val sessionManager    = createManagerAt(sessionRoot)
     val sessionsDirectory = sessionRoot.resolve("sessions")
 
@@ -174,7 +174,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "replay a pending session delete left behind by a crash between recording it and applying it" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-pending-delete")
+    val sessionRoot    = TestTemp.directory("session-manager-pending-delete")
     val sessionManager = createManagerAt(sessionRoot)
 
     val program = for
@@ -201,7 +201,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "quarantine an unreadable pending session write and keep operating normally" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-corrupt-pending")
+    val sessionRoot    = TestTemp.directory("session-manager-corrupt-pending")
     val sessionManager = createManagerAt(sessionRoot)
     Files.writeString(pendingFile(sessionRoot), "{ not valid pending json")
 
@@ -219,8 +219,8 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "never load an absolute legacy session path" in {
-    val sessionRoot = Files.createTempDirectory("session-manager-absolute-path")
-    val outsideFile = Files.createTempFile("session-manager-outside", ".json")
+    val sessionRoot = TestTemp.directory("session-manager-absolute-path")
+    val outsideFile = TestTemp.file("session-manager-outside", ".json")
     val original    = "outside session content"
     Files.writeString(outsideFile, original)
     val sessionManager = createManagerAt(sessionRoot)
@@ -237,8 +237,8 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "never follow a session-file symlink outside the session root" in {
-    val sessionRoot = Files.createTempDirectory("session-manager-symlink")
-    val outsideFile = Files.createTempFile("session-manager-symlink-outside", ".json")
+    val sessionRoot = TestTemp.directory("session-manager-symlink")
+    val outsideFile = TestTemp.file("session-manager-symlink-outside", ".json")
     Files.writeString(outsideFile, "outside")
     val sessionsDirectory = Files.createDirectories(sessionRoot.resolve("sessions"))
     Files.createSymbolicLink(sessionsDirectory.resolve("link.json"), outsideFile)
@@ -253,8 +253,8 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "reject a symlinked sessions directory for every persistence operation" in {
-    val sessionRoot = Files.createTempDirectory("session-manager-sessions-symlink")
-    val outsideRoot = Files.createTempDirectory("session-manager-sessions-target")
+    val sessionRoot = TestTemp.directory("session-manager-sessions-symlink")
+    val outsideRoot = TestTemp.directory("session-manager-sessions-target")
     val outsideFile = outsideRoot.resolve("session.json")
     Files.writeString(outsideFile, "malformed outside session")
     Files.createSymbolicLink(sessionRoot.resolve("sessions"), outsideRoot)
@@ -277,7 +277,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "reject traversal expressed with mixed path separators" in {
-    val sessionRoot = Files.createTempDirectory("session-manager-mixed-path")
+    val sessionRoot = TestTemp.directory("session-manager-mixed-path")
     val outsideFile = sessionRoot.getParent.resolve("mixed-session-outside.json")
     Files.writeString(outsideFile, "outside")
     val sessionManager = createManagerAt(sessionRoot)
@@ -292,8 +292,8 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "never prune through an unsafe legacy session path" in {
-    val sessionRoot = Files.createTempDirectory("session-manager-unsafe-prune")
-    val outsideFile = Files.createTempFile("session-manager-prune-outside", ".json")
+    val sessionRoot = TestTemp.directory("session-manager-unsafe-prune")
+    val outsideFile = TestTemp.file("session-manager-prune-outside", ".json")
     Files.writeString(outsideFile, "outside")
     val sessionManager = createManagerAt(sessionRoot, SessionManager.SessionPolicy(maxSessionHistory = 0))
     writeIndex(
@@ -307,8 +307,8 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "use the canonical current filename when saving over unsafe legacy metadata" in {
-    val sessionRoot = Files.createTempDirectory("session-manager-canonical-save")
-    val outsideFile = Files.createTempFile("session-manager-canonical-outside", ".json")
+    val sessionRoot = TestTemp.directory("session-manager-canonical-save")
+    val outsideFile = TestTemp.file("session-manager-canonical-outside", ".json")
     Files.writeString(outsideFile, "untouched")
     val sessionManager = createManagerAt(sessionRoot)
     writeIndex(
@@ -329,7 +329,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "reject a hostile session id before canonicalizing its filename" in {
-    val sessionRoot = Files.createTempDirectory("session-manager-hostile-id")
+    val sessionRoot = TestTemp.directory("session-manager-hostile-id")
     val outsideFile = sessionRoot.getParent.resolve("hostile-session.json")
     Files.deleteIfExists(outsideFile)
     val sessionManager = createManagerAt(sessionRoot)
@@ -343,7 +343,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "preserve session files when recovering a corrupt index" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-corrupt-index")
+    val sessionRoot    = TestTemp.directory("session-manager-corrupt-index")
     val sessionManager = createManagerAt(sessionRoot)
     val sessionId      = sessionManager.saveSessionAs("Recoverable", stateWithText("preserve me")).unsafeRunSync()
     Files.writeString(sessionRoot.resolve("session-index.json"), "not valid index json")
@@ -373,7 +373,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
     Files.delete(currentSessionFile(sessionRoot))
 
   it should "record a pending marker that names the staged session file rather than embedding its text (#1912)" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-staged-marker")
+    val sessionRoot    = TestTemp.directory("session-manager-staged-marker")
     val sessionManager = createManagerAt(sessionRoot)
     blockSessionFile(sessionRoot)
 
@@ -384,7 +384,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "finish a staged commit that was interrupted before the session file was replaced (#1912)" in {
-    val sessionRoot = Files.createTempDirectory("session-manager-staged-replay")
+    val sessionRoot = TestTemp.directory("session-manager-staged-replay")
     blockSessionFile(sessionRoot)
     createManagerAt(sessionRoot).saveSession(stateWithText("staged before the crash")).attempt.unsafeRunSync()
     unblockSessionFile(sessionRoot)
@@ -396,7 +396,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "write session files as compact JSON (#1912)" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-compact")
+    val sessionRoot    = TestTemp.directory("session-manager-compact")
     val sessionManager = createManagerAt(sessionRoot)
 
     sessionManager.saveSession(stateWithText("compact")).unsafeRunSync()
@@ -406,7 +406,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "keep the index in memory instead of re-reading it on every save (#1912)" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-index-cache")
+    val sessionRoot    = TestTemp.directory("session-manager-index-cache")
     val sessionManager = createManagerAt(sessionRoot)
     val indexFile      = sessionRoot.resolve("session-index.json")
     sessionManager.saveSessionAs("Named", stateWithText("named")).unsafeRunSync()
@@ -443,7 +443,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
       finally listing.close()
 
   it should "keep buffer text out of the session file and restore it from per-buffer content files (#1912)" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-content-files")
+    val sessionRoot    = TestTemp.directory("session-manager-content-files")
     val sessionManager = createManagerAt(sessionRoot)
 
     sessionManager.saveSession(stateWithTexts("first buffer text", "second buffer text")).unsafeRunSync()
@@ -456,7 +456,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "rewrite only the content file of the buffer that changed (#1912)" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-one-changed")
+    val sessionRoot    = TestTemp.directory("session-manager-one-changed")
     val sessionManager = createManagerAt(sessionRoot)
     sessionManager.saveSession(stateWithTexts("unchanged text", "text before the edit")).unsafeRunSync()
     val before = contentFiles(sessionRoot)
@@ -474,7 +474,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "remove a deleted session's content files (#1912)" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-content-delete")
+    val sessionRoot    = TestTemp.directory("session-manager-content-delete")
     val sessionManager = createManagerAt(sessionRoot)
     sessionManager.saveSession(stateWithTexts("one", "two")).unsafeRunSync()
 
@@ -484,7 +484,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   }
 
   it should "restore a buffer without its text when the content file is missing instead of failing the session (#1912)" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-content-missing")
+    val sessionRoot    = TestTemp.directory("session-manager-content-missing")
     val sessionManager = createManagerAt(sessionRoot)
     sessionManager.saveSession(stateWithTexts("one", "two")).unsafeRunSync()
     contentFiles(sessionRoot).keys.foreach(name =>

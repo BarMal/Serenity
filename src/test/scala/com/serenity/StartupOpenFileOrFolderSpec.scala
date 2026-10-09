@@ -53,7 +53,7 @@ class StartupOpenFileOrFolderSpec extends AnyFlatSpec with Matchers with StateMa
     )
 
   "The start page where one Open... is supported" should "list New document, Open... and then the recent files" in {
-    val recent = Files.createTempFile("serenity-combined-recent", ".md")
+    val recent = TestTemp.file("serenity-combined-recent", ".md")
     val page   = AppStartup.createStartPage(sessionExists = false, recentFiles = List(recent), fileOrFolderOpen = true)
 
     page.actions.map(_.id) shouldBe List("new-session", "open", s"recent:${recent.toAbsolutePath.normalize()}")
@@ -79,7 +79,7 @@ class StartupOpenFileOrFolderSpec extends AnyFlatSpec with Matchers with StateMa
   }
 
   "Open... on the start page" should "pin the Explorer to a chosen folder and leave the start page" in {
-    val folder = Files.createTempDirectory("serenity-combined-folder")
+    val folder = TestTemp.directory("serenity-combined-folder")
 
     val program = for
       stateManager <- createStateManagerIO(
@@ -99,7 +99,7 @@ class StartupOpenFileOrFolderSpec extends AnyFlatSpec with Matchers with StateMa
   }
 
   it should "open a chosen file in a buffer, without pinning the Explorer" in {
-    val file = Files.createTempFile("serenity-combined-file", ".txt")
+    val file = TestTemp.file("serenity-combined-file", ".txt")
     Files.writeString(file, "from the combined dialog")
 
     val program = for
@@ -133,9 +133,9 @@ class StartupOpenFileOrFolderSpec extends AnyFlatSpec with Matchers with StateMa
   }
 
   it should "ask the combined dialog, not the file dialog, when the open hotkey is pressed" in {
-    val file = Files.createTempFile("serenity-combined-hotkey", ".txt")
+    val file = TestTemp.file("serenity-combined-hotkey", ".txt")
     Files.writeString(file, "x")
-    val plain = Files.createTempFile("serenity-combined-plain", ".txt")
+    val plain = TestTemp.file("serenity-combined-plain", ".txt")
 
     val program = for
       stateManager <- createStateManagerIO(
@@ -153,7 +153,7 @@ class StartupOpenFileOrFolderSpec extends AnyFlatSpec with Matchers with StateMa
   }
 
   "The Open... command on a dialog without a combined mode" should "fall back to choosing a file" in {
-    val file = Files.createTempFile("serenity-combined-fallback", ".txt")
+    val file = TestTemp.file("serenity-combined-fallback", ".txt")
     Files.writeString(file, "x")
     def dialogRecordingTo(asked: Ref[IO, List[String]]): FileDialog =
       FileDialog(

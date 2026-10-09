@@ -91,7 +91,7 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
     buffer.viewport.visibleLines shouldBe contentRect.height
 
   "Command runner" should "save, restore, and clear the current session from command runner commands" in {
-    val sessionRoot  = Files.createTempDirectory("serenity-command-session")
+    val sessionRoot  = TestTemp.directory("serenity-command-session")
     val stateManager = createStateManager(Some(sessionRoot))
     val bufferId     = BufferId(0)
     val viewportSize = ViewportSize(120, 40)
@@ -115,7 +115,7 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "save the current session under a new name via Save Session As, without touching the current session" in {
-    val sessionRoot  = Files.createTempDirectory("serenity-save-session-as")
+    val sessionRoot  = TestTemp.directory("serenity-save-session-as")
     val stateManager = createStateManager(Some(sessionRoot))
     val bufferId     = BufferId(0)
 
@@ -130,7 +130,7 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "list saved sessions and open the selected one via Open Session" in {
-    val sessionRoot  = Files.createTempDirectory("serenity-open-session")
+    val sessionRoot  = TestTemp.directory("serenity-open-session")
     val stateManager = createStateManager(Some(sessionRoot))
     val bufferId     = BufferId(0)
 
@@ -157,7 +157,7 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "rename a saved session via Rename Session" in {
-    val sessionRoot  = Files.createTempDirectory("serenity-rename-session")
+    val sessionRoot  = TestTemp.directory("serenity-rename-session")
     val stateManager = createStateManager(Some(sessionRoot))
     val bufferId     = BufferId(0)
     val originalName = "Old"
@@ -181,7 +181,7 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "restore a startup session into the current startup viewport" in {
-    val sessionRoot     = Files.createTempDirectory("serenity-startup-session")
+    val sessionRoot     = TestTemp.directory("serenity-startup-session")
     val savedManager    = createStateManager(Some(sessionRoot))
     val restored        = createStateManager(Some(sessionRoot))
     val bufferId        = BufferId(0)

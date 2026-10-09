@@ -1,6 +1,6 @@
 package com.serenity
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -28,7 +28,7 @@ trait StateManagerTestSupport:
     deviceTextScaleProvider: IO[Double] = IO.pure(1.0),
     fileDialog: Option[FileDialog] = None
   ): IO[StateManager] =
-    IO.blocking(Files.createTempDirectory(s"${loggerName.toLowerCase}-state-manager"))
+    IO.blocking(TestTemp.directory(s"${loggerName.toLowerCase}-state-manager"))
       .flatMap(root =>
         StateManager.apply(
           testLogger(loggerName),

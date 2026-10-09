@@ -13,7 +13,7 @@ import org.scalatest.matchers.should.Matchers
 class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "ConfigManager" should "load configured hotkey overrides from a config file" in {
-    val configFile = Files.createTempFile("serenity-config", ".conf")
+    val configFile = TestTemp.file("serenity-config", ".conf")
     Files.writeString(
       configFile,
       """hotkey.command_palette = ctrl+k
@@ -48,7 +48,7 @@ class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with Optio
   }
 
   it should "load and write meta hotkey overrides using command-key aliases" in {
-    val configFile = Files.createTempFile("serenity-config", ".conf")
+    val configFile = TestTemp.file("serenity-config", ".conf")
     Files.writeString(
       configFile,
       """hotkey.command_palette = cmd+p
@@ -88,7 +88,7 @@ class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with Optio
   }
 
   it should "parse richer key trigger names for local keymap overrides" in {
-    val configFile = Files.createTempFile("serenity-config", ".conf")
+    val configFile = TestTemp.file("serenity-config", ".conf")
     Files.writeString(
       configFile,
       """keymap.editor.page_down = ctrl+pagedown
@@ -147,7 +147,7 @@ class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with Optio
   }
 
   it should "round-trip a legacy-format keymap config file across all five keymap groups" in {
-    val configFile = Files.createTempFile("serenity-keymap-round-trip", ".conf")
+    val configFile = TestTemp.file("serenity-keymap-round-trip", ".conf")
     Files.writeString(
       configFile,
       """keymap.editor.move_left = alt+h
@@ -178,7 +178,7 @@ class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with Optio
   }
 
   it should "load overrides for the modal line, list and page keys" in {
-    val configFile = Files.createTempFile("serenity-modal-ends", ".conf")
+    val configFile = TestTemp.file("serenity-modal-ends", ".conf")
     Files.writeString(
       configFile,
       """keymap.modal.line_start = ctrl+a

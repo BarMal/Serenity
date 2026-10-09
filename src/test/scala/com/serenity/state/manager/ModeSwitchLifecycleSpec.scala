@@ -6,7 +6,6 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
-import com.serenity.StateManagerTestSupport
 import com.serenity.command.*
 import com.serenity.config.{AppConfig, AppMode, ConfigManager}
 import com.serenity.keystroke.events.{InsertChar, LspEvent}
@@ -16,6 +15,7 @@ import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspR
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.SharedDictionary
+import com.serenity.{StateManagerTestSupport, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -92,7 +92,7 @@ class ModeSwitchLifecycleSpec extends AnyFlatSpec with Matchers with StateManage
     )
 
   private def editor(mode: AppMode = AppMode.Code, withConfigFile: Boolean = false): Editor =
-    val directory = Files.createTempDirectory("mode-switch-lifecycle")
+    val directory = TestTemp.directory("mode-switch-lifecycle")
     val config    = AppConfig.default.withAppMode(mode)
     val manager = StateManager
       .apply(

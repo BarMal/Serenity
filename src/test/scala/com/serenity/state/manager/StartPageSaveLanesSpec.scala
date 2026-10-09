@@ -1,11 +1,12 @@
 package com.serenity.state.manager
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.CommandRegistry
 import com.serenity.config.PreferredWindowSize
 import com.serenity.keystroke.events.{Enter, TabKey}
@@ -55,7 +56,7 @@ class StartPageSaveLanesSpec extends AnyFlatSpec with Matchers:
     for
       queued              <- Ref.of[IO, List[Deferred[IO, Either[Throwable, Unit]]]](outcomes)
       started             <- Ref.of[IO, Int](0)
-      directory           <- IO.blocking(Files.createTempDirectory("start-page-save-lanes"))
+      directory           <- IO.blocking(TestTemp.directory("start-page-save-lanes"))
       modelRef            <- Ref.of[IO, Model](Model(AppState.initial, com.serenity.state.undo.UndoState()))
       themeNamesRef       <- Ref.of[IO, List[String]](Nil)
       quitSignal          <- Deferred[IO, Unit]

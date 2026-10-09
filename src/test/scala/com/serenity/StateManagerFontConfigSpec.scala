@@ -1,6 +1,5 @@
 package com.serenity
 
-import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
@@ -94,7 +93,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
 
   it should "resolve auto text scale from the live device scale when switching modes at runtime" in {
     val observed    = AtomicReference[List[FontConfig]](Nil)
-    val sessionRoot = Files.createTempDirectory("font-scale-auto-runtime")
+    val sessionRoot = TestTemp.directory("font-scale-auto-runtime")
     val initialConfig = com.serenity.config.AppConfig.default.withFontConfig(
       FontConfig(textScaleMode = TextScaleMode.Manual, textScaleMultiplier = 1.0)
     )
@@ -152,7 +151,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
   }
 
   it should "persist font family changes made through UI font settings, and keep them after a restart and resume" in {
-    val sessionRoot  = Files.createTempDirectory("font-config-persistence")
+    val sessionRoot  = TestTemp.directory("font-config-persistence")
     val configFile   = sessionRoot.resolve("config.conf")
     val expectedFont = FontLoader.availableUiFamilies.lift(1).getOrElse(FontLoader.availableUiFamilies.head)
     val stateManager =
@@ -200,7 +199,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
   }
 
   it should "persist font size changes made through code font settings to the config file" in {
-    val configFile = Files.createTempDirectory("font-config-file").resolve("config.conf")
+    val configFile = TestTemp.directory("font-config-file").resolve("config.conf")
     val stateManager =
       StateManager
         .apply(
@@ -223,7 +222,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
   }
 
   it should "persist font family changes made through UI font settings to the config file" in {
-    val configFile   = Files.createTempDirectory("font-family-config-file").resolve("config.conf")
+    val configFile   = TestTemp.directory("font-family-config-file").resolve("config.conf")
     val expectedFont = FontLoader.availableUiFamilies.lift(1).getOrElse(FontLoader.availableUiFamilies.head)
     val stateManager =
       StateManager

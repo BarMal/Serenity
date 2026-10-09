@@ -2,6 +2,7 @@ package com.serenity.app
 
 import java.nio.file.Path
 
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -41,7 +42,7 @@ class LaunchOpensSpec extends AnyFlatSpec with Matchers:
 
   "LaunchOpens.resolve" should "ask the filesystem which paths are folders" in {
     import cats.effect.unsafe.implicits.global
-    val dir  = java.nio.file.Files.createTempDirectory("launch-opens")
+    val dir  = TestTemp.directory("launch-opens")
     val file = java.nio.file.Files.createFile(dir.resolve("a.md"))
     try LaunchOpens.resolve(List(file, dir)).unsafeRunSync() shouldBe LaunchOpens(Some(dir), List(file), Nil)
     finally

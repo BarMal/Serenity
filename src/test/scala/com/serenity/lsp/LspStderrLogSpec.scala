@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.lsp.client.LspStderrLog
 import com.serenity.lsp.client.LspStderrLog.{FileStorage, Storage}
 import com.serenity.lsp.config.LanguageId
@@ -46,7 +47,7 @@ class LspStderrLogSpec extends AnyFlatSpec with Matchers:
     def delete(path: Path): Unit = FileStorage.delete(path)
 
   private def drainMegabyte(storage: Storage): Path =
-    val directory = Files.createTempDirectory("lsp-stderr-log-spec")
+    val directory = TestTemp.directory("lsp-stderr-log-spec")
     val line      = ("x" * 99 + "\n").getBytes
     val stderr    = new ByteArrayInputStream(Array.fill(megabyte / line.length)(line).flatten)
     LspStderrLog

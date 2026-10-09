@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.command.*
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.AppMode
@@ -76,7 +77,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
   }
 
   it should "load through the native open dialog and dismiss surfaces first" in {
-    val directory = Files.createTempDirectory("effect-handlers-open")
+    val directory = TestTemp.directory("effect-handlers-open")
     val target    = Files.writeString(directory.resolve("picked.txt"), "picked content")
     try
       val dialog = FileDialog(
@@ -109,7 +110,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
   }
 
   it should "load a readable recent file and dismiss surfaces first" in {
-    val directory = Files.createTempDirectory("effect-handlers-recent")
+    val directory = TestTemp.directory("effect-handlers-recent")
     val target    = Files.writeString(directory.resolve("recent.txt"), "recent content")
     try
       val fixture = harness()

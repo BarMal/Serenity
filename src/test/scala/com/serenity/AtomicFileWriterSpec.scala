@@ -253,7 +253,7 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
     override def deleteIfExists(path: Path): Boolean = Files.deleteIfExists(path)
 
   "AtomicFileWriter" should "replace a completed sibling file atomically when supported" in {
-    val directory = Files.createTempDirectory("serenity-atomic-write")
+    val directory = TestTemp.directory("serenity-atomic-write")
     val target    = directory.resolve("document.txt")
     Files.writeString(target, "before")
 
@@ -266,7 +266,7 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fall back to a replacement move when atomic moves are unsupported" in {
-    val directory  = Files.createTempDirectory("serenity-atomic-fallback")
+    val directory  = TestTemp.directory("serenity-atomic-fallback")
     val target     = directory.resolve("document.txt")
     val fileSystem = RecordingFileSystem(rejectAtomicMove = true)
 
@@ -279,7 +279,7 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve existing POSIX permissions when replacing a target" in {
-    val directory = Files.createTempDirectory("serenity-atomic-permissions")
+    val directory = TestTemp.directory("serenity-atomic-permissions")
     val target    = directory.resolve("executable.sh")
     val permissions = Set(
       PosixFilePermission.OWNER_READ,
@@ -308,7 +308,7 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
   // before it was immediately overwritten by the real content. copyAttributes must carry over permissions without
   // duplicating the file's content.
   it should "copy only attributes, not file content, so the target file is read once per save" in {
-    val directory = Files.createTempDirectory("serenity-copy-attrs-only")
+    val directory = TestTemp.directory("serenity-copy-attrs-only")
     val source    = directory.resolve("source.txt")
     val target    = directory.resolve("target.txt")
 
@@ -334,7 +334,7 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
   // pass them. Route source/target through a counting FileSystemProvider proxy that increments only on
   // content-touching operations (`copy`, `newByteChannel`) and prove that count stays at zero.
   it should "perform zero content-reading filesystem operations while copying attributes" in {
-    val directory = Files.createTempDirectory("serenity-copy-attrs-no-content-read")
+    val directory = TestTemp.directory("serenity-copy-attrs-no-content-read")
     val source    = directory.resolve("source.txt")
     val target    = directory.resolve("target.txt")
 
@@ -375,7 +375,7 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve an existing target and clean its temporary file when writing fails" in {
-    val directory  = Files.createTempDirectory("serenity-atomic-failure")
+    val directory  = TestTemp.directory("serenity-atomic-failure")
     val target     = directory.resolve("document.txt")
     val fileSystem = RecordingFileSystem(failWrite = true)
     Files.writeString(target, "before")
@@ -395,7 +395,7 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
 
   // #1881: replacing the path itself would swap a symlinked dotfile for a regular file.
   it should "update a symlink's target and leave the symlink in place when saving through it" in {
-    val directory = Files.createTempDirectory("serenity-atomic-symlink")
+    val directory = TestTemp.directory("serenity-atomic-symlink")
     val realFile  = directory.resolve("real.txt")
     val link      = directory.resolve("link.txt")
     Files.writeString(realFile, "before")
@@ -415,7 +415,7 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
 
   // #1881: an atomic rename gives the saved name a new inode, splitting it from its other hardlinks.
   it should "overwrite a hardlinked target in place so the link count and every link's content are kept" in {
-    val directory = Files.createTempDirectory("serenity-atomic-hardlink")
+    val directory = TestTemp.directory("serenity-atomic-hardlink")
     val target    = directory.resolve("document.txt")
     val sibling   = directory.resolve("sibling.txt")
     Files.writeString(target, "before")
@@ -435,7 +435,7 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "restore a hardlinked target from its backup when the in-place overwrite fails" in {
-    val directory  = Files.createTempDirectory("serenity-atomic-hardlink-failure")
+    val directory  = TestTemp.directory("serenity-atomic-hardlink-failure")
     val target     = directory.resolve("document.txt")
     val sibling    = directory.resolve("sibling.txt")
     val fileSystem = RecordingFileSystem(failFirstInPlaceWrite = true)
@@ -459,7 +459,7 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
 
   // #1881: rename-without-fsync can leave a zero-length file after power loss (ext4 delayed allocation).
   it should "fsync the temporary file before the rename and the parent directory after it" in {
-    val directory  = Files.createTempDirectory("serenity-atomic-fsync").toRealPath()
+    val directory  = TestTemp.directory("serenity-atomic-fsync").toRealPath()
     val target     = directory.resolve("document.txt")
     val fileSystem = RecordingFileSystem()
     Files.writeString(target, "before")
@@ -477,7 +477,7 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fsync the parent directory after a non-atomic replacement move too" in {
-    val directory  = Files.createTempDirectory("serenity-atomic-fsync-fallback").toRealPath()
+    val directory  = TestTemp.directory("serenity-atomic-fsync-fallback").toRealPath()
     val target     = directory.resolve("document.txt")
     val fileSystem = RecordingFileSystem(rejectAtomicMove = true)
 

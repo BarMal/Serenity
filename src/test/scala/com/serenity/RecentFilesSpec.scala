@@ -16,7 +16,7 @@ class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSup
   trait RecentFilesFixture:
     val sm: StateManager = createStateManager("RecentFilesSpec")
     val initialBufferId  = sm.getCurrentState.unsafeRunSync().persisted.bufferOrder.head
-    val tmpDir           = Files.createTempDirectory("recent-files-spec")
+    val tmpDir           = TestTemp.directory("recent-files-spec")
 
     def tmpFile(name: String): Path =
       tmpDir.resolve(name)
