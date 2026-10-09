@@ -5,7 +5,15 @@ import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
-import com.serenity.manuscript.{Block, FrontMatter, Manuscript, ManuscriptFormat, ParagraphKind, Section}
+import com.serenity.manuscript.{
+  Block,
+  FrontMatter,
+  Manuscript,
+  ManuscriptFormat,
+  ManuscriptPageNumbering,
+  ParagraphKind,
+  Section
+}
 import com.serenity.richtext.{InlineMark, RichTextRun}
 
 /** Writes a [[Manuscript]] as a Word document laid out in a manuscript [[ManuscriptFormat]].
@@ -178,7 +186,7 @@ object ManuscriptDocxWriter:
 
   private def sectionPropertiesXml(format: ManuscriptFormat, body: Boolean): String =
     val header    = if body then """<w:headerReference w:type="default" r:id="rId3"/>""" else ""
-    val numbering = if body then """<w:pgNumType w:start="1"/>""" else ""
+    val numbering = if body then s"""<w:pgNumType w:start="${ManuscriptPageNumbering.FirstBodyPage}"/>""" else ""
     val paper     = format.paper
     val margin    = format.marginTwips
     s"""<w:sectPr>$header<w:pgSz w:w="${paper.widthTwips}" w:h="${paper.heightTwips}"/>""" +

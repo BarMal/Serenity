@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import com.serenity.lsp.client.DocumentUri
-import com.serenity.lsp.model.{Diagnostic, LspPosition, LspRange, SemanticToken}
+import com.serenity.lsp.model.{Diagnostic, LspPosition, LspRange, SemanticToken, SemanticTokenData}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, UndoState}
@@ -25,6 +25,7 @@ class ClosedBufferRetentionForgettingSpec extends AnyFlatSpec with Matchers:
   private val range      = LspRange(LspPosition(0, 0), LspPosition(0, 1))
   private val diagnostic = Diagnostic(range, None, "message")
   private val token      = SemanticToken(0, 0, 1, "variable", Set.empty)
+  private val tokens     = SemanticTokenData.from(List(token))
 
   private val withClosedBuffer = withBuffers(initial, initial.persisted.buffers + (closed.id -> closed))
   private val closedUri        = withClosedBuffer.runtime.bufferIndexMemos.uriFor(closed)
@@ -38,7 +39,7 @@ class ClosedBufferRetentionForgettingSpec extends AnyFlatSpec with Matchers:
             diagnostics = Map(closedUri -> List(diagnostic), otherUri -> List(diagnostic))
           ),
           semanticTokensState = SemanticTokensState(
-            byUri = Map(closedUri -> List(token), otherUri -> List(token)),
+            byUri = Map(closedUri -> tokens, otherUri -> tokens),
             unavailableUris = Set(closedUri, otherUri)
           )
         )
@@ -46,7 +47,7 @@ class ClosedBufferRetentionForgettingSpec extends AnyFlatSpec with Matchers:
     )
 
   private val undo =
-    UndoState(undoStack = Vector(HistoryEntry.BufferEdit(closed.id, PaneId(0), BufferSnapshot.fromBuffer(closed))))
+    UndoState().pushUndo(HistoryEntry.BufferEdit(closed.id, PaneId(0), BufferSnapshot.fromBuffer(closed)))
 
   "forgetting" should "hand back the very model it was given when no buffer was removed" in {
     val next = Model(initial.copy(runtime = initial.runtime.copy(nextBufferId = BufferId(99))), undo)

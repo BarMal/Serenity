@@ -35,6 +35,9 @@ object TextCounts:
 
   private val hyphens: Set[Char] = Set('-', '\u2010', '\u2011')
 
+  /** The placeholders of a rich document's soft breaks (U+FFFC) and blocks (U+2064): not characters of prose. */
+  private val InlineAtomPlaceholders: Set[Int] = Set(0xfffc, 0x2064)
+
   // Separate from `TextEditing`'s iterators: counting sets arbitrary strings, which would evict their cached text.
   private val threadLocalWords: ThreadLocal[BreakIterator] =
     ThreadLocal.withInitial(() => BreakIterator.getWordInstance())
@@ -71,7 +74,8 @@ object TextCounts:
       val end = characters.following(start)
       if end == BreakIterator.DONE then (count, nonWhitespace)
       else
-        val visible = if Character.isWhitespace(text.codePointAt(start)) then 0 else 1
+        val codePoint = text.codePointAt(start)
+        val visible   = if Character.isWhitespace(codePoint) || InlineAtomPlaceholders.contains(codePoint) then 0 else 1
         loop(end, count + 1, nonWhitespace + visible)
 
     loop(0, 0, 0)

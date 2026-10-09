@@ -6,3 +6,5 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 *.sh text eol=lf
+src/test/resources/richtext/golden/** -text
+*.md text eol=lf

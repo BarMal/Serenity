@@ -15,7 +15,7 @@ import com.serenity.keystroke.events.{Event, ExtendSelectionRight, InsertChar, O
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
-import com.serenity.state.undo.UndoState
+import com.serenity.state.undo.{HistoryEntry, HistoryStacks, HistoryStep, UndoState}
 import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{setBufferForPane, setCursorPosition}
@@ -94,7 +94,27 @@ class TypedKeyPathParitySpec extends AnyFlatSpec with Matchers:
     val buffers =
       if withViewports then persisted.buffers
       else persisted.buffers.view.mapValues(_.copy(viewport = Viewport.default)).toMap
-    (persisted.copy(buffers = buffers), model.undo)
+    (persisted.copy(buffers = buffers), if withViewports then model.undo else withSnapshotsPlaced(model))
+
+  /** A snapshot a key records mid-run holds a viewport still waiting for the caret, where dispatching the keys one by
+    * one records the centred one. Both are compared as undo would restore them: placed on the snapshot's cursor.
+    */
+  private def withSnapshotsPlaced(model: Model): UndoState =
+    def placedEdit(edit: HistoryEntry.BufferEdit): HistoryEntry.BufferEdit =
+      edit
+        .restore(model.app)
+        .map((restored, _) => ViewportResolution.resolve(restored))
+        .flatMap(_.persisted.buffers.get(edit.bufferId))
+        .fold(edit)(buffer => edit.copy(snapshot = edit.snapshot.copy(viewport = buffer.viewport)))
+    def placed(step: HistoryStep): HistoryStep = step.entry match
+      case edit: HistoryEntry.BufferEdit => step.copy(entry = placedEdit(edit))
+      case _                             => step
+    def placedStacks(stacks: HistoryStacks): HistoryStacks =
+      stacks.copy(undo = stacks.undo.map(placed), redo = stacks.redo.map(placed))
+    model.undo.copy(
+      buffers = model.undo.buffers.view.mapValues(history => history.copy(stacks = placedStacks(history.stacks))).toMap,
+      layout = placedStacks(model.undo.layout)
+    )
 
   private val oneSlice: EventBatchSteps[Event] = EventBatchSteps((_, event) => event, _ => false, 1.hour)
 
@@ -120,8 +140,8 @@ class TypedKeyPathParitySpec extends AnyFlatSpec with Matchers:
     val accepted = new ConcurrentLinkedQueue[Model]()
     val events   = stateManager.composition.events
     val recording = TypedRuns(
-      (event, model, nowNanos, joining) =>
-        events.typedRunStep(event, model, nowNanos, joining).map { typed =>
+      (event, model, nowNanos) =>
+        events.typedRunStep(event, model, nowNanos).map { typed =>
           accepted.add(typed); typed
         },
       events.commitTypedRun,
@@ -131,7 +151,7 @@ class TypedKeyPathParitySpec extends AnyFlatSpec with Matchers:
       .dispatch(
         EventBatch.applying(keys, oneSlice, stateManager.getModel, events.applyEventOnDispatcher, recording).void
       )
-      .as(accepted.asScala.toVector)
+      .map(_ => accepted.asScala.toVector)
 
   it should "leave every intermediate state of a typed run as dispatching its keys one by one, but for the viewport" in
     scenarios.foreach { scenario =>

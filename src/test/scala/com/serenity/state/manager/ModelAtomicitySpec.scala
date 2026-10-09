@@ -119,7 +119,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     model.app.persisted.buffers.get(bufferId).map(_.document.content.toString)
 
   private def hasUndoHistory(model: Model): Boolean =
-    model.undo.pendingGroup.nonEmpty || model.undo.undoStack.nonEmpty
+    model.undo.undoStack.nonEmpty
 
   "An edit" should "commit its text and its undo entry in one write" in {
     val program =
@@ -336,7 +336,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
         runner.uiPresetPreviews
     }
 
-  "Opening the command runner" should "commit the runner and its UI preset previews in one write" in {
+  "Opening the command runner" should "commit the runner at once and its UI preset previews in a write of their own" in {
     val program =
       for
         directory <- IO.blocking(Files.createTempDirectory("model-atomicity-presets"))
@@ -345,6 +345,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
         recorded     <- recording(Model(AppState.initial, UndoState()))
         stateManager <- stateManagerOver(recorded.modelRef, Some(store))
         _            <- stateManager.applyEvent(ToggleCommandRunner)
+        _            <- stateManager.runtimeLifecycle.awaitEffects
         writes       <- recorded.recordedWrites
         after        <- stateManager.getModel
       yield (writes, after)
@@ -352,8 +353,9 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     val (writes, after) = program.unsafeRunSync()
 
     runnerPresetPreviews(after).map(_.map(_.name)) shouldBe Some(List("Existing"))
-    writes should not be empty
-    all(writes.flatMap(runnerPresetPreviews).map(_.nonEmpty)) shouldBe true
+    val withRunner = writes.flatMap(runnerPresetPreviews)
+    withRunner.headOption shouldBe Some(Nil)
+    withRunner.lastOption.map(_.map(_.name)) shouldBe Some(List("Existing"))
   }
 
   private def replace(stateManager: StateManager, action: ReplaceWorkflowAction): IO[Unit] =

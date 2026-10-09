@@ -51,7 +51,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
     ConfigManager.configToString(config) should include("typography.scale.mode = manual")
     ConfigManager.configToString(config) should include("typography.scale.factor = 1.5")
     ConfigManager.configToString(config) should include("typography.ui.ligatures = true")
-    ConfigManager.configToString(config) should include("config.version = 1")
+    ConfigManager.configToString(config) should include(s"config.version = ${ConfigVersion.Current.value}")
   }
 
   it should "clamp out-of-range font sizes when loading via the registry" in {

@@ -12,7 +12,7 @@ import com.typesafe.config.{Config, ConfigValueFactory}
 opaque type ConfigVersion = Int
 
 object ConfigVersion:
-  val Current: ConfigVersion = ConfigVersion(1)
+  val Current: ConfigVersion = ConfigVersion(2)
 
   def apply(value: Int): ConfigVersion = value
 
@@ -153,9 +153,8 @@ object ConfigMigrationWarning:
 /** Upgrades a config file written by an older format version to the current one, before it is read.
   *
   * Each [[Step]] carries a file from `from` to `from + 1`. A file of nothing but `key = value` lines is read with each
-  * dotted key as one quoted key (`"old.wrap"`), not as a path, so a step should look for both spellings. There is none
-  * yet because the format has not changed since version 1; the first change to it adds a step here rather than teaching
-  * the parser a second spelling.
+  * dotted key as one quoted key (`"old.wrap"`), not as a path, so a step should look for both spellings. A change to
+  * the format adds a step here rather than teaching the parser a second spelling.
   */
 object ConfigMigrations:
 
@@ -168,11 +167,16 @@ object ConfigMigrations:
       notes: List[MigrationNote] = Nil
   )
 
-  final case class Plan(steps: List[Step], target: ConfigVersion)
+  /** `osName` is the platform whose hotkey defaults the file is written against. */
+  final case class Plan(steps: List[Step], target: ConfigVersion, osName: String = HotkeyOverrides.runningOs)
 
-  val installed: Plan = Plan(Nil, ConfigVersion.Current)
+  val steps: List[Step] = List(droppingDefaultHotkeys(HotkeyOverrides.runningOs))
 
-  val steps: List[Step] = Nil
+  val installed: Plan = Plan(steps, ConfigVersion.Current)
+
+  /** Version 1 to 2: `config.conf` records only the hotkeys the user changed (see [[HotkeyMigration]]). */
+  def droppingDefaultHotkeys(osName: String): Step =
+    Step(ConfigVersion(1), HotkeyMigration.withoutDefaultBindings(osName))
 
   def versionOf(source: Config): ConfigVersion =
     ConfigVersionStatus.declared(source).getOrElse(ConfigVersionStatus.legacy)

@@ -73,6 +73,39 @@ class LspEffectQueueSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "not fold an edit into a change queued before a release of everything" in {
+    drained(
+      queue =>
+        queue.enqueue(LspEffect.FileOpened(scalaUri, LanguageId.Scala, RopeText("a"))) >>
+          queue.enqueueDocumentChange(scalaUri, LanguageId.Scala, RopeText("ab")) >>
+          queue.enqueue(LspEffect.ReleaseAll) >>
+          queue.enqueueDocumentChange(scalaUri, LanguageId.Scala, RopeText("abc")),
+      3
+    ) shouldBe List(
+      LspEffect.FileOpened(scalaUri, LanguageId.Scala, RopeText("a")),
+      LspEffect.FileChanged(scalaUri, LanguageId.Scala, RopeText("ab"), 2),
+      LspEffect.ReleaseAll
+    )
+  }
+
+  it should "number a document's versions from its reopening after a release of everything" in {
+    drained(
+      queue =>
+        queue.enqueue(LspEffect.FileOpened(scalaUri, LanguageId.Scala, RopeText("a"))) >>
+          queue.enqueueDocumentChange(scalaUri, LanguageId.Scala, RopeText("ab")) >>
+          queue.enqueue(LspEffect.ReleaseAll) >>
+          queue.enqueue(LspEffect.FileOpened(scalaUri, LanguageId.Scala, RopeText("abc"))) >>
+          queue.enqueueDocumentChange(scalaUri, LanguageId.Scala, RopeText("abcd")),
+      5
+    ) shouldBe List(
+      LspEffect.FileOpened(scalaUri, LanguageId.Scala, RopeText("a")),
+      LspEffect.FileChanged(scalaUri, LanguageId.Scala, RopeText("ab"), 2),
+      LspEffect.ReleaseAll,
+      LspEffect.FileOpened(scalaUri, LanguageId.Scala, RopeText("abc")),
+      LspEffect.FileChanged(scalaUri, LanguageId.Scala, RopeText("abcd"), 2)
+    )
+  }
+
   it should "send an edit made after a language switch to the new server, not the old one" in {
     drained(
       queue =>

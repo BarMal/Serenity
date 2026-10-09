@@ -2,6 +2,7 @@ package com.serenity.state.reducers
 
 import com.serenity.lsp.model.LspTextEdit
 import com.serenity.state.models.*
+import com.serenity.state.undo.EditGrouping
 
 /** Applies a server's `workspace/applyEdit` (#1847) to every open buffer whose document uri the edit names. Each
   * buffer's edits are recorded as one undo step, in a pane that shows the buffer; a buffer shown in no pane is edited
@@ -36,6 +37,7 @@ object WorkspaceEditReducer:
       .collectFirst { case (paneId, pane) if pane.bufferId.contains(buffer.id) => paneId }
       .toList
       .flatMap(paneId =>
-        EditorEditSupport.undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, groupable = false)
+        EditorEditSupport
+          .undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, grouping = EditGrouping.Standalone)
       )
     (Focused.replaceBuffer(state, updatedBuffer), undoEffects)

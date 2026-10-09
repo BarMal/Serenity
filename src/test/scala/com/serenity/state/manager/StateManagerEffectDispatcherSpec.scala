@@ -12,7 +12,7 @@ import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Exercises [[CommandEffectInterpreter]] on its own: a pure `AppEffect` match routing to one of its ten dependency
+/** Exercises [[CommandEffectInterpreter]] on its own: a pure `AppEffect` match routing to one of its eleven dependency
   * closures. Each case is asserted on as "which dependency fired, with which argument" -- nothing else about it is
   * behavior this class owns.
   */
@@ -30,6 +30,7 @@ class StateManagerEffectDispatcherSpec extends AnyFlatSpec with Matchers:
           command = value => calls.update(_ :+ s"command:$value"),
           unrecordedCommand = value => calls.update(_ :+ s"unrecordedCommand:$value"),
           theme = value => calls.update(_ :+ s"theme:$value"),
+          settings = value => calls.update(_ :+ s"settings:$value"),
           surface = value => calls.update(_ :+ s"surface:$value"),
           file = value => calls.update(_ :+ s"file:$value"),
           explorer = value => calls.update(_ :+ s"explorer:$value"),
@@ -87,6 +88,15 @@ class StateManagerEffectDispatcherSpec extends AnyFlatSpec with Matchers:
     fixture.interpreter.interpret(AppEffect.Theme(effect)).unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() shouldBe List(s"theme:$effect")
+  }
+
+  it should "route Settings to the settings dependency" in {
+    val fixture = harness()
+    val effect  = SettingsEffect.ReapplyConfig
+
+    fixture.interpreter.interpret(AppEffect.Settings(effect)).unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe List(s"settings:$effect")
   }
 
   it should "route Surface to the surface dependency" in {

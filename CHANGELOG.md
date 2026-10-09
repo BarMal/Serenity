@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### 2026-10-08
+
+- Made the start page and Cmd+O on macOS offer one "Open..." that takes a file or a folder, through the native open panel with both choices on, as VS Code, Zed and Pulsar do: a folder opens in the Explorer and leaves the start page, a file opens in a buffer, and cancelling changes nothing. Windows, Linux and the terminal keep Open file and Open folder, the palette lists Open File..., Open Folder... and, on macOS, Open..., and if the macOS panel cannot be shown the dialog failure notice says why. The macOS File menu is not built yet, so its Open... entry is ready but not visible.
+- Stopped Backspace, Delete and typing doing nothing after a selection collapsed onto its own anchor (Shift+Right then Shift+Left, Shift+Left at the start of the document, Shift+End at the end of a line): a selection that selects nothing is now no selection, so the edit lands, dirties the buffer and is undoable.
+- Bound Cmd+Backspace and Cmd+Delete to delete to the start and the end of the line, and Option+Delete to delete the word forward, each deleting the selection instead when there is one and working at every cursor; Shift+Backspace and Shift+Delete now act as Backspace and Delete instead of being dropped.
+- Split "Open file or folder" on the start page into Open file and Open folder, added an "Open Folder..." command to the palette and File menu, and made the folder picker work: a folder chosen in the native dialog opens in the Explorer and leaves the start page, a folder passed to Open File now says it is a folder, and a native dialog that cannot be shown reports why instead of only logging it.
+- In the terminal, where there is no native dialog, Open folder (start page and palette) now opens a dedicated Open Folder form instead of the generic Open form: it lists folders only, `Enter` browses into the folder named in the Path, `Tab` descends into the highlighted one, `Ctrl+R` opens the shown folder in the Explorer, and `Esc` cancels.
+- Put away the code-only panels, such as the project output, whenever the mode changes to prose, not only for the mode command: a config file edit, a workflow preset and Reset Settings now do the same, in the same write as the mode change.
+- Made leaving code mode release the language servers: open documents are closed, servers are shut down and exited, and their diagnostics, semantic tokens and progress are cleared, and entering code mode opens every document that has a language and a file again, whether the mode changes by command, workflow preset or an outside edit of the config file.
+- Asked before leaving code mode while a build, test or run task is running, offering to stay or stop the task and switch; a mode change nobody was asked about, such as a config file edit, stops the task and says so.
+
 ### 2026-10-06
 
 - Turned spell check on by default with British English (`en-GB`) as the language, bundled the LibreOffice en_GB Hunspell dictionary so it works with nothing installed, and read language codes in any casing (#2070, #2060).

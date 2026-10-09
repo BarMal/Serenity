@@ -1,14 +1,15 @@
 package com.serenity.state.models
 
 import java.nio.file.Path
+import java.time.Instant
 
 import cats.Order
 import cats.data.NonEmptyList
 import com.serenity.io.{DocumentFormat, DocumentRevision, FileType}
 import com.serenity.lsp.config.LanguageId
-import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
+import com.serenity.richtext.{FidelityReport, InlineAtom, RichTextDocument, RichTextStyle}
 import com.serenity.rope.Rope
-import com.serenity.text.{LineEnding, TextEncoding}
+import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
 
 opaque type BufferId = Int
 
@@ -53,7 +54,29 @@ trait DirectedRange:
 
 final case class Selection(anchor: CursorPosition, focus: CursorPosition) extends DirectedRange
 
-final case class DocumentComment(anchor: CursorPosition, focus: CursorPosition, text: String) extends DirectedRange
+/** A comment on a range of the document, with the thread that grew under it. `id` is stable for the comment's life (see
+  * [[CommentId]]). `author` and `createdAt` are `None` for a comment that predates them being recorded.
+  */
+final case class DocumentComment(
+    anchor: CursorPosition,
+    focus: CursorPosition,
+    text: String,
+    id: CommentId = CommentId.Unassigned,
+    author: Option[String] = None,
+    createdAt: Option[Instant] = None,
+    editedAt: Option[Instant] = None,
+    replies: List[CommentReply] = Nil,
+    resolved: Boolean = false
+) extends DirectedRange:
+
+  def withText(newText: String, at: Instant): DocumentComment =
+    if newText == text then this else copy(text = newText, editedAt = Some(at))
+
+  def withReply(reply: CommentReply): DocumentComment = copy(replies = replies :+ reply)
+
+  def resolve: DocumentComment = copy(resolved = true)
+
+  def reopen: DocumentComment = copy(resolved = false)
 
 /** A to-do marker at a single buffer position, carrying a short note about what still needs writing there -- Neo's
   * "placeholder" QoL feature: drop a mark and a sticky note, keep writing, come back and resolve it later.
@@ -89,14 +112,39 @@ final case class Document(
     // Bumped on every `content` change (`withContent`, #1663). Paired with `RichTextState.richTextSyncedVersion`
     // so `Buffer.richTextInSync` can tell in O(1) whether a stored `richTextDocument` still describes this
     // `content`, instead of re-deriving and comparing the whole plain text on every check.
-    contentVersion: Long = 0L
+    contentVersion: Long = 0L,
+    // Advanced whenever the buffer stops matching what an undo snapshot taken while it was clean would restore: a save
+    // or reload, which moves what "clean" means, or a change undo does not record (#1930).
+    savedGeneration: Long = 0L,
+    // Set on load when the file mixed terminators and cleared once a save has made it uniform or the user has chosen
+    // `lineEnding` (#1964): until then a save rewrites lines the user never touched, which the editor has to say.
+    mixedLineEndings: Option[LineEndingCounts] = None,
+    // The user has not yet been told about `mixedLineEndings`: it waits for no modal to be in the way.
+    mixedNoticePending: Boolean = false
 ):
+
+  /** The line ending saved from now on. Marks the document dirty whenever that changes the bytes a save writes, which
+    * includes picking the detected ending for a mixed file: that save rewrites the minority lines.
+    */
+  def withLineEnding(ending: LineEnding): Document =
+    if ending == lineEnding && mixedLineEndings.isEmpty then this
+    else copy(lineEnding = ending, mixedLineEndings = None, mixedNoticePending = false, isDirty = true)
+
   /** The only sanctioned way to change `content`: keeps `contentVersion` monotonically increasing so a
     * `richTextDocument` stamped against the old version is correctly seen as stale by `Buffer.richTextInSync`, without
     * re-comparing any text.
     */
   def withContent(newContent: Rope): Document =
     copy(content = newContent, contentVersion = contentVersion + 1, isDirty = true, isNewEmpty = false)
+
+  /** This document as just written to (or read from) its file. */
+  def markedSaved: Document =
+    copy(isDirty = false, savedGeneration = savedGeneration + 1)
+
+  /** This document after a change undo cannot reverse, such as a comment edit: undo can no longer return it to clean.
+    */
+  def withUnrecordedChange: Document =
+    copy(isDirty = true, savedGeneration = savedGeneration + 1)
 
 /** A buffer's cursor/selection state: one entry per live cursor, each carrying its own position, in-flight selection
   * anchor and preferred vertical-navigation column/pixel-x (`#1577`). Before `#1577` this was five separate parallel
@@ -131,13 +179,49 @@ final case class Annotations(
     documentComments: List[DocumentComment] = Nil,
     placeholders: List[Placeholder] = Nil,
     darlings: List[Darling] = Nil,
-    notes: Map[NoteKey, Notes] = Map.empty
-)
+    notes: Map[NoteKey, Notes] = Map.empty,
+    // The next id to hand out, kept apart from the comments themselves so deleting the newest comment never lets its id
+    // be given to a different one.
+    nextCommentId: CommentId = CommentId(1)
+):
+
+  def comment(id: CommentId): Option[DocumentComment] =
+    documentComments.find(_.id == id)
+
+  /** The comments a lens, a comment navigation command or the highlights show: resolved ones only on request. */
+  def shownComments(showResolved: Boolean): List[DocumentComment] =
+    if showResolved then documentComments else documentComments.filterNot(_.resolved)
+
+  /** `added` with the next free id, appended to the list. */
+  def withNewComment(added: DocumentComment): Annotations =
+    val id = freshCommentId
+    copy(documentComments = documentComments :+ added.copy(id = id), nextCommentId = id.next)
+
+  def withUpdatedComment(id: CommentId)(change: DocumentComment => DocumentComment): Annotations =
+    copy(documentComments = documentComments.map(existing => if existing.id == id then change(existing) else existing))
+
+  def withoutComment(id: CommentId): Annotations =
+    copy(documentComments = documentComments.filterNot(_.id == id))
+
+  /** Gives every comment without a usable id -- one from a session that predates ids, or one repeating an earlier
+    * comment's -- a fresh one, and leaves the rest alone.
+    */
+  def withCommentIdsAssigned: Annotations =
+    val (assigned, _, next) =
+      documentComments.foldLeft((List.empty[DocumentComment], Set.empty[CommentId], freshCommentId)) {
+        case ((done, taken, nextFree), comment) =>
+          if comment.id.isAssigned && !taken.contains(comment.id) then (comment :: done, taken + comment.id, nextFree)
+          else (comment.copy(id = nextFree) :: done, taken + nextFree, nextFree.next)
+      }
+    copy(documentComments = assigned.reverse, nextCommentId = next)
+
+  private def freshCommentId: CommentId =
+    documentComments.foldLeft(nextCommentId)((highest, comment) => highest.max(comment.id.next))
 
 /** Rich-text authoring state layered on top of the buffer's plain-text `Rope` content. */
 final case class RichTextState(
     richTextDocument: Option[RichTextDocument] = None,
-    richTextFidelity: Option[RichTextFidelity] = None,
+    richTextFidelity: Option[FidelityReport] = None,
     insertionRichTextStyle: Option[RichTextStyle] = None,
     // The `Document.contentVersion` `richTextDocument` is known to match, or `None` if it either isn't set or
     // wasn't stamped as verified against the buffer's current content (#1663). `None` is always the safe default:
@@ -214,7 +298,8 @@ final case class Buffer(
     val lineCount                         = document.content.lineCount
     def inRange(position: CursorPosition) = position.line < lineCount
     def clamp(position: CursorPosition) =
-      if inRange(position) then position
+      if inRange(position) then
+        CursorPosition(position.line, position.column.min(document.content.getLine(position.line).fold(0)(_.length)))
       else
         val lastLine = (lineCount - 1).max(0)
         CursorPosition(lastLine, document.content.getLine(lastLine).fold(0)(_.length))
@@ -231,6 +316,13 @@ final case class Buffer(
         placeholders = annotations.placeholders.filter(placeholder => inRange(placeholder.position))
       )
     )
+
+  /** This buffer with its text replaced by `newContent` in a way that is not an edit: it stays as clean or dirty as it
+    * was, the content version moves so a stale rich-text document is recognised, and the cursors are brought back
+    * inside the new text.
+    */
+  def withSettledContent(newContent: Rope): Buffer =
+    copy(document = document.copy(content = newContent, contentVersion = document.contentVersion + 1)).clampedToContent
 
   /** True when closing this buffer may lose user-authored content. A hidden buffer is never closed on its own, and the
     * session keeps its text, so it never asks to be saved.
@@ -289,6 +381,14 @@ final case class Buffer(
     */
   def richTextInSync: Boolean =
     richText.richTextDocument.isDefined && richText.richTextSyncedVersion.contains(document.contentVersion)
+
+  /** `text` taken from this buffer's content, as plain text outside the editor: a rich document's inline atoms (its
+    * rope placeholder) become the text they stand for, so a soft break is a newline.
+    */
+  def plainTextExport(text: String): String =
+    if holdsRichText then InlineAtom.asPlainText(text) else text
+
+  def holdsRichText: Boolean = richText.richTextDocument.isDefined
 
 object Buffer:
   def empty(id: BufferId)(using com.serenity.rope.Balance): Buffer =

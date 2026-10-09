@@ -7,6 +7,7 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.io.SettledClock
 import com.serenity.rope.Balance
 import com.serenity.session.{PendingSessionWrite, SessionId, SessionIndex, SessionManager, SessionMetadata}
 import com.serenity.state.models.*
@@ -31,7 +32,7 @@ class SessionManagerRecoverySpec extends AnyFlatSpec with Matchers with OptionVa
   ): SessionManager =
     val themeManager = AppThemeManager.create
     val logger       = LoggerFactory[IO].getLogger(using LoggerName("SessionManagerRecoverySpec"))
-    SessionManager.create(tempDirectory, themeManager, logger, policy)
+    SessionManager(tempDirectory, themeManager, logger, policy, clock = SettledClock.aMinuteAhead)
 
   private def currentSessionFile(sessionRoot: Path): Path =
     sessionRoot.resolve("sessions").resolve("session.json")

@@ -45,6 +45,7 @@ class TuiSettingsSpec extends TuiSpec:
         _      <- verify("option row")(screen => screen.containsText("Line Numbers") shouldBe true)
         _      <- arrowRight
         _      <- verifyState("flag")(current => current.persisted.config.surfaceConfig.showLineNumbers shouldBe false)
+        _      <- enter
         _      <- dismissSurfaces()
         after  <- settledScreen
       yield
@@ -61,6 +62,7 @@ class TuiSettingsSpec extends TuiSpec:
         _     <- arrowRight
         _     <- arrowRight
         _     <- verifyState("flag")(current => current.persisted.config.surfaceConfig.showLineNumbers shouldBe true)
+        _     <- enter
         _     <- dismissSurfaces()
         after <- settledScreen
       yield after.rowText(1).stripTrailing shouldBe " 1 body text"

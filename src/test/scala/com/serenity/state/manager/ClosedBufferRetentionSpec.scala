@@ -9,7 +9,7 @@ import cats.effect.{Deferred, IO, Ref}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.keystroke.events.{CloseTab, Enter, Event, InsertChar, LspEvent}
 import com.serenity.lsp.client.DocumentUri
-import com.serenity.lsp.model.{Diagnostic, LspPosition, LspRange, SemanticToken}
+import com.serenity.lsp.model.{Diagnostic, LspPosition, LspRange, SemanticToken, SemanticTokenData}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
@@ -58,10 +58,10 @@ class ClosedBufferRetentionSpec extends AnyFlatSpec with Matchers:
       ()
 
     def editsFor(id: BufferId): List[HistoryEntry.BufferEdit] =
-      val undo = model.undo
-      (undo.undoStack ++ undo.redoStack ++ undo.pendingGroup).collect {
+      val stacks = model.undo.buffers.get(id).map(_.stacks).toList
+      stacks.flatMap(history => history.undo ++ history.redo).map(_.entry).collect {
         case edit: HistoryEntry.BufferEdit if edit.bufferId == id => edit
-      }.toList
+      }
 
     def publishDiagnostics(id: BufferId): Unit = publishDiagnosticsFor(uriOf(id))
 
@@ -72,7 +72,12 @@ class ClosedBufferRetentionSpec extends AnyFlatSpec with Matchers:
     def publishSemanticTokens(id: BufferId): Unit = publishSemanticTokensFor(uriOf(id))
 
     def publishSemanticTokensFor(uri: DocumentUri): Unit =
-      send(LspEvent.LspSemanticTokensReceived(uri.value, List(SemanticToken(0, 0, 1, "variable", Set.empty))))
+      send(
+        LspEvent.LspSemanticTokensReceived(
+          uri.value,
+          SemanticTokenData.from(List(SemanticToken(0, 0, 1, "variable", Set.empty)))
+        )
+      )
 
     def seedChapterGhosts(id: BufferId): Unit =
       val buffer = state.persisted.buffers.getOrElse(id, fail("no such buffer"))
@@ -132,13 +137,13 @@ class ClosedBufferRetentionSpec extends AnyFlatSpec with Matchers:
     f.editsFor(b) shouldBe bEdits
   }
 
-  it should "leave no pending undo group for it" in {
+  it should "leave no undo history for it, open typing run included" in {
     val (f, a, _) = sessionWithEditedBuffers()
-    f.model.undo.pendingGroup.map(_.bufferId) shouldBe Some(a)
+    f.model.undo.buffers.keySet should contain(a)
 
     f.closeActiveBufferSaving(a)
 
-    f.model.undo.pendingGroup shouldBe empty
+    f.model.undo.buffers.keySet should not contain a
   }
 
   it should "drop its chapter-ghost cache entry and keep the other buffers'" in {

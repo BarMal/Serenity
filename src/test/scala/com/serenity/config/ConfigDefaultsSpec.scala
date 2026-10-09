@@ -27,7 +27,7 @@ class ConfigDefaultsSpec extends AnyFlatSpec with Matchers:
   private val canonicalDefault = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("linux"))
 
   "the generated reference config" should "match what the app ships with" in {
-    val expected = ConfigFileFormat.render(canonicalDefault)
+    val expected = ConfigFileFormat.render(canonicalDefault, "linux")
     val actual   = Files.readString(referencePath, StandardCharsets.UTF_8)
 
     withClue(

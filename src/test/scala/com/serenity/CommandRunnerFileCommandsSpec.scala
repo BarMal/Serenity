@@ -27,12 +27,17 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
 
   private def testFileDialog(
     openSelection: Option[Path] = None,
-    saveSelection: Option[Path] = None
+    saveSelection: Option[Path] = None,
+    folderSelection: Option[Path] = None
   ): FileDialog =
     FileDialog(
       chooseOpenFile = _ => IO.pure(openSelection),
-      chooseSaveFile = (_, _) => IO.pure(saveSelection)
+      chooseSaveFile = (_, _) => IO.pure(saveSelection),
+      chooseFolder = _ => IO.pure(folderSelection)
     )
+
+  private def explorerRoots(state: AppState): List[Path] =
+    state.pinnedSurfaces.map(_.content).collect { case SurfaceContent.DirectoryTree(tree, _, _) => tree.rootPath }
 
   private def createStateManager(
     sessionRootOverride: Option[Path] = None,
@@ -185,6 +190,30 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
     String(entry.readAllBytes(), "UTF-8") shouldBe "application/epub+zip"
   }
 
+  it should "export the focused buffer as a PDF through the native save dialog" in {
+    val targetPath   = Files.createTempDirectory("serenity-export-pdf").resolve("novel-manuscript.pdf")
+    val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val document = state.persisted.buffers(bufferId).document
+        val buffer = state.persisted
+          .buffers(bufferId)
+          .copy(document = document.copy(content = com.serenity.rope.Rope("# Arrival\n\nThe train was late.")))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "export-manuscript-pdf", "export-manuscript-pdf")
+
+    eventually(timeout(Span(20, Seconds)))(Files.exists(targetPath) shouldBe true)
+    val text = scala.util.Using.resource(org.apache.pdfbox.Loader.loadPDF(Files.readAllBytes(targetPath)))(doc =>
+      org.apache.pdfbox.text.PDFTextStripper().getText(doc)
+    )
+    text should include("The train was late.")
+  }
+
   it should "open a selected file through the native open-file dialog" in {
     val sourcePath = Files.createTempDirectory("serenity-open").resolve("notes.md")
     Files.writeString(sourcePath, "# Notes")
@@ -211,6 +240,73 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
       .contentRect
     openedBuffer.map(_.viewport.visibleColumns) shouldBe Some(contentRect.width)
     openedBuffer.map(_.viewport.visibleLines) shouldBe Some(contentRect.height)
+  }
+
+  private def openFolderThroughPalette(mode: com.serenity.config.AppMode): Unit =
+    val folder       = Files.createTempDirectory("serenity-open-folder")
+    val stateManager = createStateManager(fileDialog = Some(testFileDialog(folderSelection = Some(folder))))
+    stateManager.updateState(TestAppModes.inMode(mode)).unsafeRunSync()
+    val buffersBefore = stateManager.getCurrentState.unsafeRunSync().persisted.buffers
+
+    executeCommandThroughRunner(stateManager, "open-folder", "open-folder")
+
+    val updatedState = (IO.sleep(20.millis) >> stateManager.getCurrentState)
+      .iterateUntil(explorerRoots(_).contains(folder))
+      .timeout(20.seconds)
+      .unsafeRunSync()
+    updatedState.commandRunnerSurface shouldBe None
+    updatedState.topModal shouldBe None
+    explorerRoots(updatedState) shouldBe List(folder)
+    updatedState.persisted.buffers shouldBe buffersBefore
+
+  it should "open a selected folder as the Explorer root through the palette in Code mode" in
+    openFolderThroughPalette(com.serenity.config.AppMode.Code)
+
+  it should "open a selected folder as the Explorer root through the palette in Prose mode" in
+    openFolderThroughPalette(com.serenity.config.AppMode.Prose)
+
+  it should "leave the session unchanged when the native folder dialog is cancelled" in {
+    val stateManager = createStateManager(fileDialog = Some(testFileDialog()))
+    val before       = stateManager.getCurrentState.unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "open-folder", "open-folder")
+    stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    explorerRoots(after) shouldBe Nil
+    after.persisted.buffers shouldBe before.persisted.buffers
+    after.topModal shouldBe None
+  }
+
+  it should "open the in-app Open Folder form for Open Folder when no native dialog is available" in {
+    val stateManager = createStateManager()
+
+    executeCommandThroughRunner(stateManager, "open-folder", "open-folder")
+
+    val workflow = stateManager.getCurrentState
+      .unsafeRunSync()
+      .topModal
+      .flatMap(_.modal match
+        case Modal.FileWorkflow(w) => Some(w)
+        case _                     => None)
+      .getOrElse(fail("Expected active file workflow modal"))
+    workflow.mode shouldBe FileWorkflowMode.OpenFolder
+    workflow.operationLabel shouldBe "Open Folder"
+  }
+
+  it should "keep the generic in-app Open form for Open File when no native dialog is available" in {
+    val stateManager = createStateManager()
+
+    executeCommandThroughRunner(stateManager, "open", "open")
+
+    val workflow = stateManager.getCurrentState
+      .unsafeRunSync()
+      .topModal
+      .flatMap(_.modal match
+        case Modal.FileWorkflow(w) => Some(w)
+        case _                     => None)
+      .getOrElse(fail("Expected active file workflow modal"))
+    workflow.mode shouldBe FileWorkflowMode.Open
   }
 
   it should "open the in-app save-as form when no native dialog is available" in {

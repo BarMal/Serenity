@@ -33,6 +33,20 @@ class RopeWordCountSpec extends AnyFlatSpec with Matchers with ScalaCheckPropert
     stats.wordCount shouldBe 0
   }
 
+  "A rich document's inline atom placeholder" should "separate words and not count as a non-whitespace character" in {
+    val stats = TextStatistics.of(Rope("ab￼cd"))
+
+    stats.wordCount shouldBe 2
+    stats.characterCountExcludingWhitespace shouldBe 4
+  }
+
+  "A rich document's block placeholder line" should "count no word and no non-whitespace character" in {
+    val stats = TextStatistics.of(Rope("ab\n\u2064\ncd"))
+
+    stats.wordCount shouldBe 2
+    stats.characterCountExcludingWhitespace shouldBe 4
+  }
+
   "Markdown syntax and punctuation" should "not count as words" in {
     TextStatistics.of(Rope("# Title\n\n- **bold** item ---")).wordCount shouldBe 3
   }

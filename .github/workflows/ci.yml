@@ -157,6 +157,17 @@ jobs:
         # Fails with a thread dump after 40 minutes instead of holding the runner for 6 hours on a hang.
         run: bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test
 
+      # The console log of a failed run drops per-test detail (see the -u note in build.sbt), so the JUnit XML is the
+      # only place a property failure's name, shrunk arguments and Init Seed survive.
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-linux
+          path: target/test-reports/**
+          if-no-files-found: ignore
+          retention-days: 14
+
   real-boundary:
     name: Real-OS-boundary specs
     runs-on: ubuntu-latest

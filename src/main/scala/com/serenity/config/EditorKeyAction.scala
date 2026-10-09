@@ -33,6 +33,8 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
   case DeleteForward
   case DeleteWordBackward
   case DeleteWordForward
+  case DeleteToLineStart
+  case DeleteToLineEnd
   case Escape
   case NewLine
   case Tab
@@ -81,6 +83,8 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
       case DeleteForward      => com.serenity.keystroke.events.DeleteForward
       case DeleteWordBackward => com.serenity.keystroke.events.DeleteWordBackward
       case DeleteWordForward  => com.serenity.keystroke.events.DeleteWordForward
+      case DeleteToLineStart  => com.serenity.keystroke.events.DeleteToLineStart
+      case DeleteToLineEnd    => com.serenity.keystroke.events.DeleteToLineEnd
       case Escape             => com.serenity.keystroke.events.Escape
       case NewLine            => com.serenity.keystroke.events.NewLine
       case Tab                => com.serenity.keystroke.events.TabKey
@@ -217,8 +221,16 @@ object EditorKeyAction:
     EditorKeyAction.ExtendSelectionPageDown -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.PageDown, None, Set(com.serenity.keystroke.Modifier.Shift))
     ),
-    EditorKeyAction.DeleteBackward -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set.empty)),
-    EditorKeyAction.DeleteForward  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set.empty)),
+    // Shift is bound explicitly rather than stripped: it is often still held after a capital, and Shift+Backspace
+    // would otherwise be dropped silently, while every other Shift chord stays distinct.
+    EditorKeyAction.DeleteBackward -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set.empty),
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Shift))
+    ),
+    EditorKeyAction.DeleteForward -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set.empty),
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set(com.serenity.keystroke.Modifier.Shift))
+    ),
     EditorKeyAction.DeleteWordBackward -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Ctrl)),
       // Alt+Backspace as the readline-standard alternate: many legacy terminals (e.g. Git Bash/MSYS) collapse
@@ -226,7 +238,17 @@ object EditorKeyAction:
       HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Alt))
     ),
     EditorKeyAction.DeleteWordForward -> List(
-      HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set(com.serenity.keystroke.Modifier.Ctrl))
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set(com.serenity.keystroke.Modifier.Ctrl)),
+      // Option+Delete, the macOS word-forward delete; Alt+Backspace above is its backward twin.
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set(com.serenity.keystroke.Modifier.Alt))
+    ),
+    // Cmd is Modifier.Meta from the Swing handler. Unconditional rather than per platform: a terminal never reports
+    // Meta, and on Windows/Linux nothing else binds Meta+Backspace/Delete, so the triggers are inert there.
+    EditorKeyAction.DeleteToLineStart -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Meta))
+    ),
+    EditorKeyAction.DeleteToLineEnd -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set(com.serenity.keystroke.Modifier.Meta))
     ),
     EditorKeyAction.Escape     -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty)),
     EditorKeyAction.NewLine    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty)),

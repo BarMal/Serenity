@@ -25,7 +25,8 @@ class ManuscriptExportEffectsSpec extends AnyFlatSpec with Matchers:
   private def dialog(choice: Option[Path], asked: Ref[IO, List[(Option[Path], Option[String])]]): FileDialog =
     FileDialog(
       chooseOpenFile = _ => IO.pure(None),
-      chooseSaveFile = (directory, name) => asked.update(_ :+ (directory -> name)).as(choice)
+      chooseSaveFile = (directory, name) => asked.update(_ :+ (directory -> name)).as(choice),
+      chooseFolder = _ => IO.pure(None)
     )
 
   private def stateWith(buffer: Buffer): AppState =
@@ -90,6 +91,32 @@ class ManuscriptExportEffectsSpec extends AnyFlatSpec with Matchers:
     yield (questions, docxCount, epubPaths)
 
     run.unsafeRunSync() shouldBe (List(Some(draft.getParent) -> Some("novel-manuscript.epub")), 0, List(target))
+  }
+
+  it should "offer a .pdf name and use the PDF writer when asked for a PDF" in {
+    val draft  = Path.of("/books/novel.md").toAbsolutePath
+    val target = Path.of("/books/out.pdf").toAbsolutePath
+    val run = for
+      asked <- Ref.of[IO, List[(Option[Path], Option[String])]](Nil)
+      other <- Ref.of[IO, Int](0)
+      pdf   <- Ref.of[IO, List[Path]](Nil)
+      effects = ManuscriptExportEffects(
+        NoOpLogger[IO],
+        Some(dialog(Some(target), asked)),
+        immediateLanes,
+        IO.pure(AppState.initial),
+        (_, _) => IO.unit,
+        (_, _) => other.update(_ + 1),
+        (_, _) => other.update(_ + 1),
+        (_, path) => pdf.update(_ :+ path)
+      )
+      _         <- effects.exportFocused(stateWith(markdownBuffer(draft, "# One\n\nText.")), ManuscriptFileFormat.Pdf)
+      questions <- asked.get
+      others    <- other.get
+      pdfPaths  <- pdf.get
+    yield (questions, others, pdfPaths)
+
+    run.unsafeRunSync() shouldBe (List(Some(draft.getParent) -> Some("novel-manuscript.pdf")), 0, List(target))
   }
 
   it should "write nothing when the dialog is cancelled, and log rather than raise a failed export" in {

@@ -82,6 +82,8 @@ class PaneCloseUndoSpec extends AnyFlatSpec with Matchers:
     afterFirstUndo.persisted.layout.editorPanes.keySet shouldBe Set(pane0, pane1)
     afterFirstUndo.persisted.buffers(bufferId).document.content.collect() shouldBe "hello!"
 
+    // Text undo acts on the buffer being worked in (#1930), and the restored pane1 holds none: go back to pane0's.
+    sm.switchToPane(pane0).unsafeRunSync()
     sm.applyEvent(Undo).unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect() shouldBe "hello"
 

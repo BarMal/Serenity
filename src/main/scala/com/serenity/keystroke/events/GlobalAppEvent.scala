@@ -20,6 +20,9 @@ case object OpenChapterNote         extends GlobalAppEvent // Ctrl+Shift+N
 case object ToggleNotesPin          extends GlobalAppEvent // Ctrl+Shift+L
 case object ToggleRecentFilesInMode extends GlobalAppEvent // issue #1307
 
+/** A settings preview was put back because the command runner went away without committing it. */
+case object SettingsPreviewAbandoned extends GlobalAppEvent
+
 /** Toggles a registered panel's floating (command-palette) presentation open or closed (issue #1310) -- the parametric
   * counterpart to `ToggleTabList`/`ToggleRecentFilesInMode` above, driven by `PanelRegistry` instead of a new case per
   * panel.

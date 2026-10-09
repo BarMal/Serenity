@@ -28,6 +28,27 @@ private[command] object CommandRegistryNavigationCommands:
       label = "Delete Document Comment"
     ),
     Command.typed(
+      "resolve-document-comment",
+      "Resolve the document comment at the current cursor, hiding it until resolved comments are shown.",
+      CommandIntent.Comments(CommentsIntent.ResolveDocumentComment),
+      CommandCategory.Edit,
+      label = "Resolve Document Comment"
+    ),
+    Command.typed(
+      "reopen-document-comment",
+      "Reopen the resolved document comment at the current cursor.",
+      CommandIntent.Comments(CommentsIntent.ReopenDocumentComment),
+      CommandCategory.Edit,
+      label = "Reopen Document Comment"
+    ),
+    Command.typed(
+      "show-resolved-comments",
+      "Show or hide resolved document comments in the comment lens, highlights and comment navigation.",
+      CommandIntent.Comments(CommentsIntent.ToggleResolvedComments),
+      CommandCategory.View,
+      label = "Show Resolved Comments"
+    ),
+    Command.typed(
       "goto-line",
       "Go to a specific line number.",
       CommandIntent.Navigation(NavigationIntent.OpenGotoLine),

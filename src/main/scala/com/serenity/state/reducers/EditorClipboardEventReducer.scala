@@ -3,6 +3,7 @@ package com.serenity.state.reducers
 import com.serenity.keystroke.events.*
 import com.serenity.rope.*
 import com.serenity.state.models.*
+import com.serenity.state.undo.EditGrouping
 
 /** Copy/Cut/Paste -- the family that reads or writes the clipboard alongside the buffer. Each event gets its own helper
   * (rather than one large match) since all three independently compute a clipboard string alongside their buffer
@@ -30,7 +31,9 @@ private[reducers] object EditorClipboardEventReducer:
     if hasSelection then ClipboardEntry(selectedTexts(buffer).mkString("\n"), wholeLine = false)
     else
       ClipboardEntry(
-        distinctCursorLines(buffer).map(line => buffer.document.content.getLine(line).getOrElse("")).mkString("\n"),
+        distinctCursorLines(buffer)
+          .map(line => buffer.plainTextExport(buffer.document.content.getLine(line).getOrElse("")))
+          .mkString("\n"),
         wholeLine = true
       )
 
@@ -56,7 +59,7 @@ private[reducers] object EditorClipboardEventReducer:
         ),
         entry
       ),
-      undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+      undoBoundaryEffects(buffer.id, paneId, buffer, edits, grouping = EditGrouping.Standalone)
     )
 
   private def reducePaste(ctx: CursorEventContext): ReducerResult =
@@ -73,7 +76,7 @@ private[reducers] object EditorClipboardEventReducer:
       val (updated, edits) = f(buffer)
       ReducerResult(
         Focused.replaceBuffer(currentState, updated),
-        undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+        undoBoundaryEffects(buffer.id, paneId, buffer, edits, grouping = EditGrouping.Standalone)
       )
 
     val text = entry.text
@@ -92,7 +95,8 @@ private[reducers] object EditorClipboardEventReducer:
         annotations = replacedBuffer.annotations,
         richText = replacedBuffer.richText
       )
-      val effects = undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), groupable = false)
+      val effects =
+        undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), grouping = EditGrouping.Standalone)
       ReducerResult(
         currentState.copy(persisted =
           currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
@@ -120,7 +124,7 @@ private[reducers] object EditorClipboardEventReducer:
         currentState.copy(persisted =
           currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> withDarling))
         ),
-        undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+        undoBoundaryEffects(buffer.id, paneId, buffer, edits, grouping = EditGrouping.Standalone)
       )
     else ReducerResult.noEffects(currentState)
 
@@ -144,7 +148,8 @@ private[reducers] object EditorClipboardEventReducer:
           annotations = replacedBuffer.annotations,
           richText = replacedBuffer.richText
         )
-        val effects = undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), groupable = false)
+        val effects =
+          undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), grouping = EditGrouping.Standalone)
         ReducerResult(
           currentState.copy(persisted =
             currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
@@ -194,14 +199,14 @@ private[reducers] object EditorClipboardEventReducer:
       val sortedLineEdits = lineEdits
         .sortBy { case (_, start, end) => (-start, -end) }
         .map { case (_, start, end) => MultiCursorEdit(0, start, end, "") }
-      val (updatedContent, updatedRichTextDocument) =
-        foldEditsWithRichText(buffer, sortedLineEdits)((content, edit) =>
-          deleteOrUnchanged(content, edit.start, edit.end)
-        )
-      val edits = lineEdits.zipWithIndex.map {
-        case ((_, start, end), index) =>
-          MultiCursorEdit(index, start, end, "")
-      }
+      val folded =
+        foldEditsTracked(buffer, sortedLineEdits)((content, edit) => deleteOrUnchanged(content, edit.start, edit.end))
+      val (updatedContent, updatedRichTextDocument) = (folded.content, folded.richText)
+      val edits = folded
+        .appliedAmong(lineEdits.zipWithIndex.map {
+          case ((_, start, end), index) =>
+            MultiCursorEdit(index, start, end, "")
+        })
       val maxFinalLine = math.max(0, updatedContent.lineCount - 1)
       val finalCursors = targetLines.distinct.sorted.map { line =>
         val deletedBefore = targetLines.count(_ < line)
