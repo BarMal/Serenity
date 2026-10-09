@@ -30,9 +30,10 @@ object KeywordHighlights:
   def onLines(content: Rope, terms: Set[String], lines: Set[Int]): Map[Int, List[KeywordHighlight]] =
     if terms.isEmpty then Map.empty
     else
-      lines.iterator.flatMap { line =>
-        content.getLine(line).map(text => line -> highlightsOn(line, text, terms))
-      }.filter(_._2.nonEmpty).toMap
+      lines.iterator
+        .flatMap(line => content.getLine(line).map(text => line -> highlightsOn(line, text, terms)))
+        .filter(_._2.nonEmpty)
+        .toMap
 
   private def highlightsOn(line: Int, text: String, terms: Set[String]): List[KeywordHighlight] =
     val found = terms.toList.flatMap(term => KeywordMatches.occurrences(text, term))
