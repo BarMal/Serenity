@@ -222,7 +222,7 @@ object ConfigManager:
   ): Edit =
     val before =
       ConfigFileFormat
-        .settings(HotkeyOverrides.comparableTo(config, existing.loaded.config), plan.osName)
+        .settings(HotkeyOverrides.likeRunning(config, existing.loaded.config), plan.osName)
         .map((key, value) => key -> value.rendered)
         .toMap
     val after                                 = ConfigFileFormat.settings(config, plan.osName)

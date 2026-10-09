@@ -229,7 +229,7 @@ object UiPreset:
     )
 
   def applyToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
-    applyToState(preset.withPanelIds, state, theme, preset.config)
+    applyToState(preset.withPanelIds, state, theme, HotkeyOverrides.likeRunning(state.persisted.config, preset.config))
 
   /** Apply a built-in workflow without replacing unrelated persisted configuration -- the theme included: a workflow is
     * about how the workspace behaves, and the user's colours are theirs (#1880).

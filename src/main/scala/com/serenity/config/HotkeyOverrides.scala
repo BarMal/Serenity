@@ -18,11 +18,14 @@ object HotkeyOverrides:
     val platform = HotkeyConfig.forOs(osName)
     if config.terminalAdjusted then platform.forTerminalUse else platform
 
-  /** `loaded` read the way `live` is, so the two are compared on the same footing. */
-  def comparableTo(live: AppConfig, loaded: AppConfig): AppConfig =
-    if live.inputConfig.hotkeyConfig.terminalAdjusted then
-      loaded.withHotkeyConfig(loaded.inputConfig.hotkeyConfig.forTerminalUse)
-    else loaded
+  /** `other` with its hotkeys read the way `running` holds its own: a terminal-adjusted config keeps the terminal's
+    * rewrite of whatever is applied to it (a loaded file, a preset, the shipped defaults), so Cmd bindings a terminal
+    * cannot receive never come back and the adjustment is not lost.
+    */
+  def likeRunning(running: AppConfig, other: AppConfig): AppConfig =
+    if running.inputConfig.hotkeyConfig.terminalAdjusted then
+      other.withHotkeyConfig(other.inputConfig.hotkeyConfig.forTerminalUse)
+    else other
 
   def actions(config: HotkeyConfig, osName: String): List[(HotkeyAction, List[HotkeyTrigger])] =
     val defaults = defaultsFor(config, osName).bindings

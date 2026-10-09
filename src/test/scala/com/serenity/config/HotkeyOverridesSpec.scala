@@ -336,3 +336,19 @@ class HotkeyOverridesSpec extends AnyFlatSpec with Matchers with OptionValues:
     Files.readString(file).linesIterator.filter(_.startsWith("hotkey.")).toList shouldBe
       List("""hotkey.save = ["ctrl+s"]""", """hotkey.find = ["meta+alt+f"]""")
   }
+
+  "resetting an action in the terminal on macOS" should "restore the terminal's default and write no override" in {
+    val changed = macTerminal.withBinding(HotkeyAction.Find, "ctrl+alt+f")
+
+    val reset = changed.resetBinding(HotkeyAction.Find, mac)
+
+    rendered(reset.bindingsFor(HotkeyAction.Find)) shouldBe List("ctrl+f")
+    reset.terminalAdjusted shouldBe true
+    hotkeyLines(withHotkeys(reset), mac) shouldBe Nil
+  }
+
+  "resetting an action on macOS outside the terminal" should "restore the Cmd default" in {
+    val changed = HotkeyConfig.forOs(mac).withBinding(HotkeyAction.Find, "ctrl+alt+f")
+
+    rendered(changed.resetBinding(HotkeyAction.Find, mac).bindingsFor(HotkeyAction.Find)) shouldBe List("meta+f")
+  }

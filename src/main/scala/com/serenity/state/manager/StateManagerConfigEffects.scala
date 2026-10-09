@@ -13,6 +13,7 @@ import com.serenity.config.{
   ConfigManager,
   ConfigNotice,
   ConfigRestart,
+  HotkeyOverrides,
   LineNumberLayout,
   SpellCheckLanguage,
   StatusLinePlacement,
@@ -325,8 +326,11 @@ final private[manager] class StateManagerConfigEffects(
   private def restoreDefaultSettings: IO[Unit] =
     deviceTextScaleProvider.flatMap { deviceTextScale =>
       val defaults = AppConfig.default
-      applyConfigUpdate(_ =>
-        defaults.withFontConfig(defaults.editorConfig.fontConfig.resolveAutoTextScale(deviceTextScale))
+      applyConfigUpdate(current =>
+        HotkeyOverrides.likeRunning(
+          current,
+          defaults.withFontConfig(defaults.editorConfig.fontConfig.resolveAutoTextScale(deviceTextScale))
+        )
       ).flatMap(config => onFontConfigChanged(config.editorConfig.fontConfig))
     }
 

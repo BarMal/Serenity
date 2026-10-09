@@ -300,10 +300,9 @@ final case class HotkeyConfig(
         HotkeyConfig.validated(freed.copy(bindings = freed.bindings + (action -> List(trigger)))).getOrElse(this)
       case None => this
 
-  def resetBinding(action: HotkeyAction): HotkeyConfig =
-    HotkeyConfig
-      .validated(copy(bindings = bindings + (action -> HotkeyConfig.defaultBindings.getOrElse(action, Nil))))
-      .getOrElse(this)
+  def resetBinding(action: HotkeyAction, osName: String = HotkeyOverrides.runningOs): HotkeyConfig =
+    val default = HotkeyOverrides.defaultsFor(this, osName).bindings.getOrElse(action, Nil)
+    HotkeyConfig.validated(copy(bindings = bindings + (action -> default))).getOrElse(this)
 
   /** Strips from the command bindings not in `explicitCommandIds` -- the shipped defaults a file or session did not
     * mention -- any trigger the user's own bindings already hold. A config written before a default existed may have
