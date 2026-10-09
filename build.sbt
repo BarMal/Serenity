@@ -191,11 +191,12 @@ lazy val root = (project in file("."))
     Compile / sourceGenerators += Def.task {
       val generated  = (Compile / sourceManaged).value / "com" / "serenity" / "BuildInfo.scala"
       val root       = baseDirectory.value
+      val log        = streams.value.log
       val commit     = gitOutput(root, "rev-parse", "HEAD").getOrElse("unknown")
       val commitTime = gitOutput(root, "log", "-1", "--format=%cI").getOrElse("unknown")
       val resolved = packageVersion.value.fold(
         problem => {
-          streams.value.log.warn(s"BuildInfo falls back to ${PackageVersion.FirstVersion}/dev: $problem")
+          log.warn(s"BuildInfo falls back to ${PackageVersion.FirstVersion}/dev: $problem")
           PackageVersion.Result(PackageVersion.FirstVersion, PackageVersion.Channel.Dev)
         },
         identity
