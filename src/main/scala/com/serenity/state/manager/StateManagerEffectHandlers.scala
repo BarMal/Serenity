@@ -312,6 +312,8 @@ final private[manager] class StateManagerEffectHandlers(
         requestOpenFileOrFolderDialog
       case FileIntent.OpenRecentFile(path) =>
         loadFile(path)
+      case FileIntent.ClearRecentFiles =>
+        currentState.flatMap(current => commitState(FileResults.withoutRecentFiles(current), current))
       case FileIntent.OpenFileSearch =>
         interpretSurfaceEffect(SurfaceEffect.OpenFileSearch)
       case FileIntent.GoToFile =>
