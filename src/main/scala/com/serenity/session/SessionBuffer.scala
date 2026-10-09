@@ -243,7 +243,7 @@ object SessionBuffer:
       case _               => buffer
 
   private def fromDisk(recorded: Buffer, disk: Buffer): Buffer =
-    if disk.document.content.collect() == recorded.document.content.collect() then
+    if disk.document.content == recorded.document.content then
       recorded.copy(
         document = recorded.document.copy(revision = disk.document.revision, isDirty = false),
         // The file just read is the package the unchanged document came from, with every paragraph's source.

@@ -128,7 +128,7 @@ private[manager] object EditorTransitions:
         richText = richTextAfterReplacement(buffer, document.contentVersion, content)
       )
       val documentChange =
-        if buffer.document.content.collect() == content then None
+        if buffer.document.content.contentEquals(content) then None
         else
           for
             path       <- updatedBuffer.document.filePath
