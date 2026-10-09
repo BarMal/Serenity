@@ -17,6 +17,7 @@ case object ToggleShortcutsHelp     extends GlobalAppEvent // F1 (issue #1247)
 case object ToggleTabList           extends GlobalAppEvent // issue #1307
 case object ToggleChapterGhosts     extends GlobalAppEvent // Ctrl+Shift+G
 case object OpenChapterNote         extends GlobalAppEvent // Ctrl+Shift+N
+case object OpenKeywordNote         extends GlobalAppEvent // Ctrl+Shift+K
 case object ToggleNotesPin          extends GlobalAppEvent // Ctrl+Shift+L
 case object ToggleRecentFilesInMode extends GlobalAppEvent // issue #1307
 

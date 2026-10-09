@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.command.CommandRegistry
 import com.serenity.config.{HotkeyAction, HotkeyConfig}
-import com.serenity.keystroke.events.{OpenChapterNote, ToggleNotesPin}
+import com.serenity.keystroke.events.{OpenChapterNote, OpenKeywordNote, ToggleNotesPin}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
@@ -43,6 +43,18 @@ class ChapterNoteHotkeySpec extends AnyFlatSpec with Matchers:
     val reduced = AppEventReducer.reduce(OpenChapterNote, manuscript, CommandRegistry.withToggleUI).state
 
     reduced.runtime.notesPane should not be empty
+  }
+
+  "Open Note for Word" should "be bound to Ctrl+Shift+K (Cmd+Shift+K on macOS)" in
+    platforms.foreach(os => rendered(os, HotkeyAction.OpenKeywordNote) shouldBe List(s"${modifierFor(os)}+shift+k"))
+
+  it should "open the note for the word under the cursor when its event is reduced" in {
+    val buffers = manuscript.persisted.buffers
+    val onWord  = buffers(BufferId(0)).copy(editing = EditingState(List(CursorPosition(1, 5))))
+    val state   = manuscript.copy(persisted = manuscript.persisted.copy(buffers = buffers.updated(BufferId(0), onWord)))
+    val reduced = AppEventReducer.reduce(OpenKeywordNote, state, CommandRegistry.withToggleUI).state
+
+    reduced.persisted.buffers(BufferId(0)).annotations.notes.keySet shouldBe Set(NoteKey.Keyword("sea"))
   }
 
   "Pin/Unpin Notes" should "be bound to Ctrl+Shift+L (Cmd+Shift+L on macOS)" in

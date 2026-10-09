@@ -41,6 +41,7 @@ object CommandKeyBindings:
       case HotkeyAction.SplitPaneVertical       => Some(CommandId("split-pane-vertical"))
       case HotkeyAction.ToggleChapterGhosts     => Some(CommandId("toggle-chapter-ghosts"))
       case HotkeyAction.OpenChapterNote         => Some(CommandId("open-chapter-note"))
+      case HotkeyAction.OpenKeywordNote         => Some(CommandId("open-term-note"))
       case HotkeyAction.ToggleNotesPin          => Some(CommandId("toggle-notes-pin"))
       case HotkeyAction.ClosePane               => Some(CommandId("close-pane"))
       case HotkeyAction.Find                    => Some(CommandId("find"))

@@ -49,6 +49,7 @@ Run `sbt "Test/runMain com.serenity.docs.KeyboardReferenceTable"` to rewrite it 
 | Focus down | `focus_down` | `Alt+Down` | `Alt+Down` |
 | Toggle chapter ghosts | `toggle_chapter_ghosts` | `Ctrl+Shift+G` | `Cmd+Shift+G` |
 | Open chapter note | `open_chapter_note` | `Ctrl+Shift+N` | `Cmd+Shift+N` |
+| Open keyword note | `open_keyword_note` | `Ctrl+Shift+K` | `Cmd+Shift+K` |
 | Toggle notes pin | `toggle_notes_pin` | `Ctrl+Shift+L` | `Cmd+Shift+L` |
 | Bold | `bold` | `Ctrl+B` | `Cmd+B` |
 | Italic | `italic` | `Ctrl+I` | `Cmd+I` |
