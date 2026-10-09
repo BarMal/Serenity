@@ -23,7 +23,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-  // The built-in word list is keyed by `en`; the default `en-GB` needs an installed dictionary.
+  // A bare `en` is served by the bundled British dictionary; the default `en-GB` would need an installed one.
   private val EnglishSpellCheck = SpellCheckConfig(enabled = true, languages = List("en"))
 
   // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Node` tree
@@ -116,14 +116,14 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "accept configured French and Greek dictionaries with diacritics and non-Latin letters" in {
-    val french = "bonjour caf\u00e9 fran\u00e7ais r\u00e9sum\u00e9"
-    val greek  = "\u03ba\u03cc\u03c3\u03bc\u03bf\u03c2 \u03b3\u03b5\u03b9\u03ac"
+    val french = List("bonjour", "caf\u00e9", "fran\u00e7ais", "r\u00e9sum\u00e9")
+    val greek  = List("\u03ba\u03cc\u03c3\u03bc\u03bf\u03c2", "\u03b3\u03b5\u03b9\u03ac")
     val config = SpellCheckConfig(
       enabled = true,
-      languages = List("en", "fr", "el")
+      languages = List("en", "fr", "el"),
+      dictionaryPaths = List(writeDic("serenity-fr", french).toString, writeDic("serenity-el", greek).toString)
     )
-
-    val diagnostics = SpellChecker.check(s"$french\n$greek\nwrld", config)
+    val diagnostics = SpellChecker.check(s"${french.mkString(" ")}\n${greek.mkString(" ")}\nwrld", config)
 
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: wrld")
   }

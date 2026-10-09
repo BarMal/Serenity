@@ -101,6 +101,22 @@ class FileFailureNoticeTextSpec extends AnyFlatSpec with Matchers:
       "Couldn't open notes.md: it doesn't exist or can't be read."
   }
 
+  "Opening a folder as a file" should "say it is a folder and point at Open Folder, not claim it does not exist" in {
+    val notice = FileFailureNotice.isFolder(Path.of("/home/writer/drafts"))
+
+    notice.level shouldBe NoticeLevel.Error
+    notice.message shouldBe "drafts is a folder. Use Open Folder to open it."
+    notice.hint shouldBe Some("esc dismiss")
+  }
+
+  "A native file dialog that cannot be shown" should "say so and give the cause" in {
+    val notice = FileFailureNotice.dialogFailed(new IllegalStateException("no display"))
+
+    notice.level shouldBe NoticeLevel.Error
+    notice.message shouldBe "Couldn't show the file dialog: no display."
+    notice.hint shouldBe Some("esc dismiss")
+  }
+
   "A failed reload" should "name the file and the cause" in {
     val notice = FileFailureNotice.reloadFailed(
       target,

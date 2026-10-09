@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 import cats.effect.{Deferred, IO}
 import cats.syntax.all.*
@@ -159,8 +159,39 @@ final private[manager] class StateManagerFilePersistence(
       FileUtils.getCurrentDirectory
         .flatMap(directory => dialog.chooseOpenFile(Some(directory)))
         .flatMap(_.fold(IO.unit)(loadFile))
-        .handleErrorWith(error => logger.error(error)("[FILE] Native open-file dialog failed"))
+        .handleErrorWith(dialogFailed("open-file"))
     )
+
+  /** Shows the folder picker off the dispatcher and hands what it returns to `openFolder` there, so the folder opens
+    * through the same route whoever chose it. A second request while a dialog is up is dropped.
+    */
+  def openFolderFromDialog(dialog: FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
+    submitIgnoringShutdown(
+      DialogLane,
+      FileUtils.getCurrentDirectory
+        .flatMap(directory => dialog.chooseFolder(Some(directory)))
+        .flatMap(_.fold(IO.unit)(folder => lanes.post(openFolder(folder))))
+        .handleErrorWith(dialogFailed("open-folder"))
+    )
+
+  /** Shows the combined picker off the dispatcher: a folder goes to `openFolder`, as the folder picker's choice does,
+    * and a file opens like the file picker's. A second request while a dialog is up is dropped.
+    */
+  def openFileOrFolderFromDialog(dialog: FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
+    submitIgnoringShutdown(
+      DialogLane,
+      FileUtils.getCurrentDirectory
+        .flatMap(directory => dialog.chooseFileOrFolder(Some(directory)))
+        .flatMap(_.fold(IO.unit)(chosen => openChosen(chosen, openFolder)))
+        .handleErrorWith(dialogFailed("open"))
+    )
+
+  private def openChosen(chosen: Path, openFolder: Path => IO[Unit]): IO[Unit] =
+    IO.blocking(Files.isDirectory(chosen))
+      .flatMap(isFolder => if isFolder then lanes.post(openFolder(chosen)) else loadFile(chosen))
+
+  private def dialogFailed(what: String)(error: Throwable): IO[Unit] =
+    logger.error(error)(s"[FILE] Native $what dialog failed") >> showNotice(FileFailureNotice.dialogFailed(error))
 
   private def request(bufferId: BufferId, kind: SaveKind, saveAsPath: Option[Path]): IO[Option[FileSave]] =
     currentState.flatMap { state =>
@@ -222,7 +253,11 @@ final private[manager] class StateManagerFilePersistence(
   private def loadJob(path: Path): IO[Option[EffectResult]] =
     IO.blocking(FileUtils.isReadableFile(path)).flatMap {
       case false =>
-        logger.warn(s"[FILE] Not a readable file: $path") >> showNotice(FileFailureNotice.notReadable(path)).as(None)
+        IO.blocking(Files.isDirectory(path)).flatMap { isFolder =>
+          logger.warn(s"[FILE] Not a readable file: $path") >>
+            showNotice(if isFolder then FileFailureNotice.isFolder(path) else FileFailureNotice.notReadable(path))
+              .as(None)
+        }
       case true =>
         fileManager
           .loadFile(path, PlaceholderBufferId)

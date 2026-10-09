@@ -16,7 +16,7 @@ object ThirdPartyNotices {
     def key: String = s"$organization:$name"
   }
 
-  private final case class Entry(
+  final private case class Entry(
       title: String,
       version: String,
       licence: String,
@@ -49,7 +49,7 @@ object ThirdPartyNotices {
   }
 
   def runtimeModulesOf(
-      classpath: Seq[sbt.Attributed[java.io.File]]
+    classpath: Seq[sbt.Attributed[java.io.File]]
   ): Seq[Module] =
     classpath.flatMap(_.get(sbt.Keys.moduleID.key)).map(id => Module(id.organization, id.name, id.revision))
 
@@ -110,4 +110,5 @@ object ThirdPartyNotices {
       "| --- | --- | --- | --- | --- | --- |"
     ) ++ rows).mkString("\n") + "\n"
   }
+
 }

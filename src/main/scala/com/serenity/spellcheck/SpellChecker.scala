@@ -356,4 +356,8 @@ object SpellChecker:
 
   private def isSpellCheckDiagnostic(diagnostic: Diagnostic): Boolean =
     diagnostic.source.contains(Source)
+
+  /** `diagnostics` with everything but spell-check's own dropped, and the documents left with none. */
+  def onlySpellCheck(diagnostics: Map[DocumentUri, List[Diagnostic]]): Map[DocumentUri, List[Diagnostic]] =
+    diagnostics.view.mapValues(_.filter(isSpellCheckDiagnostic)).filter(_._2.nonEmpty).toMap
 end SpellChecker

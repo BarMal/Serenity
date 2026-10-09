@@ -10,11 +10,14 @@
         </encoder>
     </appender>
 
+    <!-- The platform's conventional log directory (#2020), computed by LogLocation. -->
+    <define name="SERENITY_LOG_DIR" class="com.serenity.diagnostics.LogDirectoryPropertyDefiner" />
+
     <!-- Rolling app log for packaged desktop runs and crash diagnostics -->
     <appender name="APP_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${user.home}/.serenity/serenity.log</file>
+        <file>${SERENITY_LOG_DIR}/serenity.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>${user.home}/.serenity/serenity.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <fileNamePattern>${SERENITY_LOG_DIR}/serenity.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
             <maxFileSize>5MB</maxFileSize>
             <maxHistory>14</maxHistory>
             <totalSizeCap>50MB</totalSizeCap>

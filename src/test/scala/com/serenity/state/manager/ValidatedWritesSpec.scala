@@ -214,8 +214,8 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
         def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] = IO.unit
       val undoRecording = new UndoRecording(new UndoRecordingPort:
         def updateUndo(update: UndoState => UndoState): IO[Unit] = ModelViews.undoRef(model).update(update)
-        def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
-          operations.modelCommit.updateValidated(transition))
+        def updateModelPlaced(transition: Model => Option[Model]): IO[Unit] =
+          operations.modelCommit.updateValidatedPlaced(transition))
       val pipeline = new StateManagerEventPipeline(
         statePort,
         effectPort,
