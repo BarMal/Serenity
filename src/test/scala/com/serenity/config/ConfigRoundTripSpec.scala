@@ -211,6 +211,9 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     "inputConfig.focusedKeymapConfig.modal.bindings",
     "inputConfig.focusedKeymapConfig.panel.bindings",
     "inputConfig.focusedKeymapConfig.peek.bindings",
+    // Records that the bindings were adjusted for a terminal at startup; it is a property of the running frontend,
+    // never written to the file (HotkeyOverridesSpec).
+    "inputConfig.hotkeyConfig.terminalAdjusted",
     "inputConfig.hotkeyConfig.bindings"
   )
 
