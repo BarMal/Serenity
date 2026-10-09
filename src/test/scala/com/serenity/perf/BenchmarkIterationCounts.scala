@@ -74,7 +74,7 @@ package com.serenity.perf
   * phase was `iterations x sample`: 22ms for `render.full_frame.java2d`, under 200ms for most others, so one stall of
   * that length moved the whole median. `BenchmarkRunner` now samples until the samples span 400ms; the counts above are
   * its minimum. The three benchmarks that type without deleting keep their count, as every extra sample grows their
-  * document (`typing_random_letters` went from 1.30 to 2.05ms). Second, eight benchmarks sit on a JIT plateau that the
+  * document (`typing_random_letters` went from 1.30 to 2.05ms). Second, nine benchmarks sit on a JIT plateau that the
   * 500ms warmup ends before C2 has finished (`lsp.framer.large_batch` 1.83ms before, 0.62ms settled); they are listed
   * in `JitSettled` and run the settle phase. Settling every benchmark was measured and rejected: it added 170s to a 72s
   * run, and for `laptop.input.state_manager.*` it widened the spread (4 to 6x) rather than narrowing it.
@@ -108,5 +108,6 @@ private[perf] object BenchmarkIterationCounts:
     "reducer.multi_cursor_move_down",
     "damage.caret_move.repaint_region.pinned_status",
     "render.cursor_only.scene_reuse.java2d_overlay",
-    "render.diagnostics_and_comments.java2d"
+    "render.diagnostics_and_comments.java2d",
+    "layout.large_multiline.visible_viewport"
   )
