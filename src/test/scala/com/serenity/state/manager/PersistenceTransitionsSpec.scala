@@ -76,7 +76,7 @@ class PersistenceTransitionsSpec extends AnyFlatSpec with Matchers:
     shouldValidate(prompted)
   }
 
-  private val preset = UiPreset(name = "Custom", config = AppConfig.default, themeName = Theme.light.name)
+  private val preset = UiPreset(name = "Custom", config = AppConfig.default, themeName = Some(Theme.light.name))
 
   "Preset store feedback" should "refresh the previews and report a status, validly" in {
     val reported = UiPresetTransitions.withFeedback(

@@ -69,7 +69,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       name = "Drafting",
       config = AppConfig.default
         .withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(
         SessionDockedPanel(
           "panel-1",
@@ -160,7 +160,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Drafting",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = Nil
     )
     store.upsert(preset).unsafeRunSync()
@@ -314,7 +314,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     saved.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    saved.themeName shouldBe Theme.light.name
+    saved.themeName shouldBe Some(Theme.light.name)
     saved.pinnedPanels.map(_.position) shouldBe List(PanelPosition.Right)
   }
 

@@ -189,7 +189,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.presets.interpret(UiPresetsIntent.OverwriteUiPreset("Custom")).unsafeRunSync()
 
-    fixture.store.find("Custom").unsafeRunSync().map(_.themeName) shouldBe Some("light")
+    fixture.store.find("Custom").unsafeRunSync().map(_.themeName) shouldBe Some(Some("light"))
     fixture.currentRunner.statusMessage shouldBe Some("Preset overwritten. Configure Custom.")
   }
 
@@ -205,7 +205,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
 
   it should "apply a custom preset's theme, config, and font, and auto-save the session" in {
     val fixture = harness(commandPaletteState())
-    val preset  = UiPreset(name = "Custom", config = AppConfig.default, themeName = Theme.light.name)
+    val preset  = UiPreset(name = "Custom", config = AppConfig.default, themeName = Some(Theme.light.name))
     fixture.store.create(preset).unsafeRunSync()
 
     fixture.presets.interpret(UiPresetsIntent.ApplyUiPreset("Custom")).unsafeRunSync()
@@ -242,7 +242,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
 
   it should "open the preset diff review rather than applying immediately, on ReviewUiPreset" in {
     val fixture = harness(commandPaletteState())
-    val preset  = UiPreset(name = "Custom", config = AppConfig.default, themeName = Theme.light.name)
+    val preset  = UiPreset(name = "Custom", config = AppConfig.default, themeName = Some(Theme.light.name))
     fixture.store.create(preset).unsafeRunSync()
 
     fixture.presets.interpret(UiPresetsIntent.ReviewUiPreset("Custom")).unsafeRunSync()
@@ -254,7 +254,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
 
   it should "apply a custom preset's theme, config, and font, and auto-save the session, on confirm" in {
     val fixture = harness(commandPaletteState())
-    val preset  = UiPreset(name = "Custom", config = AppConfig.default, themeName = Theme.light.name)
+    val preset  = UiPreset(name = "Custom", config = AppConfig.default, themeName = Some(Theme.light.name))
     fixture.store.create(preset).unsafeRunSync()
     fixture.presets.interpret(UiPresetsIntent.ReviewUiPreset("Custom")).unsafeRunSync()
 
@@ -293,7 +293,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Custom",
       config = AppConfig.default.withFontConfig(fontConfig),
-      themeName = Theme.dark.name
+      themeName = Some(Theme.dark.name)
     )
     fixture.store.create(preset).unsafeRunSync()
 
@@ -308,7 +308,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
   it should "reject applying a preset whose theme cannot be loaded" in {
     val fixture = harness(commandPaletteState())
     val preset =
-      UiPreset(name = "Custom", config = AppConfig.default, themeName = "does-not-exist-theme")
+      UiPreset(name = "Custom", config = AppConfig.default, themeName = Some("does-not-exist-theme"))
     fixture.store.create(preset).unsafeRunSync()
 
     fixture.presets.interpret(UiPresetsIntent.ApplyUiPreset("Custom")).unsafeRunSync()
@@ -316,6 +316,19 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
     val message = fixture.currentRunner.statusMessage.getOrElse(fail("Expected a status message"))
     message should startWith("Cannot preview Custom: Theme 'does-not-exist-theme' could not be loaded")
     fixture.persistedConfigs.get.unsafeRunSync() shouldBe Nil
+  }
+
+  it should "apply a preset that names no theme without loading one, keeping the current theme" in {
+    val initial = commandPaletteState(
+      AppState.initial.copy(persisted = AppState.initial.persisted.copy(theme = Theme.light))
+    )
+    val fixture = harness(initial)
+    fixture.store.create(UiPreset(name = "Custom", config = AppConfig.default)).unsafeRunSync()
+
+    fixture.presets.interpret(UiPresetsIntent.ApplyUiPreset("Custom")).unsafeRunSync()
+
+    fixture.currentState.persisted.theme.name shouldBe "light"
+    fixture.persistedConfigs.get.unsafeRunSync().size shouldBe 1
   }
 
   it should "report a missing source preset on duplicate instead of creating one" in {
@@ -336,12 +349,12 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.currentRunner.statusMessage shouldBe Some("Preset duplicated. Configure Custom Copy.")
   }
 
-  it should "duplicate a built-in preset into a new custom preset" in {
+  it should "duplicate a built-in preset into a new custom preset that names no theme, as the built-in names none" in {
     val fixture = harness(commandPaletteState())
 
     fixture.presets.interpret(UiPresetsIntent.DuplicateUiPreset("Writing", "My Writing")).unsafeRunSync()
 
-    fixture.store.find("My Writing").unsafeRunSync().map(_.themeName) shouldBe Some(Theme.dark.name)
+    fixture.store.find("My Writing").unsafeRunSync().map(_.themeName) shouldBe Some(None)
   }
 
   it should "refuse to rename a built-in preset" in {

@@ -9,7 +9,7 @@ private[presets] object UiPresetSummary:
   def previewHint(preset: UiPreset): String =
     List(
       Some(documentModeSummary(preset.config)),
-      Option(preset.themeName).filter(name => name.nonEmpty && !UiPreset.isBuiltInWorkflow(preset)),
+      preset.themeName.filter(name => name.nonEmpty && !UiPreset.isBuiltInWorkflow(preset)),
       Some(s"${preset.config.interfaceDensity.configKey} density"),
       Some(proseFontSummary(preset.config)),
       paneCountSummary(preset.targetEditorPaneCount),

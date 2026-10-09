@@ -92,7 +92,7 @@ class UiPresetWorkspaceTreeSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Nested",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(
         SessionDockedPanel("surface-7", SessionPinnedPanel(PanelPosition.Left, 30, SessionPanelContent.Outline(Nil)))
       ),
@@ -131,7 +131,7 @@ class UiPresetWorkspaceTreeSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Nested",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(
         SessionDockedPanel("surface-7", SessionPinnedPanel(PanelPosition.Left, 30, SessionPanelContent.Outline(Nil)))
       ),
@@ -139,7 +139,7 @@ class UiPresetWorkspaceTreeSpec extends AnyFlatSpec with Matchers:
       targetEditorPaneCount = Some(2)
     )
 
-    val restored = UiPreset.applyToState(preset, state, Theme.dark)
+    val restored = UiPreset.applyToState(preset, state, Some(Theme.dark))
 
     restored.persisted.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(pane0, pane1))
     // A preset saved before panels had fixed ids is moved onto the panel's own id, nested tree intact.
@@ -159,7 +159,7 @@ class UiPresetWorkspaceTreeSpec extends AnyFlatSpec with Matchers:
 
   it should "migrate a legacy preset with only pinnedPanels into dockedPanels with no persisted tree" in {
     val legacyPanel = SessionPinnedPanel(PanelPosition.Left, 20, SessionPanelContent.DirectoryTree("/repo", None, Nil))
-    val baseJson    = UiPreset(name = "Legacy", config = AppConfig.default, themeName = Theme.dark.name).asJson
+    val baseJson    = UiPreset(name = "Legacy", config = AppConfig.default, themeName = Some(Theme.dark.name)).asJson
     val legacyJson = baseJson.mapObject(
       _.remove("dockedPanels")
         .remove("workspaceTree")
@@ -183,12 +183,12 @@ class UiPresetWorkspaceTreeSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Broken",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       workspaceTree = Some(SessionWorkspaceNode.EditorLeaf("bad-leaf", 999)),
       targetEditorPaneCount = Some(1)
     )
 
-    val restored = UiPreset.applyToState(preset, state, Theme.dark)
+    val restored = UiPreset.applyToState(preset, state, Some(Theme.dark))
 
     restored.persisted.buffers shouldBe state.persisted.buffers
     restored.persisted.layout.editorPanes should have size 1
@@ -209,12 +209,12 @@ class UiPresetWorkspaceTreeSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "StaleMaximized",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       maximizedWorkspaceNodeId = Some("dock-node-1"),
       targetEditorPaneCount = Some(1)
     )
 
-    val restored = UiPreset.applyToState(preset, state, Theme.dark)
+    val restored = UiPreset.applyToState(preset, state, Some(Theme.dark))
 
     restored.persisted.layout.maximizedWorkspaceNodeId shouldBe None
     restored.isValid shouldBe true
@@ -224,7 +224,7 @@ class UiPresetWorkspaceTreeSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Nested",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       workspaceTree = Some(nestedSessionTree)
     )
     val withUnknownField = preset.asJson.mapObject(_.add("futureField", Json.fromString("keep-me")))

@@ -97,7 +97,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
   it should "reject saving or duplicating over an existing preset name" in {
     val path     = Files.createTempDirectory("state-manager-ui-preset-name-collision").resolve("ui-presets.json")
     val store    = UiPresetStore(path)
-    val existing = UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Theme.dark.name, Nil)
+    val existing = UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Some(Theme.dark.name), Nil)
     val sm       = managerWithStore(store)
     store.upsert(existing).unsafeRunSync()
 
@@ -155,7 +155,9 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
     val path  = Files.createTempDirectory("state-manager-ui-preset-overwrite").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
-    store.upsert(UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Theme.dark.name, Nil)).unsafeRunSync()
+    store
+      .upsert(UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Some(Theme.dark.name), Nil))
+      .unsafeRunSync()
 
     (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
@@ -212,7 +214,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
     val sm      = managerWithStore(store)
     val initial = sm.getCurrentState.unsafeRunSync()
     store
-      .upsert(UiPreset("Missing Theme", AppConfig.default.withLineNumbers(false), "not-installed", Nil))
+      .upsert(UiPreset("Missing Theme", AppConfig.default.withLineNumbers(false), Some("not-installed"), Nil))
       .unsafeRunSync()
     store
       .upsert(
@@ -221,7 +223,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
           AppConfig.default.withFontConfig(
             AppConfig.default.editorConfig.fontConfig.copy(textFontFamily = "not-installed")
           ),
-          Theme.dark.name,
+          Some(Theme.dark.name),
           Nil
         )
       )

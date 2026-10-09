@@ -17,7 +17,7 @@ import io.circe.syntax.*
 final case class UiPreset(
     name: String,
     config: AppConfig,
-    themeName: String,
+    themeName: Option[String] = None,
     dockedPanels: List[SessionDockedPanel] = Nil,
     targetEditorPaneCount: Option[Int] = None,
     workspaceTree: Option[SessionWorkspaceNode] = None,
@@ -26,6 +26,10 @@ final case class UiPreset(
     unknownFields: JsonObject = JsonObject.empty,
     configUnknownFields: JsonObject = JsonObject.empty
 ):
+
+  /** This preset naming `theme` -- none when blank, as the codec reads a blank name -- or no theme at all. */
+  def withThemeName(theme: Option[String]): UiPreset =
+    copy(themeName = theme.map(_.trim).filter(_.nonEmpty))
 
   /** Flat view of the persisted panel content, independent of workspace-tree topology. */
   def pinnedPanels: List[SessionPinnedPanel] = dockedPanels.map(_.panel)
@@ -66,7 +70,7 @@ object UiPreset:
         case Appearance(config, themeName) =>
           preset.copy(
             config = patchAppearanceConfig(preset.config, config),
-            themeName = themeName.getOrElse(preset.themeName)
+            themeName = themeName.orElse(preset.themeName)
           )
         case DocumentDefaults(config) =>
           preset.copy(config = patchDocumentDefaultsConfig(preset.config, config))
@@ -221,15 +225,28 @@ object UiPreset:
           preferredSize = preferredWindowSize.orElse(state.persisted.config.preferredWindowSize)
         )
       ),
-      themeName = state.persisted.theme.name,
+      themeName = Some(state.persisted.theme.name),
       dockedPanels = dockedPanels,
       targetEditorPaneCount = Option(state.persisted.layout.editorPanes.size).filter(_ > 0),
       workspaceTree = workspaceTree,
       maximizedWorkspaceNodeId = SessionWorkspaceNode.captureMaximizedNodeId(state, workspaceTree)
     )
 
-  def applyToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
-    applyToState(preset.withPanelIds, state, theme, appliedConfig(state.persisted.config, preset))
+  def applyToState(preset: UiPreset, state: AppState, presetTheme: Option[Theme]): AppState =
+    applyToState(
+      preset.withPanelIds,
+      state,
+      appliedTheme(state.persisted.config, state.persisted.theme, presetTheme),
+      appliedConfig(state.persisted.config, preset)
+    )
+
+  /** The theme `running` ends up with after a preset that carries `presetTheme` (none when the preset names no theme)
+    * is applied. While `running` follows the OS the OS-chosen theme stays: the preset's theme is neither applied nor
+    * written into the light, dark or high-contrast slot -- those slots are the person's own mapping, kept like the rest
+    * of `theme.*` (see [[appliedConfig]]), and a preset is not the place to rewrite it.
+    */
+  private[presets] def appliedTheme(running: AppConfig, current: Theme, presetTheme: Option[Theme]): Theme =
+    if running.themeFollowConfig.followSystem then current else presetTheme.getOrElse(current)
 
   /** `preset`'s config as it takes over from `running`: hotkeys read the way `running` holds its own, and the
     * `theme.follow_system` settings stay as `running` has them -- whether the theme tracks the OS is not part of how a
@@ -391,6 +408,7 @@ object UiPreset:
       .encodeObject(preset)
       .remove("unknownFields")
       .remove("configUnknownFields")
+      .filter((key, value) => key != "themeName" || !value.isNull)
       .add("config", encodedConfig)
     preset.unknownFields.deepMerge(encodedPreset)
   }
@@ -426,7 +444,7 @@ object UiPreset:
     for
       name                     <- cursor.get[String]("name")
       config                   <- cursor.get[AppConfig]("config")
-      themeName                <- cursor.get[String]("themeName")
+      themeName                <- cursor.getOrElse[Option[String]]("themeName")(None).map(_.filter(_.nonEmpty))
       dockedPanels             <- decodeDockedPanels(cursor)
       targetEditorPaneCount    <- cursor.get[Option[Int]]("targetEditorPaneCount")
       workspaceTree            <- cursor.getOrElse[Option[SessionWorkspaceNode]]("workspaceTree")(None)
