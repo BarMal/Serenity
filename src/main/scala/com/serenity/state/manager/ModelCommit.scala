@@ -29,6 +29,19 @@ final private[manager] class ModelCommit(
   def updateValidated(transition: Model => Option[Model]): IO[Unit] =
     commit(current => transition(current).map(next => (next, current.app)))
 
+  /** [[updateValidated]] for a transition that can leave a viewport waiting for its caret (an undo or redo restoring a
+    * snapshot taken mid typed run). The measuring placement runs here, outside `Ref.modify`, which may retry what it is
+    * given; if the model moved on meanwhile, the whole transition is read and placed again.
+    */
+  def updateValidatedPlaced(transition: Model => Option[Model]): IO[Unit] =
+    modelRef.get.flatMap { seen =>
+      transition(seen).fold(IO.unit) { transitioned =>
+        val placed = transitioned.copy(app = ViewportResolution.resolve(transitioned.app, wrapCache))
+        committed(current => Option.when(current eq seen)((placed, current.app)))
+          .flatMap(applied => IO.unlessA(applied)(updateValidatedPlaced(transition)))
+      }
+    }
+
   /** Commits the model `transition` returns. A rejected app state restores `fallbackState` and leaves the other parts
     * of the model as they were.
     */
@@ -76,21 +89,25 @@ final private[manager] class ModelCommit(
     modelRef.update(current => current.copy(undo = update(current.undo)))
 
   private def commit(transition: Model => Option[(Model, AppState)]): IO[Unit] =
+    committed(transition).void
+
+  /** Whether `transition` returned a model, so a caller that offered it a stale one knows to offer a fresh one. */
+  private def committed(transition: Model => Option[(Model, AppState)]): IO[Boolean] =
     modelRef.flatModify { current =>
       transition(current) match
-        case None                                       => (current, IO.unit)
-        case Some((next, _)) if next.app eq current.app => (next, IO.unit)
+        case None                                       => (current, IO.pure(false))
+        case Some((next, _)) if next.app eq current.app => (next, IO.pure(true))
         case Some((transitioned, fallbackState)) =>
           val next = ModelCommit.settled(current.app, transitioned)
           StateManagerOperationBoundary.prepareCommit(next.app, fallbackState) match
             case Right(committedState) =>
               (
                 next.copy(app = committedState),
-                operations.afterCommit(fallbackState, committedState) >>
-                  operations.afterModeChange(current.app, committedState)
+                (operations.afterCommit(fallbackState, committedState) >>
+                  operations.afterModeChange(current.app, committedState)).as(true)
               )
             case Left(errors) =>
-              (current.copy(app = fallbackState), operations.logRejectedCommit(errors))
+              (current.copy(app = fallbackState), operations.logRejectedCommit(errors).as(true))
     }
 
 private[manager] object ModelCommit:

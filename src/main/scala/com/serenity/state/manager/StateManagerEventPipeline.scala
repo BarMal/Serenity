@@ -208,7 +208,7 @@ final private[manager] class StateManagerEventPipeline(
     def eventLabel                                      = s"event.${event.getClass.getSimpleName}"
     Trace.timed(eventLabel) {
       cats.effect.IO.monotonic.product(modelCommit.model).flatMap { (now, model) =>
-        typedRunStep(event, model, now.toNanos, joining = false) match
+        typedRunStep(event, model, now.toNanos) match
           case Some(typed) => commitTypedRun(model, typed)
           case None        => dispatchGeneral(event, eventLabel, now.toNanos, model.app)
       }
@@ -235,14 +235,11 @@ final private[manager] class StateManagerEventPipeline(
     * bookkeeping; `None` for any other event, which takes the general dispatch. Every typed key goes through here,
     * whether dispatched alone or folded into a batch's run, and [[commitTypedRun]] centres and commits it (#1985).
     *
-    * A key `joining` a run is refused if it keeps an undo snapshot -- a new group or a non-groupable step -- since that
-    * snapshot would hold the run's uncentred viewport; the run settles first and the key starts the next one.
+    * A key joins a run even when it records an undo snapshot: the buffer it leaves is marked `FollowCaret`, so the
+    * snapshot holds a viewport waiting for the caret, which undo and redo place when they restore it.
     */
-  private[manager] def typedRunStep(event: Event, model: Model, nowNanos: Long, joining: Boolean): Option[Model] =
-    typedKeyModel(event, model, nowNanos).filterNot(typed => joining && keepsUndoSnapshot(model, typed))
-
-  private def keepsUndoSnapshot(before: Model, after: Model): Boolean =
-    (after.undo.undoStack ne before.undo.undoStack) || (after.undo.pendingGroup ne before.undo.pendingGroup)
+  private[manager] def typedRunStep(event: Event, model: Model, nowNanos: Long): Option[Model] =
+    typedKeyModel(event, model, nowNanos)
 
   private def typedKeyModel(event: Event, model: Model, nowNanos: Long): Option[Model] =
     event match
@@ -263,7 +260,11 @@ final private[manager] class StateManagerEventPipeline(
                       StateManagerOperationBoundary
                         .prepareCommit(result.state, model.app)
                         .toOption
-                        .map(committed => EventPipelineTransitions.committed(model, result).copy(app = committed))
+                        .map(committed =>
+                          EventPipelineTransitions
+                            .committed(model, result)
+                            .copy(app = ViewportResolution.markFollow(model.app, committed))
+                        )
                     )
                 case _ => None
             case FocusScopes.PeekKeyOutcome.Consumed(_) => None
@@ -271,7 +272,8 @@ final private[manager] class StateManagerEventPipeline(
 
   /** Commits a run [[typedRunStep]] folded from `start`, with the cursor centred once for all of its keys. */
   private[manager] def commitTypedRun(start: Model, typed: Model): cats.effect.IO[Unit] =
-    val centred = typed.copy(app = CursorViewport.ensureVisibleCursors(start.app, typed.app, wrapCache = wrappedLines))
+    val centred =
+      typed.copy(app = ViewportResolution.resolve(ViewportResolution.markFollow(start.app, typed.app), wrappedLines))
     modelCommit.commitValidated(start.app)(_ => centred) >>
       lspDocumentSync.enqueueChangedLspDocuments(start.app) >>
       scheduleMarkdownPreviewCommits(start.app)

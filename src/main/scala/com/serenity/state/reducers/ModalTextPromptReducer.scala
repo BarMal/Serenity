@@ -57,7 +57,7 @@ private[reducers] object ModalTextPromptReducer:
         val newTopLine = math.max(0, targetLine - buffer.viewport.visibleLines / 2)
         val updatedBuffer = buffer.copy(
           editing = EditingState(List(CursorPosition(targetLine, 0))),
-          viewport = buffer.viewport.copy(topLine = newTopLine)
+          viewport = buffer.viewport.scrolledTo(newTopLine, buffer.viewport.leftColumn, buffer.viewport.topVisualLine)
         )
         val dismissed = state.dismissTopModal
         dismissed.copy(

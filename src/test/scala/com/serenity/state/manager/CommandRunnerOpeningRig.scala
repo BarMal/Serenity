@@ -47,7 +47,8 @@ private[manager] object CommandRunnerOpeningRig:
       modelCommit = operations.modelCommit
       undoRecording = new UndoRecording(new UndoRecordingPort:
         def updateUndo(update: UndoState => UndoState): IO[Unit] = ModelViews.undoRef(modelRef).update(update)
-        export modelCommit.updateValidated as updateModelValidated)
+        export modelCommit.updateValidated as updateModelValidated
+        export modelCommit.updateValidatedPlaced as updateModelPlaced)
     yield CommandRunnerOpeningRig(
       new StateManagerEventPipeline(
         statePort,

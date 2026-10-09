@@ -36,12 +36,13 @@ final case class EventBatch[A](
 )
 
 /** How a batch folds consecutive typed keys into one commit with the cursor centred once (#1985). `step` is the model a
-  * key would commit before centring, given whether it would join a run already under way, or `None` for an event that
-  * must be applied on its own; `commit` centres and commits a run from the model it started at. A run ends before any
-  * other event, so that event and any undo snapshot it records see the cursor centred, and after `maxKeys` keys.
+  * key would commit before centring, or `None` for an event that must be applied on its own; `commit` centres and
+  * commits a run from the model it started at. A run ends before any other event, so that event sees the cursor
+  * centred, and after `maxKeys` keys. An undo snapshot a key records mid-run holds a viewport still waiting for the
+  * caret; undo and redo place it when they restore it.
   */
 final private[serenity] case class TypedRuns(
-    step: (Event, Model, Long, Boolean) => Option[Model],
+    step: (Event, Model, Long) => Option[Model],
     commit: (Model, Model) => IO[Unit],
     maxKeys: Int
 )
@@ -53,7 +54,7 @@ private[serenity] object TypedRuns:
     */
   val MaxKeys = 96
 
-  val none: TypedRuns = TypedRuns((_, _, _, _) => None, (_, _) => IO.unit, 1)
+  val none: TypedRuns = TypedRuns((_, _, _) => None, (_, _) => IO.unit, 1)
 
 object EventBatch:
 
@@ -86,7 +87,7 @@ object EventBatch:
                 val event = steps.decode(current.app, input)
                 if steps.isolate(event) then settle(run).as((applied, Some(event), rest))
                 else
-                  typedRuns.step(event, current, now.toNanos, run.nonEmpty) match
+                  typedRuns.step(event, current, now.toNanos) match
                     case Some(typed) =>
                       val next = extended(run, current, typed)
                       if next.keys >= typedRuns.maxKeys then

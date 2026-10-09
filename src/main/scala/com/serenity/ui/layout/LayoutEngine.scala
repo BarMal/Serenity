@@ -392,7 +392,7 @@ object LayoutEngine:
     val maxScrollLine     = math.max(0, bufferLineCount - viewport.visibleLines)
     val clampedScrollLine = math.max(0, math.min(desiredScrollLine, maxScrollLine))
 
-    viewport.copy(topLine = clampedScrollLine, topVisualLine = 0)
+    viewport.scrolledTo(clampedScrollLine, viewport.leftColumn, 0)
 
   def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect): Viewport =
     viewport.copy(
