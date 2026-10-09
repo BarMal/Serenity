@@ -11,7 +11,24 @@ import scala.annotation.tailrec
 private[rope] object RopeContent:
 
   def equal(a: Rope, b: Rope): Boolean =
-    (a: AnyRef).eq(b) || (a.weight == b.weight && sameChunks(Cursor.over(a), Cursor.over(b)))
+    (a: AnyRef).eq(b) || (a.weight == b.weight && (sameTree(List(a, b)) || sameChunks(Cursor.over(a), Cursor.over(b))))
+
+  /** The common case -- ropes of identical shape, e.g. one rebuilt from the same text -- needs no cursor bookkeeping.
+    * Any mismatch, including a mere difference in shape, returns false and leaves the verdict to `sameChunks`. `pairs`
+    * holds the ropes still to compare, two at a time.
+    */
+  @tailrec
+  private def sameTree(pairs: List[Rope]): Boolean = pairs match
+    case Nil => true
+    case a :: b :: rest =>
+      if a.eq(b) then sameTree(rest)
+      else
+        (a, b) match
+          case (Node(leftA, rightA), Node(leftB, rightB)) =>
+            leftA.weight == leftB.weight && sameTree(leftA :: leftB :: rightA :: rightB :: rest)
+          case (Leaf(textA), Leaf(textB)) => textA == textB && sameTree(rest)
+          case _                          => false
+    case _ :: Nil => false
 
   /** Agrees with `String.hashCode` on the rope's text. */
   def hash(rope: Rope): Int =

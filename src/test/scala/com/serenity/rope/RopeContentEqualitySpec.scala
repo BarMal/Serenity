@@ -111,6 +111,15 @@ class RopeContentEqualitySpec extends AnyFlatSpec with Matchers:
     left should not be skewed(chunks.updated(99999, "ax"))
   }
 
+  it should "fall back to chunks when only some of two identically shaped subtrees differ in where they cut" in {
+    val first  = node(node(leaf("ab"), leaf("cd")), node(leaf("ef"), leaf("gh")))
+    val second = node(node(leaf("ab"), leaf("cd")), node(leaf("e"), leaf("fgh")))
+
+    first shouldBe second
+    first.hashCode shouldBe second.hashCode
+    first should not be node(node(leaf("ab"), leaf("cd")), node(leaf("e"), leaf("fgx")))
+  }
+
   "Comparing a rope with text" should "match however the rope is cut" in {
     leaf("abcd").contentEquals("abcd") shouldBe true
     node(leaf("ab"), node(leaf(""), leaf("cd"))).contentEquals("abcd") shouldBe true
