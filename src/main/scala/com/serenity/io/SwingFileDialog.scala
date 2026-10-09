@@ -24,7 +24,9 @@ object SwingFileDialog:
         initialDirectory => choose(parent, AwtFileDialog.LOAD, initialDirectory, None, _.showOpenDialog(parent)),
       chooseSaveFile = (initialDirectory, suggestedFileName) =>
         choose(parent, AwtFileDialog.SAVE, initialDirectory, suggestedFileName, _.showSaveDialog(parent)),
-      chooseFolder = initialDirectory => chooseFolder(parent, initialDirectory)
+      chooseFolder = initialDirectory => chooseFolder(parent, initialDirectory),
+      chooseFileOrFolder = AppKitOpenPanel.choose,
+      supportsFileOrFolder = AppKitOpenPanel.isAvailable(System.getProperty("os.name", ""))
     )
 
   // Runs `body` on the event dispatch thread and waits for it. Dialogs, and the global state they read as they

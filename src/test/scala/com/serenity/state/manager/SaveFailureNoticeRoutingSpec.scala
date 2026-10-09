@@ -288,6 +288,22 @@ class SaveFailureNoticeRoutingSpec extends AnyFlatSpec with Matchers:
       chooseFolder = _ => IO.raiseError(failure)
     )
 
+  "A combined dialog that cannot be shown" should "tell the user, as the file and folder dialogs do" in {
+    val failure = new IllegalStateException("NSOpenPanel did not respond")
+    val dialog = FileDialog(
+      chooseOpenFile = _ => IO.pure(None),
+      chooseSaveFile = (_, _) => IO.pure(None),
+      chooseFolder = _ => IO.pure(None),
+      chooseFileOrFolder = _ => IO.raiseError(failure),
+      supportsFileOrFolder = true
+    )
+    val f = fixture(fileDialog = Some(dialog))
+
+    f.runWithoutWaiting(CommandRegistry.default.findCommand("open-file-or-folder").getOrElse(fail("no command")))
+
+    f.expectNotice("Couldn't show the file dialog: NSOpenPanel did not respond.").level shouldBe NoticeLevel.Error
+  }
+
   "A native dialog that cannot be shown" should "tell the user when opening a file, not only log it" in {
     val f = fixture(fileDialog = Some(failingDialog(new IllegalStateException("no display"))))
 

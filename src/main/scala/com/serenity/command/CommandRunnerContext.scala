@@ -13,7 +13,8 @@ final case class CommandRunnerContext(
     themeNames: List[String] = Nil,
     currentThemeName: Option[String] = None,
     editingContext: Option[EditingContext] = None,
-    projectPresence: ProjectPresence = ProjectPresence.Unchecked
+    projectPresence: ProjectPresence = ProjectPresence.Unchecked,
+    opensFileOrFolder: Boolean = false
 )
 
 object CommandRunnerContext:

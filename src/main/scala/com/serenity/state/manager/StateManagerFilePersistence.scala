@@ -174,6 +174,22 @@ final private[manager] class StateManagerFilePersistence(
         .handleErrorWith(dialogFailed("open-folder"))
     )
 
+  /** Shows the combined picker off the dispatcher: a folder goes to `openFolder`, as the folder picker's choice does,
+    * and a file opens like the file picker's. A second request while a dialog is up is dropped.
+    */
+  def openFileOrFolderFromDialog(dialog: FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
+    submitIgnoringShutdown(
+      DialogLane,
+      FileUtils.getCurrentDirectory
+        .flatMap(directory => dialog.chooseFileOrFolder(Some(directory)))
+        .flatMap(_.fold(IO.unit)(chosen => openChosen(chosen, openFolder)))
+        .handleErrorWith(dialogFailed("open"))
+    )
+
+  private def openChosen(chosen: Path, openFolder: Path => IO[Unit]): IO[Unit] =
+    IO.blocking(Files.isDirectory(chosen))
+      .flatMap(isFolder => if isFolder then lanes.post(openFolder(chosen)) else loadFile(chosen))
+
   private def dialogFailed(what: String)(error: Throwable): IO[Unit] =
     logger.error(error)(s"[FILE] Native $what dialog failed") >> showNotice(FileFailureNotice.dialogFailed(error))
 

@@ -150,6 +150,8 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def openFromDialog(dialog: FileDialog): IO[Unit]     = filePersistence.openFromDialog(dialog)
       def openFolderFromDialog(dialog: FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
         filePersistence.openFolderFromDialog(dialog, openFolder)
+      def openFileOrFolderFromDialog(dialog: FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
+        filePersistence.openFileOrFolderFromDialog(dialog, openFolder)
       def isSaving(path: Path): IO[Boolean]                     = filePersistence.isSaving(path)
       override def openExternalUrl(uri: java.net.URI): IO[Unit] = callsVar.update(_ :+ s"openExternalUrl:$uri")
 

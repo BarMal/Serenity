@@ -19,7 +19,8 @@ private[manager] object StartPageTransitions:
         StartupPageContent.createStartPage(
           sessionExists = true,
           recentFiles = readableRecentFiles,
-          resumeIdentifier = Some(StartupPageContent.sessionResumeIdentifier(saved))
+          resumeIdentifier = Some(StartupPageContent.sessionResumeIdentifier(saved)),
+          fileOrFolderOpen = live.runtime.capabilities.opensFileOrFolder
         )
       )
 

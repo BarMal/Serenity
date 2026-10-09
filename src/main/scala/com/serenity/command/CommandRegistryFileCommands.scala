@@ -109,6 +109,13 @@ private[command] object CommandRegistryFileCommands:
       CommandCategory.File,
       label = "Open Folder..."
     ),
+    Command.typed(
+      "open-file-or-folder",
+      "Open a file or a folder in one dialog.",
+      CommandIntent.File(FileIntent.OpenFileOrFolder),
+      CommandCategory.File,
+      label = "Open..."
+    ),
     FileFinderCommands.goToFile
   )
 

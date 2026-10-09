@@ -16,5 +16,7 @@ import cats.effect.IO
 final case class FileDialog(
     chooseOpenFile: Option[Path] => IO[Option[Path]],
     chooseSaveFile: (Option[Path], Option[String]) => IO[Option[Path]],
-    chooseFolder: Option[Path] => IO[Option[Path]]
+    chooseFolder: Option[Path] => IO[Option[Path]],
+    chooseFileOrFolder: Option[Path] => IO[Option[Path]] = _ => IO.pure(None),
+    supportsFileOrFolder: Boolean = false
 )
