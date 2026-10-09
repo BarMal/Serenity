@@ -16,7 +16,7 @@ import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, DictionarySna
 import com.serenity.state.core.NotesPaneSync
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{ModalEventReducer, NoticeReducer, PeekStateReducer, SettingsPreviewReducer}
+import com.serenity.state.reducers.{ModalEventReducer, NoticeReducer, PeekStateReducer}
 import com.serenity.ui.layout.{DirEntry, PeekContent, WrappedLineCache}
 import org.typelevel.log4cats.Logger
 
@@ -503,10 +503,7 @@ private[manager] object StateManagerOperationBoundary:
     // lens in sync with the cursor regardless of what moved it -- a keyboard cursor move opens/closes it exactly as a
     // mouse click already did, without each event source having to remember to call it itself.
     AppStateValidation
-      .validatedOver(
-        fallbackState,
-        EventPipelineTransitions.commandRunnerFocusNormalized(SettingsPreviewReducer.withoutOrphanedPreview(newState))
-      )
+      .validatedOver(fallbackState, EventPipelineTransitions.commitNormalized(newState))
       .map(CommentRendering.syncFloatingLensWithCursor(_, fallbackState))
       .map(PanelContentSync.synced(_, fallbackState))
       .map(NotesPaneSync.synced(_, fallbackState))

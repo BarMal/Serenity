@@ -93,7 +93,9 @@ private[manager] object FileResults:
             disk.document.content
           )
         val document =
-          disk.document.replacingContentOf(current.document).copy(savedGeneration = current.document.savedGeneration + 1)
+          disk.document
+            .replacingContentOf(current.document)
+            .copy(savedGeneration = current.document.savedGeneration + 1)
         withBuffer(
           state,
           current

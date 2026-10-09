@@ -5,6 +5,7 @@ import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.{AppState, Buffer, BufferId, CursorPosition, PaneId, RichTextState}
+import com.serenity.state.undo.BufferSnapshot
 import com.serenity.testkit.Generators
 import org.scalacheck.{Gen, Shrink}
 import org.scalatest.matchers.should.Matchers
@@ -37,6 +38,7 @@ class ContentVersionInvariantSpec extends AnyPropSpec with ScalaCheckPropertyChe
     1  -> Gen.const(Cut),
     1  -> Gen.const(Copy),
     1  -> Gen.const(Paste),
+    1  -> Gen.oneOf(DeleteToLineStart, DeleteToLineEnd),
     1  -> Gen.const(CutToDarlings),
     1  -> Gen.const(RestoreDarling),
     1  -> Gen.const(SelectAll),
@@ -152,6 +154,52 @@ class ContentVersionInvariantSpec extends AnyPropSpec with ScalaCheckPropertyChe
     )
 
     applied.persisted.buffers(bufferId).richTextInSync shouldBe true
+  }
+
+  private def withBuffer(state: AppState, buffer: Buffer): AppState =
+    state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(buffer.id, buffer)))
+
+  property("replacing a buffer's whole text advances its version and is accepted by prepareCommit") {
+    val before   = startingState("abc")
+    val replaced = EditorTransitions.bufferContentReplaced(before, bufferId, "formatted").map(_.state)
+
+    replaced.map(versionOf) should contain(versionOf(before) + 1)
+    replaced.map(StateManagerOperationBoundary.prepareCommit(_, before)) should matchPattern { case Some(Right(_)) => }
+  }
+
+  property("restoring an undo snapshot advances the version past the edit it undoes and is accepted by prepareCommit") {
+    val clean  = startingState("abc").persisted.buffers(bufferId)
+    val edited = clean.withEditedContent(Rope("abcd"), List(CursorPosition(0, 4)))
+    val undone = BufferSnapshot.fromBuffer(clean).restoreInto(edited)
+
+    undone.document.content.collect() shouldBe "abc"
+    undone.document.contentVersion should be > edited.document.contentVersion
+    StateManagerOperationBoundary
+      .prepareCommit(withBuffer(startingState("abc"), undone), withBuffer(startingState("abc"), edited)) shouldBe a[
+      Right[?, ?]
+    ]
+  }
+
+  property("a reload whose disk read carries a lower version than the edited buffer is accepted by prepareCommit") {
+    val path    = java.nio.file.Paths.get("/tmp/reload.txt")
+    val clean   = startingState("abc").persisted.buffers(bufferId)
+    val edited  = clean.withEditedContent(Rope("abcd"), List(CursorPosition(0, 4))).withEditedContent(Rope("abc"), Nil)
+    val running = withBuffer(startingState("abc"), edited.copy(document = edited.document.copy(filePath = Some(path))))
+    val disk    = Buffer.fromString(bufferId, "from disk")
+
+    val reloaded =
+      FileResults.reloaded(running, bufferId, path, edited.document.content, disk)
+
+    reloaded.persisted.buffers(bufferId).document.contentVersion should be > edited.document.contentVersion
+    StateManagerOperationBoundary.prepareCommit(reloaded, running) shouldBe a[Right[?, ?]]
+  }
+
+  property("a buffer whose text is settled by a save leaves no stale change log behind") {
+    val buffer  = startingState("abc").persisted.buffers(bufferId)
+    val settled = buffer.withSettledContent(Rope("abc\n"))
+
+    settled.document.changes.head shouldBe settled.document.contentVersion
+    settled.document.changesSince(buffer.document.contentVersion) shouldBe None
   }
 
 end ContentVersionInvariantSpec

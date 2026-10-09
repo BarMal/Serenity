@@ -364,7 +364,13 @@ final case class Buffer(
     * inside the new text.
     */
   def withSettledContent(newContent: Rope): Buffer =
-    copy(document = document.copy(content = newContent, contentVersion = document.contentVersion + 1)).clampedToContent
+    copy(document =
+      document.copy(
+        content = newContent,
+        contentVersion = document.contentVersion + 1,
+        changes = document.changes.gapped(document.contentVersion)
+      )
+    ).clampedToContent
 
   /** True when closing this buffer may lose user-authored content. A hidden buffer is never closed on its own, and the
     * session keeps its text, so it never asks to be saved.
