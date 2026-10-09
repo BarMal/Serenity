@@ -132,3 +132,29 @@ object AppStateValidation:
   def validated(state: AppState): Either[List[String], AppState] =
     val errors = validationErrors(state)
     if errors.isEmpty then Right(state) else Left(errors)
+
+  /** [[validated]] for a commit of `after` over `before`: also rejects a buffer whose `content` changed without its
+    * `contentVersion` advancing, because every cache stamped with a version (rich text, outline, the [[ChangeLog]])
+    * trusts that a version names one text. A buffer is compared only with the one of the same id in `before`.
+    */
+  def validatedOver(before: AppState, after: AppState): Either[List[String], AppState] =
+    validated(after).flatMap { state =>
+      val errors = contentVersionErrors(before, state)
+      if errors.isEmpty then Right(state) else Left(errors)
+    }
+
+  private def contentVersionErrors(before: AppState, after: AppState): List[String] =
+    if before.persisted.buffers eq after.persisted.buffers then Nil
+    else
+      after.persisted.buffers.toList.sortBy(_._1.value).flatMap { (id, buffer) =>
+        before.persisted.buffers
+          .get(id)
+          .filter(old => (old.document.content ne buffer.document.content) && !advanced(old, buffer))
+          .map(old =>
+            s"Buffer ${id.value} changed its content without advancing contentVersion " +
+              s"(${old.document.contentVersion} -> ${buffer.document.contentVersion})"
+          )
+      }
+
+  private def advanced(before: Buffer, after: Buffer): Boolean =
+    after.document.contentVersion > before.document.contentVersion

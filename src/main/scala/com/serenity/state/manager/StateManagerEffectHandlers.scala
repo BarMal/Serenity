@@ -502,7 +502,7 @@ final private[manager] class StateManagerEffectHandlers(
   /** The one route a chosen folder takes, whether it came from a native dialog or the in-app form's "Open as root":
     * leave the start page, then pin the Explorer on it.
     */
-  private def openFolderAsProjectRoot(folder: Path): IO[Unit] =
+  private[manager] def openFolderAsProjectRoot(folder: Path): IO[Unit] =
     leaveStartPage() >> panelEffects.pinExplorerPanelEffect(
       PanelPosition.Left,
       folder,

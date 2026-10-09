@@ -198,7 +198,7 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
 
   /** A fresh read starts at content version 0; carrying that over would move `buffer`'s version backwards (#1935). */
   private def reloadedInto(buffer: Buffer, reloaded: Buffer): Buffer =
-    val document = reloaded.document.copy(contentVersion = buffer.document.contentVersion + 1)
+    val document = reloaded.document.replacingContentOf(buffer.document)
     buffer.copy(
       document = document,
       richText = reloaded.richText.withSyncedDocument(reloaded.richText.richTextDocument, document.contentVersion)

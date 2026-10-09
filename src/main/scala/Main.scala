@@ -141,7 +141,7 @@ object Main extends IOApp:
       _         <- migrateEarlierLogs
       _         <- Java2DPipeline.installSafeDefaults()
       _         <- IO(CrashReporter.install(CrashRecord(LogLocation.current), build))
-      requested <- IO(launchOptionsForLogging.openPath.map(_.toAbsolutePath.normalize).toList)
+      requested <- IO(launchOptionsForLogging.openPaths.map(_.toAbsolutePath.normalize))
       // #2023: settled before anything reads or writes the session, which only one process may own.
       instances = SingleInstance.forConfigDirectory(SessionManager.defaultSessionRoot(), logger)
       _ <- SingleInstance.claim(instances, requested, logger).use {
@@ -231,15 +231,24 @@ object Main extends IOApp:
             _: ConfigDiagnostic.Migrated) =>
           logger.warn(s"[CONFIG] ${diagnostic.message}")
       }.sequence_
+      opens <- LaunchOpens.resolve(launchOptions.openPaths)
+      _     <- opens.notice.traverse_(logger.warn(_))
       appConfig = resolveAppConfig(loaded.config, launchOptions)
       startup   = Startup(plan, requestRestart, StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker))
       // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
       instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten
-      notice         = plan.noticeWith(Option((configNotice.toList ++ instanceNotice).mkString(" ")).filter(_.nonEmpty))
+      notice = plan.noticeWith(
+        Option((configNotice.toList ++ instanceNotice ++ opens.notice).mkString(" ")).filter(_.nonEmpty)
+      )
+      // The first file opens as part of startup; the folder and the other files open as a later launch's would.
+      startupOptions = launchOptions.copy(openPaths = opens.files)
       _ <- safeModeSessionRoot(plan).use { scratchRoot =>
-        val session = SessionChoice(scratchRoot.orElse(role.sessionRootOverride), forwardedOpensOf(role))
-        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, launchOptions, notice, startup, session)
-        else runGui(appConfig, launchOptions, notice, startup, session)
+        val session = SessionChoice(
+          scratchRoot.orElse(role.sessionRootOverride),
+          Stream.emit(opens.root.toList ++ startupOptions.extraOpenPaths).filter(_.nonEmpty) ++ forwardedOpensOf(role)
+        )
+        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, startupOptions, notice, startup, session)
+        else runGui(appConfig, startupOptions, notice, startup, session)
       }
       _ <- startup.markStarted
     yield ()
