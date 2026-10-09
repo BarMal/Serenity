@@ -19,7 +19,7 @@ import org.scalatest.matchers.should.Matchers
 /** The start page lists the recent folders after the recent files, and leaves out any that have gone. */
 class StartupRecentFoldersSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll with StateManagerTestSupport:
 
-  private val root = Files.createTempDirectory("startup-recent-folders-spec")
+  private val root = TestTemp.directory("startup-recent-folders-spec")
 
   override protected def afterAll(): Unit =
     try super.afterAll()

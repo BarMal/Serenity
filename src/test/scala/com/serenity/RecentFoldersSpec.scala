@@ -17,7 +17,7 @@ import org.scalatest.matchers.should.Matchers
 /** Every route that opens a folder as the project root records it, as opening a file records the file. */
 class RecentFoldersSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll with StateManagerTestSupport:
 
-  private val root = Files.createTempDirectory("recent-folders-spec")
+  private val root = TestTemp.directory("recent-folders-spec")
 
   override protected def afterAll(): Unit =
     try super.afterAll()
