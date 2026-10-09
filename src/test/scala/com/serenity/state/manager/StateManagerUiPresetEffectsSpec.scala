@@ -349,12 +349,12 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.currentRunner.statusMessage shouldBe Some("Preset duplicated. Configure Custom Copy.")
   }
 
-  it should "duplicate a built-in preset into a new custom preset" in {
+  it should "duplicate a built-in preset into a new custom preset that names no theme, as the built-in names none" in {
     val fixture = harness(commandPaletteState())
 
     fixture.presets.interpret(UiPresetsIntent.DuplicateUiPreset("Writing", "My Writing")).unsafeRunSync()
 
-    fixture.store.find("My Writing").unsafeRunSync().map(_.themeName) shouldBe Some(Some(Theme.dark.name))
+    fixture.store.find("My Writing").unsafeRunSync().map(_.themeName) shouldBe Some(None)
   }
 
   it should "refuse to rename a built-in preset" in {
