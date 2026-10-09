@@ -58,6 +58,8 @@ final case class Runtime(
     // Never persisted: whether a chapter note's overview is painted, faded, under an empty chapter. The notes themselves
     // are untouched by hiding the ghosts.
     chapterGhostsVisible: Boolean = true,
+    // Never persisted: whether keyword occurrences are highlighted while the notes pane is open on their document.
+    keywordHighlightsVisible: Boolean = true,
     // Never persisted: the pane showing chapter notes, and whether it follows the cursor's chapter or is pinned.
     notesPane: Option[NotesPane] = None,
     // Never persisted: the paned buffers' indexes as of the last commit (#1864), so the copies made in between reuse

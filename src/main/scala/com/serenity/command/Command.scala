@@ -128,6 +128,7 @@ enum ViewIntent:
 
   /** Pins the notes pane to the note it shows, or lets it follow the cursor's chapter again. */
   case ToggleNotesPin
+  case ToggleTermHighlights
 
   /** Moves focus to the nearest editor pane or docked panel in `direction`. */
   case FocusInDirection(direction: Direction)

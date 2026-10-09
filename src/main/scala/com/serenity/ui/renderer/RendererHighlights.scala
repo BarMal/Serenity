@@ -1,5 +1,6 @@
 package com.serenity.ui.renderer
 
+import com.serenity.document.KeywordHighlight
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 import com.serenity.ui.color.RenderColor
@@ -110,6 +111,58 @@ object RendererHighlights:
             styledSegments
           )
       }
+    }
+
+  /** Keyword occurrences on this row: a soft wash of the accent, lighter than a find match, painted before the find
+    * matches and the selection so either still reads on top of it.
+    */
+  def renderKeywordHighlights(
+    surface: RenderSurface,
+    keywords: List[KeywordHighlight],
+    visualLine: TextVisualLine,
+    rect: LayoutRect,
+    screenY: Int,
+    lineTopPx: Int,
+    theme: Theme,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot,
+    styledSegments: Option[List[StyledText]] = None
+  ): Unit =
+    keywords.foreach { keyword =>
+      columnsForRange(keyword.start, keyword.end, visualLine, markPoint = false).foreach {
+        case (keywordStart, keywordEnd) =>
+          renderTextRangeBackground(
+            surface,
+            visualLine,
+            rect,
+            screenY,
+            lineTopPx,
+            theme.foreground,
+            keywordBackground(theme),
+            context,
+            snapshot,
+            keywordStart,
+            keywordEnd,
+            styledSegments
+          )
+      }
+    }
+
+  def keywordBackground(theme: Theme): RenderColor =
+    theme.accent.mixOver(theme.background, 0.18)
+
+  /** The find matches on the rows about to be drawn, so a partial repaint re-matches only those lines. */
+  def findMatchesOnDrawnRows(
+    buffer: Buffer,
+    state: AppState,
+    visualLines: Vector[TextVisualLine],
+    dirtyRows: Option[Set[Int]]
+  ): Map[Int, List[FindHighlight]] =
+    FindHighlights.paintedFindState(state, buffer.id).fold(Map.empty[Int, List[FindHighlight]]) { found =>
+      val drawnLines = visualLines.zipWithIndex.collect {
+        case (visualLine, row) if dirtyRows.forall(_.contains(row)) => visualLine.bufferLine
+      }.toSet
+      FindHighlights.onLines(buffer.document.content, found, drawnLines)
     }
 
   def findMatchBackground(theme: Theme): RenderColor =
