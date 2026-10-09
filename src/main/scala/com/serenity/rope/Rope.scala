@@ -182,6 +182,16 @@ sealed trait Rope(using balance: Balance):
         case Leaf(value) => (baseOffset, value)
       Some(go(this, 0))
 
+  def contentEquals(text: String): Boolean = RopeContent.equalsText(this, text)
+
+  /** Two ropes are equal when they hold the same text, however their trees are shaped; `hashCode` agrees. */
+  override def equals(obj: Any): Boolean =
+    obj match
+      case that: Rope => RopeContent.equal(this, that)
+      case _          => false
+
+  override def hashCode: Int = RopeContent.hash(this)
+
   override def toString: String = collect()
 
   def slice(startIndex: Int, endIndex: Int): Rope =
@@ -423,12 +433,6 @@ case class Leaf(value: String)(using balance: Balance) extends Rope:
 
   override def collect(): String = value
 
-  override def equals(obj: Any): Boolean =
-    obj match
-      case that: AnyRef if (this: AnyRef).eq(that) => true
-      case that: Leaf                              => value == that.value
-      case _                                       => false
-
 // Kept in this file (rather than its own `Node.scala`, as before `Rope` was sealed) -- see `Leaf`'s doc above.
 final case class Node(left: Rope, right: Rope)(using balance: Balance) extends Rope:
 
@@ -504,17 +508,6 @@ final case class Node(left: Rope, right: Rope)(using balance: Balance) extends R
 
   override def index(i: Int): Option[Char] =
     if i < left.weight then left.index(i) else right.index(i - left.weight)
-
-  // The compiler-generated equals recurses through left == that.left && right == that.right with no fast path,
-  // so comparing two large ropes -- even the very same object to itself -- walks the entire tree and can stack
-  // overflow on deeply skewed trees. Short-circuiting on reference identity and on a cheap weight mismatch avoids
-  // that descent for the two most common comparisons: "is this literally the same content" and "clearly different
-  // length".
-  override def equals(obj: Any): Boolean =
-    obj match
-      case that: AnyRef if (this: AnyRef).eq(that) => true
-      case that: Node                              => weight == that.weight && left == that.left && right == that.right
-      case _                                       => false
 
 object Rope:
 
