@@ -113,6 +113,9 @@ final case class Document(
     // so `Buffer.richTextInSync` can tell in O(1) whether a stored `richTextDocument` still describes this
     // `content`, instead of re-deriving and comparing the whole plain text on every check.
     contentVersion: Long = 0L,
+    // Advanced whenever the buffer stops matching what an undo snapshot taken while it was clean would restore: a save
+    // or reload, which moves what "clean" means, or a change undo does not record (#1930).
+    savedGeneration: Long = 0L,
     // Set on load when the file mixed terminators and cleared once a save has made it uniform or the user has chosen
     // `lineEnding` (#1964): until then a save rewrites lines the user never touched, which the editor has to say.
     mixedLineEndings: Option[LineEndingCounts] = None,
@@ -133,6 +136,15 @@ final case class Document(
     */
   def withContent(newContent: Rope): Document =
     copy(content = newContent, contentVersion = contentVersion + 1, isDirty = true, isNewEmpty = false)
+
+  /** This document as just written to (or read from) its file. */
+  def markedSaved: Document =
+    copy(isDirty = false, savedGeneration = savedGeneration + 1)
+
+  /** This document after a change undo cannot reverse, such as a comment edit: undo can no longer return it to clean.
+    */
+  def withUnrecordedChange: Document =
+    copy(isDirty = true, savedGeneration = savedGeneration + 1)
 
 /** A buffer's cursor/selection state: one entry per live cursor, each carrying its own position, in-flight selection
   * anchor and preferred vertical-navigation column/pixel-x (`#1577`). Before `#1577` this was five separate parallel

@@ -4,6 +4,7 @@ import com.serenity.command.RichTextIntent
 import com.serenity.markdown.{Emphasis, MarkdownFormatting, Reformatted, SourceRange}
 import com.serenity.richtext.ParagraphRole
 import com.serenity.state.models.*
+import com.serenity.state.undo.EditGrouping
 
 /** Formatting commands on a Markdown file, applied by editing its source -- `**`, `*`, `<u>` and `#` -- as one undoable
   * edit, so the formatting is in the text the file saves rather than in a model a save would drop.
@@ -86,5 +87,5 @@ private[reducers] object MarkdownFormattingReducer:
       .copy(editing = EditingState.fromCursors(cursors))
     ReducerResult(
       state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(buffer.id, edited))),
-      undoBoundaryEffects(buffer.id, paneId, buffer, folded.applied, groupable = false)
+      undoBoundaryEffects(buffer.id, paneId, buffer, folded.applied, grouping = EditGrouping.Standalone)
     )

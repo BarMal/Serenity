@@ -47,7 +47,7 @@ class ClosedBufferRetentionForgettingSpec extends AnyFlatSpec with Matchers:
     )
 
   private val undo =
-    UndoState(undoStack = Vector(HistoryEntry.BufferEdit(closed.id, PaneId(0), BufferSnapshot.fromBuffer(closed))))
+    UndoState().pushUndo(HistoryEntry.BufferEdit(closed.id, PaneId(0), BufferSnapshot.fromBuffer(closed)))
 
   "forgetting" should "hand back the very model it was given when no buffer was removed" in {
     val next = Model(initial.copy(runtime = initial.runtime.copy(nextBufferId = BufferId(99))), undo)

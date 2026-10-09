@@ -2,6 +2,7 @@ package com.serenity.state.reducers
 
 import com.serenity.lsp.model.LspTextEdit
 import com.serenity.state.models.*
+import com.serenity.state.undo.EditGrouping
 import com.serenity.ui.layout.PeekContent
 
 /** Applies a `textDocument/rename` response's `WorkspaceEdit` (#1467) to the buffer open in the currently focused
@@ -36,7 +37,8 @@ object RenameEditReducer:
           val stateWithEdit = Focused.replaceBuffer(state, updatedBuffer)
           val undoEffects = state.persisted.layout.activeEditorPaneId
             .map(paneId =>
-              EditorEditSupport.undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, groupable = false)
+              EditorEditSupport
+                .undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, grouping = EditGrouping.Standalone)
             )
             .getOrElse(Nil)
           val summary = summaryPeek(

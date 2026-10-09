@@ -79,8 +79,8 @@ final private[manager] class StateManagerEventPipeline(
 
   private def interpretEffect(effect: AppEffect): cats.effect.IO[Unit] =
     effect match
-      case AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable)) =>
-        undoRecording.recordUndoBoundary(entry, groupable)
+      case AppEffect.Undo(UndoEffect.RecordBoundary(entry, grouping)) =>
+        undoRecording.recordUndoBoundary(entry, grouping)
       case other =>
         effects.interpretEffect(other) >> drainPendingOperations
 

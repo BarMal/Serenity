@@ -17,13 +17,18 @@ final case class BufferSnapshot(
     editing: EditingState,
     viewport: Viewport,
     findState: Option[FindState],
-    isNewEmpty: Boolean
+    isNewEmpty: Boolean,
+    // The `Document.savedGeneration` the buffer was clean in, if it was: restoring this snapshot within that same
+    // generation brings back the saved text, so the buffer is clean again (#1930).
+    cleanIn: Option[Long]
 ):
 
   def restoreInto(buffer: Buffer): Buffer =
     // Bumped even when `content` is the current text: whatever was stamped against the current version (the rich
     // text, an outline) was stamped against the state being undone, not this one.
-    val restoredDocument = buffer.document.withContent(content).copy(isNewEmpty = isNewEmpty)
+    val restoredDocument = buffer.document
+      .withContent(content)
+      .copy(isNewEmpty = isNewEmpty, isDirty = !cleanIn.contains(buffer.document.savedGeneration))
     buffer.copy(
       document = restoredDocument,
       editing = editing,
@@ -49,7 +54,8 @@ object BufferSnapshot:
       editing = buffer.editing,
       viewport = buffer.viewport,
       findState = buffer.findState,
-      isNewEmpty = buffer.document.isNewEmpty
+      isNewEmpty = buffer.document.isNewEmpty,
+      cleanIn = Option.when(!buffer.document.isDirty)(buffer.document.savedGeneration)
     )
 
 /** One undoable/redoable change (#1016), self-contained: restoring it needs nothing but the entry and the current
@@ -176,66 +182,193 @@ object HistoryEntry:
         )
       )
 
-/** Full undo/redo state, held separately from AppState in StateManager. Never persisted to disk — always starts fresh.
+/** A recorded change, numbered in the order changes were recorded across every history, so undo can tell which of two
+  * histories changed last.
   */
-final case class UndoState(
-    undoStack: Vector[HistoryEntry] = Vector.empty,
-    redoStack: Vector[HistoryEntry] = Vector.empty,
-    pendingGroup: Option[HistoryEntry.BufferEdit] = None,
-    maxUndoDepth: Int = UndoState.DefaultMaxUndoDepth
-):
+final case class HistoryStep(number: Long, entry: HistoryEntry)
 
-  def canUndo: Boolean = pendingGroup.isDefined || undoStack.nonEmpty
+/** One undo stack and its redo stack, newest first, each holding at most `maxDepth` steps once pushed to. */
+final case class HistoryStacks(undo: Vector[HistoryStep] = Vector.empty, redo: Vector[HistoryStep] = Vector.empty):
 
-  def canRedo: Boolean = redoStack.nonEmpty
+  def pushedUndo(step: HistoryStep, maxDepth: Int): HistoryStacks =
+    copy(undo = HistoryStacks.boundedPush(step, undo, maxDepth))
 
-  def flushPendingGroup: UndoState =
-    pendingGroup match
-      case None        => this
-      case Some(entry) => pushUndo(entry, clearRedo = false).copy(pendingGroup = None)
+  def pushedRedo(step: HistoryStep, maxDepth: Int): HistoryStacks =
+    copy(redo = HistoryStacks.boundedPush(step, redo, maxDepth))
 
-  def clearRedo: UndoState = copy(redoStack = Vector.empty)
+  def withoutRedo: HistoryStacks = if redo.isEmpty then this else copy(redo = Vector.empty)
 
-  /** Forgets every buffer edit whose buffer is no longer `live`. A closed buffer's entries can never be replayed -- a
-    * reopened file is a new buffer under a fresh id -- yet each holds a rope, and the one at the head of a stack would
-    * stop undo and redo cold, since restoring it finds no buffer. The same instance comes back when nothing is lost.
-    */
-  def retainingBuffers(live: BufferId => Boolean): UndoState =
-    val retainedUndo    = UndoState.retained(undoStack, live)
-    val retainedRedo    = UndoState.retained(redoStack, live)
-    val retainedPending = pendingGroup.filter(group => live(group.bufferId))
-    if (retainedUndo eq undoStack) && (retainedRedo eq redoStack) && (retainedPending eq pendingGroup) then this
-    else copy(undoStack = retainedUndo, redoStack = retainedRedo, pendingGroup = retainedPending)
-
-  def pushUndo(entry: HistoryEntry, clearRedo: Boolean = true): UndoState =
-    copy(
-      undoStack = boundedPush(entry, undoStack),
-      redoStack = if clearRedo then Vector.empty else redoStack
-    )
-
-  def pushRedo(entry: HistoryEntry): UndoState =
-    copy(redoStack = boundedPush(entry, redoStack))
+object HistoryStacks:
 
   // `Vector` keeps this O(1) amortized on every push, not just below the cap: prepending (`+:`) and dropping the
   // oldest entry off the far end (`dropRight(1)`) are both effectively-constant-time operations on a `Vector`, unlike a
   // `List`, which has no cheap way to drop its last element. The prior fix only avoided the O(maxUndoDepth) `take`
   // copy while under the cap; every push once the stack reached the cap -- the steady state for any session longer
   // than `maxUndoDepth` edits -- still paid it in full (#1455).
-  private def boundedPush(entry: HistoryEntry, stack: Vector[HistoryEntry]): Vector[HistoryEntry] =
-    val pushed = entry +: stack
-    if pushed.lengthIs <= effectiveMaxUndoDepth then pushed else pushed.dropRight(1)
+  private def boundedPush(step: HistoryStep, stack: Vector[HistoryStep], maxDepth: Int): Vector[HistoryStep] =
+    val pushed = step +: stack
+    if pushed.lengthIs <= math.max(1, maxDepth) then pushed else pushed.dropRight(1)
 
-  private def effectiveMaxUndoDepth: Int =
-    math.max(1, maxUndoDepth)
+/** Where a buffer's cursors and selections stood: what must be unchanged for the next edit to continue a run. */
+final case class CaretMarks(marks: List[(CursorPosition, Option[CursorPosition])])
+
+object CaretMarks:
+
+  def of(editing: EditingState): CaretMarks =
+    CaretMarks(editing.cursors.toList.map(cursor => cursor.position -> cursor.selectionAnchor))
+
+/** Edits still coalescing into the undo step numbered `step`: all of `kind`, the latest leaving the cursors at
+  * `carets`.
+  */
+final case class EditRun(paneId: PaneId, step: Long, kind: EditKind, carets: CaretMarks)
+
+final case class BufferHistory(stacks: HistoryStacks = HistoryStacks(), openRun: Option[EditRun] = None)
+
+/** The history an undo or redo acts on: the working buffer's, shown in `paneId`, or the layout's. */
+enum HistoryOwner:
+  case OfBuffer(bufferId: BufferId, paneId: PaneId)
+  case OfLayout
+
+/** Undo/redo history, held separately from AppState in StateManager. Never persisted to disk — always starts fresh.
+  *
+  * Each buffer keeps its own history (#1930), so undo only ever touches the buffer being worked in, and closing a
+  * buffer drops its history with it. Pane and panel changes share a separate layout history, so toggling panels never
+  * pushes text edits out of a buffer's bounded stack.
+  */
+final case class UndoState(
+    buffers: Map[BufferId, BufferHistory] = Map.empty,
+    layout: HistoryStacks = HistoryStacks(),
+    recordedSteps: Long = 0L,
+    maxUndoDepth: Int = UndoState.DefaultMaxUndoDepth
+):
+
+  /** Every undoable step in every history, most recently recorded first. */
+  def undoStack: Vector[HistoryEntry] = merged(_.undo)
+
+  def redoStack: Vector[HistoryEntry] = merged(_.redo)
+
+  /** An edit still coalescing into an open run already has its step on the stack, so this covers it. */
+  def canUndo: Boolean = layout.undo.nonEmpty || buffers.values.exists(_.stacks.undo.nonEmpty)
+
+  def canRedo: Boolean = layout.redo.nonEmpty || buffers.values.exists(_.stacks.redo.nonEmpty)
+
+  def pushUndo(entry: HistoryEntry, clearRedo: Boolean = true): UndoState =
+    val step = HistoryStep(recordedSteps, entry)
+    withStacksFor(entry)(stacks => (if clearRedo then stacks.withoutRedo else stacks).pushedUndo(step, maxUndoDepth))
+      .copy(recordedSteps = recordedSteps + 1)
+
+  def pushRedo(entry: HistoryEntry): UndoState =
+    val step = HistoryStep(recordedSteps, entry)
+    withStacksFor(entry)(_.pushedRedo(step, maxUndoDepth)).copy(recordedSteps = recordedSteps + 1)
+
+  /** Records `entry` as a new undo step, or -- for a [[EditGrouping.Coalescing]] edit that picks up exactly where its
+    * buffer's open run left off -- folds it into that run's step. `carets` is where the edit left the buffer's cursors
+    * and `paused` whether the key making the edit came over [[EditClock.Pause]] after the one before. A run stays open
+    * only while nothing else has been recorded since it, in any history; it closes at a cursor jump, a pause
+    * (`paused`), a change of edit kind, whitespace typed after a word, and any clean buffer, so undo can stop at the
+    * saved text.
+    */
+  def recorded(entry: HistoryEntry, grouping: EditGrouping, carets: CaretMarks, paused: Boolean): UndoState =
+    (entry, grouping) match
+      case (edit: HistoryEntry.BufferEdit, EditGrouping.Coalescing(kind, afterWord)) =>
+        if continuesRun(edit, kind, afterWord, paused) then
+          withRun(edit.bufferId, EditRun(edit.paneId, recordedSteps - 1, kind, carets))(
+            _.withoutRedo
+          )
+        else
+          val pushed = pushUndo(edit)
+          pushed.withRun(edit.bufferId, EditRun(edit.paneId, recordedSteps, kind, carets))(identity)
+      case _ => pushUndo(entry)
+
+  /** What undo acts on in `state`: the newest step of the working buffer's history or of the layout history, whichever
+    * was recorded last. Another buffer's history is never a candidate.
+    */
+  def nextUndo(state: AppState): Option[(HistoryOwner, HistoryEntry)] = newest(state, _.undo)
+
+  def nextRedo(state: AppState): Option[(HistoryOwner, HistoryEntry)] = newest(state, _.redo)
+
+  /** `owner`'s newest undo step moved to its redo stack as `inverse`, the state that step's restore replaced. */
+  def undone(owner: HistoryOwner, inverse: HistoryEntry): UndoState =
+    withStacksOf(owner)(stacks => stacks.copy(undo = stacks.undo.drop(1))).pushRedo(inverse)
+
+  def redone(owner: HistoryOwner, inverse: HistoryEntry): UndoState =
+    withStacksOf(owner)(stacks => stacks.copy(redo = stacks.redo.drop(1))).pushUndo(inverse, clearRedo = false)
+
+  /** Forgets the history of every buffer that is no longer `live`: a closed buffer's steps can never be replayed -- a
+    * reopened file is a new buffer under a fresh id -- yet each holds a rope. The same instance comes back when nothing
+    * is lost.
+    */
+  def retainingBuffers(live: BufferId => Boolean): UndoState =
+    if buffers.keysIterator.forall(live) then this
+    else copy(buffers = buffers.filter((bufferId, _) => live(bufferId)))
+
+  def forOpenBuffers(open: Map[BufferId, Buffer]): UndoState = retainingBuffers(open.contains)
+
+  private def continuesRun(
+    edit: HistoryEntry.BufferEdit,
+    kind: EditKind,
+    afterWord: Boolean,
+    paused: Boolean
+  ): Boolean =
+    !afterWord && !paused && edit.snapshot.cleanIn.isEmpty && buffers
+      .get(edit.bufferId)
+      .flatMap(_.openRun)
+      .exists(run =>
+        run.paneId == edit.paneId &&
+          run.step == recordedSteps - 1 &&
+          run.kind == kind &&
+          run.carets == CaretMarks.of(edit.snapshot.editing)
+      )
+
+  private def withRun(bufferId: BufferId, run: EditRun)(update: HistoryStacks => HistoryStacks): UndoState =
+    copy(buffers =
+      buffers.updatedWith(bufferId)(
+        _.map(history => history.copy(stacks = update(history.stacks), openRun = Some(run)))
+      )
+    )
+
+  private def newest(
+    state: AppState,
+    stack: HistoryStacks => Vector[HistoryStep]
+  ): Option[(HistoryOwner, HistoryEntry)] =
+    val bufferStep = UndoState.workingPane(state).flatMap { (paneId, bufferId) =>
+      buffers
+        .get(bufferId)
+        .flatMap(history => stack(history.stacks).headOption)
+        .map(step => (HistoryOwner.OfBuffer(bufferId, paneId), step))
+    }
+    val layoutStep = stack(layout).headOption.map(step => (HistoryOwner.OfLayout, step))
+    (bufferStep.toList ++ layoutStep).maxByOption((_, step) => step.number).map((owner, step) => (owner, step.entry))
+
+  private def withStacksFor(entry: HistoryEntry)(update: HistoryStacks => HistoryStacks): UndoState =
+    entry match
+      case edit: HistoryEntry.BufferEdit         => withBufferStacks(edit.bufferId)(update)
+      case change: HistoryEntry.LineEndingChange => withBufferStacks(change.bufferId)(update)
+      case _                                     => withStacksOf(HistoryOwner.OfLayout)(update)
+
+  // Any change to a buffer's stacks ends its open run: the run's step is no longer the one an edit would fold into.
+  private def withStacksOf(owner: HistoryOwner)(update: HistoryStacks => HistoryStacks): UndoState =
+    owner match
+      case HistoryOwner.OfBuffer(bufferId, _) => withBufferStacks(bufferId)(update)
+      case HistoryOwner.OfLayout              => copy(layout = update(layout))
+
+  private def withBufferStacks(bufferId: BufferId)(update: HistoryStacks => HistoryStacks): UndoState =
+    val stacks = buffers.get(bufferId).fold(HistoryStacks())(_.stacks)
+    copy(buffers = buffers.updated(bufferId, BufferHistory(update(stacks))))
+
+  private def merged(stack: HistoryStacks => Vector[HistoryStep]): Vector[HistoryEntry] =
+    if buffers.isEmpty then stack(layout).map(_.entry)
+    else
+      (buffers.values.toVector.flatMap(history => stack(history.stacks)) ++ stack(layout))
+        .sortBy(-_.number)
+        .map(_.entry)
 
 object UndoState:
   val DefaultMaxUndoDepth: Int = 1000
 
-  private def retained(stack: Vector[HistoryEntry], live: BufferId => Boolean): Vector[HistoryEntry] =
-    if stack.forall(isLive(_, live)) then stack else stack.filter(isLive(_, live))
-
-  private def isLive(entry: HistoryEntry, live: BufferId => Boolean): Boolean =
-    entry match
-      case edit: HistoryEntry.BufferEdit         => live(edit.bufferId)
-      case change: HistoryEntry.LineEndingChange => live(change.bufferId)
-      case _                                     => true
+  /** The editor pane undo works in: the focused one, or -- while a panel has focus -- the active one. */
+  private def workingPane(state: AppState): Option[(PaneId, BufferId)] =
+    val paneId = state.persisted.focus match
+      case Focus.EditorPane(focused) => Some(focused)
+      case _                         => state.persisted.layout.activeEditorPaneId
+    paneId.flatMap(pane => state.persisted.layout.editorPanes.get(pane).flatMap(_.bufferId).map(pane -> _))

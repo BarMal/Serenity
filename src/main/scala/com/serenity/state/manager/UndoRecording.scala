@@ -2,11 +2,12 @@ package com.serenity.state.manager
 
 import cats.effect.IO
 import com.serenity.state.models.*
-import com.serenity.state.undo.{HistoryEntry, UndoState}
+import com.serenity.state.undo.{CaretMarks, EditGrouping, HistoryEntry, HistoryOwner, UndoState}
 
 /** State the event pipeline exposes for recording and replaying undo/redo history. */
 private[manager] trait UndoRecordingPort:
   def updateUndo(update: UndoState => UndoState): IO[Unit]
+  def updateModelValidated(transition: Model => Option[Model]): IO[Unit]
   def updateModelPlaced(transition: Model => Option[Model]): IO[Unit]
 
 /** Records undoable changes and replays undo/redo history, independent of event dispatch and focus routing.
@@ -15,13 +16,14 @@ private[manager] trait UndoRecordingPort:
   * are undoable or diffs state to infer a change, since the code that made the change is the only code with that
   * knowledge. `applyUndo` and `applyRedo` replay history entries back into state via `HistoryEntry.restore`, agnostic
   * to which kind of entry (buffer edit, pane close, ...) they're replaying, committing the restored state and the new
-  * history in one model write.
+  * history in one model write. They act on the working buffer's history or the layout history, never another buffer's
+  * (#1930).
   */
 final private[manager] class UndoRecording(port: UndoRecordingPort):
   import port.*
 
-  def recordUndoBoundary(entry: HistoryEntry, groupable: Boolean): IO[Unit] =
-    updateUndo(UndoRecording.recorded(_, entry, groupable))
+  def recordUndoBoundary(entry: HistoryEntry, grouping: EditGrouping): IO[Unit] =
+    updateModelValidated(model => Some(UndoRecording.recorded(model, entry, grouping)))
 
   def applyUndo(@annotation.unused prevState: AppState): IO[Unit] =
     updateModelPlaced(UndoRecording.undone)
@@ -31,34 +33,36 @@ final private[manager] class UndoRecording(port: UndoRecordingPort):
 
 private[manager] object UndoRecording:
 
-  def recorded(undo: UndoState, entry: HistoryEntry, groupable: Boolean): UndoState =
-    (groupable, entry) match
-      case (true, bufferEdit: HistoryEntry.BufferEdit) =>
-        val sameGroup =
-          undo.pendingGroup.exists(g => g.bufferId == bufferEdit.bufferId && g.paneId == bufferEdit.paneId)
-        if sameGroup then undo.clearRedo
-        else undo.flushPendingGroup.copy(pendingGroup = Some(bufferEdit), redoStack = Vector.empty)
-      case _ =>
-        undo.flushPendingGroup.pushUndo(entry)
+  /** `model` with `entry` recorded, noting where the edit left the buffer's cursors so the next edit can tell whether
+    * it carries on from there.
+    */
+  def recorded(model: Model, entry: HistoryEntry, grouping: EditGrouping): Model =
+    val carets = entry match
+      case edit: HistoryEntry.BufferEdit =>
+        model.app.persisted.buffers.get(edit.bufferId).fold(CaretMarks(Nil))(buffer => CaretMarks.of(buffer.editing))
+      case _ => CaretMarks(Nil)
+    model.copy(undo = model.undo.recorded(entry, grouping, carets, model.app.runtime.editClock.pausedBeforeLatest))
 
   def undone(model: Model): Option[Model] =
-    val flushed = model.undo.flushPendingGroup
-    flushed.undoStack.headOption.flatMap { entry =>
-      val rest = flushed.undoStack.drop(1)
-      restored(model, entry, inverse => flushed.copy(undoStack = rest).pushRedo(inverse))
-    }
+    model.undo.nextUndo(model.app).flatMap((owner, entry) => restored(model, owner, entry, model.undo.undone(owner, _)))
 
   def redone(model: Model): Option[Model] =
-    model.undo.redoStack.headOption.flatMap { entry =>
-      val rest = model.undo.redoStack.drop(1)
-      restored(model, entry, inverse => model.undo.copy(redoStack = rest).pushUndo(inverse, clearRedo = false))
-    }
+    model.undo.nextRedo(model.app).flatMap((owner, entry) => restored(model, owner, entry, model.undo.redone(owner, _)))
 
   /** Restores `entry` into the model's app state and pairs it with the `UndoState` `nextUndoState` builds from the
-    * inverse entry `HistoryEntry.restore` hands back. A missing target (`restore` returning `None`) leaves the whole
-    * model untouched, the stack included.
+    * inverse entry `HistoryEntry.restore` hands back. A buffer edit is restored into the pane undo was invoked in,
+    * which may not be the pane it was made in. A missing target (`restore` returning `None`) leaves the whole model
+    * untouched, the stack included.
     */
-  private def restored(model: Model, entry: HistoryEntry, nextUndoState: HistoryEntry => UndoState): Option[Model] =
-    entry
+  private def restored(
+    model: Model,
+    owner: HistoryOwner,
+    entry: HistoryEntry,
+    nextUndoState: HistoryEntry => UndoState
+  ): Option[Model] =
+    val target = (owner, entry) match
+      case (HistoryOwner.OfBuffer(_, paneId), edit: HistoryEntry.BufferEdit) => edit.copy(paneId = paneId)
+      case _                                                                 => entry
+    target
       .restore(model.app)
       .map((restoredState, inverse) => model.copy(app = restoredState, undo = nextUndoState(inverse)))

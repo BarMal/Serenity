@@ -4,7 +4,7 @@ import com.serenity.command.{CommandAvailability, CommandRegistry}
 import com.serenity.config.{AppConfig, AppMode, StatusLinePlacement}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, PaneId}
-import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, UndoState}
+import com.serenity.state.undo.{BufferSnapshot, CaretMarks, EditGrouping, EditKind, HistoryEntry, UndoState}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -24,6 +24,10 @@ class MenuItemStateSpec extends AnyFlatSpec with Matchers:
     val buffer = app.activeBuffer.getOrElse(fail("the initial state has no buffer"))
     HistoryEntry.BufferEdit(BufferId(0), PaneId(0), BufferSnapshot.fromBuffer(buffer))
 
+  private def withOpenRun: UndoState =
+    val typing = EditGrouping.Coalescing(EditKind.Typing, afterWord = false)
+    UndoState().recorded(edit, typing, CaretMarks(Nil), paused = false)
+
   "Undo and redo" should "be disabled with nothing to undo or redo" in {
     stateOf("undo").enabled shouldBe false
     stateOf("undo").disabledReason should not be empty
@@ -32,9 +36,9 @@ class MenuItemStateSpec extends AnyFlatSpec with Matchers:
 
   it should "be enabled once the history holds an entry to undo, or a pending edit" in {
     stateOf("undo", undo = UndoState().pushUndo(edit)).enabled shouldBe true
-    stateOf("undo", undo = UndoState(pendingGroup = Some(edit))).enabled shouldBe true
+    stateOf("undo", undo = withOpenRun).enabled shouldBe true
     stateOf("redo", undo = UndoState().pushUndo(edit)).enabled shouldBe false
-    stateOf("redo", undo = UndoState(redoStack = Vector(edit))).enabled shouldBe true
+    stateOf("redo", undo = UndoState().pushRedo(edit)).enabled shouldBe true
   }
 
   "Close, close pane and save" should "need an active buffer" in {

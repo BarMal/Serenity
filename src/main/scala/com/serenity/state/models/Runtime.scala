@@ -22,6 +22,7 @@ final case class Runtime(
     focusHistory: List[Focus] = List.empty,
     navigation: NavigationHistory = NavigationHistory(),
     typingActivity: TypingActivity = TypingActivity.idle,
+    editClock: EditClock = EditClock(),
     // Theme discovery/loading state (issue #1693): grouped into its own sub-record since the available
     // theme names and the most recently requested theme are written together from
     // `ThemeStateReducer`/`StateManagerSurfacePopupEffects`'s theme-listing effect. See `ThemeDiscoveryState`'s own doc comment.
@@ -74,3 +75,6 @@ final case class Runtime(
   /** A typed character restarts the quiet window for cursor-adjacent surfaces. */
   def observeTyping(nowNanos: Long): Runtime =
     copy(typingActivity = typingActivity.observed(nowNanos))
+
+  def observeEditKey(nowNanos: Long): Runtime =
+    copy(editClock = editClock.observed(nowNanos))

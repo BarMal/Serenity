@@ -114,7 +114,7 @@ class TypedRunsJoinSpec extends AnyFlatSpec with Matchers:
     yield (before, run, model, bufferId)
     val (before, run, model, bufferId) = program.unsafeRunSync()
 
-    val alreadyRecorded = before.undo.undoStack ++ before.undo.pendingGroup
+    val alreadyRecorded = before.undo.undoStack
     val recordedMidRun = run.models.lastOption.toVector
       .flatMap(_.undo.undoStack)
       .filterNot(alreadyRecorded.contains)

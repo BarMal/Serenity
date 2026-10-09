@@ -6,7 +6,7 @@ import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.state.core.{ChapterNoteTransitions, EditorState}
 import com.serenity.state.models.*
-import com.serenity.state.undo.HistoryEntry
+import com.serenity.state.undo.{EditGrouping, HistoryEntry}
 import com.serenity.ui.layout.SplitAxis
 
 object AppEventReducer:
@@ -411,7 +411,7 @@ object AppEventReducer:
     if updatedState == state then ReducerResult.noEffects(state)
     else
       val entry = HistoryEntry.PaneClose(state.persisted.layout, state.persisted.focus)
-      ReducerResult.withEffect(updatedState, AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable = false)))
+      ReducerResult.withEffect(updatedState, AppEffect.Undo(UndoEffect.RecordBoundary(entry, EditGrouping.Standalone)))
 
   private def closeTabState(state: AppState, registry: CommandRegistry): AppState =
     val closedState = EditorState.closeFocusedTab(state)

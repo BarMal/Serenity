@@ -244,7 +244,10 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
         val loop = AppRuntime.externalChangeWatchLoop(
           watcher,
           openBufferPaths = IO.pure(Map(file -> bufferId)),
-          checkBufferForExternalChanges = id => checkedBuffers.update(_ :+ id)
+          checkBufferForExternalChanges = id => checkedBuffers.update(_ :+ id),
+          // The burst takes about 100 ms. On a loaded machine its writes can drift apart by more than the default
+          // 200 ms, and a write landing after the window closed is a genuine second change, not a duplicate check.
+          settle = 2.seconds
         )
         val burst =
           (1 to 5).toList.traverse_(n => IO.blocking(Files.writeString(file, s"write $n")) >> IO.sleep(20.millis))

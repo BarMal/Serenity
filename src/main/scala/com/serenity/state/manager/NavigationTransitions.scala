@@ -312,7 +312,7 @@ private[manager] object NavigationTransitions:
     )
 
   private def withDocumentComments(state: AppState, buffer: Buffer, annotations: Annotations): AppState =
-    withBuffer(state, buffer.copy(annotations = annotations, document = buffer.document.copy(isDirty = true)))
+    withBuffer(state, buffer.copy(annotations = annotations, document = buffer.document.withUnrecordedChange))
 
   /** An emptied draft deletes the comment. A comment the buffer no longer holds is left alone. */
   private def saveCommentDraft(state: AppState, id: CommentId, text: String, now: Instant): NavigationOutcome =
@@ -412,9 +412,9 @@ private[manager] object NavigationTransitions:
             state,
             buffer.copy(
               annotations = buffer.annotations.copy(documentComments = comments),
-              document = buffer.document.copy(
-                isDirty = buffer.document.isDirty || comments != buffer.annotations.documentComments
-              )
+              document =
+                if comments != buffer.annotations.documentComments then buffer.document.withUnrecordedChange
+                else buffer.document
             )
           )
         )
@@ -435,7 +435,7 @@ private[manager] object NavigationTransitions:
             state,
             buffer.copy(
               annotations = buffer.annotations.copy(placeholders = updated),
-              document = buffer.document.copy(isDirty = true)
+              document = buffer.document.withUnrecordedChange
             )
           )
         )
@@ -452,9 +452,9 @@ private[manager] object NavigationTransitions:
             state,
             buffer.copy(
               annotations = buffer.annotations.copy(placeholders = placeholders),
-              document = buffer.document.copy(
-                isDirty = buffer.document.isDirty || placeholders != buffer.annotations.placeholders
-              )
+              document =
+                if placeholders != buffer.annotations.placeholders then buffer.document.withUnrecordedChange
+                else buffer.document
             )
           )
         )

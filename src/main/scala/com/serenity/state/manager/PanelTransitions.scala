@@ -53,7 +53,7 @@ private[manager] object PanelTransitions:
     val updated = update(model.app)
     val undo =
       if updated == model.app then model.undo
-      else UndoRecording.recorded(model.undo, HistoryEntry.PanelChange.capture(model.app), groupable = false)
+      else model.undo.pushUndo(HistoryEntry.PanelChange.capture(model.app))
     model.copy(app = updated, undo = undo)
 
   def removePanel(id: PanelId)(state: AppState): AppState =

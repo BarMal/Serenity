@@ -9,6 +9,7 @@ import com.serenity.lsp.model.{LspPosition, LspRange, LspTextEdit}
 import com.serenity.richtext.{DocumentFeature, ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
+import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.{Layout, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -58,6 +59,47 @@ class OpaqueBlockSkippedEditsSpec extends AnyFlatSpec with Matchers with OptionV
 
   private def cursorsAt(positions: CursorPosition*): EditingState =
     EditingState.fromCursors(positions.toList.map(Cursor(_)))
+
+  private def undoEntries(effects: List[AppEffect]): Int =
+    effects.count {
+      case AppEffect.Undo(_: UndoEffect.RecordBoundary) => true
+      case _                                            => false
+    }
+
+  "A refused deletion before or after a block" should "record no undo entry and leave the buffer clean" in {
+    val beforeBlock = editorState(buffer(cursorsAt(CursorPosition(1, 4))))
+    val afterBlock  = editorState(buffer(cursorsAt(CursorPosition(3, 0))))
+
+    val refused = List(
+      EditorEventReducer.reduce(DeleteToLineEnd, paneId, beforeBlock),
+      EditorEventReducer.reduce(DeleteForward, paneId, beforeBlock),
+      EditorEventReducer.reduce(DeleteToLineStart, paneId, afterBlock)
+    )
+
+    refused.map(result => undoEntries(result.effects)) shouldBe List(0, 0, 0)
+    refused.map(_.state.persisted.buffers(bufferId).document.isDirty) shouldBe List(false, false, false)
+  }
+
+  "A multi-cursor deletion with one cursor refused" should "record exactly one undo entry whose snapshot is the text before" in {
+    val state = editorState(buffer(cursorsAt(CursorPosition(0, 2), CursorPosition(1, 4))))
+
+    val result = EditorEventReducer.reduce(DeleteToLineEnd, paneId, state)
+
+    val entries = result.effects.collect { case AppEffect.Undo(UndoEffect.RecordBoundary(entry, _)) => entry }
+    entries.size shouldBe 1
+    entries.collect { case edit: HistoryEntry.BufferEdit => edit.snapshot.content.collect() } shouldBe
+      List(document.plainText)
+    result.state.persisted.buffers(bufferId).document.isDirty shouldBe true
+  }
+
+  "A rename whose only edit would join a block" should "record no undo entry" in {
+    val joinsBlock = LspTextEdit(LspRange(LspPosition(1, 4), LspPosition(2, 0)), "")
+    val state      = editorState(buffer(cursorsAt(CursorPosition(0, 0))))
+
+    val result = RenameEditReducer(Map(path.toUri.toString -> List(joinsBlock)), CursorPosition(0, 0), state)
+
+    undoEntries(result.effects) shouldBe 0
+  }
 
   "A rename with an edit that would join a block" should "apply the others, count only those, and move cursors by them" in {
     val joinsBlock = LspTextEdit(LspRange(LspPosition(1, 4), LspPosition(2, 0)), "")

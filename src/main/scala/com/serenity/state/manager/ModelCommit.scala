@@ -123,8 +123,8 @@ private[manager] object ModelCommit:
     */
   def applyModelEffects(model: Model, effects: List[AppEffect]): Model =
     effects.foldLeft(model) {
-      case (current, AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable))) =>
-        current.copy(undo = UndoRecording.recorded(current.undo, entry, groupable))
+      case (current, AppEffect.Undo(UndoEffect.RecordBoundary(entry, grouping))) =>
+        UndoRecording.recorded(current, entry, grouping)
       case (current, _) => current
     }
 

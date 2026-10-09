@@ -3,6 +3,7 @@ package com.serenity.state.reducers
 import com.serenity.keystroke.events.*
 import com.serenity.rope.*
 import com.serenity.state.models.*
+import com.serenity.state.undo.EditGrouping
 
 /** Copy/Cut/Paste -- the family that reads or writes the clipboard alongside the buffer. Each event gets its own helper
   * (rather than one large match) since all three independently compute a clipboard string alongside their buffer
@@ -58,7 +59,7 @@ private[reducers] object EditorClipboardEventReducer:
         ),
         entry
       ),
-      undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+      undoBoundaryEffects(buffer.id, paneId, buffer, edits, grouping = EditGrouping.Standalone)
     )
 
   private def reducePaste(ctx: CursorEventContext): ReducerResult =
@@ -75,7 +76,7 @@ private[reducers] object EditorClipboardEventReducer:
       val (updated, edits) = f(buffer)
       ReducerResult(
         Focused.replaceBuffer(currentState, updated),
-        undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+        undoBoundaryEffects(buffer.id, paneId, buffer, edits, grouping = EditGrouping.Standalone)
       )
 
     val text = entry.text
@@ -94,7 +95,8 @@ private[reducers] object EditorClipboardEventReducer:
         annotations = replacedBuffer.annotations,
         richText = replacedBuffer.richText
       )
-      val effects = undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), groupable = false)
+      val effects =
+        undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), grouping = EditGrouping.Standalone)
       ReducerResult(
         currentState.copy(persisted =
           currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
@@ -122,7 +124,7 @@ private[reducers] object EditorClipboardEventReducer:
         currentState.copy(persisted =
           currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> withDarling))
         ),
-        undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+        undoBoundaryEffects(buffer.id, paneId, buffer, edits, grouping = EditGrouping.Standalone)
       )
     else ReducerResult.noEffects(currentState)
 
@@ -146,7 +148,8 @@ private[reducers] object EditorClipboardEventReducer:
           annotations = replacedBuffer.annotations,
           richText = replacedBuffer.richText
         )
-        val effects = undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), groupable = false)
+        val effects =
+          undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), grouping = EditGrouping.Standalone)
         ReducerResult(
           currentState.copy(persisted =
             currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))

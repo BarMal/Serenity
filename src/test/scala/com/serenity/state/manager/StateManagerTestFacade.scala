@@ -107,7 +107,7 @@ object StateManagerTestFacade:
 
     def markBufferSaved(bufferId: BufferId): IO[Unit] =
       stateManager.updateStateValidated(
-        withBufferUpdate(bufferId)(buffer => buffer.copy(document = buffer.document.copy(isDirty = false)))
+        withBufferUpdate(bufferId)(buffer => buffer.copy(document = buffer.document.markedSaved))
       )
 
     def checkUnsavedChanges(bufferId: Option[BufferId]): IO[Boolean] =

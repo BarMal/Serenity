@@ -3,7 +3,7 @@ package com.serenity.state.reducers
 import com.serenity.richtext.{RichTextDocument, RichTextPosition, RichTextRange}
 import com.serenity.rope.*
 import com.serenity.state.models.*
-import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
+import com.serenity.state.undo.{BufferSnapshot, EditGrouping, EditKind, HistoryEntry}
 
 /** Low-level infrastructure shared by every family of [[EditorEventReducer]] event handling: applying one or many
   * [[MultiCursorEdit]]s to a buffer's content, rich text document and comments in lockstep. Extracted from
@@ -28,21 +28,30 @@ private[state] object EditorEditSupport:
   final case class MultiCursorEdit(ownerIndex: Int, start: Int, end: Int, insertedText: String)
 
   /** Declares the edit(s) just performed as undoable -- see #1016. `before` is the buffer as it stood immediately
-    * before this call's edits; every caller already has it in scope as the receiver it edited. `groupable` mirrors
-    * whether the triggering event was a character/tab insertion, the only two event kinds a consecutive run of which
-    * coalesces into one undo step.
+    * before this call's edits; every caller already has it in scope as the receiver it edited. `grouping` says whether
+    * this edit coalesces into the run before it: only typing at the cursor and one-grapheme deletions do.
     */
   def undoBoundaryEffects(
     bufferId: BufferId,
     paneId: PaneId,
     before: Buffer,
     edits: List[MultiCursorEdit],
-    groupable: Boolean
+    grouping: EditGrouping
   ): List[AppEffect] =
     if edits.isEmpty then Nil
     else
       val entry = HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(before))
-      List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable)))
+      List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, grouping)))
+
+  val standalone: List[MultiCursorEdit] => EditGrouping = _ => EditGrouping.Standalone
+
+  /** Typing `edits` into `before`: whitespace typed straight after a word opens a new undo step. */
+  def typingGrouping(before: Buffer)(edits: List[MultiCursorEdit]): EditGrouping =
+    edits.headOption.fold(EditGrouping.Standalone)(edit =>
+      EditGrouping.typing(edit.insertedText, before.document.content.index(edit.start - 1))
+    )
+
+  def deletingGrouping(kind: EditKind): List[MultiCursorEdit] => EditGrouping = _ => EditGrouping.deleting(kind)
 
   def backwardGraphemeDeletionRange(content: Rope, offset: Int): Option[(Int, Int)] =
     val beforeOrAt = content.graphemeBoundaryBeforeOrAt(offset)
@@ -328,26 +337,21 @@ private[state] object EditorEditSupport:
 
   /** For a whole-content swap that carries no edit list -- undo and redo restore a snapshot's text outright. The
     * difference is treated as one replaced region (common prefix and suffix trimmed), so annotations keep their place
-    * relative to the text around the change. Inside a run of identical characters the region is ambiguous, and a marker
-    * there may land anywhere within the run.
+    * relative to the text around the change. Found by walking both ropes together and skipping every shared subtree, so
+    * the cost follows the change, not the document. Inside a run of identical characters the region is ambiguous, and a
+    * marker there may land anywhere within the run.
     */
   def adjustAnnotationsAcrossReplacement(annotations: Annotations, before: Rope, after: Rope): Annotations =
     if annotations.bookmarks.isEmpty && annotations.documentComments.isEmpty && annotations.placeholders.isEmpty then
       annotations
     else
-      val beforeText = before.collect()
-      val afterText  = after.collect()
-      val limit      = math.min(beforeText.length, afterText.length)
-      val prefix     = Iterator.range(0, limit).takeWhile(i => beforeText(i) == afterText(i)).size
-      val suffix = Iterator
-        .range(0, limit - prefix)
-        .takeWhile(i => beforeText(beforeText.length - 1 - i) == afterText(afterText.length - 1 - i))
-        .size
-      if prefix == beforeText.length && prefix == afterText.length then annotations
-      else
-        val replacement = afterText.substring(prefix, afterText.length - suffix)
-        val edit        = MultiCursorEdit(0, prefix, beforeText.length - suffix, replacement)
+      // `RopeDiff` wants a `Balance` only for an empty rope on a branch its bounds make unreachable; the ropes compared
+      // carry their own.
+      RopeDiff.changedOffsetRange(before, after)(using Balance.default).fold(annotations) { (start, end) =>
+        val replacedEnd = before.weight - (after.weight - end)
+        val edit        = MultiCursorEdit(0, start, replacedEnd, after.sliceString(start, end))
         adjustAnnotations(annotations, before, after, List(edit))
+      }
 
   private def remapCommentStart(offset: Int, edits: List[MultiCursorEdit]): Int =
     remapEditBoundary(offset, edits, insertionAtBoundaryMoves = true)
