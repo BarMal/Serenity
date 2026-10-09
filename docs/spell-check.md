@@ -57,8 +57,7 @@ Install a Hunspell dictionary (for example hunspell-fr) or set spellcheck.dictio
 
 - **Some languages resolve.** Only the missing ones are named and the rest keep being checked.
 - **None resolve.** Every configured language is named and no words are flagged, since checking against a near-empty
-  word list would flag every word. The small built-in word lists (`en`, `fr`, `el`) do not count as a dictionary, so
-  they never suppress the notice.
+  word list would flag every word.
 - **No notice** when a loaded dictionary is not named for any configured language (a bare `words.dic` path), since it
   cannot be said to leave a particular language unserved.
 
@@ -134,8 +133,7 @@ unmodified copies of upstream.
 
   So `["en-US"]` with `en_US.dic` installed uses that dictionary, and `["en-US"]` with none installed shows the notice
   rather than quietly checking American prose against British spellings.
-- **Other languages have no bundled dictionary.** `fr` and `el` carry a built-in word list of a handful of words, far too
-  small to check prose with, so they follow the notice rule instead of flagging every ordinary word.
+- **Other languages have no bundled dictionary.** They follow the notice rule instead of flagging every ordinary word.
 
 ## Setting up another language (or British English by hand)
 
