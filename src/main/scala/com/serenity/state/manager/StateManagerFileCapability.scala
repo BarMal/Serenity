@@ -101,7 +101,8 @@ final private[manager] class StateManagerFileCapability(
   private def saveBufferAs(bufferId: BufferId, filePath: Path): IO[Unit] =
     fileFacade.saveBufferAs(bufferId, filePath)
 
-  val fileOpener: FileOpener = FileOpener(openFile = openFile)
+  val fileOpener: FileOpener =
+    FileOpener(openFile = openFile, openFolder = folder => dispatch(effects.openFolderAsProjectRoot(folder)))
 
   val fileService: FileService = FileService(
     saveBuffer = saveBuffer,

@@ -20,7 +20,7 @@ import com.monovore.decline.{Command, Help, Opts}
   *   `--reset-session`: move the saved session aside to a timestamped backup before starting. See [[LaunchReset]].
   */
 final case class LaunchOptions(
-    openPath: Option[Path] = None,
+    openPaths: List[Path] = Nil,
     eco: Boolean = false,
     tui: Boolean = false,
     gui: Boolean = false,
@@ -30,16 +30,22 @@ final case class LaunchOptions(
     smokeTest: Boolean = false,
     resetConfig: Boolean = false,
     resetSession: Boolean = false
-)
+):
+  def openPath: Option[Path]     = openPaths.headOption
+  def extraOpenPaths: List[Path] = openPaths.drop(1)
 
 object LaunchOptions:
 
-  private val open: Opts[Option[Path]] =
-    Opts
-      .option[Path]("open", "Open this file on startup.", metavar = "path")
-      .orElse(Opts.option[Path]("file", "Open this file on startup (alias for --open).", metavar = "path"))
-      .orElse(Opts.argument[Path]("path"))
-      .orNone
+  /** `--open`/`--file` first, then any bare paths, which a file manager passes several of for a multi-file selection.
+    */
+  private val open: Opts[List[Path]] =
+    (
+      Opts
+        .option[Path]("open", "Open this file or folder on startup.", metavar = "path")
+        .orElse(Opts.option[Path]("file", "Open this file or folder on startup (alias for --open).", metavar = "path"))
+        .orNone,
+      Opts.arguments[Path]("path").orEmpty
+    ).mapN((flagged, bare) => flagged.toList ++ bare)
 
   private val eco: Opts[Boolean] =
     Opts.flag("eco", "Lower the frame-rate target.").orFalse

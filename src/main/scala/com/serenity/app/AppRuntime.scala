@@ -380,12 +380,17 @@ object AppRuntime:
       )
     ).parMapN((_, _, _, _, _, _, _, _, _, _, _) => ())
 
-  /** Opens what a later launch handed over (#2023). A file that fails to open must not take the editor down with it. */
+  /** Opens what a later launch handed over (#2023). A path that fails to open must not take the editor down with it. A
+    * folder becomes the Explorer root, as Open Folder makes it.
+    */
   private[serenity] def openForwarded(fileOpener: FileOpener)(paths: List[Path])(using logger: Logger[IO]): IO[Unit] =
-    paths.traverse_ { path =>
-      fileOpener
-        .openFile(path)
-        .handleErrorWith(error => logger.error(error)(s"[INSTANCE] Could not open forwarded file $path"))
+    def attempt(path: Path, open: Path => IO[Unit]): IO[Unit] =
+      open(path).handleErrorWith(error => logger.error(error)(s"[INSTANCE] Could not open forwarded path $path"))
+    LaunchOpens.resolve(paths).flatMap { opens =>
+      opens.notice.traverse_(logger.warn(_)) >>
+        opens.root.traverse_(attempt(_, fileOpener.openFolder)) >> opens.files.traverse_(
+          attempt(_, fileOpener.openFile)
+        )
     }
 
   /** Runs [[StartupWarmUp]] in the background for as long as the main loop does, if the frontend can draw off-screen

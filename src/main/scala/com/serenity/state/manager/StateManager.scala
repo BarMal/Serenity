@@ -99,12 +99,12 @@ final case class SessionStartupInfo(
     setAsideUnreadableSession: IO[Option[UnreadableSession]] = IO.none
 )
 
-/** Opens a file into editor state.
+/** Opens a file into editor state, or a folder as the Explorer root.
   *
   * A capability record per #1017 -- see `FileService` below for the shape rationale. `StateManager` holds one of these
   * as a field instead of mixing this trait in directly.
   */
-final case class FileOpener(openFile: Path => IO[Unit])
+final case class FileOpener(openFile: Path => IO[Unit], openFolder: Path => IO[Unit])
 
 /** Reads the persisted editor session.
   *

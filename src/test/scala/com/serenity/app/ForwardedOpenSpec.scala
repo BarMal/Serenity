@@ -1,6 +1,6 @@
 package com.serenity.app
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
@@ -22,12 +22,33 @@ class ForwardedOpenSpec extends AnyFlatSpec with Matchers:
 
     val opened = for
       log <- Ref.of[IO, List[Path]](Nil)
-      opener = FileOpener(path =>
-        if path == unreadable then IO.raiseError(new java.io.IOException("denied")) else log.update(_ :+ path)
+      opener = FileOpener(
+        openFile = path =>
+          if path == unreadable then IO.raiseError(new java.io.IOException("denied")) else log.update(_ :+ path),
+        openFolder = _ => IO.unit
       )
       _      <- AppRuntime.openForwarded(opener)(wanted)
       result <- log.get
     yield result
 
     opened.unsafeRunSync() shouldBe List(Paths.get("/work/a.md"), Paths.get("/work/b.md"))
+  }
+
+  it should "pin a forwarded folder as the root, once, and open the files beside it" in {
+    val folder = Files.createTempDirectory("forwarded-open")
+    val other  = Files.createTempDirectory("forwarded-open-other")
+    val file   = Paths.get("/work/a.md")
+    val program = for
+      files   <- Ref.of[IO, List[Path]](Nil)
+      folders <- Ref.of[IO, List[Path]](Nil)
+      opener = FileOpener(openFile = path => files.update(_ :+ path), openFolder = path => folders.update(_ :+ path))
+      _      <- AppRuntime.openForwarded(opener)(List(folder, file, other))
+      opened <- files.get
+      pinned <- folders.get
+    yield (opened, pinned)
+
+    try program.unsafeRunSync() shouldBe (List(file), List(folder))
+    finally
+      Files.deleteIfExists(folder)
+      Files.deleteIfExists(other)
   }
