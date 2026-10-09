@@ -71,11 +71,11 @@ private[command] object CommandRegistryPanelProjectCommands:
       label = "Open Chapter Note"
     ),
     Command.typed(
-      "open-keyword-note",
-      "Open the note for the word under the cursor, or the words selected, beside the manuscript.",
+      "open-term-note",
+      "Open the note for the term under the cursor, or the one selected, beside the manuscript.",
       CommandIntent.View(ViewIntent.OpenKeywordNote),
       CommandCategory.View,
-      label = "Open Note for Word"
+      label = "Open Term Note"
     ),
     Command.typed(
       "toggle-chapter-ghosts",
