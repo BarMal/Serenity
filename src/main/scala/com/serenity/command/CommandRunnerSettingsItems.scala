@@ -134,6 +134,16 @@ object CommandRunnerSettingsItems:
       hint = "Render a flagged paragraph's first letter as a large multi-line glyph"
     )
 
+  private[command] def followSystemOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
+      id = "follow-system-theme",
+      label = "Follow OS Appearance",
+      selectedIndex = optionSelections.getOrElse("follow-system-theme", 1),
+      enabledIntent = CommandIntent.Theme(ThemeIntent.SetFollowSystem(true)),
+      disabledIntent = CommandIntent.Theme(ThemeIntent.SetFollowSystem(false)),
+      hint = "Switch theme with the OS light, dark or high-contrast setting; picking a theme turns it off"
+    )
+
   private[command] def autoSaveModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     def option(label: String, mode: AutoSaveMode): CommandOption =
       CommandOption(

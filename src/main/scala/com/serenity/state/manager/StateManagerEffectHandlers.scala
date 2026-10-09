@@ -15,6 +15,7 @@ import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.{PanelPosition, PeekContent}
+import com.serenity.ui.theme.appearance.OsAppearanceDetector
 
 /** Owns ordered I/O interpretation for reducer effects. */
 final private[manager] class StateManagerEffectHandlers(
@@ -23,7 +24,8 @@ final private[manager] class StateManagerEffectHandlers(
     surfaces: EffectSurfacePort,
     files: EffectFilePort,
     sessions: EffectSessionPort,
-    workflow: EffectModalWorkflowPort
+    workflow: EffectModalWorkflowPort,
+    appearanceDetector: OsAppearanceDetector = OsAppearanceDetector.system
 )(using balance: com.serenity.rope.Balance):
 
   import editor.*
@@ -56,6 +58,18 @@ final private[manager] class StateManagerEffectHandlers(
   private val lineEndingEffects = new LineEndingEffects(currentState, commitState, updateModelValidated)
   private val manuscriptExport  = new ManuscriptExportEffects(logger, fileDialog, editor, currentState, commitState)
 
+  private val appearanceFollower = new SystemAppearanceFollower(
+    appearanceDetector,
+    currentState,
+    themeName => interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(themeName))),
+    logger
+  )
+
+  private[manager] def followSystemAppearance: IO[Unit] = appearanceFollower.follow
+
+  private[manager] def followSystemAppearanceWithin(bound: FiniteDuration): IO[Unit] =
+    appearanceFollower.followWithin(bound)
+
   private val configEffects = new StateManagerConfigEffects(
     currentState,
     logger,
@@ -65,7 +79,8 @@ final private[manager] class StateManagerEffectHandlers(
     editor,
     runtime.renderCaches,
     showNotice = showNotice,
-    configOnDisk = configOnDisk
+    configOnDisk = configOnDisk,
+    followSystemAppearance = followSystemAppearance
   )
 
   private[manager] val configWatch: Option[ConfigFileWatch] = configEffects.watch
@@ -162,7 +177,8 @@ final private[manager] class StateManagerEffectHandlers(
     commitState,
     editor,
     interpretEffect,
-    configEffects.updateConfig
+    configEffects.updateConfig,
+    followSystemAppearance
   )
 
   private[manager] val behavior = new CommandEffectInterpreter(
@@ -272,8 +288,8 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.Spelling(intent)                       => spellingEffects.interpret(intent)
       case CommandIntent.Navigation(intent)                     => navigationEffects.interpretNavigation(intent)
       case CommandIntent.Lsp(intent)                            => projectLspEffects.interpretLsp(intent, state)
-      case CommandIntent.Theme(intent)       => surfacePopupEffects.interpretThemeIntent(intent, state)
-      case CommandIntent.View(intent)        => panelEffects.interpret(intent, state)
+      case CommandIntent.Theme(intent) => surfacePopupEffects.interpretThemeIntent(intent, state, chosen = recordUsage)
+      case CommandIntent.View(intent)  => panelEffects.interpret(intent, state)
       case CommandIntent.Project(intent)     => projectLspEffects.interpretProject(intent, state)
       case CommandIntent.Session(intent)     => interpretSessionIntent(intent, state)
       case CommandIntent.Keybindings(intent) => keybindingEffects.interpret(intent)

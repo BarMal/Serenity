@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.config.{AppConfig, ConfigFileFormat, ConfigRegistry, ThemeFollowConfig}
+import com.serenity.config.{AppConfig, AppearanceSlot, ConfigFileFormat, ConfigRegistry, ThemeFollowConfig}
 import com.serenity.ui.theme.appearance.OsAppearance
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -37,6 +37,13 @@ class ThemeFollowConfigSpec extends AnyFlatSpec with Matchers:
 
     List(OsAppearance.Light, OsAppearance.Dark, OsAppearance.HighContrast).map(off.themeFor) shouldBe
       List(None, None, None)
+  }
+
+  "a theme slot" should "be read and set by the appearance it is for" in {
+    AppearanceSlot.values.toList.map(following.themeIn) shouldBe List("paper", "ink", "contrast")
+    following.withTheme(AppearanceSlot.Dark, "night") shouldBe following.copy(darkTheme = "night")
+    following.withTheme(AppearanceSlot.Light, "day") shouldBe following.copy(lightTheme = "day")
+    following.withTheme(AppearanceSlot.HighContrast, "bold") shouldBe following.copy(highContrastTheme = "bold")
   }
 
   "the config file" should "read the follow settings from their theme.* keys" in {

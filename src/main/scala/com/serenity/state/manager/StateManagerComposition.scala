@@ -12,7 +12,6 @@ import com.serenity.rope.Balance
 import com.serenity.session.{SessionId, SessionManager, SessionPersistence}
 import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, ThemeEffect}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent}
@@ -255,7 +254,8 @@ private[manager] class StateManagerComposition(
     effectSurfacePort,
     effectFilePort,
     effectSessionPort,
-    effectModalWorkflowPort
+    effectModalWorkflowPort,
+    appearanceDetector
   )
 
   private val eventStatePort: EventStatePort =
@@ -388,14 +388,12 @@ private[manager] class StateManagerComposition(
   def restoreStartupSession(): IO[Unit]                       = workflow.restoreStartupSession()
   def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
 
-  private val appearanceFollower = new SystemAppearanceFollower(
-    appearanceDetector,
-    modelCommit.currentState,
-    themeName => interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(themeName))) >> operations.awaitEffects,
-    logger
-  )
+  private def settled(effect: IO[Unit]): IO[Unit] = effect >> drainPendingOperations >> operations.awaitEffects
 
-  def followSystemAppearance: IO[Unit] = appearanceFollower.follow
+  def followSystemAppearance: IO[Unit] = settled(effects.followSystemAppearance)
+
+  def followSystemAppearanceWithin(bound: scala.concurrent.duration.FiniteDuration): IO[Unit] =
+    settled(effects.followSystemAppearanceWithin(bound))
 
   val sessionService: SessionService = SessionService(loadSession = loadSession)
 

@@ -163,6 +163,13 @@ object CommandRunnerSettingsGroups:
         .toList ++ onFrontend.rows(guiOnly, input("rich-text-font-size")) ++ input("rich-text-color")
     )
     val themeGroup = CommandRunnerSettingsItems.themeGroupItem(context.themeNames, context.currentThemeName)
+    val followSystemGroup = group(
+      "settings-follow-system",
+      "OS Appearance",
+      "Follow the OS light, dark or high-contrast setting, and the theme for each",
+      CommandRunnerSettingsItems.followSystemOptionItem(optionSelections) ::
+        input("follow-system-light", "follow-system-dark", "follow-system-high-contrast")
+    )
     // issue #1046: command-runner row count/spacing (visible rows, item gap, cursor gap) is not editable here as
     // three separate knobs -- Interface Density is the one control that governs all three; the underlying config
     // keys still parse as explicit overrides for back-compat, they just aren't palette rows.
@@ -273,7 +280,7 @@ object CommandRunnerSettingsGroups:
       "settings-look",
       "Look",
       "Theme, density, cursor",
-      List(themeGroup, interfaceLayoutGroup, cursorGroup, lookAdvancedGroup)
+      List(themeGroup, followSystemGroup, interfaceLayoutGroup, cursorGroup, lookAdvancedGroup)
     )
     val languageToolsGroup = group(
       "settings-language-tools",

@@ -15,6 +15,13 @@ import com.serenity.ui.theme.config.AppThemeManager
 
 object AppStartup:
 
+  /** How long startup waits for the OS to say whether it is light, dark or high contrast before drawing the first
+    * frame. The queries are a few short processes and normally answer in tens of milliseconds; a detector that has not
+    * answered by now is treated as not having said, so the theme is the configured one and startup is not held.
+    */
+  val AppearanceDetectionBound: scala.concurrent.duration.FiniteDuration =
+    scala.concurrent.duration.DurationInt(200).millis
+
   /** `recentFiles` must already be filtered to existing, readable files -- `createStartPage` does no filesystem access
     * of its own, so callers filter via `IO.blocking` before calling this. Delegates to [[StartupPageContent]] so the
     * same page can be rebuilt from the state layer (the "return to start page" command) without a package cycle.

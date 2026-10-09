@@ -229,7 +229,14 @@ object UiPreset:
     )
 
   def applyToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
-    applyToState(preset.withPanelIds, state, theme, HotkeyOverrides.likeRunning(state.persisted.config, preset.config))
+    applyToState(preset.withPanelIds, state, theme, appliedConfig(state.persisted.config, preset))
+
+  /** `preset`'s config as it takes over from `running`: hotkeys read the way `running` holds its own, and the
+    * `theme.follow_system` settings stay as `running` has them -- whether the theme tracks the OS is not part of how a
+    * workspace looks, so a preset (captured with it off, or on someone else's machine) neither switches it off nor on.
+    */
+  private[presets] def appliedConfig(running: AppConfig, preset: UiPreset): AppConfig =
+    HotkeyOverrides.likeRunning(running, preset.config).withThemeFollowConfig(running.themeFollowConfig)
 
   /** Apply a built-in workflow without replacing unrelated persisted configuration -- the theme included: a workflow is
     * about how the workspace behaves, and the user's colours are theirs (#1880).

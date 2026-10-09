@@ -6,7 +6,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
 import com.serenity.command.{Command, CommandIntent, ThemeIntent}
-import com.serenity.config.{AppConfig, ThemeFollowConfig}
+import com.serenity.config.{AppConfig, AppearanceSlot, ThemeFollowConfig}
 import com.serenity.rope.Balance
 import com.serenity.testkit.AwaitCondition.awaitValue
 import com.serenity.ui.theme.appearance.{OsAppearance, OsAppearanceDetector}
@@ -165,4 +165,71 @@ class StateManagerSystemAppearanceSpec extends AnyFlatSpec with Matchers:
       yield on
 
     program.unsafeRunSync() shouldBe false
+  }
+
+  private def setting(intent: ThemeIntent): Command =
+    Command.typed("theme-follow-setting", "Sets how the theme follows the OS.", CommandIntent.Theme(intent))
+
+  private def followConfig(manager: StateManager): IO[ThemeFollowConfig] =
+    manager.getCurrentState.map(_.persisted.config.themeFollowConfig)
+
+  "SetFollowSystem(true)" should "turn following on and apply the OS theme without waiting for a focus regain" in {
+    val program =
+      for
+        os      <- appearance(OsAppearance.Light)
+        manager <- managerWith(followSystem = false, os)
+        _       <- manager.executeCommand(setting(ThemeIntent.SetFollowSystem(true)))
+        landed  <- awaitValue(themeName(manager))(_ == light)
+        on      <- following(manager)
+      yield (landed, on)
+
+    program.unsafeRunSync() shouldBe ((light, true))
+  }
+
+  "SetFollowSystem(false)" should "turn following off and leave the theme where it is" in {
+    val program =
+      for
+        os      <- appearance(OsAppearance.Dark)
+        manager <- managerWith(followSystem = true, os)
+        _       <- manager.followSystemAppearance
+        _       <- manager.executeCommand(setting(ThemeIntent.SetFollowSystem(false)))
+        _       <- os.set(OsAppearance.Light)
+        _       <- manager.followSystemAppearance
+        after   <- themeName(manager)
+        on      <- following(manager)
+      yield (after, on)
+
+    program.unsafeRunSync() shouldBe ((dark, false))
+  }
+
+  "SetFollowSystemTheme" should "set the theme for that appearance and apply it when the OS is in it" in {
+    val program =
+      for
+        os      <- appearance(OsAppearance.Dark)
+        manager <- managerWith(followSystem = true, os)
+        _       <- manager.followSystemAppearance
+        _       <- manager.executeCommand(setting(ThemeIntent.SetFollowSystemTheme(AppearanceSlot.Dark, light)))
+        landed  <- awaitValue(themeName(manager))(_ == light)
+        config  <- followConfig(manager)
+      yield (landed, config.darkTheme, config.lightTheme)
+
+    program.unsafeRunSync() shouldBe ((light, light, light))
+  }
+
+  it should "only record the theme while following is off, without asking the OS" in {
+    val program =
+      for
+        os      <- appearance(OsAppearance.Dark)
+        manager <- managerWith(followSystem = false, os)
+        before  <- themeName(manager)
+        _       <- manager.executeCommand(setting(ThemeIntent.SetFollowSystemTheme(AppearanceSlot.Dark, "paper")))
+        after   <- themeName(manager)
+        config  <- followConfig(manager)
+        reads   <- os.detections
+      yield (before, after, config.darkTheme, reads)
+
+    val (before, after, darkTheme, reads) = program.unsafeRunSync()
+    after shouldBe before
+    darkTheme shouldBe "paper"
+    reads shouldBe 0
   }

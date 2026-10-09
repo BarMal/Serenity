@@ -159,6 +159,8 @@ trait StateManager extends StateEngine:
     */
   def followSystemAppearance: IO[Unit]
 
+  def followSystemAppearanceWithin(bound: scala.concurrent.duration.FiniteDuration): IO[Unit]
+
   /** The instance-scoped render/mouse-hit-testing cache bundle for this manager (issue #1677): threaded down through
     * [[com.serenity.ui.renderer.RenderContext]] to every render entry point, and via [[EventStatePort]] to every
     * mouse-hit-testing capability, so nothing in the render/hit-testing call graph reaches a JVM-wide singleton cache.

@@ -81,7 +81,8 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
         case AppEffect.Surface(SurfaceEffect.OpenThemeCreator) => stateRef.get.flatMap(popups.openThemeCreatorEffect)
         case _                                                 => IO.unit
       },
-      update => IO.pure(update(AppConfig.default))
+      update => IO.pure(update(AppConfig.default)),
+      IO.unit
     )
     popups
 
