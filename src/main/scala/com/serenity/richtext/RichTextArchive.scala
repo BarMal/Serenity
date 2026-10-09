@@ -9,6 +9,9 @@ import scala.util.control.NonFatal
 
 import org.xml.sax.{ErrorHandler, SAXParseException}
 
+/** Every entry name of a package, plus the bytes of the entries a decoder asked for. */
+final case class ArchiveContents(entryNames: Set[String], entries: Map[String, Array[Byte]])
+
 class RichTextCodecException(message: String, cause: Throwable | Null = null) extends RuntimeException(message, cause)
 
 object RichTextArchive:
@@ -53,16 +56,25 @@ object RichTextArchive:
       case NonFatal(error)               => throw RichTextCodecException(s"$format archive could not be read", error)
     finally input.close()
 
-  def entryNames(bytes: Array[Byte], format: String): Set[String] =
+  /** Reads the package in one pass: all entry names, and the bytes of the `wanted` entries only. */
+  def read(bytes: Array[Byte], format: String, wanted: Set[String]): ArchiveContents =
     requireArchiveSize(bytes, format)
     val input = ZipInputStream(ByteArrayInputStream(bytes))
     try
-      Iterator
+      val (names, entries) = Iterator
         .continually(input.getNextEntry)
         .takeWhile(_ != null)
-        .map(_.getName)
-        .toSet
-    catch case NonFatal(error) => throw RichTextCodecException(s"$format archive could not be read", error)
+        .foldLeft((Set.empty[String], Map.empty[String, Array[Byte]])) {
+          case ((names, entries), entry) =>
+            val name = entry.getName
+            if wanted.contains(name) then
+              (names + name, entries.updated(name, readBoundedEntry(input, name, format, MaxXmlEntryBytes)))
+            else (names + name, entries)
+        }
+      ArchiveContents(names, entries)
+    catch
+      case error: RichTextCodecException => throw error
+      case NonFatal(error)               => throw RichTextCodecException(s"$format archive could not be read", error)
     finally input.close()
 
   private def readBoundedEntry(

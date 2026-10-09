@@ -77,7 +77,7 @@ object AccessibilitySnapshot:
             s"pane:${paneId.value}",
             AccessibilityRole.Document,
             name,
-            buffer.map(found => AccessibleValue.DocumentText(found.document.content)),
+            buffer.map(found => AccessibleValue.DocumentText(found.document.content, found.holdsRichText)),
             false,
             state.persisted.focus == Focus.EditorPane(paneId),
             node.contentRect

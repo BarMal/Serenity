@@ -9,7 +9,6 @@
 # The same regeneration also corrects Rope, PerformanceBenchmarks and StateManagerCapabilitySpec, whose recorded sizes
 # had drifted above what the tree measures.
 main/scala/com/serenity/app/RuntimeDisplayState.scala	forbidden mutable state at line 78: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/io/SwingFileDialog.scala	forbidden mutable state at line 35: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/spellcheck/HunspellFreeCompoundMatcher.scala	forbidden mutable state at line 106: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 272: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 346: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1

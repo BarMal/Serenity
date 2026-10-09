@@ -11,7 +11,7 @@ import org.typelevel.log4cats.Logger
 
 /** `textDocument/references` and `textDocument/rename` request handling, split out of [[LspManager]] to keep that file
   * under the architecture ratchet's file-length target. Both follow [[LspManager.startRequest]]'s shared request
-  * lifecycle exactly like [[LspManager.requestSemanticTokens]] does, just kept out of `LspManager` itself.
+  * lifecycle exactly like [[LspManagerSemanticTokens]] does, just kept out of `LspManager` itself.
   */
 private[lsp] object LspManagerReferenceRenameSupport:
 

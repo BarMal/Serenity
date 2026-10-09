@@ -58,7 +58,9 @@ final case class DocumentConfig(
     // Gates the multi-line drop cap paragraph role (issue: "Drop caps"). When false, a paragraph already tagged
     // ParagraphRole.DropCap keeps that role in the document (no data loss), but rendering/layout treats it as plain
     // Body -- see RichTextStyling/TextLayoutSnapshot's drop-cap gating.
-    dropCapsEnabled: Boolean = true
+    dropCapsEnabled: Boolean = true,
+    // Who new comments and replies are written as; `None` means the operating system's user name (`CommentAuthor`).
+    commentAuthor: Option[String] = None
 )
 
 final case class AppModeConfig(

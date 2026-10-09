@@ -102,51 +102,31 @@ final private[manager] class StateManagerWorkflowCapability(
         IO.unit
 
   /** Persist the current session (unsaved buffers included, so [Tab] Quick-resume restores them) and replace the editor
-    * with a start page that offers to resume it. Runtime chrome (theme, viewport, terminal/GUI mode, keyboard tier)
-    * carries over from the committed editor state so the splash matches the environment it came from.
+    * with a start page that offers to resume it. The write runs on the Session lane. If the editor changed while it was
+    * being written, the changed editor is written once more; if it changes again, it stays, with a notice saying why.
     */
   private def snapshotAndShowStartPage(committed: AppState): IO[Unit] =
+    lanes.submitEffect(SessionLane, saveThenShowStartPage(committed, rewritesLeft = 1))
+
+  private def saveThenShowStartPage(snapshot: AppState, rewritesLeft: Int): IO[Unit] =
     // On failure the editor stays: the start page would offer to resume a session that was never written.
-    sessionManager.saveSession(committed, persistUnsavedBuffers = true).attempt.flatMap {
-      case Right(_) => showStartPage(committed)
+    sessionManager.saveSession(snapshot, persistUnsavedBuffers = true).attempt.flatMap {
+      case Right(_) =>
+        modelCommit.currentState.flatMap { live =>
+          if StartPageTransitions.sameBuffers(live, snapshot) then
+            readableRecentFiles(snapshot).flatMap(recent =>
+              lanes.dispatchEffectResult(EffectResult.StartPageReady(snapshot, recent), _ => IO.unit)
+            )
+          else if rewritesLeft > 0 then saveThenShowStartPage(live, rewritesLeft - 1)
+          else operations.showNotice(FileFailureNotice.stayedInEditor)
+        }
       case Left(error) =>
         logger.error(error)("[SESSION] Saving the session before the start page failed") >>
           operations.showNotice(FileFailureNotice.sessionSaveFailed(error))
     }
 
-  private def showStartPage(committed: AppState): IO[Unit] =
-    IO.blocking(
-      committed.persisted.recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
-    ).flatMap { readableRecentFiles =>
-      val page = StartupPageContent.createStartPage(
-        sessionExists = true,
-        recentFiles = readableRecentFiles,
-        resumeIdentifier = Some(StartupPageContent.sessionResumeIdentifier(committed))
-      )
-      modelCommit.commitState(startPageStateFrom(committed, page), committed)
-    }
-
-  private def startPageStateFrom(committed: AppState, page: StartupPage): AppState =
-    val startPageSurfaceId = SurfaceId("surface-0")
-    val base               = AppState.empty(committed.persisted.config)
-    base.copy(
-      persisted = base.persisted.copy(
-        focus = Focus.Surface(startPageSurfaceId),
-        theme = committed.persisted.theme
-      ),
-      runtime = base.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            id = startPageSurfaceId,
-            content = SurfaceContent.StartPage(page),
-            presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          )
-        ),
-        viewportSize = committed.runtime.viewportSize,
-        nextSurfaceId = SurfaceIdSupply(1),
-        capabilities = committed.runtime.capabilities
-      )
-    )
+  private def readableRecentFiles(committed: AppState): IO[List[Path]] =
+    IO.blocking(committed.persisted.recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path)))
 
   /** Answers the close waiting on the action stack -- what the close prompt's choices run. */
   private[manager] def resolveClose(choice: CloseWorkflowChoice): IO[Unit] =
@@ -327,6 +307,10 @@ final private[manager] class StateManagerWorkflowCapability(
       val opened = EditorState.openNewTab(before)
       opened.copy(runtime = opened.runtime.copy(uiSurfaces = List.empty))
     }
+
+  /** Replaces the start page with a fresh editor tab, keeping every other surface; a no-op once it has gone. */
+  private[manager] def leaveStartPage(): IO[Unit] =
+    commit(UiPresetTransitions.seedEditorFromSplash)
 
   /** Opens the "Save Session As..." name prompt (issue #1390), pre-filled empty -- `ModalSessionReducer` routes its
     * Enter into `submitSessionNamePromptEffect` below. Shown on the current state, so the palette's record of the

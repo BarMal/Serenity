@@ -119,3 +119,13 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("render-fps") shouldBe 4
     selections("render-damage-granularity") shouldBe 1
   }
+
+  it should "reflect whether the word goal and line ending status segments are shown" in {
+    val shown  = AppConfig.default.withStatusLineSegments(List(StatusSegment.WordGoal, StatusSegment.LineEnding))
+    val hidden = AppConfig.default.withStatusLineSegments(Nil)
+
+    CommandRunnerOptionSelections.default(shown)("status-word-goal") shouldBe 0
+    CommandRunnerOptionSelections.default(shown)("status-line-ending") shouldBe 0
+    CommandRunnerOptionSelections.default(hidden)("status-word-goal") shouldBe 1
+    CommandRunnerOptionSelections.default(hidden)("status-line-ending") shouldBe 1
+  }

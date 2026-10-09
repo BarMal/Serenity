@@ -59,6 +59,11 @@ private[terminal] trait SwingWindowChromeSupport:
         !isTilingCompositor(env) &&
         !nativeWaylandToolkit)
 
+  private[serenity] def menuBarPlacement(osName: String, usesCustomChrome: Boolean): MenuBarPlacement =
+    if osName.toLowerCase(java.util.Locale.ROOT).contains("mac") then MenuBarPlacement.ScreenMenuBar
+    else if usesCustomChrome then MenuBarPlacement.UnderCustomTitleBar
+    else MenuBarPlacement.FrameMenuBar
+
   private[serenity] def isNativeWaylandToolkit(toolkitClassName: String): Boolean =
     toolkitClassName == "sun.awt.wl.WLToolkit"
 

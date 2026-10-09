@@ -3,17 +3,22 @@ package com.serenity.state.models
 import java.nio.file.Path
 
 import com.serenity.command.{
+  AppModeCommands,
   CloseCommands,
   Command,
   CommandIntent,
+  DiagnosticsCommands,
   ExternalChangeCommands,
   FileIntent,
+  LineEndingCommands,
   ReopenWithEncodingCommands,
   RichTextCommands,
   RichTextIntent,
   SafeModeCommands
 }
-import com.serenity.text.TextEncoding
+import com.serenity.config.AppMode
+import com.serenity.diagnostics.RuntimeIdentity
+import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
 import com.serenity.ui.widget.{ButtonEmphasis, EndBehaviour, SelectableList}
 
 /** What choosing an option in a [[ConfirmPrompt]] does once the prompt closes. */
@@ -61,6 +66,67 @@ object ConfirmPrompt:
       choices = List(
         ConfirmChoice("Restart normally", ConfirmAction.Run(SafeModeCommands.restartNormally), ButtonEmphasis.Primary),
         ConfirmChoice("Stay in safe mode", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** The last run ended without a clean exit (#2020). The report is what the log folder would show, ready to paste. */
+  def closedUnexpectedly(report: String): ConfirmPrompt =
+    of(
+      title = "Serenity closed unexpectedly",
+      message = List(
+        "The last session did not end cleanly. Files you had saved are untouched.",
+        "Serenity keeps unsaved edits in its session about a second after you stop typing and restores them when " +
+          "it starts normally, so the last moments before the crash may be missing.",
+        "The log folder holds what happened; copy the report to include it when asking for help."
+      ),
+      choices = List(
+        ConfirmChoice(
+          "Copy report",
+          ConfirmAction.Run(DiagnosticsCommands.copyToClipboard(report)),
+          ButtonEmphasis.Primary
+        ),
+        ConfirmChoice("Open Logs Folder", ConfirmAction.Run(DiagnosticsCommands.openLogsFolder)),
+        ConfirmChoice("Dismiss", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** Which build this is, with the ways to share it or find the logs. */
+  def about(identity: RuntimeIdentity): ConfirmPrompt =
+    of(
+      title = "About Serenity",
+      message = identity.lines,
+      choices = List(
+        ConfirmChoice(
+          "Copy details",
+          ConfirmAction.Run(DiagnosticsCommands.copyToClipboard(identity.summary)),
+          ButtonEmphasis.Primary
+        ),
+        ConfirmChoice("Open Logs Folder", ConfirmAction.Run(DiagnosticsCommands.openLogsFolder)),
+        ConfirmChoice("Dismiss", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** Switching to `target` would stop the project task that is running, as it has no home outside code mode. Staying
+    * stops nothing, so it is the first choice and what Escape does.
+    */
+  def stopProjectTaskToLeaveCode(task: RunningProjectTask, target: AppMode): ConfirmPrompt =
+    val targetName = target.configKey.capitalize
+    of(
+      title = "Project task running",
+      message = List(
+        s"A ${task.command.kind.lowerLabel} task for ${task.command.ecosystemLabel} is still running.",
+        s"$targetName mode has no project tools, so switching stops it."
+      ),
+      choices = List(
+        ConfirmChoice("Stay in Code mode", ConfirmAction.Dismiss, ButtonEmphasis.Primary),
+        ConfirmChoice(
+          s"Stop task and switch to $targetName",
+          ConfirmAction.Run(AppModeCommands.switchStoppingProjectTask(target)),
+          ButtonEmphasis.Danger
+        )
       ),
       blocking = true
     )
@@ -218,5 +284,35 @@ object ConfirmPrompt:
         ConfirmChoice("Save without formatting", ConfirmAction.Run(RichTextCommands.saveWithoutFormatting(bufferId))),
         ConfirmChoice("Cancel", ConfirmAction.Dismiss)
       ),
+      blocking = false
+    )
+
+  /** A file whose line endings are mixed, which saving makes uniform (#1964). Not blocking: nothing has changed yet,
+    * and the answer is also available as a command until the file is saved.
+    */
+  def mixedLineEndings(bufferId: BufferId, bufferLabel: String, counts: LineEndingCounts): ConfirmPrompt =
+    of(
+      title = "Mixed line endings",
+      message = List(
+        bufferLabel,
+        s"This file has ${counts.describe} line endings.",
+        s"Saving will write every line ending as ${counts.dominant.label}."
+      ),
+      choices = ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary) ::
+        LineEnding.values.toList
+          .filter(_ != counts.dominant)
+          .map(ending =>
+            ConfirmChoice(s"Use ${ending.label} instead", ConfirmAction.Run(LineEndingCommands.set(bufferId, ending)))
+          ),
+      blocking = false
+    )
+
+  /** A mixed file was saved without the user having chosen an ending (#1964), so the lines that changed are reported.
+    */
+  def savedMixedLineEndings(bufferLabel: String, written: LineEnding, counts: LineEndingCounts): ConfirmPrompt =
+    of(
+      title = "Line endings changed",
+      message = List(bufferLabel, s"Saved with ${written.label} line endings; the file had ${counts.describe}."),
+      choices = List(ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary)),
       blocking = false
     )

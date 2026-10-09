@@ -10,11 +10,12 @@ final private[manager] case class FileWorkflowListing(
     missingPathSegments: List[String]
 )
 
-/** What an Open dialog's target turned out to be on disk. */
+/** What an Open or Open Folder dialog's target turned out to be on disk. */
 private[manager] enum FileWorkflowTarget:
   case ReadableFile(path: Path)
   case Directory(path: Path)
   case Missing(path: Path)
+  case NotADirectory(path: Path)
 
 /** The Open/Save-As dialog's state changes as pure functions (#1697 Wave 3). Listings and target checks read the disk
   * on a lane; each result applies only while the dialog still shows the input it was computed for, so a listing for a
@@ -81,7 +82,10 @@ private[manager] object FileWorkflowTransitions:
             current.updated(path = path.toString + java.io.File.separator, statusMessage = None)
           )
         case FileWorkflowTarget.Missing(path) =>
-          withStatus(state, surfaceId, current, s"File not found: $path")
+          val subject = if current.mode == FileWorkflowMode.OpenFolder then "Folder" else "File"
+          withStatus(state, surfaceId, current, s"$subject not found: $path")
+        case FileWorkflowTarget.NotADirectory(path) =>
+          withStatus(state, surfaceId, current, s"Not a folder: $path")
     }
 
   def withProjectRootResolved(
