@@ -1,5 +1,6 @@
 package com.serenity
 
+import com.serenity.command.{CommandIntent, CommentsIntent}
 import com.serenity.document.{CommentRendering, RenderedComment}
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
@@ -16,7 +17,7 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
 
   private val paneId   = PaneId(0)
   private val bufferId = BufferId(0)
-  private val comment  = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Initial")
+  private val comment  = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Initial", id = CommentId(1))
   private val lensId   = SurfaceId("comment-lens")
 
   private def baseState: AppState =
@@ -46,7 +47,7 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
                 RenderedComment(0, "Initial", "Initial"),
                 "Initial",
                 "Initial".length,
-                Some(CommentLensTarget(0, comment))
+                Some(CommentLensTarget(comment.id, comment))
               )
             ),
             SurfacePresentation.Floating(Some(CursorPosition(0, 3)), SurfacePlacement.AboveCursor)
@@ -89,14 +90,14 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
     dismissed.persisted.buffers(bufferId).annotations.documentComments shouldBe List(comment)
   }
 
-  it should "save an authored comment and dismiss on Enter" in {
-    val edited = stateAfter(component.processEvent(ModalInsertChar('!'), baseState), baseState)
-    val saved  = stateAfter(component.processEvent(ModalSubmit, edited), edited)
+  it should "dismiss and hand the draft to the save command on Enter" in {
+    val edited                = stateAfter(component.processEvent(ModalInsertChar('!'), baseState), baseState)
+    val (dismissed, commands) = submitted(edited)
 
-    saved.commentLensSurface shouldBe None
-    saved.persisted.focus shouldBe Focus.EditorPane(paneId)
-    saved.persisted.buffers(bufferId).annotations.documentComments shouldBe List(comment.copy(text = "Initial!"))
-    saved.persisted.buffers(bufferId).document.isDirty shouldBe true
+    dismissed.commentLensSurface shouldBe None
+    dismissed.persisted.focus shouldBe Focus.EditorPane(paneId)
+    dismissed.persisted.buffers(bufferId).annotations.documentComments shouldBe List(comment)
+    commands shouldBe List(CommentsIntent.SaveCommentDraft(comment.id, "Initial!"))
   }
 
   it should "pass edit events on to the editor while read-only" in {
@@ -146,14 +147,12 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
     component.processEvent(ModalSubmit, untargeted) shouldBe ComponentResult.unhandled
   }
 
-  "Saving an emptied comment draft" should "delete the comment rather than save placeholder text" in {
-    val emptied = withLens(baseState)(_.copy(draft = "  ", cursor = 2))
+  "Saving an emptied comment draft" should "still go to the save command, which deletes the comment" in {
+    val emptied               = withLens(baseState)(_.copy(draft = "  ", cursor = 2))
+    val (dismissed, commands) = submitted(emptied)
 
-    val saved = stateAfter(component.processEvent(ModalSubmit, emptied), emptied)
-
-    saved.commentLensSurface shouldBe None
-    saved.persisted.buffers(bufferId).annotations.documentComments shouldBe Nil
-    saved.persisted.buffers(bufferId).document.isDirty shouldBe true
+    dismissed.commentLensSurface shouldBe None
+    commands shouldBe List(CommentsIntent.SaveCommentDraft(comment.id, "  "))
   }
 
   "Deleting in the comment draft" should "remove a whole emoji grapheme on Backspace" in {
@@ -187,35 +186,24 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
     commentLens(deleted).cursor shouldBe 0
   }
 
-  "Saving a comment draft" should "change only the targeted one of two identical comments" in {
-    val twins      = withComments(baseState, List(comment, comment))
-    val secondTwin = withLens(twins)(_.copy(target = Some(CommentLensTarget(1, comment))))
+  "Saving a comment draft" should "name the targeted one of two identical comments by its id" in {
+    val twin       = comment.copy(id = CommentId(2))
+    val twins      = withComments(baseState, List(comment, twin))
+    val secondTwin = withLens(twins)(_.copy(target = Some(CommentLensTarget(twin.id, twin))))
     val edited     = stateAfter(component.processEvent(ModalInsertChar('!'), secondTwin), secondTwin)
-    val saved      = stateAfter(component.processEvent(ModalSubmit, edited), edited)
 
-    saved.persisted.buffers(bufferId).annotations.documentComments shouldBe
-      List(comment, comment.copy(text = "Initial!"))
+    submitted(edited)._2 shouldBe List(CommentsIntent.SaveCommentDraft(twin.id, "Initial!"))
   }
 
-  it should "still reach a comment whose range an edit shifted while the lens was open" in {
-    val edited  = stateAfter(component.processEvent(ModalInsertChar('!'), baseState), baseState)
-    val shifted = DocumentComment(CursorPosition(0, 2), CursorPosition(0, 9), "Initial")
-    val moved   = withComments(edited, List(shifted))
-
-    val saved = stateAfter(component.processEvent(ModalSubmit, moved), moved)
-
-    saved.persisted.buffers(bufferId).annotations.documentComments shouldBe List(shifted.copy(text = "Initial!"))
-  }
-
-  it should "leave the comments alone when the targeted slot no longer holds the opened comment" in {
-    val other    = DocumentComment(CursorPosition(0, 8), CursorPosition(0, 17), "Unrelated")
-    val replaced = withComments(baseState, List(other))
-
-    val saved = stateAfter(component.processEvent(ModalSubmit, replaced), replaced)
-
-    saved.commentLensSurface shouldBe None
-    saved.persisted.buffers(bufferId).annotations.documentComments shouldBe List(other)
-  }
+  private def submitted(state: AppState): (AppState, List[CommentsIntent]) =
+    component.processEvent(ModalSubmit, state) match
+      case ComponentResult.Composite(
+            List(ComponentResult.StateChange(update), ComponentResult.ExecuteCommand(command))
+          ) =>
+        command.intent match
+          case CommandIntent.Comments(intent) => (update(state), List(intent))
+          case other                          => fail(s"Expected a comments command, got $other")
+      case other => fail(s"Expected a dismissal and a command, got $other")
 
   private def withComments(state: AppState, comments: List[DocumentComment]): AppState =
     val buffer = state.persisted.buffers(bufferId)

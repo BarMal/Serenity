@@ -256,8 +256,9 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.nav.interpretComments(CommentsIntent.ToggleCommentLens).unsafeRunSync()
 
     fixture.currentState.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.CommentLens(lensState)) => lensState.target shouldBe Some(CommentLensTarget(0, comment))
-      case other                                       => fail(s"Expected a single CommentLens surface, got $other")
+      case List(SurfaceContent.CommentLens(lensState)) =>
+        lensState.target shouldBe Some(CommentLensTarget(comment.id, comment))
+      case other => fail(s"Expected a single CommentLens surface, got $other")
   }
 
   it should "dismiss an already-open comment lens on a second toggle" in {
@@ -335,8 +336,9 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val after = fixture.currentState
     after.activeCursorPosition shouldBe Some(CursorPosition(2, 0))
     after.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.CommentLens(lensState)) => lensState.target shouldBe Some(CommentLensTarget(1, second))
-      case other                                       => fail(s"Expected a single CommentLens surface, got $other")
+      case List(SurfaceContent.CommentLens(lensState)) =>
+        lensState.target shouldBe Some(CommentLensTarget(second.id, second))
+      case other => fail(s"Expected a single CommentLens surface, got $other")
   }
 
   it should "navigate to the previous document comment" in {

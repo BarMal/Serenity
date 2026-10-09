@@ -214,12 +214,13 @@ class ChangeSetMappingParitySpec extends AnyPropSpec with ScalaCheckPropertyChec
   }
 
   property(
-    "pinned legacy quirk: remapOffsetAfterDeletions mixes shifted offsets with unshifted ranges after two deletions"
+    "remapOffsetAfterDeletions agrees with the change set after two merged deletions"
   ) {
+    // #2135 fixed remapOffsetAfterDeletions mixing shifted offsets with unshifted ranges; this used to pin 6.
     val deletions = List((2, 4), (6, 8))
     val changes =
       ChangeSet.fromIntents(12, deletions.map((from, to) => Replacement(from, to, "")), OverlapPolicy.MergeDeletions)
-    EditorEditSupport.remapOffsetAfterDeletions(9, deletions) shouldBe 6
+    EditorEditSupport.remapOffsetAfterDeletions(9, deletions) shouldBe 5
     changes.mapPos(9, MapMode.Cursor) shouldBe 5
   }
 

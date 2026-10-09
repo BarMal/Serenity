@@ -28,6 +28,16 @@ private[manager] object ProjectTaskTransitions:
     if state.runtime.projectTasks.running.isEmpty then state
     else withTasks(state, state.runtime.projectTasks.copy(running = None))
 
+  /** Releases the running task, if any, leaving the terminal to say it was stopped for leaving code mode. */
+  def stoppedOnLeavingCode(state: AppState): AppState =
+    state.runtime.projectTasks.running.fold(state) { task =>
+      withTasks(
+        state,
+        state.runtime.projectTasks
+          .copy(running = None, terminalText = ProjectTaskTerminal.stoppedOnLeavingCode(task.command))
+      )
+    }
+
   /** What a session restore keeps: no running task, but the id counter -- ids version task results, so they must never
     * repeat within the process, and a task from before the restore may still post output.
     */

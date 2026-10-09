@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer, ModalStateReducer, UndoEffect}
-import com.serenity.state.undo.HistoryEntry
+import com.serenity.state.undo.{EditGrouping, HistoryEntry}
 import com.serenity.ui.layout.{PanelPosition, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -247,7 +247,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
       AppEffect.Undo(
         UndoEffect.RecordBoundary(
           HistoryEntry.PaneClose(twoPaneState.persisted.layout, twoPaneState.persisted.focus),
-          groupable = false
+          EditGrouping.Standalone
         )
       )
     )

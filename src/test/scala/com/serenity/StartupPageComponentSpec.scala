@@ -133,6 +133,27 @@ class StartupPageComponentSpec extends AnyFlatSpec with Matchers:
       case _ => fail(s"Expected ExecuteCommand, got $result")
   }
 
+  it should "execute the open folder command when Enter is pressed on the third action of the launch page" in {
+    val page      = com.serenity.app.AppStartup.createStartPage(sessionExists = false, recentFiles = Nil)
+    val surfaceId = SurfaceId("surface-0")
+    val state = AppState.empty.copy(
+      persisted = AppState.empty.persisted.copy(focus = Focus.Surface(surfaceId)),
+      runtime = AppState.empty.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            surfaceId,
+            SurfaceContent.StartPage(page.withSelectedIndex(2)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        )
+      )
+    )
+
+    StartupPageComponent().processEvent(Enter, state) match
+      case ComponentResult.ExecuteCommand(command) => command.name shouldBe "startup.open-folder"
+      case other                                   => fail(s"Expected ExecuteCommand, got $other")
+  }
+
   it should "dismiss startup page when Escape is pressed" in {
     val component    = StartupPageComponent()
     val initialState = createStartupPageState(selectedIndex = 1)

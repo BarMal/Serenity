@@ -295,6 +295,15 @@ object ProjectTaskTerminal:
        |${if output.isEmpty then "(waiting for output)" else output}
        |""".stripMargin
 
+  def stoppedOnLeavingCode(command: ProjectTaskCommand): String =
+    s"""Project task stopped: the workspace left code mode.
+       |
+       |The ${command.kind.lowerLabel} task for ${command.ecosystemLabel} was stopped.
+       |
+       |Command:
+       |${command.renderedCommand}
+       |""".stripMargin
+
   def failedToStart(command: ProjectTaskCommand, error: Throwable): String =
     s"""Failed to start ${command.kind.lowerLabel} task for ${command.ecosystemLabel}.
        |

@@ -189,7 +189,10 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
 
   it should "load a double modifier tap from the text configuration" in {
     val configFile = Files.createTempFile("serenity-double-tap-hotkey", ".conf")
-    Files.writeString(configFile, "hotkey.command_palette = ctrl+ctrl\n")
+    Files.writeString(
+      configFile,
+      s"config.version = ${ConfigVersion.Current.value}\nhotkey.command_palette = ctrl+ctrl\n"
+    )
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 

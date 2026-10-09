@@ -7,7 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.*
 import cats.syntax.all.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
-import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
+import com.serenity.config.{AutoSaveMode, SpellCheckConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.diagnostics.Trace
 import com.serenity.document.CommentRendering
 import com.serenity.io.{FileBrowser, FileEntry}
@@ -16,7 +16,7 @@ import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, DictionarySna
 import com.serenity.state.core.NotesPaneSync
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{ModalEventReducer, NoticeReducer, PeekStateReducer}
+import com.serenity.state.reducers.{ModalEventReducer, NoticeReducer, PeekStateReducer, SettingsPreviewReducer}
 import com.serenity.ui.layout.{DirEntry, PeekContent, WrappedLineCache}
 import org.typelevel.log4cats.Logger
 
@@ -50,7 +50,9 @@ final private[manager] class StateManagerOperationBoundary private (
     commitsUnobserved: Ref[IO, Boolean],
     editIdleSessionSave: Option[EditIdleSessionSave],
     announceClosedDocuments: (AppState, AppState) => IO[Unit],
-    forgetClosedBuffers: (AppState, AppState) => IO[Unit]
+    forgetClosedBuffers: (AppState, AppState) => IO[Unit],
+    announceModeChange: (AppState, AppState) => IO[Unit],
+    autoSave: Ref[IO, BufferId => IO[Unit]]
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
@@ -62,6 +64,7 @@ final private[manager] class StateManagerOperationBoundary private (
   private val ShutdownGracePeriod              = 5.seconds
 
   private val EditIdleSessionSaveLane: Lane.Keyed = Lane.Keyed(LaneKey.EditIdleSessionSave, LanePolicy.SwitchLatest)
+  private val AutoSaveLane: Lane.Keyed            = Lane.Keyed(LaneKey.AutoSave, LanePolicy.Sequential)
 
   // Built here, over the dispatcher's own model ref, because every commit it makes runs this boundary's follow-up work.
   val modelCommit: ModelCommit = new ModelCommit(modelRef, this, wrapCache)
@@ -106,13 +109,40 @@ final private[manager] class StateManagerOperationBoundary private (
 
   /** The follow-up work of every `ModelCommit` app-state commit. */
   private[manager] def afterCommit(fallbackState: AppState, committedState: AppState): IO[Unit] =
-    logModalTransition(fallbackState, committedState) >> scheduleDocumentAnalysis() >>
+    logModalTransition(fallbackState, committedState) >> reapplyAbandonedPreview(fallbackState, committedState) >>
+      scheduleDocumentAnalysis() >>
       ModalEventReducer.findRefreshDue(fallbackState, committedState).traverse_(scheduleFindSearch) >>
       PanelContentSync.outlineRefreshDue(committedState, fallbackState).traverse_(scheduleOutlineRefresh) >>
       PanelContentSync.explorerListingsDue(committedState, fallbackState).traverse_(listExplorerDirectory) >>
       scheduleSessionSaveIfDue(fallbackState, committedState) >>
+      scheduleAutoSaveIfDue(fallbackState, committedState) >>
       announceClosedDocuments(fallbackState, committedState) >> forgetClosedBuffers(fallbackState, committedState) >>
       commitsUnobserved.get.ifM(IO.unit, commitObserver.get.flatMap(_(fallbackState, committedState)))
+
+  /** A preview that `prepareCommit` put back because the runner went away leaves the font loader on the previewed
+    * fonts; the event makes the reducers ask for them to be reloaded.
+    */
+  private def reapplyAbandonedPreview(before: AppState, after: AppState): IO[Unit] =
+    enqueueEvent(com.serenity.keystroke.events.SettingsPreviewAbandoned)
+      .whenA(
+        before.runtime.pendingSetting.isDefined && after.runtime.pendingSetting.isEmpty &&
+          before.persisted.config != after.persisted.config
+      )
+
+  /** The IO half of a mode change (see [[ModeTransition]]): tells the language servers, and stops the project task
+    * whose record the commit released. The commit's own state change was settled inside it.
+    */
+  private[manager] def afterModeChange(before: AppState, after: AppState): IO[Unit] =
+    IO.whenA(ModeTransition.changed(before, after))(
+      announceModeChange(before, after) >>
+        ModeTransition
+          .stoppedTask(before, after)
+          .traverse_(task =>
+            submit(StateManagerProjectLspEffects.TaskLane, IO.unit) >> showNotice(
+              ModeTransition.taskStoppedNotice(task)
+            )
+          )
+    )
 
   /** Replaces the observer told of every commit `afterCommit` follows up, with the states before and after. */
   def observeCommits(observer: (AppState, AppState) => IO[Unit]): IO[Unit] =
@@ -317,6 +347,34 @@ final private[manager] class StateManagerOperationBoundary private (
       )
     submit(EditIdleSessionSaveLane, IO.sleep(editIdle.idle) >> submit(StateManagerWorkflowCapability.SessionLane, save))
 
+  /** Installs what writes a buffer for auto-save: built from the file persistence, which is made after this boundary.
+    */
+  def installAutoSave(save: BufferId => IO[Unit]): IO[Unit] =
+    autoSave.set(save)
+
+  private def scheduleAutoSaveIfDue(before: AppState, after: AppState): IO[Unit] =
+    val config = after.persisted.config.autoSaveConfig
+    config.mode match
+      case AutoSaveMode.AfterDelay =>
+        AutoSave.edited(before, after).traverse_(scheduleAutoSave(_, config.delay))
+      case AutoSaveMode.OnFocusChange =>
+        AutoSave.leftBehind(before, after).traverse_(bufferId => submit(AutoSaveLane, runAutoSave(bufferId)))
+      case AutoSaveMode.Off | AutoSaveMode.OnWindowChange => IO.unit
+
+  /** Every edit to the buffer restarts the pause; the write is queued on its own lane, where a later edit cannot cut it
+    * off.
+    */
+  private def scheduleAutoSave(bufferId: BufferId, delay: FiniteDuration): IO[Unit] =
+    submit(
+      Lane.Keyed(LaneKey.AutoSaveDelay(bufferId), LanePolicy.SwitchLatest),
+      IO.sleep(delay) >> submit(AutoSaveLane, runAutoSave(bufferId))
+    )
+
+  private def runAutoSave(bufferId: BufferId): IO[Unit] =
+    autoSave.get
+      .flatMap(_(bufferId))
+      .handleErrorWith(error => logger.error(error)(s"[FILE] Auto-save of buffer $bufferId failed"))
+
   private def listExplorerDirectory(surfaceId: SurfaceId, path: Path): IO[Unit] =
     submit(
       Lane.Keyed(LaneKey.ExplorerListing(surfaceId, path.toAbsolutePath.normalize), LanePolicy.SwitchLatest),
@@ -445,12 +503,16 @@ private[manager] object StateManagerOperationBoundary:
     // lens in sync with the cursor regardless of what moved it -- a keyboard cursor move opens/closes it exactly as a
     // mouse click already did, without each event source having to remember to call it itself.
     AppStateValidation
-      .validatedOver(fallbackState, EventPipelineTransitions.commandRunnerFocusNormalized(newState))
+      .validatedOver(
+        fallbackState,
+        EventPipelineTransitions.commandRunnerFocusNormalized(SettingsPreviewReducer.withoutOrphanedPreview(newState))
+      )
       .map(CommentRendering.syncFloatingLensWithCursor(_, fallbackState))
       .map(PanelContentSync.synced(_, fallbackState))
       .map(NotesPaneSync.synced(_, fallbackState))
       .map(PanelArrangement.resyncedIn)
       .map(_.withBufferIndexesRefreshed)
+      .map(LineEndingChoice.withPendingNotice)
 
   /** A directory listing for an explorer. `FileBrowser` lists a missing directory as empty, which an explorer would
     * show as an empty folder, so an empty listing is checked for the directory still being there.
@@ -485,6 +547,7 @@ private[manager] object StateManagerOperationBoundary:
     // The model drops its own record of a closed buffer inside the commit (`ClosedBufferRetention.forgetting`); this is
     // for the caches that live outside it.
     forgetClosedBuffers: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit,
+    announceModeChange: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit,
     // Owned by this boundary unless the caller shares one on purpose (#1677: never a JVM-wide default): a harness that
     // builds many managers in one process hands them the same cache so the dictionary is parsed once between them.
     dictionaryCache: DictionaryCache = DictionaryCache(),
@@ -506,6 +569,7 @@ private[manager] object StateManagerOperationBoundary:
       fileWriteLedger   <- FileWriteLedger.create
       commitObserver    <- Ref.of[IO, (AppState, AppState) => IO[Unit]]((_, _) => IO.unit)
       commitsUnobserved <- Ref.of[IO, Boolean](false)
+      autoSave          <- Ref.of[IO, BufferId => IO[Unit]](_ => IO.unit)
     yield new StateManagerOperationBoundary(
       pendingOperations,
       modelRef,
@@ -531,5 +595,7 @@ private[manager] object StateManagerOperationBoundary:
       commitsUnobserved,
       editIdleSessionSave,
       announceClosedDocuments,
-      forgetClosedBuffers
+      forgetClosedBuffers,
+      announceModeChange,
+      autoSave
     )

@@ -71,7 +71,8 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
         target => calls.update(_ :+ s"expand:$target"),
         () => calls.update(_ :+ "collapse"),
         target => calls.update(_ :+ s"switch:$target"),
-        (target, size) => calls.update(_ :+ s"resize:$target:$size")
+        (target, size) => calls.update(_ :+ s"resize:$target:$size"),
+        _ => IO.unit
       )
     )
 
@@ -310,7 +311,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.peeks.get.unsafeRunSync() shouldBe List(PeekContent.QuickInfo("Focus a panel to maximise it."))
   }
 
-  it should "hide panels whose family doesn't fit the mode being switched to" in {
+  it should "leave the panels of the mode being left to the mode transition in the commit" in {
     val withPanels =
       pinnedState(PanelId.Diagnostics.surfaceId, SurfaceContent.Diagnostics(Nil), PanelPosition.Bottom, 10)
     val state =
@@ -325,7 +326,9 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.panels.interpret(ViewIntent.SetAppMode(com.serenity.config.AppMode.Prose), state).unsafeRunSync()
 
-    fixture.currentSurfaces.map(_.id) shouldBe List(PanelId.Outline.surfaceId)
+    fixture.stateRef.get.unsafeRunSync().persisted.config.appMode shouldBe com.serenity.config.AppMode.Prose
+    fixture.currentSurfaces.map(_.id) should contain theSameElementsAs
+      List(PanelId.Diagnostics.surfaceId, PanelId.Outline.surfaceId)
   }
 
   it should "raise the tab list as an event rather than mutating state directly" in {

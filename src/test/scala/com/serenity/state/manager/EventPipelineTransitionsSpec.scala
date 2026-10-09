@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import com.serenity.command.CommandRegistry
 import com.serenity.config.AppConfig
-import com.serenity.keystroke.events.{NextTab, ResizeEvent, ToggleCommandRunner}
+import com.serenity.keystroke.events.{DeleteBackward, Enter, InsertChar, NextTab, ResizeEvent, ToggleCommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer, ReducerResult, SurfaceEffect}
@@ -102,4 +102,24 @@ class EventPipelineTransitionsSpec extends AnyFlatSpec with Matchers:
     val state = twoPanes()
 
     EventPipelineTransitions.commandRunnerFocusNormalized(state) shouldBe state
+  }
+
+  "typingObserved" should "stamp the edit clock for a text-entry key pressed in an editor pane" in {
+    val observed = EventPipelineTransitions.typingObserved(DeleteBackward, nowNanos = 7L)(twoPanes())
+
+    observed.runtime.editClock.nowNanos shouldBe 7L
+  }
+
+  it should "leave the state alone for a text-entry key pressed where nothing is being edited" in {
+    val panes     = twoPanes()
+    val onSurface = panes.copy(persisted = panes.persisted.copy(focus = Focus.Surface(SurfaceId("surface-0"))))
+
+    EventPipelineTransitions.typingObserved(Enter, nowNanos = 7L)(onSurface) shouldBe onSurface
+    EventPipelineTransitions.typingObserved(DeleteBackward, nowNanos = 7L)(onSurface) shouldBe onSurface
+  }
+
+  it should "stamp the edit clock when a character is typed into an editor pane" in {
+    val observed = EventPipelineTransitions.typingObserved(InsertChar('a'), nowNanos = 7L)(twoPanes())
+
+    observed.runtime.editClock.nowNanos shouldBe 7L
   }

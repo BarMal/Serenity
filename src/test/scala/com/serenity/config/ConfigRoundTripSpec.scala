@@ -102,7 +102,10 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
     .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
     .withWordGoal(Some(50000))
+    .withCommentAuthor(Some("Ada Lovelace"))
     .withDropCapsEnabled(false)
+    .withAutoSaveMode(AutoSaveMode.OnFocusChange)
+    .withAutoSaveDelayMillis(2500L)
     .withAppMode(AppMode.Prose)
     .withShowAllSettingsRegardlessOfMode(true)
     .withInterfaceDensity(InterfaceDensity.Compact)
@@ -208,6 +211,9 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     "inputConfig.focusedKeymapConfig.modal.bindings",
     "inputConfig.focusedKeymapConfig.panel.bindings",
     "inputConfig.focusedKeymapConfig.peek.bindings",
+    // Records that the bindings were adjusted for a terminal at startup; it is a property of the running frontend,
+    // never written to the file (HotkeyOverridesSpec).
+    "inputConfig.hotkeyConfig.terminalAdjusted",
     "inputConfig.hotkeyConfig.bindings"
   )
 

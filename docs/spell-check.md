@@ -43,11 +43,26 @@ with nothing configured. Each language loads from the first directory that has i
 several of these directories is loaded once. This lookup is only consulted when `spellcheck.dictionary_paths` is
 empty: a path you have configured yourself is always used as configured and never silently second-guessed.
 
-When no dictionary resolves for a configured language, every prose buffer shows one notice on its first line naming
-that language and the directories searched, and no words are flagged for it -- checking against a near-empty word list
-would flag every word. This holds for every language without a dictionary (`fr`, `el`, `en-US` and so on). Only British
-English and a bare `en` never reach it: they have a bundled dictionary (below). The notice names only the languages
-still unserved, and prose in the languages that did resolve keeps being checked.
+When a configured language has no dictionary, Serenity tells the writer once per session (once per distinct wording)
+with a notice shown as a peek, not as a diagnostic on the document. It appears only while spell check is enabled and
+there is prose to check, and it waits for the next analysis if another peek is on screen. The notice names every
+language with no dictionary, the directories searched (`spellcheck.dictionary_paths` when set, otherwise the OS
+directories above), and a package suggestion per language, `hunspell-` followed by the language in lower case:
+
+```
+Spell check found no dictionary for fr.
+Searched: /usr/share/hunspell, /usr/share/myspell/dicts, ...
+Install a Hunspell dictionary (for example hunspell-fr) or set spellcheck.dictionary_paths.
+```
+
+- **Some languages resolve.** Only the missing ones are named and the rest keep being checked.
+- **None resolve.** Every configured language is named and no words are flagged, since checking against a near-empty
+  word list would flag every word.
+- **No notice** when a loaded dictionary is not named for any configured language (a bare `words.dic` path), since it
+  cannot be said to leave a particular language unserved.
+
+Every language without a dictionary is named (`fr`, `el`, `en-US` and so on). Only British English and a bare `en`
+never count as missing: they have a bundled dictionary (below).
 
 A config file saved by an earlier version keeps the values it was saved with (`spellcheck.enabled = false`,
 `spellcheck.languages = ["en"]`); a saved `["en"]` is checked against the bundled British English dictionary unless an
@@ -118,8 +133,7 @@ unmodified copies of upstream.
 
   So `["en-US"]` with `en_US.dic` installed uses that dictionary, and `["en-US"]` with none installed shows the notice
   rather than quietly checking American prose against British spellings.
-- **Other languages have no bundled dictionary.** `fr` and `el` carry a built-in word list of a handful of words, far too
-  small to check prose with, so they follow the notice rule instead of flagging every ordinary word.
+- **Other languages have no bundled dictionary.** They follow the notice rule instead of flagging every ordinary word.
 
 ## Setting up another language (or British English by hand)
 

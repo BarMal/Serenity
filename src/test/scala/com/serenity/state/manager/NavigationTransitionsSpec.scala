@@ -1,5 +1,7 @@
 package com.serenity.state.manager
 
+import java.time.Instant
+
 import com.serenity.command.{CommentsIntent, NavigationIntent, PlaceholderIntent}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -28,7 +30,12 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
         editing = EditingState(List(cursor)),
         annotations = Annotations(bookmarks = bookmarks, documentComments = comments, placeholders = placeholders)
       )
-    AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(BufferId(0) -> buffer)))
+    AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        buffers = Map(BufferId(0) -> buffer),
+        config = AppState.initial.persisted.config.withCommentAuthor(Some(author))
+      )
+    )
 
   private def withoutActiveEditor(state: AppState): AppState =
     state.copy(persisted = state.persisted.copy(layout = state.persisted.layout.copy(activeEditorPaneId = None)))
@@ -52,6 +59,9 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
 
   private def commentLensTargets(state: AppState): List[Option[CommentLensTarget]] =
     state.runtime.uiSurfaces.map(_.content).collect { case SurfaceContent.CommentLens(lens) => lens.target }
+
+  private val now    = Instant.parse("2026-10-06T10:00:00Z")
+  private val author = "Ada"
 
   private val lines    = "line0\nline1\nline2"
   private val sections = "Section One\n\nSection Two\n\nSection Three"
@@ -288,22 +298,23 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
 
   // --- Comment lens ----------------------------------------------------------------------------------------------
 
-  private val comment     = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "Needs work")
+  private val comment =
+    DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "Needs work", id = CommentId(1))
   private val placeholder = Placeholder(CursorPosition(0, 2), "Pick a real name")
 
   it should "open the comment lens on the active comment as a valid state" in {
     val state = stateWithBuffer("hello world", cursor = CursorPosition(0, 2), comments = List(comment))
 
-    val result = validApplied(NavigationTransitions.comments(CommentsIntent.ToggleCommentLens, state))
+    val result = validApplied(NavigationTransitions.comments(CommentsIntent.ToggleCommentLens, state, now))
 
-    commentLensTargets(result.state) shouldBe List(Some(CommentLensTarget(0, comment)))
+    commentLensTargets(result.state) shouldBe List(Some(CommentLensTarget(comment.id, comment)))
   }
 
   it should "dismiss an open comment lens and restore the prior focus" in {
     val state  = stateWithBuffer("hello world", cursor = CursorPosition(0, 2), comments = List(comment))
-    val opened = validApplied(NavigationTransitions.comments(CommentsIntent.ToggleCommentLens, state)).state
+    val opened = validApplied(NavigationTransitions.comments(CommentsIntent.ToggleCommentLens, state, now)).state
 
-    val result = validApplied(NavigationTransitions.comments(CommentsIntent.ToggleCommentLens, opened))
+    val result = validApplied(NavigationTransitions.comments(CommentsIntent.ToggleCommentLens, opened, now))
 
     result.state.runtime.uiSurfaces shouldBe Nil
     result.state.persisted.focus shouldBe state.persisted.focus
@@ -312,7 +323,7 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
   it should "ignore a comment-lens toggle with no active comment" in {
     val state = stateWithBuffer("hello world", cursor = CursorPosition(0, 2))
 
-    NavigationTransitions.comments(CommentsIntent.ToggleCommentLens, state) shouldBe
+    NavigationTransitions.comments(CommentsIntent.ToggleCommentLens, state, now) shouldBe
       NavigationOutcome.Ignored(Some("[CMD] Comment lens requested without an active comment"))
   }
 
@@ -321,10 +332,19 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
   it should "add a comment at the cursor and mark the buffer dirty" in {
     val state = stateWithBuffer("hello world")
 
-    val result = validApplied(NavigationTransitions.comments(CommentsIntent.AddDocumentComment("A note"), state))
+    val result = validApplied(NavigationTransitions.comments(CommentsIntent.AddDocumentComment("A note"), state, now))
 
     buffer0(result.state).annotations.documentComments shouldBe
-      List(DocumentComment(CursorPosition(0, 0), CursorPosition(0, 0), "A note"))
+      List(
+        DocumentComment(
+          CursorPosition(0, 0),
+          CursorPosition(0, 0),
+          "A note",
+          id = CommentId(1),
+          author = Some(author),
+          createdAt = Some(now)
+        )
+      )
     buffer0(result.state).document.isDirty shouldBe true
   }
 
@@ -344,23 +364,35 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val result = validApplied(NavigationTransitions.comments(CommentsIntent.AddDocumentComment("Hi"), selected))
+    val result = validApplied(NavigationTransitions.comments(CommentsIntent.AddDocumentComment("Hi"), selected, now))
 
     buffer0(result.state).annotations.documentComments shouldBe
-      List(DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "Hi"))
+      List(
+        DocumentComment(
+          CursorPosition(0, 0),
+          CursorPosition(0, 5),
+          "Hi",
+          id = CommentId(1),
+          author = Some(author),
+          createdAt = Some(now)
+        )
+      )
   }
 
   it should "replace the text of the comment at the cursor instead of adding another" in {
     val state = stateWithBuffer("hello world", cursor = CursorPosition(0, 2), comments = List(comment))
 
-    val result = validApplied(NavigationTransitions.comments(CommentsIntent.AddDocumentComment("New"), state))
+    val result = validApplied(NavigationTransitions.comments(CommentsIntent.AddDocumentComment("New"), state, now))
 
-    buffer0(result.state).annotations.documentComments shouldBe List(comment.copy(text = "New"))
+    buffer0(result.state).annotations.documentComments shouldBe
+      List(comment.copy(text = "New", editedAt = Some(now)))
   }
 
   it should "default blank comment text to the placeholder" in {
     val result =
-      validApplied(NavigationTransitions.comments(CommentsIntent.AddDocumentComment("  "), stateWithBuffer("hi")))
+      validApplied(
+        NavigationTransitions.comments(CommentsIntent.AddDocumentComment("  "), stateWithBuffer("hi"), now)
+      )
 
     buffer0(result.state).annotations.documentComments.map(_.text) shouldBe List("Comment")
   }
@@ -368,7 +400,7 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
   it should "delete the comment at the cursor and mark the buffer dirty" in {
     val state = stateWithBuffer("hello world", cursor = CursorPosition(0, 2), comments = List(comment))
 
-    val result = validApplied(NavigationTransitions.comments(CommentsIntent.DeleteDocumentComment, state))
+    val result = validApplied(NavigationTransitions.comments(CommentsIntent.DeleteDocumentComment, state, now))
 
     buffer0(result.state).annotations.documentComments shouldBe Nil
     buffer0(result.state).document.isDirty shouldBe true
@@ -377,7 +409,7 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
   it should "leave the buffer clean when there is no comment at the cursor to delete" in {
     val state = stateWithBuffer("hello world", cursor = CursorPosition(0, 8), comments = List(comment))
 
-    val result = validApplied(NavigationTransitions.comments(CommentsIntent.DeleteDocumentComment, state))
+    val result = validApplied(NavigationTransitions.comments(CommentsIntent.DeleteDocumentComment, state, now))
 
     buffer0(result.state).annotations.documentComments shouldBe List(comment)
     buffer0(result.state).document.isDirty shouldBe false
@@ -386,34 +418,34 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
   it should "ignore comment edits without an active editor buffer" in {
     val state = withoutActiveEditor(stateWithBuffer("hello world"))
 
-    NavigationTransitions.comments(CommentsIntent.AddDocumentComment("x"), state) shouldBe
+    NavigationTransitions.comments(CommentsIntent.AddDocumentComment("x"), state, now) shouldBe
       NavigationOutcome.Ignored(Some("[CMD] Add document comment requested without an active editor buffer"))
-    NavigationTransitions.comments(CommentsIntent.DeleteDocumentComment, state) shouldBe
+    NavigationTransitions.comments(CommentsIntent.DeleteDocumentComment, state, now) shouldBe
       NavigationOutcome.Ignored(Some("[CMD] Delete document comment requested without an active editor buffer"))
   }
 
   // --- Comment navigation ------------------------------------------------------------------------------------------
 
   it should "jump to the next comment and open the lens on it" in {
-    val first  = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "First")
-    val second = DocumentComment(CursorPosition(2, 0), CursorPosition(2, 5), "Second")
+    val first  = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "First", id = CommentId(1))
+    val second = DocumentComment(CursorPosition(2, 0), CursorPosition(2, 5), "Second", id = CommentId(2))
     val state  = stateWithBuffer("aaaaa\nbbbbb\nccccc", comments = List(first, second))
 
-    val result = validApplied(NavigationTransitions.comments(CommentsIntent.NextDocumentComment, state))
+    val result = validApplied(NavigationTransitions.comments(CommentsIntent.NextDocumentComment, state, now))
 
     result.state.activeCursorPosition shouldBe Some(CursorPosition(2, 0))
-    commentLensTargets(result.state) shouldBe List(Some(CommentLensTarget(1, second)))
+    commentLensTargets(result.state) shouldBe List(Some(CommentLensTarget(second.id, second)))
   }
 
   it should "open the lens without moving when the only comment is already under the cursor (#1183)" in {
-    val only  = DocumentComment(CursorPosition(1, 0), CursorPosition(1, 5), "Only")
+    val only  = DocumentComment(CursorPosition(1, 0), CursorPosition(1, 5), "Only", id = CommentId(1))
     val state = stateWithBuffer("aaaaa\nbbbbb\nccccc", cursor = CursorPosition(1, 0), comments = List(only))
 
-    val result = validApplied(NavigationTransitions.comments(CommentsIntent.NextDocumentComment, state))
+    val result = validApplied(NavigationTransitions.comments(CommentsIntent.NextDocumentComment, state, now))
 
     result.state.activeCursorPosition shouldBe Some(CursorPosition(1, 0))
     result.state.runtime.navigation shouldBe state.runtime.navigation
-    commentLensTargets(result.state) shouldBe List(Some(CommentLensTarget(0, only)))
+    commentLensTargets(result.state) shouldBe List(Some(CommentLensTarget(only.id, only)))
     result.effects shouldBe Nil
   }
 

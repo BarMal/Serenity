@@ -46,9 +46,15 @@ object StateManagerTestFacade:
   def stateManagerWithFileManager(fileManager: FileManager)(using Balance): IO[StateManager] =
     stateManagerOver(Model(AppState.initial, UndoState()), Some(fileManager))
 
-  private def stateManagerOver(model: Model, fileManager: Option[FileManager] = None)(using
-    Balance
-  ): IO[StateManager] =
+  /** A state manager over a runtime `adjust` has changed -- a fake project-task launcher, a config file to watch. */
+  def adjustedStateManager(adjust: StateManagerRuntime => StateManagerRuntime)(using Balance): IO[StateManager] =
+    stateManagerOver(Model(AppState.initial, UndoState()), None, adjust)
+
+  private def stateManagerOver(
+    model: Model,
+    fileManager: Option[FileManager] = None,
+    adjust: StateManagerRuntime => StateManagerRuntime = identity
+  )(using Balance): IO[StateManager] =
     for
       directory           <- IO.blocking(Files.createTempDirectory("seeded-state-manager"))
       modelRef            <- Ref.of[IO, Model](model)
@@ -76,7 +82,7 @@ object StateManagerTestFacade:
         dictionaryCache = SharedDictionary.default
       )
       stateManager <- StateManager.fromRuntime(
-        fileManager.fold(runtime)(manager => runtime.copy(fileManager = manager))
+        adjust(fileManager.fold(runtime)(manager => runtime.copy(fileManager = manager)))
       )
     yield stateManager
 
@@ -113,7 +119,7 @@ object StateManagerTestFacade:
 
     def markBufferSaved(bufferId: BufferId): IO[Unit] =
       stateManager.updateStateValidated(
-        withBufferUpdate(bufferId)(buffer => buffer.copy(document = buffer.document.copy(isDirty = false)))
+        withBufferUpdate(bufferId)(buffer => buffer.copy(document = buffer.document.markedSaved))
       )
 
     def checkUnsavedChanges(bufferId: Option[BufferId]): IO[Boolean] =

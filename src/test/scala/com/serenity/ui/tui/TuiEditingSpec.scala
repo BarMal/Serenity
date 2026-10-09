@@ -96,6 +96,7 @@ class TuiEditingSpec extends TuiSpec:
     yield ()
   }
 
+  // Undo steps by word (#1930): the first undo takes off " edit", not the whole of what was typed.
   "undo and redo" should "step the document back and forward, repainting each time" in runTui() {
     for
       _      <- typeText("first edit")
@@ -106,7 +107,7 @@ class TuiEditingSpec extends TuiSpec:
       redone <- documentText
       _      <- verify("redone")(screen => screen.rowText(1).stripTrailing shouldBe " 1 first edit")
     yield
-      undone shouldBe Some("")
+      undone shouldBe Some("first")
       redone shouldBe Some("first edit")
   }
 

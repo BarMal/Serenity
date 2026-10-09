@@ -15,6 +15,8 @@ class ConfigVersioningSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   private val baselineText = ConfigManager.configToString(AppConfig.default)
 
+  private val currentVersionLine = s"config.version = ${ConfigVersion.Current.value}\n"
+
   private def tempFile(content: String): Path =
     val file = Files.createTempFile("serenity-versioning", ".conf")
     Files.writeString(file, content)
@@ -104,7 +106,7 @@ class ConfigVersioningSpec extends AnyFlatSpec with Matchers with OptionValues:
   }
 
   "a newer config" should "load, be reported, keep its version and unknown keys on save, and be backed up first" in {
-    val original = baselineText.replace("config.version = 1", "config.version = 7") + "future.key = 1\n"
+    val original = baselineText.replace(currentVersionLine, "config.version = 7\n") + "future.key = 1\n"
     val file     = tempFile(original)
     val result   = ConfigManager.parseConfigResult(file)
 
@@ -135,7 +137,7 @@ class ConfigVersioningSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "a current config" should "produce no notice, and neither does one without a version" in {
     val current = tempFile(baselineText)
-    val legacy  = tempFile(baselineText.replace("config.version = 1\n", ""))
+    val legacy  = tempFile(baselineText.replace(currentVersionLine, ""))
 
     ConfigNotice.forLoad(current, ConfigManager.parseConfigResult(current).report) shouldBe None
     ConfigNotice.forLoad(legacy, ConfigManager.parseConfigResult(legacy).report) shouldBe None

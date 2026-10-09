@@ -5,15 +5,18 @@ import java.nio.file.Path
 import cats.effect.IO
 import com.serenity.lsp.config.{FileExtension, LanguageId}
 import com.serenity.richtext.{
+  DocxDocumentCodec,
+  FidelityReport,
+  InlineAtom,
   LossyRichTextOverwriteException,
   OdtDocumentCodec,
+  PackageFormat,
   RichTextDocument,
-  RichTextFidelity,
   RtfDocumentCodec
 }
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
-import com.serenity.text.{LineEnding, TextEncoding}
+import com.serenity.text.{LineEndingCounts, TextEncoding}
 
 /** Failures `FileManager` raises for its own file-open/save workflow, distinct from [[LossyRichTextOverwriteException]]
   * (a richtext-package concern about a specific re-import losing content, not about format support in general).
@@ -78,7 +81,7 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
         }
       case FileType.WordOpenXmlDocument =>
         openStored(location).flatMap { stored =>
-          IO.fromEither(com.serenity.richtext.DocxDocumentCodec.readBytesWithFidelity(stored.content))
+          IO.fromEither(DocxDocumentCodec.readBytesWithFidelity(stored.content))
             .map(imported =>
               bufferFromRichText(bufferId, path, imported.document, Some(imported.fidelity), stored.revision)
             )
@@ -96,27 +99,67 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
       case FileType.Markdown =>
         for
           _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
-          encoded = encodedForSave(buffer, markdownContentForSave(buffer))
+          written = markdownContentForSave(buffer)
+          encoded = encodedForSave(buffer, written)
           stored <- saveStored(path, encoded.bytes, expectedRevision)
-        yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision))
+        yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision, settledToWritten(buffer, written)))
       case FileType.RichText =>
-        val document = richTextDocumentForSave(buffer)
+        val document           = richTextDocumentForSave(buffer)
+        val (settled, content) = settledFor(document, None)
         saveStored(path, RtfDocumentCodec.writeBytes(document), expectedRevision)
-          .map(stored => savedBuffer(buffer, path, Some(document), stored.revision))
+          .map(stored => savedBuffer(buffer, path, Some(settled), stored.revision, content))
       case FileType.OpenDocumentText =>
-        val document = richTextDocumentForSave(buffer)
-        saveStored(path, OdtDocumentCodec.writeBytes(document), expectedRevision)
-          .map(stored => savedBuffer(buffer, path, Some(document), stored.revision))
+        val document           = richTextDocumentForSave(buffer)
+        val bytes              = OdtDocumentCodec.writeBytes(document)
+        val (settled, content) = settledFor(document, Some(PackageFormat.Odt))
+        saveStored(path, bytes, expectedRevision)
+          .map(stored =>
+            savedBuffer(
+              buffer,
+              path,
+              Some(rebasedOnSaved(settled, bytes, PackageFormat.Odt)),
+              stored.revision,
+              content
+            )
+          )
       case FileType.WordOpenXmlDocument =>
-        val document = richTextDocumentForSave(buffer)
-        saveStored(path, com.serenity.richtext.DocxDocumentCodec.writeBytes(document), expectedRevision)
-          .map(stored => savedBuffer(buffer, path, Some(document), stored.revision))
+        val document           = richTextDocumentForSave(buffer)
+        val bytes              = DocxDocumentCodec.writeBytes(document)
+        val (settled, content) = settledFor(document, Some(PackageFormat.Docx))
+        saveStored(path, bytes, expectedRevision)
+          .map(stored =>
+            savedBuffer(
+              buffer,
+              path,
+              Some(rebasedOnSaved(settled, bytes, PackageFormat.Docx)),
+              stored.revision,
+              content
+            )
+          )
       case _ =>
         for
           _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
-          encoded = encodedForSave(buffer, buffer.document.content.collect())
+          written = plainTextForSave(buffer)
+          encoded = encodedForSave(buffer, written)
           stored <- saveStored(path, encoded.bytes, expectedRevision)
-        yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision)))
+        yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision, settledToWritten(buffer, written))))
+
+  /** The document in the DOCX or ODT at `path` as it is now, when that file is still at `expected`, the revision a
+    * document restored from a session was last read or written at. Only then do the body blocks a restored document
+    * remembers still mean what they did, so any other file yields `None`.
+    */
+  def importPackage(path: Path, expected: Option[DocumentRevision]): IO[Option[RichTextDocument]] =
+    openStored(StorageLocation.Local(path)).flatMap { stored =>
+      val unchanged = stored.revision.zip(expected).exists((onDisk, recorded) => onDisk.sameContent(recorded))
+      if !unchanged then IO.pure(None)
+      else
+        FileUtils.detectFileType(path) match
+          case FileType.WordOpenXmlDocument =>
+            IO.fromEither(DocxDocumentCodec.readBytes(stored.content)).map(Some(_))
+          case FileType.OpenDocumentText =>
+            IO.fromEither(OdtDocumentCodec.readBytes(stored.content)).map(Some(_))
+          case _ => IO.pure(None)
+    }
 
   /** Save buffer to its existing file path */
   def saveBuffer(buffer: Buffer): IO[Buffer] =
@@ -202,13 +245,16 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
     decoded: DecodedText,
     revision: Option[DocumentRevision]
   ): Buffer =
+    val lineEndings = LineEndingCounts.of(decoded.content)
     Buffer(
       id = bufferId,
       document = com.serenity.state.models.Document(
         content = com.serenity.rope.Rope(decoded.content),
         filePath = Some(path),
         language = languageFromPath(path),
-        lineEnding = LineEnding.detect(decoded.content),
+        lineEnding = lineEndings.dominant,
+        mixedLineEndings = Option.when(lineEndings.isMixed)(lineEndings),
+        mixedNoticePending = lineEndings.isMixed,
         encoding = decoded.encoding,
         hasBom = decoded.hasBom,
         revision = revision
@@ -219,7 +265,7 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
     bufferId: BufferId,
     path: Path,
     document: RichTextDocument,
-    fidelity: Option[RichTextFidelity],
+    fidelity: Option[FidelityReport],
     revision: Option[DocumentRevision]
   ): Buffer =
     val normalized = document.normalized
@@ -242,20 +288,24 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
     buffer: Buffer,
     path: Path,
     richTextDocument: Option[RichTextDocument],
-    revision: Option[DocumentRevision]
+    revision: Option[DocumentRevision],
+    settledContent: Option[com.serenity.rope.Rope]
   ): Buffer =
-    buffer.copy(
-      document = buffer.document.copy(
+    val base = settledContent.fold(buffer)(buffer.withSettledContent)
+    base.copy(
+      document = base.document.copy(
         filePath = Some(path),
         isDirty = false,
         language = languageFromPath(path),
-        revision = revision
+        revision = revision,
+        mixedLineEndings = None,
+        mixedNoticePending = false
       ),
       // `richTextDocument` (when present) is `richTextDocumentForSave(buffer)`'s result, already proven to match
-      // `buffer.document.content` -- which this save doesn't change -- so it's synced at `buffer`'s current version
-      // (#1663).
-      richText = buffer.richText
-        .withSyncedDocument(richTextDocument.map(_.normalized), buffer.document.contentVersion)
+      // `buffer.document.content` -- or, when the save settled the text, that text -- so it is synced at `base`'s
+      // current version (#1663).
+      richText = base.richText
+        .withSyncedDocument(richTextDocument.map(_.normalized), base.document.contentVersion)
         .copy(richTextFidelity = None)
     )
 
@@ -285,18 +335,63 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
 
   private def preventLossyOverwrite(buffer: Buffer, path: Path): IO[Unit] =
     val replacesImportedFile = buffer.document.filePath.contains(path)
-    val isLossyImport        = buffer.richText.richTextFidelity.exists(!_.isLossless)
-    IO.raiseWhen(replacesImportedFile && isLossyImport)(
+    val dropped              = buffer.richText.richTextFidelity.toList.flatMap(_.wouldDrop)
+    IO.raiseWhen(replacesImportedFile && dropped.nonEmpty)(
       LossyRichTextOverwriteException(
-        s"Saving $path would discard unsupported rich document content. Use Save As to write a new file."
+        s"Saving $path would drop ${FidelityReport.listed(dropped)}. Use Save As to write a new file."
       )
     )
+
+  /** `document` linked to the package just written, which is what a later save copies from: reading it back is what
+    * gives every paragraph the place it now has in the file. A document with another format's package keeps it.
+    */
+  private def rebasedOnSaved(
+    document: RichTextDocument,
+    written: Array[Byte],
+    format: PackageFormat
+  ): RichTextDocument =
+    if document.source.exists(_.format != format) then document
+    else
+      val readBack = format match
+        case PackageFormat.Docx => DocxDocumentCodec.readBytes(written)
+        case PackageFormat.Odt  => OdtDocumentCodec.readBytes(written)
+      readBack.fold(_ => document, document.rebasedOn)
+
+  /** The text a Markdown or plain-text save wrote, as the buffer's text, when the buffer came from a rich document. The
+    * rope of such a buffer holds the internal placeholders of soft breaks, objects and blocks, which the file does not,
+    * and the buffer loses its rich document with the save; left as it was, a later in-place save would write the
+    * placeholders. A block is an empty line and not a marker such as "[table]": the file must say exactly what the
+    * buffer shows, and a marker would be text the user never wrote.
+    */
+  private def settledToWritten(buffer: Buffer, written: String): Option[com.serenity.rope.Rope] =
+    buffer.richText.richTextDocument.map(_ => com.serenity.rope.Rope(written))
+
+  /** What the buffer holds after a save in `format`, which is what the file now says. A format that cannot hold blocks
+    * wrote each block line as an empty paragraph, so the buffer's lines become empty too and a later save cannot differ
+    * from what is shown. The text is returned when it changed.
+    */
+  private def settledFor(
+    document: RichTextDocument,
+    format: Option[PackageFormat]
+  ): (RichTextDocument, Option[com.serenity.rope.Rope]) =
+    if !document.hasOpaqueBlock || document.source.exists(source => format.contains(source.format)) then
+      (document, None)
+    else
+      val withoutBlocks = document.withoutBlocks
+      (withoutBlocks, Some(com.serenity.rope.Rope(withoutBlocks.plainText)))
 
   private def richTextDocumentForSave(buffer: Buffer): RichTextDocument =
     val text = buffer.document.content.collect()
     buffer.richText.richTextDocument
       .filter(_.matchesPlainText(text))
       .getOrElse(RichTextDocument.fromPlainText(text))
+
+  /** The rope's text, except that a rich document's inline atoms (soft breaks) become the text they stand for. */
+  private def plainTextForSave(buffer: Buffer): String =
+    val text = buffer.document.content.collect()
+    buffer.richText.richTextDocument.fold(text)(document =>
+      if document.matchesPlainText(text) then document.exportText else text.filterNot(_ == InlineAtom.BlockCharacter)
+    )
 
   private def markdownContentForSave(buffer: Buffer): String =
     richTextDocumentForSave(buffer).paragraphs
@@ -307,8 +402,16 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
         prefix + paragraph.runs.map(markdownRun).mkString
       }
       .mkString("\n")
+      .filterNot(char => buffer.richText.richTextDocument.isDefined && char == InlineAtom.BlockCharacter)
 
   private def markdownRun(run: com.serenity.richtext.RichTextRun): String =
+    run.atom match
+      case Some(InlineAtom.Block(_, _))  => ""
+      case Some(InlineAtom.SoftBreak)    => MarkdownHardBreak
+      case Some(InlineAtom.Opaque(_, _)) => ""
+      case None                          => markdownMarkedText(run)
+
+  private def markdownMarkedText(run: com.serenity.richtext.RichTextRun): String =
     val marks = run.style.marks
     val marked =
       if marks.contains(com.serenity.richtext.InlineMark.Bold) && marks.contains(
@@ -319,6 +422,8 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
       else if marks.contains(com.serenity.richtext.InlineMark.Italic) then s"*${run.text}*"
       else run.text
     if marks.contains(com.serenity.richtext.InlineMark.Underline) then s"<u>$marked</u>" else marked
+
+  private val MarkdownHardBreak = "\\\n"
 
   private def languageFromPath(path: Path): Option[LanguageId] =
     Option(path.getFileName)

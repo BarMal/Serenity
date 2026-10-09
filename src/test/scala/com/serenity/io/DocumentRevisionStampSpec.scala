@@ -5,7 +5,7 @@ import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
@@ -24,11 +24,11 @@ class DocumentRevisionStampSpec extends AnyFlatSpec with Matchers:
     def bytesRead: Long   = read.get.unsafeRunSync()
     def bytesHashed: Long = hashed.get.unsafeRunSync()
 
-  private def counted(): Counted =
+  private def counted(clock: IO[FiniteDuration] = SettledClock.aMinuteAhead): Counted =
     val read   = Ref.unsafe[IO, Long](0L)
     val hashed = Ref.unsafe[IO, Long](0L)
     Counted(
-      LocalDocumentStorageProvider(StorageIoProbe(n => read.update(_ + n), n => hashed.update(_ + n))),
+      LocalDocumentStorageProvider(StorageIoProbe(n => read.update(_ + n), n => hashed.update(_ + n)), clock),
       read,
       hashed
     )
@@ -110,6 +110,16 @@ class DocumentRevisionStampSpec extends AnyFlatSpec with Matchers:
     storage.bytesHashed shouldBe 0L
   }
 
+  it should "not keep a stamp for a file whose mtime is not comfortably before the observation" in {
+    val path     = largeFile(1)
+    val storage  = counted(IO.realTime.map(_ - 1.minute))
+    val location = StorageLocation.Local(path)
+
+    val saved = storage.provider.save(location, bytes("replaced"), None).unsafeRunSync()
+
+    saved.toOption.flatMap(_.revision).map(_.stamp) shouldBe Some(None)
+  }
+
   "FileStamp.vouchesForContent" should "distrust a young stamp from a coarse-timestamp filesystem" in {
     val second = 1_000_000_000L
     val coarse = FileStamp(size = 3L, modifiedNanos = 100 * second, fileKey = None)
@@ -117,7 +127,21 @@ class DocumentRevisionStampSpec extends AnyFlatSpec with Matchers:
 
     FileStamp.vouchesForContent(coarse, observedAtNanos = 100 * second + 500_000_000L) shouldBe false
     FileStamp.vouchesForContent(coarse, observedAtNanos = 103 * second) shouldBe true
-    FileStamp.vouchesForContent(fine, observedAtNanos = 100 * second + 1_000L) shouldBe true
+    FileStamp.vouchesForContent(fine, observedAtNanos = 100 * second + 1_000_000_000L) shouldBe true
+  }
+
+  it should "distrust a young unrounded stamp from a kernel-tick filesystem, and trust it once comfortably old" in {
+    val mtime  = 100_000_000_000L + 123_457L
+    val stamp  = FileStamp(size = 3L, modifiedNanos = mtime, fileKey = None)
+    val tenMs  = 10_000_000L
+    val margin = 20_000_000L
+
+    FileStamp.vouchesForContent(stamp, observedAtNanos = mtime + 1_000L) shouldBe false
+    FileStamp.vouchesForContent(stamp, observedAtNanos = mtime + tenMs) shouldBe false
+    FileStamp.vouchesForContent(stamp, observedAtNanos = mtime + margin - 1L) shouldBe false
+    FileStamp.vouchesForContent(stamp, observedAtNanos = mtime - 1L) shouldBe false
+    FileStamp.vouchesForContent(stamp, observedAtNanos = mtime + margin) shouldBe true
+    FileStamp.vouchesForContent(stamp, observedAtNanos = mtime + 5_000_000_000L) shouldBe true
   }
 
   it should "never vouch for a same-size rewrite inside one tick, at any observation time in that tick" in {

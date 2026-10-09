@@ -97,10 +97,9 @@ class EditorTransitionsSpec extends AnyFlatSpec with Matchers:
     EditorTransitions.bufferContentReplaced(AppState.initial, BufferId(42), "text") shouldBe None
   }
 
-  it should "drop a richTextDocument it can't cheaply carry onto the replacement text, and bump the content version" in {
-    // A bulk external replacement (e.g. an LSP formatter or a file-watch reload) has no "old content" to diff a
-    // paragraph-shaped edit against, so the old richTextDocument is dropped immediately here instead of being left
-    // to desync silently and only get caught the next time something checks `richTextInSync` (#1663).
+  it should "carry the richTextDocument onto the replacement text, in sync, and bump the content version" in {
+    // A bulk replacement (an LSP formatter's output) maps the old document onto the new text line by line rather than
+    // dropping it, so the pairing stays valid for `richTextInSync` (#1663) and formatting survives (#1896).
     val withRichText = AppState.initial.copy(persisted =
       AppState.initial.persisted.copy(buffers = AppState.initial.persisted.buffers.map { (id, buffer) =>
         id -> buffer.copy(richText =
@@ -116,6 +115,7 @@ class EditorTransitionsSpec extends AnyFlatSpec with Matchers:
 
     val replaced = EditorTransitions.bufferContentReplaced(withRichText, BufferId(0), "replacement text")
 
-    replaced.map(_.buffer.richText.richTextDocument) shouldBe Some(None)
+    replaced.flatMap(_.buffer.richText.richTextDocument.map(_.plainText)) shouldBe Some("replacement text")
+    replaced.map(_.buffer.richTextInSync) shouldBe Some(true)
     replaced.map(_.buffer.document.contentVersion) shouldBe Some(before.document.contentVersion + 1)
   }

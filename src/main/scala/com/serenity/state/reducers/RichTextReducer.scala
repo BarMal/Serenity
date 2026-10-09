@@ -3,7 +3,7 @@ package com.serenity.state.reducers
 import com.serenity.command.RichTextIntent
 import com.serenity.richtext.*
 import com.serenity.state.models.*
-import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
+import com.serenity.state.undo.{BufferSnapshot, EditGrouping, HistoryEntry}
 
 /** What a rich-text command does, given the kind of buffer it would format. */
 enum RichTextRoute:
@@ -70,7 +70,7 @@ object RichTextReducer:
       edited <- after.persisted.buffers.get(buffer.id)
       if formattingChanged(buffer, edited)
       entry = HistoryEntry.BufferEdit(buffer.id, paneId, BufferSnapshot.fromBuffer(buffer))
-    yield AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable = false))
+    yield AppEffect.Undo(UndoEffect.RecordBoundary(entry, EditGrouping.Standalone))
 
   // By identity: an unchanged command hands the very same document back, and comparing two documents by value would
   // walk every paragraph of a long one on every formatting command.

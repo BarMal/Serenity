@@ -8,7 +8,7 @@ import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Rope
 import com.serenity.state.models.{AppState, BufferId, CloseScope, SurfaceId}
-import com.serenity.state.undo.HistoryEntry
+import com.serenity.state.undo.{EditGrouping, HistoryEntry}
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.theme.config.ThemeConfig
 
@@ -18,6 +18,12 @@ enum ThemeEffect:
   case SaveThemeConfig(config: ThemeConfig)
   case RefreshThemeNames
   case ExportCurrentTheme
+
+enum SettingsEffect:
+  /** Pushes the live config into the parts of the runtime that learn of a change only when told: the font loader, the
+    * render caches, and the command runner and toolbar built from it.
+    */
+  case ReapplyConfig
 
 enum SurfaceEffect:
   case OpenThemePicker
@@ -55,14 +61,14 @@ enum LspQueueEffect:
   case DocumentChanged(uri: String, languageId: LanguageId, text: Rope)
 
 /** A reducer's own declaration that the change it just performed is undoable, carrying the [[HistoryEntry]] that
-  * restores it -- see #1016. `groupable` marks whether this should coalesce into an already-open run of edits
-  * (consecutive character/tab insertion) rather than becoming its own undo step; only ever true for a
+  * restores it -- see #1016. `grouping` says whether this coalesces into the buffer's open run of edits (consecutive
+  * typing, or consecutive deletion) or becomes an undo step of its own; only ever coalescing for a
   * `HistoryEntry.BufferEdit`. The entry captures state as it was immediately prior to this change -- carried in the
   * effect itself (rather than left for `UndoRecording` to infer from an event-type allowlist and a before/after diff)
   * because interpretation runs after `AppState` has already been updated to the post-change state.
   */
 enum UndoEffect:
-  case RecordBoundary(entry: HistoryEntry, groupable: Boolean)
+  case RecordBoundary(entry: HistoryEntry, grouping: EditGrouping)
 
 enum AppEffect:
   case CompleteQuit
@@ -74,6 +80,7 @@ enum AppEffect:
   case ExecuteCommandUnrecorded(command: Command)
   case ScheduleCommandRunnerBindingExpiry(recordedAtMillis: Long)
   case Theme(effect: ThemeEffect)
+  case Settings(effect: SettingsEffect)
   case Surface(effect: SurfaceEffect)
   case File(effect: FileEffect)
   case Explorer(effect: ExplorerEffect)

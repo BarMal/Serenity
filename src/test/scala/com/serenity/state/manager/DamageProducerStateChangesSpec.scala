@@ -239,6 +239,30 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
       DamageProducer.forTransition(before, after) shouldBe Damage.Everything
     }
 
+  private def withConfig(state: AppState, update: com.serenity.config.AppConfig => com.serenity.config.AppConfig) =
+    state.copy(persisted = state.persisted.copy(config = update(state.persisted.config)))
+
+  it should "report only the status row, not Everything, when the pinned status line's segments change (#1934)" in {
+    val before = stateWithContent("alpha")
+    val after  = withConfig(before, _.withStatusLineSegments(List(com.serenity.config.StatusSegment.WordCount)))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Chrome
+  }
+
+  it should "report Everything when the status line stops being pinned, since the layout changes (#1934)" in {
+    val before = stateWithContent("alpha")
+    val after  = withConfig(before, _.withStatusLinePlacement(com.serenity.config.StatusLinePlacement.Off))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
+  }
+
+  it should "report nothing when the config is replaced by an equal one (#1934)" in {
+    val before = stateWithContent("alpha")
+    val after  = withConfig(before, identity)
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Nothing
+  }
+
   it should "report Everything when a floating/pinned surface appears" in {
     val before = stateWithContent("alpha")
     val surface = UiSurface(

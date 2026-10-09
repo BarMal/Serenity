@@ -6,6 +6,7 @@ import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.{CommandId, CommandRegistry, CommandUsageHistory}
 import com.serenity.config.*
+import com.serenity.io.FileManager
 import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
 
@@ -55,8 +56,12 @@ object SessionState:
     *
     * Schema version 4 moves a buffer's unsaved text out of the session file into a content file it names by
     * `contentRef` (#1912); an older build would restore those buffers empty, so it refuses the session instead.
+    *
+    * Schema version 5 gives comments an id, an author, times, replies and a resolved flag (#1903). Every one decodes
+    * with a default, and a comment without an id is given one on restore; the bump is so an older build refuses the
+    * session rather than silently dropping its threads the next time it saves.
     */
-  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(4)
+  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(5)
 
   def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
     assemble(appState, orderedBuffers(appState).map(SessionBuffer.fromBuffer(_, persistUnsaved)))
@@ -74,8 +79,8 @@ object SessionState:
       layout = SessionLayout.fromAppState(appState),
       focus = SessionFocus.fromFocus(appState.persisted.focus),
       bufferOrder = appState.persisted.bufferOrder.map(_.value),
-      config = appState.persisted.config,
-      themeName = appState.persisted.theme.name,
+      config = appState.committedConfig,
+      themeName = appState.committedTheme.name,
       recentFiles = appState.persisted.recentFiles.map(_.toString),
       recentFilesByMode = appState.persisted.recentFilesByMode.map {
         case (mode, paths) => mode.configKey -> paths.map(_.toString)
@@ -104,9 +109,11 @@ object SessionState:
   /** Convert SessionState back to AppState for restoration, reading file-backed buffers from disk when older or
     * size-conscious session files do not contain persisted text.
     */
-  def toAppStateIO(sessionState: SessionState, theme: Theme)(using balance: com.serenity.rope.Balance): IO[AppState] =
+  def toAppStateIO(sessionState: SessionState, theme: Theme, files: FileManager)(using
+    balance: com.serenity.rope.Balance
+  ): IO[AppState] =
     for buffers <- sessionState.buffers.traverse { sessionBuffer =>
-          SessionBuffer.toBufferIO(sessionBuffer).map(buffer => BufferId(sessionBuffer.id) -> buffer)
+          SessionBuffer.toBufferIO(sessionBuffer, files).map(buffer => BufferId(sessionBuffer.id) -> buffer)
         }
     yield toAppStateWithBuffers(sessionState, theme, buffers.toMap)
 

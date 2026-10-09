@@ -7,20 +7,18 @@ package com.serenity.text
   * assume one terminator -- but it means the buffer alone cannot reproduce the file it came from. Without recording
   * this, saving rewrites every line of a CRLF file to LF, silently and on the first save.
   */
-enum LineEnding(val sequence: String):
-  case Lf   extends LineEnding("\n")
-  case Crlf extends LineEnding("\r\n")
+enum LineEnding(val sequence: String, val label: String):
+  case Lf   extends LineEnding("\n", "LF")
+  case Crlf extends LineEnding("\r\n", "CRLF")
+  case Cr   extends LineEnding("\r", "CR")
 
-  def configKey: String =
-    this match
-      case Lf   => "lf"
-      case Crlf => "crlf"
+  def configKey: String = label.toLowerCase
 
   /** Rewrite normalised (LF-only) editor content back into this terminator. */
   def applyTo(normalizedContent: String): String =
     this match
-      case Lf   => normalizedContent
-      case Crlf => normalizedContent.replace("\n", Crlf.sequence)
+      case Lf => normalizedContent
+      case _  => normalizedContent.replace("\n", sequence)
 
 object LineEnding:
 
@@ -29,17 +27,8 @@ object LineEnding:
   def fromConfigKey(value: String): Option[LineEnding] =
     values.find(_.configKey.equalsIgnoreCase(value.trim))
 
-  /** The terminator to treat `rawContent` as being written with, judged before any normalisation.
-    *
-    * Mixed files are real -- a merge or a generator can leave both -- and they have no correct answer, so the majority
-    * wins and a tie goes to the platform-neutral `Lf`. Whichever is chosen, saving then makes the file uniform, which
-    * is a change but a coherent one; preserving the original mixture would mean tracking a terminator per line for a
-    * file that is already inconsistent.
+  /** The terminator to treat `rawContent` as being written with, judged before any normalisation. See
+    * [[LineEndingCounts.dominant]] for how a mixed file is settled.
     */
   def detect(rawContent: String): LineEnding =
-    val crlfCount = countCrlf(rawContent)
-    val lfCount   = rawContent.count(_ == '\n') - crlfCount
-    if crlfCount > lfCount then Crlf else Lf
-
-  private def countCrlf(content: String): Int =
-    content.sliding(2).count(_ == Crlf.sequence)
+    LineEndingCounts.of(rawContent).dominant

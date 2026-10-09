@@ -4,7 +4,7 @@ import com.serenity.SpellingStateFixture.*
 import com.serenity.spellcheck.{DictionarySnapshot, SpellChecker}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, SpellingIgnoreReducer, SpellingReplacementReducer, UndoEffect}
-import com.serenity.state.undo.HistoryEntry
+import com.serenity.state.undo.{EditGrouping, HistoryEntry}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -17,7 +17,13 @@ class SpellingActionsSpec extends AnyFlatSpec with Matchers:
 
     result.map(r => textOf(r.state)) shouldBe Some("a world here")
     result.map(_.effects) match
-      case Some(List(AppEffect.Undo(UndoEffect.RecordBoundary(HistoryEntry.BufferEdit(id, pane, before), false)))) =>
+      case Some(
+            List(
+              AppEffect.Undo(
+                UndoEffect.RecordBoundary(HistoryEntry.BufferEdit(id, pane, before), EditGrouping.Standalone)
+              )
+            )
+          ) =>
         id shouldBe bufferId
         pane shouldBe paneId
         before.content.collect() shouldBe "a wrold here"
