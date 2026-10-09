@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.nio.file.Files
-
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
@@ -56,7 +54,7 @@ class AppRuntimeFirstFrameThemeSpec extends AnyFlatSpec with Matchers:
         ) => themes.update(_ :+ state.persisted.theme.name)
         val config = AppConfig.default.withThemeFollowConfig(ThemeFollowConfig(followSystem = followSystem))
         val manager = (logger: Logger[IO]) =>
-          IO.blocking(Files.createTempDirectory("first-frame-theme")).flatMap { root =>
+          IO.blocking(TestTemp.directory("first-frame-theme")).flatMap { root =>
             StateManager(
               logger,
               sessionRootOverride = Some(root),

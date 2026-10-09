@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.config.{AppConfig, ConfigManager, HotkeyAction, HotkeyConfig}
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -14,7 +15,7 @@ import org.scalatest.matchers.should.Matchers
 class ConfigFileSyncHotkeysSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   private def reloaded(fileText: String): HotkeyConfig =
-    val file: Path = Files.createTempFile("serenity-hot-reload", ".conf")
+    val file: Path = TestTemp.file("serenity-hot-reload", ".conf")
     Files.writeString(file, fileText)
     val sync = ConfigFileSync.unsafe(file, Some(AppConfig.default), ConfigManager.saveConfigIO)
     sync.externalChange.unsafeRunSync() match

@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.io.FileManager
 import com.serenity.rope.Balance
 import com.serenity.state.effects.Lane
@@ -105,7 +106,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
     )
 
   "StateManagerFileWorkflow" should "save to the resolved target path and hand off to its owner exactly once" in {
-    val directory = Files.createTempDirectory("file-workflow-save-as")
+    val directory = TestTemp.directory("file-workflow-save-as")
     try
       val fixture =
         harness(SaveAsFileWorkflowState(filename = "notes.txt", path = directory.toString))
@@ -118,7 +119,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "ask for confirmation instead of saving when the target directory does not exist yet" in {
-    val directory = Files.createTempDirectory("file-workflow-missing-dirs")
+    val directory = TestTemp.directory("file-workflow-missing-dirs")
     try
       val target = directory.resolve("reports").resolve("2026")
       val fixture = harness(
@@ -138,7 +139,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "save on an explicit create-directories request without a second submit" in {
-    val directory = Files.createTempDirectory("file-workflow-create-dirs")
+    val directory = TestTemp.directory("file-workflow-create-dirs")
     try
       val target = directory.resolve("reports")
       val fixture = harness(
@@ -169,7 +170,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "surface a save failure and not hand off to its owner" in {
-    val directory = Files.createTempDirectory("file-workflow-save-failure")
+    val directory = TestTemp.directory("file-workflow-save-failure")
     try
       val fixture = harness(
         SaveAsFileWorkflowState(filename = "notes.txt", path = directory.toString),
@@ -184,7 +185,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "show a notice naming the file it could not write (#1717)" in {
-    val directory = Files.createTempDirectory("file-workflow-save-failure-notice")
+    val directory = TestTemp.directory("file-workflow-save-failure-notice")
     try
       val fixture = harness(
         SaveAsFileWorkflowState(filename = "notes.txt", path = directory.toString),
@@ -200,7 +201,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "neither save nor hand off when no editor pane holds a buffer" in {
-    val directory = Files.createTempDirectory("file-workflow-no-buffer")
+    val directory = TestTemp.directory("file-workflow-no-buffer")
     try
       val fixture = harness(
         SaveAsFileWorkflowState(filename = "notes.txt", path = directory.toString),
@@ -215,7 +216,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "close the dialog and load the file when an Open workflow targets a readable file" in {
-    val directory = Files.createTempDirectory("file-workflow-open")
+    val directory = TestTemp.directory("file-workflow-open")
     val target    = Files.writeString(directory.resolve("notes.txt"), "opened content")
     try
       val fixture = harness(OpenFileWorkflowState(filename = "notes.txt", path = directory.toString))
@@ -232,7 +233,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report a missing file rather than committing anything when an Open target does not exist" in {
-    val directory = Files.createTempDirectory("file-workflow-open-missing")
+    val directory = TestTemp.directory("file-workflow-open-missing")
     try
       val fixture = harness(OpenFileWorkflowState(filename = "absent.txt", path = directory.toString))
 
@@ -246,7 +247,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "descend into a directory rather than failing when an Open target is a directory" in {
-    val directory = Files.createTempDirectory("file-workflow-open-directory")
+    val directory = TestTemp.directory("file-workflow-open-directory")
     val child     = Files.createDirectory(directory.resolve("nested"))
     try
       val fixture = harness(OpenFileWorkflowState(filename = "nested", path = directory.toString))

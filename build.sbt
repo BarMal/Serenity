@@ -277,8 +277,13 @@ lazy val root = (project in file("."))
       case x                             => (assembly / assemblyMergeStrategy).value(x)
     },
     Test / testOptions ++= Seq(
-      Tests.Setup(() => System.setProperty("serenity.test.ephemeralSessions", "true")),
-      Tests.Cleanup(() => System.clearProperty("serenity.test.ephemeralSessions")),
+      // One folder per test run holds everything the suites create (`TestTemp`, and the session folder of every
+      // `StateManager` built without an explicit one). Removing it here is what stops a run leaving thousands of
+      // entries in the system temp directory, whether the suites passed, failed or were cancelled.
+      Tests.Setup(() => System.setProperty("serenity.test.tempRoot", IO.createTemporaryDirectory.getAbsolutePath)),
+      Tests.Cleanup { () =>
+        Option(System.clearProperty("serenity.test.tempRoot")).foreach(root => IO.delete(file(root)))
+      },
       // Full stack traces on every failure (ScalaTest's default reporter otherwise truncates them). #1213's
       // macOS-arm64/windows-x64 CI failures show only a bare "Failed tests:" summary line -- no assertion message, no
       // stack trace, for either the failed or the canceled test alongside it -- which makes them undiagnosable from

@@ -100,8 +100,8 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave the session it starts from untouched, and clean up after itself" in {
-    val sessionRoot = Files.createTempDirectory("serenity-warm-up-spec-session")
-    val scratchRoot = Files.createTempDirectory("serenity-warm-up-spec-scratch")
+    val sessionRoot = TestTemp.directory("serenity-warm-up-spec-session")
+    val scratchRoot = TestTemp.directory("serenity-warm-up-spec-scratch")
     val program = for
       user <- StateManager.apply(
         NoOpLogger[IO],
@@ -137,7 +137,7 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep its session directory inside the scratch root it is given, removing it when done" in {
-    val scratchRoot = Files.createTempDirectory("serenity-warm-up-spec-scratch")
+    val scratchRoot = TestTemp.directory("serenity-warm-up-spec-scratch")
     val program = for
       seen    <- Ref.of[IO, Set[Path]](Set.empty)
       drawn   <- Ref.of[IO, Drawn](Drawn(Vector.empty, 0))

@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.sun.net.httpserver.HttpServer
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -226,7 +227,7 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "read and write ODT files through IO" in {
-    val path   = Files.createTempFile("serenity-rich-text", ".odt")
+    val path   = TestTemp.file("serenity-rich-text", ".odt")
     val source = RichTextDocument.oneParagraph("Saved text")
 
     try

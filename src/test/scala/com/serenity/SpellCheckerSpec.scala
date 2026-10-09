@@ -79,7 +79,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     def apply(delegate: Rope): NonCollectingRope = new NonCollectingRope(delegate)
 
   private def writeDic(name: String, words: List[String]): java.nio.file.Path =
-    val path = Files.createTempFile(name, ".dic")
+    val path = TestTemp.file(name, ".dic")
     Files.writeString(path, (words.length.toString :: words).mkString("\n"), StandardCharsets.UTF_8)
     path
 
@@ -89,7 +89,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     affixRules: List[String],
     charset: Charset = StandardCharsets.UTF_8
   ): (java.nio.file.Path, java.nio.file.Path) =
-    val directory = Files.createTempDirectory(name)
+    val directory = TestTemp.directory(name)
     val dic       = directory.resolve(s"$name.dic")
     val aff       = directory.resolve(s"$name.aff")
     Files.writeString(dic, (words.length.toString :: words).mkString("\n"), charset)
@@ -411,7 +411,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report dictionary load failures without preventing fallback spell checks" in {
-    val missing = Files.createTempDirectory("serenity-missing-dictionaries").resolve("missing.dic")
+    val missing = TestTemp.directory("serenity-missing-dictionaries").resolve("missing.dic")
     val config  = EnglishSpellCheck.copy(dictionaryPaths = List(missing.toString))
 
     val diagnostics = SpellChecker.check("hello wurld", config)

@@ -1,12 +1,13 @@
 package com.serenity.state.manager
 
 import java.io.IOException
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import scala.concurrent.duration.*
 
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{FileEntry, FileManager}
 import com.serenity.keystroke.events.{Enter, InsertChar, SwitchTheme}
@@ -80,7 +81,7 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
     def trace(message: => String): IO[Unit]               = IO.unit
     def trace(t: Throwable)(message: => String): IO[Unit] = IO.unit
 
-  private val sessionRoot: Path = Files.createTempDirectory("explorer-theme-lanes-spec")
+  private val sessionRoot: Path = TestTemp.directory("explorer-theme-lanes-spec")
 
   private def managerWith(
     listings: Gates[Path, List[FileEntry]],

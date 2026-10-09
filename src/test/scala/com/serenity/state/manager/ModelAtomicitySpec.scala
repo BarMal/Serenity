@@ -1,11 +1,10 @@
 package com.serenity.state.manager
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.data.State
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.StateManagerTestFixtures
 import com.serenity.command.{Command, CommandCategory, CommandIntent, FileIntent, SessionIntent, ViewIntent}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.keystroke.events.{Enter, InsertChar, NextTab, TabKey, ToggleCommandRunner, Undo}
@@ -21,6 +20,7 @@ import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition}
 import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.config.AppThemeManager
+import com.serenity.{StateManagerTestFixtures, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
@@ -74,7 +74,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     uiPresetStore: Option[UiPresetStore] = None
   ): IO[StateManager] =
     for
-      directory           <- IO.blocking(Files.createTempDirectory("model-atomicity-spec"))
+      directory           <- IO.blocking(TestTemp.directory("model-atomicity-spec"))
       themeNamesRef       <- Ref.of[IO, List[String]](Nil)
       quitSignal          <- Deferred[IO, Unit]
       lspQueue            <- LspEffectQueue.create
@@ -339,7 +339,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
   "Opening the command runner" should "commit the runner at once and its UI preset previews in a write of their own" in {
     val program =
       for
-        directory <- IO.blocking(Files.createTempDirectory("model-atomicity-presets"))
+        directory <- IO.blocking(TestTemp.directory("model-atomicity-presets"))
         store = UiPresetStore(directory.resolve("presets.json"))
         _            <- store.create(UiPreset.capture("Existing", AppState.initial, None))
         recorded     <- recording(Model(AppState.initial, UndoState()))

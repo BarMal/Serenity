@@ -2,13 +2,14 @@ package com.serenity.ui.tui
 
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import scala.concurrent.duration.*
 
 import cats.effect.std.Queue
 import cats.effect.{FiberIO, IO, Ref, Resource}
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.app.{AppRuntimeRenderLoops, AppStartup}
 import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.input.{FocusedInputTranslator, InProcessClipboard, InputRouter, Osc52Clipboard, SystemClipboard}
@@ -254,13 +255,6 @@ object TuiSession:
   private def endsOnLoneEscape(bytes: Array[Byte]): Boolean =
     TerminalInputDecoder.decode(bytes).remainder.toList == List(0x1b.toByte)
 
-  private def deleteRecursively(root: Path): Unit =
-    if Files.exists(root) then
-      Files
-        .walk(root)
-        .sorted(java.util.Comparator.reverseOrder[Path]())
-        .forEach(path => scala.util.Try(Files.delete(path)).fold(_ => (), _ => ()))
-
   final private case class Streams(terminal: DumbTerminal, reader: FakeTerminalReader, output: ByteArrayOutputStream)
 
   private def openTerminal(size: ViewportSize): IO[Streams] =
@@ -279,14 +273,12 @@ object TuiSession:
     Balance
   ): Resource[IO, TuiSession] =
     for
-      workspace <- Resource.make(IO.blocking(Files.createTempDirectory("tui-session")))(root =>
-        IO.blocking(deleteRecursively(root)).attempt.void
-      )
-      streams <- Resource.eval(openTerminal(environment.viewport))
-      shell   <- TerminalShell.forTerminal(streams.terminal)
-      built   <- Resource.eval(assemble(environment, workspace, streams, shell))
-      _       <- Resource.make(built.consumer.start)((fiber: FiberIO[Unit]) => fiber.cancel)
-      _       <- Resource.onFinalize(built.session.handlerShutdown)
+      workspace <- TestTemp.scoped("tui-session")
+      streams   <- Resource.eval(openTerminal(environment.viewport))
+      shell     <- TerminalShell.forTerminal(streams.terminal)
+      built     <- Resource.eval(assemble(environment, workspace, streams, shell))
+      _         <- Resource.make(built.consumer.start)((fiber: FiberIO[Unit]) => fiber.cancel)
+      _         <- Resource.onFinalize(built.session.handlerShutdown)
     yield built.session
 
   final private case class Built(session: TuiSession, consumer: IO[Unit])

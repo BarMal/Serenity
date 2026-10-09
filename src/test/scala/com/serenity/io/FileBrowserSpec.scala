@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.effect.syntax.all.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -12,7 +13,7 @@ import org.scalatest.matchers.should.Matchers
 /** Regression coverage for #1416: `listDirectory` must not serialize its per-entry blocking IO one file at a time. */
 class FileBrowserSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll:
 
-  private val tempDir: Path = Files.createTempDirectory("file-browser-spec")
+  private val tempDir: Path = TestTemp.directory("file-browser-spec")
 
   override def afterAll(): Unit =
     def delete(path: Path): Unit =
@@ -48,7 +49,7 @@ class FileBrowserSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll:
   }
 
   it should "return an empty list for an empty directory" in {
-    val emptyDir = Files.createTempDirectory("file-browser-spec-empty")
+    val emptyDir = TestTemp.directory("file-browser-spec-empty")
     try FileBrowser.listDirectory(emptyDir).unsafeRunSync() shouldBe empty
     finally Files.deleteIfExists(emptyDir)
   }

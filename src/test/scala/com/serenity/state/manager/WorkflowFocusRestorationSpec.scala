@@ -4,7 +4,6 @@ import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.DockedPanelFixtures
 import com.serenity.keystroke.events.{Enter, Event, ModalDismiss, ModalSubmit, PeekInputEvent}
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionId, SessionMetadata}
@@ -13,6 +12,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalEventReducer, ModalStateReducer, PeekStateReducer}
 import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{PanelPosition, PeekContent}
+import com.serenity.{DockedPanelFixtures, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -38,7 +38,7 @@ class WorkflowFocusRestorationSpec extends AnyFlatSpec with Matchers:
     StateManager
       .apply(
         LoggerFactory[IO].getLogger(using LoggerName("WorkflowFocusRestorationSpec")),
-        sessionRootOverride = Some(Files.createTempDirectory("workflow-focus-restoration-sessions")),
+        sessionRootOverride = Some(TestTemp.directory("workflow-focus-restoration-sessions")),
         dictionaryCache = SharedDictionary.default
       )
       .unsafeRunSync()
@@ -68,7 +68,7 @@ class WorkflowFocusRestorationSpec extends AnyFlatSpec with Matchers:
   private def valid(state: AppState): Boolean = AppStateValidation.validationErrors(state).isEmpty
 
   "An Open dialog opened over a focused panel" should "hand focus to the opened file's editor and forget the panel" in {
-    val directory = Files.createTempDirectory("workflow-focus-open")
+    val directory = TestTemp.directory("workflow-focus-open")
     val target    = Files.writeString(directory.resolve("notes.txt"), "opened")
     try
       val opened = settled(openedOverPanel(showFileWorkflow(FileWorkflowMode.Open, directory)), Enter)
@@ -104,7 +104,7 @@ class WorkflowFocusRestorationSpec extends AnyFlatSpec with Matchers:
   }
 
   "A Save-As dialog opened over a focused panel" should "return focus to the panel once it saves" in {
-    val directory = Files.createTempDirectory("workflow-focus-save-as")
+    val directory = TestTemp.directory("workflow-focus-save-as")
     val target    = directory.resolve("notes.txt")
     try
       val saved = settled(openedOverPanel(showFileWorkflow(FileWorkflowMode.SaveAs, directory)), Enter)

@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
@@ -44,7 +45,7 @@ class StateManagerPartialDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
     }
 
   "Document analysis with one of two languages lacking a dictionary" should "show one notice naming only that language" in {
-    val directory = Files.createTempDirectory("serenity-partial-notice")
+    val directory = TestTemp.directory("serenity-partial-notice")
     Files.writeString(directory.resolve("en_US.dic"), "1\ncolour", StandardCharsets.UTF_8)
     Files.writeString(directory.resolve("en_US.aff"), "SET UTF-8", StandardCharsets.UTF_8)
     val spellCheck =

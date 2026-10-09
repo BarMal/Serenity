@@ -7,7 +7,6 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
-import com.serenity.StateManagerTestSupport
 import com.serenity.app.AppStartup
 import com.serenity.command.{Command, CommandCategory, CommandIntent, SessionIntent}
 import com.serenity.keystroke.events.{Direction, InsertChar, ModalNavigate, ModalSubmit}
@@ -16,6 +15,7 @@ import com.serenity.state.models.*
 import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
+import com.serenity.{StateManagerTestSupport, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -68,7 +68,7 @@ class HotExitRecoveryStartupSpec extends AnyFlatSpec with Matchers with StateMan
 
   private def fixture: IO[(Path, Path)] =
     IO.blocking {
-      val directory = Files.createTempDirectory("hot-exit-recovery")
+      val directory = TestTemp.directory("hot-exit-recovery")
       val file      = Files.writeString(directory.resolve("draft.txt"), "saved text")
       (directory.resolve("session"), file)
     }

@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.sun.net.httpserver.HttpServer
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -160,7 +161,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
   }
 
   it should "read and write DOCX files through IO" in {
-    val path   = Files.createTempFile("serenity-rich-text", ".docx")
+    val path   = TestTemp.file("serenity-rich-text", ".docx")
     val source = RichTextDocument.oneParagraph("Saved text")
 
     try

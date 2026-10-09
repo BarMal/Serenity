@@ -14,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
 class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "ConfigManager" should "load and write command runner visible rows" in {
-    val configFile = Files.createTempFile("serenity-command-rows-config", ".conf")
+    val configFile = TestTemp.file("serenity-command-rows-config", ".conf")
     Files.writeString(
       configFile,
       """command_runner.visible_rows = 9
@@ -28,7 +28,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "load and write command runner item and cursor gaps independently" in {
-    val configFile = Files.createTempFile("serenity-command-spacing-config", ".conf")
+    val configFile = TestTemp.file("serenity-command-spacing-config", ".conf")
     Files.writeString(
       configFile,
       """command_runner.item_gap_rows = 1
@@ -45,7 +45,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "preserve decimal floating-surface spacing values" in {
-    val configFile = Files.createTempFile("serenity-command-decimal-spacing-config", ".conf")
+    val configFile = TestTemp.file("serenity-command-decimal-spacing-config", ".conf")
     Files.writeString(
       configFile,
       """command_runner.item_gap_rows = 0.25
@@ -68,7 +68,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   // `command_runner.item_gap_rows` override in the config file, the effective spacing now follows density instead
   // of a flat 0.0 regardless of density.
   it should "derive command runner item gap rows from interface density when no override is configured" in {
-    val configFile = Files.createTempFile("serenity-command-density-spacing-config", ".conf")
+    val configFile = TestTemp.file("serenity-command-density-spacing-config", ".conf")
     Files.writeString(configFile, "ui.density = spacious\n")
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
@@ -83,7 +83,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   // issue #1046 (review follow-up): `command_runner.visible_rows`/`command_runner.cursor_gap_rows` complete the
   // same density unification the test above covers for item gap rows.
   it should "derive command runner visible rows from interface density when no override is configured" in {
-    val configFile = Files.createTempFile("serenity-command-density-rows-config", ".conf")
+    val configFile = TestTemp.file("serenity-command-density-rows-config", ".conf")
     Files.writeString(configFile, "ui.density = spacious\n")
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
@@ -96,7 +96,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "derive command runner cursor gap rows from interface density when no override is configured" in {
-    val configFile = Files.createTempFile("serenity-command-density-cursor-gap-config", ".conf")
+    val configFile = TestTemp.file("serenity-command-density-cursor-gap-config", ".conf")
     Files.writeString(configFile, "ui.density = spacious\n")
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
@@ -109,7 +109,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "load and write render FPS targets" in {
-    val configFile = Files.createTempFile("serenity-render-fps-config", ".conf")
+    val configFile = TestTemp.file("serenity-render-fps-config", ".conf")
     Files.writeString(
       configFile,
       """ui.render.fps = 120
@@ -123,7 +123,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "load uncapped render FPS targets" in {
-    val configFile = Files.createTempFile("serenity-render-fps-uncapped-config", ".conf")
+    val configFile = TestTemp.file("serenity-render-fps-uncapped-config", ".conf")
     Files.writeString(
       configFile,
       """ui.render.fps = uncapped
@@ -137,7 +137,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "load and write text area inset percentages" in {
-    val configFile = Files.createTempFile("serenity-text-area-config", ".conf")
+    val configFile = TestTemp.file("serenity-text-area-config", ".conf")
     Files.writeString(
       configFile,
       """editor.text_area.left = 12.5
@@ -160,7 +160,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "load and write the renderer frame-state cache capacity" in {
-    val configFile = Files.createTempFile("serenity-render-frame-state-cache-capacity-config", ".conf")
+    val configFile = TestTemp.file("serenity-render-frame-state-cache-capacity-config", ".conf")
     Files.writeString(
       configFile,
       """ui.render.cache_capacity = 128
@@ -176,7 +176,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   it should "default layer caching to off, then load and write it" in {
     AppConfig.default.surfaceConfig.layerCachingEnabled shouldBe false
 
-    val configFile = Files.createTempFile("serenity-render-layer-cache-config", ".conf")
+    val configFile = TestTemp.file("serenity-render-layer-cache-config", ".conf")
     Files.writeString(
       configFile,
       """ui.render.layer_cache = true
@@ -192,7 +192,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   it should "default frame timing to off, then load and write it" in {
     AppConfig.default.surfaceConfig.frameTimingEnabled shouldBe false
 
-    val configFile = Files.createTempFile("serenity-render-frame-timing-config", ".conf")
+    val configFile = TestTemp.file("serenity-render-frame-timing-config", ".conf")
     Files.writeString(
       configFile,
       """ui.render.frame_timing = true
@@ -208,7 +208,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   it should "default the keystroke latency trace to off, then load and write it" in {
     AppConfig.default.surfaceConfig.latencyTraceEnabled shouldBe false
 
-    val configFile = Files.createTempFile("serenity-render-latency-trace-config", ".conf")
+    val configFile = TestTemp.file("serenity-render-latency-trace-config", ".conf")
     Files.writeString(
       configFile,
       """ui.render.latency_trace = true
@@ -224,7 +224,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   it should "default the startup warm-up to on, then load and write it" in {
     AppConfig.default.surfaceConfig.startupWarmUpEnabled shouldBe true
 
-    val configFile = Files.createTempFile("serenity-startup-warm-up-config", ".conf")
+    val configFile = TestTemp.file("serenity-startup-warm-up-config", ".conf")
     Files.writeString(
       configFile,
       """startup.warm_up = false
@@ -238,7 +238,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "load and write the cursor info bar background alpha override" in {
-    val configFile = Files.createTempFile("serenity-cursor-info-bar-alpha-config", ".conf")
+    val configFile = TestTemp.file("serenity-cursor-info-bar-alpha-config", ".conf")
     Files.writeString(
       configFile,
       """display.cursor_info_bar_background_alpha = 0.5
@@ -259,7 +259,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "reject a cursor info bar background alpha outside 0.0-1.0" in {
-    val configFile = Files.createTempFile("serenity-cursor-info-bar-alpha-invalid-config", ".conf")
+    val configFile = TestTemp.file("serenity-cursor-info-bar-alpha-invalid-config", ".conf")
     Files.writeString(
       configFile,
       """status.background_alpha = 1.5
@@ -273,7 +273,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "load and write word wrap display mode" in {
-    val configFile = Files.createTempFile("serenity-word-wrap-config", ".conf")
+    val configFile = TestTemp.file("serenity-word-wrap-config", ".conf")
     Files.writeString(
       configFile,
       """editor.word_wrap = false
@@ -287,7 +287,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "load and write pane header display mode" in {
-    val configFile = Files.createTempFile("serenity-pane-header-config", ".conf")
+    val configFile = TestTemp.file("serenity-pane-header-config", ".conf")
     Files.writeString(configFile, "editor.pane_headers = false\n")
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
@@ -297,7 +297,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "load and write focused text body display mode" in {
-    val configFile = Files.createTempFile("serenity-focused-body-config", ".conf")
+    val configFile = TestTemp.file("serenity-focused-body-config", ".conf")
     Files.writeString(
       configFile,
       """editor.focused_text_body = true
@@ -311,7 +311,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "load and write contextual toolbar display mode" in {
-    val configFile = Files.createTempFile("serenity-contextual-toolbar-display-config", ".conf")
+    val configFile = TestTemp.file("serenity-contextual-toolbar-display-config", ".conf")
     Files.writeString(
       configFile,
       """editor.contextual_toolbar_mode = text-only
@@ -325,7 +325,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "report invalid surface display config values through the surface schema" in {
-    val configFile = Files.createTempFile("serenity-surface-display-invalid-config", ".conf")
+    val configFile = TestTemp.file("serenity-surface-display-invalid-config", ".conf")
     Files.writeString(
       configFile,
       """command_runner.visible_rows = 0
@@ -344,7 +344,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "report invalid surface layout config values through the surface schema" in {
-    val configFile = Files.createTempFile("serenity-surface-layout-invalid-config", ".conf")
+    val configFile = TestTemp.file("serenity-surface-layout-invalid-config", ".conf")
     Files.writeString(
       configFile,
       """editor.text_area.left = 60
@@ -361,7 +361,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "load and write viewport sizing policy" in {
-    val configFile = Files.createTempFile("serenity-viewport-config", ".conf")
+    val configFile = TestTemp.file("serenity-viewport-config", ".conf")
     Files.writeString(
       configFile,
       """window.viewport.width_percent = 80

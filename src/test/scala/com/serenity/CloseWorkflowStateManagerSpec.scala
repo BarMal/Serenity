@@ -284,7 +284,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "save and close a dirty path-backed buffer" in {
-    val tempRoot   = Files.createTempDirectory("close-workflow-save")
+    val tempRoot   = TestTemp.directory("close-workflow-save")
     val targetFile = tempRoot.resolve("notes.scala")
     val bufferId   = BufferId(0)
 
@@ -321,7 +321,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "route save for an unsaved buffer through the native save-as dialog and resume closure" in {
-    val tempRoot   = Files.createTempDirectory("close-workflow-save-as")
+    val tempRoot   = TestTemp.directory("close-workflow-save-as")
     val targetDir  = tempRoot.resolve("nested")
     val targetFile = targetDir.resolve("notes.scala")
     val bufferId   = BufferId(0)

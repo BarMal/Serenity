@@ -59,7 +59,7 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
   }
 
   it should "number recent files after the three fixed actions" in {
-    val recent = Files.createTempFile("serenity-recent-digit", ".md")
+    val recent = TestTemp.file("serenity-recent-digit", ".md")
     val page   = AppStartup.createStartPage(sessionExists = false, recentFiles = List(recent))
 
     page.actions.map(_.id).take(4) shouldBe List(
@@ -75,7 +75,7 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
   }
 
   it should "activate a selected recent file through a path-carrying command" in {
-    val recent = Files.createTempFile("serenity-recent-document", ".md")
+    val recent = TestTemp.file("serenity-recent-document", ".md")
     val page   = AppStartup.createStartPage(sessionExists = true, recentFiles = List(recent))
     val index  = page.actions.indexWhere(_.id == s"recent:${recent.toString}")
 
@@ -91,7 +91,7 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
   }
 
   it should "use unambiguous recent labels and discard missing paths before rendering" in {
-    val root    = Files.createTempDirectory("serenity-startup-recents")
+    val root    = TestTemp.directory("serenity-startup-recents")
     val first   = Files.createFile(root.resolve("one").resolveSibling("notes.md"))
     val second  = Files.createFile(root.resolve("second-notes.md"))
     val missing = root.resolve("missing.md")

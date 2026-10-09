@@ -71,7 +71,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
   }
 
   it should "treat file URIs as local storage" in {
-    val path = Files.createTempFile("serenity-storage-location", ".txt")
+    val path = TestTemp.file("serenity-storage-location", ".txt")
 
     try StorageLocation.parse(path.toUri.toString).shouldBe(Right(StorageLocation.Local(path)))
     finally Files.deleteIfExists(path)
@@ -96,7 +96,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   "FileManager" should "raise a clear error instead of opening rich documents as plain text" in {
     val fileManager = new FileManager()
-    val docFile     = Files.createTempFile("serenity-rich-open", ".doc")
+    val docFile     = TestTemp.file("serenity-rich-open", ".doc")
 
     try
       Files.writeString(docFile, "not a real doc")
@@ -112,7 +112,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   it should "raise a clear error instead of saving text buffers as rich documents" in {
     val fileManager = new FileManager()
-    val docFile     = Files.createTempDirectory("serenity-rich-save").resolve("draft.doc")
+    val docFile     = TestTemp.directory("serenity-rich-save").resolve("draft.doc")
     val buffer      = Buffer.fromString(BufferId(99), "plain text")
 
     try
@@ -135,7 +135,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   it should "open RTF files as editable plain text with rich document metadata" in {
     val fileManager = new FileManager()
-    val rtfFile     = Files.createTempFile("serenity-rich-open", ".rtf")
+    val rtfFile     = TestTemp.file("serenity-rich-open", ".rtf")
 
     try
       Files.writeString(rtfFile, """{\rtf1\ansi plain \b bold\b0\par}""")
@@ -154,8 +154,8 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   it should "save clean RTF buffers without dropping rich formatting" in {
     val fileManager = new FileManager()
-    val sourceFile  = Files.createTempFile("serenity-rich-source", ".rtf")
-    val savedFile   = Files.createTempFile("serenity-rich-saved", ".rtf")
+    val sourceFile  = TestTemp.file("serenity-rich-source", ".rtf")
+    val savedFile   = TestTemp.file("serenity-rich-saved", ".rtf")
 
     try
       Files.writeString(sourceFile, """{\rtf1\ansi plain \b bold\b0\par}""")
@@ -174,8 +174,8 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   it should "save dirty RTF buffers from current text instead of stale rich metadata" in {
     val fileManager = new FileManager()
-    val sourceFile  = Files.createTempFile("serenity-rich-dirty-source", ".rtf")
-    val savedFile   = Files.createTempFile("serenity-rich-dirty-saved", ".rtf")
+    val sourceFile  = TestTemp.file("serenity-rich-dirty-source", ".rtf")
+    val savedFile   = TestTemp.file("serenity-rich-dirty-saved", ".rtf")
 
     try
       Files.writeString(sourceFile, """{\rtf1\ansi plain \b bold\b0\par}""")
@@ -199,8 +199,8 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   it should "save dirty RTF buffers with aligned rich formatting metadata" in {
     val fileManager = new FileManager()
-    val sourceFile  = Files.createTempFile("serenity-rich-format-source", ".rtf")
-    val savedFile   = Files.createTempFile("serenity-rich-format-saved", ".rtf")
+    val sourceFile  = TestTemp.file("serenity-rich-format-source", ".rtf")
+    val savedFile   = TestTemp.file("serenity-rich-format-saved", ".rtf")
 
     try
       Files.writeString(sourceFile, """{\rtf1\ansi plain bold\par}""")
@@ -233,7 +233,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   it should "open ODT files as editable plain text with rich document metadata" in {
     val fileManager = new FileManager()
-    val odtFile     = Files.createTempFile("serenity-odt-open", ".odt")
+    val odtFile     = TestTemp.file("serenity-odt-open", ".odt")
     val source = com.serenity.richtext.RichTextDocument(
       List(
         com.serenity.richtext.RichTextParagraph(
@@ -265,7 +265,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   it should "save ODT buffers with aligned rich formatting metadata" in {
     val fileManager = new FileManager()
-    val savedFile   = Files.createTempFile("serenity-odt-save", ".odt")
+    val savedFile   = TestTemp.file("serenity-odt-save", ".odt")
     val document = com.serenity.richtext.RichTextDocument(
       List(
         com.serenity.richtext.RichTextParagraph(
@@ -299,7 +299,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   it should "open DOCX files as editable plain text with rich document metadata" in {
     val fileManager = new FileManager()
-    val docxFile    = Files.createTempFile("serenity-docx-open", ".docx")
+    val docxFile    = TestTemp.file("serenity-docx-open", ".docx")
     val source = com.serenity.richtext.RichTextDocument(
       List(
         com.serenity.richtext.RichTextParagraph(
@@ -331,8 +331,8 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   it should "require Save As before replacing an RTF import that contains a table or picture" in {
     val fileManager = new FileManager()
-    val sourceFile  = Files.createTempFile("serenity-lossy-rtf-source", ".rtf")
-    val savedFile   = Files.createTempFile("serenity-lossy-rtf-copy", ".rtf")
+    val sourceFile  = TestTemp.file("serenity-lossy-rtf-source", ".rtf")
+    val savedFile   = TestTemp.file("serenity-lossy-rtf-copy", ".rtf")
 
     try
       Files.writeString(
@@ -360,7 +360,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   it should "save DOCX buffers with aligned rich formatting metadata" in {
     val fileManager = new FileManager()
-    val savedFile   = Files.createTempFile("serenity-docx-save", ".docx")
+    val savedFile   = TestTemp.file("serenity-docx-save", ".docx")
     val document = com.serenity.richtext.RichTextDocument(
       List(
         com.serenity.richtext.RichTextParagraph(
@@ -394,7 +394,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   it should "export rich text headings and inline marks to Markdown" in {
     val fileManager = new FileManager()
-    val savedFile   = Files.createTempFile("serenity-markdown-save", ".md")
+    val savedFile   = TestTemp.file("serenity-markdown-save", ".md")
     val document = RichTextDocument(
       List(
         RichTextParagraph.plain("Title", role = ParagraphRole.Heading(1)),
@@ -423,7 +423,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
 
   "FileUtils" should "handle file operations" in {
     // Create a temporary file
-    val tempFile = Files.createTempFile("test", ".txt")
+    val tempFile = TestTemp.file("test", ".txt")
 
     try
       // Test writing and reading
@@ -445,7 +445,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
       .getOrElse(Set.empty)
 
   it should "raise a clear error when reading a missing file" in {
-    val missingFile = Files.createTempDirectory("serenity-missing-file").resolve("missing.txt")
+    val missingFile = TestTemp.directory("serenity-missing-file").resolve("missing.txt")
 
     try
       val result = FileUtils.readFileContent(missingFile).attempt.unsafeRunSync()
@@ -455,7 +455,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
   }
 
   "FileBrowser" should "list a directory's entries, directories first, sorted by name" in {
-    val root                     = Files.createTempDirectory("serenity-file-browser")
+    val root                     = TestTemp.directory("serenity-file-browser")
     val (childDir, fileA, fileB) = (root.resolve("zzz-dir"), root.resolve("a.txt"), root.resolve("b.txt"))
     try
       Files.createDirectory(childDir)
@@ -469,14 +469,14 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
   }
 
   it should "return an empty listing for a missing directory rather than raising" in {
-    val missingDirectory = Files.createTempDirectory("serenity-missing-directory").resolve("missing")
+    val missingDirectory = TestTemp.directory("serenity-missing-directory").resolve("missing")
     try FileBrowser.listDirectory(missingDirectory).unsafeRunSync() shouldBe Nil
     finally Files.deleteIfExists(missingDirectory.getParent)
   }
 
   "StateManager" should "handle save file events through the active editor pane" in {
     // Create a temporary file with content
-    val tempFile       = Files.createTempFile("test", ".scala")
+    val tempFile       = TestTemp.file("test", ".scala")
     val initialContent = "val x = 42"
 
     try

@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.command.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -40,7 +41,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
 
   it should "enqueue a hover request for the active language buffer" in {
     val stateManager = createStateManager()
-    val file         = Files.createTempFile("lsp-hover", ".scala")
+    val file         = TestTemp.file("lsp-hover", ".scala")
     try
       stateManager
         .updateState { state =>
@@ -82,7 +83,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
 
   it should "enqueue a definition request with the word under the active cursor" in {
     val stateManager = createStateManager()
-    val file         = Files.createTempFile("lsp-definition", ".scala")
+    val file         = TestTemp.file("lsp-definition", ".scala")
     try
       stateManager
         .updateState { state =>
@@ -125,7 +126,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
 
   it should "enqueue a completion request for the active language buffer" in {
     val stateManager = createStateManager()
-    val file         = Files.createTempFile("lsp-completion", ".scala")
+    val file         = TestTemp.file("lsp-completion", ".scala")
     try
       stateManager
         .updateState { state =>

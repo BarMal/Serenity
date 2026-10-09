@@ -49,7 +49,7 @@ class FileWorkflowOpenDialogStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "include readable files alongside directories in the Path field suggestions" in {
-    val tempDir  = Files.createTempDirectory("open-path-dir-and-file")
+    val tempDir  = TestTemp.directory("open-path-dir-and-file")
     val subDir   = Files.createDirectory(tempDir.resolve("documents"))
     val textFile = Files.createTempFile(tempDir, "notes", ".txt")
     Files.writeString(textFile, "hello")
@@ -90,7 +90,7 @@ class FileWorkflowOpenDialogStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "open a file immediately when its path suggestion is accepted with Tab" in {
-    val tempDir  = Files.createTempDirectory("open-tab-file-path")
+    val tempDir  = TestTemp.directory("open-tab-file-path")
     val textFile = Files.createTempFile(tempDir, "notes", ".txt")
     Files.writeString(textFile, "tab-opened content")
 
@@ -130,7 +130,7 @@ class FileWorkflowOpenDialogStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "navigate into a directory when Enter is pressed on a path that resolves to a directory" in {
-    val tempDir = Files.createTempDirectory("open-enter-dir")
+    val tempDir = TestTemp.directory("open-enter-dir")
     val subDir  = Files.createDirectory(tempDir.resolve("inner"))
     val subFile = Files.createTempFile(subDir, "notes", ".txt")
     Files.writeString(subFile, "inner content")

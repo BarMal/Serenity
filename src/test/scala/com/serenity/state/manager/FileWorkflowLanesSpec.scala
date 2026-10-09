@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{FileEntry, FileManager}
 import com.serenity.keystroke.events.{Escape, InsertChar}
@@ -56,7 +57,7 @@ class FileWorkflowLanesSpec extends AnyFlatSpec with Matchers:
       (gate.complete(()) >> stateManager.runtimeLifecycle.awaitEffects).timeout(20.seconds).unsafeRunSync()
 
   private def fixture(): Fixture =
-    val directory = Files.createTempDirectory("file-workflow-lanes-spec")
+    val directory = TestTemp.directory("file-workflow-lanes-spec")
     val program =
       for
         gate                <- Deferred[IO, Unit]

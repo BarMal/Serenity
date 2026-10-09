@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.command.*
 import com.serenity.config.AppMode
 import com.serenity.keystroke.events.InsertChar
@@ -57,7 +58,7 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
 
   "Setting a buffer's language in code mode" should "enqueue an LSP FileOpened effect" in {
     val stateManager = createStateManager()
-    val file         = Files.createTempFile("lsp-mode-gating-code", ".scala")
+    val file         = TestTemp.file("lsp-mode-gating-code", ".scala")
     try
       setBufferPath(stateManager, file)
       setLanguage(stateManager, LanguageId.Scala)
@@ -70,7 +71,7 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
 
   "Setting a buffer's language in prose mode" should "not enqueue an LSP FileOpened effect" in {
     val stateManager = createStateManager()
-    val file         = Files.createTempFile("lsp-mode-gating-prose", ".scala")
+    val file         = TestTemp.file("lsp-mode-gating-prose", ".scala")
     try
       stateManager
         .executeCommand(
@@ -100,7 +101,7 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
 
   "Editing a Markdown buffer in prose mode" should "not enqueue an LSP document change" in {
     val stateManager = createStateManager()
-    val file         = Files.createTempFile("lsp-mode-gating-prose-edit", ".md")
+    val file         = TestTemp.file("lsp-mode-gating-prose-edit", ".md")
     try
       stateManager
         .executeCommand(

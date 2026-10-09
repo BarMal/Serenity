@@ -4,6 +4,7 @@ import java.awt.Color
 import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment, ThemeFollowConfig}
 import com.serenity.keystroke.Modifier
@@ -31,14 +32,14 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
   private def keyClass(key: String): String = key.replace(".", "").replace("_", "").toLowerCase
 
   private def savedText(config: AppConfig): String =
-    val file = Files.createTempFile("serenity-config-round-trip", ".conf")
+    val file = TestTemp.file("serenity-config-round-trip", ".conf")
     try
       ConfigManagerTestSupport.saveConfig(config, file) shouldBe true
       Files.readString(file)
     finally Files.deleteIfExists(file): Unit
 
   private def savedAndReloaded(config: AppConfig): AppConfig =
-    val file = Files.createTempFile("serenity-config-round-trip", ".conf")
+    val file = TestTemp.file("serenity-config-round-trip", ".conf")
     try
       ConfigManagerTestSupport.saveConfig(config, file) shouldBe true
       ConfigManagerTestSupport.loadConfig(Some(file.toString))
@@ -284,7 +285,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
   // -- An unreadable file --------------------------------------------------------------------------------------------
 
   "a config file that cannot be parsed" should "be kept aside rather than left to be overwritten by defaults" in {
-    val file = Files.createTempFile("serenity-unreadable-config", ".conf")
+    val file = TestTemp.file("serenity-unreadable-config", ".conf")
     Files.writeString(file, "editor.pane_headers = false\nthis is not = valid = hocon {\n")
 
     val preserved = ConfigManager.backUpConfig(file, java.time.Instant.now())
@@ -296,7 +297,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report itself as a load failure rather than quietly returning defaults" in {
-    val file = Files.createTempFile("serenity-unreadable-config", ".conf")
+    val file = TestTemp.file("serenity-unreadable-config", ".conf")
     // What older versions wrote: a quoted key (so the legacy line-based reader declines the file) alongside the
     // unquoted comma that makes it invalid HOCON. Every setting in such a file was silently replaced by defaults.
     Files.writeString(

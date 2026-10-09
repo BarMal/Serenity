@@ -7,6 +7,7 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.AtomicInteger
 import javax.imageio.ImageIO
 
+import com.serenity.TestTemp
 import com.serenity.markdown.MarkdownPreviewCache.{ImageCacheKey, SourceFingerprint}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -121,7 +122,7 @@ class MarkdownPreviewCacheBytesSpec extends AnyFlatSpec with Matchers:
   }
 
   private def withDirectory[A](body: Path => A): A =
-    val dir = Files.createTempDirectory("preview-cache-bytes").toRealPath()
+    val dir = TestTemp.directory("preview-cache-bytes").toRealPath()
     try body(dir)
     finally
       Files.list(dir).forEach(p => Files.deleteIfExists(p))

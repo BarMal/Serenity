@@ -1,6 +1,6 @@
 package com.serenity
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -62,7 +62,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("command runner should be open"))
 
   "StateManager UI presets" should "list custom UI presets in the command runner when opened" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-list").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-list").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
     val preset = UiPreset(
@@ -113,7 +113,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "refresh custom UI presets in an open command runner after saving" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-refresh").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-refresh").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -154,7 +154,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep command runner preset context current after preset management actions" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-action-status").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-action-status").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
     val preset = UiPreset(
@@ -205,7 +205,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "open preset options after saving a new UI preset from the command runner" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-create-options").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-create-options").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -236,7 +236,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave a saved preset untouched while later settings change the live workspace" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-snapshot").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-snapshot").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -272,7 +272,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "capture live config, theme, and panel changes when overwriting a preset" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-overwrite-capture").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-overwrite-capture").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -319,7 +319,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "offer the Arrange Panels list in the preset active panels group" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-edit-panel-order-menu").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-edit-panel-order-menu").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -368,7 +368,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "save the live workspace under a second name without touching the first preset" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-second-name").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-second-name").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 

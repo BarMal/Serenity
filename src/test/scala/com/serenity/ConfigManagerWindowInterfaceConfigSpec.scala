@@ -11,7 +11,7 @@ import org.scalatest.matchers.should.Matchers
 class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "ConfigManager" should "load and write preferred window size" in {
-    val configFile = Files.createTempFile("serenity-window-size-config", ".conf")
+    val configFile = TestTemp.file("serenity-window-size-config", ".conf")
     Files.writeString(
       configFile,
       """window.preferred.width = 1400
@@ -27,7 +27,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
   }
 
   it should "load and write window chrome mode" in {
-    val configFile = Files.createTempFile("serenity-window-chrome-config", ".conf")
+    val configFile = TestTemp.file("serenity-window-chrome-config", ".conf")
     Files.writeString(
       configFile,
       """window.chrome = auto
@@ -44,7 +44,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
   }
 
   it should "report invalid window config values through the window schema" in {
-    val configFile = Files.createTempFile("serenity-window-invalid-config", ".conf")
+    val configFile = TestTemp.file("serenity-window-invalid-config", ".conf")
     Files.writeString(
       configFile,
       """window.chrome = themed-ish
@@ -59,7 +59,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
   }
 
   it should "load and write interface density mode" in {
-    val configFile = Files.createTempFile("serenity-density-config", ".conf")
+    val configFile = TestTemp.file("serenity-density-config", ".conf")
     Files.writeString(
       configFile,
       """ui.density = spacious
@@ -73,7 +73,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
   }
 
   it should "report invalid interface config values through the interface schema" in {
-    val configFile = Files.createTempFile("serenity-interface-invalid-config", ".conf")
+    val configFile = TestTemp.file("serenity-interface-invalid-config", ".conf")
     Files.writeString(
       configFile,
       """ui.density = roomy
@@ -90,7 +90,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
   }
 
   it should "load and write UI element gaps" in {
-    val configFile = Files.createTempFile("serenity-ui-gap-config", ".conf")
+    val configFile = TestTemp.file("serenity-ui-gap-config", ".conf")
     Files.writeString(
       configFile,
       """ui.element_gap = 3
@@ -104,7 +104,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
   }
 
   it should "load and write UI outline thickness" in {
-    val configFile = Files.createTempFile("serenity-ui-outline-thickness-config", ".conf")
+    val configFile = TestTemp.file("serenity-ui-outline-thickness-config", ".conf")
     Files.writeString(
       configFile,
       """ui.outline_thickness = 4

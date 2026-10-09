@@ -44,7 +44,7 @@ class AppRuntimeCursorCadenceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "load from and write to the config file" in {
-    val configFile = Files.createTempFile("serenity-cursor-blink-timeout-config", ".conf")
+    val configFile = TestTemp.file("serenity-cursor-blink-timeout-config", ".conf")
     Files.writeString(
       configFile,
       """editor.cursor.blink_timeout_ms = 3000

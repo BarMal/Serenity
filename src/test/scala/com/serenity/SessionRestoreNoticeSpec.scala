@@ -50,7 +50,7 @@ class SessionRestoreNoticeSpec extends AnyFlatSpec with Matchers with OptionValu
   /** A real saved session holding `text` as unsaved, then rewritten by `damage`. */
   private def damagedSession(text: String)(damage: String => String): IO[Path] =
     for
-      root <- IO.blocking(Files.createTempDirectory("session-restore-notice"))
+      root <- IO.blocking(TestTemp.directory("session-restore-notice"))
       _    <- sessionManagerAt(root).saveSession(dirtyState(text))
       _    <- IO.blocking(Files.writeString(sessionFile(root), damage(Files.readString(sessionFile(root)))))
     yield root
@@ -160,7 +160,7 @@ class SessionRestoreNoticeSpec extends AnyFlatSpec with Matchers with OptionValu
   it should "still set the session aside and say so when launched with a file to open" in {
     val program = for
       root     <- damagedSession("draft to keep")(truncatedAfterContentRef)
-      document <- IO.blocking(Files.writeString(Files.createTempFile("session-restore-open", ".txt"), "opened"))
+      document <- IO.blocking(Files.writeString(TestTemp.file("session-restore-open", ".txt"), "opened"))
       state    <- launch(root, openPath = Some(document))
     yield
       Files.exists(sessionFile(root)) shouldBe false
