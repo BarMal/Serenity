@@ -48,5 +48,18 @@ private[command] object CommandRunnerSettingsInputItemsPresets:
             CommandIntent.UiPresets(UiPresetsIntent.RenameUiPreset(sourceName, targetName))
         },
       category = CommandCategory.Settings
+    ),
+    CommandSurfaceItem.InputItem(
+      id = "ui-preset-set-theme",
+      label = "Set Preset Theme",
+      hint = "Preset -> Theme",
+      currentValue = "",
+      kind = CommandSurfaceItem.InputKind.FreeText,
+      parse = text =>
+        CommandRunnerSettingsTextParsing.namedPair(text).map {
+          case (presetName, themeName) =>
+            CommandIntent.UiPresets(UiPresetsIntent.SetUiPresetTheme(presetName, themeName))
+        },
+      category = CommandCategory.Settings
     )
   )

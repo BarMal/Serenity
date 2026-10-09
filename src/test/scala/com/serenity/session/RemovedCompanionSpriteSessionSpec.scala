@@ -59,7 +59,7 @@ class RemovedCompanionSpriteSessionSpec extends AnyFlatSpec with Matchers with O
       """[{"surfaceId":"panel-outline","panel":{"position":"Left","size":24,"content":{"Outline":{"symbols":[]}}}},
         |{"surfaceId":"panel-companion","panel":{"position":"Right","size":22,"content":{"CompanionSprite":{}}}}]""".stripMargin
     ).getOrElse(fail("fixture panels are not JSON"))
-    val preset = UiPreset(name = "Sprite", config = AppConfig.default, themeName = Theme.dark.name)
+    val preset = UiPreset(name = "Sprite", config = AppConfig.default, themeName = Some(Theme.dark.name))
     val saved  = preset.asJson.mapObject(_.add("dockedPanels", dockedPanels))
 
     val loaded = saved.as[UiPreset].getOrElse(fail("a preset with a docked companion sprite must decode"))

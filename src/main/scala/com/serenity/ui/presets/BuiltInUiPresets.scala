@@ -5,7 +5,6 @@ import java.awt.Font
 import com.serenity.config.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
-import com.serenity.ui.theme.Theme
 
 /** The five concrete built-in `UiPreset` definitions and their name-based lookup. */
 private[presets] object BuiltInUiPresets:
@@ -43,7 +42,6 @@ private[presets] object BuiltInUiPresets:
             uiFontSize = 13.0f
           )
         ),
-      themeName = Theme.dark.name,
       targetEditorPaneCount = Some(1)
     )
 
@@ -64,7 +62,6 @@ private[presets] object BuiltInUiPresets:
             fontSize = 13.0f
           )
         ),
-      themeName = Theme.dark.name,
       targetEditorPaneCount = Some(1)
     )
 
@@ -77,7 +74,6 @@ private[presets] object BuiltInUiPresets:
         .withInterfaceDensity(InterfaceDensity.Compact)
         .withSyntaxHighlighting(true)
         .withFontConfig(FontConfig()),
-      themeName = Theme.dark.name,
       dockedPanels = List(
         SessionDockedPanel(
           "code-directory-tree",
@@ -102,7 +98,6 @@ private[presets] object BuiltInUiPresets:
         .withInterfaceDensity(InterfaceDensity.Compact)
         .withSyntaxHighlighting(true)
         .withFontConfig(FontConfig()),
-      themeName = Theme.dark.name,
       targetEditorPaneCount = Some(1)
     )
 
@@ -114,7 +109,6 @@ private[presets] object BuiltInUiPresets:
         .withLineNumbers(true)
         .withInterfaceDensity(InterfaceDensity.Comfortable)
         .withStatusLineSegments(List(StatusSegment.Position, StatusSegment.Title, StatusSegment.Mode)),
-      themeName = Theme.dark.name,
       dockedPanels = List(
         SessionDockedPanel(
           "review-outline",

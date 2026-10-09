@@ -48,7 +48,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
     )
     val preset = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
 
-    val restored = UiPreset.applyToState(preset, state, Theme.dark)
+    val restored = UiPreset.applyToState(preset, state, Some(Theme.dark))
 
     restored.persisted.layout.editorPanes should have size 1
     restored.persisted.layout.activeEditorPaneId shouldBe Some(pane1)
@@ -77,12 +77,12 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Two Pane Drafting",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = Nil,
       targetEditorPaneCount = Some(2)
     )
 
-    val restored = UiPreset.applyToState(preset, state, Theme.dark)
+    val restored = UiPreset.applyToState(preset, state, Some(Theme.dark))
 
     restored.persisted.layout.editorPanes should have size 2
     restored.persisted.layout.orderedPaneIds shouldBe List(PaneId(0), PaneId(1))
@@ -98,7 +98,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Legacy",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = Nil
     )
     val legacyJson = preset.asJson.hcursor
@@ -119,7 +119,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
     val first = UiPreset(
       name = "Focus",
       config = AppConfig.default.withPreferredWindowSize(PreferredWindowSize(1000, 700)),
-      themeName = "dark",
+      themeName = Some("dark"),
       dockedPanels = Nil
     )
     val second = first.copy(config = AppConfig.default.withPreferredWindowSize(PreferredWindowSize(1200, 900)))
@@ -141,7 +141,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
     val focus = UiPreset(
       name = "Focus",
       config = AppConfig.default.withPreferredWindowSize(PreferredWindowSize(1000, 700)),
-      themeName = "dark",
+      themeName = Some("dark"),
       dockedPanels = Nil
     )
     val review = focus.copy(name = "Review Notes")
@@ -158,14 +158,14 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
     yield
       loaded.names.sorted shouldBe List("Focus Copy", "Review Archive")
       copied.flatMap(_.config.preferredWindowSize) shouldBe Some(PreferredWindowSize(1000, 700))
-      renamed.map(_.themeName) shouldBe Some("dark")
+      renamed.map(_.themeName) shouldBe Some(Some("dark"))
     ).unsafeRunSync()
   }
 
   it should "reject built-in and path-like preset names before writing" in {
     val path   = TestTemp.directory("ui-preset-store-validation").resolve("ui-presets.json")
     val store  = UiPresetStore(path)
-    val preset = UiPreset("Writing", AppConfig.default, Theme.dark.name, Nil)
+    val preset = UiPreset("Writing", AppConfig.default, Some(Theme.dark.name), Nil)
 
     store.upsert(preset).attempt.unsafeRunSync().isLeft shouldBe true
     store.upsert(preset.copy(name = "../escape")).attempt.unsafeRunSync().isLeft shouldBe true
@@ -175,7 +175,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   it should "preserve unknown compatible preset and index fields when saving" in {
     val path   = TestTemp.directory("ui-preset-store-future-fields").resolve("ui-presets.json")
     val store  = UiPresetStore(path)
-    val preset = UiPreset("Future", AppConfig.default, Theme.dark.name, Nil)
+    val preset = UiPreset("Future", AppConfig.default, Some(Theme.dark.name), Nil)
     val input = Json.obj(
       "presets"          -> Json.arr(preset.asJson.mapObject(_.add("futurePresetField", Json.fromString("keep")))),
       "futureIndexField" -> Json.fromString("keep")
@@ -192,7 +192,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   it should "preserve unknown compatible config fields when saving" in {
     val path   = TestTemp.directory("ui-preset-store-future-config-fields").resolve("ui-presets.json")
     val store  = UiPresetStore(path)
-    val preset = UiPreset("Future", AppConfig.default, Theme.dark.name, Nil)
+    val preset = UiPreset("Future", AppConfig.default, Some(Theme.dark.name), Nil)
     val config = preset.asJson.hcursor.downField("config").focus.getOrElse(fail("preset config should encode"))
     val input = Json.obj(
       "presets" -> Json.arr(
@@ -229,8 +229,8 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   it should "reject renaming a preset to an existing normalized name" in {
     val path  = TestTemp.directory("ui-preset-store-rename-collision").resolve("ui-presets.json")
     val store = UiPresetStore(path)
-    val foo   = UiPreset("Foo", AppConfig.default, Theme.dark.name, Nil)
-    val bar   = UiPreset("Bar", AppConfig.default.withLineNumbers(false), Theme.dark.name, Nil)
+    val foo   = UiPreset("Foo", AppConfig.default, Some(Theme.dark.name), Nil)
+    val bar   = UiPreset("Bar", AppConfig.default.withLineNumbers(false), Some(Theme.dark.name), Nil)
 
     store.upsert(foo).unsafeRunSync()
     store.upsert(bar).unsafeRunSync()
@@ -241,7 +241,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   it should "treat canonically equivalent Unicode names as one preset identity" in {
     val path       = TestTemp.directory("ui-preset-store-unicode").resolve("ui-presets.json")
     val store      = UiPresetStore(path)
-    val composed   = UiPreset("Caf\u00e9", AppConfig.default, Theme.dark.name, Nil)
+    val composed   = UiPreset("Caf\u00e9", AppConfig.default, Some(Theme.dark.name), Nil)
     val decomposed = composed.copy(name = "Cafe\u0301")
 
     store.upsert(composed).unsafeRunSync()
@@ -255,7 +255,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
     val source = UiPreset(
       "Focus",
       AppConfig.default,
-      Theme.dark.name,
+      Some(Theme.dark.name),
       Nil,
       unknownFields = JsonObject("futurePresetField" -> Json.fromString("keep")),
       configUnknownFields = JsonObject("futureConfigField" -> Json.fromString("keep"))
@@ -278,7 +278,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   it should "keep the last write when two overwrites race for the same preset" in
     (1 to 20).foreach { attempt =>
       val path   = TestTemp.directory(s"ui-preset-store-concurrent-overwrite-$attempt").resolve("ui-presets.json")
-      val source = UiPreset("Focus", AppConfig.default, Theme.dark.name, Nil)
+      val source = UiPreset("Focus", AppConfig.default, Some(Theme.dark.name), Nil)
       val storeA = UiPresetStore(path)
       val storeB = UiPresetStore(path)
       val first  = source.copy(config = AppConfig.default.withLineNumbers(false))
@@ -295,7 +295,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   it should "serialize an overwrite with a concurrent deletion" in
     (1 to 20).foreach { attempt =>
       val path   = TestTemp.directory(s"ui-preset-store-overwrite-delete-$attempt").resolve("ui-presets.json")
-      val source = UiPreset("Focus", AppConfig.default, Theme.dark.name, Nil)
+      val source = UiPreset("Focus", AppConfig.default, Some(Theme.dark.name), Nil)
       val storeA = UiPresetStore(path)
       val storeB = UiPresetStore(path)
 
@@ -314,7 +314,7 @@ class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
   it should "serialize an overwrite with a concurrent rename" in
     (1 to 20).foreach { attempt =>
       val path   = TestTemp.directory(s"ui-preset-store-overwrite-rename-$attempt").resolve("ui-presets.json")
-      val source = UiPreset("Focus", AppConfig.default, Theme.dark.name, Nil)
+      val source = UiPreset("Focus", AppConfig.default, Some(Theme.dark.name), Nil)
       val storeA = UiPresetStore(path)
       val storeB = UiPresetStore(path)
 

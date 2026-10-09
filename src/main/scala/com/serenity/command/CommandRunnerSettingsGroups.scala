@@ -280,7 +280,7 @@ object CommandRunnerSettingsGroups:
       "settings-look",
       "Look",
       "Theme, density, cursor",
-      List(themeGroup, interfaceLayoutGroup, cursorGroup, lookAdvancedGroup, followSystemGroup)
+      List(themeGroup, followSystemGroup, interfaceLayoutGroup, cursorGroup, lookAdvancedGroup)
     )
     val languageToolsGroup = group(
       "settings-language-tools",

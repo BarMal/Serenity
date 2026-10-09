@@ -124,6 +124,9 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       "ui-preset-apply",
       "ui-preset-overwrite",
       "ui-preset-duplicate",
+      "ui-preset-set-theme",
+      "ui-preset-use-current-theme",
+      "ui-preset-clear-theme",
       "ui-preset-delete",
       "ui-preset-reset"
     )

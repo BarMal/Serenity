@@ -72,7 +72,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
 
     val saved = store.find("Workbench").unsafeRunSync()
 
-    saved.map(_.themeName) shouldBe Some(Theme.light.name)
+    saved.map(_.themeName) shouldBe Some(Some(Theme.light.name))
     saved.map(_.config.interfaceDensity) shouldBe Some(InterfaceDensity.Spacious)
     saved.flatMap(_.config.preferredWindowSize) shouldBe Some(size)
     saved.map(_.pinnedPanels.map(panel => panel.position -> panel.size)) shouldBe Some(List(PanelPosition.Bottom -> 12))
@@ -91,7 +91,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
       config = AppConfig.default
         .withInterfaceDensity(InterfaceDensity.Compact)
         .withPreferredWindowSize(PreferredWindowSize(1280, 720)),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(
         com.serenity.ui.layout.SessionDockedPanel(
           "panel-1",
