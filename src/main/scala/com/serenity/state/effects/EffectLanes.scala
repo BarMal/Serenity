@@ -1,7 +1,9 @@
 package com.serenity.state.effects
 
+import scala.concurrent.duration.FiniteDuration
+
 import cats.effect.std.Supervisor
-import cats.effect.{IO, Outcome, Ref, Resource}
+import cats.effect.{Deferred, IO, Outcome, Ref, Resource}
 import cats.syntax.all.*
 
 /** Runs effects off the dispatcher fiber, one lane at a time per [[Lane]] (see docs/state-architecture-target.md).
@@ -16,6 +18,13 @@ trait EffectLanes:
     * Fails with [[EffectLanes.Released]] once the resource has been released.
     */
   def submit(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit]
+
+  /** Accepts `job` to be submitted to `lane` once `delay` passes with no later `submitAfter` for the same lane: each
+    * call replaces the one still waiting, so a burst of calls runs `job` once, after the burst, and costs no fiber per
+    * call. Unlike [[submit]], a job already running on the lane is cancelled when the replacement is handed over, not
+    * when it is requested. Fails with [[EffectLanes.Released]] once the resource has been released.
+    */
+  def submitAfter(lane: Lane.Keyed, delay: FiniteDuration, job: IO[Unit]): IO[Unit]
 
   /** Completes once every job accepted before the call has finished, been cancelled, been superseded or been dropped.
     * Work accepted afterwards is not waited for, so a steady stream of submissions cannot starve a drain.
@@ -33,7 +42,16 @@ object EffectLanes:
     for
       supervisor <- Supervisor[IO](await = false)
       table      <- Resource.make(IO.ref(LaneTable.empty))(table => table.modify(_.release).flatMap(signalOnly))
-    yield SupervisedLanes(supervisor, table, onFailure)
+      lanes      <- Resource.eval(IO.deferred[EffectLanes])
+      delayed    <- Resource.make(DelayedSubmissions.create(handOver(lanes)))(_.discard)
+      _          <- Resource.eval(supervisor.supervise(delayed.run))
+      supervised = SupervisedLanes(supervisor, table, delayed, onFailure)
+      _ <- Resource.eval(lanes.complete(supervised))
+    yield supervised
+
+  // The lanes may be released while a delayed job is still due; it then has nowhere to run and is dropped.
+  private def handOver(lanes: Deferred[IO, EffectLanes])(lane: Lane.Keyed, job: IO[Unit]): IO[Unit] =
+    lanes.get.flatMap(_.submit(lane, job)).recover { case _: Released => () }
 
   private def signalOnly(actions: Actions): IO[Unit] =
     actions.cancel.traverse_(_.complete(())) >> actions.release.traverse_(_.complete(()))
@@ -41,6 +59,7 @@ object EffectLanes:
   final private class SupervisedLanes(
       supervisor: Supervisor[IO],
       table: Ref[IO, LaneTable],
+      delayed: DelayedSubmissions,
       onFailure: (Lane.Scheduled, Throwable) => IO[Unit]
   ) extends EffectLanes:
 
@@ -56,8 +75,13 @@ object EffectLanes:
         }
       }
 
+    def submitAfter(lane: Lane.Keyed, delay: FiniteDuration, job: IO[Unit]): IO[Unit] =
+      table.get.flatMap(current =>
+        if current.released then IO.raiseError(Released()) else delayed.schedule(lane, delay, job)
+      )
+
     def drain: IO[Unit] =
-      IO.deferred[Unit].flatMap(drained => transition(_.awaitDrain(drained)) >> drained.get)
+      delayed.handedOver >> IO.deferred[Unit].flatMap(drained => transition(_.awaitDrain(drained)) >> drained.get)
 
     private def transition(step: LaneTable => (LaneTable, Actions)): IO[Unit] =
       IO.uncancelable(_ => table.modify(step).flatMap(perform))
