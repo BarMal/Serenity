@@ -4,8 +4,9 @@ import com.serenity.config.MarkdownViewMode
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
 import com.serenity.markdown.MarkdownInlineSpans.Run
+import com.serenity.markdown.MarkdownTableColumns.Columns
 
-/** Whether, and where, a buffer's Markdown emphasis and code markers are hidden. */
+/** Whether, and where, a buffer's Markdown markers (emphasis, code, heading hashes, rules) are hidden. */
 enum MarkerMode:
   /** Markers are ordinary text: source editing, or any buffer a live preview does not apply to. */
   case Off
@@ -38,15 +39,28 @@ final case class MarkdownInlineView(
     mode: MarkerMode,
     revealed: Vector[Range.Inclusive],
     fences: FenceRangeIndex,
-    baseIsMonospaced: Boolean = false
+    baseIsMonospaced: Boolean = false,
+    tableColumns: Map[Int, Columns] = Map.empty
 ):
 
   def isActive: Boolean = mode != MarkerMode.Off
 
   /** The decorated stretches of `text`, the content of buffer line `line`. Code inside a fenced block is not prose. */
   def runsOn(line: Int, text: String): Vector[Run] =
-    if !isActive || !MarkdownInlineSpans.mayContainMarkup(text) || fences.rangeAt(line).isDefined then Vector.empty
-    else MarkdownInlineSpans.scan(text)
+    if !isActive || fences.rangeAt(line).isDefined then Vector.empty
+    else MarkdownBlockSpans.scan(text, fences.tableRowAt(line), fences.setextAt(line))
+
+  /** Whether `text`, buffer line `line`, is a thematic break, setext underline or table delimiter row drawn as a line
+    * in place of its hidden characters.
+    */
+  def drawsRuleOn(line: Int, text: String): Boolean =
+    isActive && hidesMarkersOn(line) && fences.rangeAt(line).isEmpty &&
+      MarkdownBlockSpans.isRule(text, fences.tableRowAt(line), fences.setextAt(line))
+
+  /** The padding geometry of the table `line` is a row of, when its pipes are to line up. */
+  def columnsOn(line: Int): Option[Columns] =
+    if tableColumns.isEmpty || fences.tableRowAt(line) == MarkdownBlockLens.TableRow.Delimiter then None
+    else fences.tableAt(line).flatMap(table => tableColumns.get(table.start))
 
   def hidesMarkersOn(line: Int): Boolean =
     mode match

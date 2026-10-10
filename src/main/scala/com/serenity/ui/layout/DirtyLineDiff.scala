@@ -76,4 +76,5 @@ object DirtyLineDiff:
       previous.isProportional == current.isProportional &&
       previous.usesMeasuredLayout == current.usesMeasuredLayout &&
       previous.richTextDocument == current.richTextDocument &&
-      previous.markdownInline.mode == current.markdownInline.mode
+      previous.markdownInline.mode == current.markdownInline.mode &&
+      previous.markdownInline.tableColumns == current.markdownInline.tableColumns

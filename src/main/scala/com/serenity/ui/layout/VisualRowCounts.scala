@@ -60,7 +60,7 @@ object VisualRowCounts:
     val content = buffer.document.content
     val frc     = TextLayoutSnapshot.defaultFontRenderContext()
     val richText =
-      RichTextContext.forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, forceCellLayout, wrapCache)
+      RichTextContext.forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, forceCellLayout, wrapCache, frc)
     def measure(line: Int): Int =
       TextLayoutSnapshot
         .boundedVisualLinesForText(

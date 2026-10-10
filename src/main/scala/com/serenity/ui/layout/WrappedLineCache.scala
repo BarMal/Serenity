@@ -1,5 +1,6 @@
 package com.serenity.ui.layout
 
+import java.awt.Font
 import java.awt.font.FontRenderContext
 import java.util.concurrent.atomic.AtomicLong
 import java.util.{ArrayDeque, HashMap, LinkedHashMap}
@@ -8,6 +9,7 @@ import scala.jdk.CollectionConverters.*
 
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
+import com.serenity.markdown.MarkdownTableColumns.Columns
 import com.serenity.richtext.ParagraphRole
 import com.serenity.rope.Rope
 import com.serenity.state.models.{BufferId, TextVisualLine}
@@ -42,6 +44,13 @@ sealed abstract class WrappedLineCache:
     * document, so a cache keeps the answer for as long as the buffer's content is the same rope.
     */
   def fenceIndex(bufferId: BufferId, content: Rope): FenceRangeIndex
+
+  /** The column geometry of `content`'s pipe tables at `font`, which `compute` measures; a cache keeps it for as long
+    * as the content is the same rope and the font the same.
+    */
+  def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
+    compute: => Map[Int, Columns]
+  ): Map[Int, Columns]
 
 /** Everything a line's wrap and caret measurement depends on except its buffer line number, which only labels the rows
   * -- so a line keeps its entry when lines are inserted or deleted above it. `resolver` carries the base font and the
@@ -122,8 +131,19 @@ object WrappedLineCache:
 
     def fenceIndex(bufferId: BufferId, content: Rope): FenceRangeIndex = fencesOf(content)
 
+    def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
+      compute: => Map[Int, Columns]
+    ): Map[Int, Columns] = compute
+
   def bounded(maxLines: Int = DefaultMaxLines, maxChars: Long = DefaultMaxChars): Bounded =
     new Bounded(math.max(1, maxLines), math.max(1L, maxChars))
+
+  final private case class TableColumnsEntry(
+      content: Rope,
+      font: Font,
+      frc: FontRenderContext,
+      columns: Map[Int, Columns]
+  )
 
   /** `complete` is false when the wrap stopped at a row limit, so the entry only answers requests for that many rows.
     */
@@ -154,6 +174,28 @@ object WrappedLineCache:
     private val measuredCount    = new AtomicLong(0L)
     private val visualRows       = new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries)
     private val fences           = new LinkedHashMap[BufferId, (Rope, FenceRangeIndex)](16, 0.75f, true)
+    private val columns          = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
+
+    def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
+      compute: => Map[Int, Columns]
+    ): Map[Int, Columns] =
+      cachedColumns(bufferId, content, font, frc).getOrElse {
+        val found = compute
+        synchronized {
+          val _ = columns.put(bufferId, TableColumnsEntry(content, font, frc, found))
+          if columns.size() > MaxFenceIndexes then
+            val eldest = columns.keySet().iterator()
+            val _      = eldest.next()
+            eldest.remove()
+        }
+        found
+      }
+
+    private def cachedColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext) = synchronized {
+      Option(columns.get(bufferId)).collect {
+        case entry if sameRope(entry.content, content) && entry.font == font && entry.frc == frc => entry.columns
+      }
+    }
 
     def fenceIndex(bufferId: BufferId, content: Rope): FenceRangeIndex =
       cachedFences(bufferId, content).getOrElse {

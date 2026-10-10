@@ -4,27 +4,112 @@ import scala.annotation.tailrec
 
 object MarkdownBlockLens:
 
-  final case class FenceRangeIndex(ranges: Vector[Range.Inclusive]):
+  /** A line's place in a pipe table. */
+  enum TableRow:
+    case None, Header, Delimiter, Body
 
-    def rangeAt(line: Int): Option[Range.Inclusive] =
-      @annotation.tailrec
-      def search(low: Int, high: Int): Option[Range.Inclusive] =
-        if low > high then None
-        else
-          val middle = (low + high) / 2
-          val range  = ranges(middle)
-          if line < range.start then search(low, middle - 1)
-          else if line > range.end then search(middle + 1, high)
-          else Some(range)
-      search(0, ranges.length - 1)
+  /** A line's place in a setext heading, whose text lines are underlined by a line of `=` or `-`. */
+  enum SetextRole:
+    case None
+    case Text(level: Int)
+    case Underline
+
+  /** A setext heading: the paragraph lines and, last, the underline. */
+  final case class SetextHeading(lines: Range.Inclusive, level: Int)
+
+  /** The document's fenced code blocks, pipe tables and setext headings, found in one pass over its lines. Despite the
+    * name it is the one block index the live preview consults, so no further scan of the document is needed.
+    */
+  final case class FenceRangeIndex(
+      ranges: Vector[Range.Inclusive],
+      tables: Vector[Range.Inclusive] = Vector.empty,
+      setext: Vector[SetextHeading] = Vector.empty
+  ):
+
+    def rangeAt(line: Int): Option[Range.Inclusive] = containing(ranges, line)(identity)
+
+    def tableAt(line: Int): Option[Range.Inclusive] = containing(tables, line)(identity)
+
+    def tableRowAt(line: Int): TableRow =
+      tableAt(line).fold(TableRow.None) { table =>
+        if line == table.start then TableRow.Header
+        else if line == table.start + 1 then TableRow.Delimiter
+        else TableRow.Body
+      }
+
+    def setextAt(line: Int): SetextRole =
+      containing(setext, line)(_.lines).fold(SetextRole.None) { heading =>
+        if line == heading.lines.end then SetextRole.Underline else SetextRole.Text(heading.level)
+      }
+
+  private def containing[A](items: Vector[A], line: Int)(range: A => Range.Inclusive): Option[A] =
+    @annotation.tailrec
+    def search(low: Int, high: Int): Option[A] =
+      if low > high then None
+      else
+        val middle = (low + high) / 2
+        val item   = items(middle)
+        val lines  = range(item)
+        if line < lines.start then search(low, middle - 1)
+        else if line > lines.end then search(middle + 1, high)
+        else Some(item)
+    search(0, items.length - 1)
 
   def fenceRangeIndex(lineCount: Int, lineAt: Int => Option[String]): FenceRangeIndex =
     fenceRangeIndex((0 until lineCount).iterator.map(index => lineAt(index).getOrElse("")))
 
-  /** The fenced blocks of a document given its lines in order, each paired fence line to the next. */
+  final private case class IndexScan(
+      fences: Vector[Int],
+      tables: Vector[Range.Inclusive],
+      inFence: Boolean,
+      header: Option[Int],
+      tableStart: Option[Int],
+      lineCount: Int,
+      paragraphStart: Option[Int],
+      setext: Vector[SetextHeading]
+  ):
+
+    def closeTable(lastLine: Int): IndexScan =
+      tableStart.fold(this)(start => copy(tables = tables :+ (start to lastLine), tableStart = None))
+
+    def next(line: String): IndexScan =
+      val index = lineCount
+      val seen  = copy(lineCount = lineCount + 1)
+      if isFenceLine(line) then
+        seen
+          .closeTable(index - 1)
+          .copy(fences = fences :+ index, inFence = !inFence, header = None, paragraphStart = None)
+      else if inFence then seen
+      else if tableStart.isDefined && MarkdownInlineTablePreview.isTableRow(line) then seen
+      else seen.closeTable(index - 1).candidate(line, index).paragraphs(line, index)
+
+    private def paragraphs(line: String, index: Int): IndexScan =
+      paragraphStart match
+        case _ if tableStart.isDefined => copy(paragraphStart = None)
+        case Some(start) if isSetextUnderline(line) =>
+          val level = if line.trim.startsWith("=") then 1 else 2
+          copy(setext = setext :+ SetextHeading(start to index, level), paragraphStart = None)
+        case _ if isParagraphLine(line) => copy(paragraphStart = paragraphStart.orElse(Some(index)))
+        case _                          => copy(paragraphStart = None)
+
+    private def candidate(line: String, index: Int): IndexScan =
+      if line.indexOf('|') < 0 then copy(header = None)
+      else if header.isDefined && MarkdownInlineTablePreview.isTableSeparator(line) then
+        copy(tableStart = header, header = None)
+      else copy(header = Option.when(MarkdownInlineTablePreview.isTableRow(line))(index))
+
+  /** The fenced blocks of a document given its lines in order, each paired fence line to the next, its tables (a header
+    * row, a delimiter row and the rows after them) and its setext headings, outside any fence.
+    */
   def fenceRangeIndex(lines: Iterator[String]): FenceRangeIndex =
-    val fences = lines.zipWithIndex.collect { case (line, index) if isFenceLine(line) => index }.toVector
-    FenceRangeIndex(fences.grouped(2).collect { case Vector(open, close) => open to close }.toVector)
+    val scan =
+      lines.foldLeft(IndexScan(Vector.empty, Vector.empty, false, None, None, 0, None, Vector.empty))(_.next(_))
+    val done = scan.closeTable(scan.lineCount - 1)
+    FenceRangeIndex(
+      done.fences.grouped(2).collect { case Vector(open, close) => open to close }.toVector,
+      done.tables,
+      done.setext
+    )
 
   final private case class LineSource(lineCount: Int, lineAt: Int => Option[String], fenceProbeWindow: Option[Int]):
     def at(index: Int): String =
@@ -242,10 +327,10 @@ object MarkdownBlockLens:
   private def isHeadingLine(line: String): Boolean =
     line.trim.matches("""^#{1,6}\s+.*""")
 
-  private def isSetextUnderline(line: String): Boolean =
+  private[markdown] def isSetextUnderline(line: String): Boolean =
     line.trim.matches("""^(=+|-+)$""")
 
-  private def isThematicBreak(line: String): Boolean =
+  private[markdown] def isThematicBreak(line: String): Boolean =
     val markers = line.filterNot(_.isWhitespace)
     markers.length >= 3 && markers.headOption.exists(Set('*', '-', '_').contains) && markers.forall(_ == markers.head)
 

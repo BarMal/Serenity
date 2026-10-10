@@ -38,7 +38,8 @@ private[renderer] object RendererLineSegments:
             visualLine.startColumn,
             view.hidesMarkersOn(visualLine.bufferLine),
             theme,
-            view.baseIsMonospaced
+            view.baseIsMonospaced,
+            context.fontForBuffer(buffer).getSize2D
           )
         )
 

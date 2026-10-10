@@ -1,9 +1,10 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
+import java.awt.font.FontRenderContext
 
 import com.serenity.config.MarkdownViewMode
-import com.serenity.markdown.{MarkdownInlineSpans, MarkdownInlineView, MarkerMode}
+import com.serenity.markdown.{MarkdownBlockSpans, MarkdownInlineView, MarkerMode}
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.{Buffer, Cursor}
 import com.serenity.ui.fonts.FontLoader
@@ -37,14 +38,15 @@ object RichTextContext:
     dropCapsEnabled: Boolean,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     cellGrid: Boolean = false,
-    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
+    frc: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext()
   ): RichTextContext =
     val content = buffer.document.content
     RichTextContext(
       buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(content.lineCount, content.weight)),
       RichTextStyling.proseZoom(font.getSize2D),
       dropCapsEnabled,
-      markdownViewFor(buffer, markdownViewMode, cellGrid, wrapCache, font)
+      markdownViewFor(buffer, markdownViewMode, cellGrid, wrapCache, font, frc)
     )
 
   /** How `buffer`'s inline Markdown is restyled under `viewMode`. A buffer carrying a rich-text document styles its own
@@ -55,16 +57,27 @@ object RichTextContext:
     viewMode: MarkdownViewMode,
     cellGrid: Boolean,
     wrapCache: WrappedLineCache,
-    font: Font
+    font: Font,
+    frc: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext()
   ): MarkdownInlineView =
     val mode = MarkerMode.of(viewMode, buffer.document.language, cellGrid)
     if mode == MarkerMode.Off || buffer.richText.richTextDocument.isDefined then MarkdownInlineView.Off
     else
+      val content = buffer.document.content
+      val fences  = wrapCache.fenceIndex(buffer.id, content)
+      val mono    = FontLoader.isMonospacedFont(font)
+      val columns =
+        if fences.tables.isEmpty then Map.empty
+        else
+          wrapCache.tableColumns(buffer.id, content, font, frc)(
+            MarkdownTableMetrics.columnsFor(content, fences.tables, font, frc, mono)
+          )
       MarkdownInlineView(
         mode,
         if mode == MarkerMode.Live then revealedLines(buffer) else Vector.empty,
-        wrapCache.fenceIndex(buffer.id, buffer.document.content),
-        FontLoader.isMonospacedFont(font)
+        fences,
+        mono,
+        columns
       )
 
   /** The lines the caret or a selection touches. A caret on a line with nothing to reveal changes no layout, so it is
@@ -74,7 +87,7 @@ object RichTextContext:
     buffer.editing.cursors.toList.toVector.map(touchedLines).filter { lines =>
       lines.start != lines.end || buffer.document.content
         .getLine(lines.start)
-        .exists(MarkdownInlineSpans.mayContainMarkup)
+        .exists(MarkdownBlockSpans.mayContainMarkup)
     }
 
   private def touchedLines(cursor: Cursor): Range.Inclusive =

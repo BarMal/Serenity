@@ -86,7 +86,8 @@ private[layout] object LineLayout:
   ): LineLayoutInputs =
     val resolver =
       if !measuredLayout then singleFontResolver(font)
-      else if richText.markdown.isActive then markdownAwareResolver(font, richText, lineIndex, lineLength, lineText)
+      else if richText.markdown.isActive then
+        markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText)
       else resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale)
     val paragraphRole = RichTextStyling.effectiveRole(
       richText.document.flatMap(_.paragraphAt(lineIndex)).map(_.role).getOrElse(ParagraphRole.Body),
@@ -100,6 +101,7 @@ private[layout] object LineLayout:
 
   private def markdownAwareResolver(
     font: Font,
+    frc: FontRenderContext,
     richText: RichTextContext,
     lineIndex: Int,
     lineLength: Int,
@@ -108,10 +110,11 @@ private[layout] object LineLayout:
     val runs = richText.markdown.runsOn(lineIndex, lineText)
     if runs.isEmpty then resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale)
     else
-      markdownResolver(
+      val resolver = markdownResolver(
         font,
         lineLength,
         runs,
         richText.markdown.hidesMarkersOn(lineIndex),
         richText.markdown.baseIsMonospaced
       )
+      richText.markdown.columnsOn(lineIndex).fold(resolver)(MarkdownTableMetrics.padded(lineText, resolver, _, frc))

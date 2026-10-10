@@ -227,7 +227,8 @@ object TextLayoutSnapshot:
     val totalLines  = buffer.document.content.lineCount
     val richDocument =
       buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.document.content.weight))
-    val markdownInline = RichTextContext.markdownViewFor(buffer, markdownViewMode, forceCellLayout, wrapCache, font)
+    val markdownInline =
+      RichTextContext.markdownViewFor(buffer, markdownViewMode, forceCellLayout, wrapCache, font, fontRenderContext)
     val richText       = RichTextContext(richDocument, proseScale, dropCapsEnabled, markdownInline)
     val measuredLayout = LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText)
     // The non-measured (cell) path draws every row on `cellMetrics`' own grid (see `TextRowMetrics`'s non-measured

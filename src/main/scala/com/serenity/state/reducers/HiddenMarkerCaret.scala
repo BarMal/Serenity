@@ -1,6 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.markdown.{MarkdownBlockLens, MarkdownInlineSpans, MarkdownInlineView, MarkerMode}
+import com.serenity.markdown.{MarkdownBlockSpans, MarkdownInlineSpans, MarkdownInlineView, MarkerMode}
 import com.serenity.state.models.{AppState, Buffer, CursorPosition}
 
 /** Keeps the caret off Markdown markers the read view hides. A hidden marker has no width, so a caret before it would
@@ -16,7 +16,7 @@ private[reducers] object HiddenMarkerCaret:
   def settle(state: AppState, buffer: Buffer, from: CursorPosition, landed: CursorPosition): CursorPosition =
     if !readModeHidesMarkers(state, buffer) then landed
     else
-      val hidden = hiddenColumns(buffer, landed.line)
+      val hidden = hiddenColumns(state, buffer, landed.line)
       if !hidden.contains(landed.column) then landed
       else
         val lineLength = buffer.document.content.getLine(landed.line).fold(0)(_.length)
@@ -33,12 +33,12 @@ private[reducers] object HiddenMarkerCaret:
       state.runtime.capabilities.isCellGrid
     ) == MarkerMode.Read
 
-  private def hiddenColumns(buffer: Buffer, line: Int): Set[Int] =
+  private def hiddenColumns(state: AppState, buffer: Buffer, line: Int): Set[Int] =
     val content = buffer.document.content
     val text    = content.getLine(line).getOrElse("")
-    if !MarkdownInlineSpans.mayContainMarkup(text) then Set.empty
+    if !MarkdownBlockSpans.mayContainMarkup(text) then Set.empty
     else
-      val fences = MarkdownBlockLens.fenceRangeIndex(content.linesIteratorFrom(0).map(_._2))
+      val fences = state.runtime.markdownBlockIndexes.of(content)
       MarkdownInlineSpans
         .hiddenColumns(MarkdownInlineView(MarkerMode.Read, Vector.empty, fences).runsOn(line, text))
         .toSet
