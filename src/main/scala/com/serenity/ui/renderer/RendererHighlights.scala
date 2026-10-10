@@ -202,7 +202,7 @@ object RendererHighlights:
         val amplitude = math.min(MaxSquiggleAmplitudePx, math.max(1, rowBottom - baselinePx - 1))
         val gap       = if rowBottom - baselinePx - 1 - amplitude >= 1 then 1 else 0
         val topPx     = math.max(lineTopPx, math.min(baselinePx + gap, rowBottom - 1 - amplitude))
-        squiggleSegments(startXPx.round, widthPx.round, topPx, amplitude).foreach { (xPx, yPx, segmentWidthPx) =>
+        forEachSquiggleSegment(startXPx.round, widthPx.round, topPx, amplitude) { (xPx, yPx, segmentWidthPx) =>
           surface.pixels.fillPixelRect(xPx, yPx, segmentWidthPx, 1, colour)
         }
       }
@@ -223,18 +223,21 @@ object RendererHighlights:
   private val MaxSquiggleAmplitudePx = 2
   private val SquiggleStepPx         = 2
 
-  /** One-pixel-high segments tracing a zig-zag `amplitude` deep from `topPx`, as (x, y, width). */
-  private[renderer] def squiggleSegments(
-    startXPx: Int,
-    widthPx: Int,
-    topPx: Int,
-    amplitude: Int
-  ): List[(Int, Int, Int)] =
-    (0 until math.max(widthPx, 1) by SquiggleStepPx).toList.map { offset =>
-      val phase = (offset / SquiggleStepPx) % (amplitude * 2)
-      val depth = if phase <= amplitude then phase else amplitude * 2 - phase
-      (startXPx + offset, topPx + depth, math.min(SquiggleStepPx, widthPx - offset).max(1))
-    }
+  /** Visits the one-pixel-high segments tracing a zig-zag `amplitude` deep from `topPx`, as (x, y, width). Walks the
+    * word directly because it runs for every misspelling on every frame, where building a list of tuples did not.
+    */
+  private[renderer] def forEachSquiggleSegment(startXPx: Int, widthPx: Int, topPx: Int, amplitude: Int)(
+    visit: (Int, Int, Int) => Unit
+  ): Unit =
+    val period = amplitude * 2
+    @annotation.tailrec
+    def walk(offset: Int): Unit =
+      if offset < math.max(widthPx, 1) then
+        val phase = (offset / SquiggleStepPx) % period
+        val depth = if phase <= amplitude then phase else period - phase
+        visit(startXPx + offset, topPx + depth, math.min(SquiggleStepPx, widthPx - offset).max(1))
+        walk(offset + SquiggleStepPx)
+    walk(0)
 
   /** The default blend weight (#1529): kept here, rather than only as `SurfaceConfig`'s default, so a caller testing
     * these functions directly (or a legacy 2-arg call) gets the same result the app always used to render.
