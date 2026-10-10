@@ -79,14 +79,11 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       }
       .getOrElse(fail("missing edit preset group"))
 
-    // issue #1058: editing/creating a preset used to walk a hand-maintained parallel clone tree (Active Panels,
-    // Theme & Surface > Surface Material, Fonts > Editor/Code/UI
-    // Typography, Document Defaults > New Documents/Markdown Preview/Spelling) that re-sliced the same canonical
-    // items several levels deeper than their top-level counterparts. It now reuses the same canonical settings
-    // groups directly (see `presetScopedGroups` in `CommandRunnerSettingsGroups`), just re-tagged with
-    // `settings-preset-*` ids so they remain addressable as distinct pages.
+    // issue #1058: editing a preset reuses the same canonical settings groups as the live settings, re-tagged with
+    // `settings-preset-*` ids so they remain addressable as distinct pages. issue #1682: only the settings a preset
+    // can hold are offered, and only under Edit -- Create is just Save As New, and the panel layout is captured
+    // whole by Overwrite Preset.
     val presetScopedGroupIds = List(
-      "settings-preset-workspace-layout",
       "settings-preset-cursor",
       "settings-preset-prose-font",
       "settings-preset-code-font",
@@ -94,19 +91,12 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       "settings-preset-document-defaults",
       "settings-preset-spellcheck"
     )
-    createPreset.label shouldBe "Create New Preset"
-    createPreset.children.map(_.id) shouldBe "settings-preset-create-name" :: presetScopedGroupIds
+    createPreset.label shouldBe "Save As New Preset"
+    createPreset.children.map(_.id) shouldBe List("ui-preset-save-as-new")
     editPreset.label shouldBe "Edit Preset: Writing"
-    editPreset.hint shouldBe Some("Editing Writing")
+    editPreset.hint shouldBe Some("Editing Writing. Panel layout: use Overwrite Preset")
     editPreset.children.map(_.id) shouldBe
       List("settings-preset-name", "settings-preset-actions") ++ presetScopedGroupIds
-    val createName = createPreset.children
-      .collectFirst {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-create-name" => group
-      }
-      .getOrElse(fail("missing create preset name group"))
-    createName.children.map(_.id) shouldBe List("ui-preset-save-as-new")
-
     val presetName = editPreset.children
       .collectFirst {
         case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-name" => group
@@ -130,39 +120,46 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       "ui-preset-delete",
       "ui-preset-reset"
     )
-    val activePanels = editPreset.children
-      .collectFirst {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-workspace-layout" => group
-      }
-      .getOrElse(fail("missing workspace layout group"))
-    activePanels.label shouldBe "Panels"
-    val workspaceItems = descendants(activePanels)
-    workspaceItems.collect { case CommandSurfaceItem.CommandItem(command, _) => command.intent } shouldBe
-      List(CommandIntent.View(ViewIntent.ArrangePanels))
+    descendants(editPreset).map(_.id) should not contain "arrange-panels"
+    // Each row on a preset page is its own row, not the live settings' row of the same name.
+    val own       = "preset:Writing:"
     val proseFont = groupByIdRecursive(List(editPreset), "settings-preset-prose-font")
     proseFont.label shouldBe "Prose Font"
-    proseFont.children.map(_.id) should contain allOf ("text-font", "text-ligatures", "text-font-size")
+    proseFont.children.map(_.id) should contain allOf (
+      "settings-preset-text-font-options",
+      s"${own}text-ligatures",
+      s"${own}text-font-size"
+    )
     val codeFont = groupByIdRecursive(List(editPreset), "settings-preset-code-font")
-    codeFont.children.map(_.id) should contain allOf ("code-font", "code-ligatures", "code-font-size")
+    codeFont.children.map(_.id) should contain allOf (
+      "settings-preset-code-font-options",
+      s"${own}code-ligatures",
+      s"${own}code-font-size"
+    )
     val uiFont = groupByIdRecursive(List(editPreset), "settings-preset-ui-font")
-    uiFont.children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
+    uiFont.children.map(_.id) should contain allOf (
+      "settings-preset-ui-font-options",
+      s"${own}ui-ligatures",
+      s"${own}ui-font-size"
+    )
     val documentDefaults = groupByIdRecursive(List(editPreset), "settings-preset-document-defaults")
     documentDefaults.label shouldBe "Document Defaults"
-    documentDefaults.children.map(_.id) shouldBe List("default-document-mode", "markdown-view", "drop-caps-enabled")
+    documentDefaults.children.map(_.id) shouldBe
+      List(s"${own}default-document-mode", s"${own}markdown-view", s"${own}drop-caps-enabled")
     val spellcheck = groupByIdRecursive(List(editPreset), "settings-preset-spellcheck")
     spellcheck.label shouldBe "Spell Check"
     spellcheck.children.map(_.id) should contain allOf (
-      "spellcheck-enabled",
-      "spellcheck-languages",
-      "spellcheck-dictionaries",
-      "spellcheck-words"
+      s"${own}spellcheck-enabled",
+      s"${own}spellcheck-languages",
+      s"${own}spellcheck-dictionaries",
+      s"${own}spellcheck-words"
     )
     descendants(documentDefaults).map(_.id) should not contain "lang-plain-text"
     // issue #1057: this used to also carry a "Theme Selection" child (Theme Chooser/Creator/Toggle/Reload) -- those
     // are one-shot actions with no preset-scoped value of their own, now ordinary CommandRegistry commands
     // (CommandRunnerOneShotActionsSpec), not part of this settings subtree.
     val cursor = groupByIdRecursive(List(editPreset), "settings-preset-cursor")
-    cursor.children.map(_.id) should contain("cursor-mode")
+    cursor.children.map(_.id) should contain(s"${own}cursor-mode")
 
     // issue #1060: Apply/Overwrite/Delete/Reset now pick from the existing-preset catalog instead of requiring a
     // typed exact name -- Duplicate/Rename/Save-As-New still need typed input since each needs a *new* name.

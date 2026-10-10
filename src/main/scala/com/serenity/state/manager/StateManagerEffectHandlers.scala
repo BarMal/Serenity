@@ -290,11 +290,25 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.Lsp(intent)                            => projectLspEffects.interpretLsp(intent, state)
       case CommandIntent.Theme(intent) => surfacePopupEffects.interpretThemeIntent(intent, state, chosen = recordUsage)
       case CommandIntent.View(intent)  => panelEffects.interpret(intent, state)
-      case CommandIntent.Project(intent)     => projectLspEffects.interpretProject(intent, state)
-      case CommandIntent.Session(intent)     => interpretSessionIntent(intent, state)
-      case CommandIntent.Keybindings(intent) => keybindingEffects.interpret(intent)
-      case CommandIntent.UiPresets(intent)   => uiPresetEffects.interpret(intent)
-      case CommandIntent.Settings(intent)    => configEffects.interpret(intent, state)
+      case CommandIntent.Project(intent)                           => projectLspEffects.interpretProject(intent, state)
+      case CommandIntent.Session(intent)                           => interpretSessionIntent(intent, state)
+      case CommandIntent.Keybindings(intent)                       => keybindingEffects.interpret(intent)
+      case CommandIntent.UiPresets(intent)                         => uiPresetEffects.interpret(intent)
+      case CommandIntent.Settings(intent)                          => configEffects.interpret(intent, state)
+      case CommandIntent.Scoped(SettingsTarget.Preset(name), edit) => uiPresetEffects.editSetting(name, edit)
+      case CommandIntent.Scoped(SettingsTarget.Global, edit) =>
+        dispatchCommand(
+          Command.typed(
+            command.name,
+            command.description,
+            edit,
+            command.category,
+            command.label,
+            command.keepMenuOpenOnSubmit
+          ),
+          state,
+          recordUsage
+        )
     // issue #1048: MRU tracking -- every executed registry command counts toward its recency, regardless of what
     // triggered it (palette, hotkey, mouse click, ...), living on `persisted` since `CommandRunner` itself is
     // reconstructed fresh each time the palette opens (`CommandRunner.recordCommandUsage`'s own doc). Left out:

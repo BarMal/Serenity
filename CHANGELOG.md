@@ -5,6 +5,7 @@
 ### 2026-10-10
 
 - Stopped a text setting that reads as a number (a comment author of `4e9`, say) coming back changed after a save: it was written bare and read back as the number 4000000000. It is now written quoted whenever the loader would read it as anything but the same text.
+- Made the settings pages under Edit Preset change that preset, not the live settings: cursor, fonts, document defaults and spell check are saved into the preset being edited, the pages show that preset's own values, and a built-in preset refuses the edit. Panel layout is no longer on the preset pages (Overwrite Preset captures it), Create New Preset is now just Save As New Preset, and every settings group has a unique id (#1682, part 1).
 
 ### 2026-10-09
 

@@ -303,10 +303,10 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       .activate(registry, AppConfig.default)
       .copy(surface =
         CommandRunnerSurface
-          .Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1))))
+          .Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 2))))
       )
     val items            = runner.submenuItems("settings-ui-presets")
-    val preview          = SettingsSurfaceState.previewRows(items, 1)
+    val preview          = SettingsSurfaceState.previewRows(items, 2)
     val fullPreviewCount = preview.rows.size + (if preview.overflowCount > 0 then 1 else 0)
     fullPreviewCount should be > 1
     val rect = LayoutRect(
@@ -336,7 +336,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
   it should "mark font submenu labels with their preview font family" in {
     val family = FontLoader.availableTextFamilies.head
     val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default)
+      .activate(CommandRegistry.default, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
       .copy(surface =
         CommandRunnerSurface.Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("text-font"))))
       )

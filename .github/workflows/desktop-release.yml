@@ -1,6 +1,6 @@
 name: Desktop Package Check
 
-# Packaging is built for every master push by Desktop Publish. On pull requests the three-OS jpackage build only runs
+# Packaging is built nightly, and for every release tag, by Desktop Publish. On pull requests the three-OS jpackage build only runs
 # when something that shapes the package changes; ordinary code is covered by CI and Cross-OS Tests, and building
 # installers on every PR starved the shared runners (jobs cancelled after queueing).
 on:

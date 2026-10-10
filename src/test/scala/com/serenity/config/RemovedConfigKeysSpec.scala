@@ -17,13 +17,11 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   private val keptSetting = "editor.word_wrap = false"
 
-  /** Both compat fixtures were written on Linux, so they spell out the Ctrl-based action keys. Command keys they never
-    * mention still default by the running OS (Cmd on macOS), exactly as for any file that leaves them out.
+  /** Both compat fixtures were written on Linux, so they spell out the Ctrl-based hotkeys and are read against Linux's
+    * defaults, as they would be on the machine that wrote them. A hotkey they never mention takes the default of the
+    * platform doing the reading.
     */
-  private val linuxWrittenHotkeys =
-    AppConfig.default.inputConfig.hotkeyConfig.copy(bindings = HotkeyConfig.forOs("linux").bindings)
-
-  private val linuxWrittenDefault = AppConfig.default.withHotkeyConfig(linuxWrittenHotkeys)
+  private val linuxWrittenDefault = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("linux"))
 
   private def load(lines: Seq[String]): ConfigLoadResult =
     val file = TestTemp.file("serenity-removed-keys", ".conf")
@@ -251,7 +249,7 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
       scala.io.Source.fromResource("compat/default-config-with-motion.conf")(using scala.io.Codec.UTF8).mkString
     val file = TestTemp.file("serenity-old-default", ".conf")
     Files.writeString(file, oldDefault)
-    val result = ConfigManagerTestSupport.loadConfigResult(Some(file.toString))
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(file.toString), ConfigManagerTestSupport.linuxPlan)
 
     result.config shouldBe linuxWrittenDefault.withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
     result.report.unknownKeys shouldBe Nil
@@ -275,8 +273,11 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val decoded = json.as[SessionState].getOrElse(fail("the stored session no longer decodes"))
 
-    decoded.config shouldBe linuxWrittenDefault
+    val hotkeysOfThisPlatform = AppConfig.default.inputConfig.hotkeyConfig
+    decoded.config.withHotkeyConfig(hotkeysOfThisPlatform) shouldBe AppConfig.default
       .withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
       .withWordWrap(false)
       .withLineNumbers(false)
+    decoded.config.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.Save) shouldBe
+      HotkeyConfig.forOs("linux").bindingsFor(HotkeyAction.Save)
   }
