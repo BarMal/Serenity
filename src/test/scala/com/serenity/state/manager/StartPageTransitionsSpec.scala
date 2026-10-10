@@ -26,11 +26,12 @@ class StartPageTransitionsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "list the recent folders it is given, after the fixed actions" in {
-    val live  = AppState.empty
-    val shown = StartPageTransitions.withStartPageShown(live, live, Nil, List(Path.of("/work/book")))
+    val live   = AppState.empty
+    val folder = Path.of("/work/book").toAbsolutePath.normalize
+    val shown  = StartPageTransitions.withStartPageShown(live, live, Nil, List(folder))
 
     shown.startPageSurface
       .map(_.content)
       .collect { case SurfaceContent.StartPage(page) => page.actions.map(_.id).last }
-      .getOrElse(fail("no start page")) shouldBe "recent-folder:/work/book"
+      .getOrElse(fail("no start page")) shouldBe s"recent-folder:$folder"
   }
