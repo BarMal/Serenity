@@ -18,6 +18,7 @@ import com.serenity.state.models.{
   FileWorkflowState,
   FindMatches,
   FindSearchRequest,
+  ListPicker,
   SessionListPurpose,
   SpellCheckFingerprint,
   SurfaceId
@@ -100,6 +101,11 @@ private[manager] enum EffectResult:
     * FileFinderTransitions.
     */
   case FilesListed(pickerId: SurfaceId, root: Path, listing: Either[String, ProjectFileListing])
+
+  /** The list picker `pickerId` recomputed for `query`; dropped unless that picker is open and still holds `query`. See
+    * PickerSearchTransitions.
+    */
+  case PickerSearched(pickerId: SurfaceId, query: String, searched: ListPicker)
 
   // What opening the command palette loads (#1911): each result is for the palette `surfaceId` it was started by, and
   // is dropped once that palette has closed. See CommandRunnerOpening.
@@ -198,6 +204,8 @@ private[manager] object EffectResult:
         SessionWorkflowTransitions.withNamedSessionLoaded(state, pickerId, restored)
       case FilesListed(pickerId, root, listing) =>
         FileFinderTransitions.withFilesListed(state, pickerId, root, listing)
+      case PickerSearched(pickerId, query, searched) =>
+        PickerSearchTransitions.applied(state, pickerId, query, searched).state
 
       case CommandRunnerPresetsListed(surfaceId, previews) =>
         CommandRunnerOpening.withPresetsListed(state, surfaceId, previews)
@@ -217,6 +225,8 @@ private[manager] object EffectResult:
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): ReducerResult =
     result match
+      case PickerSearched(pickerId, query, searched) =>
+        PickerSearchTransitions.applied(state, pickerId, query, searched)
       case ProjectTaskOutput(taskId, chunk)     => ProjectTaskTransitions.outputArrived(state, taskId, chunk)
       case ProjectTaskFinished(taskId, outcome) => ProjectTaskTransitions.finished(state, taskId, outcome)
       case CommandRunnerBindingExpired(recordedAtMillis) =>

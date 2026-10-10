@@ -58,6 +58,8 @@ class StateManagerComponentPortsSpec extends AnyFlatSpec with Matchers:
         def refresh(surfaceId: SurfaceId): IO[Unit] = calls.update(_ :+ s"refresh:$surfaceId")
         def refreshFind(request: com.serenity.state.models.FindSearchRequest): IO[Unit] =
           calls.update(_ :+ s"find:${request.query}")
+        def refreshPicker(surfaceId: SurfaceId, query: String): IO[Unit] =
+          calls.update(_ :+ s"picker:$surfaceId:$query")
         def submitFile(surfaceId: SurfaceId): IO[Unit]        = calls.update(_ :+ s"file:$surfaceId")
         def openAsProjectRoot(surfaceId: SurfaceId): IO[Unit] = calls.update(_ :+ s"open-as-root:$surfaceId")
         def submitReplace(surfaceId: SurfaceId): IO[Unit]     = calls.update(_ :+ s"replace:$surfaceId")

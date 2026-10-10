@@ -35,16 +35,23 @@ private[reducers] object ModalListPickerReducer:
                 shown(id, picker, moved(picker, WidgetInput.Click(index, 1), currentState), currentState)
               )
           case other =>
-            updated(other, picker, currentState)
-              .fold(ReducerResult.noEffects(currentState))(shown(id, picker, _, currentState))
+            updated(id, other, picker, currentState)
+              .fold(ReducerResult.noEffects(currentState))((next, followUps) =>
+                shown(id, picker, next, currentState, followUps)
+              )
       case _ => ReducerResult.noEffects(currentState)
 
-  private def updated(event: ModalInputEvent, picker: ListPicker, state: AppState): Option[ListPicker] =
+  private def updated(
+    id: SurfaceId,
+    event: ModalInputEvent,
+    picker: ListPicker,
+    state: AppState
+  ): Option[(ListPicker, List[AppEffect])] =
     val edit = for
       field <- picker.query
       input <- queryEditing(event, state)
-    yield edited(picker, field, input, state)
-    edit.orElse(navigation(event).map(moved(picker, _, state)))
+    yield edited(id, picker, field, input, state)
+    edit.orElse(navigation(event).map(input => moved(picker, input, state) -> Nil))
 
   private def queryEditing(event: ModalInputEvent, state: AppState): Option[WidgetInput] =
     event match
@@ -69,11 +76,22 @@ private[reducers] object ModalListPickerReducer:
       case ModalPage(pages) => Some(if pages < 0 then WidgetInput.PageUp else WidgetInput.PageDown)
       case _                => None
 
-  private def edited(picker: ListPicker, field: TextField, input: WidgetInput, state: AppState): ListPicker =
+  /** A changed query shows the typed text at once; its matches follow in the same reducer step only when cheap to find,
+    * otherwise from a background search that replaces the items the text was typed over.
+    */
+  private def edited(
+    id: SurfaceId,
+    picker: ListPicker,
+    field: TextField,
+    input: WidgetInput,
+    state: AppState
+  ): (ListPicker, List[AppEffect]) =
     field.update(input) match
       case (next, Some(TextFieldOutcome.Changed(_))) =>
-        ListPickerSearch.refreshed(picker.copy(query = Some(next)), state)
-      case (next, _) => picker.copy(query = Some(next))
+        val queried = picker.copy(query = Some(next))
+        if ListPickerSearch.isCheap(queried, state) then (ListPickerSearch.refreshed(queried, state), Nil)
+        else (queried, List(AppEffect.Workflow(WorkflowEffect.RefreshPicker(id, queried.queryText))))
+      case (next, _) => (picker.copy(query = Some(next)), Nil)
 
   private def moved(picker: ListPicker, input: WidgetInput, state: AppState): ListPicker =
     val grown = input match
@@ -94,12 +112,18 @@ private[reducers] object ModalListPickerReducer:
     picker.items.toOption.exists(choices => choices.selected.contains(choices.items.size - 1))
 
   /** Shows `after` in place of `before`, previewing its highlighted choice if the highlight changed. */
-  private def shown(id: SurfaceId, before: ListPicker, after: ListPicker, state: AppState): ReducerResult =
+  private def shown(
+    id: SurfaceId,
+    before: ListPicker,
+    after: ListPicker,
+    state: AppState,
+    followUps: List[AppEffect] = Nil
+  ): ReducerResult =
     val preview =
       if after.selectedChoice == before.selectedChoice then None else after.selectedChoice.flatMap(_.preview)
     ReducerResult(
       updateModal(state, id, Modal.ListPicker(after)),
-      preview.map(AppEffect.ExecuteCommandUnrecorded(_)).toList
+      preview.map(AppEffect.ExecuteCommandUnrecorded(_)).toList ++ followUps
     )
 
   private def picked(id: SurfaceId, picker: ListPicker, state: AppState): ReducerResult =
