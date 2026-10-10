@@ -35,7 +35,7 @@ object RowMoves:
     bands: List[RowBands],
     unreusable: Set[Int]
   ): List[RowRun] =
-    if bands.isEmpty || !DirtyLineDiff.comparableShape(previous, current) then Nil
+    if bands.isEmpty || !DirtyLineDiff.comparableShape(previous, current) || !sameRichDocument(previous, current) then Nil
     else
       val previousRowOf =
         previous.visualLines.zipWithIndex.map((line, row) => (line.bufferLine, line.startColumn) -> row).toMap
@@ -63,6 +63,13 @@ object RowMoves:
         val runs = runsOf(reusable.toList.sorted, moves)
         if runs.sizeIs > MaxRuns then Nil else runs
       }
+
+  /** A rich document edited in place restyles rows whose visual lines compare equal, so only an unchanged one is safe. */
+  private def sameRichDocument(previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Boolean =
+    (previous.richTextDocument, current.richTextDocument) match
+      case (None, None)                => true
+      case (Some(before), Some(after)) => before eq after
+      case _                           => false
 
   private def distanceBetween(previous: Option[PixelRect], current: Option[PixelRect]): Option[Int] =
     for

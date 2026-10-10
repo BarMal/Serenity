@@ -529,35 +529,25 @@ private[state] object EditorEditSupport:
     insertedText: String
   ): Option[RichTextDocument] =
     buffer.richText.richTextDocument.filter(_ => buffer.richTextInSync).map { document =>
+      val start = richTextPositionForOffset(buffer.document.content, startOffset)
       val updatedDocument = document
-        .replaceRange(
-          RichTextRange(
-            richTextPositionForOffset(buffer.document.content, startOffset),
-            richTextPositionForOffset(buffer.document.content, endOffset)
-          ),
-          insertedText
-        )
+        .replaceRange(RichTextRange(start, richTextPositionForOffset(buffer.document.content, endOffset)), insertedText)
         .normalized
       buffer.richText.insertionRichTextStyle
         .filter(_ => insertedText.nonEmpty)
         .map { style =>
-          val updatedContent =
-            insertOrUnchanged(
-              deleteOrUnchanged(buffer.document.content, startOffset, endOffset),
-              startOffset,
-              insertedText
-            )
           updatedDocument
-            .updateInlineStyle(
-              RichTextRange(
-                richTextPositionForOffset(updatedContent, startOffset),
-                richTextPositionForOffset(updatedContent, startOffset + insertedText.length)
-              )
-            )(_ => style)
+            .updateInlineStyle(RichTextRange(start, richTextPositionAfterInsertion(start, insertedText)))(_ => style)
             .normalized
         }
         .getOrElse(updatedDocument)
     }
+
+  /** Where `insertedText` ends once inserted at `start`, from the text alone: the edited content is not rebuilt. */
+  private def richTextPositionAfterInsertion(start: RichTextPosition, insertedText: String): RichTextPosition =
+    val lines = insertedText.split("\n", -1)
+    if lines.length == 1 then start.copy(offset = start.offset + insertedText.length)
+    else RichTextPosition(start.paragraphIndex + lines.length - 1, lines.last.length)
 
   def richTextPositionForOffset(content: Rope, offset: Int): RichTextPosition =
     val (line, column) = content.offsetToLineColumn(offset)

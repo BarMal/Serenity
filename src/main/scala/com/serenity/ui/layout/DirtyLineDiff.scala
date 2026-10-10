@@ -1,5 +1,7 @@
 package com.serenity.ui.layout
 
+import com.serenity.richtext.RichTextParagraph
+
 /** Diffs two consecutive frames of one editor pane's text layout and reports which visible rows can no longer reuse the
   * pixels an earlier frame left on the surface.
   *
@@ -8,8 +10,9 @@ package com.serenity.ui.layout
   *
   * The bias is always towards reporting too much. Redrawing a row that did not change is invisible; skipping a row that
   * did change leaves stale pixels on screen. Every whole-snapshot property that shifts row geometry (panel width, row
-  * height, ascent, proportional/measured layout mode, the rich-text document that drives styling, how inline Markdown
-  * is restyled) therefore invalidates every row rather than being reasoned about per row.
+  * height, ascent, proportional/measured layout mode, how inline Markdown is restyled) therefore invalidates every row
+  * rather than being reasoned about per row. The rich-text document that drives styling is the exception (#1855): it is
+  * compared paragraph by paragraph for the rows on screen, so typing in one paragraph repaints only that paragraph.
   */
 object DirtyLineDiff:
 
@@ -25,8 +28,11 @@ object DirtyLineDiff:
       case Some(previousSnapshot) =>
         if !comparableShape(previousSnapshot, current) then allRows(current)
         else
+          val reflowFrom = richReflowStart(previousSnapshot, current)
           current.visualLines.indices.filter { row =>
-            !previousSnapshot.visualLines.lift(row).contains(current.visualLines(row))
+            reflowFrom.exists(row >= _) ||
+            !previousSnapshot.visualLines.lift(row).contains(current.visualLines(row)) ||
+            richParagraphEdited(previousSnapshot, current, current.visualLines(row).bufferLine)
           }.toSet
 
   /** As [[dirtyRows]], additionally comparing a caller-supplied style key per row.
@@ -69,6 +75,42 @@ object DirtyLineDiff:
   private def allRows(snapshot: TextLayoutSnapshot): Set[Int] =
     snapshot.visualLines.indices.toSet
 
+  private def sameRichParagraphCount(previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Boolean =
+    (previous.richTextDocument, current.richTextDocument) match
+      case (None, None)                => true
+      case (Some(before), Some(after)) => (before eq after) || before.paragraphCount == after.paragraphCount
+      case _                           => false
+
+  private def richParagraphEdited(previous: TextLayoutSnapshot, current: TextLayoutSnapshot, line: Int): Boolean =
+    (previous.richTextDocument, current.richTextDocument) match
+      case (Some(before), Some(after)) if !(before eq after) =>
+        (before.paragraphAt(line), after.paragraphAt(line)) match
+          case (Some(was), Some(now)) => was != now
+          case (None, None)           => false
+          case _                      => true
+      case _ => false
+
+  /** The first visible row below which rows may have moved without their own text changing: a paragraph whose role or
+    * alignment changed, or a row whose measured height or ascent did. Rows above it keep their position.
+    */
+  private def richReflowStart(previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Option[Int] =
+    (previous.richTextDocument, current.richTextDocument) match
+      case (Some(before), Some(after)) if !(before eq after) =>
+        current.visualLines.indices.find { row =>
+          val line = current.visualLines(row)
+          previous.visualLines
+            .lift(row)
+            .exists(old => old.heightPx != line.heightPx || old.ascentPx != line.ascentPx) ||
+          formattingDiffers(before.paragraphAt(line.bufferLine), after.paragraphAt(line.bufferLine))
+        }
+      case _ => None
+
+  private def formattingDiffers(before: Option[RichTextParagraph], after: Option[RichTextParagraph]): Boolean =
+    (before, after) match
+      case (Some(was), Some(now)) => was.role != now.role || was.alignment != now.alignment
+      case (None, None)           => false
+      case _                      => true
+
   /** Whether rows of `previous` and `current` can be compared at all: nothing about the whole snapshot moved. */
   def comparableShape(previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Boolean =
     previous.panelWidthPx == current.panelWidthPx &&
@@ -76,6 +118,6 @@ object DirtyLineDiff:
       previous.ascentPx == current.ascentPx &&
       previous.isProportional == current.isProportional &&
       previous.usesMeasuredLayout == current.usesMeasuredLayout &&
-      previous.richTextDocument == current.richTextDocument &&
+      sameRichParagraphCount(previous, current) &&
       previous.markdownInline.mode == current.markdownInline.mode &&
       previous.markdownInline.tableColumns == current.markdownInline.tableColumns
