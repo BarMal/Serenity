@@ -2,7 +2,7 @@ package com.serenity.app
 
 import scala.concurrent.duration.*
 
-import cats.effect.std.Supervisor
+import cats.effect.std.{Queue, Supervisor}
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
 import com.serenity.state.manager.StateUpdater
@@ -12,31 +12,41 @@ import com.serenity.state.models.AppState
   * [[com.serenity.state.models.TypingActivity.QuietWindow]] old, rather than waiting for a render-loop tick to notice
   * it has run out -- so nothing wakes while the editor is idle.
   *
-  * A commit that moves the window's end arms a timer; one that arrives while another is pending supersedes it, and the
-  * superseded timer wakes to find it is no longer current. The timers are never cancelled: this runs inside the commit
-  * dispatcher, which a cancelled expiry mid-commit would wait on.
+  * One fiber serves every window: a commit that moves the window's end only records the new end, and the fiber, asleep
+  * until the end it last saw, finds the window has moved on and sleeps again. A burst of keystrokes therefore starts no
+  * fiber and leaves none sleeping (#1928), and the expiry never runs inside the commit dispatcher it would otherwise
+  * have to be cancelled from.
   */
-final class TypingQuietTimer private (supervisor: Supervisor[IO], latest: Ref[IO, Long], expire: IO[Unit]):
+final class TypingQuietTimer private (windowEnd: Ref[IO, Option[Long]], armed: Queue[IO, Unit], expire: IO[Unit]):
 
   def onCommit(before: AppState, after: AppState): IO[Unit] =
-    val windowEnd = after.runtime.typingActivity.quietUntilNanos
-    if windowEnd == before.runtime.typingActivity.quietUntilNanos then IO.unit
-    else windowEnd.traverse_(arm)
+    val end = after.runtime.typingActivity.quietUntilNanos
+    if end == before.runtime.typingActivity.quietUntilNanos then IO.unit
+    else end.traverse_(arm)
 
-  private def arm(windowEnd: Long): IO[Unit] =
-    for
-      generation <- latest.updateAndGet(_ + 1)
-      now        <- IO.monotonic
-      _          <- supervisor.supervise(await(generation, (windowEnd - now.toNanos).nanos)).void
-    yield ()
+  private def arm(end: Long): IO[Unit] =
+    windowEnd.getAndSet(Some(end)).flatMap(previous => IO.whenA(previous.isEmpty)(armed.offer(())))
 
-  private def await(generation: Long, remaining: FiniteDuration): IO[Unit] =
-    IO.sleep(remaining) >> latest.get.flatMap(current => IO.whenA(current == generation)(expire))
+  private val run: IO[Nothing] = (armed.take >> expireOnceQuiet).foreverM
+
+  private def expireOnceQuiet: IO[Unit] =
+    IO.monotonic.flatMap { now =>
+      windowEnd.modify {
+        case Some(end) if end <= now.toNanos => (None, expire)
+        case Some(end)                       => (Some(end), IO.sleep((end - now.toNanos).nanos) >> expireOnceQuiet)
+        case None                            => (None, IO.unit)
+      }.flatten
+    }
 
 object TypingQuietTimer:
 
   def create(supervisor: Supervisor[IO], expire: IO[Unit]): IO[TypingQuietTimer] =
-    Ref.of[IO, Long](0L).map(new TypingQuietTimer(supervisor, _, expire))
+    for
+      windowEnd <- Ref.of[IO, Option[Long]](None)
+      armed     <- Queue.dropping[IO, Unit](1)
+      timer = new TypingQuietTimer(windowEnd, armed, expire)
+      _ <- supervisor.supervise(timer.run)
+    yield timer
 
   /** Expires the window through an ordinary validated commit, which the render loop's commit observer turns into the
     * status-row repaint like any other state change.
