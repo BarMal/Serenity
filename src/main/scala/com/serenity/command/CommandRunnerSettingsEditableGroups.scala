@@ -21,6 +21,35 @@ private[command] object CommandRunnerSettingsEditableGroups:
     inputItems: List[CommandSurfaceItem.InputItem],
     fontFamilies: FontLoader.FontFamilyCatalog
   ): CommandRunnerSettingsEditableGroups =
+    assemble(
+      optionSelections,
+      inputItems,
+      CommandRunnerSettingsItems.textFontGroupItem(optionSelections, fontFamilies.text),
+      CommandRunnerSettingsItems.codeFontGroupItem(optionSelections, fontFamilies.monospace),
+      CommandRunnerSettingsItems.uiFontGroupItem(optionSelections, fontFamilies.ui)
+    )
+
+  /** The same groups with each font family as a carousel row instead of a drill-in picker, for a preset's flat page. */
+  def withFamilyCarousels(
+    optionSelections: Map[String, Int],
+    inputItems: List[CommandSurfaceItem.InputItem],
+    fontFamilies: FontLoader.FontFamilyCatalog
+  ): CommandRunnerSettingsEditableGroups =
+    assemble(
+      optionSelections,
+      inputItems,
+      CommandRunnerSettingsItems.textFontOptionItem(optionSelections, fontFamilies.text),
+      CommandRunnerSettingsItems.codeFontOptionItem(optionSelections, fontFamilies.monospace),
+      CommandRunnerSettingsItems.uiFontOptionItem(optionSelections, fontFamilies.ui)
+    )
+
+  private def assemble(
+    optionSelections: Map[String, Int],
+    inputItems: List[CommandSurfaceItem.InputItem],
+    textFamily: CommandSurfaceItem,
+    codeFamily: CommandSurfaceItem,
+    uiFamily: CommandSurfaceItem
+  ): CommandRunnerSettingsEditableGroups =
     def input(ids: String*): List[CommandSurfaceItem.InputItem] =
       ids.toList.flatMap(id => inputItems.find(_.id == id))
     def group(id: String, label: String, hint: String, children: List[CommandSurfaceItem]) =
@@ -39,7 +68,7 @@ private[command] object CommandRunnerSettingsEditableGroups:
         "Prose Font",
         fontHint,
         List(
-          CommandRunnerSettingsItems.textFontGroupItem(optionSelections, fontFamilies.text),
+          textFamily,
           CommandRunnerSettingsItems.textLigaturesOptionItem(optionSelections)
         ) ++ input("text-font-size")
       ),
@@ -48,7 +77,7 @@ private[command] object CommandRunnerSettingsEditableGroups:
         "Code Font",
         fontHint,
         List(
-          CommandRunnerSettingsItems.codeFontGroupItem(optionSelections, fontFamilies.monospace),
+          codeFamily,
           CommandRunnerSettingsItems.codeLigaturesOptionItem(optionSelections)
         ) ++ input("code-font-size")
       ),
@@ -57,7 +86,7 @@ private[command] object CommandRunnerSettingsEditableGroups:
         "UI Font",
         fontHint,
         List(
-          CommandRunnerSettingsItems.uiFontGroupItem(optionSelections, fontFamilies.ui),
+          uiFamily,
           CommandRunnerSettingsItems.uiLigaturesOptionItem(optionSelections)
         ) ++ input("ui-font-size")
       ),

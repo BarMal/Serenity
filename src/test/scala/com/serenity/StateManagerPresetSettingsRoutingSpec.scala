@@ -109,7 +109,7 @@ class StateManagerPresetSettingsRoutingSpec extends AnyFlatSpec with Matchers:
     val (sm, store) = openedOnDrafting("preset-routing-font-size")
     val liveBefore  = globalConfig(sm)
 
-    submitInput(sm, inputOn(sm, "settings-preset-code-font", "code-font-size"), EditedFontSize.toString)
+    submitInput(sm, inputOn(sm, "settings-preset-edit", "code-font-size"), EditedFontSize.toString)
 
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting should still exist"))
     saved.config.editorConfig.fontConfig.codeFontSize shouldBe EditedFontSize
@@ -120,7 +120,7 @@ class StateManagerPresetSettingsRoutingSpec extends AnyFlatSpec with Matchers:
     val (sm, store) = openedOnDrafting("preset-routing-document-default")
     val liveBefore  = globalConfig(sm)
 
-    chooseOption(sm, optionOn(sm, "settings-preset-document-defaults", "default-document-mode"), "Rich Text")
+    chooseOption(sm, optionOn(sm, "settings-preset-edit", "default-document-mode"), "Rich Text")
 
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting should still exist"))
     saved.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
@@ -131,7 +131,7 @@ class StateManagerPresetSettingsRoutingSpec extends AnyFlatSpec with Matchers:
     val (sm, store) = openedOnDrafting("preset-routing-spellcheck")
     val liveBefore  = globalConfig(sm)
 
-    chooseOption(sm, optionOn(sm, "settings-preset-spellcheck", "spellcheck-enabled"), "Off")
+    chooseOption(sm, optionOn(sm, "settings-preset-edit", "spellcheck-enabled"), "Off")
 
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting should still exist"))
     saved.config.languageToolsConfig.spellCheck.enabled shouldBe false
@@ -142,14 +142,12 @@ class StateManagerPresetSettingsRoutingSpec extends AnyFlatSpec with Matchers:
     val (sm, store) = openedOnDrafting("preset-routing-font-family")
     val liveBefore  = globalConfig(sm)
 
-    val familyPicker = pageItems(sm, "settings-preset-code-font")
-      .collect { case item: CommandSurfaceItem.CommandItem => item }
-      .lastOption
-      .getOrElse(fail("the code font picker should list at least one family"))
-    execute(sm, familyPicker.command.name, familyPicker.command.label, familyPicker.command.intent)
+    val familyCarousel = optionOn(sm, "settings-preset-edit", "code-font")
+    val lastFamily = familyCarousel.options.lastOption.getOrElse(fail("the code font carousel should list a family"))
+    chooseOption(sm, familyCarousel, lastFamily.label)
 
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting should still exist"))
-    saved.config.editorConfig.fontConfig.codeFontFamily shouldBe familyPicker.command.label
+    saved.config.editorConfig.fontConfig.codeFontFamily shouldBe lastFamily.label
     globalConfig(sm) shouldBe liveBefore
   }
 
@@ -157,7 +155,7 @@ class StateManagerPresetSettingsRoutingSpec extends AnyFlatSpec with Matchers:
     val (sm, store)  = openedOnDrafting("preset-routing-siblings")
     val secondBefore = store.find("Second").unsafeRunSync()
 
-    submitInput(sm, inputOn(sm, "settings-preset-code-font", "code-font-size"), EditedFontSize.toString)
+    submitInput(sm, inputOn(sm, "settings-preset-edit", "code-font-size"), EditedFontSize.toString)
 
     store.find("Second").unsafeRunSync() shouldBe secondBefore
   }
@@ -165,9 +163,9 @@ class StateManagerPresetSettingsRoutingSpec extends AnyFlatSpec with Matchers:
   it should "show the edited value on the page once the preset has been saved" in {
     val (sm, _) = openedOnDrafting("preset-routing-page-refresh")
 
-    submitInput(sm, inputOn(sm, "settings-preset-code-font", "code-font-size"), EditedFontSize.toString)
+    submitInput(sm, inputOn(sm, "settings-preset-edit", "code-font-size"), EditedFontSize.toString)
 
-    inputOn(sm, "settings-preset-code-font", "code-font-size").currentValue shouldBe EditedFontSize.toString
+    inputOn(sm, "settings-preset-edit", "code-font-size").currentValue shouldBe EditedFontSize.toString
   }
 
   it should "refuse a built-in preset and change nothing" in {
@@ -183,7 +181,7 @@ class StateManagerPresetSettingsRoutingSpec extends AnyFlatSpec with Matchers:
     runnerOf(sm).editingPresetName shouldBe Some("Writing")
     val liveBefore = globalConfig(sm)
 
-    submitInput(sm, inputOn(sm, "settings-preset-code-font", "code-font-size"), EditedFontSize.toString)
+    submitInput(sm, inputOn(sm, "settings-preset-edit", "code-font-size"), EditedFontSize.toString)
 
     store.list().unsafeRunSync() shouldBe Nil
     globalConfig(sm) shouldBe liveBefore
@@ -192,7 +190,7 @@ class StateManagerPresetSettingsRoutingSpec extends AnyFlatSpec with Matchers:
 
   it should "report a preset that no longer exists and change nothing" in {
     val (sm, store) = openedOnDrafting("preset-routing-missing")
-    val item        = inputOn(sm, "settings-preset-code-font", "code-font-size")
+    val item        = inputOn(sm, "settings-preset-edit", "code-font-size")
     val liveBefore  = globalConfig(sm)
     store.delete("Drafting").unsafeRunSync()
 

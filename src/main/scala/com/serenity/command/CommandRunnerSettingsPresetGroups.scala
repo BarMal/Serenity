@@ -73,21 +73,8 @@ private[command] object CommandRunnerSettingsPresetGroups:
       editingPreset.fold("Fonts, cursor, documents, spelling")(name =>
         s"Editing $name. Panel layout: use Overwrite Preset"
       ),
-      List(
-        group(
-          "settings-preset-name",
-          "Name",
-          "Rename this preset",
-          presetInputItems.filter(_.id == "ui-preset-rename")
-        ),
-        group(
-          "settings-preset-actions",
-          "Preset Actions",
-          "Apply, overwrite, duplicate, delete, or reset",
-          presetActionItems
-        )
-      ) ++ editingPreset.toList.flatMap(
-        editablePages(_, optionSelections, inputItems, uiPresetPreviews, capabilities, fontFamilies, showAllSettings)
+      presetInputItems.filter(_.id == "ui-preset-rename") ++ presetActionItems ++ editingPreset.toList.flatMap(
+        editableRows(_, optionSelections, inputItems, uiPresetPreviews, capabilities, fontFamilies, showAllSettings)
       )
     )
     group(
@@ -97,9 +84,9 @@ private[command] object CommandRunnerSettingsPresetGroups:
       List(selectPresetGroup, saveAsNewGroup, editPresetGroup)
     )
 
-  // The pages show the preset's own values; a preview built from a name alone carries none, so those rows show the
+  // The rows show the preset's own values; a preview built from a name alone carries none, so those rows show the
   // live ones.
-  private def editablePages(
+  private def editableRows(
     presetName: String,
     optionSelections: Map[String, Int],
     inputItems: List[CommandSurfaceItem.InputItem],
@@ -107,28 +94,25 @@ private[command] object CommandRunnerSettingsPresetGroups:
     capabilities: FrontendCapabilities,
     fontFamilies: FontLoader.FontFamilyCatalog,
     showAllSettings: Boolean
-  ): List[CommandSurfaceItem.GroupItem] =
+  ): List[CommandSurfaceItem] =
     val (shownSelections, shownInputs) =
       presetConfig(presetName, uiPresetPreviews).fold(optionSelections -> inputItems) { config =>
         val inFlight = CommandRunnerSettingsPresetScope.selectionsFor(presetName, optionSelections)
         (CommandRunnerOptionSelections.default(config) ++ inFlight) ->
           CommandRunnerSettingsInputItems.build(config, capabilities)
       }
-    val editable = CommandRunnerSettingsEditableGroups.build(shownSelections, shownInputs, fontFamilies)
-    def page(id: String, group: CommandSurfaceItem.GroupItem) =
-      CommandRunnerSettingsPresetScope.pageOf(presetName, id, group)
+    val editable   = CommandRunnerSettingsEditableGroups.withFamilyCarousels(shownSelections, shownInputs, fontFamilies)
     val onFrontend = SettingsFrontendFilter(Shell.of(capabilities), showAllSettings)
-    List(page("settings-preset-cursor", editable.cursor)) ++ onFrontend.rows(
-      FrontendSupport.GuiOnly,
-      List(
-        page("settings-preset-prose-font", editable.proseFont),
-        page("settings-preset-code-font", editable.codeFont),
-        page("settings-preset-ui-font", editable.uiFont)
-      )
-    ) ++ List(
-      page("settings-preset-document-defaults", editable.documentDefaults),
-      page("settings-preset-spellcheck", editable.spellCheck)
-    )
+    def rows(group: CommandSurfaceItem.GroupItem): List[CommandSurfaceItem] =
+      CommandRunnerSettingsPresetScope.rowsOf(presetName, group)
+    def guiOnly(item: CommandSurfaceItem): Option[CommandSurfaceItem] =
+      item match
+        case option: CommandSurfaceItem.OptionItem => onFrontend.row(FrontendSupport.GuiOnly, option)
+        case input: CommandSurfaceItem.InputItem   => onFrontend.row(FrontendSupport.GuiOnly, input)
+        case other                                 => Some(other)
+    rows(editable.cursor) ++
+      List(editable.proseFont, editable.codeFont, editable.uiFont).flatMap(rows).flatMap(guiOnly(_)) ++
+      rows(editable.documentDefaults) ++ rows(editable.spellCheck)
 
   private def presetConfig(presetName: String, uiPresetPreviews: List[UiPreset.Preview]): Option[AppConfig] =
     uiPresetPreviews

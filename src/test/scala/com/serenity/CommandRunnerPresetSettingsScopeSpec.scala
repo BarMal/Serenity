@@ -16,14 +16,37 @@ class CommandRunnerPresetSettingsScopeSpec extends AnyFlatSpec with Matchers:
   given CommandRegistry      = registry
   private val PresetFontSize = 19.0f
 
-  private val EditableGroupIds = List(
-    "settings-preset-cursor",
-    "settings-preset-prose-font",
-    "settings-preset-code-font",
-    "settings-preset-ui-font",
-    "settings-preset-document-defaults",
-    "settings-preset-spellcheck"
+  private val PresetActionIds = List(
+    "ui-preset-rename",
+    "ui-preset-apply",
+    "ui-preset-overwrite",
+    "ui-preset-duplicate",
+    "ui-preset-set-theme",
+    "ui-preset-use-current-theme",
+    "ui-preset-clear-theme",
+    "ui-preset-delete",
+    "ui-preset-reset"
   )
+
+  private val EditableRowIds = List(
+    "cursor-mode",
+    "text-font",
+    "text-ligatures",
+    "text-font-size",
+    "code-font",
+    "code-ligatures",
+    "code-font-size",
+    "ui-font",
+    "ui-ligatures",
+    "ui-font-size",
+    "default-document-mode",
+    "markdown-view",
+    "drop-caps-enabled",
+    "spellcheck-enabled",
+    "spellcheck-languages",
+    "spellcheck-dictionaries",
+    "spellcheck-words"
+  ).map(row => s"preset:Drafting:$row")
 
   private def descendants(group: CommandSurfaceItem.GroupItem): List[CommandSurfaceItem] =
     group.children.flatMap {
@@ -96,11 +119,11 @@ class CommandRunnerPresetSettingsScopeSpec extends AnyFlatSpec with Matchers:
     create.children.map(_.id) shouldBe List("ui-preset-save-as-new")
   }
 
-  "The edit page" should "offer only the settings a preset can edit, after its name and actions" in {
+  "The edit page" should "be flat: the preset's name and actions, then the settings a preset can edit" in {
     val tree = runnerEditing(everythingShown, Some("Drafting"), List(drafting)).settingsGroups
     val edit = groupNamed(tree, "settings-preset-edit")
 
-    edit.children.map(_.id) shouldBe List("settings-preset-name", "settings-preset-actions") ++ EditableGroupIds
+    edit.children.map(_.id) shouldBe PresetActionIds ++ EditableRowIds
     allGroups(tree).map(_.id) should not contain "settings-preset-workspace-layout"
   }
 
@@ -121,13 +144,13 @@ class CommandRunnerPresetSettingsScopeSpec extends AnyFlatSpec with Matchers:
         .getOrElse(fail(s"missing code font size on $id"))
 
     sizeOn("settings-code-font") shouldBe AppConfig.default.editorConfig.fontConfig.codeFontSize.toString
-    sizeOn("settings-preset-code-font") shouldBe drafting.config.editorConfig.fontConfig.codeFontSize.toString
+    sizeOn("settings-preset-edit") shouldBe drafting.config.editorConfig.fontConfig.codeFontSize.toString
   }
 
   it should "show a built-in preset's own values" in {
     val writing = UiPreset.builtIn("Writing").getOrElse(fail("Writing is a built-in preset"))
     val tree    = runnerEditing(everythingShown, Some("Writing"), Nil).settingsGroups
-    val shown = descendants(groupNamed(tree, "settings-preset-document-defaults")).collectFirst {
+    val shown = descendants(groupNamed(tree, "settings-preset-edit")).collectFirst {
       case item: CommandSurfaceItem.OptionItem if item.id.endsWith("default-document-mode") => item.selectedOption
     }
 
@@ -143,9 +166,9 @@ class CommandRunnerPresetSettingsScopeSpec extends AnyFlatSpec with Matchers:
   it should "keep a row's choice separate from the same row on the global page" in {
     val runner = runnerEditing(everythingShown, Some("Drafting"), List(drafting))
     val ids = allGroups(runner.settingsGroups)
-      .filter(group => group.id == "settings-code-font" || group.id == "settings-preset-code-font")
+      .filter(group => group.id == "settings-code-font" || group.id == "settings-preset-edit")
       .flatMap(group => descendants(group).filterNot(_.isInstanceOf[CommandSurfaceItem.GroupItem]))
-      .collect { case item: CommandSurfaceItem.InputItem => item.id }
+      .collect { case item: CommandSurfaceItem.InputItem if item.id.endsWith("code-font-size") => item.id }
 
     ids.distinct should have size 2
   }
