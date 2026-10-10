@@ -21,8 +21,8 @@ final case class Java2DTextMeasurer(frc: FontRenderContext) extends TextMeasurer
 
   /** Without a fallback chain each column keeps its styled font, so these are the resolver's own font runs. */
   def itemise(text: String, from: Int, until: Int, startColumn: Int, fonts: LineFonts): Vector[FontRun] =
-    resolverFor(fonts).fontRuns(startColumn + from, startColumn + until).map { (runStart, runEnd, font) =>
-      FontRun(runStart, runEnd, FontSpec.fromAwt(font))
+    resolverFor(fonts).fontRuns(startColumn + from, startColumn + until).map { span =>
+      FontRun(span.startColumn, span.endColumn, FontSpec.fromAwt(span.font))
     }
 
   def lineMetrics(fonts: LineFonts, startColumn: Int, endColumn: Int): LineMetrics =

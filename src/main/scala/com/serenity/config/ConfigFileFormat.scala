@@ -134,7 +134,7 @@ object ConfigFileFormat:
     field("editor.cursor.inactive_color"),
     comment("Milliseconds the caret blinks without input before it holds solid; 0 blinks for as long as focused"),
     field("editor.cursor.blink_timeout_ms"),
-    comment("Markdown rendering mode: source, split-preview, inline-lens"),
+    comment("Markdown rendering mode: source, split-preview, inline-lens, live-preview, read"),
     field("editor.markdown_view"),
     comment("Default mode for new buffers: plain-text, markdown, rich-text"),
     field("editor.default_document_mode"),

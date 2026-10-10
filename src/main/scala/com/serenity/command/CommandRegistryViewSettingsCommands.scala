@@ -85,5 +85,12 @@ private[command] object CommandRegistryViewSettingsCommands:
       CommandIntent.View(ViewIntent.OpenMarkdownPreview),
       CommandCategory.View,
       label = "Open Markdown Preview"
+    ),
+    Command.typed(
+      "markdown-toggle-read",
+      "Hide Markdown emphasis and code markers on every line, or reveal them again on the caret line.",
+      CommandIntent.View(ViewIntent.ToggleMarkdownReadMode),
+      CommandCategory.View,
+      label = "Toggle Markdown Read Mode"
     )
   )

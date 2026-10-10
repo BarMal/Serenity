@@ -87,6 +87,11 @@ final private[manager] class StateManagerPanelEffects(
         commitApp(state => ModalStateReducer.show(Modal.PanelArrangement(PanelArrangement.of(state)), state).state)
       case ViewIntent.SetMarkdownViewMode(mode) =>
         setMarkdownViewMode(mode)
+      case ViewIntent.ToggleMarkdownReadMode =>
+        setMarkdownViewMode(
+          if state.persisted.config.markdownViewMode == MarkdownViewMode.Read then MarkdownViewMode.LivePreview
+          else MarkdownViewMode.Read
+        )
       case ViewIntent.SetDefaultDocumentMode(mode) =>
         updateConfig(_.withDefaultDocumentMode(mode)).void
       case ViewIntent.SetAppMode(mode) =>
@@ -114,7 +119,8 @@ final private[manager] class StateManagerPanelEffects(
     mode match
       case MarkdownViewMode.SplitPreview =>
         updateConfigEffect >> openMarkdownPreview
-      case MarkdownViewMode.Source | MarkdownViewMode.InlineLens =>
+      case MarkdownViewMode.Source | MarkdownViewMode.InlineLens | MarkdownViewMode.LivePreview |
+          MarkdownViewMode.Read =>
         updateConfigEffect >> commitApp(PanelTransitions.removePanel(PanelId.MarkdownPreview))
 
   // Hidden through the same animated, undoable unpin a drag-off uses.

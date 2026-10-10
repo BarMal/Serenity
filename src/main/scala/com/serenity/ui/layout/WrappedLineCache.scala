@@ -6,9 +6,11 @@ import java.util.{ArrayDeque, HashMap, LinkedHashMap}
 
 import scala.jdk.CollectionConverters.*
 
+import com.serenity.markdown.MarkdownBlockLens
+import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
 import com.serenity.richtext.ParagraphRole
 import com.serenity.rope.Rope
-import com.serenity.state.models.TextVisualLine
+import com.serenity.state.models.{BufferId, TextVisualLine}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 
 /** Memoises [[TextLayoutSnapshot]]'s wrap-and-measure of one logical line -- the AWT `TextLayout` work that otherwise
@@ -35,6 +37,11 @@ sealed abstract class WrappedLineCache:
     measure: Int => Int,
     stamp: AnyRef
   ): VisualRowCounts
+
+  /** The fenced code blocks of `content`, which a live Markdown preview leaves unstyled. Finding them reads the whole
+    * document, so a cache keeps the answer for as long as the buffer's content is the same rope.
+    */
+  def fenceIndex(bufferId: BufferId, content: Rope): FenceRangeIndex
 
 /** Everything a line's wrap and caret measurement depends on except its buffer line number, which only labels the rows
   * -- so a line keeps its entry when lines are inserted or deleted above it. `resolver` carries the base font and the
@@ -83,6 +90,12 @@ object WrappedLineCache:
 
   val DefaultMaxLines = 4096
 
+  /** How many buffers' fenced-block indexes are kept. */
+  val MaxFenceIndexes = 16
+
+  private def fencesOf(content: Rope): FenceRangeIndex =
+    MarkdownBlockLens.fenceRangeIndex(content.linesIteratorFrom(0).map(_._2))
+
   /** How many recent wraps per [[WrapShape]] a line may resume from. */
   val MaxRecentPerShape = 8
 
@@ -106,6 +119,8 @@ object WrappedLineCache:
       stamp: AnyRef
     ): VisualRowCounts =
       VisualRowCounts.walking(content.lineCount, measure)
+
+    def fenceIndex(bufferId: BufferId, content: Rope): FenceRangeIndex = fencesOf(content)
 
   def bounded(maxLines: Int = DefaultMaxLines, maxChars: Long = DefaultMaxChars): Bounded =
     new Bounded(math.max(1, maxLines), math.max(1L, maxChars))
@@ -138,6 +153,31 @@ object WrappedLineCache:
     private val rowCount         = new AtomicLong(0L)
     private val measuredCount    = new AtomicLong(0L)
     private val visualRows       = new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries)
+    private val fences           = new LinkedHashMap[BufferId, (Rope, FenceRangeIndex)](16, 0.75f, true)
+
+    def fenceIndex(bufferId: BufferId, content: Rope): FenceRangeIndex =
+      cachedFences(bufferId, content).getOrElse {
+        val found = fencesOf(content)
+        synchronized {
+          val _ = fences.put(bufferId, (content, found))
+          trimFences()
+        }
+        found
+      }
+
+    private def cachedFences(bufferId: BufferId, content: Rope): Option[FenceRangeIndex] = synchronized {
+      Option(fences.get(bufferId)).flatMap { case (rope, index) => Option.when(sameRope(rope, content))(index) }
+    }
+
+    private def sameRope(a: Rope, b: Rope): Boolean = (a: AnyRef) eq (b: AnyRef)
+
+    @annotation.tailrec
+    private def trimFences(): Unit =
+      if fences.size() > MaxFenceIndexes then
+        val eldest = fences.keySet().iterator()
+        val _      = eldest.next()
+        eldest.remove()
+        trimFences()
 
     def size: Int = synchronized(entries.size())
 

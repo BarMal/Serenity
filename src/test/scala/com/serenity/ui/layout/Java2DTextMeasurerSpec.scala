@@ -93,7 +93,7 @@ class Java2DTextMeasurerSpec extends TextMeasurerContract:
       val start    = line.startColumn
       val expected = resolverFor(line.fonts).fontRuns(start + from, start + until)
       line.measurer.itemise(line.text, from, until, start, line.fonts) shouldBe
-        expected.map((runStart, runEnd, font) => FontRun(runStart, runEnd, FontSpec.fromAwt(font)))
+        expected.map(span => FontRun(span.startColumn, span.endColumn, FontSpec.fromAwt(span.font)))
     }
   }
 

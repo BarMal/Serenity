@@ -6,6 +6,7 @@ import java.util.LinkedHashMap
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{InterfaceDensity, StatusLineConfig, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
+import com.serenity.markdown.MarkerMode
 import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
@@ -94,6 +95,9 @@ final private[manager] case class MouseTargetLayoutKey(
         Option[(RopeIdentity, Viewport, TypographyRole, Option[LanguageId], Option[RichTextDocument])]
       )
     ],
+    // Hidden Markdown markers change how a line wraps and where its carets sit, and which lines are revealed follows the
+    // caret, so neither the text nor the viewport alone says what a pane's snapshot looks like.
+    inlineMarkdown: List[(PaneId, MarkerMode, Vector[Range.Inclusive])],
     uiSurfaces: List[SurfaceGeometryKey],
     // The blocking modal layer (#814) lives outside `uiSurfaces`, so without it here two states that differ only in
     // which dialog is open share a scene key -- reopening a dialog after dismissing one returns the first's cached
@@ -137,6 +141,22 @@ private[manager] object MouseTargetLayoutKey:
       // `floatingStatusLineSurface` is hidden while typing.
       runtime.typingActivity
     )
+
+  private def inlineMarkdownOf(state: AppState): List[(PaneId, MarkerMode, Vector[Range.Inclusive])] =
+    state.persisted.layout.orderedPaneIds.flatMap { paneId =>
+      for
+        buffer <- state.persisted.layout.editorPanes
+          .get(paneId)
+          .flatMap(_.bufferId)
+          .flatMap(state.persisted.buffers.get)
+        mode = MarkerMode.of(
+          state.persisted.config.inlineMarkdownViewMode,
+          buffer.document.language,
+          state.runtime.capabilities.isCellGrid
+        )
+        if mode != MarkerMode.Off
+      yield (paneId, mode, if mode == MarkerMode.Live then RichTextContext.revealedLines(buffer) else Vector.empty)
+    }
 
   private[manager] def compute(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
     MouseTargetLayoutKey(
@@ -182,6 +202,7 @@ private[manager] object MouseTargetLayoutKey:
             )
           )
       },
+      inlineMarkdown = inlineMarkdownOf(state),
       uiSurfaces = state.runtime.uiSurfaces.map(SurfaceGeometryKey.from),
       modalStack = state.runtime.modalStack,
       derivedStatusLineSurface = state.floatingStatusLineSurface,
@@ -434,7 +455,8 @@ final private[serenity] class AuthoritativeUiScene(val wrappedLines: WrappedLine
                 // Match the render path's prose zoom so hit-testing rows/advances line up with what was drawn.
                 proseScale = proseScale,
                 dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
-                wrapCache = wrappedLines
+                wrapCache = wrappedLines,
+                markdownViewMode = state.persisted.config.inlineMarkdownViewMode
               )
               paneId -> (single, Vector.empty[ColumnSnapshotPlacement])
       }

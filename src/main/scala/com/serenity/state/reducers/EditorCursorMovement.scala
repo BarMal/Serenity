@@ -64,6 +64,15 @@ private[reducers] object EditorCursorMovement:
   def subWordRightTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
     horizontalTarget(wordBoundaryFrom(buffer, from, (rope, offset) => rope.nextSubWordBoundary(offset)))
 
+  /** Where `landed` ends up once the caret is kept off the markers the read view hides. */
+  private def settled(
+    currentState: AppState,
+    buffer: Buffer,
+    from: CursorPosition,
+    landed: CursorTarget
+  ): CursorTarget =
+    landed.copy(cursor = HiddenMarkerCaret.settle(currentState, buffer, from, landed.cursor))
+
   /** `from` is passed rather than derived: arrow keys resume from the selection focus so a right-arrow off a selection
     * lands past its end, while Home and End resume from the head cursor.
     */
@@ -73,7 +82,7 @@ private[reducers] object EditorCursorMovement:
     ReducerResult.fromTransition(
       currentState,
       Focused.modifyBufferWithId(buffer.id) { current =>
-        val landed = target(current, from)
+        val landed = settled(currentState, current, from, target(current, from))
         current.copy(
           editing =
             current.editing.withPrimary(Cursor(landed.cursor, None, Some(landed.preferredColumn), landed.preferredXPx))
@@ -87,7 +96,7 @@ private[reducers] object EditorCursorMovement:
     ReducerResult.fromTransition(
       currentState,
       Focused.modifyBufferWithId(buffer.id) { current =>
-        val landed = target(current, cursor)
+        val landed = settled(currentState, current, cursor, target(current, cursor))
         extendSelection(current, cursor, landed.cursor, Some(landed.preferredColumn), landed.preferredXPx)
       }
     )

@@ -98,6 +98,8 @@ enum MarkdownViewMode(val configKey: String):
   case Source       extends MarkdownViewMode("source")
   case SplitPreview extends MarkdownViewMode("split-preview")
   case InlineLens   extends MarkdownViewMode("inline-lens")
+  case LivePreview  extends MarkdownViewMode("live-preview")
+  case Read         extends MarkdownViewMode("read")
 
 object MarkdownViewMode:
 
@@ -106,6 +108,8 @@ object MarkdownViewMode:
       case "source"                                                => Some(MarkdownViewMode.Source)
       case "split-preview" | "split_preview" | "split" | "preview" => Some(MarkdownViewMode.SplitPreview)
       case "inline-lens" | "inline_lens" | "lens"                  => Some(MarkdownViewMode.InlineLens)
+      case "live-preview" | "live_preview" | "live"                => Some(MarkdownViewMode.LivePreview)
+      case "read" | "reading"                                      => Some(MarkdownViewMode.Read)
       case _                                                       => None
 
 enum ToolbarDisplayMode:

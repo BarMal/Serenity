@@ -49,6 +49,13 @@ final case class AppConfig(
   def markdownViewMode: MarkdownViewMode =
     documentConfig.markdownViewMode
 
+  /** The view mode layout restyles inline Markdown by. Multi-column pages lay out their own window of rows, which hides
+    * no markers, so a page layout is laid out as source whatever the mode says.
+    */
+  def inlineMarkdownViewMode: MarkdownViewMode =
+    if surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled then MarkdownViewMode.Source
+    else markdownViewMode
+
   def defaultDocumentMode: DefaultDocumentMode =
     documentConfig.defaultMode
 

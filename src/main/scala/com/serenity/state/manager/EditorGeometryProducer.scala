@@ -112,6 +112,7 @@ object EditorGeometryProducer:
     val windowBudget        = math.max(24, rowsAbove + buffer.viewport.visibleLines * 3)
     val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
     val dropCapsEnabled     = state.persisted.config.documentConfig.dropCapsEnabled
+    val markdownViewMode    = state.persisted.config.inlineMarkdownViewMode
     val visualRows =
       VisualRowCounts.forBuffer(
         buffer,
@@ -120,7 +121,8 @@ object EditorGeometryProducer:
         cellMetricsOverride,
         forceCellLayout = isTui,
         wrapCache,
-        dropCapsEnabled
+        dropCapsEnabled,
+        markdownViewMode
       )
     val cursorRowInWindow =
       if !wordWrapEnabled then cursor.line - windowTopLine
@@ -136,7 +138,7 @@ object EditorGeometryProducer:
             forceCellLayout = isTui,
             wrapCache = wrapCache,
             bufferLine = cursor.line,
-            richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled)
+            richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, isTui, wrapCache)
           )
     val windowTopVisualLine = math.max(0, cursorRowInWindow - rowsAbove)
     // Without rich text a snapshot folds each line into exactly the rows `visualRows` counts, so the window can start
@@ -163,7 +165,8 @@ object EditorGeometryProducer:
         // Same prose zoom as the render path so navigation caret advances match the drawn glyphs.
         proseScale = com.serenity.ui.theme.RichTextStyling.proseZoom(font.getSize2D),
         dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
-        wrapCache = wrapCache
+        wrapCache = wrapCache,
+        markdownViewMode = markdownViewMode
       )
     EditorGeometry(snapshot.navigationGeometry, metrics.charWidth, panelWidthColumns)
 

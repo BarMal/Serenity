@@ -5,6 +5,7 @@ import java.awt.font.FontRenderContext
 
 import scala.annotation.tailrec
 
+import com.serenity.config.MarkdownViewMode
 import com.serenity.state.models.{Buffer, BufferId}
 
 /** How many visual rows the logical lines of one buffer's content wrap into under one wrap setting -- the counts
@@ -26,9 +27,10 @@ sealed abstract class VisualRowCounts:
   /** The line and row within it `rows` visual rows below the top of `line`, or `None` once the document has ended. */
   def rowBelow(line: Int, rows: Int): Option[(Int, Int)]
 
-/** What a line's visual row count depends on besides its text. The buffer's rich-text styling is the other input: it
-  * changes without the text changing, so it stamps the index instead (see [[VisualLineIndexStore]]) -- a new document
-  * would otherwise leave a new key behind per edit and crowd other buffers' indexes out.
+/** What a line's visual row count depends on besides its text. The buffer's rich-text styling and the way its inline
+  * Markdown is restyled are the other inputs: they change without the text changing, so they stamp the index instead
+  * (see [[VisualLineIndexStore]]) -- a new document or a caret on another line would otherwise leave a new key behind
+  * per change and crowd other buffers' indexes out.
   */
 final private[layout] case class VisualRowKey(
     bufferId: BufferId,
@@ -52,11 +54,13 @@ object VisualRowCounts:
     cellMetricsOverride: Option[CellMetrics],
     forceCellLayout: Boolean,
     wrapCache: WrappedLineCache,
-    dropCapsEnabled: Boolean = true
+    dropCapsEnabled: Boolean = true,
+    markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source
   ): VisualRowCounts =
-    val content  = buffer.document.content
-    val frc      = TextLayoutSnapshot.defaultFontRenderContext()
-    val richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled)
+    val content = buffer.document.content
+    val frc     = TextLayoutSnapshot.defaultFontRenderContext()
+    val richText =
+      RichTextContext.forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, forceCellLayout, wrapCache)
     def measure(line: Int): Int =
       TextLayoutSnapshot
         .boundedVisualLinesForText(
@@ -73,7 +77,7 @@ object VisualRowCounts:
         .length
         .max(1)
     val key = VisualRowKey(buffer.id, panelWidthPx, font, frc, cellMetricsOverride, forceCellLayout, dropCapsEnabled)
-    wrapCache.visualRowCounts(key, content, measure, richText.document.getOrElse(VisualLineIndexStore.Unstamped))
+    wrapCache.visualRowCounts(key, content, measure, VisualLineIndexStore.stampOf(richText))
 
   def oneRowPerLine(lineCount: Int): VisualRowCounts = walking(lineCount, _ => 1)
 

@@ -92,6 +92,7 @@ object CursorViewport:
     val wrapWidthPx         = if isTui then viewport.visibleColumns * CellMetrics.cellUnit.charWidth else gridWidthPx
     val lineText            = buffer.document.content.getLine(cursor.line).getOrElse("")
     val dropCapsEnabled     = currentState.persisted.config.documentConfig.dropCapsEnabled
+    val markdownViewMode    = currentState.persisted.config.inlineMarkdownViewMode
     val cursorVisualLine =
       if !wordWrapEnabled then 0
       else
@@ -106,7 +107,7 @@ object CursorViewport:
           rowAffinity = cursor.rowAffinity,
           wrapCache = wrapCache,
           bufferLine = cursor.line,
-          richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled)
+          richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, isTui, wrapCache)
         )
 
     // Counted the same way `cursorVisualLine` above was measured, or the two disagree.
@@ -120,7 +121,8 @@ object CursorViewport:
           cellMetricsOverride,
           forceCellLayout,
           wrapCache,
-          dropCapsEnabled
+          dropCapsEnabled,
+          markdownViewMode
         )
 
     // Desired top: halfVisibleLines rows of context above the cursor's own visual row, counted in visual rows (not
@@ -212,7 +214,8 @@ object CursorViewport:
     val lineCount           = buffer.document.content.lineCount
     val visibleLines        = math.max(1, viewport.visibleLines)
 
-    val dropCapsEnabled = currentState.persisted.config.documentConfig.dropCapsEnabled
+    val dropCapsEnabled  = currentState.persisted.config.documentConfig.dropCapsEnabled
+    val markdownViewMode = currentState.persisted.config.inlineMarkdownViewMode
     val visualRows =
       VisualRowCounts.forBuffer(
         buffer,
@@ -221,7 +224,8 @@ object CursorViewport:
         cellMetricsOverride,
         forceCellLayout,
         wrapCache,
-        dropCapsEnabled
+        dropCapsEnabled,
+        markdownViewMode
       )
 
     val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
@@ -237,7 +241,7 @@ object CursorViewport:
         rowAffinity = cursor.rowAffinity,
         wrapCache = wrapCache,
         bufferLine = cursor.line,
-        richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled)
+        richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, isTui, wrapCache)
       )
 
     // Multi-column page anchoring (issue #1338, Phase 2 / slice 1): a "page" shows `columnCount` columns side by side,

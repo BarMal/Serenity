@@ -53,10 +53,8 @@ object TextLayoutSnapshotColumnMode:
       measuredLayout,
       cellMetrics,
       visualLineLimit,
-      richDocument,
+      RichTextContext(richDocument, proseScale, dropCapsEnabled),
       wordWrapEnabled = true,
-      proseScale,
-      dropCapsEnabled,
       wrapCache
     ).drop(topVisualLine).take(totalRowsNeeded)
 
