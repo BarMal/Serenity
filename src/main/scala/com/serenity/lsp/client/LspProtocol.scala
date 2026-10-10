@@ -2,7 +2,7 @@ package com.serenity.lsp.client
 
 import cats.syntax.traverse.*
 import com.serenity.lsp.model.*
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.{Balance, ChangeSet, Rope}
 import io.circe.syntax.*
 import io.circe.{HCursor, Json}
 
@@ -233,19 +233,39 @@ object LspProtocol:
         incrementalDidChangeParams(uri, version, TextChangeDiff.diff(previous, next))
       case _ => didChangeParams(uri, version, next.collect())
 
+  /** [[didChangeParams]] for an edit whose change is known, which `Incremental` sync sends as it is: one content change
+    * per part, the last first, so no two texts are compared. Any other kind sends the new text.
+    */
+  def didChangeParams(
+    uri: DocumentUri,
+    version: Int,
+    previous: Rope,
+    next: Rope,
+    change: ChangeSet,
+    syncKind: TextDocumentSyncKind
+  ): Json =
+    syncKind match
+      case TextDocumentSyncKind.Incremental =>
+        Json.obj(
+          "textDocument"   -> Json.obj("uri" -> uri.value.asJson, "version" -> version.asJson),
+          "contentChanges" -> Json.arr(TextChangeDiff.changes(previous, change).map(contentChangeJson)*)
+        )
+      case _ => didChangeParams(uri, version, next.collect())
+
   private def incrementalDidChangeParams(uri: DocumentUri, version: Int, previousText: String, newText: String): Json =
     incrementalDidChangeParams(uri, version, TextChangeDiff.diff(previousText, newText))
 
   private def incrementalDidChangeParams(uri: DocumentUri, version: Int, change: TextChangeDiff.Change): Json =
     Json.obj(
-      "textDocument" -> Json.obj("uri" -> uri.value.asJson, "version" -> version.asJson),
-      "contentChanges" -> Json.arr(
-        Json.obj(
-          "range"       -> rangeJson(change.range),
-          "rangeLength" -> change.rangeLength.asJson,
-          "text"        -> change.text.asJson
-        )
-      )
+      "textDocument"   -> Json.obj("uri" -> uri.value.asJson, "version" -> version.asJson),
+      "contentChanges" -> Json.arr(contentChangeJson(change))
+    )
+
+  private def contentChangeJson(change: TextChangeDiff.Change): Json =
+    Json.obj(
+      "range"       -> rangeJson(change.range),
+      "rangeLength" -> change.rangeLength.asJson,
+      "text"        -> change.text.asJson
     )
 
   private def rangeJson(range: LspRange): Json =

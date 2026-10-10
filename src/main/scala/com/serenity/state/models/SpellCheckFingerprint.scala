@@ -2,9 +2,25 @@ package com.serenity.state.models
 
 import com.serenity.config.*
 import com.serenity.lsp.model.Diagnostic
+import com.serenity.rope.Rope
+
+/** The very rope a check was made of. Equal only to itself, which is what "unchanged" means for an immutable rope: an
+  * identity hash code can be shared by two ropes, so it cannot stand in for the rope, and comparing the text would cost
+  * the whole document.
+  */
+final class ContentIdentity(val content: Rope):
+
+  override def equals(other: Any): Boolean =
+    other match
+      case that: ContentIdentity => that.content eq content
+      case _                     => false
+
+  override def hashCode: Int = System.identityHashCode(content)
+
+  override def toString: String = s"ContentIdentity(${hashCode.toHexString})"
 
 final case class SpellCheckFingerprint(
-    contentIdentity: Int,
+    contentIdentity: ContentIdentity,
     contentWeight: Int,
     contentNewlineCount: Int,
     contentLastLineLength: Int,
@@ -33,7 +49,7 @@ object SpellCheckFingerprint:
     dictionaryFingerprints: List[SpellCheckDictionaryFingerprint]
   ): SpellCheckFingerprint =
     SpellCheckFingerprint(
-      contentIdentity = System.identityHashCode(buffer.document.content),
+      contentIdentity = new ContentIdentity(buffer.document.content),
       contentWeight = buffer.document.content.weight,
       contentNewlineCount = buffer.document.content.newlineCount,
       contentLastLineLength = buffer.document.content.lastLineLength,
@@ -45,5 +61,6 @@ object SpellCheckFingerprint:
 final case class SpellCheckCacheEntry(
     fingerprint: SpellCheckFingerprint,
     diagnostics: List[Diagnostic],
-    analysis: Option[SpellCheckAnalysis] = None
+    analysis: Option[SpellCheckAnalysis] = None,
+    contentVersion: Option[Long] = None
 )

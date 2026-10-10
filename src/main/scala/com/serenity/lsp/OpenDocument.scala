@@ -10,7 +10,7 @@ import com.serenity.rope.Rope
   * remembered by its URI alone, however large it is and however often it is edited.
   */
 private[lsp] enum OpenDocument:
-  case Served(text: Rope)
+  case Served(text: Rope, version: Option[Long] = None)
   case Unserved
 
 private[lsp] object OpenDocument:
@@ -20,9 +20,14 @@ private[lsp] object OpenDocument:
   extension (registry: Registry)
 
     def textOf(uri: DocumentUri): Option[Rope] =
-      registry.get(uri).collect { case Served(text) => text }
+      registry.get(uri).collect { case Served(text, _) => text }
 
-    def served(uri: DocumentUri, text: Rope): Registry = registry.updated(uri, Served(text))
+    /** The editor's content version of the text last sent, when it was sent as an edit of a known version. */
+    def versionOf(uri: DocumentUri): Option[Long] =
+      registry.get(uri).collect { case Served(_, version) => version }.flatten
+
+    def served(uri: DocumentUri, text: Rope, version: Option[Long] = None): Registry =
+      registry.updated(uri, Served(text, version))
 
     def unserved(uri: DocumentUri): Registry = registry.updated(uri, Unserved)
 

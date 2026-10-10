@@ -3,7 +3,7 @@ package com.serenity.spellcheck
 import scala.annotation.tailrec
 
 import com.serenity.lsp.model.{Diagnostic, LspPosition, LspRange}
-import com.serenity.rope.{Balance, Rope, RopeDiff}
+import com.serenity.rope.{Balance, ChangeSet, Rope, RopeDiff}
 import com.serenity.state.models.*
 
 /** Checks a document by reading again only the lines an edit touched.
@@ -24,12 +24,27 @@ private[spellcheck] object ParagraphSpellCheck:
   /** `prior` is only used while it was found against `dictionary` itself, since a different dictionary may judge the
     * same words differently.
     */
-  def analyze(content: Rope, prior: Option[SpellCheckAnalysis], dictionary: DictionaryContext): SpellCheckAnalysis =
+  def analyze(
+    content: Rope,
+    prior: Option[SpellCheckAnalysis],
+    dictionary: DictionaryContext,
+    change: Option[ChangeSet] = None
+  ): SpellCheckAnalysis =
     given Balance = Balance.default
     val base      = prior.filter(_.dictionary eq dictionary).getOrElse(unchecked(dictionary))
-    RopeDiff.changedOffsetRange(base.content, content) match
+    changedRange(base.content, content, change) match
       case None               => base.copy(content = content)
       case Some((start, end)) => reanalyze(content, base, start, end, dictionary)
+
+  /** The span of `content` the edit touched: read off `change`, an edit of `before` already known, when it fits the two
+    * texts, and found by walking the two ropes otherwise.
+    */
+  private def changedRange(before: Rope, content: Rope, change: Option[ChangeSet])(using
+    Balance
+  ): Option[(Int, Int)] =
+    change.filter(known => known.oldLength == before.weight && known.newLength == content.weight) match
+      case Some(known) => known.newEnvelope
+      case None        => RopeDiff.changedOffsetRange(before, content)
 
   private def reanalyze(
     content: Rope,

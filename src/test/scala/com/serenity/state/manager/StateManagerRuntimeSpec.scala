@@ -332,7 +332,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
           workflow = _ => IO.unit,
           lspQueue =
             case LspQueueEffect.Enqueue(value) => observed.update(_ :+ value)
-            case LspQueueEffect.DocumentChanged(uri, languageId, text) =>
+            case LspQueueEffect.DocumentChanged(uri, languageId, text, _) =>
               observed.update(_ :+ LspEffect.FileChanged(uri, languageId, text, version = 0)),
           scheduleCommandRunnerBindingExpiry = _ => IO.unit
         )
