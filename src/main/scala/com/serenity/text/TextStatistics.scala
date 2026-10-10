@@ -50,18 +50,26 @@ object TextStatistics:
       characterCountExcludingWhitespace = counts.nonWhitespaceCharacters
     )
 
-  final private case class RangeEntry(content: Rope, start: Int, end: Int, statistics: TextStatistics)
-
-  private val lastRange = new AtomicReference[Option[RangeEntry]](None)
+  private val rangeMemo = new RangeStatisticsMemo()
 
   /** Counts `content[start, end)` by slicing the rope, which reuses the cached summaries of every subtree the range
     * covers, so no selection text is copied or rescanned. The last answer is kept: a status line asks again on every
     * frame, usually about the very same rope and selection.
     */
   def ofRange(content: Rope, start: Int, end: Int): TextStatistics =
-    lastRange.get.filter(entry => (entry.content eq content) && entry.start == start && entry.end == end) match
+    rangeMemo.statisticsOf(content, start, end)(of(content.slice(start, end)))
+
+final private class RangeStatisticsMemo:
+
+  private val last = new AtomicReference[Option[RangeStatisticsMemo.Entry]](None)
+
+  def statisticsOf(content: Rope, start: Int, end: Int)(compute: => TextStatistics): TextStatistics =
+    last.get.filter(entry => (entry.content eq content) && entry.start == start && entry.end == end) match
       case Some(entry) => entry.statistics
       case None =>
-        val statistics = of(content.slice(start, end))
-        lastRange.set(Some(RangeEntry(content, start, end, statistics)))
+        val statistics = compute
+        last.set(Some(RangeStatisticsMemo.Entry(content, start, end, statistics)))
         statistics
+
+private object RangeStatisticsMemo:
+  final case class Entry(content: Rope, start: Int, end: Int, statistics: TextStatistics)
