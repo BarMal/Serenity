@@ -48,6 +48,15 @@ jobs:
       - name: Set up sbt launcher
         uses: sbt/setup-sbt@v1
 
+      # Tests run inside sbt's own JVM (no `fork`), so SBT_OPTS reaches them. GC and safepoint logs plus the stall
+      # sampler's file (StallSampler) let a test that overshot its budget (#2016) be matched to a whole-JVM stall by
+      # wall-clock time. Written outside target/ because `clean` deletes that directory.
+      - name: Enable JVM stall diagnostics
+        shell: bash
+        run: |
+          mkdir -p jvm-diag
+          echo "SBT_OPTS=-Xlog:gc*,safepoint:file=jvm-diag/gc-safepoint.log:time,uptime,level,tags -Dserenity.test.stallLog=jvm-diag/stalls.log" >> "$GITHUB_ENV"
+
       - name: Run tests
         shell: bash
         # Fails with a thread dump after 40 minutes instead of holding the runner for 6 hours on a hang.
@@ -78,3 +87,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Upload JVM stall diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jvm-diag-${{ matrix.label }}
+          path: jvm-diag/**
+          if-no-files-found: ignore
+          retention-days: 7
