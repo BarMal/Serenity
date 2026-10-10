@@ -38,23 +38,32 @@ object TypingBurst:
   private def keystroke(char: Char): PendingInput =
     PendingInput.Keystroke(KeyStrokeInfo(InputKey.Character, Some(char), Set.empty))
 
-  /** Applies each batch as the input loop does and returns how many slices published damage. */
-  private def applyBatches(stateManager: StateManager, batches: List[List[Char]]): IO[Long] =
+  /** The input loop's context over `stateManager`, counting the slices that published damage in `slices`. */
+  private[perf] def inputContext(
+    stateManager: StateManager,
+    slices: Ref[IO, Long],
+    frameTimings: FrameTimings = FrameTimings()
+  ): IO[AppRuntimeRenderLoops.InputBatchContext] =
     for
       router          <- InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default))
       cursorVisible   <- Ref.of[IO, Boolean](true)
       translatorCache <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
-      slices          <- Ref.of[IO, Long](0L)
-      context = AppRuntimeRenderLoops.InputBatchContext(
-        stateManager,
-        router,
-        SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit),
-        IO.unit,
-        cursorVisible,
-        _ => slices.update(_ + 1),
-        translatorCache,
-        FrameTimings()
-      )
+    yield AppRuntimeRenderLoops.InputBatchContext(
+      stateManager,
+      router,
+      SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit),
+      IO.unit,
+      cursorVisible,
+      _ => slices.update(_ + 1),
+      translatorCache,
+      frameTimings
+    )
+
+  /** Applies each batch as the input loop does and returns how many slices published damage. */
+  private def applyBatches(stateManager: StateManager, batches: List[List[Char]]): IO[Long] =
+    for
+      slices  <- Ref.of[IO, Long](0L)
+      context <- inputContext(stateManager, slices)
       _ <- Stream
         .emits(batches.map(batch => Chunk.from(batch.map(keystroke))))
         .through(AppRuntimeRenderLoops.inputBatchPhase(context))
