@@ -114,3 +114,19 @@ class MarkdownReadModeCaretSpec extends AnyFlatSpec with Matchers:
 
     after(MoveRight, state).editing.cursorPositions.head shouldBe CursorPosition(1, 2)
   }
+
+  "Home in read mode on a heading" should "land in front of the first heading character" in {
+    caretAfter(MoveToStart, "## Title", MarkdownViewMode.Read, 6) shouldBe CursorPosition(0, 3)
+  }
+
+  "Moving left in read mode at the start of a heading's text" should "stay in front of it" in {
+    caretAfter(MoveLeft, "## Title", MarkdownViewMode.Read, 3) shouldBe CursorPosition(0, 3)
+  }
+
+  "Moving right in read mode on a thematic break" should "go straight to the end of the line" in {
+    caretAfter(MoveRight, "---", MarkdownViewMode.Read, 0) shouldBe CursorPosition(0, 3)
+  }
+
+  "Moving in live preview on a heading" should "step one column at a time, its hashes being visible there" in {
+    caretAfter(MoveRight, "## Title", MarkdownViewMode.LivePreview, 0) shouldBe CursorPosition(0, 1)
+  }

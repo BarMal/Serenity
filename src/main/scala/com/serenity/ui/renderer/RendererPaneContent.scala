@@ -420,6 +420,17 @@ object RendererPaneContent:
               )
               DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, context.surface, screenX, screenY)
 
+            RendererMarkdownRules.paint(
+              context.surface,
+              snapshot.markdownInline,
+              visualLine,
+              lineTheme,
+              xOriginPx,
+              contentRightXPx,
+              lineTopPx,
+              rowHeightPxFor(visualLine, snapshot)
+            )
+
             RendererHighlights.renderDocumentCommentHighlights(
               context.surface,
               annotations.commentsByLine.getOrElse(visualLine.bufferLine, Nil),

@@ -16,7 +16,9 @@ import com.serenity.ui.theme.{MarkdownInlineStyling, RichTextStyling, TextStyle}
 private[layout] object TextCaretMeasurement:
 
   /** The AWT font a single buffer-line column is measured/drawn with, over the buffer's base font. A `hidden` run stays
-    * in the line's text but has no width, so it neither advances the line nor takes a caret stop of its own.
+    * in the line's text but has no width, so it neither advances the line nor takes a caret stop of its own. The
+    * resolver's `extraAdvances` are the dual: a column that is wider than its glyph by that many pixels, which a table
+    * uses to pad a cell out to its column.
     */
   final private[layout] case class ColumnFontRun(startColumn: Int, endColumn: Int, font: Font, hidden: Boolean = false)
 
@@ -27,7 +29,11 @@ private[layout] object TextCaretMeasurement:
     * reports a visual line's height/ascent from the tallest run covering it. Non-rich lines carry no runs and fall back
     * to the base font everywhere, reproducing the old single-font behaviour exactly.
     */
-  final private[layout] case class LineFontResolver(baseFont: Font, runs: Vector[ColumnFontRun]):
+  final private[layout] case class LineFontResolver(
+      baseFont: Font,
+      runs: Vector[ColumnFontRun],
+      extraAdvances: Map[Int, Float] = Map.empty
+  ):
     val hasHidden: Boolean = runs.exists(_.hidden)
 
     private def runAt(column: Int): Option[ColumnFontRun] =
@@ -127,7 +133,10 @@ private[layout] object TextCaretMeasurement:
         ColumnFontRun(
           run.startColumn,
           run.endColumn,
-          TextStyle.styledFont(baseFont, MarkdownInlineStyling.textStyle(run.style, baseIsMonospaced))
+          TextStyle.styledFont(
+            baseFont,
+            MarkdownInlineStyling.textStyle(run.style, baseIsMonospaced, baseFont.getSize2D)
+          )
         )
     val (covered, columnRuns) = runs.foldLeft((0, Vector.empty[ColumnFontRun])) {
       case ((from, acc), run) =>
@@ -185,24 +194,48 @@ private[layout] object TextCaretMeasurement:
     resolver: LineFontResolver,
     frc: FontRenderContext
   ): IArray[Float] =
-    if resolver.hasHidden then visibleLayoutCaretXs(text, absoluteStartColumn, resolver, frc)
+    withExtraAdvances(
+      if resolver.hasHidden then visibleLayoutCaretXs(text, absoluteStartColumn, resolver, frc)
+      else plainLayoutCaretXs(text, absoluteStartColumn, resolver, frc),
+      absoluteStartColumn,
+      resolver
+    )
+
+  /** `carets` with each column's extra advance added to every caret after it. */
+  private def withExtraAdvances(
+    carets: IArray[Float],
+    absoluteStartColumn: Int,
+    resolver: LineFontResolver
+  ): IArray[Float] =
+    if resolver.extraAdvances.isEmpty then carets
     else
-      val attributed = AttributedString(text)
-      // One FONT attribute per contiguous run of equal per-column fonts, so a mixed-size rich line's caret advances
-      // (and thus wrap points and widths) match the per-run glyphs the draw path paints.
-      resolver.fontRuns(absoluteStartColumn, absoluteStartColumn + text.length).foreach { span =>
-        attributed.addAttribute(
-          TextAttribute.FONT,
-          span.font,
-          span.startColumn - absoluteStartColumn,
-          span.endColumn - absoluteStartColumn
-        )
+      val shifts = (0 until carets.length).scanLeft(0.0f) { (sum, index) =>
+        sum + resolver.extraAdvances.getOrElse(absoluteStartColumn + index, 0.0f)
       }
-      val layout = TextLayout(attributed.getIterator, frc)
-      val carets = new Array[Float](text.length + 1)
-      (0 until text.length).foreach(index => carets(index) = layout.getCaretInfo(TextHitInfo.leading(index))(0))
-      carets(text.length) = layout.getAdvance
-      IArray.unsafeFromArray(carets)
+      IArray.tabulate(carets.length)(index => carets(index) + shifts(index))
+
+  private def plainLayoutCaretXs(
+    text: String,
+    absoluteStartColumn: Int,
+    resolver: LineFontResolver,
+    frc: FontRenderContext
+  ): IArray[Float] =
+    val attributed = AttributedString(text)
+    // One FONT attribute per contiguous run of equal per-column fonts, so a mixed-size rich line's caret advances
+    // (and thus wrap points and widths) match the per-run glyphs the draw path paints.
+    resolver.fontRuns(absoluteStartColumn, absoluteStartColumn + text.length).foreach { span =>
+      attributed.addAttribute(
+        TextAttribute.FONT,
+        span.font,
+        span.startColumn - absoluteStartColumn,
+        span.endColumn - absoluteStartColumn
+      )
+    }
+    val layout = TextLayout(attributed.getIterator, frc)
+    val carets = new Array[Float](text.length + 1)
+    (0 until text.length).foreach(index => carets(index) = layout.getCaretInfo(TextHitInfo.leading(index))(0))
+    carets(text.length) = layout.getAdvance
+    IArray.unsafeFromArray(carets)
 
   /** [[layoutCaretXs]] for a line with hidden columns: the visible characters are laid out as if the hidden ones were
     * not in the text, and each hidden column takes the caret of the next visible one.

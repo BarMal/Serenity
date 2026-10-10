@@ -277,9 +277,10 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    shownInPanel(settled).exists(_.contains("First settled render")) shouldBe true
-    shownInPanel(bursting).exists(_.contains("Totally different content")) shouldBe true
-    shownInPanel(bursting).exists(_.contains("First settled render")) shouldBe false
+    // The heading is set larger than the panel's text, so its words wrap onto rows of their own.
+    shownInPanel(settled).mkString(" ") should (include("First") and include("settled") and include("render"))
+    shownInPanel(bursting).mkString(" ") should (include("Totally") and include("different") and include("mid-burst"))
+    shownInPanel(bursting).mkString(" ") should not include "settled"
   }
 
   "Markdown inline lens mode" should "leave markdown source untouched in source mode" in {

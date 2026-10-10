@@ -12,7 +12,15 @@ import scala.annotation.tailrec
   */
 object MarkdownInlineSpans:
 
-  final case class Style(bold: Boolean, italic: Boolean, code: Boolean)
+  /** `scale` is the text's size over the base font's, `muted` paints it in the theme's muted colour. */
+  final case class Style(
+      bold: Boolean,
+      italic: Boolean,
+      code: Boolean,
+      muted: Boolean = false,
+      scale: Float = 1.0f,
+      strike: Boolean = false
+  )
 
   /** `[startColumn, endColumn)` of a line drawn in one `style`. A marker run is the delimiter characters themselves,
     * which a live preview hides; its `style` is always plain.
@@ -25,6 +33,7 @@ object MarkdownInlineSpans:
   private val Italic = 2
   private val Code   = 4
   private val Marker = 8
+  private val Strike = 16
 
   final private case class Delimiter(
       char: Char,
@@ -60,7 +69,7 @@ object MarkdownInlineSpans:
   def hiddenColumns(runs: Vector[Run]): Vector[Int] =
     runs.filter(_.isMarker).flatMap(run => run.startColumn until run.endColumn)
 
-  private def isDelimiterChar(char: Char): Boolean = char == '*' || char == '_'
+  private def isDelimiterChar(char: Char): Boolean = char == '*' || char == '_' || char == '~'
 
   private def addFlag(flags: Array[Int], from: Int, until: Int, flag: Int): Unit =
     (from until until).foreach(index => flags(index) = flags(index) | flag)
@@ -115,7 +124,9 @@ object MarkdownInlineSpans:
         if char == '\\' then from(index + 2, found)
         else if isDelimiterChar(char) then
           val length = runLength(line, index, char)
-          from(index + length, found :+ delimiterAt(line, index, length, char))
+          // Only a run of exactly two tildes strikes text through.
+          if char == '~' && length != 2 then from(index + length, found)
+          else from(index + length, found :+ delimiterAt(line, index, length, char))
         else from(index + 1, found)
     from(0, Vector.empty)
 
@@ -124,7 +135,7 @@ object MarkdownInlineSpans:
     val after  = if start + length >= line.length then ' '.toInt else line.codePointAt(start + length)
     val left   = !isWhitespace(after) && (!isPunctuation(after) || isWhitespace(before) || isPunctuation(before))
     val right  = !isWhitespace(before) && (!isPunctuation(before) || isWhitespace(after) || isPunctuation(after))
-    if char == '*' then Delimiter(char, start, length, length, canOpen = left, canClose = right)
+    if char == '*' || char == '~' then Delimiter(char, start, length, length, canOpen = left, canClose = right)
     else
       Delimiter(
         char,
@@ -160,7 +171,12 @@ object MarkdownInlineSpans:
       val closerStart = closer.start + closer.consumed
       addFlag(flags, openerStart, openerStart + used, Marker)
       addFlag(flags, closerStart, closerStart + used, Marker)
-      addFlag(flags, openerStart + used, closerStart, if used == 2 then Bold else Italic)
+      addFlag(
+        flags,
+        openerStart + used,
+        closerStart,
+        if closer.char == '~' then Strike else if used == 2 then Bold else Italic
+      )
       val stillOpen = opener.copy(remaining = opener.remaining - used)
       val below     = openers.take(matching)
       close(
@@ -193,6 +209,6 @@ object MarkdownInlineSpans:
         if flag == 0 then collect(index + 1, found)
         else
           val end   = runEnd(index, flag)
-          val style = Style((flag & Bold) != 0, (flag & Italic) != 0, (flag & Code) != 0)
+          val style = Style((flag & Bold) != 0, (flag & Italic) != 0, (flag & Code) != 0, strike = (flag & Strike) != 0)
           collect(end, found :+ Run(index, end, style, isMarker = (flag & Marker) != 0))
     collect(0, Vector.empty)

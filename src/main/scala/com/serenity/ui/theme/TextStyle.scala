@@ -12,7 +12,8 @@ final case class TextStyle(
     isItalic: Boolean = false,
     isUnderlined: Boolean = false,
     fontFamily: Option[String] = None,
-    fontSize: Option[Float] = None
+    fontSize: Option[Float] = None,
+    isStrikethrough: Boolean = false
 ):
 
   def combine(other: TextStyle): TextStyle =
@@ -21,7 +22,8 @@ final case class TextStyle(
       isItalic = other.isItalic || this.isItalic,
       isUnderlined = other.isUnderlined || this.isUnderlined,
       fontFamily = other.fontFamily.orElse(this.fontFamily),
-      fontSize = other.fontSize.orElse(this.fontSize)
+      fontSize = other.fontSize.orElse(this.fontSize),
+      isStrikethrough = other.isStrikethrough || this.isStrikethrough
     )
 
   def fontMode: Int =
@@ -45,8 +47,11 @@ object TextStyle:
     val styled = style.fontFamily match
       case Some(family) => Font(family, fontMode, size.round.max(1)).deriveFont(fontMode, size)
       case None         => base.deriveFont(fontMode, size)
-    if style.isUnderlined then styled.deriveFont(Map(TextAttribute.UNDERLINE -> TextAttribute.UNDERLINE_ON).asJava)
-    else styled
+    val underline = Option.when(style.isUnderlined)(TextAttribute.UNDERLINE -> (TextAttribute.UNDERLINE_ON: AnyRef))
+    val strike =
+      Option.when(style.isStrikethrough)(TextAttribute.STRIKETHROUGH -> (TextAttribute.STRIKETHROUGH_ON: AnyRef))
+    val attributes = List(underline, strike).flatten.toMap
+    if attributes.isEmpty then styled else styled.deriveFont(attributes.asJava)
 
 final case class StyledText(
     content: String,

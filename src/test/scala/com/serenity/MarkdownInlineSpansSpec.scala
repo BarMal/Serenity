@@ -48,6 +48,25 @@ class MarkdownInlineSpansSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "strike through text between two tildes and mark the delimiters" in {
+    val struck = plain.copy(strike = true)
+
+    MarkdownInlineSpans.scan("~~gone~~") shouldBe Vector(marker(0, 2), content(2, 6, struck), marker(6, 8))
+    MarkdownInlineSpans.scan("~~a **b**~~") shouldBe Vector(
+      marker(0, 2),
+      content(2, 4, struck),
+      marker(4, 6),
+      content(6, 7, struck.copy(bold = true)),
+      marker(7, 11)
+    )
+  }
+
+  it should "leave single and triple tildes as text" in {
+    MarkdownInlineSpans.scan("~one~") shouldBe Vector.empty
+    MarkdownInlineSpans.scan("~~~three~~~") shouldBe Vector.empty
+    MarkdownInlineSpans.scan("`~~code~~`") shouldBe Vector(marker(0, 1), content(1, 9, code), marker(9, 10))
+  }
+
   it should "leave unmatched, escaped and intraword delimiters as text" in {
     MarkdownInlineSpans.scan("2 * 3 * 4") shouldBe Vector.empty
     MarkdownInlineSpans.scan("**unclosed") shouldBe Vector.empty

@@ -1,6 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.frontend.FrontendCapabilities
+import com.serenity.markdown.MarkdownBlockIndexMemo
 import com.serenity.project.ProjectPresence
 import com.serenity.ui.layout.ViewportSize
 
@@ -63,6 +64,8 @@ final case class Runtime(
     // Never persisted: the paned buffers' indexes as of the last commit (#1864), so the copies made in between reuse
     // them. See `AppState.withBufferIndexesRefreshed`.
     bufferIndexMemos: BufferIndexMemos = BufferIndexMemos.empty,
+    // Never persisted: the Markdown block index of recently indexed content, so caret movement need not rescan it.
+    markdownBlockIndexes: MarkdownBlockIndexMemo = MarkdownBlockIndexMemo(),
     // Never persisted: the notes pane's source headings as of its last retarget (#1848). See `NotesPaneSync`.
     chapterHeadingMemo: ChapterHeadingMemo = ChapterHeadingMemo.empty,
     // Never persisted: whether resolved comments still show in the lens, the highlights and comment navigation. Resolved
