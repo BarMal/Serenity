@@ -54,17 +54,9 @@ final private[manager] class StateManagerOperationBoundary private (
     announceModeChange: (AppState, AppState) => IO[Unit],
     autoSave: Ref[IO, BufferId => IO[Unit]]
 ):
-  private val DocumentAnalysisDebounce         = 150.millis
-  private val FindSearchDebounce               = 50.millis
-  private val MarkdownPreviewCommitDebounce    = 150.millis
-  private val OutlineRefreshDebounce           = 150.millis
-  private val FindSearchLane: Lane.Keyed       = Lane.Keyed(LaneKey.Search, LanePolicy.SwitchLatest)
-  private val OutlineRefreshLane: Lane.Keyed   = Lane.Keyed(LaneKey.OutlineRefresh, LanePolicy.SwitchLatest)
-  private val DocumentAnalysisLane: Lane.Keyed = Lane.Keyed(LaneKey.Analysis, LanePolicy.SwitchLatest)
-  private val ShutdownGracePeriod              = 5.seconds
+  private val ShutdownGracePeriod = 5.seconds
 
-  private val EditIdleSessionSaveLane: Lane.Keyed = Lane.Keyed(LaneKey.EditIdleSessionSave, LanePolicy.SwitchLatest)
-  private val AutoSaveLane: Lane.Keyed            = Lane.Keyed(LaneKey.AutoSave, LanePolicy.Sequential)
+  private val AutoSaveLane: Lane.Keyed = Lane.Keyed(LaneKey.AutoSave, LanePolicy.Sequential)
 
   // Built here, over the dispatcher's own model ref, because every commit it makes runs this boundary's follow-up work.
   val modelCommit: ModelCommit = new ModelCommit(modelRef, this, wrapCache)
@@ -185,7 +177,7 @@ final private[manager] class StateManagerOperationBoundary private (
               else
                 effectsShutdownRef.get.ifM(
                   IO.unit,
-                  beforeDocumentAnalysisStart >> submit(DocumentAnalysisLane, documentAnalysisJob)
+                  beforeDocumentAnalysisStart >> submitAfter(DebouncedEffects.DocumentAnalysis, documentAnalysisJob)
                 )
           }
         }
@@ -300,31 +292,30 @@ final private[manager] class StateManagerOperationBoundary private (
     def dispatchUpdate(update: IO[Unit]): IO[Unit] = dispatcher.submit(update)
 
   def scheduleFindSearch(request: FindSearchRequest): IO[Unit] =
-    submit(
-      FindSearchLane,
-      IO.sleep(FindSearchDebounce) >>
-        IO.delay(FindSearch.search(request.content, request.query, request.options, request.anchor))
-          .flatMap(matches => postResult(EffectResult.FindSearchCompleted(request, matches)))
+    submitAfter(
+      DebouncedEffects.FindSearch,
+      IO.delay(FindSearch.search(request.content, request.query, request.options, request.anchor))
+        .flatMap(matches => postResult(EffectResult.FindSearchCompleted(request, matches)))
     )
 
-  /** Supersedes any pending markdown-preview commit for `bufferId` with one that, after
-    * `MarkdownPreviewCommitDebounce`, records `generation` as this buffer's committed markdown-preview generation -- if
-    * no edit has moved past it by then. The renderer compares this against `Buffer.markdownPreviewEditGeneration` to
-    * decide whether an edit burst is still in flight -- see `MarkdownDocumentPreview.renderOrReuseCommitted`.
+  /** Supersedes any pending markdown-preview commit for `bufferId` with one that, after its debounce, records
+    * `generation` as this buffer's committed markdown-preview generation -- if no edit has moved past it by then. The
+    * renderer compares this against `Buffer.markdownPreviewEditGeneration` to decide whether an edit burst is still in
+    * flight -- see `MarkdownDocumentPreview.renderOrReuseCommitted`.
     */
   def scheduleMarkdownPreviewCommit(bufferId: BufferId, generation: Long): IO[Unit] =
-    submit(
-      markdownPreviewCommitLane(bufferId),
-      IO.sleep(MarkdownPreviewCommitDebounce) >> postResult(EffectResult.MarkdownPreviewSettled(bufferId, generation))
+    submitAfter(
+      DebouncedEffects.markdownPreviewCommit(bufferId),
+      postResult(EffectResult.MarkdownPreviewSettled(bufferId, generation))
     )
 
   /** Re-parses the outline of `bufferId` once edits to it pause: large documents take several milliseconds to parse,
     * too long to repeat on every keystroke. The result is dropped if the buffer changed again before it landed.
     */
   private def scheduleOutlineRefresh(bufferId: BufferId): IO[Unit] =
-    submit(
-      OutlineRefreshLane,
-      IO.sleep(OutlineRefreshDebounce) >> modelCommit.currentState.flatMap { snapshot =>
+    submitAfter(
+      DebouncedEffects.OutlineRefresh,
+      modelCommit.currentState.flatMap { snapshot =>
         snapshot.persisted.buffers.get(bufferId).traverse_ { buffer =>
           IO.delay(PanelSymbolLookup.outlineSymbolsForBuffer(buffer))
             .flatMap(symbols =>
@@ -345,7 +336,10 @@ final private[manager] class StateManagerOperationBoundary private (
         logger.error(error)("[SESSION] Saving the session after edits paused failed") >>
           showNotice(FileFailureNotice.sessionBackupFailed(error))
       )
-    submit(EditIdleSessionSaveLane, IO.sleep(editIdle.idle) >> submit(StateManagerWorkflowCapability.SessionLane, save))
+    submitAfter(
+      DebouncedEffects.editIdleSessionSave(editIdle.idle),
+      submit(StateManagerWorkflowCapability.SessionLane, save)
+    )
 
   /** Installs what writes a buffer for auto-save: built from the file persistence, which is made after this boundary.
     */
@@ -365,10 +359,7 @@ final private[manager] class StateManagerOperationBoundary private (
     * off.
     */
   private def scheduleAutoSave(bufferId: BufferId, delay: FiniteDuration): IO[Unit] =
-    submit(
-      Lane.Keyed(LaneKey.AutoSaveDelay(bufferId), LanePolicy.SwitchLatest),
-      IO.sleep(delay) >> submit(AutoSaveLane, runAutoSave(bufferId))
-    )
+    submitAfter(DebouncedEffects.autoSave(bufferId, delay), submit(AutoSaveLane, runAutoSave(bufferId)))
 
   private def runAutoSave(bufferId: BufferId): IO[Unit] =
     autoSave.get
@@ -384,9 +375,6 @@ final private[manager] class StateManagerOperationBoundary private (
           postResult(EffectResult.ExplorerListed(surfaceId, path, result))
       }
     )
-
-  private def markdownPreviewCommitLane(bufferId: BufferId): Lane.Keyed =
-    Lane.Keyed(LaneKey.MarkdownPreview(bufferId), LanePolicy.SwitchLatest)
 
   private[manager] def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit] = submit(lane, job)
 
@@ -418,6 +406,10 @@ final private[manager] class StateManagerOperationBoundary private (
   private def submit(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit] =
     submittedEffects.update(_ + 1) >> effectLanes.submit(lane, job).recover { case _: EffectLanes.Released => () }
 
+  private def submitAfter(effect: DebouncedEffect, job: IO[Unit]): IO[Unit] =
+    submittedEffects.update(_ + 1) >>
+      effectLanes.submitAfter(effect.lane, effect.delay, job).recover { case _: EffectLanes.Released => () }
+
   private def postResult(result: EffectResult): IO[Unit] =
     dispatcher.post(modelCommit.applyResult(result, _ => IO.unit))
 
@@ -429,8 +421,8 @@ final private[manager] class StateManagerOperationBoundary private (
 
   private def documentAnalysisJob: IO[Unit] =
     given Logger[IO] = logger
-    (IO.sleep(DocumentAnalysisDebounce) >>
-      Trace.timed("analysis.documentAnalysisJob") {
+    Trace
+      .timed("analysis.documentAnalysisJob") {
         modelCommit.currentState.flatMap { snapshot =>
           val spellCheckConfig = snapshot.persisted.config.languageToolsConfig.spellCheck
           detachedBlocking(loadDictionary(spellCheckConfig, dictionaryCache)).flatMap { dictionary =>
@@ -446,9 +438,10 @@ final private[manager] class StateManagerOperationBoundary private (
               detachedBlocking(dictionary.context.stems.foreach(_.prepareSuggestions()))
           }
         }
-      }).handleErrorWith(error =>
-      documentAnalysisInputsRef.set(None) >> logger.error(error)("[ANALYSIS] Document analysis refresh failed")
-    )
+      }
+      .handleErrorWith(error =>
+        documentAnalysisInputsRef.set(None) >> logger.error(error)("[ANALYSIS] Document analysis refresh failed")
+      )
 
   /** Tells the writer, once per session and only when there is prose to check, that spell check has no dictionary to
     * check against (#1680). It is a notice rather than a diagnostic on the document: nothing is wrong with the text,
