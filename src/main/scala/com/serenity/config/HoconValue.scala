@@ -21,12 +21,15 @@ object HoconValue:
     * decide whether a reader would find the bare form clearer, and parsing the bare form back decides whether it still
     * says the same thing. The second is what a character rule alone got wrong -- an unquoted comma turned a segment
     * list into a file the parser rejected, taking every other setting in it down to defaults.
+    *
+    * "Says the same thing" is judged the way the loader reads a value (`FieldCodec.flatten`), not by the library's
+    * `getString`, which hands back the text as typed: `4e9` is a string to one and the number 4000000000 to the other.
     */
   def string(value: String): HoconValue =
     val quoted  = ConfigValueFactory.fromAnyRef(value).render(ConfigRenderOptions.concise())
     val legible = value.nonEmpty && value.forall(char => char.isLetterOrDigit || "_./-".contains(char))
     val faithful =
-      legible && (try ConfigFactory.parseString(s"probe = $value").getString("probe") == value
+      legible && (try FieldCodec.flatten(ConfigFactory.parseString(s"probe = $value").getValue("probe")) == value
       catch case _: Exception => false)
     HoconValue(ConfigValueFactory.fromAnyRef(value), if faithful then value else quoted)
 

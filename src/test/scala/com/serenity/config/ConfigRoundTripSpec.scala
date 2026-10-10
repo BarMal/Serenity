@@ -282,6 +282,17 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     reloaded.surfaceConfig.showPaneHeaders shouldBe false
   }
 
+  it should "keep a text setting that reads as a number as the text it was written" in {
+    val authors = List("4e9", "007", "1.50", "0x1F", "1e3")
+
+    authors.foreach { author =>
+      withClue(s"comment author $author: ") {
+        savedAndReloaded(AppConfig.default.withCommentAuthor(Some(author))).documentConfig.commentAuthor shouldBe
+          Some(author)
+      }
+    }
+  }
+
   // -- An unreadable file --------------------------------------------------------------------------------------------
 
   "a config file that cannot be parsed" should "be kept aside rather than left to be overwritten by defaults" in {
