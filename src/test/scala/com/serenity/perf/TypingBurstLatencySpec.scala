@@ -16,32 +16,27 @@ import com.serenity.input.{InputRouter, SwingInputHandler}
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.{StateManager, TypedRuns}
 import com.serenity.state.models.{Buffer, BufferId}
-import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.layout.{CellMetrics, WrappedLineCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The latency a typing burst sees through the production input path (#1985): AWT key events reach `SwingInputHandler`,
-  * queue there, and leave `inputBatches` for `inputBatchPhase` and `applyEventBatch`, as the `bench/bench-laptop.sh`
-  * burst (200 keys, `xdotool` 5 ms apart) does. Each key is timed by the handler's own latency trace, from
-  * `keyReceived` to the damage its slice published.
+/** What a typing burst costs through the production input path (#1985): AWT key events reach `SwingInputHandler`, queue
+  * there, and leave `inputBatches` for `inputBatchPhase` and `applyEventBatch`, as the `bench/bench-laptop.sh` burst
+  * (200 keys, `xdotool` 5 ms apart) does. Each key is traced by the handler's own latency trace, from `keyReceived` to
+  * the damage its slice published.
   *
-  * Real time rather than `TestControl`: keys apply in zero virtual time, so a virtual clock could only ever report the
-  * pacing, never the cost of draining. The bound below is loose enough for a loaded CI machine, and still a long way
-  * under the 400-745 ms dispatch p95 the burst showed on the laptop before keys were settled once per batch (#1988).
+  * The guard counts work instead of reading a clock. A burst only queues up if a batch costs more than its keys'
+  * arrival rate pays for, and the cost that did it was re-wrapping the paragraph once per key instead of once per
+  * published slice (#1988). That holds however the keys happen to be grouped into batches, so unlike a p95 bound it
+  * cannot fail on a loaded machine, and it fails whenever a batch settles its keys one at a time.
+  * `TypingBurstBatchSpec` pins the same count for a single batch; this spec pins it through the real queue.
   */
 class TypingBurstLatencySpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private val burstKeys = 200
-  private val spacing   = 5.millis
-
-  /** Three times the p95 measured with keys settled once per batch (about 15 ms on the 2-core cloud box), and under the
-    * 110 ms p95 measured with the run settling switched off. A p95 past it means keys queue behind batches that cost
-    * more than the keys' arrival rate pays for.
-    */
-  private val p95BoundMs = 50.0
 
   private def burst: List[Char] = TypingBurst.letters.take(burstKeys).toList
 
@@ -59,9 +54,9 @@ class TypingBurstLatencySpec extends AnyFlatSpec with Matchers:
       parkUntil(deadlineNanos)
 
   /** Delivers each key to the component's key listener on a thread of its own, on a fixed schedule so a slow key does
-    * not delay the next, as the event dispatch thread would.
+    * not delay the next, as the event dispatch thread would. A zero `spacing` delivers them back to back.
     */
-  private def typePaced(component: JPanel, chars: List[Char]): IO[Unit] =
+  private def typePaced(component: JPanel, chars: List[Char], spacing: FiniteDuration): IO[Unit] =
     IO.blocking {
       val started = System.nanoTime
       chars.zipWithIndex.foreach { (char, index) =>
@@ -78,8 +73,14 @@ class TypingBurstLatencySpec extends AnyFlatSpec with Matchers:
   private def awaitDamaged(frameTimings: FrameTimings): IO[Unit] =
     allDamaged(frameTimings).ifM(IO.unit, IO.sleep(2.millis) >> awaitDamaged(frameTimings))
 
-  /** Replays `chars` paced through the production input path and returns the trace of every key. */
-  private def replay(stateManager: StateManager, chars: List[Char]): IO[Vector[KeyStamps]] =
+  /** Replays `chars` through the production input path and returns the trace of every key and how many slices published
+    * damage.
+    */
+  private def replay(
+    stateManager: StateManager,
+    chars: List[Char],
+    spacing: FiniteDuration
+  ): IO[(Vector[KeyStamps], Long)] =
     val frameTimings = FrameTimings()
     frameTimings.keyLatency.setEnabled(true)
     val component = new JPanel()
@@ -94,32 +95,68 @@ class TypingBurstLatencySpec extends AnyFlatSpec with Matchers:
         .compile
         .drain
         .start
-      _ <- typePaced(component, chars)
-      _ <- awaitDamaged(frameTimings).timeout(60.seconds)
-      _ <- handler.shutdown
-      _ <- inputLoop.joinWithNever
-    yield frameTimings.keyLatency.pendingKeys
+      _         <- typePaced(component, chars, spacing)
+      _         <- awaitDamaged(frameTimings).timeout(60.seconds)
+      _         <- handler.shutdown
+      _         <- inputLoop.joinWithNever
+      published <- slices.get
+    yield (frameTimings.keyLatency.pendingKeys, published)
 
   private def millisBetween(from: Long, to: Long): Double = (to - from) / 1e6
 
-  private def queuePlusDispatchMs(keys: Vector[KeyStamps]): Vector[Double] =
-    keys.flatMap(key => key.damagedAt.map(millisBetween(key.receivedAt, _)))
+  private def wrapsPerformed(stateManager: StateManager): Long =
+    stateManager.renderCaches.wrappedLines match
+      case cache: WrappedLineCache.Bounded => cache.wrapStats.coldWraps + cache.wrapStats.incrementalWraps
+      case _                               => 0L
 
-  private def queueMs(keys: Vector[KeyStamps]): Vector[Double] =
-    keys.flatMap(key => key.dequeuedAt.map(millisBetween(key.receivedAt, _)))
-
-  "A 200-key burst typed 5 ms apart through SwingInputHandler" should "see a bounded queue-plus-dispatch latency per key" in {
+  private def warmEditor(): StateManager =
     val (stateManager, _) = editor()
     val _                 = TypingBurst.typeEachAlone(stateManager, List('w')).unsafeRunSync()
-    val trace             = replay(stateManager, burst).unsafeRunSync()
-    val total             = queuePlusDispatchMs(trace)
-    val summary           = TypingStatistics.summarize(total)
-    val queued            = TypingStatistics.summarize(queueMs(trace))
+    stateManager
 
-    withClue(s"queue+dispatch $summary, queue alone $queued, max ${total.maxOption}: ") {
+  private def mostWrapsForOneKey(): Long =
+    val alone = warmEditor()
+    burst
+      .map { char =>
+        val before = wrapsPerformed(alone)
+        val _      = TypingBurst.typeEachAlone(alone, List(char)).unsafeRunSync()
+        wrapsPerformed(alone) - before
+      }
+      .maxOption
+      .getOrElse(0L)
+
+  private def assertRewrapsOncePerSlice(spacing: FiniteDuration): Unit =
+    val mostPerKey      = mostWrapsForOneKey()
+    val stateManager    = warmEditor()
+    val before          = wrapsPerformed(stateManager)
+    val (trace, slices) = replay(stateManager, burst, spacing).unsafeRunSync()
+    val wraps           = wrapsPerformed(stateManager) - before
+    val settledRuns     = slices + burstKeys / TypedRuns.MaxKeys
+    val waits           = trace.flatMap(key => key.damagedAt.map(millisBetween(key.receivedAt, _)))
+
+    withClue(
+      s"keys=$burstKeys slices=$slices runs<=$settledRuns wraps=$wraps (most for one key alone $mostPerKey), " +
+        s"queue+dispatch ${TypingStatistics.summarize(waits)}: "
+    ) {
       trace should have size burstKeys.toLong
-      total should have size burstKeys.toLong
-      summary.map(_.p95Ms).getOrElse(Double.MaxValue) should be <= p95BoundMs
+      trace.flatMap(_.damagedAt) should have size burstKeys.toLong
+      mostPerKey should be > 0L
+      wraps should be <= settledRuns * mostPerKey
+    }
+
+  "A 200-key burst typed back to back through SwingInputHandler" should "re-wrap once per published slice, not once per key" in
+    assertRewrapsOncePerSlice(0.millis)
+
+  "A 200-key burst typed 5 ms apart through SwingInputHandler" should "re-wrap once per published slice, not once per key" in
+    assertRewrapsOncePerSlice(5.millis)
+
+  it should "damage every key after it was received and dequeued, in the order the keys arrived" in {
+    val (trace, _) = replay(warmEditor(), burst, 5.millis).unsafeRunSync()
+
+    trace.map(_.receivedAt) shouldBe trace.map(_.receivedAt).sorted
+    trace.foreach { key =>
+      key.dequeuedAt.exists(_ >= key.receivedAt) shouldBe true
+      key.damagedAt.exists(damaged => key.dequeuedAt.exists(_ <= damaged)) shouldBe true
     }
   }
 
@@ -127,7 +164,7 @@ class TypingBurstLatencySpec extends AnyFlatSpec with Matchers:
     val (alone, aloneBuffer) = editor()
     val (paced, pacedBuffer) = editor()
     val _                    = TypingBurst.typeEachAlone(alone, burst).unsafeRunSync()
-    val _                    = replay(paced, burst).unsafeRunSync()
+    val _                    = replay(paced, burst, 5.millis).unsafeRunSync()
     def state(m: StateManager, id: BufferId) =
       typedBuffer(m, id).map(buffer => (buffer.document.content.toString, buffer.editing, buffer.viewport))
 
