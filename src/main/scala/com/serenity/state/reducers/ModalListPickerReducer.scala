@@ -27,7 +27,7 @@ private[reducers] object ModalListPickerReducer:
               picker.onDismiss.map(AppEffect.ExecuteCommandUnrecorded(_)).toList
             )
           case _ if picker.pending.isDefined => ReducerResult.noEffects(currentState)
-          case ModalSubmit                   => picked(id, picker, currentState)
+          case ModalSubmit                   => picked(id, settled(picker, currentState), currentState)
           case ModalClick(_, Some(actionId)) =>
             ListPickerComposition
               .choiceIndex(actionId)
@@ -89,8 +89,13 @@ private[reducers] object ModalListPickerReducer:
     field.update(input) match
       case (next, Some(TextFieldOutcome.Changed(_))) =>
         val queried = picker.copy(query = Some(next))
-        if ListPickerSearch.isCheap(queried, state) then (ListPickerSearch.refreshed(queried, state), Nil)
-        else (queried, List(AppEffect.Workflow(WorkflowEffect.RefreshPicker(id, queried.queryText))))
+        if ListPickerSearch.isCheap(queried, state) then
+          (ListPickerSearch.refreshed(queried.copy(searchPending = false), state), Nil)
+        else
+          (
+            queried.copy(searchPending = true),
+            List(AppEffect.Workflow(WorkflowEffect.RefreshPicker(id, queried.queryText)))
+          )
       case (next, _) => (picker.copy(query = Some(next)), Nil)
 
   private def moved(picker: ListPicker, input: WidgetInput, state: AppState): ListPicker =
@@ -125,6 +130,12 @@ private[reducers] object ModalListPickerReducer:
       updateModal(state, id, Modal.ListPicker(after)),
       preview.map(AppEffect.ExecuteCommandUnrecorded(_)).toList ++ followUps
     )
+
+  /** The picker as its query says it should be: a search still running for it is done here and now, so a pick never
+    * acts on the rows of an earlier query.
+    */
+  private def settled(picker: ListPicker, state: AppState): ListPicker =
+    if picker.searchPending then ListPickerSearch.refreshed(picker.copy(searchPending = false), state) else picker
 
   private def picked(id: SurfaceId, picker: ListPicker, state: AppState): ReducerResult =
     picker.selectedChoice match

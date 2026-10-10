@@ -59,6 +59,30 @@ class PickerSearchSpec extends AnyFlatSpec with Matchers:
     labels(result.state, id) should not be labels(state, id)
   }
 
+  "Enter before the background match lands" should "open the row matching the query as typed, not the stale one" in {
+    val (state, id) = filled(bigList)
+    val typed       = "File49".foldLeft(state)((current, char) => typing(current, char).state)
+    val stale       = picker(typed, id).selectedChoice.map(_.action)
+    val expected    = ListPickerSearch.refreshed(picker(typed, id), typed).selectedChoice.map(_.action)
+
+    expected should not be stale
+    val result = ModalEventReducer.reduce(ModalType.ListPicker, ModalSubmit, typed)
+
+    result.effects shouldBe expected.map(AppEffect.ExecuteCommand(_)).toList
+  }
+
+  it should "leave a highlight moved after the match landed alone" in {
+    val (state, id) = filled(bigList)
+    val typed       = typing(state, '1').state
+    val searched    = PickerSearchTransitions.searched(typed, id, "1").getOrElse(fail("no result"))
+    val landed      = PickerSearchTransitions.applied(typed, id, "1", searched).state
+    val moved       = ModalEventReducer.reduce(ModalType.ListPicker, MoveDown, landed).state
+
+    val result = ModalEventReducer.reduce(ModalType.ListPicker, ModalSubmit, moved)
+
+    result.effects shouldBe picker(moved, id).selectedChoice.map(c => AppEffect.ExecuteCommand(c.action)).toList
+  }
+
   "A background match" should "replace the items of the picker still holding its query" in {
     val (state, id) = filled(bigList)
     val typed       = typing(typing(state, '1').state, '2').state

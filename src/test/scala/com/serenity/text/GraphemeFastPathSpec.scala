@@ -135,3 +135,24 @@ class GraphemeFastPathSpec extends AnyFlatSpec with ScalaCheckPropertyChecks wit
 
     TextEditing.graphemeBreakIterator(RopeCharacterSource.of(rope)).getText() should be theSameInstanceAs text
   }
+
+  it should "never show one thread's rope to another running at the same time" in {
+    val failures = new AtomicInteger(0)
+    val workers = (0 until 8).map { n =>
+      val text = ("éx" * (50 + n)) + "👨‍👩"
+      val rope = Rope(text)
+      val worker = new Thread(() =>
+        val expected = breakIteratorOver(text)
+        (0 until 5).foreach(_ =>
+          (0 until text.length).foreach(index =>
+            if rope.nextGraphemeBoundary(index) != expected.following(index) then failures.incrementAndGet()
+          )
+        )
+      )
+      worker.start()
+      worker
+    }
+    workers.foreach(_.join())
+
+    failures.get() shouldBe 0
+  }

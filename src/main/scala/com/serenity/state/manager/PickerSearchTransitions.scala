@@ -17,7 +17,12 @@ private[manager] object PickerSearchTransitions:
     */
   def applied(state: AppState, surfaceId: SurfaceId, query: String, searched: ListPicker): ReducerResult =
     pickerHolding(state, surfaceId, query).fold(ReducerResult.noEffects(state)) { current =>
-      val updated = current.copy(title = searched.title, items = searched.items, source = searched.source)
+      val updated = current.copy(
+        title = searched.title,
+        items = searched.items,
+        source = searched.source,
+        searchPending = false
+      )
       val preview =
         if updated.selectedChoice == current.selectedChoice then None else updated.selectedChoice.flatMap(_.preview)
       ReducerResult(
