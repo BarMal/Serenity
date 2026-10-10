@@ -200,16 +200,16 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
           )
     yield (rope, text, term)
 
-  property("searchAll finds exactly the offsets String.indexOf finds") {
+  // Matches do not overlap (find-all and replace-all step past each match), and an empty term matches nothing. The
+  // empty term has to be handled here because shrinking a failing case can reach it.
+  property("searchAll finds exactly the non-overlapping offsets String.indexOf finds") {
     forAll(ropeAndSearchTerm) { (rope, text, term) =>
       def expected(from: Int, found: List[Int]): List[Int] =
-        if from > text.length then found.reverse
-        else
-          text.indexOf(term, from) match
-            case -1     => found.reverse
-            case offset => expected(offset + 1, offset :: found)
+        text.indexOf(term, from) match
+          case -1     => found.reverse
+          case offset => expected(offset + term.length, offset :: found)
 
-      rope.searchAll(term) shouldBe expected(0, Nil)
+      rope.searchAll(term) shouldBe (if term.isEmpty then Nil else expected(0, Nil))
     }
   }
 
