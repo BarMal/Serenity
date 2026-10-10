@@ -9,9 +9,9 @@ import com.serenity.ui.presets.UiPreset
 /** Builds the settings tree from schema rows and current option selections.
   *
   * The tree is cut by the task someone is doing, not by where a value happens to live in `AppConfig`: Workspace (what
-  * am I working on), Editor (what the text area shows), Typography, Look, Language Tools and Keys. Each group that has
-  * knobs nobody needs day to day keeps them in one nested "Advanced" leaf rather than spreading them across the top
-  * level.
+  * am I working on), UI Presets, Editor (what the text area shows), Typography, Look, Language Tools and Keys. Each
+  * group that has knobs nobody needs day to day keeps them in one nested "Advanced" leaf rather than spreading them
+  * across the top level.
   */
 object CommandRunnerSettingsGroups:
 
@@ -189,12 +189,11 @@ object CommandRunnerSettingsGroups:
     val workspaceGroup = group(
       "settings-workspace",
       "Workspace",
-      "Code or prose mode, presets, panels",
+      "Code or prose mode and panels",
       List(
         CommandRunnerSettingsItems.appModeOptionItem(optionSelections),
         CommandRunnerSettingsItems.showAllSettingsOptionItem(optionSelections),
-        workspaceLayoutGroup,
-        presetsGroup
+        workspaceLayoutGroup
       )
     )
     val editorGroup = group(
@@ -230,5 +229,7 @@ object CommandRunnerSettingsGroups:
       bufferLanguageGroup :: Option.when(showProseSettings)(spellCheckGroup).toList
     )
     // A code workspace on a terminal has no typography row left to show.
-    List(workspaceGroup, editorGroup) ++ Option.when(typographyGroup.children.nonEmpty)(typographyGroup) ++
+    List(workspaceGroup, presetsGroup, editorGroup) ++ Option.when(typographyGroup.children.nonEmpty)(
+      typographyGroup
+    ) ++
       List(lookGroup, languageToolsGroup, keysGroup)

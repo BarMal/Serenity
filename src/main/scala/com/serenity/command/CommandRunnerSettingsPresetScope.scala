@@ -20,20 +20,15 @@ private[command] object CommandRunnerSettingsPresetScope:
   def withoutScopedSelections(optionSelections: Map[String, Int]): Map[String, Int] =
     optionSelections.filterNot((id, _) => isScopedItemId(id))
 
-  /** `group` as a page of `presetName`'s: its own id is `pageId`, everything below it is renamed and re-aimed. */
-  def pageOf(presetName: String, pageId: String, group: CommandSurfaceItem.GroupItem): CommandSurfaceItem.GroupItem =
-    group.copy(id = pageId, children = group.children.map(scoped(presetName, _)))
+  /** The rows of `group` as rows of `presetName`'s, for a page that lists them directly instead of nesting a group. */
+  def rowsOf(presetName: String, group: CommandSurfaceItem.GroupItem): List[CommandSurfaceItem] =
+    group.children.map(scoped(presetName, _))
 
   private def scoped(presetName: String, item: CommandSurfaceItem): CommandSurfaceItem =
     val prefix = prefixFor(presetName)
     def aimed(intent: CommandIntent): CommandIntent =
       CommandIntent.Scoped(SettingsTarget.Preset(presetName), intent)
     item match
-      case group: CommandSurfaceItem.GroupItem =>
-        group.copy(
-          id = s"settings-preset-${group.id.stripPrefix("settings-")}-options",
-          children = group.children.map(scoped(presetName, _))
-        )
       case option: CommandSurfaceItem.OptionItem =>
         option.copy(
           id = prefix + option.id,

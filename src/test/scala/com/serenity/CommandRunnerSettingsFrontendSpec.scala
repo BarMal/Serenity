@@ -82,6 +82,6 @@ class CommandRunnerSettingsFrontendSpec extends AnyFlatSpec with Matchers:
   it should "hide the GUI-only font groups from a preset being edited on a TUI frontend" in {
     val presetIds = allRows(treeOn(FrontendCapabilities.tui(), proseMode)).map(_.id).toSet
 
-    presetIds should contain("settings-preset-cursor")
-    presetIds should not contain "settings-preset-prose-font"
+    presetIds should contain("preset:Writing:cursor-mode")
+    presetIds should not contain "preset:Writing:text-font"
   }

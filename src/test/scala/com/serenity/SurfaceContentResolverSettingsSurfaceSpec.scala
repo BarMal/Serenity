@@ -72,8 +72,8 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
         surface = CommandRunnerSurface.Settings(drilled =
           Some(
             SettingsSurfaceState(
-              SettingsPage.Group("settings-preset-prose-font"),
-              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+              SettingsPage.Group("settings-preset-edit"),
+              List(SettingsPage.Group("settings-ui-presets"))
             )
           )
         )
@@ -86,9 +86,9 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
     )
 
     val header = resolved.header.getOrElse(fail("Expected breadcrumb header"))
-    header.plainText shouldBe "Settings > UI Presets > Edit Preset: Writing > Prose Font"
-    header.segments.map(_.text) shouldBe List("Settings >", "UI Presets >", "Edit Preset: Writing >", "Prose Font")
-    header.segments.map(_.selected) shouldBe List(true, true, true, false)
+    header.plainText shouldBe "Settings > UI Presets > Edit Preset: Writing"
+    header.segments.map(_.text) shouldBe List("Settings >", "UI Presets >", "Edit Preset: Writing")
+    header.segments.map(_.selected) shouldBe List(true, true, false)
   }
 
   /** Bug: selecting a settings-root group whose expand-in-place preview (`groupPreviewRows`, capped at
@@ -105,7 +105,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
   it should "always render the selected settings-root group's own row, even when its preview needs the whole item budget" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
-      .copy(surface = CommandRunnerSurface.Settings(root = CommandPaletteState(selectedIndex = 2), drilled = None))
+      .copy(surface = CommandRunnerSurface.Settings(root = CommandPaletteState(selectedIndex = 3), drilled = None))
 
     val resolved = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),
@@ -120,18 +120,17 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
     resolved.rows.find(_.selected).map(_.plainText) shouldBe Some("Typography")
   }
 
-  // issue #1058: "Fonts" (Editor/Code/UI Typography) is gone -- editing a preset's typography now drills straight
-  // into the same canonical Prose/Code/UI Font groups the top-level Typography settings use, each holding its own
-  // family picker, ligatures toggle, and size input directly, rather than one extra wrapping level per font family.
-  it should "resolve preset prose font submenu as the canonical font family, ligature, and size rows" in {
+  // issue #1682: the preset's cursor, fonts, document defaults and spelling are rows of the one flat Edit page; the
+  // font families are carousels like every other option row.
+  it should "resolve the flat preset edit page with every editable setting as a row" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
         surface = CommandRunnerSurface.Settings(drilled =
           Some(
             SettingsSurfaceState(
-              SettingsPage.Group("settings-preset-prose-font"),
-              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+              SettingsPage.Group("settings-preset-edit"),
+              List(SettingsPage.Group("settings-ui-presets"))
             )
           )
         )
@@ -139,68 +138,21 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
 
     val resolved = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),
-      LayoutRect(0, 0, 80, 20),
+      LayoutRect(0, 0, 80, 60),
       SurfaceRenderMode.Floating
     )
 
     resolved.rows.flatMap(_.segments.headOption.map(_.text)) should contain allOf (
+      "Cursor Style",
       "Text Font",
       "Prose Ligatures",
-      "Prose Font Size"
+      "Prose Font Size",
+      "Code Font",
+      "UI Font",
+      "Default Document",
+      "Markdown View",
+      "Drop Caps"
     )
-  }
-
-  // issue #1057: Theme Chooser/Creator/Toggle/Reload are one-shot actions with no preset-scoped value of their own,
-  // so they are ordinary CommandRegistry commands, not part of this settings subtree.
-  // issue #1058: editing a preset drills straight into the same canonical groups the top-level Settings screen uses.
-  it should "resolve the preset cursor submenu as the canonical cursor rows" in {
-    val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default)
-      .copy(
-        surface = CommandRunnerSurface.Settings(drilled =
-          Some(
-            SettingsSurfaceState(
-              SettingsPage.Group("settings-preset-cursor"),
-              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
-            )
-          )
-        )
-      )
-
-    val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
-      LayoutRect(0, 0, 80, 10),
-      SurfaceRenderMode.Floating
-    )
-
-    resolved.rows.flatMap(_.segments.headOption.map(_.text)) shouldBe List("Cursor Style")
-  }
-
-  // issue #1058: "Document Defaults > New Documents/Markdown Preview/Spelling" is gone -- editing a preset's document
-  // defaults now drills straight into the same canonical Document Defaults group (default mode + Markdown view);
-  // Spelling is now its own sibling page (`settings-preset-spellcheck`), matching the top-level Document Writing tree.
-  it should "resolve preset document defaults submenu as the canonical document default rows" in {
-    val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default)
-      .copy(
-        surface = CommandRunnerSurface.Settings(drilled =
-          Some(
-            SettingsSurfaceState(
-              SettingsPage.Group("settings-preset-document-defaults"),
-              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
-            )
-          )
-        )
-      )
-
-    val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
-      LayoutRect(0, 0, 80, 10),
-      SurfaceRenderMode.Floating
-    )
-
-    resolved.rows.flatMap(_.segments.headOption.map(_.text)) shouldBe
-      List("Default Document", "Markdown View", "Drop Caps")
   }
 
   it should "expand the selected preset group's own children inline as the capped group preview" in {

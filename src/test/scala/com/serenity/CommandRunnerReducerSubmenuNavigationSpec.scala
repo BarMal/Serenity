@@ -175,12 +175,12 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     runner.selectedItem.collect {
       case item: CommandSurfaceItem.SettingSearchItem =>
         (item.targetGroupId, item.targetItemId, item.sourceScope)
-    } shouldBe Some(("settings-preset-actions", "ui-preset-overwrite", "Preset"))
+    } shouldBe Some(("settings-preset-edit", "ui-preset-overwrite", "Preset"))
 
     val opened       = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
     val openedRunner = runnerFrom(opened)
 
-    openedRunner.activeSubmenuGroupId shouldBe Some("settings-preset-actions")
+    openedRunner.activeSubmenuGroupId shouldBe Some("settings-preset-edit")
     openedRunner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("ui-preset-overwrite")
   }
 
@@ -333,14 +333,14 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     runner.activeSubmenuGroupId shouldBe Some("settings-preset-edit")
     runner.activeSubmenuParentGroupId shouldBe Some("settings-ui-presets")
     runner.focusedSubmenuItems.map(_.id) should contain allOf (
-      "settings-preset-name",
-      "settings-preset-actions",
-      "settings-preset-cursor",
-      "settings-preset-prose-font",
-      "settings-preset-code-font",
-      "settings-preset-ui-font",
-      "settings-preset-document-defaults",
-      "settings-preset-spellcheck"
+      "ui-preset-rename",
+      "ui-preset-overwrite",
+      "preset:Writing:cursor-mode",
+      "preset:Writing:text-font",
+      "preset:Writing:code-font",
+      "preset:Writing:ui-font",
+      "preset:Writing:default-document-mode",
+      "preset:Writing:spellcheck-enabled"
     )
   }
 
@@ -348,24 +348,12 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val registry = CommandRegistry.default
     val state    = settingsStateOnItem("settings-ui-presets", "settings-preset-edit")
 
-    val presetOptions = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
-    val typographySelected = CommandRunnerReducer
-      .reduce(RunnerSelectSubmenuItem(3), presetOptions, registry)
-      .state
-    val typography = CommandRunnerReducer.reduce(RunnerSubmit, typographySelected, registry)
-    val runner     = runnerFrom(typography.state)
+    val runner = runnerFrom(CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state)
 
-    runner.activeSubmenuGroupId shouldBe Some("settings-preset-prose-font")
-    runner.activeSubmenuParentGroupId shouldBe Some("settings-preset-edit")
-    runner.activeSubmenuAncestorGroupIds shouldBe Some(
-      List("settings-workspace", "settings-ui-presets", "settings-preset-edit")
-    )
-    runner.submenuBreadcrumbLabels("settings-preset-prose-font") shouldBe List(
-      "Workspace",
-      "UI Presets",
-      "Edit Preset: Writing",
-      "Prose Font"
-    )
+    runner.activeSubmenuGroupId shouldBe Some("settings-preset-edit")
+    runner.activeSubmenuParentGroupId shouldBe Some("settings-ui-presets")
+    runner.activeSubmenuAncestorGroupIds shouldBe Some(List("settings-ui-presets"))
+    runner.submenuBreadcrumbLabels("settings-preset-edit") shouldBe List("UI Presets", "Edit Preset: Writing")
   }
 
   // issue #1059: Escape now uniformly pops one settings level at a time regardless of entry point (the settings
@@ -375,34 +363,26 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val registry = CommandRegistry.default
     val state    = settingsStateOnItem("settings-ui-presets", "settings-preset-edit")
 
-    val presetOptions      = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
-    val typographySelected = CommandRunnerReducer.reduce(RunnerSelectSubmenuItem(3), presetOptions, registry).state
-    val typography         = CommandRunnerReducer.reduce(RunnerSubmit, typographySelected, registry).state
-    runnerFrom(typography).activeSubmenuGroupId shouldBe Some("settings-preset-prose-font")
+    val editPage = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
+    runnerFrom(editPage).activeSubmenuGroupId shouldBe Some("settings-preset-edit")
 
-    val backOnce = CommandRunnerReducer.reduce(Escape, typography, registry)
-    runnerFrom(backOnce.state).activeSubmenuGroupId shouldBe Some("settings-preset-edit")
+    val backOnce = CommandRunnerReducer.reduce(Escape, editPage, registry)
+    runnerFrom(backOnce.state).activeSubmenuGroupId shouldBe Some("settings-ui-presets")
 
-    val backTwice = CommandRunnerReducer.reduce(Escape, backOnce.state, registry)
-    runnerFrom(backTwice.state).activeSubmenuGroupId shouldBe Some("settings-ui-presets")
-
-    val backToWorkspace = CommandRunnerReducer.reduce(Escape, backTwice.state, registry)
-    runnerFrom(backToWorkspace.state).activeSubmenuGroupId shouldBe Some("settings-workspace")
-
-    val backToRoot = CommandRunnerReducer.reduce(Escape, backToWorkspace.state, registry)
+    val backToRoot = CommandRunnerReducer.reduce(Escape, backOnce.state, registry)
     val rootRunner = runnerFrom(backToRoot.state)
     rootRunner.activeSettingsSurface shouldBe None
     rootRunner.isActive shouldBe true // the palette itself stays open -- this Escape only closed the submenu stack
   }
 
-  it should "preserve preset submenu ancestry when entering a nested settings group from search results" in {
+  it should "preserve preset submenu ancestry when entering a preset group from search results" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val searchedRunner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .openSettings
-      .updateSearchTerm("prose font")
-    val runner = searchedRunner.withSelectedItem("settings-preset-prose-font")
+      .updateSearchTerm("select preset")
+    val runner = searchedRunner.withSelectedItem("settings-preset-select")
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -417,22 +397,15 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
       runtime = Runtime(uiSurfaces = List(surface))
     )
 
-    runner.selectedItem.map(_.id) shouldBe Some("settings-preset-prose-font")
+    runner.selectedItem.map(_.id) shouldBe Some("settings-preset-select")
 
     val entered       = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val enteredRunner = runnerFrom(entered.state)
 
-    enteredRunner.activeSubmenuGroupId shouldBe Some("settings-preset-prose-font")
-    enteredRunner.activeSubmenuParentGroupId shouldBe Some("settings-preset-edit")
-    enteredRunner.activeSubmenuAncestorGroupIds shouldBe Some(
-      List("settings-workspace", "settings-ui-presets", "settings-preset-edit")
-    )
-    enteredRunner.submenuBreadcrumbLabels("settings-preset-prose-font") shouldBe List(
-      "Workspace",
-      "UI Presets",
-      "Edit Preset: Writing",
-      "Prose Font"
-    )
+    enteredRunner.activeSubmenuGroupId shouldBe Some("settings-preset-select")
+    enteredRunner.activeSubmenuParentGroupId shouldBe Some("settings-ui-presets")
+    enteredRunner.activeSubmenuAncestorGroupIds shouldBe Some(List("settings-ui-presets"))
+    enteredRunner.submenuBreadcrumbLabels("settings-preset-select") shouldBe List("UI Presets", "Select Preset")
   }
 
   it should "open the matched settings leaf without filtering away its context" in {
