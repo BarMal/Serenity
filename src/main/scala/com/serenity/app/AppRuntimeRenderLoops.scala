@@ -4,6 +4,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.*
 import cats.syntax.foldable.*
+import cats.syntax.semigroup.*
 import com.serenity.config.AppConfig
 import com.serenity.diagnostics.{FrameTimings, KeyLatencyTrace, Trace}
 import com.serenity.input.*
@@ -299,8 +300,9 @@ private[serenity] object AppRuntimeRenderLoops:
     sleep: FiniteDuration => IO[Unit] = IO.sleep,
     frameClock: IO[FiniteDuration] = IO.monotonic,
     lastFrameStart: Ref[IO, Option[FiniteDuration]] = Ref.unsafe[IO, Option[FiniteDuration]](None),
-    keyLatency: KeyLatencyTrace = KeyLatencyTrace()
-  )(using logger: Logger[IO]): Stream[IO, Unit] =
+    keyLatency: KeyLatencyTrace = KeyLatencyTrace(),
+    lastDrawnState: Ref[IO, Option[AppState]] = Ref.unsafe[IO, Option[AppState]](None)
+  )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Stream[IO, Unit] =
     Stream
       .eval(
         for
@@ -317,8 +319,10 @@ private[serenity] object AppRuntimeRenderLoops:
           model <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
             stateManager.getModel
           )
-          _           <- pendingDamage.set(Damage.Nothing)
-          paintDamage <- pendingPaintDamage.getAndSet(Damage.Nothing)
+          _         <- pendingDamage.set(Damage.Nothing)
+          published <- pendingPaintDamage.getAndSet(Damage.Nothing)
+          previous  <- lastDrawnState.getAndSet(Some(model.app))
+          paintDamage = damageToModel(previous, model.app, published)
           _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(model.app)))(
             renderFull(model.app, true, None, paintDamage, renderCaches)
           )
@@ -326,6 +330,17 @@ private[serenity] object AppRuntimeRenderLoops:
         yield ()
       )
       .onFinalize(settleFastMode(fastModeSignal, pendingDamage))
+
+  /** A batch commits each event to the model as it is applied but publishes damage once per slice, so the model a frame
+    * reads can be newer than the damage it drains. Diffing against what the last frame drew covers that gap exactly
+    * (#1906); published damage still carries what no state diff can express.
+    */
+  private def damageToModel(previouslyDrawn: Option[AppState], model: AppState, published: Damage)(using
+    com.serenity.rope.Balance
+  ): Damage =
+    previouslyDrawn match
+      case Some(previous) if !(previous eq model) => published |+| DamageProducer.forTransition(previous, model)
+      case _                                      => published
 
   /** Clears fast mode unless damage arrived since the phase drained it -- and re-raises it if damage lands between that
     * check and the clear, so no wake-up is lost.

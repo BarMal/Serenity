@@ -226,6 +226,7 @@ object AppRuntime:
           )
         )
         lastFastFrameStart <- Ref.of[IO, Option[FiniteDuration]](None)
+        lastDrawnState     <- Ref.of[IO, Option[AppState]](Some(initialState))
         translatorCache    <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
         currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
@@ -280,6 +281,7 @@ object AppRuntime:
                     runtime.renderFull,
                     stateManager.renderCaches,
                     lastFrameStart = lastFastFrameStart,
+                    lastDrawnState = lastDrawnState,
                     keyLatency = runtime.frameTimings.keyLatency
                   )
 
