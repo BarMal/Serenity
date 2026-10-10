@@ -222,6 +222,8 @@ new tag.
 To verify a download, put it beside `SHA256SUMS` and run `sha256sum --check --ignore-missing SHA256SUMS`
 (`shasum -a 256 -c` on macOS).
 
-Every push to `master` also republishes the `desktop-latest` pre-release, titled "Nightly desktop build". It is a
-rolling channel, not a version: it is replaced in place and carries the unreleased changes. macOS builds are signed
+A scheduled run at 04:43 UTC every night also republishes the `desktop-latest` pre-release, titled "Nightly desktop
+build", from the tip of `master`; the "Desktop Publish" workflow can also be run by hand from the Actions tab to publish
+sooner. A push to `master` does not publish. It is a rolling channel, not a version: it is replaced in place and carries
+the unreleased changes. macOS builds are signed
 ad hoc, and Developer ID signing and notarization switch on when the `MACOS_*` secrets in `desktop-publish.yml` are set.

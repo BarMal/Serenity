@@ -1,18 +1,21 @@
 name: Desktop Publish
 
-# Two channels share this build. A push to master (or a manual dispatch) republishes the rolling `desktop-latest`
-# nightly pre-release. Pushing a `vX.Y.Z` (or `vX.Y.Z-rc.N`) tag publishes a versioned, immutable GitHub release named
-# for that version, with SHA256SUMS and the matching CHANGELOG section as its notes. See DEVELOPMENT.md, "Releasing".
+# Two channels share this build. The nightly schedule (or a manual dispatch on master) republishes the rolling
+# `desktop-latest` pre-release; a master push does not, because a three-OS build on every merge kept the publish job
+# red and queued behind scarce macOS runners (#2016, #2141). Pushing a `vX.Y.Z` (or `vX.Y.Z-rc.N`) tag publishes a
+# versioned, immutable GitHub release named for that version, with SHA256SUMS and the matching CHANGELOG section as its
+# notes. See DEVELOPMENT.md, "Releasing".
 on:
+  schedule:
+    # After the 03:17 UTC Cross-OS Tests nightly, so a red test run is visible before the build that republishes.
+    - cron: '43 4 * * *'
   push:
-    branches:
-      - master
     tags:
       - 'v[0-9]*.[0-9]*.[0-9]*'
   workflow_dispatch:
 
-# Keyed by ref so a tag build is never cancelled by a master push (or the reverse); only a newer run of the same ref
-# supersedes an older one, and a tag run is never cancelled at all.
+# Keyed by ref so a tag build is never cancelled by a nightly or manual run on master (or the reverse); only a newer
+# run of the same ref supersedes an older one, and a tag run is never cancelled at all.
 concurrency:
   group: desktop-publish-${{ github.ref }}
   cancel-in-progress: ${{ github.ref_type != 'tag' }}
@@ -416,7 +419,7 @@ jobs:
           fi
           BUILD_SHA="$(git rev-parse HEAD)"
           {
-            echo "Nightly desktop build for commit \`${BUILD_SHA}\`. This is not a release: it is rebuilt from \`master\` on every push and replaced in place. Download a versioned release for anything you intend to keep."
+            echo "Nightly desktop build for commit \`${BUILD_SHA}\`. This is not a release: it is rebuilt from \`master\` every night and replaced in place. Download a versioned release for anything you intend to keep."
             echo
             echo "Built from branch \`${GITHUB_REF_NAME}\`."
             echo
@@ -510,7 +513,8 @@ jobs:
             --verify-tag \
             "${CHANNEL_FLAGS[@]}"
 
-      # Only master feeds the nightly channel; a manual dispatch from another branch still builds and tests.
+      # Only master feeds the nightly channel (a scheduled run is always on the default branch); a manual dispatch from
+      # another branch still builds and tests.
       - name: Publish nightly desktop build
         if: github.ref == 'refs/heads/master'
         env:
