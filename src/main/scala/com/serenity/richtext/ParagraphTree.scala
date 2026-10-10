@@ -18,6 +18,11 @@ sealed trait ParagraphTree:
   def paragraphCount: Int
   def charCount: Int
 
+  /** How many paragraphs are outline headings (see [[RichTextParagraph.isOutlineHeading]]); lets [[headings]] skip
+    * every subtree without one.
+    */
+  def headingCount: Int
+
   /** The paragraph at sequence index `index`, or `None` when out of `[0, paragraphCount)`. `O(log n)`. */
   def paragraphAt(index: Int): Option[RichTextParagraph] =
     if index < 0 || index >= paragraphCount then None
@@ -30,6 +35,30 @@ sealed trait ParagraphTree:
             val leftCount = left.paragraphCount
             if i < leftCount then go(left, i) else go(right, i - leftCount)
       go(this, index)
+
+  /** The outline headings with their paragraph indices, in order. `O(h log n)` for `h` headings. */
+  def headings: List[(Int, RichTextParagraph)] =
+    def go(node: ParagraphTree, offset: Int, acc: List[(Int, RichTextParagraph)]): List[(Int, RichTextParagraph)] =
+      node match
+        case _ if node.headingCount == 0   => acc
+        case ParagraphTree.Leaf(paragraph) => (offset, paragraph) :: acc
+        case ParagraphTree.Branch(left, right, _, _) =>
+          go(left, offset, go(right, offset + left.paragraphCount, acc))
+        case ParagraphTree.Empty => acc
+    go(this, 0, Nil)
+
+  /** True when both trees hold equal paragraphs in the same order. Subtrees shared by reference, and equally split
+    * subtrees, are compared without flattening, so two versions of a document one edit apart compare in `O(log n + k)`
+    * rather than `O(n)`.
+    */
+  def sameParagraphsAs(other: ParagraphTree): Boolean =
+    (this eq other) ||
+      (paragraphCount == other.paragraphCount && charCount == other.charCount && ((this, other) match
+        case (ParagraphTree.Leaf(mine), ParagraphTree.Leaf(theirs)) => mine == theirs
+        case (ParagraphTree.Branch(myLeft, myRight, _, _), ParagraphTree.Branch(theirLeft, theirRight, _, _))
+            if myLeft.paragraphCount == theirLeft.paragraphCount =>
+          myLeft.sameParagraphsAs(theirLeft) && myRight.sameParagraphsAs(theirRight)
+        case _ => toParagraphs == other.toParagraphs))
 
   /** Flattens the tree back into paragraph order. `O(n)`, with `O(log n)` recursion depth. */
   def toParagraphs: List[RichTextParagraph] =
@@ -96,7 +125,10 @@ sealed trait ParagraphTree:
         val newLeft  = left.mapAll(f)
         val newRight = right.mapAll(f)
         if (newLeft eq left) && (newRight eq right) then branch
-        else ParagraphTree.Branch(newLeft, newRight, count, newLeft.charCount + newRight.charCount)
+        else
+          ParagraphTree.Branch(newLeft, newRight, count, newLeft.charCount + newRight.charCount)(
+            newLeft.headingCount + newRight.headingCount
+          )
 
   /** Replaces the paragraphs in `[startIndex, endIndex]` (inclusive, clamped to `[0, paragraphCount - 1]` by the
     * caller) with `replacement`, via `O(log n)` split/link plus the `O(m)` cost of building the replacement span.
@@ -111,17 +143,20 @@ object ParagraphTree:
   case object Empty extends ParagraphTree:
     def paragraphCount: Int = 0
     def charCount: Int      = 0
+    def headingCount: Int   = 0
 
   final case class Leaf(paragraph: RichTextParagraph) extends ParagraphTree:
     def paragraphCount: Int = 1
     def charCount: Int      = paragraph.plainTextLength
+    def headingCount: Int   = if paragraph.isOutlineHeading then 1 else 0
 
   final case class Branch private[ParagraphTree] (
       left: ParagraphTree,
       right: ParagraphTree,
       paragraphCount: Int,
       charCount: Int
-  ) extends ParagraphTree
+  )(val headingCount: Int)
+      extends ParagraphTree
 
   private val BalanceFactor = 3
 
@@ -185,7 +220,10 @@ object ParagraphTree:
       case (Empty, Empty)  => Empty
       case (single, Empty) => single
       case (Empty, single) => single
-      case _ => Branch(left, right, left.paragraphCount + right.paragraphCount, left.charCount + right.charCount)
+      case _ =>
+        Branch(left, right, left.paragraphCount + right.paragraphCount, left.charCount + right.charCount)(
+          left.headingCount + right.headingCount
+        )
 
   /** Rebalances `left`/`right` into one node, applying a single or double rotation once one side holds more than
     * [[BalanceFactor]] times the other's paragraph count.

@@ -21,7 +21,7 @@ private[models] object ContextualToolbarRichTextStyle:
     document: RichTextDocument
   ): Option[com.serenity.richtext.RichTextParagraph] =
     val paragraphIndex = currentRange(buffer, document).start.paragraphIndex
-    document.paragraphs.lift(paragraphIndex)
+    document.paragraphAt(paragraphIndex)
 
   def activeStyle(
     buffer: Buffer,
@@ -40,8 +40,8 @@ private[models] object ContextualToolbarRichTextStyle:
     document: RichTextDocument
   ): RichTextStyle =
     val range = richTextRange(selection)
-    document.paragraphs
-      .lift(range.start.paragraphIndex)
+    document
+      .paragraphAt(range.start.paragraphIndex)
       .flatMap(paragraph => styleAtParagraphOffset(paragraph, range.start.offset))
       .getOrElse(styleAtCursor(selection.focus, document).getOrElse(RichTextStyle.empty))
 
@@ -49,9 +49,9 @@ private[models] object ContextualToolbarRichTextStyle:
     cursor: CursorPosition,
     document: RichTextDocument
   ): Option[RichTextStyle] =
-    val paragraphIndex = cursor.line.max(0).min(document.paragraphs.length - 1)
-    document.paragraphs
-      .lift(paragraphIndex)
+    val paragraphIndex = cursor.line.max(0).min(document.paragraphCount - 1)
+    document
+      .paragraphAt(paragraphIndex)
       .flatMap(paragraph => styleAtParagraphOffset(paragraph, (cursor.column - 1).max(0)))
 
   def styleAtParagraphOffset(
@@ -93,9 +93,9 @@ private[models] object ContextualToolbarRichTextStyle:
     cursor: CursorPosition,
     document: RichTextDocument
   ): RichTextPosition =
-    val paragraphIndex = cursor.line.max(0).min((document.paragraphs.length - 1).max(0))
-    val offset = document.paragraphs
-      .lift(paragraphIndex)
+    val paragraphIndex = cursor.line.max(0).min((document.paragraphCount - 1).max(0))
+    val offset = document
+      .paragraphAt(paragraphIndex)
       .map(_.plainText.length)
       .map(length => cursor.column.max(0).min(length))
       .getOrElse(0)

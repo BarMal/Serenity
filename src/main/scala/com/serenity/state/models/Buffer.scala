@@ -5,6 +5,7 @@ import java.time.Instant
 
 import cats.Order
 import cats.data.NonEmptyList
+import com.serenity.document.{HeadingIndexCell, MarkdownHeadingIndex}
 import com.serenity.io.{DocumentFormat, DocumentRevision, FileType}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{FidelityReport, InlineAtom, RichTextDocument, RichTextStyle}
@@ -123,8 +124,13 @@ final case class Document(
     mixedNoticePending: Boolean = false,
     // What took `content` through its recent versions (#1838); transient, so a session never stores it and equality
     // ignores it.
-    changes: ChangeLog = ChangeLog.empty
+    changes: ChangeLog = ChangeLog.empty,
+    // The Markdown headings of `content` (#1848); a cache shared by every copy of this document, ignored by equality.
+    headingIndex: HeadingIndexCell = new HeadingIndexCell
 ):
+
+  /** The headings of `content` read as Markdown, advanced from the last read rather than parsed afresh. */
+  def markdownHeadings: MarkdownHeadingIndex = headingIndex.indexFor(content)
 
   /** The line ending saved from now on. Marks the document dirty whenever that changes the bytes a save writes, which
     * includes picking the detected ending for a mixed file: that save rewrites the minority lines.

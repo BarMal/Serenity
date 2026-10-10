@@ -180,3 +180,50 @@ class ParagraphTreeSpec extends AnyFlatSpec with Matchers:
     val result = tree.forallInRange(50, 60)((_, _) => false)
     result shouldBe true
   }
+
+  private def heading(text: String): RichTextParagraph =
+    RichTextParagraph.plain(text, role = ParagraphRole.Heading(1))
+
+  it should "list its heading paragraphs with their indices" in {
+    val paragraphs =
+      linear(1_000).updated(3, heading("three")).updated(640, heading("six-forty")).updated(7, heading("  "))
+    val tree = ParagraphTree.fromParagraphs(paragraphs)
+
+    tree.headings.map((index, found) => index -> found.plainText) shouldBe List(3 -> "three", 640 -> "six-forty")
+    tree.headingCount shouldBe 2
+    ParagraphTree.fromParagraphs(linear(50)).headings shouldBe Nil
+  }
+
+  it should "keep heading counts through splits, links and range updates" in {
+    val tree =
+      ParagraphTree.fromParagraphs(linear(200).updated(10, heading("ten")).updated(150, heading("one-fifty")))
+    val updated = tree.updatedRange(10, 10)((found, _) => found.copy(role = ParagraphRole.Body))
+
+    updated.headings.map(_._1) shouldBe List(150)
+    tree.replaceSlice(100, 120, List(heading("new"))).headings.map(_._1) shouldBe List(10, 100, 130)
+  }
+
+  it should "compare equal to a tree of equal paragraphs however it is shaped" in {
+    val paragraphs = linear(500)
+    val built      = ParagraphTree.fromParagraphs(paragraphs)
+    val spliced = ParagraphTree.link(
+      ParagraphTree.fromParagraphs(paragraphs.take(37)),
+      ParagraphTree.fromParagraphs(paragraphs.drop(37))
+    )
+
+    built.sameParagraphsAs(spliced) shouldBe true
+    built.sameParagraphsAs(built.updatedRange(250, 250)((found, _) => found.derivedWith(Nil))) shouldBe false
+    built.sameParagraphsAs(built.replaceSlice(0, 0, Nil)) shouldBe false
+  }
+
+  it should "share every untouched leaf with the tree before an edit to one paragraph" in {
+    val before = ParagraphTree.fromParagraphs(linear(2_000))
+    val after  = before.updatedRange(1_000, 1_000)((found, _) => found.replaceRange(0, 0, "x"))
+
+    (0 until 2_000).filterNot(_ == 1_000).foreach { index =>
+      withClue(s"paragraph $index: ")(
+        (after.paragraphAt(index).orNull eq before.paragraphAt(index).orNull) shouldBe true
+      )
+    }
+    after.paragraphAt(1_000).map(_.plainText) shouldBe Some("xline-1000")
+  }

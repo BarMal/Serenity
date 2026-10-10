@@ -1,5 +1,13 @@
 package com.serenity
 
+import com.serenity.richtext.{
+  InlineMark,
+  ParagraphRole,
+  RichTextDocument,
+  RichTextParagraph,
+  RichTextPosition,
+  RichTextRange
+}
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
 import com.serenity.ui.layout.{DirtyLineDiff, TextLayoutSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -162,4 +170,68 @@ class DirtyLineDiffSpec extends AnyFlatSpec with Matchers:
 
   it should "leave an empty dirty set empty" in {
     DirtyLineDiff.dilate(Set.empty, rowCount = 5) shouldBe Set.empty[Int]
+  }
+
+  private def richDocument(texts: String*): RichTextDocument =
+    RichTextDocument(texts.toList.map(text => RichTextParagraph.plain(text)))
+
+  private def richSnapshot(document: RichTextDocument, lines: Vector[TextVisualLine]): TextLayoutSnapshot =
+    snapshot(lines).copy(richTextDocument = Some(document))
+
+  private def richLines(texts: String*): Vector[TextVisualLine] =
+    texts.zipWithIndex.map((text, line) => visualLine(line, text)).toVector
+
+  private def atStartOfParagraph(index: Int): RichTextRange =
+    RichTextRange(RichTextPosition(index, 0), RichTextPosition(index, 0))
+
+  "DirtyLineDiff with rich text" should "mark only the edited paragraph's row dirty (#1855)" in {
+    val document = richDocument("alpha", "beta", "gamma")
+    val before   = richSnapshot(document, richLines("alpha", "beta", "gamma"))
+    val after    = richSnapshot(document.replaceRange(atStartOfParagraph(1), "x"), richLines("alpha", "xbeta", "gamma"))
+
+    DirtyLineDiff.dirtyRows(Some(before), after) shouldBe Set(1)
+  }
+
+  it should "mark a restyled paragraph's row dirty although its text and layout are unchanged" in {
+    val document = richDocument("alpha", "beta", "gamma")
+    val before   = richSnapshot(document, richLines("alpha", "beta", "gamma"))
+    val bold =
+      document.applyMark(RichTextRange(RichTextPosition(1, 0), RichTextPosition(1, 4)), InlineMark.Bold)
+    val after = richSnapshot(bold, richLines("alpha", "beta", "gamma"))
+
+    DirtyLineDiff.dirtyRows(Some(before), after) shouldBe Set(1)
+  }
+
+  it should "report no dirty rows for an equal document that is a different instance" in {
+    val before = richSnapshot(richDocument("alpha", "beta"), richLines("alpha", "beta"))
+    val after  = richSnapshot(richDocument("alpha", "beta"), richLines("alpha", "beta"))
+
+    DirtyLineDiff.dirtyRows(Some(before), after) shouldBe Set.empty[Int]
+  }
+
+  it should "mark every row dirty when the paragraph count changes" in {
+    val before = richSnapshot(richDocument("alpha", "beta"), richLines("alpha", "beta"))
+    val after  = richSnapshot(richDocument("alpha", "beta", "gamma"), richLines("alpha", "beta", "gamma"))
+
+    DirtyLineDiff.dirtyRows(Some(before), after) shouldBe Set(0, 1, 2)
+  }
+
+  it should "mark the rows from a changed paragraph role down, since a heading size moves what follows" in {
+    val document = richDocument("alpha", "beta", "gamma")
+    val before   = richSnapshot(document, richLines("alpha", "beta", "gamma"))
+    val heading  = document.setParagraphRole(atStartOfParagraph(1), ParagraphRole.Heading(1))
+    val after    = richSnapshot(heading, richLines("alpha", "beta", "gamma"))
+
+    DirtyLineDiff.dirtyRows(Some(before), after) shouldBe Set(1, 2)
+  }
+
+  it should "mark the rows below a row whose measured height changed" in {
+    val document = richDocument("alpha", "beta", "gamma")
+    val before   = richSnapshot(document, richLines("alpha", "beta", "gamma"))
+    val taller   = richLines("alpha", "beta", "gamma").updated(0, visualLine(0, "alpha").copy(heightPx = 30))
+    val bold =
+      document.applyMark(RichTextRange(RichTextPosition(0, 0), RichTextPosition(0, 5)), InlineMark.Bold)
+    val after = richSnapshot(bold, taller)
+
+    DirtyLineDiff.dirtyRows(Some(before), after) shouldBe Set(0, 1, 2)
   }
