@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-10-10
+
+- Stopped a text setting that reads as a number (a comment author of `4e9`, say) coming back changed after a save: it was written bare and read back as the number 4000000000. It is now written quoted whenever the loader would read it as anything but the same text.
+
 ### 2026-10-09
 
 - Added recent folders to Open Recent: every folder opened as the project root, by Open Folder, on the command line or handed over by a later launch, is remembered (most recent first, once however its path is spelt, twenty at most) in an Open Recent Folder submenu beside Open Recent and on the start page after the recent files, and choosing one opens it in the Explorer as Open Folder does. They are saved with the session (schema version 6; an older session loads with none), the start page leaves out a folder that has gone, and Clear Recent now forgets the folders as well as the files.
