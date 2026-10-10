@@ -10,7 +10,7 @@ enum LspEffect:
   def documentUri: Option[String] =
     this match
       case FileOpened(uri, _, _)                   => Some(uri)
-      case FileChanged(uri, _, _, _)               => Some(uri)
+      case FileChanged(uri, _, _, _, _)            => Some(uri)
       case FileClosed(uri, _)                      => Some(uri)
       case HoverRequested(uri, _, _, _, _)         => Some(uri)
       case CompletionRequested(uri, _, _, _, _)    => Some(uri)
@@ -24,7 +24,15 @@ enum LspEffect:
 
   // The text travels as the rope: the characters are only collected when a server is sent them.
   case FileOpened(uri: String, languageId: LanguageId, text: Rope)
-  case FileChanged(uri: String, languageId: LanguageId, text: Rope, version: Int)
+
+  case FileChanged(
+      uri: String,
+      languageId: LanguageId,
+      text: Rope,
+      version: Int,
+      delta: Option[DocumentDelta] = None
+  )
+
   case FileClosed(uri: String, languageId: LanguageId)
   case HoverRequested(uri: String, languageId: LanguageId, line: Int, character: Int, anchor: CursorPosition)
   case CompletionRequested(uri: String, languageId: LanguageId, line: Int, character: Int, anchor: CursorPosition)

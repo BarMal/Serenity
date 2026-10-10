@@ -46,7 +46,8 @@ final class VisualLineIndexStore[K](maxEntries: Int):
         val recorded = for
           current <- revision
           since   <- entry.version
-          change  <- current.changesSince(since)
+          if since != current.version
+          change <- current.changesSince(since)
           if change.oldLength == entry.content.weight && change.newLength == content.weight
         yield change
         recorded.fold(VisualLineIndexStore.followEdit(entry.index, entry.content, content))(

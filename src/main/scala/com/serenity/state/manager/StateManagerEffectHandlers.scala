@@ -248,8 +248,8 @@ final private[manager] class StateManagerEffectHandlers(
     effect match
       case LspQueueEffect.Enqueue(effect) =>
         lspQueue.enqueue(effect)
-      case LspQueueEffect.DocumentChanged(uri, languageId, text) =>
-        lspQueue.enqueueDocumentChange(uri, languageId, text)
+      case LspQueueEffect.DocumentChanged(uri, languageId, text, delta) =>
+        lspQueue.enqueueDocumentChange(uri, languageId, text, delta)
 
   private[manager] def updateConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig

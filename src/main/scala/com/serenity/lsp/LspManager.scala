@@ -197,7 +197,7 @@ object LspManager:
                 applyEvent(LspEvent.LspSemanticTokensUnavailable(rawUri))
           }
 
-      case LspEffect.FileChanged(rawUri, languageId, text, version) =>
+      case LspEffect.FileChanged(rawUri, languageId, text, version, delta) =>
         val uri = DocumentUri(rawUri)
         invalidateDocument(uri, requestContexts, requestFibers) >>
           documentVersions.update(_ + (uri -> version)) >>
@@ -205,11 +205,17 @@ object LspManager:
             .connectionFor(uri)
             .flatMap {
               case Some(connection) =>
-                openDocuments.get.map(_.textOf(uri)).flatMap { previous =>
-                  LspDidChange.send(connection, uri, version, text, openDocuments, logger).flatMap {
+                openDocuments.get.flatMap { registry =>
+                  val previous = registry.textOf(uri)
+                  val known = for
+                    change <- delta
+                    held   <- previous
+                    if change.appliesTo(registry.versionOf(uri), held, text)
+                  yield change.change
+                  LspDidChange.send(connection, uri, version, text, openDocuments, logger, known).flatMap {
                     case true =>
-                      openDocuments.update(_.served(uri, text)) >>
-                        previous.traverse_(semanticTokens.documentEdited(rawUri, _, text))
+                      openDocuments.update(_.served(uri, text, delta.map(_.toVersion))) >>
+                        previous.traverse_(semanticTokens.documentEdited(rawUri, _, text, known))
                     case false => IO.unit
                   }
                 } >> semanticTokens.refreshAfterQuiet(rawUri, languageId)

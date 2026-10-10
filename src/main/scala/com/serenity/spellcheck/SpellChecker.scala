@@ -147,12 +147,24 @@ object SpellChecker:
     if !config.normalized.enabled then SpellCheckCacheEntry(fingerprint, Nil)
     else if dictionary.missingDictionary.nonEmpty then SpellCheckCacheEntry(fingerprint, loadFailures)
     else
+      val reusable = previous.filter(_.fingerprint.sameDictionaryAndConfig(fingerprint))
       val analysis = ParagraphSpellCheck.analyze(
         buffer.document.content,
-        previous.filter(_.fingerprint.sameDictionaryAndConfig(fingerprint)).flatMap(_.analysis),
-        dictionary
+        reusable.flatMap(_.analysis),
+        dictionary,
+        for
+          entry    <- reusable
+          version  <- entry.contentVersion
+          analysed <- entry.analysis
+          change   <- buffer.document.changeSinceText(version, analysed.content)
+        yield change
       )
-      SpellCheckCacheEntry(fingerprint, loadFailures ++ analysis.unknownWords, Some(analysis))
+      SpellCheckCacheEntry(
+        fingerprint,
+        loadFailures ++ analysis.unknownWords,
+        Some(analysis),
+        Some(buffer.document.contentVersion)
+      )
 
   /** Pure: `dictionaryFingerprints` must be discovered once (via `SpellCheckConfig.discoverDictionaryFingerprints` or
     * `DictionaryLoader.loadSnapshot`, both `IO.blocking`) and passed in -- this method never reads the filesystem, so

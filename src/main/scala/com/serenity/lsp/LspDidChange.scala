@@ -4,7 +4,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.lsp.OpenDocument.textOf
 import com.serenity.lsp.client.{DocumentUri, LspConnection, LspMethod, LspProtocol}
 import com.serenity.lsp.model.TextDocumentSyncKind
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.{Balance, ChangeSet, Rope}
 import org.typelevel.log4cats.Logger
 
 private[lsp] object LspDidChange:
@@ -15,6 +15,8 @@ private[lsp] object LspDidChange:
     * diff against the document's previous text for `Incremental`, the existing full-text notification for `Full`, and
     * nothing at all for `None` -- a server that opted out of document sync should not be sent notifications for it
     * regardless of how expensive skipping them is.
+    *
+    * A `change` from the held text to `text` is sent as it is; the two texts are compared only when there is none.
     *
     * The text is collected here, once, and only for `Full`: the lane hands over ropes, and an incremental change is
     * found by walking what the edit left shared between the two.
@@ -30,14 +32,18 @@ private[lsp] object LspDidChange:
     version: Int,
     text: Rope,
     openDocuments: Ref[IO, OpenDocument.Registry],
-    logger: Logger[IO]
+    logger: Logger[IO],
+    change: Option[ChangeSet] = None
   ): IO[Boolean] =
     connection.syncKind.flatMap {
       case TextDocumentSyncKind.None => IO.pure(true)
       case syncKind =>
         openDocuments.get.map(_.textOf(uri).getOrElse(text)).flatMap { previous =>
-          IO.delay(LspProtocol.didChangeParams(uri, version, previous, text, syncKind))
-            .flatMap(connection.sendNotification(LspMethod("textDocument/didChange"), _))
+          IO.delay(
+            change.fold(LspProtocol.didChangeParams(uri, version, previous, text, syncKind))(
+              LspProtocol.didChangeParams(uri, version, previous, text, _, syncKind)
+            )
+          ).flatMap(connection.sendNotification(LspMethod("textDocument/didChange"), _))
             .as(true)
             .handleErrorWith(ex => logger.error(ex)(s"[LSP] didChange failed: ${uri.value}").as(false))
         }

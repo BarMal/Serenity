@@ -21,7 +21,14 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class LspQueueSpec extends AnyFlatSpec with Matchers:
 
-  given Balance           = Balance.default
+  given Balance = Balance.default
+
+  /** The delta says how the edit changed the text; these specs are about which text and version reach the lane. */
+  private def withoutDelta(effect: LspEffect): LspEffect =
+    effect match
+      case changed: LspEffect.FileChanged => changed.copy(delta = None)
+      case other                          => other
+
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def makeStateManager(): StateManager =
@@ -157,7 +164,12 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
       currentText shouldBe defined
       effects.head shouldBe LspEffect.FileOpened(tempFile.toUri.toString, LanguageId.Scala, RopeText("object Change"))
-      effects(1) shouldBe LspEffect.FileChanged(tempFile.toUri.toString, LanguageId.Scala, currentText.get, 2)
+      withoutDelta(effects(1)) shouldBe LspEffect.FileChanged(
+        tempFile.toUri.toString,
+        LanguageId.Scala,
+        currentText.get,
+        2
+      )
     finally
       Files.deleteIfExists(tempFile)
       sm.applyEvent(Quit).unsafeRunSync()
@@ -202,7 +214,12 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
       effects should have size 2
       currentText shouldBe defined
-      effects(1) shouldBe LspEffect.FileChanged(tempFile.toUri.toString, LanguageId.Scala, currentText.get, 2)
+      withoutDelta(effects(1)) shouldBe LspEffect.FileChanged(
+        tempFile.toUri.toString,
+        LanguageId.Scala,
+        currentText.get,
+        2
+      )
     finally
       Files.deleteIfExists(tempFile)
       sm.applyEvent(Quit).unsafeRunSync()

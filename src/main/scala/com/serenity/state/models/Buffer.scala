@@ -196,13 +196,14 @@ final case class Document(
   /** What took `before`, an earlier state of this document, to this one; `None` when it was not an edit this document
     * recorded (a reload, a restored session) or the record no longer reaches back that far.
     */
-  def changeFrom(before: Document): Option[ChangeSet] =
-    if before.contentVersion == contentVersion then
-      Option.when(before.content eq content)(ChangeSet.identity(content.weight))
-    else
-      changesSince(before.contentVersion).filter(change =>
-        change.oldLength == before.content.weight && change.newLength == content.weight
-      )
+  def changeFrom(before: Document): Option[ChangeSet] = changeSinceText(before.contentVersion, before.content)
+
+  /** [[changeFrom]] for a state of this document remembered as its version and text, the text standing guard for a
+    * version that was not bumped.
+    */
+  def changeSinceText(version: Long, text: Rope): Option[ChangeSet] =
+    if version == contentVersion then Option.when(text eq content)(ChangeSet.identity(content.weight))
+    else changesSince(version).filter(change => change.oldLength == text.weight && change.newLength == content.weight)
 
   /** Whether the text differs from `before`'s: read off the recorded change when there is one, compared otherwise. */
   def textDiffersFrom(before: Document): Boolean =
