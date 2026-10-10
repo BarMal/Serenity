@@ -36,6 +36,8 @@ object BenchmarkRunner:
       "damage.scroll.cells",
       "damage.caret_move_100k_lines.rows",
       "damage.caret_move_100k_lines.cells",
+      "laptop.render.typing_frame_2x",
+      "laptop.render.scroll_frame_2x",
       "equals.appstate.same_reference",
       "equals.appstate.shared_fields_different_instance",
       "equals.appstate.independent_equal_content",

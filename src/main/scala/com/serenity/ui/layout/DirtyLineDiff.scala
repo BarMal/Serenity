@@ -111,7 +111,8 @@ object DirtyLineDiff:
       case (None, None)           => false
       case _                      => true
 
-  private def comparableShape(previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Boolean =
+  /** Whether rows of `previous` and `current` can be compared at all: nothing about the whole snapshot moved. */
+  def comparableShape(previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Boolean =
     previous.panelWidthPx == current.panelWidthPx &&
       previous.lineHeightPx == current.lineHeightPx &&
       previous.ascentPx == current.ascentPx &&

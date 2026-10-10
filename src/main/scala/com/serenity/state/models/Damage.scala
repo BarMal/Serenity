@@ -20,6 +20,12 @@ enum Damage:
     * grow with the buffer, so a scroll or a reclassification of a 100k-line buffer costs no more than of a short one.
     */
   case BufferAll(bufferId: BufferId)
+
+  /** One buffer's viewport moved: its visible rows now show other lines, though no row's own pixels changed. A consumer
+    * that matches rows by identity can reuse them where they land; to every other consumer it damages every row, as
+    * [[BufferAll]] does, and [[rowFactsFor]] reports it so.
+    */
+  case BufferScrolled(bufferId: BufferId)
   case PaneChrome(paneId: PaneId)
   case Surface(surfaceId: SurfaceId)
 
@@ -54,19 +60,25 @@ object Damage:
       case _                                            => Set.empty[Int]
     }
 
-  /** What `damage` says about one buffer's rows: whether it names them all ([[BufferAll]]), the whole lines it names,
-    * and the [[BufferCells]] spans kept apart from those, so a caller that knows how a line wraps can dirty only the
-    * visual rows a span falls on.
+  /** What `damage` says about one buffer's rows: whether it names them all ([[BufferAll]], or a scroll, which moves
+    * every row), the whole lines it names, and the [[BufferCells]] spans kept apart from those, so a caller that knows
+    * how a line wraps can dirty only the visual rows a span falls on.
+    *
+    * `scrollOnly` says `everyRow` holds because the viewport moved and for no other reason: rows whose line the other
+    * facts leave alone are unchanged wherever they now sit, for a caller that can find where that is.
     */
-  final case class BufferRowFacts(everyRow: Boolean, lines: Set[Int], spans: List[BufferCells])
+  final case class BufferRowFacts(everyRow: Boolean, lines: Set[Int], spans: List[BufferCells], scrollOnly: Boolean)
 
   def rowFactsFor(bufferId: BufferId, damage: Damage): BufferRowFacts =
-    flatten(damage).foldLeft(BufferRowFacts(everyRow = false, Set.empty, Nil)) {
+    val facts = flatten(damage).foldLeft(BufferRowFacts(everyRow = false, Set.empty, Nil, scrollOnly = false)) {
       case (facts, BufferAll(id)) if id == bufferId                    => facts.copy(everyRow = true)
+      case (facts, BufferScrolled(id)) if id == bufferId               => facts.copy(scrollOnly = true)
       case (facts, BufferRows(id, rows)) if id == bufferId             => facts.copy(lines = facts.lines ++ rows)
       case (facts, cells @ BufferCells(id, _, _, _)) if id == bufferId => facts.copy(spans = cells :: facts.spans)
       case (facts, _)                                                  => facts
     }
+    if facts.everyRow then facts.copy(scrollOnly = false)
+    else facts.copy(everyRow = facts.scrollOnly)
 
   def damagesEveryRow(bufferId: BufferId, damage: Damage): Boolean =
     rowFactsFor(bufferId, damage).everyRow
@@ -91,8 +103,8 @@ object Damage:
     */
   def isBufferRowsOnly(damage: Damage): Boolean =
     flatten(damage).forall {
-      case BufferRows(_, _) | BufferCells(_, _, _, _) | BufferAll(_) => true
-      case _                                                         => false
+      case BufferRows(_, _) | BufferCells(_, _, _, _) | BufferAll(_) | BufferScrolled(_) => true
+      case _                                                                             => false
     }
 
   /** As [[isBufferRowsOnly]], also allowing [[Chrome]] and [[PaneChrome]]: the status row and each pane's header have a
@@ -100,8 +112,9 @@ object Damage:
     */
   def isBufferRowsOrChromeOnly(damage: Damage): Boolean =
     flatten(damage).forall {
-      case BufferRows(_, _) | BufferCells(_, _, _, _) | BufferAll(_) | Chrome | PaneChrome(_) => true
-      case _                                                                                  => false
+      case BufferRows(_, _) | BufferCells(_, _, _, _) | BufferAll(_) | BufferScrolled(_) | Chrome | PaneChrome(_) =>
+        true
+      case _ => false
     }
 
   def touchesChrome(damage: Damage): Boolean =
@@ -147,6 +160,8 @@ object Damage:
     else
       val everyRow: Set[BufferId] = items.collect { case BufferAll(id) => id }
 
+      val scrolled: Set[BufferId] = items.collect { case BufferScrolled(id) if !everyRow.contains(id) => id }
+
       val bufferRows: Map[BufferId, Set[Int]] =
         items.foldLeft(Map.empty[BufferId, Set[Int]]) {
           case (acc, BufferRows(id, rows)) if !everyRow.contains(id) =>
@@ -170,6 +185,7 @@ object Damage:
       val leaves: Set[Damage] =
         chromeAndSurfaces ++
           everyRow.map(BufferAll.apply) ++
+          scrolled.map(BufferScrolled.apply) ++
           bufferRows.map { case (id, rows) => BufferRows(id, rows) } ++
           cellsNotSubsumedByRows.valuesIterator.flatMap(mergeSpans)
 

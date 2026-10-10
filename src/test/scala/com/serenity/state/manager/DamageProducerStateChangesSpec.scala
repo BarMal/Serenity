@@ -217,8 +217,42 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
         )
       )
 
-      DamageProducer.forTransition(before, after) shouldBe Damage.BufferAll(bufferId)
+      DamageProducer.forTransition(before, after) shouldBe Damage.BufferScrolled(bufferId)
     }
+
+  it should "report every row, not a scroll, when the viewport is resized or scrolled sideways" in {
+    val before = stateWithContent("first\nsecond\nthird")
+    def withViewport(change: Viewport => Viewport) =
+      before.copy(persisted =
+        before.persisted.copy(buffers =
+          before.persisted.buffers.updated(
+            bufferId,
+            before.persisted.buffers(bufferId).copy(viewport = change(before.persisted.buffers(bufferId).viewport))
+          )
+        )
+      )
+
+    DamageProducer.forTransition(before, withViewport(_.copy(leftColumn = 4))) shouldBe Damage.BufferAll(bufferId)
+    DamageProducer.forTransition(before, withViewport(_.copy(visibleLines = 3))) shouldBe Damage.BufferAll(bufferId)
+  }
+
+  it should "report nothing when only the placement of the viewport changes, since nothing painted depends on it" in {
+    val before = stateWithContent("first\nsecond\nthird")
+    val after = before.copy(persisted =
+      before.persisted.copy(buffers =
+        before.persisted.buffers.updated(
+          bufferId,
+          before.persisted
+            .buffers(bufferId)
+            .copy(viewport =
+              before.persisted.buffers(bufferId).viewport.copy(placement = ViewportPlacement.FollowCaret)
+            )
+        )
+      )
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Nothing
+  }
 
   it should "report no damage from scrolling when the viewport does not actually change" in {
     val before = stateWithContent("first\nsecond\nthird")

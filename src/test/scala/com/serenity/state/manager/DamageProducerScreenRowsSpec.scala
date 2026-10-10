@@ -37,7 +37,7 @@ class DamageProducerScreenRowsSpec extends AnyFlatSpec with Matchers:
     val before = stateWithContent(hundredThousandLines)
     val after  = withBuffer(before)(_.copy(viewport = Viewport.default.copy(topLine = 50_000)))
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.BufferAll(bufferId)
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferScrolled(bufferId)
   }
 
   "Language damage" should "be one bounded fact on a 100k-line buffer" in {

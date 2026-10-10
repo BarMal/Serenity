@@ -28,18 +28,25 @@ class Java2DRenderSurface(
     deviceScaleX: Double = 1.0,
     deviceScaleY: Double = 1.0,
     contentPersists: Boolean = false,
-    layerCacheOwnerOverride: Option[ScreenIdentity] = None
+    layerCacheOwnerOverride: Option[ScreenIdentity] = None,
+    labelSprites: LabelSprites = LabelSprites.shared
 ) extends RenderSurface
     with TextDrawing
     with PixelDrawing
     with Effects
     with PanelOutlineDrawing
-    with LayerBufferSupport:
+    with LayerBufferSupport
+    with PixelCopying:
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
   override def effects: Option[Effects]                   = Some(this)
   override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
   override def layerBuffers: Option[LayerBufferSupport]   = Some(this)
+
+  override def addressesPixels: Boolean = true
+
+  override def pixelCopying: Option[PixelCopying] =
+    Option.when(isWhole(deviceScaleX) && isWhole(deviceScaleY))(this)
 
   override def layerCacheOwner: ScreenIdentity = layerCacheOwnerOverride.getOrElse(super.layerCacheOwner)
 
@@ -118,6 +125,71 @@ class Java2DRenderSurface(
           else g.clipRect(0, 0, cellGridWidthPx, cellGridHeightPx)
           g.drawString(s, xPx, (yPx + ascentPx).toFloat)
         finally g.setClip(savedClip)
+
+  /** Where a label's ink lands in device pixels: its origin on the pixel grid plus the sixteenth of a pixel it starts
+    * past it, and the integral device scale it was drawn at.
+    */
+  final private case class LabelAnchor(
+      deviceX: Int,
+      deviceBaseline: Int,
+      phaseSixteenths: Int,
+      scaleX: Int,
+      scaleY: Int
+  )
+
+  /** Only an integral device scale puts a label's baseline on a whole device pixel, which a sprite needs: it is blitted
+    * 1:1, never resampled.
+    */
+  private def labelAnchor(xPx: Float, baselinePx: Int): Option[LabelAnchor] =
+    val transform      = g.getTransform
+    val deviceBaseline = transform.getTranslateY + transform.getScaleY * baselinePx
+    val axisAligned    = transform.getShearX == 0.0 && transform.getShearY == 0.0
+    Option.when(
+      axisAligned && isWhole(transform.getScaleX) && isWhole(transform.getScaleY) && transform.getScaleX >= 1.0 &&
+        transform.getScaleY >= 1.0 && isWhole(deviceBaseline)
+    ) {
+      val sixteenths = math.round((transform.getTranslateX + transform.getScaleX * xPx) * 16.0)
+      LabelAnchor(
+        Math.floorDiv(sixteenths, 16L).toInt,
+        math.rint(deviceBaseline).toInt,
+        Math.floorMod(sixteenths, 16L).toInt,
+        transform.getScaleX.toInt,
+        transform.getScaleY.toInt
+      )
+    }
+
+  private def isWhole(value: Double): Boolean = math.abs(value - math.rint(value)) < 1e-6
+
+  override def drawLabelPx(
+    xPx: Float,
+    yPx: Int,
+    bgWidthPx: Float,
+    lineHeightPx: Int,
+    ascentPx: Int,
+    s: String
+  ): Unit =
+    labelAnchor(xPx, yPx + ascentPx) match
+      case Some(anchor) if s.nonEmpty && g.getClip == null =>
+        drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, "")
+        blitLabel(anchor, s)
+      case _ => drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, s)
+
+  private def blitLabel(anchor: LabelAnchor, s: String): Unit =
+    val sprite = labelSprites.spriteFor(
+      LabelSprites.Key(g.getFont, anchor.scaleX, anchor.scaleY, fgRef.get().getRGB, s, anchor.phaseSixteenths),
+      renderContext
+    )
+    val device = image.createGraphics()
+    try
+      device.setComposite(g.getComposite)
+      device.clipRect(0, 0, cellGridWidthPx * anchor.scaleX, cellGridHeightPx * anchor.scaleY)
+      val _ = device.drawImage(
+        sprite.image,
+        anchor.deviceX - sprite.originX,
+        anchor.deviceBaseline - sprite.baseline,
+        Java2DRenderSurface.NoOpImageObserver
+      )
+    finally device.dispose()
 
   def setForegroundColor(color: RenderColor): Unit = fgRef.set(Java2DRenderSurface.awtColor(color, fgRef.get()))
   def setBackgroundColor(color: RenderColor): Unit = bgRef.set(Java2DRenderSurface.awtColor(color, bgRef.get()))
@@ -272,6 +344,23 @@ class Java2DRenderSurface(
     try
       val _ = rawGraphics.drawImage(layerImage.toAwt, 0, 0, Java2DRenderSurface.NoOpImageObserver)
     finally rawGraphics.dispose()
+
+  /** In device pixels on an untransformed graphics, because `copyArea` is not implemented for a scaled one. A copy onto
+    * an overlapping area runs bottom-up when it moves down, so no source row is overwritten before it is read.
+    */
+  override def copyPixels(from: PixelRect, dyPx: Int): Unit =
+    val raw = image.createGraphics()
+    try
+      raw.setComposite(AlphaComposite.Src)
+      raw.copyArea(
+        math.round(from.xPx * deviceScaleX).toInt,
+        math.round(from.yPx * deviceScaleY).toInt,
+        math.round(from.widthPx * deviceScaleX).toInt,
+        math.round(from.heightPx * deviceScaleY).toInt,
+        0,
+        math.round(dyPx * deviceScaleY).toInt
+      )
+    finally raw.dispose()
 
   def hideCursor(): Unit = ()
 

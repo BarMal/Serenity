@@ -92,6 +92,32 @@ class DamageSpec extends AnyFlatSpec with Matchers:
     Damage.isBufferRowsOnly(Damage.BufferAll(bufferId)) shouldBe true
   }
 
+  "Damage.BufferScrolled" should "stay beside the row facts of its buffer and give way to BufferAll" in {
+    val scrolled = Damage.BufferScrolled(bufferId): Damage
+
+    (scrolled |+| Damage.BufferRows(bufferId, Set(3))) shouldBe
+      Damage.Combined(Set(scrolled, Damage.BufferRows(bufferId, Set(3))))
+    (scrolled |+| Damage.BufferAll(bufferId)) shouldBe Damage.BufferAll(bufferId)
+  }
+
+  it should "damage every row to a caller that cannot match rows, and say it was only a scroll to one that can" in {
+    val other    = BufferId(1)
+    val scrolled = (Damage.BufferScrolled(bufferId): Damage) |+| Damage.BufferRows(bufferId, Set(3))
+    val facts    = Damage.rowFactsFor(bufferId, scrolled)
+
+    Damage.damagesEveryRow(bufferId, scrolled) shouldBe true
+    Damage.damagesEveryRow(other, scrolled) shouldBe false
+    facts.everyRow shouldBe true
+    facts.scrollOnly shouldBe true
+    facts.lines shouldBe Set(3)
+    Damage.rowFactsFor(bufferId, scrolled |+| Damage.BufferAll(bufferId)).scrollOnly shouldBe false
+  }
+
+  it should "count as buffer-row damage for a bounded repaint" in {
+    Damage.isBufferRowsOnly(Damage.BufferScrolled(bufferId)) shouldBe true
+    Damage.isBufferRowsOrChromeOnly(Damage.BufferScrolled(bufferId)) shouldBe true
+  }
+
   "Damage.BufferCells" should "keep two disjoint spans on one row apart instead of covering everything between" in {
     val damage = (Damage.BufferCells(bufferId, 0, 2, Some(3)): Damage) |+| Damage.BufferCells(bufferId, 0, 40, Some(41))
     Damage.damagedSpans(bufferId, damage) shouldBe
