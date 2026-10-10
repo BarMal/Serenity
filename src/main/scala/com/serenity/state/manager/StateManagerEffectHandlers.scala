@@ -39,9 +39,10 @@ final private[manager] class StateManagerEffectHandlers(
   private val workflowEffects = new WorkflowEffectHandler(new WorkflowEffectPort:
     def requestOpenFile: IO[Unit] = requestOpenFileOrFolderDialog
     def requestSaveAs: IO[Unit]   = currentState.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
-    def refresh(surfaceId: SurfaceId): IO[Unit]           = refreshFileWorkflowEffect(surfaceId)
-    def refreshFind(request: FindSearchRequest): IO[Unit] = scheduleFindSearch(request)
-    def submitFile(surfaceId: SurfaceId): IO[Unit]        = submitFileWorkflowEffect(surfaceId)
+    def refresh(surfaceId: SurfaceId): IO[Unit]                      = refreshFileWorkflowEffect(surfaceId)
+    def refreshFind(request: FindSearchRequest): IO[Unit]            = scheduleFindSearch(request)
+    def refreshPicker(surfaceId: SurfaceId, query: String): IO[Unit] = refreshPickerEffect(surfaceId, query)
+    def submitFile(surfaceId: SurfaceId): IO[Unit]                   = submitFileWorkflowEffect(surfaceId)
     def openAsProjectRoot(surfaceId: SurfaceId): IO[Unit] =
       openFileWorkflowAsProjectRootEffect(surfaceId, openFolderAsProjectRoot)
     def submitReplace(surfaceId: SurfaceId): IO[Unit]           = submitReplaceWorkflowEffect(surfaceId)

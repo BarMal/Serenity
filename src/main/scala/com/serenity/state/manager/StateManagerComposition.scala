@@ -247,6 +247,8 @@ private[manager] class StateManagerComposition(
     def openRenameSessionPrompt(sessionId: SessionId, currentName: String): IO[Unit] =
       workflow.openRenameSessionPrompt(sessionId, currentName)
     def openFileFinder: IO[Unit] = workflow.openFileFinder
+    def refreshPickerEffect(surfaceId: SurfaceId, query: String): IO[Unit] =
+      workflow.refreshPickerEffect(surfaceId, query)
 
   private val effects = new StateManagerEffectHandlers(
     effectRuntimePort,

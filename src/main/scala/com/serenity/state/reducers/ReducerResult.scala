@@ -43,6 +43,11 @@ enum WorkflowEffect:
   case RequestSaveAs
   case RefreshFileWorkflow(surfaceId: SurfaceId)
   case RefreshFind(request: com.serenity.state.models.FindSearchRequest)
+
+  /** Recomputes the list picker `surfaceId`'s items for `query` off the dispatcher; the result lands only if the picker
+    * still holds exactly that query.
+    */
+  case RefreshPicker(surfaceId: SurfaceId, query: String)
   case SubmitFileWorkflow(surfaceId: SurfaceId)
   case SubmitReplaceWorkflow(surfaceId: SurfaceId)
   // Starts the close workflow (`beginCloseAction`) for `scope`: closes clean buffers, prompts for dirty ones.
