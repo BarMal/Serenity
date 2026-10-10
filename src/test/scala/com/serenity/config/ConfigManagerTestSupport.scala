@@ -23,11 +23,20 @@ object ConfigManagerTestSupport:
   def loadConfig(configPath: Option[String] = None): AppConfig =
     loadConfigResult(configPath).config
 
+  /** The plan of a build running on Linux, whatever the machine really is, for specs and fixtures written against
+    * Linux's hotkey defaults.
+    */
+  val linuxPlan: ConfigMigrations.Plan =
+    ConfigMigrations.Plan(List(ConfigMigrations.droppingDefaultHotkeys("linux")), ConfigVersion.Current, "linux")
+
   /** Load configuration from file with migration/deprecation report or return defaults. */
-  def loadConfigResult(configPath: Option[String] = None): ConfigLoadResult =
+  def loadConfigResult(
+    configPath: Option[String] = None,
+    plan: ConfigMigrations.Plan = ConfigMigrations.installed
+  ): ConfigLoadResult =
     val path = configPath.map(Paths.get(_)).getOrElse(ConfigManager.defaultConfigPath)
     if Files.exists(path) then
-      try ConfigManager.parseConfigResult(path)
+      try ConfigManager.parseConfigResult(path, plan)
       catch
         case NonFatal(error) =>
           logger.error(s"[CONFIG] Failed to load config from $path, using defaults", error)

@@ -81,8 +81,9 @@ class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with Optio
       modifiers = Set(Modifier.Meta)
     )
 
-    val written = ConfigManager.configToString(config)
-    written should include("hotkey.command_palette = [\"meta+p\"]")
+    val written = ConfigFileFormat.render(config, "linux")
+    // The palette's list may go on after the alias: macOS keeps its second default trigger beside an override.
+    written should include("hotkey.command_palette = [\"meta+p\"")
     written should include("hotkey.file_search = [\"meta+shift+f\"]")
     written should include("keymap.command_runner.submit = \"meta+enter\"")
   }
