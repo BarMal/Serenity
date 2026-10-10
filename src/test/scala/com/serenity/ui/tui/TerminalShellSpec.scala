@@ -255,8 +255,10 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
 
   // The kitty reply is preloaded, but it still reaches the probe through the terminal's reader thread, so the same race
   // applies: a slow runner (seen on Windows CI) let the 100 ms kitty window close first and fell through to Win32Input.
+  // The same reader thread feeds teardown's drain of the buffered release event, whose production 4 ms poll can expire
+  // between two of its bytes; the preloaded stream ends in EOF, which stops the drain at once however wide the poll.
   private val kittyReplyDeadlines =
-    TerminalShell.NegotiationDeadlines.Production.copy(kittyMillis = 10000L)
+    TerminalShell.NegotiationDeadlines.Production.copy(kittyMillis = 10000L, drainPollMillis = 10000L)
 
   "acquiring the shell against a terminal that answers the kitty query" should
     "push kitty's enhancement flags and report the Kitty tier" in {
