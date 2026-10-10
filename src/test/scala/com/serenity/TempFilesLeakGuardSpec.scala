@@ -7,7 +7,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
 import cats.effect.unsafe.implicits.global
-import cats.effect.{IO, Ref}
+import cats.effect.{Deferred, IO, Ref}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -38,13 +38,19 @@ class TempFilesLeakGuardSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "remove the folder when the test is cancelled" in {
-    val seen = Ref.unsafe[IO, Option[Path]](None)
-    val hanging = TestTemp
-      .scoped("leak-guard-cancel")
-      .use(dir => seen.set(Some(dir)) >> IO.blocking(populate(dir)) >> IO.never[Unit])
+    val cancelled = for
+      created   <- Deferred[IO, Path]
+      populated <- Deferred[IO, Unit]
+      fiber <- TestTemp
+        .scoped("leak-guard-cancel")
+        .use(dir => created.complete(dir) >> IO.blocking(populate(dir)) >> populated.complete(()) >> IO.never[Unit])
+        .start
+      _   <- populated.get
+      _   <- fiber.cancel
+      dir <- created.get
+    yield dir
 
-    hanging.timeout(300.millis).attempt.unsafeRunSync().isLeft shouldBe true
-    seen.get.unsafeRunSync().map(Files.exists(_)) shouldBe Some(false)
+    Files.exists(cancelled.timeout(30.seconds).unsafeRunSync()) shouldBe false
   }
 
   "TestTemp.within" should "remove the folder when the body throws" in {
