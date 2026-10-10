@@ -43,6 +43,7 @@ object PerformanceBenchmarks:
     ropeBenchmarks() ++
       RenderBenchmarks.frameBenchmarks(cursorWindow) ++
       ReducerBenchmarks.benchmarks() ++
+      ProseTypingBenchmarks.benchmarks() ++
       DamageBenchmarks.benchmarks() ++
       CommandRunnerBenchmarks.benchmarks() ++
       EqualsBenchmarks.benchmarks() ++
