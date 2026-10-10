@@ -361,7 +361,7 @@ object RendererPaneSetup:
     * the pane, so such a row paints pixels outside the band that could be preserved for it. Those rows are always
     * redrawn rather than reasoned about.
     */
-  private def overflowingRows(
+  private[renderer] def overflowingRows(
     contentRect: LayoutRect,
     context: RenderContext,
     snapshot: TextLayoutSnapshot

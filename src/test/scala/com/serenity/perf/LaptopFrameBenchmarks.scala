@@ -439,9 +439,8 @@ private[perf] object LaptopFrameBenchmarks:
       val (state, damage) = steps.next()
       frames.render(state, damage)
 
-    /** Both damaged frames must match a frame drawn from scratch for the same state. A few antialiased pixels of
-      * line-number ink bleed into the first text column and are not restored on a damaged frame; that predates these
-      * benchmarks, so it is tolerated up to [[ToleratedStalePixels]] rather than hidden.
+    /** Both damaged frames must match a frame drawn from scratch for the same state, pixel for pixel: a line number
+      * repaints only with its own row (#1839), so no ink of it is left over a row that was kept.
       */
     def verify(name: String): Unit =
       List(after, before).foreach { expected =>
@@ -449,12 +448,10 @@ private[perf] object LaptopFrameBenchmarks:
         val diff =
           differingPixels(drawn, renderedFrame(expected, RenderCaches.create(), frameImage(), cursorVisible = false))
         assert(
-          diff.size <= ToleratedStalePixels,
+          diff.isEmpty,
           s"$name: the damaged frame differs from a full frame in ${diff.size} pixels: ${diff.take(8).mkString(" ")}"
         )
       }
-
-  private val ToleratedStalePixels = 32
 
   /** The device pixels where `a` and `b` differ, as `(x, y)`. */
   private def differingPixels(a: BufferedImage, b: BufferedImage): IndexedSeq[(Int, Int)] =

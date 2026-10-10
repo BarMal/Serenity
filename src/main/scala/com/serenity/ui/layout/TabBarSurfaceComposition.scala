@@ -101,7 +101,7 @@ object TabBarSurfaceComposition:
 
   /** Split `availableWidth` cell-columns evenly across `entries`, reserving [[GapColumns]] per inter-tab gap, then
     * truncate each tab's label (dirty glyph included) to fit -- following the same `text.take(width - 3) + "..."`
-    * ellipsis convention `RendererPaneContent.renderBufferHeader` already uses for a pane's own buffer title.
+    * ellipsis convention `RendererPaneChrome.renderHeader` already uses for a pane's own buffer title.
     */
   def allocate(entries: List[TabListEntry], availableWidth: Int): List[TabAllocation] =
     if entries.isEmpty then Nil

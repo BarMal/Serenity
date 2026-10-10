@@ -5,8 +5,8 @@ import com.serenity.state.manager.FocusedTextBody
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
-/** Paints each editor pane's own content: the header/spacer chrome and the visible text rows (plain or the inline
-  * markdown-lens variant).
+/** Paints each editor pane's own content: the visible text rows (plain or the inline markdown-lens variant), with the
+  * header and spacers delegated to [[RendererPaneChrome]] when the frame repaints them.
   *
   * It also owns the per-row geometry of a pane -- [[textRowMetrics]] and the [[visualLineFits]]/[[visualLineVisible]]/
   * [[visualLineTopPx]]/[[visualLineCellOffset]] questions derived from it. Those are public because everything that
@@ -20,7 +20,8 @@ object RendererPaneContent:
     state: AppState,
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
-    dirtyRowsByPane: Map[PaneId, Set[Int]]
+    dirtyRowsByPane: Map[PaneId, Set[Int]],
+    chrome: ChromeRepaint
   ): Unit =
     val activePaneId = state.persisted.layout.activeEditorPaneId
     val orderedPanes =
@@ -40,7 +41,8 @@ object RendererPaneContent:
             renderPlan.columnSnapshotsFor(paneId),
             renderPlan.layoutContract,
             pane.bufferId.flatMap(renderPlan.annotations.get),
-            dirtyRowsByPane.get(paneId)
+            dirtyRowsByPane.get(paneId),
+            chrome
           )
         case None => ()
     }
@@ -104,12 +106,17 @@ object RendererPaneContent:
     columnPlacements: Vector[ColumnSnapshotPlacement],
     contract: EditorLayoutContract,
     annotations: Option[BufferRenderAnnotations],
-    dirtyRows: Option[Set[Int]]
+    dirtyRows: Option[Set[Int]],
+    chrome: ChromeRepaint
   ): Unit =
     val buffer = pane.bufferId.flatMap(state.persisted.buffers.get)
 
-    renderBufferHeader(pane, buffer, paneLayout, state, context, contract)
-    renderEditorPaneVerticalSpacers(paneLayout, state, context)
+    context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
+    if chrome.headers.includes(pane.id) then
+      RendererPaneChrome.renderHeader(pane, buffer, paneLayout, state, context, contract)
+    if chrome.spacers then RendererPaneChrome.renderVerticalSpacers(paneLayout, state, context)
+    context.surface.setBackgroundColor(state.persisted.theme.background)
+    context.surface.setForegroundColor(state.persisted.theme.foreground)
 
     val contentRect = paneLayout.contentRect
 
@@ -218,91 +225,6 @@ object RendererPaneContent:
     val bandWidth = math.max(0, placement.columnWidthCells - placement.gutterWidthCells)
     val width     = math.min(bandWidth, math.max(0, contentRect.right - leftX))
     contentRect.copy(x = leftX, width = math.max(0, width))
-
-  private def renderBufferHeader(
-    pane: EditorPane,
-    buffer: Option[Buffer],
-    paneLayout: EditorPaneLayout,
-    state: AppState,
-    context: RenderContext,
-    contract: EditorLayoutContract
-  ): Unit =
-    val surface    = context.surface
-    val headerRect = contract.paneHeaderRect(pane.id).getOrElse(paneLayout.headerRect)
-    if headerRect.height > 0 then
-      context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
-      val isActive  = state.persisted.layout.activeEditorPaneId.contains(pane.id)
-      val titleRect = contract.paneTitleRect(pane.id).getOrElse(paneLayout.titleRect)
-
-      if isActive then
-        surface.setBackgroundColor(state.persisted.theme.highlighted.background)
-        surface.setForegroundColor(state.persisted.theme.highlighted.foreground)
-      else
-        surface.setBackgroundColor(state.persisted.theme.panel.background)
-        surface.setForegroundColor(state.persisted.theme.panel.foreground)
-
-      val bufferTitleBase = buffer match
-        case Some(buf) =>
-          buf.document.filePath match
-            case Some(path) =>
-              val filename = path.getFileName.toString
-              if buf.document.isDirty then s"$filename - unsaved" else filename
-            case None =>
-              if buf.document.isDirty then s"Buffer ${buf.id.value} - unsaved" else s"Buffer ${buf.id.value}"
-        case None =>
-          "No Buffer"
-      val bufferTitle = bufferTitleBase
-
-      val maxTitleWidth = math.max(1, titleRect.width - 2)
-      val displayTitle =
-        if bufferTitle.length > maxTitleWidth then bufferTitle.take(maxTitleWidth - 3) + "..."
-        else bufferTitle
-
-      surface.putString(headerRect.x, headerRect.y, " " * headerRect.width)
-
-      surface.text.fontRenderContext match
-        case Some(frc) =>
-          val titlePlacement = TextAlignment.placeLine(
-            displayTitle,
-            TextAreaPx(
-              xPx = context.cellMetrics.toPixelX(titleRect.x).toFloat,
-              yPx = context.cellMetrics.toPixelY(titleRect.y),
-              widthPx = titleRect.width * context.cellMetrics.charWidth.toFloat,
-              heightPx = context.cellMetrics.lineHeight
-            ),
-            context.uiFont,
-            context.cellMetrics.lineHeight,
-            context.cellMetrics.ascent,
-            TextHorizontalAlignment.Center,
-            TextVerticalAlignment.Top,
-            frc
-          )
-          surface.text.drawRunPx(
-            titlePlacement.xPx,
-            titlePlacement.yPx,
-            titlePlacement.widthPx,
-            titlePlacement.lineHeightPx,
-            titlePlacement.ascentPx,
-            displayTitle
-          )
-        case None =>
-          val centerX = titleRect.x + math.max(0, (titleRect.width - displayTitle.length) / 2)
-          CharacterRenderer.renderString(surface, centerX, titleRect.y, displayTitle)
-
-    surface.setBackgroundColor(state.persisted.theme.background)
-    surface.setForegroundColor(state.persisted.theme.foreground)
-
-  private def renderEditorPaneVerticalSpacers(
-    paneLayout: EditorPaneLayout,
-    state: AppState,
-    context: RenderContext
-  ): Unit =
-    context.surface.setBackgroundColor(state.persisted.theme.margin)
-    List(paneLayout.topSpacerRect, paneLayout.bottomSpacerRect)
-      .filter(rect => rect.width > 0 && rect.height > 0)
-      .foreach(rect => context.surface.fillRect(rect.x, rect.y, rect.width, rect.height, ' '))
-    context.surface.setBackgroundColor(state.persisted.theme.background)
-    context.surface.setForegroundColor(state.persisted.theme.foreground)
 
   private def renderBufferContent(
     buffer: Buffer,

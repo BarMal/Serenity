@@ -12,7 +12,18 @@ import com.serenity.ui.layout.*
   */
 object RendererGutter:
 
-  def renderLineNumbers(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
+  /** How far, in logical pixels, a label's ink can spill past the band of its row. */
+  private val InkSpillPx = 2
+
+  /** Paints the line numbers of the active pane's rows that `rows` names. The other rows' bands are left alone: a
+    * persisting surface still holds their numbers, and a number repaints only with its own row.
+    */
+  def renderLineNumbers(
+    state: AppState,
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    rows: Repaint[Int]
+  ): Unit =
     if state.persisted.config.surfaceConfig.showLineNumbers then
       // Multi-column e-reader layout (issue #1338, Phase 2 / slice 2): a column-mode page has no single shared
       // pane-level rail (`LayoutEngine` reserves none in that case); each column carries its own rail on its left edge,
@@ -23,10 +34,10 @@ object RendererGutter:
       else
         context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
         renderPlan.layoutContract.lineNumberRect.foreach(rect =>
-          renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = false)
+          renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = false, rows)
         )
         renderPlan.layoutContract.rightLineNumberRect.foreach(rect =>
-          renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = true)
+          renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = true, rows)
         )
 
   /** Paint each e-reader column's own line-number rail (slice 2). Every pane carrying column placements draws a rail on
@@ -75,7 +86,7 @@ object RendererGutter:
             (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
           else continuationIndicatorText(railRect.width)
         if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
-          surface.text.drawRunPx(
+          surface.text.drawLabelPx(
             context.cellMetrics.toPixelX(railRect.x).toFloat,
             rowMetrics.lineTopPx(rowIndex),
             railRect.width * context.cellMetrics.charWidth.toFloat,
@@ -95,35 +106,118 @@ object RendererGutter:
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
     lineRect: LayoutRect,
-    dividerOnLeft: Boolean
+    dividerOnLeft: Boolean,
+    rows: Repaint[Int]
   ): Unit =
     val surface    = context.surface
     val background = gutterBackground(state)
+    val kept = state.persisted.layout.activeEditorPaneId
+      .flatMap(renderPlan.snapshots.get)
+      .toList
+      .flatMap(keptRowBands(state, context, _, lineRect, rows))
+    val toPixels = RendererChromePlan.pixelRectOf(context.cellMetrics)
+    val repainted =
+      if kept.isEmpty then Nil else PixelRect.uncoveredWithin(toPixels(lineRect), kept)
 
     surface.setBackgroundColor(background)
     surface.setForegroundColor(state.persisted.theme.muted)
 
-    surface.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height, ' ')
+    if kept.isEmpty then surface.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height, ' ')
+    else repainted.foreach(fillPixelRect(surface, _))
 
     // Diagnostic markers share the divider's own column, so they are collected here and repainted afterwards -- once
     // the divider itself has been painted as one continuous stroke -- rather than drawn inline per row, which would
     // have the divider immediately paint back over them.
-    val diagnosticRows = renderLineNumberRows(state, context, renderPlan, lineRect, surface, dividerOnLeft)
+    val diagnosticRows = renderLineNumberRows(state, context, renderPlan, lineRect, surface, dividerOnLeft, rows)
 
     // The gutter/body boundary, painted once per frame as a single full-height fill (#1483) rather than implicitly by
     // each row's own background fill: a divider assembled that way is only as continuous as every row's fill agrees
     // with its neighbours, and a row with no content to anchor it (or a diagnostic marker briefly claiming the column,
     // below) leaves a gap -- reading as a dashed line rather than one continuous rule. Recolouring rather than
     // redrawing the text keeps every existing rendered string identical; only the boundary column's background changes.
+    // Where rows are kept it is painted over the repainted rows and a little way into their neighbours: the ink of a
+    // repainted label can spill a pixel into the band beside it, and only the divider, painted last, covers that part
+    // of it. The neighbours' markers are drawn again below, as the divider paints over them.
     val dividerX = if dividerOnLeft then lineRect.x else lineRect.x + lineRect.width - 1
     surface.setBackgroundColor(state.persisted.theme.panelBorder)
-    surface.fillRect(dividerX, lineRect.y, 1, lineRect.height, ' ')
+    if kept.isEmpty then surface.fillRect(dividerX, lineRect.y, 1, lineRect.height, ' ')
+    else
+      val divider = toPixels(LayoutRect(dividerX, lineRect.y, 1, lineRect.height))
+      repainted
+        .flatMap(rect =>
+          divider.intersection(rect.copy(yPx = rect.yPx - InkSpillPx, heightPx = rect.heightPx + 2 * InkSpillPx))
+        )
+        .foreach(fillPixelRect(surface, _))
     surface.setBackgroundColor(background)
 
-    diagnosticRows.foreach {
-      case (rowY, diagnostics) =>
-        renderDiagnosticIndicator(surface, lineRect, rowY, diagnostics, state, dividerOnLeft)
+    diagnosticRows.foreach(renderDiagnosticIndicator(surface, lineRect, _, state, dividerOnLeft))
+
+  /** The bands of `lineRect` whose rows `rows` leaves alone, each reaching the inset past the counter on both sides: a
+    * measured label is drawn shifted by that much and fills its background there.
+    */
+  private[renderer] def keptRowBands(
+    state: AppState,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot,
+    lineRect: LayoutRect,
+    rows: Repaint[Int]
+  ): List[PixelRect] =
+    val reach = math.ceil(SurfaceTextInset.px(state.persisted.config)).toInt
+    if rows.everything then Nil
+    else
+      counterRowBands(state, context, snapshot, lineRect).toList.zipWithIndex.collect {
+        case (band, row) if !rows.includes(row) => band.copy(xPx = band.xPx - reach, widthPx = band.widthPx + 2 * reach)
+      }
+
+  /** The pixels each of `snapshot`'s rows owns in the counter: from where its number is drawn to where the next row's
+    * is, so the ink a label spills into the gap beside it stays with it. The first row owns the counter above it, the
+    * last the counter below.
+    *
+    * Where a number is drawn is the row's own band when the label is measured and its cell row on the grid when it is
+    * not -- the two differ whenever the snapshot's line height is not the cell height.
+    */
+  private[renderer] def counterRowBands(
+    state: AppState,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot,
+    lineRect: LayoutRect
+  ): Vector[PixelRect] =
+    val measured =
+      state.persisted.layout.activeEditorPaneId
+        .flatMap(state.persisted.layout.editorPanes.get)
+        .flatMap(_.bufferId)
+        .flatMap(state.persisted.buffers.get)
+        .exists(useMeasuredLineNumberFont(_, context)) &&
+        context.surface.text.fontRenderContext.isDefined && RendererPaneSetup.usesMeasuredDrawing(snapshot, context)
+    val bands =
+      if measured then RendererPaneSetup.paneRowRects(lineRect, context, snapshot)
+      else cellRowBands(context, snapshot, lineRect)
+    val bounds = RendererChromePlan.pixelRectOf(context.cellMetrics)(lineRect)
+    bands.indices.toVector.map { index =>
+      val band   = bands(index)
+      val top    = if index == 0 then bounds.yPx.min(band.yPx) else band.yPx
+      val bottom = bands.lift(index + 1).fold(bounds.bottomPx.max(band.bottomPx))(_.yPx.max(band.bottomPx))
+      band.copy(yPx = top, heightPx = (bottom - top).max(0))
     }
+
+  private def cellRowBands(
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot,
+    lineRect: LayoutRect
+  ): Vector[PixelRect] =
+    val metrics = context.cellMetrics
+    val cellRows = SurfaceFrameLayout
+      .contentRowSlotsFor(lineRect, snapshot.visualLines.length, hasHeader = false, hasFooter = false)
+      .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), rowY) => index -> rowY }
+      .toMap
+    snapshot.visualLines.indices.toVector.map { index =>
+      val rowY   = cellRows.getOrElse(index, lineRect.bottom)
+      val height = if cellRows.contains(index) then metrics.lineHeight else 0
+      PixelRect(metrics.toPixelX(lineRect.x), metrics.toPixelY(rowY), lineRect.width * metrics.charWidth, height)
+    }
+
+  private def fillPixelRect(surface: RenderSurface, rect: PixelRect): Unit =
+    surface.text.drawRunPx(rect.xPx.toFloat, rect.yPx, rect.widthPx.toFloat, rect.heightPx, 0, "")
 
   private def renderLineNumberRows(
     state: AppState,
@@ -131,8 +225,9 @@ object RendererGutter:
     renderPlan: EditorPaneRenderPlan,
     lineRect: LayoutRect,
     surface: RenderSurface,
-    dividerOnLeft: Boolean
-  ): List[(Int, List[com.serenity.lsp.model.Diagnostic])] =
+    dividerOnLeft: Boolean,
+    rows: Repaint[Int]
+  ): List[DiagnosticMarker] =
     state.persisted.layout.activeEditorPaneId
       .flatMap(state.persisted.layout.editorPanes.get)
       .toList
@@ -169,7 +264,8 @@ object RendererGutter:
                   rowMetrics.lineTopPx(index),
                   visualLine,
                   rowY,
-                  dividerOnLeft
+                  dividerOnLeft,
+                  paintsNumber = rows.includes(index)
                 )
               }
             case _ => Nil
@@ -189,8 +285,9 @@ object RendererGutter:
     lineTopPx: Int,
     visualLine: TextVisualLine,
     rowY: Int,
-    dividerOnLeft: Boolean
-  ): List[(Int, List[com.serenity.lsp.model.Diagnostic])] =
+    dividerOnLeft: Boolean,
+    paintsNumber: Boolean
+  ): List[DiagnosticMarker] =
     val rendersLineNumber =
       shouldRenderLineNumberForVisualLine(visualLine, state.persisted.config.surfaceConfig.wordWrapEnabled)
     val lineNumberText =
@@ -201,40 +298,48 @@ object RendererGutter:
         // one, so digits always sit against the panel edge and the divider always against the content.
         if dividerOnLeft then " " + rightAligned else rightAligned + " "
       else continuationIndicatorText(lineRect.width)
-    measuredFont match
-      case Some(measured) =>
-        surface.text.setFont(FontSpec.fromAwt(measured.font))
-        // Issue #1542 (pixel-precision follow-up): nudge the digits a sub-cell amount away from the pane's outer edge
-        // -- right for a left counter, left for a right one -- the same `SurfaceTextInset` value every other piece of
-        // framed chrome already insets by. Purely a paint-time refinement: `LayoutEngine`'s cell grid (hit-testing,
-        // drag-resize, the TUI's own rendering) is untouched.
-        val insetPx       = SurfaceTextInset.px(state.persisted.config)
-        val marginInsetPx = if dividerOnLeft then -insetPx else insetPx
-        val run =
-          if rendersLineNumber then
-            val digits        = (visualLine.bufferLine + 1).toString
-            val digitsWidthPx = measured.widthPx(digits)
-            val startPx       = measuredDigitsStartPx(digitsWidthPx, lineRect, context, insetPx, dividerOnLeft)
-            // The run is drawn inside the inset translation, so its anchor is given in the untranslated frame.
-            MeasuredLineNumberRun((startPx - marginInsetPx).toFloat, digitsWidthPx, digits)
-          else
-            MeasuredLineNumberRun(
-              context.cellMetrics.toPixelX(lineRect.x).toFloat,
-              lineRect.width * context.cellMetrics.charWidth.toFloat,
-              lineNumberText
+    if paintsNumber then
+      measuredFont match
+        case Some(measured) =>
+          surface.text.setFont(FontSpec.fromAwt(measured.font))
+          // Issue #1542 (pixel-precision follow-up): nudge the digits a sub-cell amount away from the pane's outer edge
+          // -- right for a left counter, left for a right one -- the same `SurfaceTextInset` value every other piece of
+          // framed chrome already insets by. Purely a paint-time refinement: `LayoutEngine`'s cell grid (hit-testing,
+          // drag-resize, the TUI's own rendering) is untouched.
+          val insetPx       = SurfaceTextInset.px(state.persisted.config)
+          val marginInsetPx = if dividerOnLeft then -insetPx else insetPx
+          val run =
+            if rendersLineNumber then
+              val digits        = (visualLine.bufferLine + 1).toString
+              val digitsWidthPx = measured.widthPx(digits)
+              val startPx       = measuredDigitsStartPx(digitsWidthPx, lineRect, context, insetPx, dividerOnLeft)
+              // The run is drawn inside the inset translation, so its anchor is given in the untranslated frame.
+              MeasuredLineNumberRun((startPx - marginInsetPx).toFloat, digitsWidthPx, digits)
+            else
+              MeasuredLineNumberRun(
+                context.cellMetrics.toPixelX(lineRect.x).toFloat,
+                lineRect.width * context.cellMetrics.charWidth.toFloat,
+                lineNumberText
+              )
+          surface.pixels.withPixelTranslation(marginInsetPx, 0.0) {
+            surface.text.drawLabelPx(
+              run.xPx,
+              lineTopPx,
+              run.widthPx,
+              snapshot.lineHeightPx,
+              snapshot.ascentPx,
+              run.text
             )
-        surface.pixels.withPixelTranslation(marginInsetPx, 0.0) {
-          surface.text.drawRunPx(run.xPx, lineTopPx, run.widthPx, snapshot.lineHeightPx, snapshot.ascentPx, run.text)
-        }
-        surface.text.setFont(FontSpec.fromAwt(context.uiFont))
-      case None => surface.putString(lineRect.x, rowY, lineNumberText)
+          }
+          surface.text.setFont(FontSpec.fromAwt(context.uiFont))
+        case None => surface.putString(lineRect.x, rowY, lineNumberText)
     if rendersLineNumber then
       for
         bufferId   <- pane.bufferId.toList
         annotation <- renderPlan.annotations.get(bufferId).toList
         diagnostics = annotation.diagnosticsByLine.getOrElse(visualLine.bufferLine, Nil)
         if diagnostics.nonEmpty
-      yield rowY -> diagnostics
+      yield DiagnosticMarker(rowY, Option.when(measuredFont.isDefined)(lineTopPx), diagnostics)
     else Nil
 
   private def useMeasuredLineNumberFont(buffer: Buffer, context: RenderContext): Boolean =
@@ -293,24 +398,33 @@ object RendererGutter:
     val leftWidth = (safeWidth - 1) / 2
     " " * leftWidth + "│" + " " * (safeWidth - leftWidth - 1)
 
+  /** A row's diagnostic marker, and where its row is when the counter is measured: the marker sits on that row's own
+    * band, not on the cell grid, which a measured row's band does not follow.
+    */
+  final private case class DiagnosticMarker(
+      rowY: Int,
+      lineTopPx: Option[Int],
+      diagnostics: List[com.serenity.lsp.model.Diagnostic]
+  )
+
   private def renderDiagnosticIndicator(
     surface: RenderSurface,
     lineRect: LayoutRect,
-    screenY: Int,
-    lineDiags: List[com.serenity.lsp.model.Diagnostic],
+    marker: DiagnosticMarker,
     state: AppState,
     dividerOnLeft: Boolean
   ): Unit =
-    if lineDiags.nonEmpty then
-      val worstCode = lineDiags.flatMap(_.severity).map(_.code).minOption
+    if marker.diagnostics.nonEmpty then
+      val worstCode = marker.diagnostics.flatMap(_.severity).map(_.code).minOption
       val color = worstCode match
         case Some(1) => state.persisted.theme.error.foreground
         case Some(2) => state.persisted.theme.warning.foreground
         case _       => state.persisted.theme.muted
       surface.setForegroundColor(color)
       surface.setBackgroundColor(gutterBackground(state))
-      val markerX = if dividerOnLeft then lineRect.x else lineRect.x + lineRect.width - 1
-      surface.putString(markerX, screenY, "!")
+      val markerX      = if dividerOnLeft then lineRect.x else lineRect.x + lineRect.width - 1
+      def draw(): Unit = surface.putString(markerX, marker.rowY, "!")
+      marker.lineTopPx.fold(draw())(top => surface.text.withLogicalPixelRow(marker.rowY, top)(draw()))
 
   private def gutterBackground(state: AppState): RenderColor =
     state.persisted.theme.panel.background

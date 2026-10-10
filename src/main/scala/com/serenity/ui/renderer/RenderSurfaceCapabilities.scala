@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.font.FontRenderContext
 
 import com.serenity.ui.color.RenderColor
+import com.serenity.ui.layout.PixelRect
 
 /** Character- and pixel-run text drawing. Every real [[RenderSurface]] implements this -- a surface that cannot draw
   * text cannot render Serenity's UI -- so [[RenderSurface.text]] exposes it directly rather than as an `Option`: the
@@ -27,6 +28,20 @@ trait TextDrawing:
     s: String,
     clipGlyphToRun: Boolean = false
   ): Unit
+
+  /** As [[drawRunPx]], for a short label that repeats verbatim from frame to frame, such as a line number. A raster
+    * surface may serve it from sprites of the rendered ink rather than laying the text out again; the default draws it
+    * as any other run.
+    */
+  def drawLabelPx(
+    xPx: Float,
+    yPx: Int,
+    bgWidthPx: Float,
+    lineHeightPx: Int,
+    ascentPx: Int,
+    s: String
+  ): Unit =
+    drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, s)
 
   /** Render cell-addressed content for one row at its logical-pixel top edge. */
   def withLogicalPixelRow(cellRow: Int, pixelY: Int)(render: => Unit): Unit
@@ -60,6 +75,17 @@ trait PixelDrawing:
 
   /** Translate drawing in device-independent logical pixels for fractional-cell floating geometry. */
   def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit
+
+/** Moving pixels the surface already holds, rather than drawing them again. Genuinely optional: a surface that cannot
+  * (a cell-addressed terminal, or a raster surface whose device scale is not a whole number, where logical pixels do
+  * not land on device ones) simply draws every row, so [[RenderSurface.pixelCopying]] exposes it as an `Option`.
+  */
+trait PixelCopying:
+
+  /** Copy `from`, in logical pixels, `dyPx` rows down (up when negative), overwriting whatever lies there. Source and
+    * destination may overlap: the copy reads every source pixel as it was before it.
+    */
+  def copyPixels(from: PixelRect, dyPx: Int): Unit
 
 /** Alpha compositing. Genuinely optional: a surface that can't do it (or a headless test double) simply skips the fade
   * rather than degrading a required drawing operation, so [[RenderSurface.effects]] exposes it as an `Option` and

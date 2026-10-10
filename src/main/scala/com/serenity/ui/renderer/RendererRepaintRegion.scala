@@ -4,8 +4,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
 /** Which pixels a bounded repaint has to publish, once [[RendererFramePlanner]] has decided a frame may be bounded at
-  * all. Every frame paints the status row, line numbers and pane headers whole, and redraws the dirty rows, so these
-  * rects only decide which of its pixels reach the screen.
+  * all. The frame redraws the dirty rows and whatever chrome its damage names ([[ChromeRepaint]]), and keeps the rest,
+  * so these rects only decide which of its pixels reach the screen.
   */
 private[renderer] object RendererRepaintRegion:
 
@@ -37,11 +37,6 @@ private[renderer] object RendererRepaintRegion:
     val statusRow = contract.gutterRect.filter(_ => Damage.touchesChrome(damage))
     val headers   = Damage.paneChromeIds(damage).toList.flatMap(contract.paneHeaderRect)
     PixelRect.coalesced(
-      rowRects ++ (statusRow.toList ++ headers).map(pixelRectOf(context.cellMetrics)),
+      rowRects ++ (statusRow.toList ++ headers).map(RendererChromePlan.pixelRectOf(context.cellMetrics)),
       PixelRect.RepaintRectLimit
     )
-
-  private def pixelRectOf(cellMetrics: CellMetrics)(rect: LayoutRect): PixelRect =
-    val leftPx = cellMetrics.toPixelX(rect.x)
-    val topPx  = cellMetrics.toPixelY(rect.y)
-    PixelRect(leftPx, topPx, cellMetrics.toPixelX(rect.right) - leftPx, cellMetrics.toPixelY(rect.bottom) - topPx)

@@ -24,6 +24,20 @@ object RendererChapterGhosts:
       do renderPane(buffer, paneLayout.contentRect, snapshot, ghosts, state, context)
     }
 
+  /** Whether `bufferId` has a chapter note a ghost is derived from. A ghost depends on a note's text and on which
+    * chapters are empty, which no buffer damage reports.
+    */
+  def paneShowsGhosts(state: AppState, bufferId: BufferId): Boolean =
+    state.runtime.chapterGhostsVisible &&
+      state.persisted.buffers
+        .get(bufferId)
+        .exists(buffer => !buffer.hidden && buffer.annotations.notes.keys.exists(hasChapterKey))
+
+  private def hasChapterKey(key: NoteKey): Boolean =
+    key match
+      case NoteKey.Chapter(_) => true
+      case NoteKey.Keyword(_) => false
+
   private def renderPane(
     buffer: Buffer,
     rect: LayoutRect,

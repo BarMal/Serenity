@@ -32,6 +32,13 @@ trait RenderSurface:
     * though each frame is a fresh surface, or every frame starts a new cache entry (#1798).
     */
   def layerCacheOwner: ScreenIdentity = ScreenIdentity(this)
+
+  /** Whether this surface's pixel coordinates are real device pixels, finer than a cell. The renderer keeps and
+    * repaints sub-cell bands of chrome and rows only on a surface that does; on one whose "pixel" is a cell it repaints
+    * each chrome whole.
+    */
+  def addressesPixels: Boolean = false
+
   def setForegroundColor(color: RenderColor): Unit
   def setBackgroundColor(color: RenderColor): Unit
   def getBackgroundColor: RenderColor
@@ -67,6 +74,9 @@ trait RenderSurface:
     * happened.
     */
   def effects: Option[Effects] = None
+
+  /** Copying pixels the surface already holds, when it can. `None` means a row that moved has to be drawn again. */
+  def pixelCopying: Option[PixelCopying] = None
 
   /** Panel borders and rectangular clipping, when this surface supports them. `None` means callers must fall back to
     * drawing without that chrome rather than assume it happened.

@@ -310,6 +310,15 @@ final class RendererFrameState(initialCapacity: Int):
   private val bufferDamage    = new BoundedRefCache[SurfaceContentIdentity, Damage](cacheCapacity)
   private val bufferDrawState = new BoundedRefCache[SurfaceContentIdentity, DrawState](cacheCapacity)
 
+  private val chromeGeometries = new BoundedRefCache[SurfaceContentIdentity, ChromeGeometry](cacheCapacity)
+
+  /** Records `geometry` as the rects `key`'s chrome was last painted into and reports whether it differs -- chrome the
+    * surface kept from that frame is only where it should be while the rects have not moved. `Damage` cannot say so: a
+    * line-number column widening as the document passes 99 lines changes no layout reference.
+    */
+  def chromeGeometryChanged(key: SurfaceContentIdentity, geometry: ChromeGeometry): Boolean =
+    chromeGeometries.modify(tracked => (tracked.updated(key, geometry), !tracked.get(key).contains(geometry)))
+
   /** Which screen each tracked buffer identity was last drawn for, so [[accumulateBufferDamage]] only folds a frame's
     * damage into buffers that actually belong to the same screen -- e.g. the same `SwingWindow`'s own two pooled
     * images. Without this, every buffer identity ever tracked shares one process-wide map with no notion of which ones
@@ -382,6 +391,7 @@ final class RendererFrameState(initialCapacity: Int):
     bufferDamage.remove(key)
     bufferScreen.remove(key)
     bufferDrawState.remove(key)
+    chromeGeometries.remove(key)
 
   /** Drops every screen-scoped cache entry for `screenToken`, the [[forgetBufferState]] counterpart for the screen
     * rather than a preserving surface.

@@ -13,9 +13,8 @@ object TabListContent:
     }
     SurfaceContent.TabList(entries, state.focusedBufferId)
 
-  /** Mirrors `RendererPaneContent.renderBufferHeader`'s title, minus its own "- unsaved" text suffix: the widget
-    * carries dirty state as its own field, rendered as a persistent glyph rather than appended text (issue #1307's own
-    * ask).
+  /** Mirrors `RendererPaneChrome.renderHeader`'s title, minus its own "- unsaved" text suffix: the widget carries dirty
+    * state as its own field, rendered as a persistent glyph rather than appended text (issue #1307's own ask).
     */
   private def titleFor(buffer: Buffer): String =
     buffer.document.filePath.map(_.getFileName.toString).getOrElse(s"Buffer ${buffer.id.value}")
