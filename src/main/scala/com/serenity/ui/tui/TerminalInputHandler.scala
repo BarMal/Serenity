@@ -1,7 +1,7 @@
 package com.serenity.ui.tui
 
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 
 import scala.concurrent.duration.*
 
@@ -184,7 +184,9 @@ object TerminalInputHandler:
     escDeadline: FiniteDuration = EscDisambiguationDeadline,
     readerOverride: Option[NonBlockingReader] = None,
     metrics: TerminalInputMetrics = TerminalInputMetrics.Disabled,
-    mouseTrackingSupported: Boolean = defaultMouseTrackingSupported
+    mouseTrackingSupported: Boolean = defaultMouseTrackingSupported,
+    // Runs in the pump ahead of every read; lets a test stand in for a pump that is slow to get back to the reader.
+    beforeEachRead: IO[Unit] = IO.unit
   ): IO[TerminalInputHandler] =
     for
       queue            <- Queue.unbounded[IO, Option[QueuedInput]]
@@ -200,7 +202,7 @@ object TerminalInputHandler:
       reader = readerOverride.getOrElse(terminal.reader())
       // rawReadLoop runs on a dedicated fiber so the CE3 compute pool is never blocked waiting for the terminal;
       // guarantee(rawFiber.cancel) tears it down whenever readLoop exits (naturally or via cancellation).
-      fiber <- rawReadLoop(reader, rawQueue, escDeadline, metrics).start.flatMap { rawFiber =>
+      fiber <- rawReadLoop(reader, rawQueue, escDeadline, metrics, beforeEachRead).start.flatMap { rawFiber =>
         readLoop(
           rawQueue,
           queue,
@@ -256,6 +258,23 @@ object TerminalInputHandler:
   private[tui] def toUtf8Bytes(ch: Int): Array[Byte] =
     if ch < 0x80 then Array(ch.toByte) else String.valueOf(ch.toChar).getBytes(StandardCharsets.UTF_8)
 
+  /** Tells whether the pump is blocked inside `reader.read()`. The count rises as a read is entered and again as it
+    * returns, both on the reading thread itself, so it is odd exactly while a read is in flight and one value says both
+    * whether and which read -- an unchanged odd count across two samples is the same read, parked throughout.
+    */
+  final private class ReadGate:
+    private val transitions = new AtomicLong(0L)
+
+    def read(reader: NonBlockingReader): Int =
+      transitions.incrementAndGet()
+      val next = reader.read()
+      transitions.incrementAndGet()
+      next
+
+    def sample: IO[Long] = IO(transitions.get)
+
+  private def parkedThroughout(first: Long, second: Long): Boolean = first == second && first % 2L == 1L
+
   /** Runs on a dedicated fiber; reads raw chars from the JLine reader as fast as they arrive and stuffs each one into
     * [[rawQueue]], so the CE3 compute pool is never blocked waiting for terminal I/O and the pty kernel buffer never
     * fills during a slow dispatch cycle. [[readLoop]] consumes from [[rawQueue]] and can safely use [[Queue.tryTake]]
@@ -271,22 +290,37 @@ object TerminalInputHandler:
     * The deadline is a Cats-Effect timer, not JLine's `reader.read(timeout)`. `IO.sleep` is terminal-independent;
     * `NonBlockingReader.read(timeout)` is not -- on a non-tty stdin (git bash on Windows without winpty, whose stdin is
     * a plain MSYS pipe) it reports `READ_EXPIRED` even while the rest of the sequence is already available, which split
-    * every arrow and kitty-Backspace back into Escape-plus-characters. So an ever-running [[pump]] does only plain,
-    * uninterrupted `reader.read()` into [[pumpQueue]], and the [[arbiter]] races the deadline against *taking* the next
-    * pumped byte -- never against a real read. Losing that race therefore cannot lose a byte: it stays in [[pumpQueue]]
-    * for the next take. Before committing to `Expired`, the arbiter re-checks with [[Queue.tryTake]] so a byte that
-    * landed exactly on the boundary (or while the arbiter fiber was momentarily starved) still wins, keeping #1283's
-    * guarantee intact on both real ptys and non-tty pipes.
+    * every arrow and kitty-Backspace back into Escape-plus-characters. (`ready()` cannot stand in for it either: the
+    * POSIX and dumb-terminal readers never override it, so it is always false.) So an ever-running [[pump]] does only
+    * plain, uninterrupted `reader.read()` into [[pumpQueue]], and the [[arbiter]] races the deadline against *taking*
+    * the next pumped byte -- never against a real read. Losing that race therefore cannot lose a byte: it stays in
+    * [[pumpQueue]] for the next take.
+    *
+    * What the timer alone cannot say is whether the pump has read yet. A pump that is late getting back to the reader
+    * (the blocking pool is busy, the fiber is unscheduled) leaves bytes already in the terminal buffer that nothing has
+    * pumped, and the deadline would read that silence as "nothing followed" (#1709). So `Expired` needs the pump to be
+    * parked in the same `read()` at the half-way point and at the deadline ([[ReadGate]]). A `read()` entered while
+    * input is buffered returns at once, so a read still blocked after half a deadline was entered with nothing
+    * buffered; whatever arrived since is a byte that came after the `ESC`'s window, not one the pump failed to pick up.
+    * The gate is cleared by the reading thread the instant `read()` returns, before the byte is enqueued, so a byte in
+    * transit between `read()` and [[pumpQueue]] also counts as "not parked". If the pump was not parked throughout, the
+    * arbiter gives it one more `escDeadline` to deliver before concluding Escape, which bounds the wait on a pump that
+    * never comes back. What remains is the span between the OS making a byte readable and the reading thread running
+    * the next instruction after `read()` returns, which only a whole-process pause or thread preemption inside it can
+    * stretch to a deadline.
     */
   private def rawReadLoop(
     reader: NonBlockingReader,
     rawQueue: Queue[IO, ReadOutcome],
     escDeadline: FiniteDuration,
-    metrics: TerminalInputMetrics
+    metrics: TerminalInputMetrics,
+    beforeEachRead: IO[Unit]
   ): IO[Unit] =
     Queue.unbounded[IO, ReadOutcome].flatMap { pumpQueue =>
+      val gate = new ReadGate
+
       def pump: IO[Unit] =
-        IO.interruptible(reader.read()).map(toOutcome).flatMap {
+        (beforeEachRead >> IO.interruptible(gate.read(reader))).map(toOutcome).flatMap {
           case ReadOutcome.Eof                => pumpQueue.offer(ReadOutcome.Eof)
           case outcome @ ReadOutcome.Bytes(_) => metrics.recordCharsRead(1) >> pumpQueue.offer(outcome) >> pump
           case outcome                        => pumpQueue.offer(outcome) >> pump
@@ -299,14 +333,31 @@ object TerminalInputHandler:
             rawQueue.offer(outcome) >> awaitAfterEsc
           case _ => rawQueue.offer(outcome) >> arbiter
 
+      def nextWithin(window: FiniteDuration): IO[Option[ReadOutcome]] =
+        IO.race(IO.sleep(window), pumpQueue.take).map(_.toOption)
+
       def awaitAfterEsc: IO[Unit] =
-        IO.race(IO.sleep(escDeadline), pumpQueue.take).flatMap {
-          case Right(outcome) => forward(outcome)
-          case Left(_) =>
-            pumpQueue.tryTake.flatMap {
-              case Some(outcome) => forward(outcome)
-              case None          => rawQueue.offer(ReadOutcome.Expired) >> arbiter
+        val firstHalf = escDeadline / 2
+        nextWithin(firstHalf).flatMap {
+          case Some(outcome) => forward(outcome)
+          case None =>
+            gate.sample.flatMap { atHalfway =>
+              nextWithin(escDeadline - firstHalf).flatMap {
+                case Some(outcome) => forward(outcome)
+                case None =>
+                  gate.sample.flatMap { atDeadline =>
+                    if parkedThroughout(atHalfway, atDeadline) then concludeEscape
+                    else nextWithin(escDeadline).flatMap(_.fold(concludeEscape)(forward))
+                  }
+              }
             }
+        }
+
+      // Last look before committing: a byte that landed exactly on the boundary still wins.
+      def concludeEscape: IO[Unit] =
+        pumpQueue.tryTake.flatMap {
+          case Some(outcome) => forward(outcome)
+          case None          => rawQueue.offer(ReadOutcome.Expired) >> arbiter
         }
 
       def arbiter: IO[Unit] = pumpQueue.take.flatMap(forward)
