@@ -7,6 +7,7 @@ import java.nio.file.{Files, Path}
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.io.FileManager
 import com.serenity.rope.Balance
 import com.serenity.state.models.BufferId
@@ -24,7 +25,7 @@ object LargeFileIoBench:
   def main(args: Array[String]): Unit =
     val megabytes  = args.headOption.flatMap(_.toIntOption).getOrElse(50)
     val terminator = if args.contains("crlf") then "\r\n" else "\n"
-    val path       = Files.createTempFile("serenity-large", ".txt")
+    val path       = TestTemp.file("serenity-large", ".txt")
     try
       writeSample(path, megabytes.toLong * 1024 * 1024, terminator)
       val manager        = new FileManager()
