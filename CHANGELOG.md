@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 1.0.0-rc.1 — 2026-10-10
+
 ### 2026-10-10
 
 - Moved UI Presets to a top-level settings group beside Workspace, with one flat Edit Preset page (rename, preset actions, cursor, fonts, document defaults and spell check, no nested pages); the preset's three font families are picked with inline carousels like the other preset settings (#1682).
