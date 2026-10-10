@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.serenity.command.UiPresetsIntent
+import com.serenity.command.{CommandIntent, PresetSettingsEdit, UiPresetsIntent}
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
 import com.serenity.state.models.*
@@ -347,6 +347,39 @@ final private[manager] class StateManagerUiPresetEffects(
                     }
                 }
             }
+          }
+        }
+
+  /** Applies one settings edit to the stored preset `name` and saves it; the live config is never touched. Built-ins
+    * are read-only like for overwrite and theme changes.
+    */
+  private[manager] def editSetting(name: String, edit: CommandIntent): IO[Unit] =
+    normalizedPresetName(name) match
+      case None =>
+        logger.warn("[PRESET] Ignoring empty UI preset name")
+      case Some(presetName) if UiPreset.builtIn(presetName).nonEmpty =>
+        updateCommandRunnerPresetContext(
+          Some(presetName),
+          s"Built-in preset cannot be edited. Duplicate $presetName first."
+        )
+      case Some(presetName) =>
+        onPresetsLane(s"edit UI preset $presetName") {
+          uiPresetStore.find(presetName).flatMap {
+            case None =>
+              report(UiPresetContext.Status(Some(presetName), s"Custom preset '$presetName' was not found."))
+            case Some(existing) =>
+              PresetSettingsEdit(edit, existing) match
+                case None =>
+                  report(UiPresetContext.Status(Some(existing.name), s"${existing.name} cannot hold that setting."))
+                case Some(edited) =>
+                  uiPresetStore.upsert(edited).attempt.flatMap {
+                    case Left(error) =>
+                      reportPresetFailure(existing.name, s"Could not save ${existing.name}", error)
+                    case Right(_) =>
+                      reportWithPreviews(
+                        UiPresetContext.Status(Some(existing.name), s"Preset updated. Configure ${existing.name}.")
+                      )
+                  }
           }
         }
 

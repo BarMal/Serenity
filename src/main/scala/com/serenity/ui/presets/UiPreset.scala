@@ -200,12 +200,13 @@ object UiPreset:
       }
     )
 
-  final case class Preview(name: String, hint: String)
+  /** `config` is what the preset holds, where known: the preset's own edit pages show it rather than the live one. */
+  final case class Preview(name: String, hint: String, config: Option[AppConfig] = None)
 
   object Preview:
 
     def fromPreset(preset: UiPreset): Preview =
-      Preview(preset.name, UiPresetSummary.previewHint(preset))
+      Preview(preset.name, UiPresetSummary.previewHint(preset), Some(preset.config))
 
     def fromName(name: String): Preview =
       Preview(name.trim, "Saved workspace setup")

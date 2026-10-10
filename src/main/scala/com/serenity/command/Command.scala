@@ -346,6 +346,11 @@ enum SettingsIntent:
   case SpellCheck(intent: SpellCheckIntent)
   case General(intent: GeneralSettingsIntent)
 
+/** What a settings edit changes: the live config, or one stored UI preset. */
+enum SettingsTarget:
+  case Global
+  case Preset(name: String)
+
 /** Every command the command runner can execute, grouped into per-family sub-enums so that both `interpretCommand` and
   * this type stay exhaustiveness-checked one family at a time instead of as one 170-case flat match.
   */
@@ -368,6 +373,8 @@ enum CommandIntent:
   case Keybindings(intent: KeybindingsIntent)
   case UiPresets(intent: UiPresetsIntent)
   case Settings(intent: SettingsIntent)
+  // An edit aimed at `target`; `Global` is the edit itself, a `Preset` change goes to that stored preset alone.
+  case Scoped(target: SettingsTarget, intent: CommandIntent)
 
 /** A command that can be executed in the command runner */
 final case class Command private (

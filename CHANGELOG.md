@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-10-10
+
+- Made the settings pages under Edit Preset change that preset, not the live settings: cursor, fonts, document defaults and spell check are saved into the preset being edited, the pages show that preset's own values, and a built-in preset refuses the edit. Panel layout is no longer on the preset pages (Overwrite Preset captures it), Create New Preset is now just Save As New Preset, and every settings group has a unique id (#1682, part 1).
+
 ### 2026-10-09
 
 - Added recent folders to Open Recent: every folder opened as the project root, by Open Folder, on the command line or handed over by a later launch, is remembered (most recent first, once however its path is spelt, twenty at most) in an Open Recent Folder submenu beside Open Recent and on the start page after the recent files, and choosing one opens it in the Explorer as Open Folder does. They are saved with the session (schema version 6; an older session loads with none), the start page leaves out a folder that has gone, and Clear Recent now forgets the folders as well as the files.
