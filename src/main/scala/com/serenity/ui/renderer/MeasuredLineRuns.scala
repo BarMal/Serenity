@@ -38,14 +38,16 @@ private[renderer] object MeasuredLineRuns:
     val styled      = segments.toArray
     val segmentEnds = styled.scanLeft(0)(_ + _.content.length).drop(1)
     val unstyled    = Attributes(theme.foreground, theme.background, TextStyle.normal)
-    val runs        = Vector.newBuilder[MeasuredRun]
+    val attributesBySegment =
+      styled.map(segment => Attributes(segment.foregroundColor, segment.backgroundColor, segment.style))
+    val runs = Vector.newBuilder[MeasuredRun]
 
     @tailrec
     def segmentAt(localIndex: Int, from: Int): Int =
       if from < segmentEnds.length && segmentEnds(from) <= localIndex then segmentAt(localIndex, from + 1) else from
 
     def attributesOf(segment: Int): Attributes =
-      styled.lift(segment).fold(unstyled)(s => Attributes(s.foregroundColor, s.backgroundColor, s.style))
+      if segment < attributesBySegment.length then attributesBySegment(segment) else unstyled
 
     def emit(start: Int, end: Int, attributes: Attributes, runText: java.lang.StringBuilder, boundsFrom: Int): Int =
       val (minXPx, maxXPx, next) = bounds.extent(start, end, boundsFrom)

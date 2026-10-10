@@ -270,7 +270,7 @@ sealed trait Rope(using balance: Balance):
     else if state.chunkIndex < state.chunk.length then
       val newlineIndex = state.chunk.indexOf('\n', state.chunkIndex)
       if newlineIndex >= 0 then
-        val value = (state.chunk.substring(state.chunkIndex, newlineIndex) :: state.fragments).reverse.mkString
+        val value = joined(state.chunk.substring(state.chunkIndex, newlineIndex) :: state.fragments)
         Some(
           (state.line -> value) ->
             state.copy(chunkIndex = newlineIndex + 1, line = state.line + 1, fragments = Nil)
@@ -283,7 +283,14 @@ sealed trait Rope(using balance: Balance):
           )
         )
     else if state.chunks.hasNext then nextLine(state.copy(chunk = state.chunks.next()._2, chunkIndex = 0))
-    else Some((state.line -> state.fragments.reverse.mkString) -> state.copy(finished = true))
+    else Some((state.line -> joined(state.fragments)) -> state.copy(finished = true))
+
+  /** The pieces of a line, last first. A line inside one chunk is a single piece and is returned as it is. */
+  private def joined(piecesLastFirst: List[String]): String =
+    piecesLastFirst match
+      case Nil         => ""
+      case only :: Nil => only
+      case _           => piecesLastFirst.reverse.mkString
 
   private def searchChunk(
     chunk: String,
