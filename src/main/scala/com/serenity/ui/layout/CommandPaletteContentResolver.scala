@@ -374,7 +374,7 @@ private[layout] object CommandPaletteContentResolver:
     )
 
   private def fontFamilyForCommand(command: com.serenity.command.Command): Option[String] =
-    command.intent match
+    unscoped(command.intent) match
       case com.serenity.command.CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetCodeFontFamily(family))) =>
         Some(family)
       case com.serenity.command.CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextFontFamily(family))) =>
@@ -382,6 +382,11 @@ private[layout] object CommandPaletteContentResolver:
       case com.serenity.command.CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetUiFontFamily(family))) =>
         Some(family)
       case _ => None
+
+  private def unscoped(intent: com.serenity.command.CommandIntent): com.serenity.command.CommandIntent =
+    intent match
+      case com.serenity.command.CommandIntent.Scoped(_, inner) => unscoped(inner)
+      case other                                               => other
 
   private[layout] def settingSearchRow(item: CommandSurfaceItem.SettingSearchItem, selected: Boolean): OverlayRow =
     OverlayRow(

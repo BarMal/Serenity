@@ -51,6 +51,15 @@ object CommandRunnerSettingsGroups:
     def group(id: String, label: String, hint: String, children: List[CommandSurfaceItem]) =
       CommandSurfaceItem.GroupItem(id, label, children, CommandCategory.Settings, Some(hint))
 
+    // Preset pages are built from the same definitions, over the edited preset's own values (see `PresetGroups`).
+    val editable              = CommandRunnerSettingsEditableGroups.build(optionSelections, inputItems, fontFamilies)
+    val cursorGroup           = editable.cursor
+    val proseFontGroup        = editable.proseFont
+    val codeFontGroup         = editable.codeFont
+    val uiFontGroup           = editable.uiFont
+    val documentDefaultsGroup = editable.documentDefaults
+    val spellCheckGroup       = editable.spellCheck
+
     val workspaceLayoutGroup = group(
       "settings-workspace-layout",
       "Panels",
@@ -95,16 +104,6 @@ object CommandRunnerSettingsGroups:
       "Resize editor margins",
       input("text-area-left", "text-area-right", "text-area-top", "text-area-bottom")
     )
-    val documentDefaultsGroup = group(
-      "settings-document-defaults",
-      "Document Defaults",
-      "New document mode, Markdown view, and drop caps",
-      List(
-        CommandRunnerSettingsItems.defaultDocumentModeOptionItem(optionSelections),
-        CommandRunnerSettingsItems.markdownViewOptionItem(optionSelections),
-        CommandRunnerSettingsItems.dropCapsEnabledOptionItem(optionSelections)
-      )
-    )
     val savingGroup = group(
       "settings-saving",
       "Saving",
@@ -118,34 +117,6 @@ object CommandRunnerSettingsGroups:
       "Comments",
       "Author or reply to a document comment",
       input("document-comment", "reply-document-comment")
-    )
-    val fontHint = "Family, size, ligatures"
-    val proseFontGroup = group(
-      "settings-prose-font",
-      "Prose Font",
-      fontHint,
-      List(
-        CommandRunnerSettingsItems.textFontGroupItem(optionSelections, fontFamilies.text),
-        CommandRunnerSettingsItems.textLigaturesOptionItem(optionSelections)
-      ) ++ input("text-font-size")
-    )
-    val codeFontGroup = group(
-      "settings-code-font",
-      "Code Font",
-      fontHint,
-      List(
-        CommandRunnerSettingsItems.codeFontGroupItem(optionSelections, fontFamilies.monospace),
-        CommandRunnerSettingsItems.codeLigaturesOptionItem(optionSelections)
-      ) ++ input("code-font-size")
-    )
-    val uiFontGroup = group(
-      "settings-ui-font",
-      "UI Font",
-      fontHint,
-      List(
-        CommandRunnerSettingsItems.uiFontGroupItem(optionSelections, fontFamilies.ui),
-        CommandRunnerSettingsItems.uiLigaturesOptionItem(optionSelections)
-      ) ++ input("ui-font-size")
     )
     val textScaleGroup = group(
       "settings-text-scale",
@@ -186,12 +157,6 @@ object CommandRunnerSettingsGroups:
         Some(CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(optionSelections))
       ).flatten
     )
-    val cursorGroup = group(
-      "settings-cursor",
-      "Cursor",
-      "Caret style",
-      List(CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections))
-    )
     val lookAdvancedGroup = group(
       "settings-look-advanced",
       "Advanced",
@@ -203,13 +168,6 @@ object CommandRunnerSettingsGroups:
         )
     )
     val bufferLanguageGroup = CommandRunnerSettingsItems.bufferLanguageGroupItem(context.bufferLanguage)
-    val spellCheckGroup = group(
-      "settings-spellcheck",
-      "Spell Check",
-      "Enable, languages, dictionaries, accepted words",
-      CommandRunnerSettingsItems.spellCheckOptionItem(optionSelections) ::
-        input("spellcheck-languages", "spellcheck-dictionaries", "spellcheck-words")
-    )
     val keysGroup = group(
       "settings-keymap",
       "Keys",
@@ -217,32 +175,15 @@ object CommandRunnerSettingsGroups:
       CommandRunnerSettingsKeymapItems.keymapGroups(inputItems.filter(_.id.startsWith("keymap-")))
     )
 
-    // issue #1058: editing a preset reuses these same canonical groups verbatim, only retagged (`settings-preset-*`)
-    // so they stay addressable as distinct pages from their top-level counterparts.
-    val presetScoped = List(
-      workspaceLayoutGroup.copy(
-        id = "settings-preset-workspace-layout",
-        children = CommandRunnerSettingsPanelItems.workspaceLayoutItems
-      ),
-      cursorGroup.copy(id = "settings-preset-cursor")
-    ) ++ onFrontend.rows(
-      guiOnly,
-      List(
-        proseFontGroup.copy(id = "settings-preset-prose-font"),
-        codeFontGroup.copy(id = "settings-preset-code-font"),
-        uiFontGroup.copy(id = "settings-preset-ui-font")
-      )
-    ) ++ List(
-      documentDefaultsGroup.copy(id = "settings-preset-document-defaults"),
-      spellCheckGroup.copy(id = "settings-preset-spellcheck")
-    )
     val presetsGroup =
       CommandRunnerSettingsPresetGroups.build(
         optionSelections,
         inputItems,
         uiPresetPreviews,
         editingPresetName,
-        presetScoped
+        capabilities,
+        fontFamilies,
+        showAllSettingsRegardlessOfMode
       )
 
     val workspaceGroup = group(

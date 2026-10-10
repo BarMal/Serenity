@@ -71,7 +71,7 @@ object CommandScope:
       case CommandIntent.Lifecycle(_) | CommandIntent.Diagnostics(_) | CommandIntent.File(_) |
           CommandIntent.Comments(_) | CommandIntent.Navigation(_) | CommandIntent.Theme(_) | CommandIntent.Session(_) |
           CommandIntent.Keybindings(_) | CommandIntent.UiPresets(_) | CommandIntent.Settings(_) |
-          CommandIntent.Spelling(_) =>
+          CommandIntent.Spelling(_) | CommandIntent.Scoped(_, _) =>
         CommandFamily.Core
 
   private def editFamily(intent: EditIntent): CommandFamily =

@@ -15,7 +15,6 @@ import com.serenity.config.{
   ConfigRestart,
   HotkeyOverrides,
   LineNumberLayout,
-  SpellCheckLanguage,
   StatusLinePlacement,
   StatusSegment
 }
@@ -114,9 +113,6 @@ final private[manager] class StateManagerConfigEffects(
     applyConfigUpdate(config => config.withSpellCheck(update(config.languageToolsConfig.spellCheck))).void >>
       editor.scheduleDocumentAnalysis()
 
-  private def clampFontSize(size: Float): Float =
-    size.max(8.0f).min(48.0f)
-
   private[manager] def interpret(intent: SettingsIntent, state: AppState): IO[Unit] =
     intent match
       case SettingsIntent.Font(fontIntent)               => interpretFontIntent(fontIntent)
@@ -129,56 +125,7 @@ final private[manager] class StateManagerConfigEffects(
       case SettingsIntent.General(generalIntent)       => interpretGeneralSettingsIntent(generalIntent, state)
 
   private def interpretFontIntent(intent: FontIntent): IO[Unit] =
-    intent match
-      case FontIntent.IncreaseFontSize =>
-        updateFontConfig(config =>
-          config.copy(
-            fontSize = clampFontSize(config.fontSize + 1.0f),
-            textFontSize = clampFontSize(config.textFontSize + 1.0f)
-          )
-        )
-      case FontIntent.DecreaseFontSize =>
-        updateFontConfig(config =>
-          config.copy(
-            fontSize = clampFontSize(config.fontSize - 1.0f),
-            textFontSize = clampFontSize(config.textFontSize - 1.0f)
-          )
-        )
-      case FontIntent.SetFontSize(size) =>
-        updateFontConfig(config => config.copy(fontSize = clampFontSize(size), textFontSize = clampFontSize(size)))
-      case FontIntent.SetCodeFontSize(size) =>
-        updateFontConfig(_.copy(fontSize = clampFontSize(size)))
-      case FontIntent.SetTextFontSize(size) =>
-        updateFontConfig(_.copy(textFontSize = clampFontSize(size)))
-      case FontIntent.SetUiFontSize(size) =>
-        updateFontConfig(_.copy(uiFontSize = clampFontSize(size)))
-      case FontIntent.SetTextScaleMode(mode) =>
-        updateFontConfig(_.copy(textScaleMode = mode))
-      case FontIntent.SetTextScaleMultiplier(scale) =>
-        updateFontConfig(config =>
-          config.copy(
-            textScaleMode = com.serenity.ui.fonts.FontLoader.TextScaleMode.Manual,
-            textScaleMultiplier = com.serenity.ui.fonts.FontLoader.FontConfig.clampTextScale(scale)
-          )
-        )
-      case FontIntent.SetCodeFontFamily(family) =>
-        updateFontConfig(_.copy(codeFontFamily = family))
-      case FontIntent.SetTextFontFamily(family) =>
-        updateFontConfig(_.copy(textFontFamily = family))
-      case FontIntent.SetUiFontFamily(family) =>
-        updateFontConfig(_.copy(uiFontFamily = family))
-      case FontIntent.SetLigatures(enabled) =>
-        updateFontConfig(_.copy(enableLigatures = enabled, textLigatures = enabled))
-      case FontIntent.SetCodeLigatures(enabled) =>
-        updateFontConfig(_.copy(enableLigatures = enabled))
-      case FontIntent.SetTextLigatures(enabled) =>
-        updateFontConfig(_.copy(textLigatures = enabled))
-      case FontIntent.SetUiLigatures(enabled) =>
-        updateFontConfig(_.copy(uiLigatures = enabled))
-      case FontIntent.ToggleLigatures =>
-        updateFontConfig(config =>
-          config.copy(enableLigatures = !config.enableLigatures, textLigatures = !config.textLigatures)
-        )
+    updateFontConfig(FontConfigEdit(intent))
 
   private def interpretCursorIntent(intent: CursorIntent): IO[Unit] =
     intent match
@@ -298,17 +245,9 @@ final private[manager] class StateManagerConfigEffects(
         updateConfig(_.withPanelEscapeTarget(mode, target)).void
 
   private def interpretSpellCheckIntent(intent: SpellCheckIntent, state: AppState): IO[Unit] =
-    intent match
-      case SpellCheckIntent.SetSpellCheckEnabled(enabled) =>
-        updateSpellCheckConfig(_.copy(enabled = enabled))
-      case SpellCheckIntent.SetSpellCheckLanguages(languages) =>
-        updateSpellCheckConfig(_.copy(languages = languages.map(SpellCheckLanguage.canonical)))
-      case SpellCheckIntent.SetSpellCheckDictionaryPaths(paths) =>
-        updateSpellCheckConfig(_.copy(dictionaryPaths = paths))
-      case SpellCheckIntent.SetSpellCheckWords(words) =>
-        updateSpellCheckConfig(_.copy(additionalWords = words))
-      case SpellCheckIntent.AddWordAtCursorToDictionary =>
-        addFlaggedWordAtCursorToDictionary(state)
+    SpellCheckConfigEdit(intent) match
+      case Some(edit) => updateSpellCheckConfig(edit)
+      case None       => addFlaggedWordAtCursorToDictionary(state)
 
   // #1531: silently a no-op when the cursor is not on a flagged word -- mirrors how `delete-document-comment`
   // is a no-op with no comment at the cursor, rather than surfacing an error for a command reachable from a

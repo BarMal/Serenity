@@ -179,7 +179,8 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     UiPreset.Preview.fromPreset(writing) shouldBe UiPreset.Preview(
       "Writing",
-      "rich text default; spacious density; Serif 18pt prose; 1 editor pane"
+      "rich text default; spacious density; Serif 18pt prose; 1 editor pane",
+      Some(writing.config)
     )
   }
 
