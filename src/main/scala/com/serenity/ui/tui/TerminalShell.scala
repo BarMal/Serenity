@@ -31,7 +31,8 @@ final class TerminalShell private (
     private val quitDeferred: Deferred[IO, Unit],
     private val dispatcher: Dispatcher[IO],
     val keyboardProtocolTier: KeyboardProtocolTier,
-    val pendingInputPrefix: Array[Byte]
+    val pendingInputPrefix: Array[Byte],
+    private val drainPollMillis: Long
 ):
 
   private val pendingResize  = new AtomicReference[Option[ViewportSize]](None)
@@ -95,7 +96,7 @@ final class TerminalShell private (
     // protocol was still active (its press already triggered quit) and left unread once the input loop was cancelled.
     // Left here the returning shell prints it literally (`[113;5:3u`). Drain while still in raw mode: restoring the
     // original (cooked) attributes first can withhold buffered bytes until a newline arrives.
-    TerminalShell.drainPendingInput(terminal)
+    TerminalShell.drainPendingInput(terminal, drainPollMillis)
     terminal.setAttributes(originalAttributes)
     val _ = terminal.puts(Capability.cursor_normal)
     val _ = terminal.puts(Capability.exit_ca_mode)
@@ -217,10 +218,15 @@ object TerminalShell:
     */
   private val NegotiationDeadlineMillis: Long = 100L
 
-  /** Per-phase probe deadlines. Injectable so a spec that delivers a reply from another thread can widen the phase that
-    * expects one without also stalling the phase that is meant to see silence.
+  /** Per-phase probe deadlines, plus how long teardown waits on an empty reader. Injectable so a spec that delivers a
+    * reply from another thread can widen the phase that expects one without also stalling the phase that is meant to
+    * see silence.
     */
-  final private[tui] case class NegotiationDeadlines(kittyMillis: Long, modifyOtherKeysMillis: Long)
+  final private[tui] case class NegotiationDeadlines(
+      kittyMillis: Long,
+      modifyOtherKeysMillis: Long,
+      drainPollMillis: Long = DrainPollMillis
+  )
 
   private[tui] object NegotiationDeadlines:
     val Production: NegotiationDeadlines = NegotiationDeadlines(NegotiationDeadlineMillis, NegotiationDeadlineMillis)
@@ -268,9 +274,17 @@ object TerminalShell:
         terminal.writer().write(FocusReportingEnable)
         terminal.flush()
         val (tier, prefix) = negotiateKeyboardProtocol(terminal, osName, deadlines)
-        val shell          = new TerminalShell(terminal, originalAttributes, quitDeferred, dispatcher, tier, prefix)
-        val _              = terminal.handle(Signal.WINCH, _ => shell.handleWinch())
-        val _              = terminal.handle(Signal.INT, _ => shell.handleInt())
+        val shell = new TerminalShell(
+          terminal,
+          originalAttributes,
+          quitDeferred,
+          dispatcher,
+          tier,
+          prefix,
+          deadlines.drainPollMillis
+        )
+        val _ = terminal.handle(Signal.WINCH, _ => shell.handleWinch())
+        val _ = terminal.handle(Signal.INT, _ => shell.handleInt())
         shell
       }
     yield shell
@@ -448,6 +462,8 @@ object TerminalShell:
   /** How long [[drainPendingInput]] waits on an otherwise-empty reader before concluding nothing more is buffered.
     * Sized to bridge the sub-millisecond gap between the bytes of a single escape sequence -- a pty delivers those as
     * one burst -- without adding a perceptible stall to shutdown: one such wait is the whole cost when nothing is left.
+    * A spec feeding bytes through an in-memory stream widens it through [[NegotiationDeadlines]], because a loaded
+    * runner can park the reader thread for longer than this between two of them.
     */
   private val DrainPollMillis: Long = 4L
 
@@ -458,10 +474,10 @@ object TerminalShell:
     * first flush the protocol-disable sequences (so no further events are emitted) and must run only after the input
     * reader fiber has been cancelled (`AppRuntime`'s shutdown ordering guarantees this), making this the sole reader.
     */
-  private def drainPendingInput(terminal: Terminal): Unit =
+  private def drainPendingInput(terminal: Terminal, pollMillis: Long): Unit =
     val reader = terminal.reader()
     @annotation.tailrec
     def loop(): Unit =
-      val ch = reader.read(DrainPollMillis)
+      val ch = reader.read(pollMillis)
       if ch != NonBlockingReader.EOF && ch != NonBlockingReader.READ_EXPIRED then loop()
     loop()
