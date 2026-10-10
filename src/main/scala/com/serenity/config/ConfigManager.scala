@@ -66,7 +66,7 @@ object ConfigManager:
   private def parseConfigResult(raw: Config, plan: ConfigMigrations.Plan): ConfigLoadResult =
     val migration           = ConfigMigrations.migrate(raw, plan)
     val source              = migration.config
-    val (config, conflicts) = parseConfig(source)
+    val (config, conflicts) = parseConfig(source, plan.osName)
     val report = inspectConfig(source, migration.found, ConfigVersionStatus.classify(raw, plan.target), plan.target)
     ConfigLoadResult(
       config,
@@ -77,10 +77,14 @@ object ConfigManager:
       )
     )
 
-  private def parseConfig(source: Config): (AppConfig, List[HotkeyConflict]) =
+  /** The file is read on top of the defaults of `osName`, the same platform it is rendered and migrated against. */
+  private def parseConfig(source: Config, osName: String): (AppConfig, List[HotkeyConflict]) =
     val entries = hoconEntries(source)
+    val defaults =
+      if osName == HotkeyOverrides.runningOs then AppConfig.default
+      else AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs(osName))
 
-    val parsed = entries.foldLeft(AppConfig.default) { (config, entry) =>
+    val parsed = entries.foldLeft(defaults) { (config, entry) =>
       val HoconEntry(key, value, _, raw) = entry
       // The registry knows every setting that is one key to one value, in both directions at once. Only the settings
       // that are not -- the key groups, and the spellings that set more than one field -- are still spelled out below.
