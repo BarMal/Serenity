@@ -37,7 +37,8 @@ sealed abstract class WrappedLineCache:
     key: VisualRowKey,
     content: Rope,
     measure: Int => Int,
-    stamp: AnyRef
+    stamp: AnyRef,
+    revision: Option[ContentRevision] = None
   ): VisualRowCounts
 
   /** The fenced code blocks of `content`, which a live Markdown preview leaves unstyled. Finding them reads the whole
@@ -127,7 +128,8 @@ object WrappedLineCache:
       key: VisualRowKey,
       content: Rope,
       measure: Int => Int,
-      stamp: AnyRef
+      stamp: AnyRef,
+      revision: Option[ContentRevision]
     ): VisualRowCounts =
       VisualRowCounts.walking(content.lineCount, measure)
 
@@ -236,9 +238,10 @@ object WrappedLineCache:
       key: VisualRowKey,
       content: Rope,
       measure: Int => Int,
-      stamp: AnyRef
+      stamp: AnyRef,
+      revision: Option[ContentRevision]
     ): VisualRowCounts =
-      visualRows.counts(key, content, measure, stamp)
+      visualRows.counts(key, content, measure, stamp, revision)
 
     private[layout] def wrapped(key: WrappedLineKey, bufferLine: Int, maxVisualLines: Int)(
       cold: Int => RowWrap,

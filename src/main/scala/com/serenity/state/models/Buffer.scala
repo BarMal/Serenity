@@ -159,6 +159,20 @@ final case class Document(
       )
     }
 
+  /** `newContent`, which `change` made out of this document's text by an edit the caller already knows. A change whose
+    * lengths do not fit the two texts is not trusted: it leaves a gap in [[changes]], like [[withContent]].
+    */
+  def edited(newContent: Rope, change: ChangeSet): Document =
+    if change.oldLength == content.weight && change.newLength == newContent.weight then
+      copy(
+        content = newContent,
+        contentVersion = contentVersion + 1,
+        isDirty = true,
+        isNewEmpty = false,
+        changes = changes.appended(contentVersion, change)
+      )
+    else withContent(newContent)
+
   /** `newContent` as one change spanning everything that differs, for a caller that has the text but not the edit. */
   def replacedWith(newContent: Rope)(using Balance): Document =
     copy(
@@ -178,6 +192,21 @@ final case class Document(
     if version == contentVersion then Some(ChangeSet.identity(content.weight))
     else if changes.head == contentVersion then changes.since(version)
     else None
+
+  /** What took `before`, an earlier state of this document, to this one; `None` when it was not an edit this document
+    * recorded (a reload, a restored session) or the record no longer reaches back that far.
+    */
+  def changeFrom(before: Document): Option[ChangeSet] =
+    if before.contentVersion == contentVersion then
+      Option.when(before.content eq content)(ChangeSet.identity(content.weight))
+    else
+      changesSince(before.contentVersion).filter(change =>
+        change.oldLength == before.content.weight && change.newLength == content.weight
+      )
+
+  /** Whether the text differs from `before`'s: read off the recorded change when there is one, compared otherwise. */
+  def textDiffersFrom(before: Document): Boolean =
+    changeFrom(before).fold(before.content != content)(!_.isIdentity)
 
   /** This document as just written to (or read from) its file. */
   def markedSaved: Document =
@@ -404,19 +433,25 @@ final case class Buffer(
     content: Rope,
     cursors: List[CursorPosition],
     adjustedAnnotations: Annotations = annotations,
-    richTextDocument: Option[RichTextDocument] = richText.richTextDocument
+    richTextDocument: Option[RichTextDocument] = richText.richTextDocument,
+    change: Option[ChangeSet] = None
   ): Buffer =
-    withEditedDocument(content, richTextDocument).copy(
+    withEditedDocument(content, richTextDocument, change).copy(
       editing = EditingState(cursors),
       annotations = adjustedAnnotations
     )
 
   /** [[withEditedContent]] for an edit that places its own cursors: the new `content`, with `richTextDocument` -- the
     * caller's remap of the old one onto it, or `None` -- stamped as matching it. The content version advances even for
-    * a keystroke, so a debounced outline parse of the previous text is recognised as stale (#1935).
+    * a keystroke, so a debounced outline parse of the previous text is recognised as stale (#1935). `change` is the
+    * edit itself, which consumers of the new version read instead of comparing the two texts (#1838).
     */
-  def withEditedDocument(content: Rope, richTextDocument: Option[RichTextDocument]): Buffer =
-    val updatedDocument = document.withContent(content)
+  def withEditedDocument(
+    content: Rope,
+    richTextDocument: Option[RichTextDocument],
+    change: Option[ChangeSet] = None
+  ): Buffer =
+    val updatedDocument = change.fold(document.withContent(content))(document.edited(content, _))
     copy(
       document = updatedDocument,
       richText = richText.withSyncedDocument(richTextDocument, updatedDocument.contentVersion)

@@ -153,7 +153,11 @@ private[reducers] object EditorTextEditReducer:
         val newContent = deleteOrUnchanged(buffer.document.content, start, end)
         val newCursor  = newContent.offsetToCursorPosition(start)
         val updated = buffer
-          .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, start, end, ""))
+          .withEditedDocument(
+            newContent,
+            richTextDocumentAfterEdit(buffer, start, end, ""),
+            Some(ChangeSet.single(buffer.document.content.weight, start, end, ""))
+          )
           .copy(
             editing = buffer.editing.withPrimary(Cursor(newCursor)),
             annotations = adjustAnnotations(
@@ -174,7 +178,11 @@ private[reducers] object EditorTextEditReducer:
         val newContent = deleteOrUnchanged(buffer.document.content, start, end)
         val newCursor  = newContent.offsetToCursorPosition(start)
         val updated = buffer
-          .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, start, end, ""))
+          .withEditedDocument(
+            newContent,
+            richTextDocumentAfterEdit(buffer, start, end, ""),
+            Some(ChangeSet.single(buffer.document.content.weight, start, end, ""))
+          )
           .copy(
             editing = buffer.editing.withPrimary(Cursor(newCursor)),
             annotations = adjustAnnotations(
@@ -206,7 +214,11 @@ private[reducers] object EditorTextEditReducer:
     val newContent = deleteOrUnchanged(buffer.document.content, startOffset, endOffset)
     val newCursor  = newContent.offsetToCursorPosition(cursorOffset)
     val baseBuffer = buffer
-      .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
+      .withEditedDocument(
+        newContent,
+        richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""),
+        Some(ChangeSet.single(buffer.document.content.weight, startOffset, endOffset, ""))
+      )
       .copy(
         editing = buffer.editing.withPrimary(Cursor(newCursor)),
         annotations = adjustAnnotations(
@@ -298,7 +310,11 @@ private[reducers] object EditorTextEditReducer:
     val newCursor = newContent.offsetToCursorPosition(startOffset + insertedText.length)
     val edit      = MultiCursorEdit(0, startOffset, endOffset, insertedText)
     val replaced = buffer
-      .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText))
+      .withEditedDocument(
+        newContent,
+        richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText),
+        Some(ChangeSet.single(buffer.document.content.weight, startOffset, endOffset, insertedText))
+      )
       .copy(
         editing = buffer.editing.withPrimary(Cursor(newCursor)),
         annotations = adjustAnnotations(
@@ -438,7 +454,8 @@ private[reducers] object EditorTextEditReducer:
           updatedContent,
           appliedEdits
         ),
-        richTextDocument = updatedRichTextDocument
+        richTextDocument = updatedRichTextDocument,
+        change = Some(folded.change(buffer.document.content.weight))
       )
       (indented.clampedToContent, appliedEdits)
 
@@ -481,7 +498,8 @@ private[reducers] object EditorTextEditReducer:
           updatedContent,
           appliedEdits
         ),
-        richTextDocument = updatedRichTextDocument
+        richTextDocument = updatedRichTextDocument,
+        change = Some(folded.change(buffer.document.content.weight))
       )
       (baseBuffer.clampedToContent, appliedEdits)
 

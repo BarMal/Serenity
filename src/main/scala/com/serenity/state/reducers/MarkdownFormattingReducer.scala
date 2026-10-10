@@ -82,7 +82,8 @@ private[reducers] object MarkdownFormattingReducer:
           content,
           folded.applied
         ),
-        richTextDocument = richTextDocument
+        richTextDocument = richTextDocument,
+        change = Some(folded.change(buffer.document.content.weight))
       )
       .copy(editing = EditingState.fromCursors(cursors))
     ReducerResult(
