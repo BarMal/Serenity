@@ -2,7 +2,7 @@ package com.serenity.ui.tui
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.CountDownLatch
 
 import scala.concurrent.duration.*
 
@@ -102,8 +102,12 @@ class TerminalInputHandlerEscLivenessSpec extends AnyFlatSpec with Matchers:
     runVirtual(program) shouldBe List(translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)))
   }
 
-  /** A pump that is healthy and parked in a read finds nothing after a lone `ESC`, and that is the answer. */
-  "a lone ESC read by a healthy pump" should "resolve to Escape on the real clock" in {
+  /** A pump that is healthy and parked in a read finds nothing after a lone `ESC`, and that is the answer. A real
+    * parked read cannot run under virtual time, so the clock is real; instead the spec waits until the pump has parked
+    * again after reading the `ESC`, so the deadline always meets a parked pump and the outcome does not depend on how
+    * quickly the pump got back to the reader.
+    */
+  "a lone ESC read by a healthy pump" should "resolve to Escape" in {
     val (terminal, reader) = fakeTerminalWithReader()
     val program = for
       clipboard <- InProcessClipboard[IO]
@@ -115,7 +119,9 @@ class TerminalInputHandlerEscLivenessSpec extends AnyFlatSpec with Matchers:
         escDeadline = 100.millis,
         readerOverride = Some(reader)
       )
+      _      <- IO.interruptible(reader.awaitWaitingRead())
       _      <- IO(reader.feed(Array(esc)))
+      _      <- IO.interruptible(reader.awaitWaitingRead())
       events <- handler.eventStream.take(1).compile.toList
     yield events
 
@@ -126,26 +132,24 @@ class TerminalInputHandlerEscLivenessSpec extends AnyFlatSpec with Matchers:
 
   /** Shutting the handler down interrupts the blocked read: no reader thread is left parked in `read`. */
   "shutting down a handler whose pump is blocked in a read" should "release the reader" in {
-    val inFlight = new AtomicInteger(0)
+    val entered  = new CountDownLatch(1)
+    val returned = new CountDownLatch(1)
     val inner    = new FakeTerminalReader
     val reader = new NonBlockingReader:
       override def read(timeout: Long, isPeek: Boolean): Int =
-        inFlight.incrementAndGet()
+        entered.countDown()
         try inner.read(timeout, isPeek)
-        finally inFlight.decrementAndGet()
+        finally returned.countDown()
       override def readBuffered(b: Array[Char], off: Int, len: Int, timeout: Long): Int =
         throw new UnsupportedOperationException("not used by the handler's read loop")
-
-    def awaitInFlight(expected: Int): IO[Unit] =
-      IO(inFlight.get).flatMap(n => if n == expected then IO.unit else IO.sleep(5.millis) >> awaitInFlight(expected))
 
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
       handler   <- TerminalInputHandler.create(structuralTerminal(), router, clipboard, readerOverride = Some(reader))
-      _         <- awaitInFlight(1)
+      _         <- IO.interruptible(entered.await())
       _         <- handler.shutdown
-      _         <- awaitInFlight(0)
+      _         <- IO.interruptible(returned.await())
     yield ()
 
     program.unsafeRunTimed(StreamTimeout).getOrElse(fail("reader still parked in read after shutdown"))

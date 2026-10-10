@@ -1,6 +1,6 @@
 package com.serenity.testkit
 
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -188,11 +188,19 @@ class HangReportSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "show a compute thread stuck inside an IO" in {
+    val entered = new CountDownLatch(1)
     val release = new CountDownLatch(1)
-    val stuck   = IO(release.await()).unsafeToFuture()
+    val stuck = IO {
+      entered.countDown()
+      release.await()
+    }.unsafeToFuture()
     try
+      entered.await(5, TimeUnit.SECONDS) shouldBe true
+      // A thread entering `await` shows the frame while still RUNNABLE; only once parked is it WAITING.
       val seen = awaitCaptured(
-        stack => stack.name.startsWith("io-compute") && stack.frames.exists(_.contains("CountDownLatch.await")),
+        stack =>
+          stack.name.startsWith("io-compute") && stack.state == "WAITING" &&
+            stack.frames.exists(_.contains("CountDownLatch.await")),
         fiveSecondsFromNow
       )
       seen.map(_.state) shouldBe Some("WAITING")
