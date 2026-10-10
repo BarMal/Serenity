@@ -1,5 +1,7 @@
 package com.serenity.text
 
+import java.util.concurrent.atomic.AtomicReference
+
 import com.serenity.rope.Rope
 
 /** Word/character counts and an estimated reading time for a span of prose.
@@ -47,3 +49,19 @@ object TextStatistics:
       characterCount = counts.characters,
       characterCountExcludingWhitespace = counts.nonWhitespaceCharacters
     )
+
+  final private case class RangeEntry(content: Rope, start: Int, end: Int, statistics: TextStatistics)
+
+  private val lastRange = new AtomicReference[Option[RangeEntry]](None)
+
+  /** Counts `content[start, end)` by slicing the rope, which reuses the cached summaries of every subtree the range
+    * covers, so no selection text is copied or rescanned. The last answer is kept: a status line asks again on every
+    * frame, usually about the very same rope and selection.
+    */
+  def ofRange(content: Rope, start: Int, end: Int): TextStatistics =
+    lastRange.get.filter(entry => (entry.content eq content) && entry.start == start && entry.end == end) match
+      case Some(entry) => entry.statistics
+      case None =>
+        val statistics = of(content.slice(start, end))
+        lastRange.set(Some(RangeEntry(content, start, end, statistics)))
+        statistics
