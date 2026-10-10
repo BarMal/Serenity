@@ -246,14 +246,20 @@ sealed trait Rope(using balance: Balance):
     val targetCol  = math.max(0, column)
 
     if targetLine > newlineCount then weight
-    else lineColumnToOffsetIn(this, targetLine, targetCol, 0)
+    else RopeLineConversion.lineColumnToOffset(this, targetLine, targetCol)
 
   /** Resolve an internal rope offset to a logical line and UTF-16 column pair. The returned column may point inside a
     * multi-code-unit grapheme; user-facing edits should snap through grapheme helpers before mutating text.
     */
   def offsetToLineColumn(offset: Int): (Int, Int) =
     val clamped = math.max(0, math.min(offset, weight))
-    offsetToLineColumnIn(this, clamped, 0, 0)
+    RopeLineConversion.offsetToLineColumn(this, clamped)
+
+  /** [[offsetToLineColumn]] for every offset of an ascending list, in one pass that skips the subtrees holding none of
+    * them and scans each leaf once, so a sorted batch (find matches, annotations) costs one descent in total.
+    */
+  def offsetsToLineColumns(ascendingOffsets: IndexedSeq[Int]): Vector[(Int, Int)] =
+    RopeLineConversion.offsetsToLineColumns(this, ascendingOffsets.map(offset => math.max(0, math.min(offset, weight))))
 
   final private case class LineTraversal(
       chunks: Iterator[(Int, String)],
@@ -326,69 +332,6 @@ sealed trait Rope(using balance: Balance):
       else build(index + 1, 0, prefix :+ 0)
 
     build(index = 1, matched = 0, prefix = Vector(0))
-
-  private def lineColumnToOffsetIn(rope: Rope, line: Int, column: Int, baseOffset: Int): Int =
-    rope match
-      case Leaf(value) =>
-        leafLineColumnToOffset(value, line, column, baseOffset)
-      case node: Node =>
-        if line < node.left.newlineCount then lineColumnToOffsetIn(node.left, line, column, baseOffset)
-        else if line > node.left.newlineCount then
-          lineColumnToOffsetIn(node.right, line - node.left.newlineCount, column, baseOffset + node.left.weight)
-        else if node.left.endsWithNewline || node.left.weight == 0 then
-          lineColumnToOffsetIn(node.right, 0, column, baseOffset + node.left.weight)
-        else if column <= node.left.lastLineLength then lineColumnToOffsetIn(node.left, line, column, baseOffset)
-        else lineColumnToOffsetIn(node.right, 0, column - node.left.lastLineLength, baseOffset + node.left.weight)
-
-  private def leafLineColumnToOffset(value: String, line: Int, column: Int, baseOffset: Int): Int =
-    @tailrec
-    def loop(offset: Int, currentLine: Int, currentColumn: Int): Int =
-      if offset >= value.length then baseOffset + value.length
-      else
-        val char = value.charAt(offset)
-        if currentLine == line && currentColumn >= column then baseOffset + offset
-        else if currentLine == line && char == '\n' then baseOffset + offset
-        else if char == '\n' then loop(offset + 1, currentLine + 1, 0)
-        else if currentLine == line then loop(offset + 1, currentLine, currentColumn + 1)
-        else loop(offset + 1, currentLine, currentColumn)
-
-    loop(0, 0, 0)
-
-  private def offsetToLineColumnIn(
-    rope: Rope,
-    offset: Int,
-    baseLine: Int,
-    baseColumn: Int
-  ): (Int, Int) =
-    if offset >= rope.weight then advancePosition(rope, baseLine, baseColumn)
-    else
-      rope match
-        case Leaf(value) =>
-          leafOffsetToLineColumn(value, offset, baseLine, baseColumn)
-        case node: Node =>
-          if offset <= node.left.weight then offsetToLineColumnIn(node.left, offset, baseLine, baseColumn)
-          else
-            val (rightBaseLine, rightBaseColumn) = advancePosition(node.left, baseLine, baseColumn)
-            offsetToLineColumnIn(node.right, offset - node.left.weight, rightBaseLine, rightBaseColumn)
-
-  private def advancePosition(rope: Rope, baseLine: Int, baseColumn: Int): (Int, Int) =
-    if rope.weight == 0 then (baseLine, baseColumn)
-    else if rope.newlineCount == 0 then (baseLine, baseColumn + rope.weight)
-    else (baseLine + rope.newlineCount, rope.lastLineLength)
-
-  private def leafOffsetToLineColumn(
-    value: String,
-    offset: Int,
-    baseLine: Int,
-    baseColumn: Int
-  ): (Int, Int) =
-    @tailrec
-    def loop(index: Int, line: Int, column: Int): (Int, Int) =
-      if index >= offset || index >= value.length then (line, column)
-      else if value.charAt(index) == '\n' then loop(index + 1, line + 1, 0)
-      else loop(index + 1, line, column + 1)
-
-    loop(0, baseLine, baseColumn)
 
 /** Deliberately not `final`, unlike every other case class in the codebase.
   *
