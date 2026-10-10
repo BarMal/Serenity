@@ -42,7 +42,7 @@ object BufferIndexes:
         ),
       references = inputs => List(inputs.comments, inputs.diagnostics),
       compute = inputs =>
-        AnnotationLineIndex(inputs.comments.toVector, inputs.diagnostics.groupMap(_.range.start.line)(identity))
+        AnnotationLineIndex(inputs.comments.toVector, AnnotationLineIndex.diagnosticsBySpannedLine(inputs.diagnostics))
     )
 
   val semanticTokens: DerivedValue[Source, SemanticTokenInputs, SemanticTokensAvailability] =

@@ -182,10 +182,11 @@ object SpellChecker:
       )
       .toMap
 
-  /** Pure: publishes `analyzed` onto `current` only if `current` still matches the fingerprints the analysis was
-    * computed against, rejecting stale results from a buffer or dictionary that changed mid-analysis.
-    * `dictionaryFingerprints` is the same precomputed value used to build `expected`, not re-read here -- this is what
-    * makes the comparison safe to run from inside `Ref.update`.
+  /** Pure: publishes what `analyzed` found onto `current`, buffer by buffer. A buffer unchanged since the analysis
+    * (`expected`) shows its result as found. One edited meanwhile shows the result moved through the edits made since,
+    * and keeps the entry for the next check to continue from, so typing never discards a finished analysis; one whose
+    * dictionary or config changed keeps what it showed. `dictionaryFingerprints` is the same precomputed value used to
+    * build `expected`, not re-read here -- this is what makes the comparison safe to run from inside `Ref.update`.
     */
   def applyIfCurrent(
     current: AppState,
@@ -193,18 +194,54 @@ object SpellChecker:
     expected: Map[DocumentUri, SpellCheckFingerprint],
     dictionaryFingerprints: List[SpellCheckDictionaryFingerprint]
   ): AppState =
-    if analysisFingerprints(current, dictionaryFingerprints) == expected then
-      current.copy(runtime =
-        current.runtime.copy(languageService =
-          current.runtime.languageService.copy(diagnosticsState =
-            current.runtime.languageService.diagnosticsState.copy(
-              diagnostics = withoutIgnoredWords(current, analyzed.runtime.languageService.diagnosticsState.diagnostics),
-              spellCheckCache = analyzed.runtime.languageService.diagnosticsState.spellCheckCache
-            )
-          )
+    val now           = analysisFingerprints(current, dictionaryFingerprints)
+    val held          = current.runtime.languageService.diagnosticsState
+    val analyzedCache = analyzed.runtime.languageService.diagnosticsState.spellCheckCache
+    val buffers       = if now == expected then Map.empty else buffersByUri(current)
+    val published: Map[DocumentUri, (List[Diagnostic], SpellCheckCacheEntry)] = now.flatMap { (uri, fingerprint) =>
+      analyzedCache
+        .get(uri)
+        .flatMap(entry =>
+          if expected.get(uri).contains(fingerprint) then Some(entry.diagnostics -> entry)
+          else movedToCurrent(entry, fingerprint, buffers.get(uri))
+        )
+        .map(uri -> _)
+    }
+    val diagnostics = (held.diagnostics.keySet ++ now.keySet).iterator.flatMap { uri =>
+      val shown = held.diagnostics.getOrElse(uri, Nil)
+      val spell =
+        if !now.contains(uri) then Nil
+        else published.get(uri).fold(shown.filter(isSpellCheckDiagnostic))(_._1)
+      val all = shown.filterNot(isSpellCheckDiagnostic) ++ spell
+      Option.when(all.nonEmpty)(uri -> all)
+    }.toMap
+    val cache = now.keysIterator.flatMap { uri =>
+      published.get(uri).map(_._2).orElse(held.spellCheckCache.get(uri)).map(uri -> _)
+    }.toMap
+    current.copy(runtime =
+      current.runtime.copy(languageService =
+        current.runtime.languageService.copy(diagnosticsState =
+          held.copy(diagnostics = withoutIgnoredWords(current, diagnostics), spellCheckCache = cache)
         )
       )
-    else current
+    )
+
+  private def buffersByUri(state: AppState): Map[DocumentUri, Buffer] =
+    state.persisted.buffers.values.map(buffer => diagnosticsUri(buffer) -> buffer).toMap
+
+  /** `entry` as it reads in `buffer` now, when only its text has changed since the analysis and the edits are known. */
+  private def movedToCurrent(
+    entry: SpellCheckCacheEntry,
+    fingerprint: SpellCheckFingerprint,
+    buffer: Option[Buffer]
+  ): Option[(List[Diagnostic], SpellCheckCacheEntry)] =
+    for
+      current  <- buffer
+      version  <- entry.contentVersion
+      analysed <- entry.analysis
+      if entry.fingerprint.sameDictionaryAndConfig(fingerprint)
+      change <- current.document.changeSinceText(version, analysed.content)
+    yield DiagnosticsEditRemap.through(entry.diagnostics, change, analysed.content, current.document.content) -> entry
 
   /** The word covered by an active spell-check diagnostic at the cursor (#1531), read back from the buffer's current
     * content at the diagnostic's own range rather than reparsed from the diagnostic message. `None` when there is no

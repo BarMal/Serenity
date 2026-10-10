@@ -17,9 +17,9 @@ final private[effects] class DelayedSubmissions private (
 ):
   import DelayedSubmissions.{Entry, Step}
 
-  def schedule(lane: Lane.Keyed, delay: FiniteDuration, job: IO[Unit]): IO[Unit] =
+  def schedule(lane: Lane.Keyed, delay: FiniteDuration, job: IO[Unit], maxWait: Option[FiniteDuration]): IO[Unit] =
     IO.monotonic.flatMap { now =>
-      state.modify(_.scheduled(lane, now + delay, job)).flatMap(IO.whenA(_)(wakeups.offer(())))
+      state.modify(_.scheduled(lane, now, delay, job, maxWait)).flatMap(IO.whenA(_)(wakeups.offer(())))
     }
 
   /** Completes once every job scheduled before the call has been handed to its lane or replaced by a later one. */
@@ -50,7 +50,7 @@ object DelayedSubmissions:
   def create(submit: (Lane.Keyed, IO[Unit]) => IO[Unit]): IO[DelayedSubmissions] =
     (Ref.of[IO, State](State.empty), Queue.dropping[IO, Unit](1)).mapN(new DelayedSubmissions(_, _, submit))
 
-  final private[effects] case class Entry(seq: Long, due: FiniteDuration, job: IO[Unit])
+  final private[effects] case class Entry(seq: Long, due: FiniteDuration, job: IO[Unit], firstAsked: FiniteDuration)
 
   private[effects] enum Step:
     case Fire(due: Vector[(Lane.Keyed, Entry)])
@@ -64,8 +64,18 @@ object DelayedSubmissions:
       waiters: Vector[(Long, Deferred[IO, Unit])]
   ):
 
-    def scheduled(lane: Lane.Keyed, due: FiniteDuration, job: IO[Unit]): (State, Boolean) =
-      val next = copy(nextSeq = nextSeq + 1, pending = pending.updated(lane, Entry(nextSeq, due, job)))
+    /** A request replacing a waiting one keeps when the burst began, so `maxWait` bounds the whole burst. */
+    def scheduled(
+      lane: Lane.Keyed,
+      now: FiniteDuration,
+      delay: FiniteDuration,
+      job: IO[Unit],
+      maxWait: Option[FiniteDuration]
+    ): (State, Boolean) =
+      val firstAsked = pending.get(lane).fold(now)(_.firstAsked)
+      val quiet      = now + delay
+      val due        = maxWait.map(firstAsked + _).filter(_ < quiet).getOrElse(quiet)
+      val next = copy(nextSeq = nextSeq + 1, pending = pending.updated(lane, Entry(nextSeq, due, job, firstAsked)))
       (next, sleepingUntil.forall(_ > due))
 
     def awaiting(handed: Deferred[IO, Unit]): (State, Boolean) =

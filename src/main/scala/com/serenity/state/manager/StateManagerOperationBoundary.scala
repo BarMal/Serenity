@@ -408,7 +408,9 @@ final private[manager] class StateManagerOperationBoundary private (
 
   private def submitAfter(effect: DebouncedEffect, job: IO[Unit]): IO[Unit] =
     submittedEffects.update(_ + 1) >>
-      effectLanes.submitAfter(effect.lane, effect.delay, job).recover { case _: EffectLanes.Released => () }
+      effectLanes.submitAfter(effect.lane, effect.delay, job, effect.maxWait).recover {
+        case _: EffectLanes.Released => ()
+      }
 
   private def postResult(result: EffectResult): IO[Unit] =
     dispatcher.post(modelCommit.applyResult(result, _ => IO.unit))
@@ -501,6 +503,7 @@ private[manager] object StateManagerOperationBoundary:
       .map(PanelContentSync.synced(_, fallbackState))
       .map(NotesPaneSync.synced(_, fallbackState))
       .map(PanelArrangement.resyncedIn)
+      .map(DiagnosticsEditRemap.carried(fallbackState, _))
       .map(_.withBufferIndexesRefreshed)
       .map(LineEndingChoice.withPendingNotice)
 

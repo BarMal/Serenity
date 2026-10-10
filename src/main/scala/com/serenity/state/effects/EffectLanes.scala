@@ -22,9 +22,15 @@ trait EffectLanes:
   /** Accepts `job` to be submitted to `lane` once `delay` passes with no later `submitAfter` for the same lane: each
     * call replaces the one still waiting, so a burst of calls runs `job` once, after the burst, and costs no fiber per
     * call. Unlike [[submit]], a job already running on the lane is cancelled when the replacement is handed over, not
-    * when it is requested. Fails with [[EffectLanes.Released]] once the resource has been released.
+    * when it is requested. With `maxWait`, a burst that never goes quiet still runs `job` that long after its first
+    * request. Fails with [[EffectLanes.Released]] once the resource has been released.
     */
-  def submitAfter(lane: Lane.Keyed, delay: FiniteDuration, job: IO[Unit]): IO[Unit]
+  def submitAfter(
+    lane: Lane.Keyed,
+    delay: FiniteDuration,
+    job: IO[Unit],
+    maxWait: Option[FiniteDuration] = None
+  ): IO[Unit]
 
   /** Completes once every job accepted before the call has finished, been cancelled, been superseded or been dropped.
     * Work accepted afterwards is not waited for, so a steady stream of submissions cannot starve a drain.
@@ -75,9 +81,14 @@ object EffectLanes:
         }
       }
 
-    def submitAfter(lane: Lane.Keyed, delay: FiniteDuration, job: IO[Unit]): IO[Unit] =
+    def submitAfter(
+      lane: Lane.Keyed,
+      delay: FiniteDuration,
+      job: IO[Unit],
+      maxWait: Option[FiniteDuration]
+    ): IO[Unit] =
       table.get.flatMap(current =>
-        if current.released then IO.raiseError(Released()) else delayed.schedule(lane, delay, job)
+        if current.released then IO.raiseError(Released()) else delayed.schedule(lane, delay, job, maxWait)
       )
 
     def drain: IO[Unit] =

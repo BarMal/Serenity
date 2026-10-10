@@ -32,6 +32,16 @@ class DelayedSubmissionsSpec extends AnyFlatSpec with Matchers:
     ran shouldBe Vector("run 5000" -> (4999.millis + 150.millis))
   }
 
+  it should "run a burst that never goes quiet once maxWait has passed since its first request" in {
+    val ran = withLanes { (lanes, ran) =>
+      (1 to 30).toList.traverse_(index =>
+        lanes.submitAfter(analysis, 150.millis, record(ran, s"run $index"), Some(1.second)) >> IO.sleep(100.millis)
+      ) >> lanes.drain >> ran.get
+    }
+    ran.map(_._2).headOption shouldBe Some(1.second)
+    ran.size should be > 1
+  }
+
   it should "not run anything while no request has been made, however long the editor idles" in {
     val ran = withLanes((_, ran) => IO.sleep(10.minutes) >> ran.get)
     ran shouldBe empty

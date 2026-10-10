@@ -50,3 +50,19 @@ final case class AnnotationLineIndex(
           .filter(visibleLines.contains)
           .foldLeft(byLine)((updated, line) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
       }
+
+object AnnotationLineIndex:
+
+  /** Each diagnostic under every line its range covers. A range that ends at the very start of a line does not cover
+    * that line, as in the LSP where an end position is exclusive.
+    */
+  def diagnosticsBySpannedLine(diagnostics: List[Diagnostic]): Map[Int, List[Diagnostic]] =
+    diagnostics
+      .flatMap(diagnostic => spannedLines(diagnostic).map(_ -> diagnostic))
+      .groupMap(_._1)(_._2)
+
+  private def spannedLines(diagnostic: Diagnostic): Range =
+    val range = diagnostic.range
+    val last =
+      if range.end.character == 0 && range.end.line > range.start.line then range.end.line - 1 else range.end.line
+    range.start.line to last.max(range.start.line)
