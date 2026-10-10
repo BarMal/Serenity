@@ -18,6 +18,8 @@ class RecentFoldersSpec extends AnyFlatSpec with Matchers with StateManagerTestS
 
   private val root = TestTemp.directory("recent-folders-spec")
 
+  private def absolute(path: String): Path = Path.of(path).toAbsolutePath.normalize
+
   private def folder(name: String): Path = Files.createDirectories(root.resolve(name))
 
   private def explorerRoots(state: AppState): List[Path] =
@@ -120,21 +122,21 @@ class RecentFoldersSpec extends AnyFlatSpec with Matchers with StateManagerTestS
   }
 
   "Persisted.trackRecentFolder" should "put the folder first, drop its earlier entry and keep the rest in order" in {
-    val (a, b, c) = (Path.of("/w/a"), Path.of("/w/b"), Path.of("/w/c"))
+    val (a, b, c) = (absolute("/w/a"), absolute("/w/b"), absolute("/w/c"))
 
     Persisted.trackRecentFolder(List(a, b, c), b) shouldBe List(b, a, c)
   }
 
   it should "store the absolute, normalised path, so differently spelt paths are one entry" in {
-    val tracked = Persisted.trackRecentFolder(List(Path.of("/w/a")), Path.of("/w/x/../a/."))
+    val tracked = Persisted.trackRecentFolder(List(absolute("/w/a")), Path.of("/w/x/../a/."))
 
-    tracked shouldBe List(Path.of("/w/a"))
+    tracked shouldBe List(absolute("/w/a"))
     Persisted.trackRecentFolder(Nil, Path.of("relative/dir")) shouldBe
       List(Path.of("relative/dir").toAbsolutePath.normalize)
   }
 
   it should "keep the twenty most recent folders, as recent files do" in {
-    val folders = (1 to 25).map(i => Path.of(s"/w/f$i")).toList
+    val folders = (1 to 25).map(i => absolute(s"/w/f$i")).toList
     val tracked = folders.foldLeft(List.empty[Path])(Persisted.trackRecentFolder)
 
     tracked shouldBe folders.reverse.take(20)

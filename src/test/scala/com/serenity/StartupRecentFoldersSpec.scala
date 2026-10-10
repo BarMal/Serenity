@@ -20,11 +20,13 @@ class StartupRecentFoldersSpec extends AnyFlatSpec with Matchers with StateManag
 
   private val root = TestTemp.directory("startup-recent-folders-spec")
 
+  private def absolute(path: String): Path = Path.of(path).toAbsolutePath.normalize
+
   private def folderActions(page: StartupPage): List[StartupAction] =
     page.actions.filter(_.id.startsWith("recent-folder:"))
 
   "The start page" should "offer each recent folder, most recent first, as a path-carrying command" in {
-    val (first, second) = (Path.of("/work/book"), Path.of("/work/notes"))
+    val (first, second) = (absolute("/work/book"), absolute("/work/notes"))
     val page            = AppStartup.createStartPage(sessionExists = false, recentFolders = List(first, second))
 
     folderActions(page).map(_.label) shouldBe List(first.toString, second.toString)
@@ -37,18 +39,19 @@ class StartupRecentFoldersSpec extends AnyFlatSpec with Matchers with StateManag
   }
 
   it should "list recent files before recent folders, after the fixed actions" in {
-    val file = Path.of("/work/a.md")
+    val file   = absolute("/work/a.md")
+    val folder = absolute("/work/book")
     val page = AppStartup.createStartPage(
       sessionExists = false,
       recentFiles = List(file),
-      recentFolders = List(Path.of("/work/book"))
+      recentFolders = List(folder)
     )
 
-    page.actions.map(_.id).takeRight(2) shouldBe List(s"recent:$file", "recent-folder:/work/book")
+    page.actions.map(_.id).takeRight(2) shouldBe List(s"recent:$file", s"recent-folder:$folder")
   }
 
   it should "show a folder once and no more than it shows files" in {
-    val many = (1 to 12).map(i => Path.of(s"/dir/folder$i")).toList
+    val many = (1 to 12).map(i => absolute(s"/dir/folder$i")).toList
     val page = AppStartup.createStartPage(
       sessionExists = false,
       recentFolders = Path.of("/dir/folder1/../folder1") :: many
