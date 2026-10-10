@@ -108,10 +108,12 @@ object WrappedLineCache:
   /** How many recent wraps per [[WrapShape]] a line may resume from. */
   val MaxRecentPerShape = 8
 
-  /** Caps retained text as well as line count: one entry holds a caret stop per character, so a few thousand long
-    * paragraphs would otherwise pin tens of megabytes.
+  /** Caps retained text as well as line count: one entry holds a caret stop and an advance per character, about 50
+    * bytes in all. Entries are keyed by text, so every keystroke leaves the paragraph's previous version behind until
+    * it is evicted; a million characters let those fill about 100MB while editing a 9KB file (#1798). This holds the
+    * wraps of several hundred prose paragraphs, far more than the screen needs.
     */
-  val DefaultMaxChars: Long = 1_000_000L
+  val DefaultMaxChars: Long = 262_144L
 
   /** Measures on every call; the default for callers that own no cache. */
   object Uncached extends WrappedLineCache:

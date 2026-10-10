@@ -78,9 +78,10 @@ final private[spellcheck] case class HunspellAffixRules(
 ):
 
   /** Every flag a compound mechanism of this dictionary consults on a word, so only words carrying one need their flags
-    * kept for compound matching.
+    * kept for compound matching. Lazy because the loader tests it once per dictionary entry and re-deriving it from the
+    * COMPOUNDRULE patterns each time allocated gigabytes while a dictionary loaded.
     */
-  def compoundRelevantFlags: Set[String] =
+  lazy val compoundRelevantFlags: Set[String] =
     HunspellCompoundMatcher.ruleFlags(compoundRules) ++
       List(compoundFlag, compoundBeginFlag, compoundMiddleFlag, compoundEndFlag).flatten ++
       compoundCheckRules.patterns.flatMap(pattern => pattern.endFlag.toList ++ pattern.beginFlag.toList)

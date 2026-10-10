@@ -158,6 +158,15 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
     cache.retainedChars should be <= (prose.length.toLong * 2 + 10)
   }
 
+  it should "keep the default character bound small enough that edit leftovers cannot pin tens of megabytes" in {
+    val cache      = WrappedLineCache.bounded()
+    val paragraphs = (0 until 3000).map(index => s"$index $prose $prose $prose")
+    paragraphs.foreach(paragraph => wrap(paragraph, cache))
+    cache.retainedChars should be <= WrappedLineCache.DefaultMaxChars
+    WrappedLineCache.DefaultMaxChars should be <= 300_000L
+    cache.size should be < paragraphs.length
+  }
+
   it should "rebase cached rows onto a line's new buffer line after a line is inserted above it" in {
     val text   = s"$prose\n\n$prose tail"
     val buffer = Buffer.fromString(BufferId(3), text).copy(viewport = Viewport(0, 0, 40, 40))
