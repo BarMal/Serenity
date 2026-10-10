@@ -114,10 +114,21 @@ object LayoutEngine:
   ): CalculatedLayout =
     calculateLayoutWithUI(state, viewportSize, spacerPercentage)
 
+  private[serenity] val chromeMemo = new ChromeLayoutMemo()
+
   def calculateLayoutWithUI(
     state: AppState,
     viewportSize: ViewportSize,
     spacerPercentage: Double = DefaultSpacerPercentage
+  ): CalculatedLayout =
+    chromeMemo.layoutFor(state, viewportSize, spacerPercentage)(
+      calculateLayoutWithUIUncached(state, viewportSize, spacerPercentage)
+    )
+
+  private[serenity] def calculateLayoutWithUIUncached(
+    state: AppState,
+    viewportSize: ViewportSize,
+    spacerPercentage: Double
   ): CalculatedLayout =
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
     val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
