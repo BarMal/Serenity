@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 1.0.0-rc.1 — 2026-10-10
+
 ### 2026-10-10
 
 - Stopped a text setting that reads as a number (a comment author of `4e9`, say) coming back changed after a save: it was written bare and read back as the number 4000000000. It is now written quoted whenever the loader would read it as anything but the same text.
