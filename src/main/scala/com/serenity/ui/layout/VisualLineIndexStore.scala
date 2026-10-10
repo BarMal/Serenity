@@ -4,6 +4,7 @@ import java.util.LinkedHashMap
 
 import scala.annotation.tailrec
 
+import com.serenity.markdown.MarkdownInlineView
 import com.serenity.rope.{Leaf, Node, Rope}
 
 /** The [[VisualLineIndex]] last built for each key -- a buffer under one wrap setting -- together with the content it
@@ -33,7 +34,7 @@ final class VisualLineIndexStore[K](maxEntries: Int):
 
   private[layout] def indexFor(key: K, content: Rope, stamp: AnyRef = VisualLineIndexStore.Unstamped): VisualLineIndex =
     synchronized(Option(entries.get(key))) match
-      case Some(entry) if entry.stamp ne stamp                  => VisualLineIndex.unmeasured(content.lineCount)
+      case Some(entry) if !sameStamp(entry.stamp, stamp)        => VisualLineIndex.unmeasured(content.lineCount)
       case Some(entry) if isSameContent(entry.content, content) => entry.index
       case Some(entry) => VisualLineIndexStore.followEdit(entry.index, entry.content, content)
       case None        => VisualLineIndex.unmeasured(content.lineCount)
@@ -44,6 +45,11 @@ final class VisualLineIndexStore[K](maxEntries: Int):
   }
 
   private def isSameContent(a: Rope, b: Rope): Boolean = (a: AnyRef) eq (b: AnyRef)
+
+  private def sameStamp(a: AnyRef, b: AnyRef): Boolean =
+    (a eq b) || ((a, b) match
+      case (x: VisualLineIndexStore.ViewStamp, y: VisualLineIndexStore.ViewStamp) => x == y
+      case _                                                                      => false)
 
   @tailrec
   private def evictEldest(eldestFirst: java.util.Iterator[Entry]): Unit =
@@ -56,6 +62,15 @@ object VisualLineIndexStore:
 
   /** The stamp of content whose row counts depend on nothing but its text. */
   val Unstamped: AnyRef = new Object
+
+  /** Rich-text styling is stamped by the identity of its document; a restyled Markdown view by its value, since each
+    * frame builds an equal one.
+    */
+  final private[layout] case class ViewStamp(base: AnyRef, markdown: MarkdownInlineView)
+
+  private[layout] def stampOf(richText: RichTextContext): AnyRef =
+    val base = richText.document.getOrElse(Unstamped)
+    if richText.markdown.isActive then ViewStamp(base, richText.markdown) else base
 
   val DefaultMaxEntries = 32
 

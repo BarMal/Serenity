@@ -142,6 +142,9 @@ enum ViewIntent:
   case SetPanelPin(id: PanelId, position: Option[PanelPosition])
   case OpenMarkdownPreview
   case SetMarkdownViewMode(mode: MarkdownViewMode)
+
+  /** Switches between hiding Markdown markers everywhere (read) and hiding them off the caret line (live preview). */
+  case ToggleMarkdownReadMode
   case SetDefaultDocumentMode(mode: DefaultDocumentMode)
   case SetAppMode(mode: AppMode)
 

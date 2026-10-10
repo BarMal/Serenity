@@ -4,7 +4,6 @@ import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.manager.FocusedTextBody
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.theme.*
 
 /** Paints each editor pane's own content: the header/spacer chrome and the visible text rows (plain or the inline
   * markdown-lens variant).
@@ -324,6 +323,18 @@ object RendererPaneContent:
       RendererMarkdownLens.renderMarkdownRawLenses(buffer, rect, state, context, snapshot, frame)
     else renderPlainBufferContent(buffer, rect, state, context, snapshot, annotations, dirtyRows)
 
+  /** Paints `buffer` into `rect` as plain, annotation-free text: what a docked preview shows of the document. */
+  private[renderer] def renderReadOnlyText(
+    buffer: Buffer,
+    rect: LayoutRect,
+    state: AppState,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
+  ): Unit =
+    context.surface.text.setFont(FontSpec.fromAwt(context.fontForBuffer(buffer)))
+    val noAnnotations = BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending)
+    renderPlainBufferContent(buffer, rect, state, context, snapshot, noAnnotations, dirtyRows = None)
+
   /** Draw the pane's visible rows.
     *
     * `dirtyRows` is the dirty-region contract: `None` draws every row, `Some(rows)` draws only those rows because the
@@ -360,8 +371,7 @@ object RendererPaneContent:
               screenX >= 0 &&
               screenX < rect.right
           then
-            val lineTheme      = state.persisted.theme
-            val styledSegments = visualLineStyledSegments(visualLine, lineTheme, snapshot, activeBodyLines)
+            val lineTheme = state.persisted.theme
             // `Pending` renders as `Some(Nil)`, not `None` -- a request still in flight (or one not yet sent) must
             // not flash the muted "unavailable" style a confirmed `Unavailable` gets; it renders exactly like a
             // connected document whose visible lines just don't have tokens yet.
@@ -369,6 +379,16 @@ object RendererPaneContent:
               case SemanticTokensAvailability.Available(byLine) => Some(byLine.getOrElse(visualLine.bufferLine, Nil))
               case SemanticTokensAvailability.Pending           => Some(Nil)
               case SemanticTokensAvailability.Unavailable       => None
+            val styledSegments = RendererLineSegments.forLine(
+              visualLine,
+              lineTheme,
+              snapshot,
+              activeBodyLines,
+              buffer,
+              state,
+              context,
+              lineSemanticTokens
+            )
             if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
               DropCapRenderer.renderMeasuredHomeAware(
                 snapshot,
@@ -518,37 +538,6 @@ object RendererPaneContent:
 
   def rowAscentPxFor(visualLine: TextVisualLine, snapshot: TextLayoutSnapshot): Int =
     if visualLine.ascentPx > 0 then visualLine.ascentPx else snapshot.ascentPx
-
-  private def richTextStyledSegments(
-    visualLine: TextVisualLine,
-    theme: Theme,
-    snapshot: TextLayoutSnapshot
-  ): Option[List[StyledText]] =
-    snapshot.richTextDocument
-      .map { document =>
-        RichTextStyling.styledLine(
-          document,
-          visualLine.bufferLine,
-          visualLine.startColumn,
-          visualLine.endColumn,
-          theme,
-          snapshot.proseScale
-        )
-      }
-      .filter(segments => segments.map(_.content).mkString == visualLine.text)
-
-  private def visualLineStyledSegments(
-    visualLine: TextVisualLine,
-    theme: Theme,
-    snapshot: TextLayoutSnapshot,
-    activeBodyLine: Int => Boolean
-  ): Option[List[StyledText]] =
-    val richSegments = richTextStyledSegments(visualLine, theme, snapshot)
-    if activeBodyLine(visualLine.bufferLine) then richSegments
-    else
-      val baseSegments =
-        richSegments.getOrElse(List(StyledText(visualLine.text, TextStyle.normal, theme.foreground, theme.background)))
-      Some(baseSegments.map(segment => segment.copy(foregroundColor = theme.muted, backgroundColor = theme.background)))
 
   private def focusedTextBodyLines(buffer: Buffer, state: AppState): Int => Boolean =
     if !state.persisted.config.surfaceConfig.focusedTextBodyEnabled then _ => true

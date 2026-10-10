@@ -287,7 +287,8 @@ object RendererPaneSetup:
           forceCellLayout = !hasFontRenderContext,
           proseScale = proseScale,
           dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
-          wrapCache = context.caches.wrappedLines
+          wrapCache = context.caches.wrappedLines,
+          markdownViewMode = state.persisted.config.inlineMarkdownViewMode
         )
     if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
 

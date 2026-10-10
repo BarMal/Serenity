@@ -5,7 +5,12 @@ import java.awt.font.FontRenderContext
 
 import com.serenity.richtext.ParagraphRole
 import com.serenity.state.models.TextVisualLine
-import com.serenity.ui.layout.TextCaretMeasurement.{LineFontResolver, resolverForLine, singleFontResolver}
+import com.serenity.ui.layout.TextCaretMeasurement.{
+  LineFontResolver,
+  markdownResolver,
+  resolverForLine,
+  singleFontResolver
+}
 import com.serenity.ui.theme.RichTextStyling
 
 /** The line-level inputs of a wrap -- per-run fonts, drop cap role and glyph width -- shared by the painted layout and
@@ -31,7 +36,9 @@ private[layout] object LineLayout:
     maxVisualLines: Int = Int.MaxValue,
     wrapCache: WrappedLineCache
   ): Vector[TextVisualLine] =
-    val inputs = lineLayoutInputs(font, frc, measuredLayout, richText, bufferLine, lineLength)
+    // A slice of a line cannot be scanned for the markup that opened before it.
+    val lineText = if baseColumn == 0 then text else ""
+    val inputs   = lineLayoutInputs(font, frc, measuredLayout, richText, bufferLine, lineLength, lineText)
     TextLayoutSnapshot.wrapLogicalLine(
       text,
       bufferLine,
@@ -47,6 +54,17 @@ private[layout] object LineLayout:
       wrapCache
     )
 
+  /** A cell grid is forced only when the caller has no glyph metrics at all; otherwise a font is measured glyph by
+    * glyph when it needs to be, or when hiding Markdown markers needs it to be.
+    */
+  def measuredLayoutFor(
+    font: Font,
+    frc: FontRenderContext,
+    forceCellLayout: Boolean,
+    richText: RichTextContext
+  ): Boolean =
+    !forceCellLayout && (richText.requiresMeasuredLayout || TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc))
+
   final case class LineLayoutInputs(
       resolver: LineFontResolver,
       paragraphRole: ParagraphRole,
@@ -54,7 +72,8 @@ private[layout] object LineLayout:
   )
 
   /** Cell layout (TUI) never consults per-run fonts -- one glyph per cell, one row per line -- nor spans a drop cap
-    * glyph across rows (`DropCapRenderer.renderGlyphCell`), so only a measured layout derives them.
+    * glyph across rows (`DropCapRenderer.renderGlyphCell`), so only a measured layout derives them. `lineText` is the
+    * whole logical line, which the inline Markdown view scans for the stretches it restyles.
     */
   def lineLayoutInputs(
     font: Font,
@@ -62,11 +81,13 @@ private[layout] object LineLayout:
     measuredLayout: Boolean,
     richText: RichTextContext,
     lineIndex: Int,
-    lineLength: Int
+    lineLength: Int,
+    lineText: String
   ): LineLayoutInputs =
     val resolver =
-      if measuredLayout then resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale)
-      else singleFontResolver(font)
+      if !measuredLayout then singleFontResolver(font)
+      else if richText.markdown.isActive then markdownAwareResolver(font, richText, lineIndex, lineLength, lineText)
+      else resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale)
     val paragraphRole = RichTextStyling.effectiveRole(
       richText.document.flatMap(_.paragraphAt(lineIndex)).map(_.role).getOrElse(ParagraphRole.Body),
       richText.dropCapsEnabled
@@ -76,3 +97,21 @@ private[layout] object LineLayout:
         DropCapLayout.measuredGlyphWidthPx(font, frc, richText.document, lineIndex, paragraphRole, richText.proseScale)
       else 0.0f
     LineLayoutInputs(resolver, paragraphRole, glyphWidthPx)
+
+  private def markdownAwareResolver(
+    font: Font,
+    richText: RichTextContext,
+    lineIndex: Int,
+    lineLength: Int,
+    lineText: String
+  ): LineFontResolver =
+    val runs = richText.markdown.runsOn(lineIndex, lineText)
+    if runs.isEmpty then resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale)
+    else
+      markdownResolver(
+        font,
+        lineLength,
+        runs,
+        richText.markdown.hidesMarkersOn(lineIndex),
+        richText.markdown.baseIsMonospaced
+      )

@@ -1,6 +1,6 @@
 package com.serenity.ui.renderer
 
-import com.serenity.markdown.MarkdownDocumentPreview
+import com.serenity.config.MarkdownViewMode
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -138,6 +138,10 @@ object RendererFloatingPanels:
   def pinnedAndExpandedSurfaces(state: AppState): List[UiSurface] =
     state.pinnedSurfaces
 
+  /** The panel shows the buffer's text on the editor's own pipeline: the same layout, glyph runs and Markdown restyling
+    * as an editor pane, in read mode so every marker is hidden, scrolled to the editor's top line, and without a caret,
+    * selection or word-wrap setting of its own.
+    */
   private def renderMarkdownPreviewPanel(
     bufferId: BufferId,
     title: String,
@@ -155,44 +159,29 @@ object RendererFloatingPanels:
       context.cellMetrics
     )
 
-    val imageRect          = markdownPreviewImageRect(rect, contentRect, context)
-    val contentWidthCells  = math.max(1, imageRect.width)
-    val contentHeightCells = math.max(1, imageRect.height)
-    val widthPx = RendererMarkdownLens.scaledImagePixelDimension(
-      contentWidthCells * context.cellMetrics.charWidth,
-      context.surface.devicePixelScaleX
-    )
-    val heightPx = RendererMarkdownLens.scaledImagePixelDimension(
-      contentHeightCells * context.cellMetrics.lineHeight,
-      context.surface.devicePixelScaleY
-    )
-    val buffer = state.persisted.buffers.get(bufferId)
-    val content = buffer
-      .map(buffer => markdownSplitPreviewWindow(buffer, contentHeightCells).source)
-      .getOrElse("")
-    val baseUri =
-      buffer.flatMap(_.document.filePath).flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
-    val image = MarkdownDocumentPreview.renderImage(
-      source = content,
-      title = title,
-      widthPx = widthPx,
-      heightPx = heightPx,
-      theme = state.persisted.theme,
-      font = context.textFont,
-      cache = context.caches.markdownPreviewCache,
-      baseUri = baseUri,
-      reuseLastRenderWhileEditing =
-        buffer.exists(b => b.markdownPreviewEditGeneration != b.markdownPreviewCommittedGeneration)
-    )
-    context.surface.pixels.drawImage(
-      RenderImage.fromAwt(image),
-      imageRect.x,
-      imageRect.y,
-      contentWidthCells,
-      contentHeightCells
+    state.persisted.buffers.get(bufferId).foreach { buffer =>
+      val textRect     = markdownPreviewTextRect(rect, contentRect, context)
+      val previewState = readingState(state)
+      val previewBuffer =
+        buffer.clearSelections.copy(viewport = buffer.viewport.copy(topVisualLine = 0, leftColumn = 0))
+      val previewSnapshot = RendererPaneSetup.snapshotForBuffer(previewBuffer, textRect, previewState, context)
+      RendererPaneContent.renderReadOnlyText(previewBuffer, textRect, previewState, context, previewSnapshot)
+    }
+
+  private def readingState(state: AppState): AppState =
+    val config = state.persisted.config
+    state.copy(persisted =
+      state.persisted.copy(config =
+        config
+          .withMarkdownViewMode(MarkdownViewMode.Read)
+          .withSurfaceConfig(
+            config.surfaceConfig
+              .copy(wordWrapEnabled = true, columnModeEnabled = false, focusedTextBodyEnabled = false)
+          )
+      )
     )
 
-  private def markdownPreviewImageRect(
+  private def markdownPreviewTextRect(
     rect: LayoutRect,
     contentRect: LayoutRect,
     context: RenderContext
@@ -210,24 +199,3 @@ object RendererFloatingPanels:
       width = math.max(1, right - x),
       height = math.max(1, contentRect.height)
     )
-
-  private def markdownSplitPreviewWindow(buffer: Buffer, visibleRows: Int): MarkdownDocumentPreview.PreviewWindow =
-    val lineCount = buffer.document.content.lineCount
-    if lineCount == 0 then MarkdownDocumentPreview.PreviewWindow(0, 0, "")
-    else
-      val maxSourceLines = RendererMarkdownLens.markdownPreviewSourceLineLimit(visibleRows).max(1)
-      val maxStart       = (lineCount - maxSourceLines).max(0)
-      val fallbackStart  = buffer.viewport.topLine.max(0).min(maxStart)
-      val anchorLine = buffer.editing.cursorPositions.headOption
-        .map(_.line)
-        .filter(line => line >= 0 && line < lineCount)
-        .getOrElse(buffer.viewport.topLine.max(0).min(lineCount - 1))
-      val firstSourceLine =
-        if anchorLine < fallbackStart then anchorLine.min(maxStart)
-        else if anchorLine >= fallbackStart + maxSourceLines then (anchorLine - maxSourceLines / 2).max(0).min(maxStart)
-        else fallbackStart
-      MarkdownDocumentPreview.PreviewWindow(
-        firstSourceLine,
-        firstPreviewRow = 0,
-        buffer.document.content.linesFrom(firstSourceLine, maxSourceLines).mkString("\n")
-      )

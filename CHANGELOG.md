@@ -4,6 +4,7 @@
 
 ### 2026-10-10
 
+- Added Live Preview and Read to the Markdown view setting (`editor.markdown_view = live-preview` or `read`, Live and Read in the Markdown toolbar, Toggle Markdown Read Mode in the palette): strong and emphasised text is set bold and italic and code spans in a monospaced face on a raised background, with the `**`, `*`, `_` and backtick markers hidden. Live Preview shows the markers only on the lines the caret or a selection touches; Read hides them everywhere, and the caret skips over them. Hidden columns take no width in wrapping, caret stops, hit-testing or selection, and fenced code stays as written. The pinned Markdown preview panel now draws the document through this same text pipeline (read mode) instead of a rendered image, so it no longer shows headings, lists or tables rendered until those land in the editor itself (#1631, slice a).
 - Moved UI Presets to a top-level settings group beside Workspace, with one flat Edit Preset page (rename, preset actions, cursor, fonts, document defaults and spell check, no nested pages); the preset's three font families are picked with inline carousels like the other preset settings (#1682).
 
 ## 1.0.0-rc.1 — 2026-10-10

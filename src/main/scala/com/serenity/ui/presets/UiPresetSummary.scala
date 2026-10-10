@@ -25,6 +25,8 @@ private[presets] object UiPresetSummary:
           case MarkdownViewMode.Source       => "markdown source default"
           case MarkdownViewMode.SplitPreview => "markdown split preview"
           case MarkdownViewMode.InlineLens   => "markdown inline lens"
+          case MarkdownViewMode.LivePreview  => "markdown live preview"
+          case MarkdownViewMode.Read         => "markdown read mode"
       case DefaultDocumentMode.PlainText =>
         "plain text default"
 

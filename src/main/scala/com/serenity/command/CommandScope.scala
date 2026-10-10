@@ -57,9 +57,10 @@ object CommandScope:
 
   def bufferRequirementOf(intent: CommandIntent): BufferRequirement =
     intent match
-      case CommandIntent.RichText(_)                          => BufferRequirement.RichText
-      case CommandIntent.View(ViewIntent.OpenMarkdownPreview) => BufferRequirement.Markdown
-      case _                                                  => BufferRequirement.AnyBuffer
+      case CommandIntent.RichText(_)                             => BufferRequirement.RichText
+      case CommandIntent.View(ViewIntent.OpenMarkdownPreview)    => BufferRequirement.Markdown
+      case CommandIntent.View(ViewIntent.ToggleMarkdownReadMode) => BufferRequirement.Markdown
+      case _                                                     => BufferRequirement.AnyBuffer
 
   private def familyOf(intent: CommandIntent): CommandFamily =
     intent match
@@ -98,10 +99,10 @@ object CommandScope:
           ViewIntent.ClosePane | ViewIntent.ToggleMaximisePanel | ViewIntent.OpenChapterNote |
           ViewIntent.OpenKeywordNote | ViewIntent.ToggleChapterGhosts | ViewIntent.ToggleNotesPin |
           ViewIntent.FocusInDirection(_) | ViewIntent.ArrangePanels | ViewIntent.OpenMarkdownPreview |
-          ViewIntent.SetMarkdownViewMode(_) | ViewIntent.SetDefaultDocumentMode(_) | ViewIntent.SetAppMode(_) |
-          ViewIntent.SetAppModeStoppingProjectTask(_) | ViewIntent.SetShowAllSettingsRegardlessOfMode(_) |
-          ViewIntent.ToggleShortcutsHelp | ViewIntent.ToggleTabList | ViewIntent.ToggleRecentFilesInMode |
-          ViewIntent.TogglePanel(_) | ViewIntent.SetPanelSize(_, _) =>
+          ViewIntent.SetMarkdownViewMode(_) | ViewIntent.ToggleMarkdownReadMode | ViewIntent.SetDefaultDocumentMode(_) |
+          ViewIntent.SetAppMode(_) | ViewIntent.SetAppModeStoppingProjectTask(_) |
+          ViewIntent.SetShowAllSettingsRegardlessOfMode(_) | ViewIntent.ToggleShortcutsHelp | ViewIntent.ToggleTabList |
+          ViewIntent.ToggleRecentFilesInMode | ViewIntent.TogglePanel(_) | ViewIntent.SetPanelSize(_, _) =>
         core
 
   private def panelScope(id: PanelId): CommandScope =

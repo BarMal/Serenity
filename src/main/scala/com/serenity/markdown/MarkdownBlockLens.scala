@@ -19,7 +19,11 @@ object MarkdownBlockLens:
       search(0, ranges.length - 1)
 
   def fenceRangeIndex(lineCount: Int, lineAt: Int => Option[String]): FenceRangeIndex =
-    val fences = (0 until lineCount).iterator.filter(index => isFenceLine(lineAt(index).getOrElse(""))).toVector
+    fenceRangeIndex((0 until lineCount).iterator.map(index => lineAt(index).getOrElse("")))
+
+  /** The fenced blocks of a document given its lines in order, each paired fence line to the next. */
+  def fenceRangeIndex(lines: Iterator[String]): FenceRangeIndex =
+    val fences = lines.zipWithIndex.collect { case (line, index) if isFenceLine(line) => index }.toVector
     FenceRangeIndex(fences.grouped(2).collect { case Vector(open, close) => open to close }.toVector)
 
   final private case class LineSource(lineCount: Int, lineAt: Int => Option[String], fenceProbeWindow: Option[Int]):

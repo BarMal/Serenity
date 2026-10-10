@@ -98,11 +98,16 @@ object CommandRunnerSettingsItems:
           "Split Preview",
           CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.SplitPreview))
         ),
-        CommandOption("Inline Lens", CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.InlineLens)))
+        CommandOption("Inline Lens", CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.InlineLens))),
+        CommandOption(
+          "Live Preview",
+          CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.LivePreview))
+        ),
+        CommandOption("Read", CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.Read)))
       ),
       selectedIndex = optionSelections.getOrElse("markdown-view", 0),
       category = CommandCategory.Settings,
-      hint = Some("Source, side preview, or inline editing lens")
+      hint = Some("Source, side preview, inline editing lens, live preview, or read mode")
     )
 
   private[command] def defaultDocumentModeOptionItem(

@@ -8,8 +8,8 @@ package com.serenity.ui.layout
   *
   * The bias is always towards reporting too much. Redrawing a row that did not change is invisible; skipping a row that
   * did change leaves stale pixels on screen. Every whole-snapshot property that shifts row geometry (panel width, row
-  * height, ascent, proportional/measured layout mode, the rich-text document that drives styling) therefore invalidates
-  * every row rather than being reasoned about per row.
+  * height, ascent, proportional/measured layout mode, the rich-text document that drives styling, how inline Markdown
+  * is restyled) therefore invalidates every row rather than being reasoned about per row.
   */
 object DirtyLineDiff:
 
@@ -75,4 +75,5 @@ object DirtyLineDiff:
       previous.ascentPx == current.ascentPx &&
       previous.isProportional == current.isProportional &&
       previous.usesMeasuredLayout == current.usesMeasuredLayout &&
-      previous.richTextDocument == current.richTextDocument
+      previous.richTextDocument == current.richTextDocument &&
+      previous.markdownInline.mode == current.markdownInline.mode

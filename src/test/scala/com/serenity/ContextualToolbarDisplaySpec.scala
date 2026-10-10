@@ -143,7 +143,8 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
   }
 
   it should "use Material Icons Round code points in icon-only mode" in {
-    ContextualToolbar.markdownItems.map(_.icon) shouldBe List("", "", "", "")
+    ContextualToolbar.markdownItems
+      .map(_.icon) shouldBe List("\uf1c5", "\ue86f", "\uf06d", "\ue8b6", "\ue8f4", "\ue431")
     ContextualToolbar.codeItems.map(_.icon) shouldBe List("", "", "", "")
     ContextualToolbar.codeItems.map(_.label) shouldBe List("Build", "Test", "Run", "Run Debug Task")
 

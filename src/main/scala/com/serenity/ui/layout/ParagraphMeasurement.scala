@@ -3,7 +3,7 @@ package com.serenity.ui.layout
 import java.text.StringCharacterIterator
 
 import com.ibm.icu.text.BreakIterator
-import com.serenity.ui.layout.TextCaretMeasurement.{SegmentFit, normalizeCollapsedCarets}
+import com.serenity.ui.layout.TextCaretMeasurement.{LineFontResolver, SegmentFit, normalizeCollapsedCarets}
 
 /** What wrapping a logical line needs measured, computed once over a window of it rather than once per row: grapheme
   * boundaries from a single sweep and, for a measured layout, every character's glyph advance. Rows are then fitted and
@@ -60,7 +60,8 @@ final private[layout] class ParagraphMeasurement private (
           val raw  = measured.caretsFrom(from - start, limit)
           val last = raw(limit)
           if math.abs(last - width) < DecisionGuardPx then None
-          else if limit >= remaining || last > width then settledFit(raw, limit, width)
+          else if limit >= remaining || last > width then
+            settledFit(raw, limit, width, spec.resolver, spec.baseColumn + from)
           else loop(math.min(remaining, math.max(limit + 1, limit * 2)))
         case _ => None
     loop(math.min(remaining, initialCandidateLength(panelWidthPx, spec.cellMetrics)))
@@ -112,8 +113,14 @@ private[layout] object ParagraphMeasurement:
     java.util.Arrays.copyOf(found, collect(0, breaks.first()))
 
   /** Mirrors the per-row search's stopping rule over the candidate's normalized carets. */
-  private def settledFit(raw: IArray[Float], limit: Int, width: Float): Option[SegmentFit] =
-    val carets     = normalizeCollapsedCarets(raw)
+  private def settledFit(
+    raw: IArray[Float],
+    limit: Int,
+    width: Float,
+    resolver: LineFontResolver,
+    absoluteStartColumn: Int
+  ): Option[SegmentFit] =
+    val carets     = normalizeCollapsedCarets(raw, resolver, absoluteStartColumn)
     val firstOver  = carets.indexWhere(_ > width)
     val maxFitting = if firstOver < 0 then limit else firstOver - 1
     val nearFit    = maxFitting >= 0 && width - carets(maxFitting) < DecisionGuardPx

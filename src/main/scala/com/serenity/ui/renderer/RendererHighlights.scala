@@ -298,6 +298,18 @@ object RendererHighlights:
       case Some(segments) if segments.nonEmpty => loop(segments, 0, Nil)
       case _                                   => List((localStart, localEnd, TextStyle.normal))
 
+  /** Hidden Markdown markers take no width, so a highlight has nothing to cover there and must not draw the characters
+    * it would otherwise paint over them.
+    */
+  private def isHiddenChunk(
+    visualLine: TextVisualLine,
+    snapshot: TextLayoutSnapshot,
+    chunkStart: Int,
+    chunkEnd: Int
+  ): Boolean =
+    snapshot.markdownInline.isActive && chunkStart < chunkEnd && chunkEnd <= visualLine.endColumn &&
+      visualLine.xForColumn(chunkStart) == visualLine.xForColumn(chunkEnd)
+
   private def renderTextRangeBackground(
     surface: RenderSurface,
     visualLine: TextVisualLine,
@@ -318,39 +330,49 @@ object RendererHighlights:
       val localEnd   = rangeEnd - visualLine.startColumn
       if localStart >= 0 && localStart < localEnd then
         val lineOriginPx = context.cellMetrics.toPixelX(rect.x).toFloat
-        styleRangesWithin(styledSegments, localStart, localEnd).foreach {
-          case (chunkStart, chunkEnd, style) =>
-            val chunkRangeStart = visualLine.startColumn + chunkStart
-            val chunkRangeEnd   = visualLine.startColumn + chunkEnd
-            val chunkText =
-              if chunkStart < visualLine.text.length then
-                visualLine.text.substring(chunkStart, math.min(chunkEnd, visualLine.text.length))
-              else " "
-            val startXPx = lineOriginPx + visualLine.xForColumn(chunkRangeStart).getOrElse(visualLine.widthPx)
-            val endXPx =
-              if chunkRangeStart == chunkRangeEnd - 1 && chunkRangeStart >= visualLine.endColumn then
-                startXPx + context.cellMetrics.charWidth
-              else lineOriginPx + visualLine.xForColumn(chunkRangeEnd).getOrElse(visualLine.widthPx)
-            val desiredWidthPx = math.max(context.cellMetrics.charWidth.toFloat, endXPx - startXPx)
-            RendererCursorGlyphs.measuredRunWidthWithin(rect, context, startXPx, startXPx + desiredWidthPx).foreach {
-              widthPx =>
-                val combinedStyle = style.combine(extraStyle)
-                surface.setForegroundColor(foreground)
-                surface.setBackgroundColor(background)
-                surface.enableStyle(combinedStyle)
-                try
-                  surface.text.drawRunPx(
-                    startXPx,
-                    lineTopPx,
-                    widthPx,
-                    RendererPaneContent.rowHeightPxFor(visualLine, snapshot),
-                    RendererPaneContent.rowAscentPxFor(visualLine, snapshot),
-                    chunkText,
-                    clipGlyphToRun = true
-                  )
-                finally surface.disableStyle(combinedStyle)
-            }
-        }
+        styleRangesWithin(styledSegments, localStart, localEnd)
+          .filterNot {
+            case (chunkStart, chunkEnd, _) =>
+              isHiddenChunk(
+                visualLine,
+                snapshot,
+                visualLine.startColumn + chunkStart,
+                visualLine.startColumn + chunkEnd
+              )
+          }
+          .foreach {
+            case (chunkStart, chunkEnd, style) =>
+              val chunkRangeStart = visualLine.startColumn + chunkStart
+              val chunkRangeEnd   = visualLine.startColumn + chunkEnd
+              val chunkText =
+                if chunkStart < visualLine.text.length then
+                  visualLine.text.substring(chunkStart, math.min(chunkEnd, visualLine.text.length))
+                else " "
+              val startXPx = lineOriginPx + visualLine.xForColumn(chunkRangeStart).getOrElse(visualLine.widthPx)
+              val endXPx =
+                if chunkRangeStart == chunkRangeEnd - 1 && chunkRangeStart >= visualLine.endColumn then
+                  startXPx + context.cellMetrics.charWidth
+                else lineOriginPx + visualLine.xForColumn(chunkRangeEnd).getOrElse(visualLine.widthPx)
+              val desiredWidthPx = math.max(context.cellMetrics.charWidth.toFloat, endXPx - startXPx)
+              RendererCursorGlyphs.measuredRunWidthWithin(rect, context, startXPx, startXPx + desiredWidthPx).foreach {
+                widthPx =>
+                  val combinedStyle = style.combine(extraStyle)
+                  surface.setForegroundColor(foreground)
+                  surface.setBackgroundColor(background)
+                  surface.enableStyle(combinedStyle)
+                  try
+                    surface.text.drawRunPx(
+                      startXPx,
+                      lineTopPx,
+                      widthPx,
+                      RendererPaneContent.rowHeightPxFor(visualLine, snapshot),
+                      RendererPaneContent.rowAscentPxFor(visualLine, snapshot),
+                      chunkText,
+                      clipGlyphToRun = true
+                    )
+                  finally surface.disableStyle(combinedStyle)
+              }
+          }
     else
       surface.enableStyle(extraStyle)
       try

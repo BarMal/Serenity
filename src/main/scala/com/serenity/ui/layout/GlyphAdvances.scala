@@ -95,7 +95,8 @@ private[layout] object GlyphAdvances:
     Character.getType(char) != Character.FORMAT && !Character.isSurrogate(char) &&
       (char == '\t' || !Character.isISOControl(char))
 
-  /** Advances of `text[from, until)`, indexed from `from`; `absoluteStartColumn` is the resolver column of `text(0)`.
+  /** Advances of `text[from, until)`, indexed from `from`; `absoluteStartColumn` is the resolver column of `text(0)`. A
+    * hidden column has no advance, which is the same however the text around it is cut into rows.
     */
   def measure(
     text: String,
@@ -109,8 +110,9 @@ private[layout] object GlyphAdvances:
     val advances    = new Array[Float](chars.length)
     val contextFree = new Array[Boolean](chars.length)
     val origin      = absoluteStartColumn + from
-    resolver.fontRuns(origin, origin + chars.length).foreach { (runStart, runEnd, font) =>
-      measureRun(chars, runStart - origin, runEnd - origin, font, frc, advances, contextFree)
+    resolver.fontRuns(origin, origin + chars.length).foreach { span =>
+      if span.hidden then java.util.Arrays.fill(contextFree, span.startColumn - origin, span.endColumn - origin, true)
+      else measureRun(chars, span.startColumn - origin, span.endColumn - origin, span.font, frc, advances, contextFree)
     }
     val contextFreeBefore = contextFree.scanLeft(0)((count, free) => if free then count + 1 else count)
     new GlyphAdvances(advances, contextFreeBefore)
