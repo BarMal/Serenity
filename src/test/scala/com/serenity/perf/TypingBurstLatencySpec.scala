@@ -125,7 +125,7 @@ class TypingBurstLatencySpec extends AnyFlatSpec with Matchers:
       .maxOption
       .getOrElse(0L)
 
-  private def assertRewrapsOncePerSlice(spacing: FiniteDuration): Unit =
+  private def assertRewrapsOncePerSlice(spacing: FiniteDuration, keysMustQueue: Boolean): Unit =
     val mostPerKey      = mostWrapsForOneKey()
     val stateManager    = warmEditor()
     val before          = wrapsPerformed(stateManager)
@@ -141,14 +141,15 @@ class TypingBurstLatencySpec extends AnyFlatSpec with Matchers:
       trace should have size burstKeys.toLong
       trace.flatMap(_.damagedAt) should have size burstKeys.toLong
       mostPerKey should be > 0L
+      if keysMustQueue then slices should be < burstKeys.toLong
       wraps should be <= settledRuns * mostPerKey
     }
 
   "A 200-key burst typed back to back through SwingInputHandler" should "re-wrap once per published slice, not once per key" in
-    assertRewrapsOncePerSlice(0.millis)
+    assertRewrapsOncePerSlice(0.millis, keysMustQueue = true)
 
   "A 200-key burst typed 5 ms apart through SwingInputHandler" should "re-wrap once per published slice, not once per key" in
-    assertRewrapsOncePerSlice(5.millis)
+    assertRewrapsOncePerSlice(5.millis, keysMustQueue = false)
 
   it should "damage every key after it was received and dequeued, in the order the keys arrived" in {
     val (trace, _) = replay(warmEditor(), burst, 5.millis).unsafeRunSync()
