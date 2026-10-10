@@ -12,9 +12,11 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO}
 import com.serenity.app.{OffscreenWarmUpFrames, RuntimeDisplayState, StartupWarmUp}
 import com.serenity.config.AppConfig
+import com.serenity.input.PendingInput
 import com.serenity.keystroke.events.{Event, InsertChar, MoveDown, MoveUp, PageDown, PageUp}
 import com.serenity.perf.TypingStatistics.{Bucket, BucketSummary, Summary}
 import com.serenity.rope.Balance
+import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
@@ -40,10 +42,25 @@ object TypingProfile:
   private val LongParagraphChars = 4_000
   private val DriftWindow        = 400
 
-  final private case class Options(warmupSeconds: Int, paceMs: Long, warmMs: Long, realWarmMs: Long)
+  final private case class Options(
+      warmupSeconds: Int,
+      paceMs: Long,
+      warmMs: Long,
+      realWarmMs: Long,
+      coldDictionary: Boolean,
+      preloadDictionary: Boolean
+  )
 
   private object Options:
-    private val defaults = Options(warmupSeconds = 10, paceMs = 100, warmMs = 0, realWarmMs = 0)
+
+    private val defaults = Options(
+      warmupSeconds = 10,
+      paceMs = 100,
+      warmMs = 0,
+      realWarmMs = 0,
+      coldDictionary = false,
+      preloadDictionary = false
+    )
 
     def parse(flags: List[String]): Either[String, Options] =
       flags.foldLeft[Either[String, Options]](Right(defaults)) { (parsed, flag) =>
@@ -57,7 +74,9 @@ object TypingProfile:
               value.toLongOption.toRight(s"bad $flag").map(v => options.copy(warmMs = v))
             case "real-warm-ms" :: value :: Nil =>
               value.toLongOption.toRight(s"bad $flag").map(v => options.copy(realWarmMs = v))
-            case _ => Left(s"unknown flag $flag")
+            case "cold-dictionary" :: Nil    => Right(options.copy(coldDictionary = true))
+            case "preload-dictionary" :: Nil => Right(options.copy(coldDictionary = true, preloadDictionary = true))
+            case _                           => Left(s"unknown flag $flag")
         )
       }
 
@@ -66,7 +85,8 @@ object TypingProfile:
 
   private val Usage =
     "usage: TypingProfile <typing_random|typing_long_paragraph|cold_typing|move_down_up|page_down_up> " +
-      "<seconds|keys> [--warmup-s=10] [--pace-ms=100] [--warm-ms=0] [--real-warm-ms=0]"
+      "<seconds|keys> [--warmup-s=10] [--pace-ms=100] [--warm-ms=0] [--real-warm-ms=0] " +
+      "[--cold-dictionary] [--preload-dictionary]"
 
   def main(args: Array[String]): Unit =
     val outcome = for
@@ -147,7 +167,11 @@ object TypingProfile:
     )
 
   private def coldTyping(keys: Int, options: Options): Unit =
-    val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager()
+    val dictionaryCache   = Option.when(options.coldDictionary)(DictionaryCache())
+    val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager(dictionaryCache = dictionaryCache)
+    dictionaryCache.filter(_ => options.preloadDictionary).foreach { cache =>
+      StartupWarmUp.preloadSpellDictionary(AppConfig.default, cache).unsafeRunAndForget()
+    }
     if options.warmMs > 0 then println(s"warm burst rounds=${warmBurst(options.warmMs)}")
     if options.realWarmMs > 0 then println(realWarmUp(options.realWarmMs))
     val paceNanos = options.paceMs * 1_000_000L
@@ -179,7 +203,14 @@ object TypingProfile:
     val (other, _) =
       LaptopFrameBenchmarks.proseStateManager(paragraphs = StartupWarmUp.Plan.default.paragraphs, cursorLine = 2)
     val deadline = System.nanoTime + milliseconds * 1_000_000L
-    untilNanoTime(deadline).map(_ => StartupWarmUp.round.foreach(apply(other, _))).size
+    val script =
+      StartupWarmUp.script(StartupWarmUp.Plan(rounds = 1, paragraphs = StartupWarmUp.Plan.default.paragraphs))
+    untilNanoTime(deadline).map(_ => script.flatten.foreach(warmEvent(other, _))).size
+
+  private def warmEvent(stateManager: StateManager, input: PendingInput): Unit =
+    input match
+      case PendingInput.Ready(event)    => apply(stateManager, event)
+      case PendingInput.Keystroke(info) => info.character.foreach(char => apply(stateManager, InsertChar(char)))
 
   /** The app's own warm-up pipeline, interrupted `milliseconds` after it starts like a first keystroke would. */
   private def realWarmUp(milliseconds: Long): String =

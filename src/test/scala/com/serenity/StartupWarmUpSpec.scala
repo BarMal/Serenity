@@ -9,11 +9,13 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref, Resource}
 import cats.syntax.all.*
 import com.serenity.app.StartupWarmUp
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.frontend.FrontendRuntime
+import com.serenity.input.PendingInput
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.model.SemanticTokenData
 import com.serenity.rope.Balance
+import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, AppStateValidation, Damage, Focus}
 import com.serenity.testkit.SharedDictionary
@@ -66,6 +68,9 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
     buffer.document.isDirty shouldBe false
     seeded.persisted.focus shouldBe Focus.EditorPane(paneId)
     AppStateValidation.validationErrors(seeded) shouldBe Nil
+    withClue("a commit that replaces the content must advance contentVersion: ")(
+      AppStateValidation.validatedOver(AppState.initial, seeded).isRight shouldBe true
+    )
   }
 
   "StartupWarmUp.interruptsWarmUp" should "treat keys and clicks as real input, but not hovering or system events" in {
@@ -88,7 +93,7 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
     yield (outcome, result)
 
     val (outcome, drawn) = program.unsafeRunTimed(60.seconds).getOrElse(fail("the warm-up did not finish"))
-    val steps            = smallPlan.rounds * StartupWarmUp.round.size
+    val steps            = StartupWarmUp.script(smallPlan).size
 
     outcome shouldBe StartupWarmUp.Outcome.Completed(steps)
     drawn.full.size shouldBe steps
@@ -99,7 +104,64 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
     drawn.full.foreach((state, _) => state.persisted.theme shouldBe Theme.dark)
   }
 
-  it should "leave the session it starts from untouched, and clean up after itself" in {
+  it should "apply typed keys through the input loop's batches, many keys to one drawn frame" in {
+    val burstKeys = StartupWarmUp.script(smallPlan).head.size
+    val program = for
+      drawn   <- Ref.of[IO, Drawn](Drawn(Vector.empty, 0))
+      noInput <- Deferred[IO, Unit]
+      _       <- StartupWarmUp.run(AppConfig.default, Theme.dark, viewport, recordingFrames(drawn), noInput, smallPlan)
+      result  <- drawn.get
+    yield result.full.map((state, _) => focusedChars(state))
+
+    val lengths = program.unsafeRunTimed(60.seconds).getOrElse(fail("the warm-up did not finish"))
+
+    burstKeys should be > 1
+    val seededLength = StartupWarmUp.document(smallPlan.paragraphs).length
+    withClue("the first burst did not land on the seeded document as one frame: ")(
+      lengths.head - seededLength shouldBe burstKeys
+    )
+  }
+
+  "StartupWarmUp.script" should "type letters that do not repeat from one round to the next" in {
+    val script          = StartupWarmUp.script(StartupWarmUp.Plan(rounds = 2, paragraphs = 1))
+    val (first, second) = script.splitAt(script.size / 2)
+    def typed(batches: List[List[PendingInput]]): List[Option[Char]] =
+      batches.flatten.collect { case PendingInput.Keystroke(info) => info.character }
+
+    typed(first).size should be > 40
+    typed(second) should not be typed(first)
+  }
+
+  it should "mix a burst, single keystrokes, deletions and movements in each round" in {
+    val round = StartupWarmUp.script(StartupWarmUp.Plan(rounds = 1, paragraphs = 1))
+
+    round.head.size should be > 1
+    round.tail.takeWhile(_.forall(_.isInstanceOf[PendingInput.Keystroke])).map(_.size).distinct shouldBe List(1)
+    round.flatten.collect { case PendingInput.Ready(event) => event } should contain allOf (
+      DeleteBackward,
+      MoveDown,
+      PageUp
+    )
+  }
+
+  "StartupWarmUp.preloadSpellDictionary" should "parse the dictionary into the cache when spell check is on" in {
+    val cache = DictionaryCache()
+
+    StartupWarmUp.preloadSpellDictionary(AppConfig.default, cache).unsafeRunTimed(120.seconds) shouldBe Some(())
+
+    cache.size should be > 0
+  }
+
+  it should "leave the cache alone when spell check is off" in {
+    val cache = DictionaryCache()
+    val off   = AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = false))
+
+    StartupWarmUp.preloadSpellDictionary(off, cache).unsafeRunTimed(30.seconds) shouldBe Some(())
+
+    cache.size shouldBe 0
+  }
+
+  "StartupWarmUp.run" should "leave the session it starts from untouched, and clean up after itself" in {
     val sessionRoot = TestTemp.directory("serenity-warm-up-spec-session")
     val scratchRoot = TestTemp.directory("serenity-warm-up-spec-scratch")
     val program = for
@@ -188,6 +250,14 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
     framesAtReturn shouldBe 3
     framesLater shouldBe framesAtReturn
   }
+
+  private def focusedChars(state: AppState): Int =
+    state.persisted.layout.activeEditorPaneId
+      .flatMap(state.persisted.layout.editorPanes.get)
+      .flatMap(_.bufferId)
+      .flatMap(state.persisted.buffers.get)
+      .map(_.document.content.toString.length)
+      .getOrElse(-1)
 
   private def focusedLength(state: AppState): Int =
     state.persisted.layout.activeEditorPaneId
