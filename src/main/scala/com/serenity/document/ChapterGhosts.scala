@@ -1,6 +1,6 @@
 package com.serenity.document
 
-import com.serenity.state.models.{Buffer, BufferId, HeadingIdentity, NoteKey}
+import com.serenity.state.models.{Buffer, BufferId, NoteKey}
 
 /** The ghost of a chapter note: its overview, shown faded on the blank lines under a chapter that has no prose yet.
   * Computed from the manuscript and its notes alone -- nothing is written into the document, and the ghost goes as soon
@@ -10,12 +10,16 @@ object ChapterGhosts:
 
   /** Overview text keyed by the buffer line it is shown on. Empty for a buffer with no notes, without parsing it, and
     * for a hidden buffer, which has no chapters of its own. Only as many overview lines as there are blank lines under
-    * the heading are shown.
+    * the heading are shown. `overview` reads a note's lines, which a caller can answer from a memo.
     */
-  def byLine(buffer: Buffer, buffers: Map[BufferId, Buffer]): Map[Int, String] =
+  def byLine(
+    buffer: Buffer,
+    buffers: Map[BufferId, Buffer],
+    overview: Buffer => List[String] = overviewLines
+  ): Map[Int, String] =
     if buffer.hidden || buffer.annotations.notes.isEmpty then Map.empty
     else
-      val headings     = HeadingIdentity.forHeadings(DocumentOutline.forBuffer(buffer))
+      val headings     = DocumentOutline.identifiedHeadings(buffer)
       val headingLines = headings.map(_._2.location.line)
       val lineOf       = headings.map { case (found, heading) => found -> heading.location.line }.toMap
       val nextHeadingLine: Map[Int, Option[Int]] =
@@ -27,7 +31,7 @@ object ChapterGhosts:
             for
               headingLine <- lineOf.get(found)
               note        <- buffers.get(notes.overview)
-            yield ghostLines(buffer, headingLine, nextHeadingLine.getOrElse(headingLine, None), note)
+            yield ghostLines(buffer, headingLine, nextHeadingLine.getOrElse(headingLine, None), overview(note))
           ghost.getOrElse(Nil)
         case _ => Nil
       }.toMap
@@ -36,14 +40,14 @@ object ChapterGhosts:
     buffer: Buffer,
     headingLine: Int,
     nextHeadingLine: Option[Int],
-    note: Buffer
+    overview: => List[String]
   ): List[(Int, String)] =
     val content = buffer.document.content
-    val body    = ((headingLine + 1) until nextHeadingLine.getOrElse(content.lineCount)).toList
+    val body    = (headingLine + 1) until nextHeadingLine.getOrElse(content.lineCount)
     val isEmpty = body.forall(line => content.getLine(line).forall(_.isBlank))
-    if isEmpty then body.zip(overviewLines(note)) else Nil
+    if isEmpty then body.zip(overview).toList else Nil
 
-  private def overviewLines(note: Buffer): List[String] =
+  def overviewLines(note: Buffer): List[String] =
     note.document.content
       .collect()
       .linesIterator

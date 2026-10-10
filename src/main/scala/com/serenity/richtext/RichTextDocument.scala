@@ -28,79 +28,6 @@ object ParagraphRole:
   def dropCap(lines: Int = DefaultDropCapLines): ParagraphRole =
     DropCap(lines.max(1))
 
-/** Inline style for a contiguous text run. */
-final case class RichTextStyle(
-    marks: Set[InlineMark] = Set.empty,
-    fontFamily: Option[String] = None,
-    fontSize: Option[Float] = None,
-    color: Option[String] = None,
-    link: Option[String] = None,
-    extras: List[RawProperty] = Nil
-):
-  def withMark(mark: InlineMark): RichTextStyle =
-    copy(marks = marks + mark)
-
-  def withoutMark(mark: InlineMark): RichTextStyle =
-    copy(marks = marks - mark)
-
-  def withFontFamily(family: String): RichTextStyle =
-    copy(fontFamily = Some(family.trim).filter(_.nonEmpty))
-
-  def withFontSize(size: Float): RichTextStyle =
-    copy(fontSize = Some(size.max(1.0f)))
-
-  def withColor(color: String): RichTextStyle =
-    copy(color = Some(color.trim).filter(_.nonEmpty))
-
-  /** `target` is an external URL, or `#name` for an anchor inside the document. */
-  def withLink(target: String): RichTextStyle =
-    copy(link = Some(target.trim).filter(_.nonEmpty))
-
-  /** The style with its link removed: what a format that stores links outside character formatting styles by. */
-  def withoutLink: RichTextStyle =
-    copy(link = None)
-
-object RichTextStyle:
-  val empty: RichTextStyle = RichTextStyle()
-
-/** A contiguous span of text sharing the same inline style. A run carrying an [[InlineAtom]] is exactly one
-  * [[RichTextRun.AtomCharacter]] and never merges with its neighbours.
-  */
-final case class RichTextRun(
-    text: String,
-    style: RichTextStyle = RichTextStyle.empty,
-    atom: Option[InlineAtom] = None
-):
-  def isEmpty: Boolean =
-    text.isEmpty
-
-  def mergesWith(next: RichTextRun): Boolean =
-    atom.isEmpty && next.atom.isEmpty && style == next.style
-
-  /** The text a plain-text or Markdown export shows for this run. */
-  def exportText: String =
-    atom.fold(text) {
-      case InlineAtom.SoftBreak    => "\n"
-      case InlineAtom.Opaque(_, _) => ""
-      case InlineAtom.Block(_, _)  => ""
-    }
-
-object RichTextRun:
-  /** U+FFFC OBJECT REPLACEMENT CHARACTER: the rope character standing for a soft break. */
-  val AtomCharacter: Char = InlineAtom.SoftBreakCharacter
-
-  def softBreak(style: RichTextStyle = RichTextStyle.empty): RichTextRun =
-    atom(InlineAtom.SoftBreak, style)
-
-  def opaque(raw: String, visible: Boolean, style: RichTextStyle = RichTextStyle.empty): RichTextRun =
-    atom(InlineAtom.Opaque(raw, visible), style)
-
-  def block(raw: String, feature: DocumentFeature): RichTextRun =
-    atom(InlineAtom.Block(raw, feature), RichTextStyle.empty)
-
-  private def atom(atom: InlineAtom, style: RichTextStyle): RichTextRun =
-    RichTextRun(atom.character.toString, style, Some(atom))
-
 /** Position inside a rich text document, measured as a UTF-16 offset within one paragraph. */
 final case class RichTextPosition(paragraphIndex: Int, offset: Int)
 
@@ -124,8 +51,9 @@ final case class RichTextParagraph(
   /** Content equality: where a paragraph was imported from is provenance, not text, so it does not take part. */
   override def equals(other: Any): Boolean =
     other match
-      case that: RichTextParagraph => runs == that.runs && alignment == that.alignment && role == that.role
-      case _                       => false
+      case that: RichTextParagraph =>
+        (that eq this) || (runs == that.runs && alignment == that.alignment && role == that.role)
+      case _ => false
 
   override def hashCode(): Int =
     (runs, alignment, role).hashCode()
@@ -147,6 +75,12 @@ final case class RichTextParagraph(
   /** True when a block atom shares its paragraph with other content, which an edit must never produce. */
   def hasMixedBlock: Boolean =
     runs.sizeIs > 1 && runs.exists(_.atom.exists(_.isInstanceOf[InlineAtom.Block]))
+
+  /** A heading paragraph with visible text: what a document outline lists. */
+  lazy val isOutlineHeading: Boolean =
+    role match
+      case ParagraphRole.Heading(_)                      => plainText.trim.nonEmpty
+      case ParagraphRole.Body | ParagraphRole.DropCap(_) => false
 
   lazy val plainText: String =
     runs.map(_.text).mkString
@@ -373,6 +307,12 @@ final class RichTextDocument private (
   def hasMixedBlock: Boolean =
     tree.existsAny(_.hasMixedBlock)
 
+  /** `O(1)`: the tree keeps its paragraph count at the root. */
+  def paragraphCount: Int = tree.paragraphCount
+
+  /** The outline headings with their paragraph indices, `O(h log n)` rather than a flatten of every paragraph. */
+  def headingParagraphs: List[(Int, RichTextParagraph)] = tree.headings
+
   /** Returns a paragraph by line index via `O(log n)` tree descent instead of a full-document index build. */
   def paragraphAt(index: Int): Option[RichTextParagraph] =
     tree.paragraphAt(index)
@@ -569,7 +509,7 @@ final class RichTextDocument private (
 
   override def equals(other: Any): Boolean =
     other match
-      case that: RichTextDocument => this.paragraphs == that.paragraphs
+      case that: RichTextDocument => (that eq this) || tree.sameParagraphsAs(that.tree)
       case _                      => false
 
   override def hashCode(): Int =
