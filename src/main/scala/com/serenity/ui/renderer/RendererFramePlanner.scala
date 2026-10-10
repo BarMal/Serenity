@@ -426,7 +426,10 @@ object RendererFramePlanner:
         val preserved = panes.toList.flatMap {
           case (paneId, record) =>
             val dirty = dirtyRowsByPane.getOrElse(paneId, record.rowRects.indices.toSet)
-            record.rowRects.indices.filterNot(dirty.contains).map(record.rowRects).map(RendererChromePlan.withBleed)
+            record.rowRects.indices
+              .filterNot(dirty.contains)
+              .map(record.rowRects)
+              .map(RendererChromePlan.withBleed(context))
         } ++ RendererChromePlan.preservedRects(state, context, renderPlan, panes, chrome)
 
         // The screen shows the previous frame, while the pixels this surface preserves come from the one before that,

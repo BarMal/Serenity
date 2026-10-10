@@ -75,7 +75,7 @@ private[renderer] object RendererChromePlan:
       damage,
       dirtyRowsByPane,
       Signals(
-        geometryChanged,
+        geometryChanged || !context.surface.addressesPixels,
         rowsOverflow(context, renderPlan, panes, persistenceKey),
         surfacesMayTouch(context, renderPlan, persistenceKey, damage, chromeRegions(context, renderPlan)),
         lastRowIfRowCountChanged(context, renderPlan.layoutContract.activePaneId, panes, persistenceKey)
@@ -132,8 +132,9 @@ private[renderer] object RendererChromePlan:
     */
   val BleedPx: Int = 1
 
-  def withBleed(band: PixelRect): PixelRect =
-    band.copy(xPx = band.xPx - BleedPx, widthPx = band.widthPx + 2 * BleedPx)
+  def withBleed(context: RenderContext)(band: PixelRect): PixelRect =
+    if context.surface.addressesPixels then band.copy(xPx = band.xPx - BleedPx, widthPx = band.widthPx + 2 * BleedPx)
+    else band
 
   /** Every place chrome is painted. */
   private def chromeRegions(context: RenderContext, renderPlan: EditorPaneRenderPlan): List[PixelRect] =

@@ -130,8 +130,8 @@ private[renderer] object RendererScrollReuse:
     def widened(bands: Vector[PixelRect]): Vector[PixelRect] =
       bands.map(band => band.copy(xPx = band.xPx - reach, widthPx = band.widthPx + 2 * reach))
     RowBands(
-      RendererPaneSetup.paneRowRects(contentRect, context, previous).map(RendererChromePlan.withBleed),
-      RendererPaneSetup.paneRowRects(contentRect, context, current).map(RendererChromePlan.withBleed)
+      RendererPaneSetup.paneRowRects(contentRect, context, previous).map(RendererChromePlan.withBleed(context)),
+      RendererPaneSetup.paneRowRects(contentRect, context, current).map(RendererChromePlan.withBleed(context))
     ) :: numbers.map { rect =>
       RowBands(
         widened(RendererGutter.counterRowBands(state, context, previous, rect)),

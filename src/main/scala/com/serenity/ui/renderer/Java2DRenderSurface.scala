@@ -43,6 +43,8 @@ class Java2DRenderSurface(
   override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
   override def layerBuffers: Option[LayerBufferSupport]   = Some(this)
 
+  override def addressesPixels: Boolean = true
+
   override def pixelCopying: Option[PixelCopying] =
     Option.when(isWhole(deviceScaleX) && isWhole(deviceScaleY))(this)
 
