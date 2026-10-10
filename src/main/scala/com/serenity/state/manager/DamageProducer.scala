@@ -219,16 +219,19 @@ object DamageProducer:
     if before.document.language == after.document.language then Damage.Nothing
     else Damage.BufferAll(bufferId)
 
-  /** Scrolling shifts which buffer line each visual row shows, so every visible row's content changes even though
-    * nothing about the buffer's own data did -- this producer has no layout knowledge of which rows are actually on
-    * screen, so it reports every row, the same coarse-but-safe bias [[languageDamage]] uses. `Renderer`'s retired
-    * row-by-row structural diff already redrew close to every visible row on a scroll in practice (a shifted row rarely
-    * matches what the previous frame had at the same row index), so this is not a regression from the pixels it
-    * replaces.
+  /** Scrolling shifts which buffer line each visual row shows without changing any row's own pixels, so a renderer that
+    * matches rows by identity can move them instead of redrawing them: [[Damage.BufferScrolled]], one fact whatever the
+    * buffer's size. Any other viewport change (a resize, a horizontal scroll) re-lays every row out, which is
+    * [[Damage.BufferAll]]. `placement` says only whether a typed key's caret still has to place the viewport, which
+    * nothing painted depends on.
     */
   private def viewportDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
-    if before.viewport == after.viewport then Damage.Nothing
-    else Damage.BufferAll(bufferId)
+    val (was, now) = (before.viewport, after.viewport)
+    if was == now then Damage.Nothing
+    else if was.copy(topLine = now.topLine, topVisualLine = now.topVisualLine, placement = now.placement) != now then
+      Damage.BufferAll(bufferId)
+    else if was.topLine == now.topLine && was.topVisualLine == now.topVisualLine then Damage.Nothing
+    else Damage.BufferScrolled(bufferId)
 
   /** `RendererPaneContent.focusedTextBodyLines` dims every row outside the active paragraph/markdown-block around the
     * cursor. Moving the cursor within the same block changes nothing this needs to report beyond what [[cursorDamage]]

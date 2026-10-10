@@ -6,9 +6,11 @@ import com.serenity.state.models.*
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
-/** What a frame redraws per pane, the pixel bands it keeps, and the screen rects it changed (`None`: all of it). */
+/** What a frame redraws, moves and keeps, per pane and of its chrome, and the screen rects it changed (`None`: all). */
 final case class FramePlan(
     dirtyRowsByPane: Map[PaneId, Set[Int]],
+    chrome: ChromeRepaint,
+    blits: List[PixelBlit],
     preserved: List[PixelRect],
     repaintRegion: Option[List[PixelRect]]
 )
@@ -130,7 +132,7 @@ object RendererFramePlanner:
         caches.frameState.rememberSnapshots(surface, editorRenderPlan.snapshots)
         framePlan match
           case Some(plan) if plan.preserved.nonEmpty =>
-            surface.clearViewportExcept(state.persisted.theme.background, plan.preserved)
+            RendererScrollReuse.clearKeeping(surface, state.persisted.theme.background, plan)
           case _ =>
             surface.clearViewport(state.persisted.theme.background)
         paintFrameLayers(state, context, editorRenderPlan, finalizedScene, framePlan, damage)
@@ -165,18 +167,16 @@ object RendererFramePlanner:
     )
     val dirtyLayerIds = LayerCompositor.dirtyLayers(layers).map(_.id).toSet
     forgetStalePanelLayerBuffers(state, scene, context.surface, context.caches)
+    val chrome = framePlan.map(_.chrome).getOrElse(ChromeRepaint.Whole)
     val paintByLayer: Map[LayerId, () => Unit] = Map(
-      ChromeLayerId -> { () =>
-        RendererPaneSetup.renderSpacerColumns(state, context, editorRenderPlan.layoutContract)
-        RendererGutter.renderLineNumbers(state, context, editorRenderPlan)
-        RendererGutter.renderGutter(state, context, editorRenderPlan.layoutContract)
-      },
+      ChromeLayerId -> { () => RendererChromePlan.paint(state, context, editorRenderPlan, chrome) },
       EditorContentLayerId -> { () =>
         RendererPaneContent.renderEditorPanes(
           state,
           context,
           editorRenderPlan,
-          framePlan.map(_.dirtyRowsByPane).getOrElse(Map.empty)
+          framePlan.map(_.dirtyRowsByPane).getOrElse(Map.empty),
+          chrome
         )
         RendererChapterGhosts.render(state, context, editorRenderPlan)
       },
@@ -397,17 +397,37 @@ object RendererFramePlanner:
 
         // A ghost is derived from a note's text and from which chapters are empty, neither of which a buffer's own
         // damage reports, so a pane showing ghosts repaints whole rather than reusing rows a stale ghost sits in.
-        val ghostPaneIds = panes.filter((_, record) => showsChapterGhosts(state, record.bufferId)).keySet
-        def rowsToRedraw(paneId: PaneId, record: PaneFrameRecord): Set[Int] =
-          if ghostPaneIds.contains(paneId) then record.rowRects.indices.toSet
-          else dirtyRowsFor(effectiveDamage, paneId, record, persistenceKey, context.caches)
-        val dirtyRowsByPane = panes.map((paneId, record) => paneId -> rowsToRedraw(paneId, record))
+        val ghostPaneIds =
+          panes.filter((_, record) => RendererChapterGhosts.paneShowsGhosts(state, record.bufferId)).keySet
+        val geometryChanged =
+          context.caches.frameState.chromeGeometryChanged(persistenceKey, ChromeGeometry.of(renderPlan))
+        val movable =
+          RendererScrollReuse.rowsMayMove(state, context, renderPlan, persistenceKey, effectiveDamage, geometryChanged)
+        val redraws = panes.map { (paneId, record) =>
+          val moving = movable && renderPlan.columnSnapshotsFor(paneId).isEmpty
+          val dirty =
+            damageDirtyRows(effectiveDamage, record, persistenceKey, context.caches, scrollIsEveryRow = !moving)
+          paneId -> {
+            if ghostPaneIds.contains(paneId) then RendererScrollReuse.PaneRedraw.everyRow(record)
+            else RendererScrollReuse.planPane(state, context, renderPlan, paneId, record, persistenceKey, dirty, moving)
+          }
+        }
+        val dirtyRowsByPane = redraws.map((paneId, redraw) => paneId -> redraw.dirtyRows)
 
+        val chrome = RendererChromePlan.plan(
+          context,
+          renderPlan,
+          panes,
+          persistenceKey,
+          effectiveDamage,
+          dirtyRowsByPane,
+          geometryChanged
+        )
         val preserved = panes.toList.flatMap {
           case (paneId, record) =>
             val dirty = dirtyRowsByPane.getOrElse(paneId, record.rowRects.indices.toSet)
-            record.rowRects.indices.filterNot(dirty.contains).map(record.rowRects)
-        }
+            record.rowRects.indices.filterNot(dirty.contains).map(record.rowRects).map(RendererChromePlan.withBleed)
+        } ++ RendererChromePlan.preservedRects(state, context, renderPlan, panes, chrome)
 
         // The screen shows the previous frame, while the pixels this surface preserves come from the one before that,
         // so the repaint region is measured against damage accumulated since the screen was last published to, and
@@ -430,22 +450,17 @@ object RendererFramePlanner:
             )
           }
 
-        FramePlan(dirtyRowsByPane = dirtyRowsByPane, preserved = preserved, repaintRegion = repaintRegion)
+        FramePlan(
+          dirtyRowsByPane = dirtyRowsByPane,
+          chrome = chrome,
+          blits = redraws.values.flatMap(_.blits).toList,
+          preserved = preserved,
+          repaintRegion = repaintRegion
+        )
       }
 
     if plan.isEmpty then forgetPreservedContent(context.surface, output, context.caches)
     plan
-
-  private def showsChapterGhosts(state: AppState, bufferId: BufferId): Boolean =
-    state.runtime.chapterGhostsVisible &&
-      state.persisted.buffers
-        .get(bufferId)
-        .exists(buffer => !buffer.hidden && buffer.annotations.notes.keys.exists(hasChapterKey))
-
-  private def hasChapterKey(key: NoteKey): Boolean =
-    key match
-      case NoteKey.Chapter(_) => true
-      case NoteKey.Keyword(_) => false
 
   /** Rows of `record` that `damage` marks dirty, translated from buffer line numbers to this pane's current visual row
     * indices -- every row of a damaged line, but only the rows a [[Damage.BufferCells]] span falls on
@@ -474,19 +489,32 @@ object RendererFramePlanner:
     persistenceKey: SurfaceContentIdentity,
     caches: com.serenity.state.manager.RenderCaches
   ): Set[Int] =
-    val damageDirty =
-      val facts = Damage.rowFactsFor(record.bufferId, damage)
-      if facts.everyRow || Damage.isEverything(damage) then record.rowBufferLines.indices.toSet
-      else
-        val lineRows = record.rowBufferLines.zipWithIndex.collect {
-          case (bufferLine, row) if facts.lines.contains(bufferLine) => row
-        }.toSet
-        val dirty = lineRows ++ rowsUnderSpans(record, facts.spans)
-        DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
-          record.overflowingRows ++
-          vacatedFloatingSurfaceRows(damage, record, persistenceKey, caches)
     val previousSnapshot = caches.frameState.previousSnapshotsFor(persistenceKey).get(paneId)
-    damageDirty ++ DirtyLineDiff.dirtyRows(previousSnapshot, record.snapshot)
+    damageDirtyRows(damage, record, persistenceKey, caches, scrollIsEveryRow = true) ++
+      DirtyLineDiff.dirtyRows(previousSnapshot, record.snapshot)
+
+  /** The rows `damage` itself marks dirty -- [[dirtyRowsFor]] without the comparison of snapshots. A scroll
+    * ([[Damage.BufferScrolled]]) marks every row unless the caller goes on to find where the rows moved to
+    * (`scrollIsEveryRow` false), as the frame being painted does and the screen's repaint region cannot.
+    */
+  private def damageDirtyRows(
+    damage: Damage,
+    record: PaneFrameRecord,
+    persistenceKey: SurfaceContentIdentity,
+    caches: com.serenity.state.manager.RenderCaches,
+    scrollIsEveryRow: Boolean
+  ): Set[Int] =
+    val facts    = Damage.rowFactsFor(record.bufferId, damage)
+    val everyRow = facts.everyRow && (scrollIsEveryRow || !facts.scrollOnly)
+    if everyRow || Damage.isEverything(damage) then record.rowBufferLines.indices.toSet
+    else
+      val lineRows = record.rowBufferLines.zipWithIndex.collect {
+        case (bufferLine, row) if facts.lines.contains(bufferLine) => row
+      }.toSet
+      val dirty = lineRows ++ rowsUnderSpans(record, facts.spans)
+      DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
+        record.overflowingRows ++
+        vacatedFloatingSurfaceRows(damage, record, persistenceKey, caches)
 
   /** The visual rows each span's columns fall on. A column at a wrap boundary matches both rows it sits between, as the
     * caret lookup does. A span that matches no row of its line (whitespace dropped at a wrap, say) dirties the whole
