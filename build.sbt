@@ -7,6 +7,9 @@ ThisBuild / scalaVersion := "3.9.0"
 ThisBuild / licenses := Seq("GPL-3.0-or-later" -> url("https://www.gnu.org/licenses/gpl-3.0.txt"))
 ThisBuild / homepage := Some(url("https://github.com/BarMal/Serenity"))
 
+// sbt-sbom reads these through its makeBom command, which the unused-key lint cannot see.
+Global / excludeLintKeys ++= Set(bomFileName, projectType)
+
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 
@@ -100,6 +103,12 @@ lazy val root = (project in file("."))
       out
     },
     name := "Serenity",
+    // The CycloneDX SBOM shipped with each release (#2017). The project has no Runtime-only dependencies, so the
+    // default Compile scope is exactly the runtime classpath that ends up in the assembled jar. Serial number and
+    // timestamp stay off (the plugin default) so the same dependency graph always yields byte-identical output.
+    organization := "io.github.barmal",
+    bomFileName := "Serenity.cdx.json",
+    projectType := "application",
     // WartRemover encodes rules docs/coding-standards.md and CLAUDE.md already state in prose.
     // Main sources only: tests legitimately use throw/null/partial access to build failure fixtures,
     // mirroring how Test / scalacOptions already relaxes the -W flags above.
@@ -246,6 +255,12 @@ lazy val root = (project in file("."))
         file,
         ThirdPartyNotices.runtimeModulesOf((Runtime / managedClasspath).value).map(_.key).distinct.sorted.mkString("\n")
       )
+      Seq(file)
+    }.taskValue,
+    // The SBOM the release ships, handed to SbomSpec so it can check it against the notices' module list.
+    Test / resourceGenerators += Def.task {
+      val file = (Test / resourceManaged).value / "sbom" / "Serenity.cdx.json"
+      IO.copyFile(makeBom.value, file)
       Seq(file)
     }.taskValue,
     // The classpath the kill-recovery spec launches its child JVM with: sbt runs specs in its own JVM, whose
