@@ -6,6 +6,7 @@ import java.awt.font.FontRenderContext
 import scala.annotation.tailrec
 
 import com.serenity.config.MarkdownViewMode
+import com.serenity.rope.ChangeSet
 import com.serenity.state.models.{Buffer, BufferId}
 
 /** How many visual rows the logical lines of one buffer's content wrap into under one wrap setting -- the counts
@@ -77,7 +78,8 @@ object VisualRowCounts:
         .length
         .max(1)
     val key = VisualRowKey(buffer.id, panelWidthPx, font, frc, cellMetricsOverride, forceCellLayout, dropCapsEnabled)
-    wrapCache.visualRowCounts(key, content, measure, VisualLineIndexStore.stampOf(richText))
+    val revision = ContentRevision(buffer.document.contentVersion, buffer.document.changesSince)
+    wrapCache.visualRowCounts(key, content, measure, VisualLineIndexStore.stampOf(richText), Some(revision))
 
   def oneRowPerLine(lineCount: Int): VisualRowCounts = walking(lineCount, _ => 1)
 
@@ -115,22 +117,24 @@ object VisualRowCounts:
     key: K,
     content: com.serenity.rope.Rope,
     measure: Int => Int,
-    stamp: AnyRef = VisualLineIndexStore.Unstamped
-  ): VisualRowCounts = new Indexed(store, key, content, measure, stamp)
+    stamp: AnyRef = VisualLineIndexStore.Unstamped,
+    revision: Option[ContentRevision] = None
+  ): VisualRowCounts = new Indexed(store, key, content, measure, stamp, revision)
 
   final private class Indexed[K](
       store: VisualLineIndexStore[K],
       key: K,
       content: com.serenity.rope.Rope,
       measure: Int => Int,
-      stamp: AnyRef
+      stamp: AnyRef,
+      revision: Option[ContentRevision]
   ) extends VisualRowCounts:
 
     val lineCount: Int = content.lineCount
 
     private def withIndex[A](answer: VisualLineIndex => (A, VisualLineIndex)): A =
-      val (result, refined) = answer(store.indexFor(key, content, stamp))
-      store.update(key, content, refined, stamp)
+      val (result, refined) = answer(store.indexFor(key, content, stamp, revision))
+      store.update(key, content, refined, stamp, revision)
       result
 
     private def inDocument(line: Int): Boolean = line >= 0 && line < lineCount
@@ -206,3 +210,8 @@ object VisualRowCounts:
         case Some(unmeasured) if index.rowsBetween(line, unmeasured) <= rows =>
           measuredBelow(index.measured(unmeasured, measure(unmeasured)), line, rows)
         case _ => index
+
+/** What a document's text was at `version`, and how to reach it from earlier ones: lets a cached per-line measurement
+  * follow an edit from the change that made it instead of comparing the old and new text.
+  */
+final case class ContentRevision(version: Long, changesSince: Long => Option[ChangeSet])

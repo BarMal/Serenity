@@ -1,7 +1,7 @@
 package com.serenity.state.undo
 
 import com.serenity.io.DocumentRevision
-import com.serenity.rope.Rope
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEditSupport
 import com.serenity.text.{LineEnding, LineEndingCounts}
@@ -27,15 +27,14 @@ final case class BufferSnapshot(
     // Bumped even when `content` is the current text: whatever was stamped against the current version (the rich
     // text, an outline) was stamped against the state being undone, not this one.
     val restoredDocument = buffer.document
-      .withContent(content)
+      .replacedWith(content)(using Balance.default)
       .copy(isNewEmpty = isNewEmpty, isDirty = !cleanIn.contains(buffer.document.savedGeneration))
     buffer.copy(
       document = restoredDocument,
       editing = editing,
       viewport = viewport,
       findState = findState,
-      annotations =
-        EditorEditSupport.adjustAnnotationsAcrossReplacement(buffer.annotations, buffer.document.content, content),
+      annotations = EditorEditSupport.adjustAnnotationsAcross(buffer.annotations, buffer.document, restoredDocument),
       // Fidelity describes the file as last read or written, not this edit state: undoing past a save must not bring
       // back a lossy-import warning that save already settled.
       richText = richText.copy(

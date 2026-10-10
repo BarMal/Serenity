@@ -99,6 +99,11 @@ private[state] object EditorEditSupport:
     */
   final case class FoldedEdits(content: Rope, richText: Option[RichTextDocument], applied: List[MultiCursorEdit]):
 
+    /** The applied edits as one change to a document of `oldLength` characters. They were applied in `applied` order,
+      * each against the original offsets, so edits meeting at a point nest the way sequential inserts do.
+      */
+    def change(oldLength: Int): ChangeSet = EditorEditSupport.changeOf(oldLength, applied)
+
     /** The members of `edits` that were applied, for the adjustments (annotations, cursors, undo) that follow the text:
       * a skipped edit changed nothing, so it must not move anything.
       */
@@ -108,6 +113,13 @@ private[state] object EditorEditSupport:
           done.start == edit.start && done.end == edit.end && done.insertedText == edit.insertedText
         )
       )
+
+  private[reducers] def changeOf(oldLength: Int, edits: List[MultiCursorEdit]): ChangeSet =
+    ChangeSet.fromIntents(
+      oldLength,
+      edits.map(edit => Replacement(edit.start, edit.end, edit.insertedText)),
+      OverlapPolicy.ConcatAtPoint
+    )
 
   def foldEditsTracked(
     buffer: Buffer,
@@ -185,7 +197,8 @@ private[state] object EditorEditSupport:
           updatedContent,
           appliedEdits
         ),
-        richTextDocument = updatedRichTextDocument
+        richTextDocument = updatedRichTextDocument,
+        change = Some(folded.change(buffer.document.content.weight))
       )
       (baseBuffer, appliedEdits)
 
@@ -228,7 +241,8 @@ private[state] object EditorEditSupport:
           updatedContent,
           mergedEdits
         ),
-        richTextDocument = updatedRichTextDocument
+        richTextDocument = updatedRichTextDocument,
+        change = Some(folded.change(buffer.document.content.weight))
       )
       (baseBuffer, mergedEdits)
 
@@ -342,16 +356,32 @@ private[state] object EditorEditSupport:
     * marker there may land anywhere within the run.
     */
   def adjustAnnotationsAcrossReplacement(annotations: Annotations, before: Rope, after: Rope): Annotations =
-    if annotations.bookmarks.isEmpty && annotations.documentComments.isEmpty && annotations.placeholders.isEmpty then
-      annotations
-    else
-      // `RopeDiff` wants a `Balance` only for an empty rope on a branch its bounds make unreachable; the ropes compared
-      // carry their own.
-      RopeDiff.changedOffsetRange(before, after)(using Balance.default).fold(annotations) { (start, end) =>
-        val replacedEnd = before.weight - (after.weight - end)
-        val edit        = MultiCursorEdit(0, start, replacedEnd, after.sliceString(start, end))
-        adjustAnnotations(annotations, before, after, List(edit))
-      }
+    if hasNoAnnotations(annotations) then annotations
+    else adjustAnnotationsAcross(annotations, before, after, ChangeSet.fromDiff(before, after)(using Balance.default))
+
+  /** Annotations carried from `before` to `after`, a later state of the same document: through the change `after`
+    * recorded when it has one, and by comparing the texts only when it has not (a reload, an evicted large edit).
+    */
+  def adjustAnnotationsAcross(annotations: Annotations, before: Document, after: Document): Annotations =
+    after.changeFrom(before) match
+      case Some(change) => adjustAnnotationsAcross(annotations, before.content, after.content, change)
+      case None         => adjustAnnotationsAcrossReplacement(annotations, before.content, after.content)
+
+  /** [[adjustAnnotationsAcrossReplacement]] for a transition whose change is already known, so nothing is compared. */
+  def adjustAnnotationsAcross(
+    annotations: Annotations,
+    before: Rope,
+    after: Rope,
+    change: ChangeSet
+  ): Annotations =
+    if hasNoAnnotations(annotations) || change.isIdentity then annotations
+    else adjustAnnotations(annotations, before, after, change.parts.map(multiCursorEditOf).toList)
+
+  private def multiCursorEditOf(part: Replacement): MultiCursorEdit =
+    MultiCursorEdit(0, part.from, part.to, part.insert)
+
+  private def hasNoAnnotations(annotations: Annotations): Boolean =
+    annotations.bookmarks.isEmpty && annotations.documentComments.isEmpty && annotations.placeholders.isEmpty
 
   private def remapCommentStart(offset: Int, edits: List[MultiCursorEdit]): Int =
     remapEditBoundary(offset, edits, insertionAtBoundaryMoves = true)
@@ -422,7 +452,11 @@ private[state] object EditorEditSupport:
 
     (
       buffer
-        .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText))
+        .withEditedDocument(
+          newContent,
+          richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText),
+          Some(ChangeSet.single(buffer.document.content.weight, startOffset, endOffset, insertedText))
+        )
         .copy(
           editing = buffer.editing.withPrimary(Cursor(newCursor)),
           annotations = adjustAnnotations(
@@ -460,7 +494,11 @@ private[state] object EditorEditSupport:
     val newContent  = deleteOrUnchanged(buffer.document.content, startOffset, endOffset)
     val newCursor   = newContent.offsetToCursorPosition(startOffset)
     val baseBuffer = buffer
-      .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
+      .withEditedDocument(
+        newContent,
+        richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""),
+        Some(ChangeSet.single(buffer.document.content.weight, startOffset, endOffset, ""))
+      )
       .copy(
         editing = buffer.editing.withPrimary(Cursor(newCursor)),
         annotations = adjustAnnotations(

@@ -5,7 +5,7 @@ import java.util.LinkedHashMap
 import scala.annotation.tailrec
 
 import com.serenity.markdown.MarkdownInlineView
-import com.serenity.rope.{Leaf, Node, Rope}
+import com.serenity.rope.{ChangeSet, Leaf, Node, Rope}
 
 /** The [[VisualLineIndex]] last built for each key -- a buffer under one wrap setting -- together with the content it
   * describes. A key's index follows edits to its buffer: only the lines an edit touched lose their measurements, and
@@ -18,7 +18,7 @@ import com.serenity.rope.{Leaf, Node, Rope}
   */
 final class VisualLineIndexStore[K](maxEntries: Int):
 
-  final private case class Entry(content: Rope, stamp: AnyRef, index: VisualLineIndex)
+  final private case class Entry(content: Rope, version: Option[Long], stamp: AnyRef, index: VisualLineIndex)
 
   private val entries = new LinkedHashMap[K, Entry](16, 0.75f, true)
 
@@ -28,19 +28,40 @@ final class VisualLineIndexStore[K](maxEntries: Int):
     key: K,
     content: Rope,
     measure: Int => Int,
-    stamp: AnyRef = VisualLineIndexStore.Unstamped
+    stamp: AnyRef = VisualLineIndexStore.Unstamped,
+    revision: Option[ContentRevision] = None
   ): VisualRowCounts =
-    VisualRowCounts.indexed(this, key, content, measure, stamp)
+    VisualRowCounts.indexed(this, key, content, measure, stamp, revision)
 
-  private[layout] def indexFor(key: K, content: Rope, stamp: AnyRef = VisualLineIndexStore.Unstamped): VisualLineIndex =
+  private[layout] def indexFor(
+    key: K,
+    content: Rope,
+    stamp: AnyRef = VisualLineIndexStore.Unstamped,
+    revision: Option[ContentRevision] = None
+  ): VisualLineIndex =
     synchronized(Option(entries.get(key))) match
       case Some(entry) if !sameStamp(entry.stamp, stamp)        => VisualLineIndex.unmeasured(content.lineCount)
       case Some(entry) if isSameContent(entry.content, content) => entry.index
-      case Some(entry) => VisualLineIndexStore.followEdit(entry.index, entry.content, content)
-      case None        => VisualLineIndex.unmeasured(content.lineCount)
+      case Some(entry) =>
+        val recorded = for
+          current <- revision
+          since   <- entry.version
+          change  <- current.changesSince(since)
+          if change.oldLength == entry.content.weight && change.newLength == content.weight
+        yield change
+        recorded.fold(VisualLineIndexStore.followEdit(entry.index, entry.content, content))(
+          VisualLineIndexStore.followChange(entry.index, entry.content, content, _)
+        )
+      case None => VisualLineIndex.unmeasured(content.lineCount)
 
-  private[layout] def update(key: K, content: Rope, index: VisualLineIndex, stamp: AnyRef): Unit = synchronized {
-    val _ = entries.put(key, Entry(content, stamp, index))
+  private[layout] def update(
+    key: K,
+    content: Rope,
+    index: VisualLineIndex,
+    stamp: AnyRef,
+    revision: Option[ContentRevision] = None
+  ): Unit = synchronized {
+    val _ = entries.put(key, Entry(content, revision.map(_.version), stamp, index))
     evictEldest(entries.values().iterator())
   }
 
@@ -73,6 +94,17 @@ object VisualLineIndexStore:
     if richText.markdown.isActive then ViewStamp(base, richText.markdown) else base
 
   val DefaultMaxEntries = 32
+
+  /** `index`, which describes `before`, carried over to `after` by the `change` that made it: the lines the change's
+    * parts touched become unmeasured and every other line keeps its measurement, without reading either text.
+    */
+  def followChange(index: VisualLineIndex, before: Rope, after: Rope, change: ChangeSet): VisualLineIndex =
+    if index.lineCount != before.lineCount then VisualLineIndex.unmeasured(after.lineCount)
+    else
+      val followed = change.lineSpans(before).foldLeft(index) { (current, span) =>
+        current.replacedLines(span.newFirst, span.oldLast - span.oldFirst + 1, span.newLast - span.newFirst + 1)
+      }
+      if followed.lineCount == after.lineCount then followed else VisualLineIndex.unmeasured(after.lineCount)
 
   /** `index`, which describes `before`, carried over to `after`: the lines an edit may have changed become unmeasured,
     * and every line outside them -- identical text, so an identical row count -- keeps its measurement.

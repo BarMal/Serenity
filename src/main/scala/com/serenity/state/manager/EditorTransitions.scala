@@ -117,14 +117,10 @@ private[manager] object EditorTransitions:
   ): Option[BufferContentReplacement] =
     state.persisted.buffers.get(bufferId).map { buffer =>
       val replacement = Rope(content)
-      val document    = buffer.document.withContent(replacement)
+      val document    = buffer.document.replacedWith(replacement)
       val updatedBuffer = buffer.copy(
         document = document,
-        annotations = EditorEditSupport.adjustAnnotationsAcrossReplacement(
-          buffer.annotations,
-          buffer.document.content,
-          replacement
-        ),
+        annotations = EditorEditSupport.adjustAnnotationsAcross(buffer.annotations, buffer.document, document),
         richText = richTextAfterReplacement(buffer, document.contentVersion, content)
       )
       val documentChange =

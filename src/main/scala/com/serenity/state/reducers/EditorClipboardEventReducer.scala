@@ -226,6 +226,7 @@ private[reducers] object EditorClipboardEventReducer:
           updatedContent,
           edits
         ),
-        richTextDocument = updatedRichTextDocument
+        richTextDocument = updatedRichTextDocument,
+        change = Some(folded.change(buffer.document.content.weight))
       )
       (baseBuffer, edits)

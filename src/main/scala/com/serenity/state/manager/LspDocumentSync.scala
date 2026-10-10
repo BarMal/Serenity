@@ -39,9 +39,8 @@ final private[manager] class LspDocumentSync(port: LspDocumentSyncPort):
       currentState.persisted.buffers.get(bufferId) match
         case None => IO.unit
         case Some(buffer) =>
-          val previous = previousState.persisted.buffers.get(bufferId)
-          val changedContent =
-            previous.exists(_.document.content != buffer.document.content)
+          val previous       = previousState.persisted.buffers.get(bufferId)
+          val changedContent = previous.exists(before => buffer.document.textDiffersFrom(before.document))
           val scrolled = previous.exists(before =>
             before.viewport.topLine != buffer.viewport.topLine ||
               before.viewport.visibleLines != buffer.viewport.visibleLines

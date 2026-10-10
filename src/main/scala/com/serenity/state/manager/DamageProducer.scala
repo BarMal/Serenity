@@ -87,11 +87,19 @@ object DamageProducer:
   )(using Balance): Damage =
     if isSameReference(before.document.content, after.document.content) then Damage.Nothing
     else
-      RopeDiff.changedOffsetRange(before.document.content, after.document.content) match
+      changedOffsetRange(before.document, after.document) match
         case None => Damage.Nothing
         case Some((start, end)) =>
           cellDamage(bufferId, after, start, end, granularity)
             .getOrElse(Damage.BufferRows(bufferId, rowsForOffsetRange(after, start, end)))
+
+  /** The range of `after`'s text that `before`'s edits replaced: taken from the change `after` recorded when it has
+    * one, found by walking the two ropes otherwise (a reload, a restored session).
+    */
+  private def changedOffsetRange(before: Document, after: Document)(using Balance): Option[(Int, Int)] =
+    after.changeFrom(before) match
+      case Some(change) => change.newEnvelope
+      case None         => RopeDiff.changedOffsetRange(before.content, after.content)
 
   /** Column-precise damage for an edit confined to one row of a monospaced buffer under `Cells` granularity. `None`
     * whenever that doesn't hold, so the caller falls back to row-level damage -- multi-row edits (including a merged
