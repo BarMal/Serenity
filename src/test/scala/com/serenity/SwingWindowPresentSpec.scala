@@ -107,6 +107,35 @@ class SwingWindowPresentSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "wait for a paint in progress and reuse its image rather than allocate a third" in {
+    val pool    = new SwingWindow.ReusableImagePool
+    val initial = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    pool.publish(initial)
+    pool.leasePublished() shouldBe Some(initial)
+    pool.publish(pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB))
+
+    val paint = new Thread(() =>
+      Thread.sleep(30)
+      pool.releaseLease()
+    )
+    paint.start()
+
+    pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB) should be theSameInstanceAs initial
+    paint.join()
+  }
+
+  it should "not wait forever on a paint that never finishes" in {
+    val pool    = new SwingWindow.ReusableImagePool
+    val initial = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    pool.publish(initial)
+    val _ = pool.leasePublished()
+    pool.publish(pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB))
+
+    pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB) should not be theSameInstanceAs(
+      initial
+    )
+  }
+
   it should "reuse a painted image again once the paint has finished" in {
     val pool    = new SwingWindow.ReusableImagePool
     val initial = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)

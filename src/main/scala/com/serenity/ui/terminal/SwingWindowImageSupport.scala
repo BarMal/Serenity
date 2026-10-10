@@ -17,7 +17,10 @@ private[terminal] trait SwingWindowImageSupport:
   /** A two-image frame pool: the render thread draws into the spare while the EDT presents the published image.
     *
     * The EDT leases the published image for the length of a paint. A paint that started before the next publish can
-    * still be reading that image once it has become the spare, so the spare is never handed back while leased.
+    * still be reading that image once it has become the spare, so the spare is never handed back while leased. Rather
+    * than allocate a third full-window image (about 50MB at 2x) for that rare overlap, `acquire` waits a short while
+    * for the paint to finish; only a paint stuck past [[MaxLeaseWaitNanos]] makes it allocate, so a hung event thread
+    * can never stall rendering.
     */
   final private[serenity] class ReusableImagePool:
 
@@ -28,9 +31,29 @@ private[terminal] trait SwingWindowImageSupport:
     ):
       def spareIsLeased: Boolean = spare.exists(image => leased.exists(_ eq image))
 
-    private val slots = new AtomicReference(Slots(None, None, None))
+    private val slots     = new AtomicReference(Slots(None, None, None))
+    private val leaseLock = new Object
+
+    @annotation.tailrec
+    private def awaitSpareRelease(deadlineNanos: Long): Unit =
+      val remainingNanos = deadlineNanos - System.nanoTime()
+      if slots.get().spareIsLeased && remainingNanos > 0 then
+        val interrupted =
+          leaseLock.synchronized {
+            if slots.get().spareIsLeased then
+              try
+                leaseLock.wait(remainingNanos / 1_000_000L, (remainingNanos % 1_000_000L).toInt)
+                false
+              catch
+                case _: InterruptedException =>
+                  Thread.currentThread().interrupt()
+                  true
+            else false
+          }
+        if !interrupted then awaitSpareRelease(deadlineNanos)
 
     def acquire(width: Int, height: Int, imageType: Int): BufferedImage =
+      awaitSpareRelease(System.nanoTime() + MaxLeaseWaitNanos)
       val before = slots.getAndUpdate(current => if current.spareIsLeased then current else current.copy(spare = None))
       before.spare
         .filterNot(_ => before.spareIsLeased)
@@ -49,6 +72,11 @@ private[terminal] trait SwingWindowImageSupport:
 
     def releaseLease(): Unit =
       val _ = slots.updateAndGet(_.copy(leased = None))
+      leaseLock.synchronized(leaseLock.notifyAll())
+
+  /** A paint takes a few milliseconds; this is generous for one and short enough that a stuck one costs a single frame.
+    */
+  private val MaxLeaseWaitNanos = 50_000_000L
 
   def shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible: Boolean): Boolean =
     !cursorVisible
