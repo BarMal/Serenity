@@ -21,7 +21,7 @@ import com.serenity.lsp.model.{
   SemanticTokensResult,
   TextChangeDiff
 }
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.{Balance, ChangeSet, Rope}
 import org.typelevel.log4cats.Logger
 
 /** The result a server last gave for a document, which a later `full/delta` request is relative to. */
@@ -173,14 +173,17 @@ final private[lsp] class LspManagerSemanticTokens(
   /** Moves the tokens on screen with the text that changed from `previous` to `next`, until the server answers for
     * `next`.
     */
-  def documentEdited(rawUri: String, previous: Rope, next: Rope): IO[Unit] =
+  def documentEdited(rawUri: String, previous: Rope, next: Rope, known: Option[ChangeSet] = None): IO[Unit] =
     session
       .isShown(DocumentUri(rawUri))
       .ifM(
-        IO.delay(TextChangeDiff.diff(previous, next)).flatMap { change =>
-          applyEvent(LspEvent.LspSemanticTokensEdited(rawUri, change)).unlessA(
-            change.text.isEmpty && change.rangeLength == 0
-          )
+        IO.delay(known.fold(List(TextChangeDiff.diff(previous, next)))(TextChangeDiff.changes(previous, _))).flatMap {
+          changes =>
+            changes.traverse_(change =>
+              applyEvent(LspEvent.LspSemanticTokensEdited(rawUri, change)).unlessA(
+                change.text.isEmpty && change.rangeLength == 0
+              )
+            )
         },
         IO.unit
       )

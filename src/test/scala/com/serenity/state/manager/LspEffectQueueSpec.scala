@@ -139,7 +139,7 @@ class LspEffectQueueSpec extends AnyFlatSpec with Matchers:
           _        <- consumer.cancel
           _        <- queue.enqueueDocumentChange(scalaUri, LanguageId.Scala, RopeText("abc"))
           next     <- queue.stream.take(1).compile.toList.timeout(1.second).attempt
-        yield next.map(_.collect { case LspEffect.FileChanged(_, _, text, _) => text.collect() })
+        yield next.map(_.collect { case LspEffect.FileChanged(_, _, text, _, _) => text.collect() })
       )
     }
 

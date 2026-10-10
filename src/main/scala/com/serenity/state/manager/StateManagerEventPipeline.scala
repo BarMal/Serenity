@@ -439,7 +439,9 @@ final private[manager] class StateManagerEventPipeline(
           currentState.persisted.buffers
             .get(bufferId)
             .exists(buffer =>
-              previousState.persisted.buffers.get(bufferId).exists(_.document.content != buffer.document.content)
+              previousState.persisted.buffers
+                .get(bufferId)
+                .exists(before => buffer.document.textDiffersFrom(before.document))
             )
         }
       if edited.isEmpty then cats.effect.IO.unit

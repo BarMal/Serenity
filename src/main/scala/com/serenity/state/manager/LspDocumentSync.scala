@@ -2,8 +2,8 @@ package com.serenity.state.manager
 
 import cats.effect.IO
 import cats.syntax.foldable.*
-import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.{DocumentDelta, LspEffect}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
 
@@ -49,7 +49,7 @@ final private[manager] class LspDocumentSync(port: LspDocumentSyncPort):
             path       <- buffer.document.filePath.toList
             languageId <- buffer.document.language.toList
             uri    = path.toUri.toString
-            change = Option.when(changedContent)(LspDocumentSync.changedDocument(uri, languageId, buffer))
+            change = Option.when(changedContent)(LspDocumentSync.changedDocument(uri, languageId, buffer, previous))
             shown  = Option.when(scrolled)(LspDocumentSync.visibleRange(uri, languageId, buffer, currentState))
             effect <- change.toList ++ shown.toList
           yield AppEffect.LspQueue(effect)
@@ -58,8 +58,18 @@ final private[manager] class LspDocumentSync(port: LspDocumentSyncPort):
 
 private[manager] object LspDocumentSync:
 
-  private def changedDocument(uri: String, languageId: LanguageId, buffer: Buffer): LspQueueEffect =
-    LspQueueEffect.DocumentChanged(uri, languageId, buffer.document.content)
+  private def changedDocument(
+    uri: String,
+    languageId: LanguageId,
+    buffer: Buffer,
+    previous: Option[Buffer]
+  ): LspQueueEffect =
+    val delta = previous.flatMap { before =>
+      buffer.document
+        .changeFrom(before.document)
+        .map(DocumentDelta(_, before.document.contentVersion, buffer.document.contentVersion))
+    }
+    LspQueueEffect.DocumentChanged(uri, languageId, buffer.document.content, delta)
 
   private def visibleRange(uri: String, languageId: LanguageId, buffer: Buffer, state: AppState): LspQueueEffect =
     val lines = VisibleBufferLines.of(buffer, state)
