@@ -230,3 +230,86 @@ class ListPanelScrollSpec extends AnyFlatSpec with Matchers:
     } shouldBe Some(Some(explorerFiles.last))
     paintedText(clicked) shouldBe paintedText(scrolled)
   }
+
+  private def explorerSelection(state: AppState): Option[java.nio.file.Path] =
+    state
+      .surfaceById(surfaceId)
+      .map(_.content)
+      .collect { case tree: SurfaceContent.DirectoryTree => tree.selectedPath }
+      .flatten
+
+  "The explorer keyboard" should "keep the selection visible when it moves past the last visible row" in {
+    val state = docked(SurfaceContent.DirectoryTree(tallTree, Some(explorerFiles.head)))
+    val shown = paintedText(state).count(_.startsWith("file-"))
+    shown should be < explorerFiles.size
+
+    val moved = pressed(PanelInputEvent.Navigate(Direction.Down), shown + 3, state)
+
+    explorerSelection(moved) shouldBe Some(explorerFiles(shown + 3))
+    highlightedText(moved) shouldBe List(s"file-${shown + 3}")
+  }
+
+  it should "reach the last row with End and the root again with Home" in {
+    val state = docked(SurfaceContent.DirectoryTree(tallTree, Some(explorerFiles.head)))
+
+    val atEnd = after(PanelInputEvent.Last, state)
+    highlightedText(atEnd) shouldBe List("file-79")
+    paintedText(atEnd).lastOption shouldBe Some("file-79")
+    explorerSelection(after(PanelInputEvent.First, atEnd)) shouldBe Some(explorerRoot)
+  }
+
+  private val src       = explorerRoot.resolve("src")
+  private val main      = src.resolve("Main.scala")
+  private val nestedDir = DirEntry(src, "src", isDirectory = true)
+
+  private val nestedTree = DirectoryTreeData(
+    explorerRoot,
+    expandedPaths = Set(src),
+    entries = Map(
+      explorerRoot -> List(nestedDir, DirEntry(explorerRoot.resolve("README.md"), "README.md", isDirectory = false)),
+      src          -> List(DirEntry(main, "Main.scala", isDirectory = false))
+    )
+  )
+
+  "The explorer tree" should "step into an expanded folder with Right and out to its parent with Left" in {
+    val state  = docked(SurfaceContent.DirectoryTree(nestedTree, Some(src)))
+    val inside = after(PanelInputEvent.Navigate(Direction.Right), state)
+    explorerSelection(inside) shouldBe Some(main)
+
+    explorerSelection(after(PanelInputEvent.Navigate(Direction.Left), inside)) shouldBe Some(src)
+  }
+
+  it should "select the root from a top-level row with Left, and stay put on the root" in {
+    val state  = docked(SurfaceContent.DirectoryTree(nestedTree.copy(expandedPaths = Set.empty), Some(src)))
+    val onRoot = after(PanelInputEvent.Navigate(Direction.Left), state)
+
+    explorerSelection(onRoot) shouldBe Some(explorerRoot)
+    explorerSelection(after(PanelInputEvent.Navigate(Direction.Left), onRoot)) shouldBe Some(explorerRoot)
+  }
+
+  it should "toggle a folder with Enter" in {
+    val state     = docked(SurfaceContent.DirectoryTree(nestedTree, Some(src)))
+    val collapsed = after(PanelInputEvent.Activate, state)
+    paintedText(collapsed) should not contain "Main.scala"
+    paintedText(after(PanelInputEvent.Activate, collapsed)) should contain("Main.scala")
+  }
+
+  it should "list a folder again when it is opened after its listing failed" in {
+    val failed = nestedTree.copy(
+      expandedPaths = Set.empty,
+      entries = nestedTree.entries - src,
+      failed = Map(src -> "denied")
+    )
+    val opened =
+      after(PanelInputEvent.Navigate(Direction.Right), docked(SurfaceContent.DirectoryTree(failed, Some(src))))
+
+    opened
+      .surfaceById(surfaceId)
+      .map(_.content)
+      .collect { case tree: SurfaceContent.DirectoryTree => (tree.tree.expandedPaths, tree.tree.failed) }
+      .shouldBe(Some((Set(src), Map.empty[java.nio.file.Path, String])))
+  }
+
+  it should "flatten its rows once per tree value, not on every read" in {
+    DirectoryTreeData.visibleRows(tallTree) should be theSameInstanceAs DirectoryTreeData.visibleRows(tallTree)
+  }
