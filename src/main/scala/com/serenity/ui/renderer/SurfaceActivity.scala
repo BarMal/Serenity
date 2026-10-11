@@ -12,10 +12,11 @@ import com.serenity.diagnostics.{FrameCounter, FrameCounters}
   * A layer surface shares its parent's activity, so what a modal or panel painted into its own buffer still counts.
   */
 final class SurfaceActivity:
-  private val runs       = new AtomicInteger(0)
-  private val shapings   = new AtomicLong(0)
-  private val composites = new AtomicInteger(0)
-  private val flushBytes = new AtomicLong(0)
+  private val runs        = new AtomicInteger(0)
+  private val shapings    = new AtomicLong(0)
+  private val composites  = new AtomicInteger(0)
+  private val flushBytes  = new AtomicLong(0)
+  private val layerPixels = new AtomicLong(0)
 
   def runDrawn(): Unit =
     val _ = runs.incrementAndGet()
@@ -25,6 +26,9 @@ final class SurfaceActivity:
 
   def layerComposited(): Unit =
     val _ = composites.incrementAndGet()
+
+  def layerAllocated(devicePixels: Long): Unit =
+    val _ = layerPixels.addAndGet(devicePixels)
 
   /** Bytes a flush wrote. They join the frame that closes next, so the caret flush a terminal makes after its frame's
     * content flush is counted with the frame after it, and a window's total is exact.
@@ -37,6 +41,7 @@ final class SurfaceActivity:
     counters.add(FrameCounter.RunsDrawn, runs.getAndSet(0).toLong)
     counters.add(FrameCounter.ShapingCalls, shapings.getAndSet(0))
     counters.add(FrameCounter.LayerComposites, composites.getAndSet(0).toLong)
+    counters.add(FrameCounter.LayerBufferPx, layerPixels.getAndSet(0))
     counters.add(FrameCounter.TuiBytes, flushBytes.getAndSet(0))
 
 object SurfaceActivity:

@@ -144,6 +144,9 @@ private[renderer] object RendererChromePlan:
     else band
 
   /** Every place chrome is painted. */
+  private[renderer] def regions(context: RenderContext, renderPlan: EditorPaneRenderPlan): List[PixelRect] =
+    chromeRegions(context, renderPlan)
+
   private def chromeRegions(context: RenderContext, renderPlan: EditorPaneRenderPlan): List[PixelRect] =
     val contract = renderPlan.layoutContract
     val panes = renderPlan.paneLayouts.values.toList.flatMap(layout =>

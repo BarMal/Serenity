@@ -74,8 +74,23 @@ final case class CachedPanelLayer(
     viewportWidth: Int,
     viewportHeight: Int,
     cursorVisible: Boolean,
-    frameRect: LayoutRect
-)
+    frameRect: LayoutRect,
+    bounds: Option[PixelRect] = None,
+    compositedOnto: Set[SurfaceContentIdentity] = Set.empty
+):
+
+  /** Whether this layer still describes a panel at `frameRect`, painted within `layerBounds`, on a window of this
+    * shape.
+    */
+  def matches(
+    viewportWidth: Int,
+    viewportHeight: Int,
+    cursorVisible: Boolean,
+    frameRect: LayoutRect,
+    layerBounds: PixelRect
+  ): Boolean =
+    this.viewportWidth == viewportWidth && this.viewportHeight == viewportHeight &&
+      this.cursorVisible == cursorVisible && this.frameRect == frameRect && bounds.forall(_ == layerBounds)
 
 /** What a frame's annotations are worked out from, compared by object identity: each part is an immutable value the
   * state replaces rather than edits, so the same object is the same answer and nothing needs deep comparison.
@@ -306,6 +321,7 @@ final class RendererFrameState(initialCapacity: Int):
   def forgetPreviousFrameState(key: SurfaceContentIdentity): Unit =
     previousSnapshots.remove(key)
     previousFloatingSurfaceRects.remove(key)
+    forgetPanelCompositions(key)
 
   private val bufferDamage    = new BoundedRefCache[SurfaceContentIdentity, Damage](cacheCapacity)
   private val bufferDrawState = new BoundedRefCache[SurfaceContentIdentity, DrawState](cacheCapacity)
@@ -365,6 +381,27 @@ final class RendererFrameState(initialCapacity: Int):
     panelLayerBuffers.replaceAll { tracked =>
       val current = tracked.getOrElse(owner, Map.empty[SurfaceId, CachedPanelLayer])
       tracked.updated(owner, current.updated(surfaceId, layer))
+    }
+
+  /** Records that `surfaceId`'s cached layer now sits in the pixels `key` holds, so a later frame that keeps those
+    * pixels need not composite it again.
+    */
+  def panelCompositedOnto(surface: RenderSurface, surfaceId: SurfaceId, key: SurfaceContentIdentity): Unit =
+    val owner = surface.layerCacheOwner
+    panelLayerBuffers.replaceAll { tracked =>
+      tracked.get(owner).fold(tracked) { layers =>
+        layers.get(surfaceId).fold(tracked) { layer =>
+          tracked.updated(owner, layers.updated(surfaceId, layer.copy(compositedOnto = layer.compositedOnto + key)))
+        }
+      }
+    }
+
+  /** `key`'s pixels no longer hold any cached panel, because they were cleared or are about to be repainted whole. */
+  private def forgetPanelCompositions(key: SurfaceContentIdentity): Unit =
+    panelLayerBuffers.replaceAll { tracked =>
+      tracked.map((owner, layers) =>
+        owner -> layers.map((id, layer) => id -> layer.copy(compositedOnto = layer.compositedOnto - key))
+      )
     }
 
   /** Drop cached panel buffers for surfaces no longer on screen this frame, scoped to `surface`'s own entry -- a
