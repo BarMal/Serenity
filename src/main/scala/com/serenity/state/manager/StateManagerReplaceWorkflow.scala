@@ -1,8 +1,7 @@
 package com.serenity.state.manager
 
 import cats.effect.IO
-import com.serenity.richtext.RichTextDocument
-import com.serenity.rope.*
+import com.serenity.rope.{Rope, isWholeGraphemeRange}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEditSupport
 import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, UndoState}
@@ -12,7 +11,7 @@ import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, UndoState}
   */
 final private[manager] class StateManagerReplaceWorkflow(
     updateModelValidated: (Model => Option[Model]) => IO[Unit]
-)(using balance: Balance):
+):
 
   private[manager] def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     updateModelValidated(ReplaceWorkflowTransitions.submitted(_, surfaceId))
@@ -23,27 +22,31 @@ final private[manager] class StateManagerReplaceWorkflow(
   ): Option[(UiSurface, ReplaceWorkflowState)] =
     ReplaceWorkflowTransitions.replaceWorkflowSurface(state, surfaceId)
 
-/** Replace-all, replace-next, and the offset/selection bookkeeping they share, as pure functions of the model. */
+/** Replace-all, replace-next, and the offset/selection bookkeeping they share, as pure functions of the model. Both
+  * replace through [[EditorEditSupport.applyTrackedEdits]], the path typing takes, so the edit reaches the document as
+  * a `ChangeSet` and annotations, rich text, diagnostics and language-server sync follow it.
+  */
 private[manager] object ReplaceWorkflowTransitions:
 
+  /** What a submit found to replace: the whole-grapheme matches inside the chosen scope. */
+  private case class ReplaceTarget(bufferId: BufferId, buffer: Buffer, scopedMatches: List[Int])
+
   /** `None` when `surfaceId` is not an open replace prompt. */
-  def submitted(model: Model, surfaceId: SurfaceId)(using Balance): Option[Model] =
+  def submitted(model: Model, surfaceId: SurfaceId): Option[Model] =
     replaceWorkflowSurface(model.app, surfaceId).map { (_, workflow) =>
       resolveTarget(model.app, workflow) match
         case Left(status) => model.copy(app = withReplaceWorkflowSurface(model.app, surfaceId, status))
-        case Right((bufferId, buffer, matches)) =>
+        case Right(target) =>
           workflow.selectedAction match
-            case ReplaceWorkflowAction.ReplaceAll =>
-              replaceAllMatches(model, surfaceId, workflow, bufferId, buffer, matches)
-            case ReplaceWorkflowAction.ReplaceNext =>
-              replaceNextMatch(model, surfaceId, workflow, bufferId, buffer, matches)
+            case ReplaceWorkflowAction.ReplaceAll  => replaceAllMatches(model, surfaceId, workflow, target)
+            case ReplaceWorkflowAction.ReplaceNext => replaceNextMatch(model, surfaceId, workflow, target)
     }
 
-  /** The buffer and matches to replace, or the prompt showing why there are none. */
+  /** The buffer and matches to replace, or the prompt showing why there are none. The document is searched once. */
   private def resolveTarget(
     state: AppState,
     workflow: ReplaceWorkflowState
-  ): Either[ReplaceWorkflowState, (BufferId, Buffer, List[Int])] =
+  ): Either[ReplaceWorkflowState, ReplaceTarget] =
     def status(message: String) = workflow.copy(statusMessage = Some(message))
     activeEditorBufferId(state).flatMap(id => state.persisted.buffers.get(id).map(id -> _)) match
       case None                                 => Left(status("No active buffer"))
@@ -52,8 +55,10 @@ private[manager] object ReplaceWorkflowTransitions:
         workflow.selectedScope.resolve(buffer.primarySelection, offsetForCursor(buffer.document.content, _)) match
           case Left(error) => Left(status(error.message))
           case Right(range) =>
-            val matches = scopedReplaceMatches(buffer, workflow.findText, range)
-            if matches.isEmpty then Left(status("No matches found")) else Right((bufferId, buffer, matches))
+            val scoped = wholeGraphemeMatches(buffer.document.content, workflow.findText)
+              .filter(inScope(range, _, workflow.findText.length))
+            if scoped.isEmpty then Left(status("No matches found"))
+            else Right(ReplaceTarget(bufferId, buffer, scoped))
 
   private def activeEditorBufferId(state: AppState): Option[BufferId] =
     state.persisted.layout.activeEditorPaneId
@@ -64,12 +69,14 @@ private[manager] object ReplaceWorkflowTransitions:
     model: Model,
     surfaceId: SurfaceId,
     workflow: ReplaceWorkflowState,
-    bufferId: BufferId,
-    buffer: Buffer,
-    matches: List[Int]
+    target: ReplaceTarget
   ): Model =
-    val (updatedContent, updatedRichText, replaced) =
-      replaceMatches(buffer, matches, workflow.findText, workflow.replacementText)
+    val buffer = target.buffer
+    val edits = target.scopedMatches.zipWithIndex.map { (offset, index) =>
+      EditorEditSupport.MultiCursorEdit(index, offset, offset + workflow.findText.length, workflow.replacementText)
+    }
+    val (edited, replaced) = EditorEditSupport.applyTrackedEdits(buffer, Nil, edits)
+    val updatedContent     = edited.document.content
     val cursorOffset =
       finalCursorOffsetAfterReplacements(
         replaced.map(_.start),
@@ -77,49 +84,55 @@ private[manager] object ReplaceWorkflowTransitions:
         workflow.replacementText.length
       )
     val newCursor = updatedContent.offsetToCursorPosition(cursorOffset)
-    val updatedFindState =
-      refreshedFindState(updatedContent, workflow.findText, requestedIndex = 0)
-    val updatedBuffer = withReplacedContent(buffer, updatedContent, updatedRichText, replaced).copy(
+    val updatedBuffer = edited.copy(
       editing = EditingState(List(newCursor)),
-      findState = updatedFindState
+      findState = findStateFor(
+        updatedContent,
+        workflow.findText,
+        wholeGraphemeMatches(updatedContent, workflow.findText),
+        requestedIndex = 0
+      )
     )
     val current = model.app
     val withReplacement = current.copy(
-      persisted = current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer)),
+      persisted = current.persisted.copy(buffers = current.persisted.buffers + (target.bufferId -> updatedBuffer)),
       runtime = current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(_.id == surfaceId))
     )
     val updatedState = current.persisted.layout.activeEditorPaneId match
       case Some(paneId) =>
         withReplacement.copy(persisted = withReplacement.persisted.copy(focus = Focus.EditorPane(paneId)))
       case None => withReplacement
-    Model(updatedState, withWorkflowUndo(model.undo, current, bufferId, buffer))
+    Model(updatedState, withWorkflowUndo(model.undo, current, target.bufferId, buffer))
 
   private def replaceNextMatch(
     model: Model,
     surfaceId: SurfaceId,
     workflow: ReplaceWorkflowState,
-    bufferId: BufferId,
-    buffer: Buffer,
-    matches: List[Int]
-  )(using Balance): Model =
-    val startOffset = nextReplaceMatchOffset(buffer, matches)
-    val endOffset   = startOffset + workflow.findText.length
-    val (updatedContent, updatedRichText, replacedEdits) =
-      replaceMatches(buffer, List(startOffset), workflow.findText, workflow.replacementText)
+    target: ReplaceTarget
+  ): Model =
+    val buffer                  = target.buffer
+    val findLength              = workflow.findText.length
+    val startOffset             = nextReplaceMatchOffset(buffer, target.scopedMatches)
+    val endOffset               = startOffset + findLength
+    val edit                    = EditorEditSupport.MultiCursorEdit(0, startOffset, endOffset, workflow.replacementText)
+    val (edited, replacedEdits) = EditorEditSupport.applyTrackedEdits(buffer, Nil, List(edit))
+    val updatedContent          = edited.document.content
     // A match that would join a block is left alone, so nothing was replaced and the text stays as long as it was.
     val replacementLength =
-      if replacedEdits.isEmpty then workflow.findText.length else workflow.replacementText.length
+      if replacedEdits.isEmpty then findLength else workflow.replacementText.length
     val cursorOffset = startOffset + replacementLength
     val newCursor    = updatedContent.offsetToCursorPosition(cursorOffset)
-    val updatedFindState =
-      refreshedFindStateAfterOffset(updatedContent, workflow.findText, cursorOffset)
+    val matchesAfter = wholeGraphemeMatches(updatedContent, workflow.findText)
+    val requestedIndex = matchesAfter.indexWhere(_ >= cursorOffset) match
+      case -1    => 0
+      case index => index
     val replacementSelection =
       workflow.selectedScope match
         case ReplaceWorkflowScope.Selection =>
           buffer.primarySelection.map(selection =>
             adjustSelectionAfterReplacement(
-              buffer = buffer,
-              updatedText = updatedContent.collect(),
+              before = buffer.document.content,
+              after = updatedContent,
               selection = selection,
               startOffset = startOffset,
               endOffset = endOffset,
@@ -128,20 +141,20 @@ private[manager] object ReplaceWorkflowTransitions:
           )
         case ReplaceWorkflowScope.CurrentBuffer =>
           None
-    val updatedBuffer = withReplacedContent(buffer, updatedContent, updatedRichText, replacedEdits).copy(
+    val updatedBuffer = edited.copy(
       editing = EditingState.fromCursors(
         List(replacementSelection.fold(Cursor(newCursor))(Cursor(_)))
       ),
-      findState = updatedFindState
+      findState = findStateFor(updatedContent, workflow.findText, matchesAfter, requestedIndex)
     )
     val current = model.app
     val replaced =
       current.copy(persisted =
-        current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer))
+        current.persisted.copy(buffers = current.persisted.buffers + (target.bufferId -> updatedBuffer))
       )
     Model(
       withReplaceWorkflowSurface(replaced, surfaceId, workflow.copy(statusMessage = Some("Replaced next match"))),
-      withWorkflowUndo(model.undo, current, bufferId, buffer)
+      withWorkflowUndo(model.undo, current, target.bufferId, buffer)
     )
 
   /** Shows `workflow` in the replace prompt `surfaceId`, raised to the top of the surfaces. */
@@ -172,82 +185,28 @@ private[manager] object ReplaceWorkflowTransitions:
     // unreachable fallback rather than a real offset choice.
     matches.find(_ >= cursorOffset).orElse(matches.headOption).getOrElse(0)
 
-  private def scopedReplaceMatches(
-    buffer: Buffer,
-    findText: String,
-    range: ReplaceScopeRange
-  ): List[Int] =
-    buffer.document.content.searchAll(findText).filter { offset =>
-      val insideScope = range match
-        case ReplaceScopeRange.Selection(startOffset, endOffset) =>
-          offset >= startOffset && (offset + findText.length) <= endOffset
-        case ReplaceScopeRange.WholeBuffer =>
-          true
-      insideScope && isWholeGraphemeMatch(buffer.document.content, offset, findText.length)
-    }
+  private def inScope(range: ReplaceScopeRange, offset: Int, findLength: Int): Boolean =
+    range match
+      case ReplaceScopeRange.Selection(startOffset, endOffset) =>
+        offset >= startOffset && (offset + findLength) <= endOffset
+      case ReplaceScopeRange.WholeBuffer =>
+        true
 
-  private def refreshedFindState(
-    content: com.serenity.rope.Rope,
+  private def wholeGraphemeMatches(content: Rope, findText: String): List[Int] =
+    content.searchAll(findText).filter(offset => isWholeGraphemeMatch(content, offset, findText.length))
+
+  private def findStateFor(
+    content: Rope,
     findText: String,
+    matchOffsets: List[Int],
     requestedIndex: Int
   ): Option[FindState] =
-    val results = content
-      .searchAll(findText)
-      .filter(offset => isWholeGraphemeMatch(content, offset, findText.length))
+    val results = matchOffsets
       .map(offset => content.offsetToCursorPosition(offset))
       .map(cursor => FindResult(cursor.line, cursor.column))
       .toVector
     val resultSet = FindResultSet.normalized(findText, results, requestedIndex)
     Option.when(resultSet.results.nonEmpty)(FindState.fromResultSet(resultSet, FindOptions.default))
-
-  private def refreshedFindStateAfterOffset(
-    content: com.serenity.rope.Rope,
-    findText: String,
-    offset: Int
-  ): Option[FindState] =
-    val matchOffsets =
-      content.searchAll(findText).filter(found => isWholeGraphemeMatch(content, found, findText.length))
-    val requestedIndex = matchOffsets.indexWhere(_ >= offset) match
-      case -1    => 0
-      case index => index
-    refreshedFindState(content, findText, requestedIndex)
-
-  /** The buffer's content and rich-text document with every match at `matchOffsets` replaced, the document remapped in
-    * step with the text so its formatting survives the replacement (#1935), and the replacements that were made: a
-    * match that would join a block line is left alone.
-    */
-  private def replaceMatches(
-    buffer: Buffer,
-    matchOffsets: List[Int],
-    findText: String,
-    replacementText: String
-  ): (Rope, Option[RichTextDocument], List[EditorEditSupport.MultiCursorEdit]) =
-    val edits = matchOffsets.sorted.reverse.zipWithIndex.map { (offset, index) =>
-      EditorEditSupport.MultiCursorEdit(index, offset, offset + findText.length, replacementText)
-    }
-    val folded = EditorEditSupport.foldEditsTracked(buffer, edits) { (current, edit) =>
-      // `edit` comes from a match found against `current` (edits are applied highest-first, so earlier replacements
-      // never shift a not-yet-applied one), so this is expected to always succeed; no-op that one replacement rather
-      // than corrupt the rope if that invariant ever breaks.
-      current
-        .delete(edit.start, edit.end)
-        .flatMap(_.insert(edit.start, edit.insertedText))
-        .getOrElse(current)
-    }
-    (folded.content, folded.richText, folded.applied)
-
-  private def withReplacedContent(
-    buffer: Buffer,
-    content: Rope,
-    richText: Option[RichTextDocument],
-    replaced: List[EditorEditSupport.MultiCursorEdit]
-  ): Buffer =
-    val document = buffer.document.withContent(content)
-    buffer.copy(
-      document = document,
-      richText = buffer.richText.withSyncedDocument(richText, document.contentVersion),
-      annotations = EditorEditSupport.adjustAnnotations(buffer.annotations, buffer.document.content, content, replaced)
-    )
 
   private def finalCursorOffsetAfterReplacements(
     matchOffsets: List[Int],
@@ -264,23 +223,22 @@ private[manager] object ReplaceWorkflowTransitions:
       ._2
 
   private def adjustSelectionAfterReplacement(
-    buffer: Buffer,
-    updatedText: String,
+    before: Rope,
+    after: Rope,
     selection: Selection,
     startOffset: Int,
     endOffset: Int,
     replacementLength: Int
-  )(using Balance): Selection =
-    val oldText = buffer.document.content.collect()
-    val delta   = replacementLength - (endOffset - startOffset)
+  ): Selection =
+    val delta = replacementLength - (endOffset - startOffset)
 
     def adjust(cursor: CursorPosition): CursorPosition =
-      val oldOffset = offsetForCursor(oldText, cursor)
+      val oldOffset = offsetForCursor(before, cursor)
       val newOffset =
         if oldOffset <= startOffset then oldOffset
         else if oldOffset >= endOffset then oldOffset + delta
         else startOffset + replacementLength
-      cursorPositionForOffset(updatedText, newOffset)
+      after.offsetToCursorPosition(newOffset)
 
     Selection(adjust(selection.anchor), adjust(selection.focus))
 
@@ -291,22 +249,10 @@ private[manager] object ReplaceWorkflowTransitions:
       case None =>
         undo
 
-  private def offsetForCursor(text: String, cursor: CursorPosition): Int =
-    val linesBefore = text.split("\n", -1).take(cursor.line)
-    val linePrefixLength =
-      if linesBefore.isEmpty then 0
-      else linesBefore.map(_.length).sum + linesBefore.length
-    linePrefixLength + cursor.column
-
-  private def offsetForCursor(content: com.serenity.rope.Rope, cursor: CursorPosition): Int =
+  private def offsetForCursor(content: Rope, cursor: CursorPosition): Int =
     content.lineColumnToOffset(cursor.line, cursor.column)
 
-  // Routed through the canonical Rope-based `offsetToCursorPosition` rather than a hand-rolled character walk,
-  // so the string-backed replace path can never drift from the rope-backed one (see #1061).
-  private def cursorPositionForOffset(text: String, offset: Int)(using Balance): CursorPosition =
-    com.serenity.rope.Rope(text).offsetToCursorPosition(offset)
-
-  private def isWholeGraphemeMatch(content: com.serenity.rope.Rope, offset: Int, length: Int): Boolean =
+  private def isWholeGraphemeMatch(content: Rope, offset: Int, length: Int): Boolean =
     content.isWholeGraphemeRange(offset, offset + length)
 
   def replaceWorkflowSurface(state: AppState, surfaceId: SurfaceId): Option[(UiSurface, ReplaceWorkflowState)] =
