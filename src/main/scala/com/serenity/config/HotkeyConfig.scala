@@ -371,24 +371,9 @@ object HotkeyConfig:
   def defaultCommandBindings: Map[String, List[HotkeyTrigger]] =
     defaultCommandBindingsFor(System.getProperty("os.name", ""))
 
-  /** Keys for registry commands that have no [[HotkeyAction]]: the prose formatting toggles (issue #1858) and the
-    * occurrence commands (issue #1994). A terminal sends Ctrl+I as Tab, and `TerminalInputDecoder` keeps it Tab, so
-    * italic's key reaches only the GUI and terminals that report modified keys distinctly -- the Tab key itself is
-    * never taken. Skipping an occurrence is Ctrl+K Ctrl+D elsewhere; there is no chord to bind here, so it takes one
-    * key beside Ctrl+D.
-    */
+  /** Keys for registry commands that have no [[HotkeyAction]]; see [[CommandDefaultBindings]]. */
   def defaultCommandBindingsFor(osName: String): Map[String, List[HotkeyTrigger]] =
-    val primaryModifier = primaryModifierFor(osName)
-    def keyed(key: Char, extra: Modifier*): List[HotkeyTrigger] =
-      List(HotkeyTrigger(InputKey.Character, Some(key), Set(primaryModifier) ++ extra))
-    Map(
-      "bold"                   -> keyed('b'),
-      "italic"                 -> keyed('i'),
-      "underline"              -> keyed('u'),
-      "select-next-occurrence" -> keyed('d'),
-      "skip-occurrence"        -> keyed('k', Modifier.Alt),
-      "select-all-occurrences" -> keyed('l', Modifier.Shift)
-    )
+    CommandDefaultBindings.forPrimaryModifier(primaryModifierFor(osName))
 
   private def isMac(osName: String): Boolean = osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
 

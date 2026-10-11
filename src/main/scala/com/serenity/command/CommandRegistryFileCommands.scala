@@ -32,6 +32,7 @@ private[command] object CommandRegistryFileCommands:
     saveAs,
     ReopenWithEncodingCommands.chooseEncoding,
     LineEndingCommands.chooseLineEnding,
+    IndentationCommands.chooseIndentation,
     Command.typed(
       "save-config",
       "Write the current settings using the latest config format.",

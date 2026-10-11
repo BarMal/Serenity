@@ -113,7 +113,7 @@ object EditorGeometryProducer:
     val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
     val dropCapsEnabled     = state.persisted.config.documentConfig.dropCapsEnabled
     val markdownViewMode    = state.persisted.config.inlineMarkdownViewMode
-    val tabSize             = state.persisted.config.indentation.tabSize
+    val tabSize             = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
     val visualRows =
       VisualRowCounts.forBuffer(
         buffer,

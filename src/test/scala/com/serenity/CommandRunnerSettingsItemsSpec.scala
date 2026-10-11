@@ -100,7 +100,8 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
       "status-char-count",
       "status-reading-time",
       "status-word-goal",
-      "status-line-ending"
+      "status-line-ending",
+      "status-indentation"
     )
   }
 

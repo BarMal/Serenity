@@ -2,6 +2,7 @@ package com.serenity.io
 
 import java.nio.file.Path
 
+import com.serenity.lsp.config.{FileExtension, LanguageId}
 import com.serenity.richtext.SaveTarget
 
 enum FileType:
@@ -14,7 +15,13 @@ enum FileType:
   case Go
   case C
   case Cpp
-  case Header
+  case Kotlin
+  case CSharp
+  case Ruby
+  case Haskell
+  case Lua
+  case Html
+  case Css
   case Markdown
   case Text
   case WordDocument
@@ -43,32 +50,47 @@ object FileType:
         val extension = fileName.substring(dotIndex + 1)
         fromExtension(extension)
 
+  /** Source and markup files take their type from the language table the editor and LSP use, so the two cannot classify
+    * one extension differently (#1897). Only formats that are not languages are listed here.
+    */
   def fromExtension(extension: String): FileType =
+    FileExtension.languageIdFor(extension).fold(documentType(extension))(fromLanguage)
+
+  private def documentType(extension: String): FileType =
     extension.toLowerCase match
-      case "scala" | "sc"       => FileType.Scala
-      case "java"               => FileType.Java
-      case "js" | "mjs"         => FileType.JavaScript
-      case "ts"                 => FileType.TypeScript
-      case "py"                 => FileType.Python
-      case "rs"                 => FileType.Rust
-      case "go"                 => FileType.Go
-      case "c"                  => FileType.C
-      case "cpp" | "cc" | "cxx" => FileType.Cpp
-      case "h" | "hpp"          => FileType.Header
-      case "md" | "markdown"    => FileType.Markdown
-      case "txt"                => FileType.Text
-      case "doc"                => FileType.WordDocument
-      case "docx"               => FileType.WordOpenXmlDocument
-      case "odt"                => FileType.OpenDocumentText
-      case "rtf"                => FileType.RichText
-      case "json"               => FileType.Json
-      case "xml"                => FileType.Xml
-      case "yaml" | "yml"       => FileType.Yaml
-      case "toml"               => FileType.Toml
-      case "conf" | "config"    => FileType.Config
-      case "sql"                => FileType.Sql
-      case "sh" | "bash"        => FileType.Shell
-      case _                    => FileType.Unknown
+      case "txt"             => FileType.Text
+      case "doc"             => FileType.WordDocument
+      case "docx"            => FileType.WordOpenXmlDocument
+      case "odt"             => FileType.OpenDocumentText
+      case "rtf"             => FileType.RichText
+      case "conf" | "config" => FileType.Config
+      case "sh" | "bash"     => FileType.Shell
+      case _                 => FileType.Unknown
+
+  def fromLanguage(language: LanguageId): FileType =
+    language match
+      case LanguageId.Scala      => FileType.Scala
+      case LanguageId.Java       => FileType.Java
+      case LanguageId.JavaScript => FileType.JavaScript
+      case LanguageId.TypeScript => FileType.TypeScript
+      case LanguageId.Python     => FileType.Python
+      case LanguageId.Rust       => FileType.Rust
+      case LanguageId.Go         => FileType.Go
+      case LanguageId.C          => FileType.C
+      case LanguageId.Cpp        => FileType.Cpp
+      case LanguageId.Kotlin     => FileType.Kotlin
+      case LanguageId.CSharp     => FileType.CSharp
+      case LanguageId.Ruby       => FileType.Ruby
+      case LanguageId.Haskell    => FileType.Haskell
+      case LanguageId.Lua        => FileType.Lua
+      case LanguageId.Html       => FileType.Html
+      case LanguageId.Css        => FileType.Css
+      case LanguageId.Markdown   => FileType.Markdown
+      case LanguageId.JsonLang   => FileType.Json
+      case LanguageId.Xml        => FileType.Xml
+      case LanguageId.Yaml       => FileType.Yaml
+      case LanguageId.Toml       => FileType.Toml
+      case LanguageId.Sql        => FileType.Sql
 
   /** The format a rich document is written in when saved as `fileType`; every other type is saved as plain text. */
   def saveTarget(fileType: FileType): SaveTarget =
@@ -89,7 +111,13 @@ object FileType:
     case FileType.Go         => "Go"
     case FileType.C          => "C"
     case FileType.Cpp        => "C++"
-    case FileType.Header     => "Header"
+    case FileType.Kotlin     => "Kotlin"
+    case FileType.CSharp     => "C#"
+    case FileType.Ruby       => "Ruby"
+    case FileType.Haskell    => "Haskell"
+    case FileType.Lua        => "Lua"
+    case FileType.Html       => "HTML"
+    case FileType.Css        => "CSS"
     case FileType.Markdown   => "Markdown"
     case FileType.Text       => "Text"
     case FileType.WordDocument =>

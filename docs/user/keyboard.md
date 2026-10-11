@@ -56,12 +56,14 @@ Run `sbt "Test/runMain com.serenity.docs.KeyboardReferenceTable"` to rewrite it 
 | Select-all-occurrences | `select-all-occurrences` | `Ctrl+Shift+L` | `Cmd+Shift+L` |
 | Select-next-occurrence | `select-next-occurrence` | `Ctrl+D` | `Cmd+D` |
 | Skip-occurrence | `skip-occurrence` | `Ctrl+Alt+K` | `Alt+Cmd+K` |
+| Toggle-block-comment | `toggle-block-comment` | `Alt+Shift+A` | `Alt+Shift+A` |
+| Toggle-line-comment | `toggle-line-comment` | `Ctrl+/`, `Ctrl+_` | `Cmd+/`, `Ctrl+_` |
 | Underline | `underline` | `Ctrl+U` | `Cmd+U` |
 <!-- keyboard-table:end -->
 
 `Ctrl+Ctrl` and `Cmd+Cmd` mean pressing the modifier twice. `EOF` is the end-of-input key a terminal sends. The rows
-after Toggle notes pin (bold, italic, the occurrence commands and underline) are commands; their config keys are written
-`hotkey.command.<name>`.
+after Toggle notes pin (bold, italic, the occurrence and comment commands, underline) are commands; their config keys
+are written `hotkey.command.<name>`.
 
 ## Several cursors
 

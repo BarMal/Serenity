@@ -48,6 +48,8 @@ enum EditIntent:
   case SelectAllOccurrences
   case Undo
   case Redo
+  case ToggleLineComment
+  case ToggleBlockComment
   case FormatCurrentFile
 
 enum RichTextIntent:

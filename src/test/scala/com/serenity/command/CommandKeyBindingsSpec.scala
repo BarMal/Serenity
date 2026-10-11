@@ -195,7 +195,12 @@ class CommandKeyBindingsSpec extends AnyFlatSpec with Matchers:
   "The prose formatting defaults" should "bind bold, italic and underline to the primary modifier" in {
     val formatting = Set("bold", "italic", "underline")
     def rendered(osName: String): Map[String, List[String]] =
-      HotkeyConfig.defaultCommandBindingsFor(osName).view.filterKeys(formatting).mapValues(_.map(_.render)).toMap
+      HotkeyConfig
+        .defaultCommandBindingsFor(osName)
+        .view
+        .filterKeys(Set("bold", "italic", "underline"))
+        .mapValues(_.map(_.render))
+        .toMap
 
     rendered("Linux") shouldBe Map("bold" -> List("ctrl+b"), "italic" -> List("ctrl+i"), "underline" -> List("ctrl+u"))
     rendered("Mac OS X") shouldBe
@@ -205,7 +210,16 @@ class CommandKeyBindingsSpec extends AnyFlatSpec with Matchers:
 
   it should "name registered commands and clash with no other default" in {
     HotkeyConfig.defaultCommandBindingsFor("Linux").keySet.map(registered).map(_.name) shouldBe
-      Set("bold", "italic", "underline", "select-next-occurrence", "skip-occurrence", "select-all-occurrences")
+      Set(
+        "bold",
+        "italic",
+        "underline",
+        "toggle-line-comment",
+        "toggle-block-comment",
+        "select-next-occurrence",
+        "skip-occurrence",
+        "select-all-occurrences"
+      )
     HotkeyConfig.validate(HotkeyConfig.forOs("Linux")) shouldBe Right(())
     HotkeyConfig.validate(HotkeyConfig.forOs("Mac OS X")) shouldBe Right(())
 
