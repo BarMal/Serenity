@@ -95,6 +95,11 @@ trait RenderSurface:
     */
   def layerBuffers: Option[LayerBufferSupport] = None
 
+  /** What drawing into this surface has cost so far, for the frame counters. A surface that counts nothing reports a
+    * fresh, empty one.
+    */
+  def activity: SurfaceActivity = SurfaceActivity()
+
   def hideCursor(): Unit
   def viewportWidth: Int
   def viewportHeight: Int

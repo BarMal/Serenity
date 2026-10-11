@@ -57,6 +57,17 @@ Set `ui.render.frame_timing = true` in `~/.serenity/config.conf` and the app log
 from an input arriving to the end of the first paint that shows it. The `laptop.*` benchmarks measure the same stages,
 so a laptop log and a CI run can be compared stage by stage.
 
+The same line carries what each frame drew, as `avg` and `max` per frame over the window: `rows-drawn` and
+`rows-preserved` (document rows redrawn against rows kept from the frame before, copied scroll rows included), `runs`
+(text runs painted), `shapings` (strings shaped rather than served from the shaping cache), `layer-composites`,
+`chrome-painted` (its average is the share of frames that repainted any chrome), `present-px` (logical pixels published
+to the screen; the whole cell grid when the frame was not bounded) and `tui-bytes` (UTF-8 bytes the terminal frontend
+wrote, escape sequences included; a caret flush made after a frame's content flush is counted with the next frame).
+Only counters that were ever non-zero are listed. A typing frame that lists `rows-drawn max=` far above a handful, or a
+`present-px` near the whole window, is over-repainting however fast it happens to be. The `laptop.render.typing_frame_2x`
+and `scroll_frame_2x` benchmarks assert a ceiling on `rows-drawn` while verifying their frames (`MaxTypingRowsDrawn`,
+`MaxScrollRowsDrawn` in `LaptopFrameBenchmarks`), so lost row reuse fails the benchmark rather than only slowing it.
+
 This remains a manual comparison tool for local before/after investigation. CI additionally runs this harness on every
 push/PR and gates on it: `scripts/check_perf_regression.py` compares the run's p50 against a stored baseline and
 fails the build when a benchmark both exceeds the ratio threshold (default 2x) and moves by more than an absolute

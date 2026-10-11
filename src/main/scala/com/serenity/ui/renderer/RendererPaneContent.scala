@@ -245,6 +245,7 @@ object RendererPaneContent:
     val activeBodyLines   = focusedTextBodyLines(buffer, state)
     val rowMetrics        = textRowMetrics(rect, context, snapshot)
     val findMatchesByLine = findMatchesOnDrawnRows(buffer, state, visualLines, dirtyRows)
+    FrameCounting.rowsPainted(context.caches.frameCounters, visualLines.size, dirtyRows)
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>

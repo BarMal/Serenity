@@ -379,7 +379,12 @@ object AppRuntime:
       ),
       AppRuntimeRenderLoops.superviseLoop("frame timing report", lifecycle.forceQuit, recordCrash)(
         FrameTimingReport
-          .stream(frameTimings, frameTimingEnabled.discrete, line => logger.info(line))
+          .stream(
+            frameTimings,
+            frameTimingEnabled.discrete,
+            line => logger.info(line),
+            stateManager.renderCaches.frameCounters
+          )
           .interruptWhen(quitSignal)
           .compile
           .drain

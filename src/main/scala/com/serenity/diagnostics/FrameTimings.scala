@@ -41,8 +41,11 @@ object PhaseStats:
 final case class FrameTimingSummary(
     elapsedMs: Double,
     frames: Map[FrameKind, Int],
-    phases: Map[FramePhase, PhaseStats]
+    phases: Map[FramePhase, PhaseStats],
+    counters: FrameCounterStats = FrameCounterStats.empty
 ):
+
+  def withCounters(counted: FrameCounterStats): FrameTimingSummary = copy(counters = counted)
 
   def logLine: String =
     val seconds = elapsedMs / 1000.0
@@ -65,7 +68,8 @@ final case class FrameTimingSummary(
       }
     }
     val window = String.format(Locale.ROOT, "%.1f", seconds)
-    s"[FRAME] window=${window}s ${frameRates.mkString(" ")} | ${if phaseParts.isEmpty then "no samples" else phaseParts.mkString(" | ")}"
+    val parts  = phaseParts ++ counters.logParts
+    s"[FRAME] window=${window}s ${frameRates.mkString(" ")} | ${if parts.isEmpty then "no samples" else parts.mkString(" | ")}"
 
 /** The timings gathered since the last summary, plus the in-flight marks that tie one input to the frame showing it.
   *

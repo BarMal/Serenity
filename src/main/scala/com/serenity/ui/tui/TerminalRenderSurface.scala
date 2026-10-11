@@ -43,9 +43,12 @@ final class TerminalRenderSurface(
   private val caretRef            = new AtomicReference[Option[TerminalRenderSurface.Caret]](None)
   private val lastEmittedCaretRef = new AtomicReference[Option[Option[TerminalRenderSurface.Caret]]](None)
 
+  private val surfaceActivity = SurfaceActivity()
+
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
   override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
+  override def activity: SurfaceActivity                  = surfaceActivity
 
   /** A terminal genuinely holds the previous frame's cells until something overwrites them, so the renderer's dirty-
     * region skip logic may treat this surface as persistent -- see [[clearViewportExcept]], which upholds the other
@@ -130,6 +133,7 @@ final class TerminalRenderSurface(
       writer.write(ansi)
       writer.write(caret)
       writer.write(TerminalRenderSurface.EndSyncUpdate)
+      surfaceActivity.flushed(TerminalRenderSurface.syncedLength(ansi, caret))
     writer.flush()
 
   /** The caret escape for this flush, or `""` when the caret's presented/hidden state hasn't changed since the last
@@ -272,3 +276,7 @@ object TerminalRenderSurface:
   // -- #1172: DEC 2026 synchronized updates -------------------------------------------------------------------------
   private val BeginSyncUpdate: String = s"$Esc[?2026h"
   private val EndSyncUpdate: String   = s"$Esc[?2026l"
+
+  private def syncedLength(ansi: String, caret: String): Int =
+    SurfaceActivity.utf8Length(BeginSyncUpdate) + SurfaceActivity.utf8Length(ansi) +
+      SurfaceActivity.utf8Length(caret) + SurfaceActivity.utf8Length(EndSyncUpdate)
