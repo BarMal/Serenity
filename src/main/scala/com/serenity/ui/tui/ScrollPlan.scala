@@ -16,12 +16,14 @@ final case class ScrollPlan(top: Int, bottom: Int, lines: Int):
 
   def rows: Range = top to bottom
 
-  /** What the terminal shows on row `y` once the scroll has run, or `None` for an exposed row. */
-  def rowAfterScroll(previous: TerminalFrame, y: Int): Option[Vector[TerminalCell]] =
-    if y < top || y > bottom then Some(previous.cells(y))
+  /** The row of the previous frame that the terminal shows on row `y` once the scroll has run, or `None` for an exposed
+    * row.
+    */
+  def sourceRow(y: Int): Option[Int] =
+    if y < top || y > bottom then Some(y)
     else
       val source = y + lines
-      Option.when(source >= top && source <= bottom)(previous.cells(source))
+      Option.when(source >= top && source <= bottom)(source)
 
 object ScrollPlan:
 
@@ -35,15 +37,15 @@ object ScrollPlan:
   /** The scroll that lets the most rows be left alone, if any. It is only a candidate: the caller keeps it only when
     * the bytes it produces really are fewer than the plain diff's.
     */
-  def detect(previous: TerminalFrame, next: TerminalFrame, dirtyRows: Option[Set[Int]]): Option[ScrollPlan] =
+  def detect(previous: CellGrid, next: CellGrid, dirtyRows: Option[Set[Int]]): Option[ScrollPlan] =
     val height = next.height
     val changed = dirtyRows match
       case Some(rows) => Vector.tabulate(height)(rows.contains)
-      case None       => Vector.tabulate(height)(y => previous.cells(y) != next.cells(y))
+      case None       => Vector.tabulate(height)(y => !previous.rowEquals(y, next, y))
     if changed.count(identity) < MinChangedRows then None
     else
-      val nextKeys = next.cells.map(_.hashCode)
-      val prevKeys = previous.cells.map(_.hashCode)
+      val nextKeys = Vector.tabulate(height)(next.rowHash)
+      val prevKeys = Vector.tabulate(height)(previous.rowHash)
       (1 until height)
         .flatMap(distance => List(distance, -distance))
         .flatMap(shift => candidate(previous, next, changed, prevKeys, nextKeys, shift))
@@ -56,8 +58,8 @@ object ScrollPlan:
     * matches its shifted source gains one, a row that was fine and would now need repainting loses one.
     */
   private def candidate(
-    previous: TerminalFrame,
-    next: TerminalFrame,
+    previous: CellGrid,
+    next: CellGrid,
     changed: Vector[Boolean],
     prevKeys: Vector[Int],
     nextKeys: Vector[Int],
@@ -67,7 +69,7 @@ object ScrollPlan:
 
     def weight(y: Int): Int =
       val source  = y + shift
-      val matched = nextKeys(y) == prevKeys(source) && next.cells(y) == previous.cells(source)
+      val matched = nextKeys(y) == prevKeys(source) && next.rowEquals(y, previous, source)
       (matched, changed(y)) match
         case (true, true)   => 1
         case (false, false) => -1

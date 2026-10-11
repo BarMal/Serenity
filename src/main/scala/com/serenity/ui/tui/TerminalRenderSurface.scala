@@ -11,8 +11,8 @@ import com.serenity.ui.theme.TextStyle
 
 /** The [[RenderSurface]] a JLine [[TerminalShell]] exposes over a [[TerminalScreenBuffer]]: every drawing method
   * forwards straight onto the buffer (already shaped to match `RenderSurface`'s own `putString`/`fillRect`/colour-and-
-  * style calls), and [[flush]] diffs the buffer's snapshot against the previous frame with [[TerminalAnsiDiff]] and
-  * writes the result to `writer`.
+  * style calls), and [[flush]] has the buffer diff itself against what the terminal last showed with
+  * [[TerminalAnsiDiff]] and writes the result to `writer`.
   *
   * `cellMetrics` is used only to translate the pixel-space [[PixelRect]]s [[clearViewportExcept]] receives back into
   * this surface's cell coordinates -- `putString`/`fillRect` themselves are already cell-addressed, same as every other
@@ -30,8 +30,7 @@ final class TerminalRenderSurface(
     with PanelOutlineDrawing
     with HardwareCursor:
 
-  private val screenBuffer     = new TerminalScreenBuffer(width, height)
-  private val previousFrameRef = new AtomicReference[Option[TerminalFrame]](None)
+  private val screenBuffer = new TerminalScreenBuffer(width, height)
 
   // The SGR attributes the last flush left on the terminal, so the next flush deltas against them instead of
   // resetting first. `TerminalShell.restore` resets them on the way out; `None` (first frame) forces a full set.
@@ -66,11 +65,11 @@ final class TerminalRenderSurface(
     else
       setBackgroundColor(color)
       val preservedCells = preserved.map(toCellRect)
-      for
-        row <- 0 until height
-        col <- 0 until width
-        if !preservedCells.exists(_.contains(col, row))
-      do screenBuffer.fillRect(col, row, 1, 1, ' ')
+      (0 until height).foreach { row =>
+        TerminalRenderSurface
+          .uncoveredSpans(preservedCells.filter(_.covers(row)), width)
+          .foreach((from, until) => screenBuffer.fillRect(from, row, until - from, 1, ' '))
+      }
 
   private def toCellRect(rect: PixelRect): TerminalRenderSurface.CellRect =
     TerminalRenderSurface.CellRect(
@@ -115,16 +114,7 @@ final class TerminalRenderSurface(
     * preserving #1170's zero-idle-wakeup contract.
     */
   def flush(): Unit =
-    val next      = screenBuffer.snapshot
-    val dirtyRows = screenBuffer.consumeDirtyRows()
-    val encoded =
-      TerminalAnsiDiff.encode(
-        previousFrameRef.getAndSet(Some(next)),
-        next,
-        Some(dirtyRows),
-        scrollRegions,
-        penRef.get()
-      )
+    val encoded = screenBuffer.flushDiff(scrollRegions, penRef.get())
     penRef.set(encoded.endPen)
     val ansi  = encoded.ansi
     val caret = caretEscape(forceReassert = ansi.nonEmpty)
@@ -251,7 +241,17 @@ final class TerminalRenderSurface(
 
 object TerminalRenderSurface:
   final private case class CellRect(x0: Int, y0: Int, x1: Int, y1: Int):
-    def contains(col: Int, row: Int): Boolean = col >= x0 && col < x1 && row >= y0 && row < y1
+    def covers(row: Int): Boolean = row >= y0 && row < y1
+
+  /** The column ranges `[from, until)` of a `width`-wide row that none of `rects` (all covering that row) reach. */
+  private def uncoveredSpans(rects: List[CellRect], width: Int): List[(Int, Int)] =
+    val (reached, gaps) = rects.sortBy(_.x0).foldLeft((0, List.empty[(Int, Int)])) {
+      case ((reachedSoFar, found), rect) =>
+        val gapEnd = math.min(rect.x0, width)
+        val gaps   = if gapEnd > reachedSoFar then (reachedSoFar, gapEnd) :: found else found
+        (math.max(reachedSoFar, math.min(rect.x1, width)), gaps)
+    }
+    (if reached < width then (reached, width) :: gaps else gaps).reverse
 
   final private case class Caret(cellX: Int, cellY: Int, style: HardwareCursorStyle)
 

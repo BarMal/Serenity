@@ -45,6 +45,7 @@ object PerformanceBenchmarks:
       ReducerBenchmarks.benchmarks() ++
       ProseTypingBenchmarks.benchmarks() ++
       DamageBenchmarks.benchmarks() ++
+      TuiBenchmarks.benchmarks() ++
       CommandRunnerBenchmarks.benchmarks() ++
       EqualsBenchmarks.benchmarks() ++
       FindReplaceBenchmarks.benchmarks() ++

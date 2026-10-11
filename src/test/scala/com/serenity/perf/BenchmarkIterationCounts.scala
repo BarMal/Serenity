@@ -86,6 +86,7 @@ package com.serenity.perf
   */
 private[perf] object BenchmarkIterationCounts:
   val Damage                  = 60
+  val Tui                     = 60
   val Reducer                 = 60
   val LspFramer               = 48
   val RenderMarkdown          = 24

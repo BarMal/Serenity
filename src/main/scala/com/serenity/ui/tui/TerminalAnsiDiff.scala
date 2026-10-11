@@ -33,9 +33,9 @@ object TerminalAnsiDiff:
     *
     * `dirtyRows`, when given, is trusted as the complete set of rows that could have changed -- rows outside it are
     * never scanned at all, rather than re-derived or double-checked. `None` (every call site before #1464, and every
-    * caller with no such record available) preserves the original full-frame scan. `TerminalRenderSurface.flush` passes
-    * `TerminalScreenBuffer.consumeDirtyRows()`, the one source that actually covers every paint path -- see its own doc
-    * comment for why the renderer's pane-scoped `FramePlan.dirtyRowsByPane` can't safely serve here instead.
+    * caller with no such record available) preserves the original full-frame scan. `TerminalScreenBuffer.flushDiff`
+    * passes `consumeDirtyRows()`, the one source that actually covers every paint path -- see its own doc comment for
+    * why the renderer's pane-scoped `FramePlan.dirtyRowsByPane` can't safely serve here instead.
     *
     * `scrollRegions` says the terminal supports DECSTBM with SU/SD; without it every moved row is rewritten.
     */
@@ -59,12 +59,32 @@ object TerminalAnsiDiff:
     scrollRegions: Boolean,
     startPen: Option[SgrState]
   ): Encoded =
+    val styles = new StyleTable
+    encodeGrids(
+      previous.map(CellGrid.fromFrame(_, styles)),
+      CellGrid.fromFrame(next, styles),
+      dirtyRows,
+      scrollRegions,
+      startPen
+    )
+
+  /** [[encode]] over the compact grids the screen buffer keeps. The two grids must share a [[StyleTable]], which is
+    * what makes comparing their style ids comparing their styles; grids that do not are treated as having no usable
+    * previous frame.
+    */
+  def encodeGrids(
+    previous: Option[CellGrid],
+    next: CellGrid,
+    dirtyRows: Option[Set[Int]],
+    scrollRegions: Boolean,
+    startPen: Option[SgrState]
+  ): Encoded =
     previous match
-      case Some(prev) if prev.width == next.width && prev.height == next.height =>
+      case Some(prev) if prev.width == next.width && prev.height == next.height && prev.styles.eq(next.styles) =>
         encodeDiff(prev, next, dirtyRows, scrollRegions, startPen)
       case _ => encodeFull(next, startPen)
 
-  private def encodeFull(frame: TerminalFrame, startPen: Option[SgrState]): Encoded =
+  private def encodeFull(frame: CellGrid, startPen: Option[SgrState]): Encoded =
     val sb    = new StringBuilder
     val _     = sb.append(ClearScreen).append(CursorHome)
     val start = Pass(startPen, Some(CursorPos(0, 0)), wrote = false)
@@ -72,8 +92,8 @@ object TerminalAnsiDiff:
     Encoded(sb.toString, end.pen, end.wrote)
 
   private def encodeDiff(
-    previous: TerminalFrame,
-    next: TerminalFrame,
+    previous: CellGrid,
+    next: CellGrid,
     dirtyRows: Option[Set[Int]],
     scrollRegions: Boolean,
     startPen: Option[SgrState]
@@ -87,8 +107,8 @@ object TerminalAnsiDiff:
     scrolled.filter(_.ansi.length < plain.ansi.length).getOrElse(plain)
 
   private def encodeRows(
-    previous: TerminalFrame,
-    next: TerminalFrame,
+    previous: CellGrid,
+    next: CellGrid,
     rows: Seq[Int],
     plan: Option[ScrollPlan],
     startPen: Option[SgrState]
@@ -96,23 +116,23 @@ object TerminalAnsiDiff:
     val sb = new StringBuilder
     plan.foreach(scroll => sb.append(scroll.sequence(next.height)))
     val end = rows.foldLeft(Pass(startPen, None, wrote = false)) { (pass, y) =>
-      val before = plan.fold(Option(previous.cells(y)))(_.rowAfterScroll(previous, y))
-      writeRow(sb, pass, next, y, changedColumns(before, next.cells(y)))
+      val before = plan.fold(Option(y))(_.sourceRow(y))
+      writeRow(sb, pass, next, y, changedColumns(previous, before, next, y))
     }
     Encoded(sb.toString, end.pen, end.wrote)
 
-  private def changedColumns(before: Option[Vector[TerminalCell]], after: Vector[TerminalCell]): Seq[Int] =
+  private def changedColumns(previous: CellGrid, before: Option[Int], next: CellGrid, y: Int): Seq[Int] =
     before match
-      case Some(row) => after.indices.filter(x => after(x) != row(x))
-      case None      => after.indices
+      case Some(source) => next.differingColumns(y, previous, source)
+      case None         => 0 until next.width
 
-  private def writeRow(sb: StringBuilder, start: Pass, frame: TerminalFrame, y: Int, columns: Seq[Int]): Pass =
+  private def writeRow(sb: StringBuilder, start: Pass, frame: CellGrid, y: Int, columns: Seq[Int]): Pass =
     columns.foldLeft(start)((pass, x) => writeBridged(sb, pass, frame, y, x))
 
   /** Draws column `x`, first rewriting the unchanged cells between the cursor and `x` if that is the cheaper way across
     * them. Both ways are rendered and measured, so the choice accounts for the style changes bridging would cause.
     */
-  private def writeBridged(sb: StringBuilder, pass: Pass, frame: TerminalFrame, y: Int, x: Int): Pass =
+  private def writeBridged(sb: StringBuilder, pass: Pass, frame: CellGrid, y: Int, x: Int): Pass =
     val gap = pass.cursor match
       case Some(CursorPos(cursorX, cursorY)) if cursorY == y && cursorX < x && x - cursorX <= MaxBridgedGap =>
         cursorX until x
@@ -125,20 +145,26 @@ object TerminalAnsiDiff:
       val _             = sb.append(text)
       after
 
-  private def renderCells(start: Pass, frame: TerminalFrame, y: Int, columns: Seq[Int]): (String, Pass) =
+  private def renderCells(start: Pass, frame: CellGrid, y: Int, columns: Seq[Int]): (String, Pass) =
     val scratch = new StringBuilder
     val end     = columns.foldLeft(start)((pass, x) => writeCell(scratch, pass, frame, y, x))
     (scratch.toString, end)
 
   /** A continuation cell draws nothing of its own -- its wide glyph already covered it. */
-  private def writeCell(sb: StringBuilder, pass: Pass, frame: TerminalFrame, y: Int, x: Int): Pass =
-    val cell = frame(x, y)
-    if cell.span == CellSpan.Continuation then pass
+  private def writeCell(sb: StringBuilder, pass: Pass, frame: CellGrid, y: Int, x: Int): Pass =
+    val glyph = frame.glyphAt(x, y)
+    val span  = CellGrid.spanOf(glyph)
+    if span == CellSpan.Continuation then pass
     else
-      val pen     = SgrState.of(cell)
-      val advance = if cell.span == CellSpan.Wide then 2 else 1
-      val _ = sb
-        .append(CursorMotion.between(pass.cursor, CursorPos(x, y), frame.width))
-        .append(SgrState.transition(pass.pen, pen))
-        .append(cell.text)
+      val pen     = frame.styleAt(x, y).sgr
+      val advance = if span == CellSpan.Wide then 2 else 1
+      val _ = appendCodePoint(
+        sb.append(CursorMotion.between(pass.cursor, CursorPos(x, y), frame.width))
+          .append(SgrState.transition(pass.pen, pen)),
+        CellGrid.codePointOf(glyph)
+      )
       Pass(Some(pen), Some(CursorPos(x + advance, y)), wrote = true)
+
+  private def appendCodePoint(sb: StringBuilder, codePoint: Int): StringBuilder =
+    if Character.isBmpCodePoint(codePoint) then sb.append(codePoint.toChar)
+    else sb.appendAll(Character.toChars(codePoint))

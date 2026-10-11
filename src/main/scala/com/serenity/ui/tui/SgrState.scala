@@ -2,6 +2,8 @@ package com.serenity.ui.tui
 
 import java.awt.Color
 
+import com.serenity.ui.theme.TextStyle
+
 /** The SGR attributes a terminal holds after [[TerminalAnsiDiff]] has drawn a cell, so the next cell is reached by
   * sending only what differs. A background with alpha 0 is stored as [[SgrState.NativeBackground]]: it is drawn with
   * SGR 49 (the terminal's own background) and every such background is the same state.
@@ -14,13 +16,15 @@ object SgrState:
 
   private val Esc = 0x1b.toChar
 
-  def of(cell: TerminalCell): SgrState =
+  def of(cell: TerminalCell): SgrState = of(cell.fg, cell.bg, cell.style)
+
+  def of(fg: Color, bg: Color, style: TextStyle): SgrState =
     SgrState(
-      cell.fg,
-      if cell.bg.getAlpha == 0 then NativeBackground else cell.bg,
-      cell.style.isBold,
-      cell.style.isItalic,
-      cell.style.isUnderlined
+      fg,
+      if bg.getAlpha == 0 then NativeBackground else bg,
+      style.isBold,
+      style.isItalic,
+      style.isUnderlined
     )
 
   /** The sequence that takes a terminal from `from` to `to`, or `""` when they are equal. `from` is `None` when the
