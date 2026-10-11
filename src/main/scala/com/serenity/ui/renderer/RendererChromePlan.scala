@@ -15,14 +15,21 @@ object Repaint:
 
 /** The chrome a frame paints -- spacers, pane headers, line numbers and the pinned status row -- as opposed to the
   * document rows. A persisting surface still holds what the chrome it does not repaint looked like.
+  *
+  * `columnRails` names, for a multi-column pane, the pane rows ([[ColumnPaneRows]]) whose line-number rail bands the
+  * frame repaints; a pane it does not name repaints its rails whole.
   */
 final case class ChromeRepaint(
     spacers: Boolean,
     statusRow: Boolean,
     headers: Repaint[PaneId],
-    lineNumberRows: Repaint[Int]
+    lineNumberRows: Repaint[Int],
+    columnRails: Map[PaneId, Repaint[Int]] = Map.empty
 ):
-  def paintsAny: Boolean = spacers || statusRow || headers.nonEmpty || lineNumberRows.nonEmpty
+  def paintsAny: Boolean =
+    spacers || statusRow || headers.nonEmpty || lineNumberRows.nonEmpty || columnRails.values.exists(_.nonEmpty)
+
+  def railRows(paneId: PaneId): Repaint[Int] = columnRails.getOrElse(paneId, Repaint.all[Int])
 
 object ChromeRepaint:
   val Whole: ChromeRepaint = ChromeRepaint(spacers = true, statusRow = true, Repaint.all, Repaint.all)
@@ -110,7 +117,8 @@ private[renderer] object RendererChromePlan:
         headers = Repaint.only(Damage.paneChromeIds(damage)),
         lineNumberRows =
           if signals.rowsOverflow && contract.rightLineNumberRect.isDefined then Repaint.all[Int]
-          else lineNumberRowsToRepaint(contract.activePaneId, dirtyRowsByPane, signals.lastRowMoved)
+          else lineNumberRowsToRepaint(contract.activePaneId, dirtyRowsByPane, signals.lastRowMoved),
+        columnRails = dirtyRowsByPane.map((paneId, rows) => paneId -> Repaint.only(rows))
       )
 
   /** Whether a surface `damage` names may have left pixels in `regions`: it is, or was last frame, over one, or its
@@ -152,8 +160,14 @@ private[renderer] object RendererChromePlan:
     val panes = renderPlan.paneLayouts.values.toList.flatMap(layout =>
       List(layout.headerRect, layout.topSpacerRect, layout.bottomSpacerRect)
     )
+    val columnRails = renderPlan.paneLayouts.toList.flatMap { (paneId, layout) =>
+      renderPlan
+        .columnSnapshotsFor(paneId)
+        .filter(_.gutterWidthCells > 0)
+        .map(ColumnRails.railRect(layout.contentRect, _))
+    }
     (List(contract.leftSpacerRect, contract.rightSpacerRect) ++ contract.gutterRect.toList ++
-      contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList ++ panes)
+      contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList ++ columnRails ++ panes)
       .map(pixelRectOf(context.cellMetrics))
 
   /** The active pane's last row when the pane showed another number of rows in the frame this surface last drew: the
@@ -203,7 +217,7 @@ private[renderer] object RendererChromePlan:
   /** Paints the chrome `repaint` names, in the order a whole frame paints it. */
   def paint(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan, repaint: ChromeRepaint): Unit =
     if repaint.spacers then RendererPaneSetup.renderSpacerColumns(state, context, renderPlan.layoutContract)
-    RendererGutter.renderLineNumbers(state, context, renderPlan, repaint.lineNumberRows)
+    RendererGutter.renderLineNumbers(state, context, renderPlan, repaint.lineNumberRows, repaint.railRows)
     if repaint.statusRow then RendererGutter.renderGutter(state, context, renderPlan.layoutContract)
 
   /** The pixel bands `repaint` leaves alone, to be handed to `clearViewportExcept` so they survive the clear. */
@@ -230,7 +244,31 @@ private[renderer] object RendererChromePlan:
         contract.paneHeaderRect(paneId).getOrElse(layout.headerRect)
     }
     (spacers ++ statusRow ++ headers).map(pixelRectOf(context.cellMetrics)) ++
-      keptLineNumberBands(state, context, renderPlan, panes, repaint.lineNumberRows)
+      keptLineNumberBands(state, context, renderPlan, panes, repaint.lineNumberRows) ++
+      keptColumnRailBands(state, context, renderPlan, repaint)
+
+  /** The rail bands of every multi-column pane's rows that `repaint` leaves alone. */
+  private def keptColumnRailBands(
+    state: AppState,
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    repaint: ChromeRepaint
+  ): List[PixelRect] =
+    if !RendererGutter.paintsColumnRails(state) then Nil
+    else
+      for
+        paneId <- state.persisted.layout.editorPanes.keys.toList
+        layout <- renderPlan.paneLayouts.get(paneId).toList
+        columns = renderPlan.columnSnapshotsFor(paneId)
+        (placement, rows) <- columns.zip(ColumnPaneRows.localRepaints(columns, repaint.railRows(paneId)))
+        if placement.gutterWidthCells > 0
+        band <- ColumnRails.keptBands(
+          context,
+          ColumnRails.railRect(layout.contentRect, placement),
+          placement.snapshot,
+          rows
+        )
+      yield band
 
   /** The line-number bands of the active pane's rows that `rows` leaves alone, in both counters. */
   private def keptLineNumberBands(

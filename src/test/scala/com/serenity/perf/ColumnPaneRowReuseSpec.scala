@@ -105,8 +105,15 @@ class ColumnPaneRowReuseSpec extends AnyFlatSpec with Matchers:
     scene.columnSnapshotsFor(paneId).size should be > 1
   }
 
-  "A typing frame in a multi-column pane" should "redraw the typed row and keep the rows of every column" in {
-    val (before, after) = typingTransition()
+  "A typing frame in a multi-column pane" should "redraw the typed row and keep the rows of every column" in
+    keepsUnaffectedRows(typingTransition())
+
+  "A typing frame in a multi-column pane with line-number rails" should
+    "redraw the typed row and keep the rows of every column" in
+    keepsUnaffectedRows(typingTransition(railedConfig))
+
+  private def keepsUnaffectedRows(transition: (AppState, AppState)): Unit =
+    val (before, after) = transition
     val frames          = PersistingImage()
     val (_, first)      = frames.render(before, Damage.Everything)
 
@@ -118,7 +125,6 @@ class ColumnPaneRowReuseSpec extends AnyFlatSpec with Matchers:
       typed(FrameCounter.RowsDrawn) + typed(FrameCounter.RowsPreserved) shouldBe first(FrameCounter.RowsDrawn)
       typed(FrameCounter.RowsPreserved) should be > (first(FrameCounter.RowsDrawn) / 2)
     }
-  }
 
   it should "equal a frame drawn from scratch, there and back" in
     equalsColdFrames(typingTransition())
