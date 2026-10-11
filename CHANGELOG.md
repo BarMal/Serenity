@@ -2,11 +2,20 @@
 
 ## [Unreleased]
 
+## 1.0.0-rc.2 — 2026-10-11
+
 ### 2026-10-11
 
 - Cut the bytes the terminal UI writes per frame (#1895): a style change now sends only the attributes that changed (and the terminal's attributes carry over from one frame to the next, reset when you leave), the cursor moves by the cheapest means (relative moves, carriage return and line feed, or rewriting a short unchanged gap) instead of an absolute position for every run, and a viewport scroll is handed to terminals that advertise scroll regions (DECSTBM with SU/SD) so only the rows it exposes are repainted. A typing frame drops from about 67 bytes to about 31, and a one-line scroll of an 80x24 screen from about 3.4 KB to about 0.11 KB; terminals without scroll regions repaint the moved rows as before.
 - Made eco mode (`--eco`, `SERENITY_ECO=1`) cut the work that dominates prose typing, not only the frame rate (#1886): besides the 30fps cap it holds the caret steady (no blink wake-ups), hides chapter ghosts, and waits 500ms instead of 150ms after you pause before spell check re-analyses the document and the outline re-parses. The new settings behind it work on their own: `editor.cursor.mode = steady` (also in Cursor Style), `document.chapter_ghosts`, `document.analysis_debounce_ms` and `document.outline_debounce_ms`; the Toggle Chapter Ghosts command still flips ghosts for the session, and a spell-check wait that never goes quiet is still bounded, now at four times the debounce (at least a second).
 - Added a large-file policy (#1867): a file above `editor.large_file.warn_above_chars` (default 5,000,000 characters) opens with a warning, and above `editor.large_file.tooling_off_above_chars` (default 20,000,000) it also goes without language servers and spell check, which would otherwise re-read the whole text on every change. A document that grows past the limit is closed on the server and one that shrinks back is announced again. `editor.large_file.optimizations = false` keeps the warning and switches nothing off.
+- Made Go to File honour `.gitignore` (#1892): the project walk follows `.gitignore` and `.ignore` files (nested, negated and anchored patterns), `.git/info/exclude` and the global excludes file, skips compiled binaries, and no longer stops at 20,000 files. The tree is walked once per project, listings appear while it runs ("indexing..." in the title), and later opens re-read only the directories that changed.
+- Made the file finder and other large pickers keep up with typing (#1926, #1921): a keystroke over more than 500 files, or a buffer search over a large open text, shows what you typed at once and matches in the background, only the files the previous query matched are scored when the query is extended, the best 200 are picked without sorting the rest, and Enter settles a search still running so it never opens a row of an earlier query. Grapheme boundaries between plain ASCII characters no longer go through the Unicode break iterator.
+- Fixed the pane text staying where it was when the tab strip appeared or went away (#2229): going from one buffer to two, or back, shifts every pane row, and the whole canvas is now repainted and presented rather than only the part reported as changed.
+- Stopped the interface scene being built under a lock (#1915, #1906): painting, hit-testing and accessibility no longer wait on one another, hit-testing uses geometry built with its own fonts, and a frame is repainted for the damage of the model it draws.
+- Measured kerned text and ligature code fonts from one shaped stretch shared with drawing instead of a text layout per row (#1888, #1859).
+- Cut panel layer buffers to the panel's bounds, built overlays once per frame, and presented the canvas without Swing back buffering or a redundant black fill (#1869, #1875).
+- Decoded language-server frames in bulk and parsed their JSON from bytes (#1850), and shared one chrome layout across the keystroke's scene, accessibility, hit-test and toolbar paths (#1919), with selection word and character counts read from rope summaries (#1947).
 
 ### 2026-10-10
 
