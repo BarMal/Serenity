@@ -2,7 +2,6 @@ package com.serenity.state.models
 
 import java.io.File
 import java.nio.file.Path
-import java.util.Locale
 
 import com.serenity.command.FileFinderCommands
 import com.serenity.io.ProjectFileListing
@@ -14,9 +13,6 @@ import com.serenity.ui.widget.{Loadable, TextField}
 object FileFinder:
 
   val Title: String = "Go to File"
-
-  /** The walk stops here, so a huge tree neither stalls the finder nor holds every path it contains in memory. */
-  val MaxListedFiles: Int = 20000
 
   /** Rows past this many are never reached by scrolling in practice; typing more narrows to them instead. */
   val MaxShownChoices: Int = 200
@@ -40,7 +36,7 @@ object FileFinder:
   def refreshed(picker: ListPicker, source: PickerSource.ProjectFiles, recentFiles: List[Path]): ListPicker =
     source.listing match
       case Loadable.Ready(project) =>
-        val titled = picker.copy(title = if project.truncated then truncatedTitle else Title)
+        val titled = picker.copy(title = if project.truncated then indexingTitle else Title)
         if project.files.isEmpty then titled.copy(items = Loadable.Empty(s"No files under ${source.root}"))
         else
           val (shown, matched) =
@@ -62,7 +58,7 @@ object FileFinder:
       case UiSurface(_, SurfaceContent.DirectoryTree(tree, _, _), SurfacePresentation.Docked, _) => tree.rootPath
     }
 
-  private def truncatedTitle: String = s"$Title (first ${"%,d".formatLocal(Locale.ROOT, MaxListedFiles)} files)"
+  private def indexingTitle: String = s"$Title (indexing...)"
 
   private def recentFirst(files: Vector[Path], root: Path, recentFiles: List[Path]): Vector[Path] =
     val base   = root.normalize()
