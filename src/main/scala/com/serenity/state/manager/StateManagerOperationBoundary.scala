@@ -177,7 +177,11 @@ final private[manager] class StateManagerOperationBoundary private (
               else
                 effectsShutdownRef.get.ifM(
                   IO.unit,
-                  beforeDocumentAnalysisStart >> submitAfter(DebouncedEffects.DocumentAnalysis, documentAnalysisJob)
+                  beforeDocumentAnalysisStart >>
+                    submitAfter(
+                      DebouncedEffects.documentAnalysis(state.persisted.config.analysisDebounce),
+                      documentAnalysisJob
+                    )
                 )
           }
         }
@@ -313,17 +317,19 @@ final private[manager] class StateManagerOperationBoundary private (
     * too long to repeat on every keystroke. The result is dropped if the buffer changed again before it landed.
     */
   private def scheduleOutlineRefresh(bufferId: BufferId): IO[Unit] =
-    submitAfter(
-      DebouncedEffects.OutlineRefresh,
-      modelCommit.currentState.flatMap { snapshot =>
-        snapshot.persisted.buffers.get(bufferId).traverse_ { buffer =>
-          IO.delay(PanelSymbolLookup.outlineSymbolsForBuffer(buffer))
-            .flatMap(symbols =>
-              postResult(EffectResult.OutlineRefreshed(bufferId, buffer.document.contentVersion, symbols))
-            )
+    modelCommit.currentState.flatMap { requested =>
+      submitAfter(
+        DebouncedEffects.outlineRefresh(requested.persisted.config.outlineDebounce),
+        modelCommit.currentState.flatMap { snapshot =>
+          snapshot.persisted.buffers.get(bufferId).traverse_ { buffer =>
+            IO.delay(PanelSymbolLookup.outlineSymbolsForBuffer(buffer))
+              .flatMap(symbols =>
+                postResult(EffectResult.OutlineRefreshed(bufferId, buffer.document.contentVersion, symbols))
+              )
+          }
         }
-      }
-    )
+      )
+    }
 
   private def scheduleSessionSaveIfDue(before: AppState, after: AppState): IO[Unit] =
     editIdleSessionSave.filter(_ => EditIdleSessionSave.due(before, after)).traverse_(scheduleSessionSave)

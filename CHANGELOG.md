@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### 2026-10-11
+
+- Made eco mode (`--eco`, `SERENITY_ECO=1`) cut the work that dominates prose typing, not only the frame rate (#1886): besides the 30fps cap it holds the caret steady (no blink wake-ups), hides chapter ghosts, and waits 500ms instead of 150ms after you pause before spell check re-analyses the document and the outline re-parses. The new settings behind it work on their own: `editor.cursor.mode = steady` (also in Cursor Style), `document.chapter_ghosts`, `document.analysis_debounce_ms` and `document.outline_debounce_ms`; the Toggle Chapter Ghosts command still flips ghosts for the session, and a spell-check wait that never goes quiet is still bounded, now at four times the debounce (at least a second).
 ### 2026-10-10
 
 - Kept spell-check squiggles and language-server diagnostics on their text while you type (#1929, #1924): each edit moves them with it at once instead of leaving them on the old line until the next check, deleting a flagged word clears its squiggle immediately, and a diagnostic spanning several lines now marks every line it covers. Spell check also starts at most a second after you begin typing however fast you type, and a check that finishes while you are still typing is kept (moved over what you typed) instead of thrown away.

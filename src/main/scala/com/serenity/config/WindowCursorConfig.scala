@@ -60,7 +60,14 @@ final case class DocumentConfig(
     // Body -- see RichTextStyling/TextLayoutSnapshot's drop-cap gating.
     dropCapsEnabled: Boolean = true,
     // Who new comments and replies are written as; `None` means the operating system's user name (`CommentAuthor`).
-    commentAuthor: Option[String] = None
+    commentAuthor: Option[String] = None,
+    // Whether a chapter note's overview is painted, faded, under an empty chapter when a session starts; the
+    // Toggle Chapter Ghosts command flips it for the session.
+    chapterGhosts: Boolean = true,
+    // How long edits must pause before the whole-document spell-check analysis and the outline re-parse run. Longer
+    // waits spend less CPU while typing at the price of staler squiggles and outline.
+    analysisDebounceMillis: Long = 150L,
+    outlineDebounceMillis: Long = 150L
 )
 
 final case class AppModeConfig(

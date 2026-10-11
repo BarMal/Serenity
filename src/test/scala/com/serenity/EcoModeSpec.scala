@@ -21,20 +21,46 @@ class EcoModeSpec extends AnyFlatSpec with Matchers:
     eco.surfaceConfig.renderFpsTarget shouldBe RenderFpsTarget.Fps30
   }
 
+  it should "hold the caret steady" in {
+    EcoMode.overlay(customized).cursorMode shouldBe CursorMode.Steady
+  }
+
+  it should "hide chapter ghosts" in {
+    EcoMode.overlay(customized).documentConfig.chapterGhosts shouldBe false
+  }
+
+  it should "wait longer than the defaults before analysing the document and refreshing the outline" in {
+    val eco = EcoMode.overlay(customized)
+
+    eco.analysisDebounce should be > AppConfig.default.analysisDebounce
+    eco.outlineDebounce should be > AppConfig.default.outlineDebounce
+  }
+
+  it should "keep a debounce the user already set longer than eco's" in {
+    val eco = EcoMode.overlay(customized.withAnalysisDebounceMillis(2000L).withOutlineDebounceMillis(3000L))
+
+    eco.documentConfig.analysisDebounceMillis shouldBe 2000L
+    eco.documentConfig.outlineDebounceMillis shouldBe 3000L
+  }
+
   it should "leave every other setting -- theme-adjacent, input, window, document config -- untouched" in {
     val eco = EcoMode.overlay(customized)
 
     eco.editorConfig shouldBe customized.editorConfig
     eco.inputConfig shouldBe customized.inputConfig
-    eco.cursorConfig shouldBe customized.cursorConfig
     eco.windowConfig shouldBe customized.windowConfig
-    eco.documentConfig shouldBe customized.documentConfig
     eco.interfaceConfig shouldBe customized.interfaceConfig
     eco.languageToolsConfig shouldBe customized.languageToolsConfig
 
-    // Within surfaceConfig, only the fps target moved.
+    // Within each shared config, only the eco knobs moved.
     eco.surfaceConfig.copy(renderFpsTarget = customized.surfaceConfig.renderFpsTarget) shouldBe
       customized.surfaceConfig
+    eco.cursorConfig.copy(mode = customized.cursorConfig.mode) shouldBe customized.cursorConfig
+    eco.documentConfig.copy(
+      chapterGhosts = customized.documentConfig.chapterGhosts,
+      analysisDebounceMillis = customized.documentConfig.analysisDebounceMillis,
+      outlineDebounceMillis = customized.documentConfig.outlineDebounceMillis
+    ) shouldBe customized.documentConfig
   }
 
   it should "be idempotent" in {

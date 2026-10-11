@@ -302,6 +302,21 @@ final case class AppConfig(
   def commentAuthor: String =
     documentConfig.commentAuthor.getOrElse(CommentAuthor.osUserName)
 
+  def withChapterGhosts(enabled: Boolean): AppConfig =
+    withDocumentConfig(documentConfig.copy(chapterGhosts = enabled))
+
+  def analysisDebounce: FiniteDuration =
+    FiniteDuration(documentConfig.analysisDebounceMillis, MILLISECONDS)
+
+  def withAnalysisDebounceMillis(millis: Long): AppConfig =
+    withDocumentConfig(documentConfig.copy(analysisDebounceMillis = millis.max(0L)))
+
+  def outlineDebounce: FiniteDuration =
+    FiniteDuration(documentConfig.outlineDebounceMillis, MILLISECONDS)
+
+  def withOutlineDebounceMillis(millis: Long): AppConfig =
+    withDocumentConfig(documentConfig.copy(outlineDebounceMillis = millis.max(0L)))
+
   /** Create a new config with the multi-line drop cap paragraph role's rendering enabled or disabled. */
   def withDropCapsEnabled(enabled: Boolean): AppConfig =
     withDocumentConfig(documentConfig.copy(dropCapsEnabled = enabled))

@@ -212,6 +212,22 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
     runVirtual(program)
   }
 
+  it should "never wake the idle tick in GUI steady mode -- a solid caret has nothing to redraw (#1886)" in {
+    val steadyState = AppState.initial(AppConfig.default.withCursorMode(CursorMode.Steady))
+
+    GuiFrontend.cursorIdleInterval(steadyState.persisted.config) shouldBe None
+
+    val program = for
+      windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
+      result <- IO.race(
+        AppRuntime.awaitFocusedIdleTick(IO.pure(steadyState), windowFocused, GuiFrontend.cursorIdleInterval),
+        IO.sleep(2.seconds)
+      )
+    yield result shouldBe Right(())
+
+    runVirtual(program)
+  }
+
   it should "skip idle cursor rendering entirely while unfocused, then resume once focus returns" in {
     val fastConfig = AppConfig.default
     val state      = AppState.initial(fastConfig)

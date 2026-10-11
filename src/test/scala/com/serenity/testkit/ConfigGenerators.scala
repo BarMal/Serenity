@@ -145,11 +145,14 @@ object ConfigGenerators:
       default  <- oneOfEnum(DefaultDocumentMode.values)
       goal     <- Gen.option(Gen.choose(1, 100000))
       dropCaps <- Gen.oneOf(true, false)
+      ghosts   <- Gen.oneOf(true, false)
+      analysis <- Gen.chooseNum(0L, 5000L)
+      outline  <- Gen.chooseNum(0L, 5000L)
       // "auto" and "default" are how the file spells no author, so they cannot be one.
       author <- Gen.option(
         Gen.alphaNumStr.suchThat(name => name.nonEmpty && !Set("auto", "default").contains(name.toLowerCase))
       )
-    yield DocumentConfig(markdown, default, goal, dropCaps, author)
+    yield DocumentConfig(markdown, default, goal, dropCaps, author, ghosts, analysis, outline)
 
   val genAutoSaveConfig: Gen[AutoSaveConfig] =
     for

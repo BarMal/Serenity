@@ -14,10 +14,23 @@ final private[manager] case class DebouncedEffect(
 
 private[manager] object DebouncedEffects:
 
-  // Typing faster than the debounce must not postpone spell check for as long as it lasts (#1929).
-  val DocumentAnalysis: DebouncedEffect = DebouncedEffect(switchLatest(LaneKey.Analysis), 150.millis, Some(1.second))
+  private val MinimumAnalysisMaxWait = 1.second
+  private val MaxWaitPerDebounce     = 4
+
+  // Typing faster than the debounce must not postpone spell check for as long as it lasts (#1929); the bound grows
+  // with a longer debounce so it never undercuts it.
+  def documentAnalysis(delay: FiniteDuration): DebouncedEffect =
+    DebouncedEffect(
+      switchLatest(LaneKey.Analysis),
+      delay,
+      Some((delay * MaxWaitPerDebounce.toLong).max(MinimumAnalysisMaxWait))
+    )
+
+  def outlineRefresh(delay: FiniteDuration): DebouncedEffect =
+    DebouncedEffect(switchLatest(LaneKey.OutlineRefresh), delay)
+
+  val DocumentAnalysis: DebouncedEffect = documentAnalysis(150.millis)
   val FindSearch: DebouncedEffect       = DebouncedEffect(switchLatest(LaneKey.Search), 50.millis)
-  val OutlineRefresh: DebouncedEffect   = DebouncedEffect(switchLatest(LaneKey.OutlineRefresh), 150.millis)
 
   def markdownPreviewCommit(bufferId: BufferId): DebouncedEffect =
     DebouncedEffect(switchLatest(LaneKey.MarkdownPreview(bufferId)), 150.millis)
