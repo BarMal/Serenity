@@ -74,6 +74,11 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     config.surfaceConfig.diagnosticHighlightBlendWeight shouldBe 0.5
   }
 
+  it should "parse steady and its solid alias as the Steady mode" in {
+    CursorMode.fromConfigKey("steady") shouldBe Some(CursorMode.Steady)
+    CursorMode.fromConfigKey(" Solid ") shouldBe Some(CursorMode.Steady)
+  }
+
   // ── CommandRunner settings ───────────────────────────────────────────────
 
   "CommandRunner Settings category" should "include a cursor mode option item" in {
@@ -83,12 +88,22 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     } should not be empty
   }
 
-  it should "offer only the Blink choice on the cursor mode option" in {
+  it should "offer the Blink and Steady choices on the cursor mode option" in {
     val runner = CommandRunner.empty.copy(isActive = true)
     val item = settingsItems(runner).collectFirst {
       case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
     }.get
-    item.options.map(_.label) shouldBe List("Blink")
+    item.options.map(_.label) shouldBe List("Blink", "Steady")
+  }
+
+  it should "map Steady option to SetCursorMode(Steady) intent" in {
+    val runner = CommandRunner.empty.copy(isActive = true)
+    val item = settingsItems(runner).collectFirst {
+      case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
+    }.get
+    item.options.find(_.label == "Steady").get.intent shouldBe CommandIntent.Settings(
+      SettingsIntent.Cursor(CursorIntent.SetCursorMode(CursorMode.Steady))
+    )
   }
 
   it should "map Blink option to SetCursorMode(Blink) intent" in {
@@ -103,12 +118,13 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
 
   // ── StateManager ─────────────────────────────────────────────────────────
 
-  "SetCursorMode" should "keep Blink when cycling the cursor mode option, which has no other choice" in {
+  "SetCursorMode" should "switch to Steady and back to Blink when cycling the cursor mode option" in {
     val sm = makeStateManager()
     openSettingsGroup(sm, "cursor")
     sm.applyEvent(MoveRight).unsafeRunSync()
-    sm.applyEvent(MoveRight).unsafeRunSync()
+    sm.getCurrentState.unsafeRunSync().persisted.config.cursorMode shouldBe CursorMode.Steady
 
+    sm.applyEvent(MoveRight).unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().persisted.config.cursorMode shouldBe CursorMode.Blink
   }
 

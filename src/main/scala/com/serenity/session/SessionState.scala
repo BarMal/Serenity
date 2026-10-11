@@ -169,6 +169,7 @@ object SessionState:
         uiSurfaces = restoredLayout.surfaces,
         nextBufferId = BufferId(bufferMap.keys.map(_.value).maxOption.getOrElse(-1) + 1),
         nextPaneId = PaneId(layout.editorPanes.keys.map(_.value).maxOption.getOrElse(-1) + 1),
-        nextSurfaceId = restoredLayout.nextSurfaceId
+        nextSurfaceId = restoredLayout.nextSurfaceId,
+        chapterGhostsVisible = sessionState.config.documentConfig.chapterGhosts
       )
     )

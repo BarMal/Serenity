@@ -91,7 +91,7 @@ private[serenity] object AppRuntimeRenderLoops:
           count <- blinks.updateAndGet(_ + 1)
           model <- loadModel
           config = model.app.persisted.config
-        yield cursorIdleInterval(config).forall(AppRuntime.keepsBlinking(config, _, count))
+        yield cursorIdleInterval(config).exists(AppRuntime.keepsBlinking(config, _, count))
       )
       .takeWhile(identity)
       .as(IdleTick.Blink)

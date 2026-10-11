@@ -48,7 +48,7 @@ object LaunchOptions:
     ).mapN((flagged, bare) => flagged.toList ++ bare)
 
   private val eco: Opts[Boolean] =
-    Opts.flag("eco", "Lower the frame-rate target.").orFalse
+    Opts.flag("eco", "Save power: lower frame rate, steady caret, no chapter ghosts, slower background checks.").orFalse
 
   private val tui: Opts[Boolean] =
     Opts.flag("tui", "Force the terminal interface.").orFalse

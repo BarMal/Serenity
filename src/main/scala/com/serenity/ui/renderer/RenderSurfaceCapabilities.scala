@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.font.FontRenderContext
 
+import com.serenity.config.CursorMode
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.PixelRect
 
@@ -125,10 +126,10 @@ enum HardwareCursorShape:
 /** A DECSCUSR-expressible caret style: shape plus whether the terminal should blink it itself.
   *
   * There is no cursor-shape setting in [[com.serenity.config.CursorConfig]] today (only
-  * [[com.serenity.config.CursorMode]]'s blink mode) -- callers that delegate the caret to the terminal (#1170)
-  * currently always ask for a blinking block, the shape every terminal defaults to. `decscusrParam` is kept as a total
-  * function of shape/blink regardless, so a future per-buffer shape setting has somewhere to plug in without touching
-  * the escape-emission code.
+  * [[com.serenity.config.CursorMode]]'s blink or steady mode) -- callers that delegate the caret to the terminal
+  * (#1170) always ask for a block, the shape every terminal defaults to. `decscusrParam` is kept as a total function of
+  * shape/blink regardless, so a future per-buffer shape setting has somewhere to plug in without touching the
+  * escape-emission code.
   */
 final case class HardwareCursorStyle(shape: HardwareCursorShape, blinking: Boolean):
 
@@ -140,6 +141,11 @@ final case class HardwareCursorStyle(shape: HardwareCursorShape, blinking: Boole
       case HardwareCursorShape.Block     => if blinking then 1 else 2
       case HardwareCursorShape.Underline => if blinking then 3 else 4
       case HardwareCursorShape.Bar       => if blinking then 5 else 6
+
+object HardwareCursorStyle:
+
+  def forMode(mode: CursorMode): HardwareCursorStyle =
+    HardwareCursorStyle(HardwareCursorShape.Block, blinking = mode == CursorMode.Blink)
 
 /** Delegating the caret to a real hardware/terminal cursor instead of painting it as surface content. Genuinely
   * optional -- a surface with no native cursor to delegate to (the GUI canvas, which composites its own caret overlay)

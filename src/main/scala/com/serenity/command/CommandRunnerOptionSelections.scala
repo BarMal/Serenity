@@ -60,7 +60,8 @@ object CommandRunnerOptionSelections:
 
   private def cursorModeIndex(mode: CursorMode): Int =
     mode match
-      case CursorMode.Blink => 0
+      case CursorMode.Blink  => 0
+      case CursorMode.Steady => 1
 
   private def statusPlacementIndex(placement: StatusLinePlacement): Int =
     placement match

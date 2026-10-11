@@ -472,7 +472,8 @@ object AppState:
       runtime = Runtime(
         nextBufferId = BufferId(1),
         nextPaneId = PaneId(1),
-        nextSurfaceId = SurfaceIdSupply.initial
+        nextSurfaceId = SurfaceIdSupply.initial,
+        chapterGhostsVisible = config.documentConfig.chapterGhosts
       )
     )
 
@@ -486,7 +487,7 @@ object AppState:
         focus = Focus.EditorPane(PaneId(0)),
         config = config
       ),
-      runtime = Runtime()
+      runtime = Runtime(chapterGhostsVisible = config.documentConfig.chapterGhosts)
     )
 
 enum AppAction:

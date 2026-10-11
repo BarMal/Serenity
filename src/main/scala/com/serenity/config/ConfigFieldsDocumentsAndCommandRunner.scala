@@ -47,6 +47,18 @@ private[config] object ConfigFieldsDocumentsAndCommandRunner:
       _.documentConfig.dropCapsEnabled,
       (config, value) => config.withDropCapsEnabled(value)
     ),
+    field("document.chapter_ghosts")(boolean)(
+      _.documentConfig.chapterGhosts,
+      (config, value) => config.withChapterGhosts(value)
+    ),
+    field("document.analysis_debounce_ms")(long.filtered(_ >= 0L))(
+      _.documentConfig.analysisDebounceMillis,
+      (config, value) => config.withAnalysisDebounceMillis(value)
+    ),
+    field("document.outline_debounce_ms")(long.filtered(_ >= 0L))(
+      _.documentConfig.outlineDebounceMillis,
+      (config, value) => config.withOutlineDebounceMillis(value)
+    ),
     field("files.auto_save")(
       enumerated(AutoSaveMode.fromConfigKey, _.configKey, text => AutoSaveMode.values.find(_.toString == text))
     )(_.autoSaveConfig.mode, (config, value) => config.withAutoSaveMode(value)),
