@@ -67,6 +67,33 @@ class RopeDiffPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wit
     }
   }
 
+  property("ropes of the same text in different shapes report exactly the common prefix and suffix") {
+    forAll(Generators.genText, Generators.genText, Gen.chooseNum(1, 40), Gen.chooseNum(1, 40)) {
+      (base, inserted, beforeChunk, afterChunk) =>
+        forAll(Gen.chooseNum(0, base.length), Gen.chooseNum(0, 3)) { (at, deleted) =>
+          val removed   = math.min(deleted, base.length - at)
+          val afterText = base.take(at) + inserted + base.drop(at + removed)
+          val before    = Rope.fromLeafValues(base.grouped(beforeChunk).toVector)
+          val after     = Rope.fromLeafValues(afterText.grouped(afterChunk).toVector)
+          RopeDiff.changedOffsetRange(before, after) shouldBe exactRange(base, afterText)
+        }
+    }
+  }
+
+  property("a rebuilt rope reports exactly the edit made after the rebuild") {
+    forAll(Generators.ropeWithText, Generators.genText) {
+      case ((original, text), inserted) =>
+        val rebuilt = original.rebuild
+        forAll(Gen.chooseNum(0, text.length)) { at =>
+          val after = rebuilt.insert(at, inserted).getOrElse(fail("expected insert to succeed"))
+          RopeDiff.changedOffsetRange(original, after) shouldBe exactRange(
+            text,
+            text.take(at) + inserted + text.drop(at)
+          )
+        }
+    }
+  }
+
   property("an insert at any offset never under-reports") {
     forAll(Generators.ropeWithText, Generators.genText) {
       case ((before, beforeText), inserted) =>

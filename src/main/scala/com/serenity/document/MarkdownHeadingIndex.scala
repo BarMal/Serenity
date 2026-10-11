@@ -2,7 +2,7 @@ package com.serenity.document
 
 import scala.jdk.CollectionConverters.*
 
-import com.serenity.rope.{Balance, Rope, RopeDiff}
+import com.serenity.rope.{Balance, ChangeSet, Rope, RopeDiff}
 import com.serenity.state.models.HeadingIdentity
 import com.serenity.ui.layout.{Location, Symbol, SymbolKind}
 import org.commonmark.Extension
@@ -14,13 +14,13 @@ import org.commonmark.renderer.text.TextContentRenderer
 
 /** The headings of one Markdown text, kept up to date from the edit rather than re-parsed (#1848).
   *
-  * [[updatedTo]] finds what changed with [[RopeDiff]] and re-parses only the top-level blocks around it: a window that
-  * starts and ends where a blank line is followed by an unindented line outside any fenced block, because nothing a
-  * block says about headings crosses such a boundary. Headings and fenced blocks before the window are kept, those
-  * after it are renumbered by the edit's line delta. When the edit touches a fenced block or a fence marker, or the
-  * text holds a construct whose meaning reaches across blank lines (HTML comments and raw `<pre>`/`<script>` blocks,
-  * link reference definitions, which change how a heading's title renders), the whole text is parsed instead, so the
-  * result is always what a full parse gives.
+  * [[updatedTo]] finds what changed from the edit's [[ChangeSet]], or with [[RopeDiff]] when it has none, and re-parses
+  * only the top-level blocks around it: a window that starts and ends where a blank line is followed by an unindented
+  * line outside any fenced block, because nothing a block says about headings crosses such a boundary. Headings and
+  * fenced blocks before the window are kept, those after it are renumbered by the edit's line delta. When the edit
+  * touches a fenced block or a fence marker, or the text holds a construct whose meaning reaches across blank lines
+  * (HTML comments and raw `<pre>`/`<script>` blocks, link reference definitions, which change how a heading's title
+  * renders), the whole text is parsed instead, so the result is always what a full parse gives.
   *
   * The fenced blocks come from the same parse as the headings, so a `#` line inside code is never a heading.
   *
@@ -44,11 +44,14 @@ final class MarkdownHeadingIndex private (
   lazy val identified: List[(HeadingIdentity, Symbol)] =
     HeadingIdentity.forTitled(entries.iterator.map(entry => entry.symbol -> entry.normalizedTitle).toList)
 
-  def updatedTo(next: Rope): MarkdownHeadingIndex =
+  /** This index advanced to `next`. `change`, when it is the edit that took [[content]] to `next`, names what changed;
+    * without it the two ropes are compared.
+    */
+  def updatedTo(next: Rope, change: Option[ChangeSet] = None): MarkdownHeadingIndex =
     given Balance = Balance.default
     if next eq content then this
     else
-      RopeDiff.changedOffsetRange(content, next) match
+      changedRange(next, change) match
         case None => new MarkdownHeadingIndex(next, entries, fences, spansBlankLines, 0)
         case Some((from, to)) =>
           Option
@@ -57,6 +60,11 @@ final class MarkdownHeadingIndex private (
             )
             .flatten
             .getOrElse(MarkdownHeadingIndex.build(next))
+
+  private def changedRange(next: Rope, change: Option[ChangeSet])(using Balance): Option[(Int, Int)] =
+    change.filter(known => known.oldLength == content.weight && known.newLength == next.weight) match
+      case Some(known) => known.newEnvelope
+      case None        => RopeDiff.changedOffsetRange(content, next)
 
   private def incrementally(next: Rope, firstChanged: Int, lastChanged: Int): Option[MarkdownHeadingIndex] =
     val delta          = next.lineCount - content.lineCount

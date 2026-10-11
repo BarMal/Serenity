@@ -1,5 +1,7 @@
 package com.serenity.rope
 
+import scala.annotation.{tailrec, unused}
+
 /** Finds the offset range within an edited `Rope` that may have changed, without reconstructing either rope's text.
   *
   * `Rope.insert`/`delete` rebuild only the path from the root to the edited leaf, so every subtree an edit did not
@@ -9,18 +11,17 @@ package com.serenity.rope
   * of finding "what changed" is proportional to how much of the tree an edit actually touched, not to the document's
   * size.
   *
-  * `rebalance` can occasionally rebuild a subtree wider than the literal edit (a weight/height/depth imbalance, or a
-  * leaf outgrowing `Balance.leafChunkSize`), which replaces every leaf in that subtree with a fresh object even where
-  * the text is unchanged. When that happens this walk reports a wider range than the literal edit -- never a narrower
-  * one. The bias is the same one [[com.serenity.ui.layout.DirtyLineDiff]] documents for the same reason: report too
-  * much rather than too little.
+  * Where the two trees' shapes do not line up (after a rebuild, or an edit that moved a subtree boundary) the walk
+  * descends whichever side is taller and reads the other through an offset window, so nothing is split, rebuilt or
+  * rebalanced to compare them. The range is the exact common prefix and suffix of the two texts; a subtree a rebalance
+  * rebuilt costs the walk its leaves, not the text it holds.
   */
 object RopeDiff:
 
   /** `None` when `before` and `after` have identical content (including the common case where they are the exact same
     * object). Otherwise the `(start, end)` offset range in `after` that may differ from `before`.
     */
-  def changedOffsetRange(before: Rope, after: Rope)(using Balance): Option[(Int, Int)] =
+  def changedOffsetRange(before: Rope, after: Rope)(using @unused balance: Balance): Option[(Int, Int)] =
     if isSameReference(before, after) then None
     else
       val bound  = math.min(before.weight, after.weight)
@@ -34,111 +35,62 @@ object RopeDiff:
   private def isSameReference(a: Rope, b: Rope): Boolean =
     (a: AnyRef) eq (b: AnyRef)
 
-  private def commonPrefixWeight(a: Rope, b: Rope, bound: Int)(using Balance): Int =
-    if bound <= 0 then 0
-    else if isSameReference(a, b) then math.min(a.weight, bound)
-    else
-      (a, b) match
-        case (Node(al, ar), Node(bl, br)) =>
-          alignedPrefixWeight(al, ar, bl, br, bound).getOrElse(splitPrefixWeight(a, b, bound))
-        case _ => splitPrefixWeight(a, b, bound)
+  private def commonPrefixWeight(a: Rope, b: Rope, bound: Int): Int =
+    commonRun(a, 0, b, 0, bound, fromEnd = false)
 
-  /** Compares the two left children directly, so an edit inside one subtree never splits -- and so rebalances and
-    * rebuilds -- the other rope. `None` when the common prefix runs past left children of different lengths.
+  private def commonSuffixWeight(a: Rope, b: Rope, bound: Int): Int =
+    commonRun(a, 0, b, 0, bound, fromEnd = true)
+
+  /** How many characters `a` and `b` share over `length` characters, counted from the start of each (from the end,
+    * backwards, when `fromEnd`) after leaving out the first `aSkip` and `bSkip` of them. A subtree pair that is `eq` at
+    * the same skip is shared whole without being read.
     */
-  private def alignedPrefixWeight(al: Rope, ar: Rope, bl: Rope, br: Rope, bound: Int)(using Balance): Option[Int] =
-    val leftBound = math.min(math.min(al.weight, bl.weight), bound)
-    val leftMatch = commonPrefixWeight(al, bl, leftBound)
-    if leftMatch < leftBound || leftMatch >= bound then Some(leftMatch)
-    else Option.when(al.weight == bl.weight)(leftMatch + commonPrefixWeight(ar, br, bound - leftMatch))
-
-  private def splitPrefixWeight(a: Rope, b: Rope, bound: Int)(using Balance): Int =
-    a match
-      case Node(al, ar) =>
-        val leftLen         = math.min(al.weight, b.weight)
-        val (bLeft, bRight) = splitAtClamped(b, leftLen)
-        val leftBound       = math.min(leftLen, bound)
-        val leftMatch       = commonPrefixWeight(al, bLeft, leftBound)
-        if leftMatch < leftBound || leftMatch >= bound then leftMatch
-        else leftMatch + commonPrefixWeight(ar, bRight, bound - leftMatch)
-      case _ =>
-        b match
-          case Node(bl, br) =>
-            val leftLen         = math.min(bl.weight, a.weight)
-            val (aLeft, aRight) = splitAtClamped(a, leftLen)
-            val leftBound       = math.min(leftLen, bound)
-            val leftMatch       = commonPrefixWeight(aLeft, bl, leftBound)
-            if leftMatch < leftBound || leftMatch >= bound then leftMatch
-            else leftMatch + commonPrefixWeight(aRight, br, bound - leftMatch)
-          case _ =>
-            matchingPrefixChars(a, b, math.min(bound, math.min(a.weight, b.weight)))
-
-  @annotation.tailrec
-  private def matchingPrefixChars(a: Rope, b: Rope, n: Int, from: Int = 0): Int =
-    if from >= n || a.index(from) != b.index(from) then from
-    else matchingPrefixChars(a, b, n, from + 1)
-
-  private def commonSuffixWeight(a: Rope, b: Rope, bound: Int)(using Balance): Int =
-    if bound <= 0 then 0
-    else if isSameReference(a, b) then math.min(a.weight, bound)
+  private def commonRun(a: Rope, aSkip: Int, b: Rope, bSkip: Int, length: Int, fromEnd: Boolean): Int =
+    if length <= 0 then 0
+    else if isSameReference(a, b) && aSkip == bSkip then length
     else
-      (a, b) match
-        case (Node(al, ar), Node(bl, br)) =>
-          alignedSuffixWeight(al, ar, bl, br, bound).getOrElse(splitSuffixWeight(a, b, bound))
-        case _ => splitSuffixWeight(a, b, bound)
+      a match
+        case aNode: Node if isTaller(aNode, b) => splitRun(aNode, aSkip, b, bSkip, length, fromEnd)
+        case _ =>
+          b match
+            case bNode: Node => splitRun(bNode, bSkip, a, aSkip, length, fromEnd)
+            case Leaf(bText) =>
+              a match
+                case Leaf(aText) => sharedChars(aText, aSkip, bText, bSkip, length, fromEnd)
+                case _           => 0
 
-  /** [[alignedPrefixWeight]] from the right-hand end. */
-  private def alignedSuffixWeight(al: Rope, ar: Rope, bl: Rope, br: Rope, bound: Int)(using Balance): Option[Int] =
-    val rightBound = math.min(math.min(ar.weight, br.weight), bound)
-    val rightMatch = commonSuffixWeight(ar, br, rightBound)
-    if rightMatch < rightBound || rightMatch >= bound then Some(rightMatch)
-    else Option.when(ar.weight == br.weight)(rightMatch + commonSuffixWeight(al, bl, bound - rightMatch))
+  private def isTaller(node: Node, other: Rope): Boolean =
+    other match
+      case otherNode: Node => node.height >= otherNode.height
+      case _               => true
 
-  private def splitSuffixWeight(a: Rope, b: Rope, bound: Int)(using Balance): Int =
-    a match
-      case Node(al, ar) =>
-        val rightLen        = math.min(ar.weight, b.weight)
-        val (bLeft, bRight) = splitAtClamped(b, b.weight - rightLen)
-        val rightBound      = math.min(rightLen, bound)
-        val rightMatch      = commonSuffixWeight(ar, bRight, rightBound)
-        if rightMatch < rightBound || rightMatch >= bound then rightMatch
-        else rightMatch + commonSuffixWeight(al, bLeft, bound - rightMatch)
-      case _ =>
-        b match
-          case Node(bl, br) =>
-            val rightLen        = math.min(br.weight, a.weight)
-            val (aLeft, aRight) = splitAtClamped(a, a.weight - rightLen)
-            val rightBound      = math.min(rightLen, bound)
-            val rightMatch      = commonSuffixWeight(aRight, br, rightBound)
-            if rightMatch < rightBound || rightMatch >= bound then rightMatch
-            else rightMatch + commonSuffixWeight(aLeft, bl, bound - rightMatch)
-          case _ =>
-            matchingSuffixChars(a, b, math.min(bound, math.min(a.weight, b.weight)))
-
-  @annotation.tailrec
-  private def matchingSuffixChars(a: Rope, b: Rope, n: Int, from: Int = 0): Int =
-    if from >= n || a.index(a.weight - 1 - from) != b.index(b.weight - 1 - from) then from
-    else matchingSuffixChars(a, b, n, from + 1)
-
-  /** `at` is always derived from a subtree's own `weight` clamped against the other rope's `weight`, so it is
-    * mathematically always in `[0, r.weight]`.
-    *
-    * The halves are only compared, never kept, so they are cut without `Rope.splitAt`'s rebalancing: cutting a large
-    * rope near one end leaves a sliver beside a large subtree, and rebalancing that rebuilds the subtree.
+  /** [[commonRun]] with `node`, the taller side, read through its children: the window falls in one of them or spans
+    * both, and `other` is only ever read through the same window.
     */
-  private def splitAtClamped(r: Rope, at: Int)(using Balance): (Rope, Rope) =
-    cut(r, math.max(0, math.min(at, r.weight)))
+  private def splitRun(node: Node, nodeSkip: Int, other: Rope, otherSkip: Int, length: Int, fromEnd: Boolean): Int =
+    val first  = if fromEnd then node.right else node.left
+    val second = if fromEnd then node.left else node.right
+    if nodeSkip >= first.weight then commonRun(second, nodeSkip - first.weight, other, otherSkip, length, fromEnd)
+    else if nodeSkip + length <= first.weight then commonRun(first, nodeSkip, other, otherSkip, length, fromEnd)
+    else
+      val inFirst = first.weight - nodeSkip
+      val shared  = commonRun(first, nodeSkip, other, otherSkip, inFirst, fromEnd)
+      if shared < inFirst then shared
+      else shared + commonRun(second, 0, other, otherSkip + inFirst, length - inFirst, fromEnd)
 
-  private def cut(r: Rope, at: Int)(using Balance): (Rope, Rope) =
-    r match
-      case _ if at == 0        => (Rope.empty, r)
-      case _ if at == r.weight => (r, Rope.empty)
-      case Node(left, right) =>
-        if at == left.weight then (left, right)
-        else if at < left.weight then
-          val (before, after) = cut(left, at)
-          (before, Node(after, right))
-        else
-          val (before, after) = cut(right, at - left.weight)
-          (Node(left, before), after)
-      case Leaf(value) => (Leaf(value.take(at)), Leaf(value.drop(at)))
+  @tailrec
+  private def sharedChars(
+    a: String,
+    aSkip: Int,
+    b: String,
+    bSkip: Int,
+    length: Int,
+    fromEnd: Boolean,
+    from: Int = 0
+  ): Int =
+    if from >= length then from
+    else
+      val aAt = if fromEnd then a.length - 1 - aSkip - from else aSkip + from
+      val bAt = if fromEnd then b.length - 1 - bSkip - from else bSkip + from
+      if a.charAt(aAt) != b.charAt(bAt) then from
+      else sharedChars(a, aSkip, b, bSkip, length, fromEnd, from + 1)
