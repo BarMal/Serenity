@@ -3,9 +3,9 @@ package com.serenity.config
 import com.serenity.keystroke.{InputKey, Modifier}
 
 /** The keys shipped for registry commands that have no [[HotkeyAction]]: the prose formatting toggles (issue #1858),
-  * the comment toggles (issue #1997) and the occurrence commands (issue #1994). A terminal sends Ctrl+I as Tab, and `TerminalInputDecoder` keeps it Tab, so
-  * italic's key reaches only the GUI and terminals that report modified keys distinctly -- the Tab key itself is never
-  * taken.
+  * the comment toggles (issue #1997) and the occurrence commands (issue #1994). A terminal sends Ctrl+I as Tab, and
+  * `TerminalInputDecoder` keeps it Tab, so italic's key reaches only the GUI and terminals that report modified keys
+  * distinctly -- the Tab key itself is never taken.
   */
 private[config] object CommandDefaultBindings:
 
