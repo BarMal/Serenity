@@ -7,6 +7,8 @@ import com.serenity.ui.layout.*
 final case class Repaint[A] private (everything: Boolean, parts: Set[A]):
   def includes(part: A): Boolean = everything || parts.contains(part)
 
+  def nonEmpty: Boolean = everything || parts.nonEmpty
+
 object Repaint:
   def all[A]: Repaint[A]                 = Repaint(everything = true, Set.empty[A])
   def only[A](parts: Set[A]): Repaint[A] = Repaint(everything = false, parts)
@@ -19,7 +21,8 @@ final case class ChromeRepaint(
     statusRow: Boolean,
     headers: Repaint[PaneId],
     lineNumberRows: Repaint[Int]
-)
+):
+  def paintsAny: Boolean = spacers || statusRow || headers.nonEmpty || lineNumberRows.nonEmpty
 
 object ChromeRepaint:
   val Whole: ChromeRepaint = ChromeRepaint(spacers = true, statusRow = true, Repaint.all, Repaint.all)

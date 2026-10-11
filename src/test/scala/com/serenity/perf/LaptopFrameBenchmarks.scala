@@ -8,6 +8,7 @@ import javax.swing.SwingUtilities
 import cats.effect.unsafe.IORuntime
 import cats.effect.{IO, Resource}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
+import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{
   DeleteBackward,
   Event,
@@ -56,6 +57,12 @@ private[perf] object LaptopFrameBenchmarks:
   val LogicalWidthPx  = 1500
   val LogicalHeightPx = 1000
   val DeviceScale     = 2.0
+
+  /** The rows a damaged frame may redraw: the typed row with a row of margin either side and the rows its reflow moves,
+    * and the rows a three-line wheel scroll uncovers with the same margin.
+    */
+  val MaxTypingRowsDrawn = 6L
+  val MaxScrollRowsDrawn = 12L
 
   private[perf] val codeFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val textFont       = Font(Font.SERIF, Font.PLAIN, 14)
@@ -409,6 +416,15 @@ private[perf] object LaptopFrameBenchmarks:
     private val caches = RenderCaches.create()
     private val screen = ScreenIdentity(this)
 
+    /** What the latest frame counted, once [[counting]] has switched the counters on. */
+    def lastFrame: FrameCounts = caches.frameCounters.lastFrame
+
+    /** Counts only the frames drawn in `work`, so the timed frames carry no counting at all. */
+    def counting[A](work: => A): A =
+      caches.frameCounters.setEnabled(true)
+      try work
+      finally caches.frameCounters.setEnabled(false)
+
     def render(state: AppState, damage: Damage): BufferedImage =
       val surface = new Java2DRenderSurface(
         image,
@@ -457,16 +473,23 @@ private[perf] object LaptopFrameBenchmarks:
       frames.render(state, damage)
 
     /** Both damaged frames must match a frame drawn from scratch for the same state, pixel for pixel: a line number
-      * repaints only with its own row (#1839), so no ink of it is left over a row that was kept.
+      * repaints only with its own row (#1839), so no ink of it is left over a row that was kept. They must also redraw
+      * no more than `maxRowsDrawn` rows, so damage that widens, or a row reuse that stops reusing, fails here rather
+      * than showing up only as milliseconds.
       */
-    def verify(name: String): Unit =
+    def verify(name: String, maxRowsDrawn: Long): Unit =
       List(after, before).foreach { expected =>
-        val drawn = nextFrame()
+        val (drawn, counts) = frames.counting((nextFrame(), frames.lastFrame))
         val diff =
           differingPixels(drawn, renderedFrame(expected, RenderCaches.create(), frameImage(), cursorVisible = false))
         assert(
           diff.isEmpty,
           s"$name: the damaged frame differs from a full frame in ${diff.size} pixels: ${diff.take(8).mkString(" ")}"
+        )
+        assert(
+          counts(FrameCounter.RowsDrawn) <= maxRowsDrawn,
+          s"$name: the damaged frame redrew ${counts(FrameCounter.RowsDrawn)} rows of " +
+            s"${counts(FrameCounter.RowsDrawn) + counts(FrameCounter.RowsPreserved)}, more than the $maxRowsDrawn allowed"
         )
       }
 
@@ -506,7 +529,7 @@ private[perf] object LaptopFrameBenchmarks:
         12,
         () =>
           assert(typing.forwardDamage != Damage.Everything, "typing damaged the whole frame")
-          typing.verify("typing")
+          typing.verify("typing", MaxTypingRowsDrawn)
         ,
         () => typing.nextFrame()
       ),
@@ -516,7 +539,7 @@ private[perf] object LaptopFrameBenchmarks:
         12,
         () =>
           assert(scroll.forwardDamage != Damage.Everything, "scrolling damaged the whole frame")
-          scroll.verify("scroll")
+          scroll.verify("scroll", MaxScrollRowsDrawn)
         ,
         () => scroll.nextFrame()
       ),

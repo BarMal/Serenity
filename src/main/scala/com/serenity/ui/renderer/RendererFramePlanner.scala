@@ -59,6 +59,7 @@ object RendererFramePlanner:
       case Some(page) =>
         surface.clearViewport(state.persisted.theme.background)
         forgetPreservedContent(surface, output, caches)
+        FrameCounting.planned(caches.frameCounters, None, viewportSize, cellMetrics)
         RendererStartPage.renderStartPage(
           page,
           surface,
@@ -137,9 +138,11 @@ object RendererFramePlanner:
             surface.clearViewport(state.persisted.theme.background)
         paintFrameLayers(state, context, editorRenderPlan, finalizedScene, framePlan, damage)
         commitFramePlan(framePlan, output)
+        FrameCounting.planned(caches.frameCounters, framePlan, viewportSize, cellMetrics)
         Some(editorRenderPlan)
 
     surface.flush()
+    FrameCounting.flushed(caches.frameCounters, surface)
     editorRenderPlan
 
   /** Paint one frame's editor content as an explicit, z-ordered stack of layers rather than a hard-coded sequence of

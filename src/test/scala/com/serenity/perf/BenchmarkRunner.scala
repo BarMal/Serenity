@@ -46,7 +46,10 @@ object BenchmarkRunner:
       "equals.buffer.independent_equal_content",
       "equals.appstate.multi_buffer_session.same_reference",
       "equals.appstate.multi_buffer_session.one_buffer_edited",
-      "equals.appstate.multi_buffer_session.independent_equal_content"
+      "equals.appstate.multi_buffer_session.independent_equal_content",
+      "tui.flush.typing_frame.200x60",
+      "tui.flush.idle.200x60",
+      "tui.clear.preserved_rows.200x60"
     )
 
   final private[perf] case class Benchmark(

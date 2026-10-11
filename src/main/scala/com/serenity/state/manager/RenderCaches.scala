@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import com.serenity.diagnostics.FrameCounters
 import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.ui.layout.WrappedLineCache
 import com.serenity.ui.renderer.{GraphemeSegmentationCache, RendererFrameState}
@@ -11,7 +12,8 @@ import com.serenity.ui.theme.ThemeHighlightCache
   * prepared-scene cache (with its own lock, now scoped to this instance rather than the JVM),
   * [[MarkdownPreviewCache]]'s markdown-preview HTML/image/inline-document caches, and [[WrappedLineCache]]'s wrapped
   * lines, which the scene and the state-update path (through the scene it is handed) both read, together with the
-  * per-buffer visual-row indexes it keeps for scrolling and jumps.
+  * per-buffer visual-row indexes it keeps for scrolling and jumps, and the [[FrameCounters]] the renderer counts what
+  * each frame drew into.
   *
   * One instance is created per render-owning entity -- today, once per [[StateManager]] (see `StateManager.apply`) --
   * and threaded explicitly: down through [[com.serenity.ui.renderer.RenderContext]] to every render entry point and
@@ -26,7 +28,8 @@ final class RenderCaches private (
     val authoritativeScene: AuthoritativeUiScene,
     val markdownPreviewCache: MarkdownPreviewCache,
     val chapterGhosts: ChapterGhostCache,
-    val wrappedLines: WrappedLineCache
+    val wrappedLines: WrappedLineCache,
+    val frameCounters: FrameCounters
 )
 
 object RenderCaches:
@@ -44,5 +47,6 @@ object RenderCaches:
       AuthoritativeUiScene(wrappedLines),
       MarkdownPreviewCache(),
       ChapterGhostCache(),
-      wrappedLines
+      wrappedLines,
+      FrameCounters()
     )

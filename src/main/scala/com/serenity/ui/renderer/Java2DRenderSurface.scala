@@ -32,7 +32,8 @@ class Java2DRenderSurface(
     layerCacheOwnerOverride: Option[ScreenIdentity] = None,
     labelSprites: LabelSprites = LabelSprites.shared,
     styledFonts: StyledFontCache = StyledFontCache.shared,
-    shapedText: ShapedTextCache = ShapedTextCache.shared
+    shapedText: ShapedTextCache = ShapedTextCache.shared,
+    override val activity: SurfaceActivity = SurfaceActivity()
 ) extends RenderSurface
     with TextDrawing
     with PixelDrawing
@@ -66,7 +67,8 @@ class Java2DRenderSurface(
       deviceScaleX,
       deviceScaleY,
       image => onFlush(RenderImage.fromAwt(image)),
-      recycled = recycled.map(_.toAwt)
+      recycled = recycled.map(_.toAwt),
+      activity = activity
     )
 
   private val g: Graphics2D = image.createGraphics()
@@ -127,10 +129,10 @@ class Java2DRenderSurface(
     until: Int
   ): Unit =
     paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun = false) {
-      shapedText
-        .stretchOf(stretch, g.getFont, renderContext)
-        .glyphsOf(from, until)
-        .foreach(g.drawGlyphVector(_, xPx, (yPx + ascentPx).toFloat))
+      val shapedBefore = shapedText.shapings
+      val shaped       = shapedText.stretchOf(stretch, g.getFont, renderContext)
+      activity.shaped(shapedText.shapings - shapedBefore)
+      shaped.glyphsOf(from, until).foreach(g.drawGlyphVector(_, xPx, (yPx + ascentPx).toFloat))
     }
 
   override def shapesStretchesOf(text: String): Boolean =
@@ -151,6 +153,7 @@ class Java2DRenderSurface(
     val boundedBottom = runBottom(yPx, lineHeightPx)
 
     if boundedLeft < boundedRight && boundedTop < boundedBottom then
+      activity.runDrawn()
       val boundedWidth  = boundedRight - boundedLeft
       val boundedHeight = boundedBottom - boundedTop
       if painted.needsBackground(boundedLeft, boundedTop, boundedRight, boundedBottom, bgRef.get()) then
@@ -388,6 +391,7 @@ class Java2DRenderSurface(
     * through [[drawImage]] instead would shrink it a little per composite.
     */
   override def compositeFullSurfaceLayer(layerImage: RenderImage): Unit =
+    activity.layerComposited()
     painted.forgetClear()
     val rawGraphics = image.createGraphics()
     try
@@ -535,7 +539,8 @@ object Java2DRenderSurface:
     deviceScaleX: Double,
     deviceScaleY: Double,
     onFlush: BufferedImage => Unit,
-    recycled: Option[BufferedImage] = None
+    recycled: Option[BufferedImage] = None,
+    activity: SurfaceActivity = SurfaceActivity()
   ): Java2DRenderSurface =
     val width  = deviceImageDimension(logicalWidthPx, deviceScaleX)
     val height = deviceImageDimension(logicalHeightPx, deviceScaleY)
@@ -552,7 +557,8 @@ object Java2DRenderSurface:
       logicalHeightPx = logicalHeightPx,
       deviceScaleX = deviceScaleX,
       deviceScaleY = deviceScaleY,
-      contentPersists = false
+      contentPersists = false,
+      activity = activity
     )
 
   private def clearedForReuse(image: BufferedImage): BufferedImage =
