@@ -173,23 +173,12 @@ object CommentRendering:
     includeStarFallback: Boolean
   ): Option[String] =
     val trimmed = line.trim
-    language match
-      case Some(LanguageId.Markdown | LanguageId.Html | LanguageId.Xml) =>
-        blockCommentBody(trimmed, BlockCommentSyntax("<!--", "-->"))
-      case Some(LanguageId.Python | LanguageId.Ruby | LanguageId.Toml | LanguageId.Yaml) =>
-        prefixedCommentBody(trimmed, "#")
-      case Some(LanguageId.Haskell | LanguageId.Sql) =>
-        prefixedCommentBody(trimmed, "--")
-      case Some(LanguageId.Lua) =>
-        prefixedCommentBody(trimmed, "--").orElse(blockCommentBody(trimmed, BlockCommentSyntax("--[[", "]]")))
-      case Some(LanguageId.Css) =>
-        blockCommentBody(trimmed, BlockCommentSyntax("/*", "*/", stripLeadingStars = true))
-      case Some(_) =>
-        prefixedCommentBody(trimmed, "//")
-          .orElse(blockCommentBody(trimmed, BlockCommentSyntax("/*", "*/", stripLeadingStars = true)))
-          .orElse(if includeStarFallback then prefixedCommentBody(trimmed, "*") else None)
-      case None =>
-        None
+    language.map(CommentSyntax.of).flatMap { syntax =>
+      syntax.line
+        .flatMap(prefixedCommentBody(trimmed, _))
+        .orElse(blockCommentSyntaxes(language).view.flatMap(blockCommentBody(trimmed, _)).headOption)
+        .orElse(if includeStarFallback && syntax.line.contains("//") then prefixedCommentBody(trimmed, "*") else None)
+    }
 
   final private case class BlockCommentSyntax(start: String, end: String, stripLeadingStars: Boolean = false)
 
@@ -212,22 +201,12 @@ object CommentRendering:
       }
 
   private def blockCommentSyntaxes(language: Option[LanguageId]): List[BlockCommentSyntax] =
-    language match
-      case Some(LanguageId.Markdown | LanguageId.Html | LanguageId.Xml) =>
-        List(BlockCommentSyntax("<!--", "-->"))
-      case Some(LanguageId.Lua) =>
-        List(BlockCommentSyntax("--[[", "]]"))
-      case Some(LanguageId.Css) =>
-        List(BlockCommentSyntax("/*", "*/", stripLeadingStars = true))
-      case Some(
-            LanguageId.Python | LanguageId.Ruby | LanguageId.Toml | LanguageId.Yaml | LanguageId.Haskell |
-            LanguageId.Sql
-          ) =>
-        Nil
-      case Some(_) =>
-        List(BlockCommentSyntax("/*", "*/", stripLeadingStars = true))
-      case None =>
-        Nil
+    language
+      .flatMap(CommentSyntax.of(_).block)
+      .map(delimiters =>
+        BlockCommentSyntax(delimiters.open, delimiters.close, stripLeadingStars = delimiters.open == "/*")
+      )
+      .toList
 
   /** Bounds `blockCommentRange`'s backward/forward scan, mirroring `MarkdownBlockLens`'s `fenceProbeWindow` pattern: an
     * unterminated or absent block-comment marker near the cursor would otherwise walk the entire document -- twice, on

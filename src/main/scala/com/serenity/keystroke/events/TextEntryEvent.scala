@@ -66,6 +66,8 @@ case object OpenFind                       extends ModalRequestEvent
 case object Escape                         extends TextEntryEvent
 case object TabKey                         extends TextEntryEvent
 case object ReverseTabKey                  extends TextEntryEvent
+case object ToggleLineComment              extends TextEntryEvent
+case object ToggleBlockComment             extends TextEntryEvent
 case object Copy                           extends TextEntryEvent
 case object Paste                          extends TextEntryEvent
 case object Cut                            extends TextEntryEvent

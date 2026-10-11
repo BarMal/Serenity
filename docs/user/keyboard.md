@@ -53,11 +53,13 @@ Run `sbt "Test/runMain com.serenity.docs.KeyboardReferenceTable"` to rewrite it 
 | Toggle notes pin | `toggle_notes_pin` | `Ctrl+Shift+L` | `Cmd+Shift+L` |
 | Bold | `bold` | `Ctrl+B` | `Cmd+B` |
 | Italic | `italic` | `Ctrl+I` | `Cmd+I` |
+| Toggle-block-comment | `toggle-block-comment` | `Alt+Shift+A` | `Alt+Shift+A` |
+| Toggle-line-comment | `toggle-line-comment` | `Ctrl+/`, `Ctrl+_` | `Cmd+/`, `Ctrl+_` |
 | Underline | `underline` | `Ctrl+U` | `Cmd+U` |
 <!-- keyboard-table:end -->
 
-`Ctrl+Ctrl` and `Cmd+Cmd` mean pressing the modifier twice. `EOF` is the end-of-input key a terminal sends. The last three
-rows (bold, italic, underline) are commands; their config keys are written `hotkey.command.<name>`.
+`Ctrl+Ctrl` and `Cmd+Cmd` mean pressing the modifier twice. `EOF` is the end-of-input key a terminal sends. The last
+five rows (bold, italic, the two comment toggles, underline) are commands; their config keys are written `hotkey.command.<name>`.
 
 ## Changing a binding
 
