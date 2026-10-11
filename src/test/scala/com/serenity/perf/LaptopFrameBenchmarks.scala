@@ -505,11 +505,9 @@ private[perf] object LaptopFrameBenchmarks:
     * letter with its removal, so the edited row's wrapped layout is served from cache, unlike a real new keystroke.
     */
   private def interactionBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val (stateManager, _) = proseStateManager()
-    def current: AppState = stateManager.getCurrentState.unsafeRunSync()
-    val beforeTyping      = current
-    stateManager.applyEvent(InsertChar('x')).unsafeRunSync()
-    val afterTyping = current
+    val (stateManager, _)           = proseStateManager()
+    def current: AppState           = stateManager.getCurrentState.unsafeRunSync()
+    val (beforeTyping, afterTyping) = TypingTransition.of(stateManager)
     stateManager.applyEvent(ScrollDown(3)).unsafeRunSync()
     val afterScroll = current
     val typing      = AlternatingTransition(beforeTyping, afterTyping)
