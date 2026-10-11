@@ -33,7 +33,7 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
     "def total(xs: List[Int]): Int = xs.map(_ + 1).filter(_ >= 2).sum",
     "if a == b && c <= d || e >= f then run(a, b) else stop()",
     "xs |> map(f) |> filter(g) :: rest -> next <- prev ... === !== ::: <=> |||",
-    "for i <- 0 until 10 do println(s\"item $i of ${xs.length}\")",
+    "for i <- 0 until 10 do report(s\"item $i of ${xs.length}\")",
     "https://www.example.com/path?query=value&other=1#fragment",
     "The quick brown fox jumps over the lazy dog, then does it all again until it wraps.",
     "    /* indented block comment */ val longName = anotherLongName.method(argumentOne, argumentTwo, argumentThree)"
