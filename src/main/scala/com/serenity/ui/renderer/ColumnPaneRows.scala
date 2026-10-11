@@ -18,10 +18,6 @@ private[renderer] object ColumnPaneRows:
   def flatSnapshot(columns: Vector[ColumnSnapshotPlacement]): Option[TextLayoutSnapshot] =
     columns.headOption.map(first => first.snapshot.copy(visualLines = columns.flatMap(_.snapshot.visualLines)))
 
-  /** Whether any column carries a line-number rail on its left edge. */
-  def hasRails(columns: Vector[ColumnSnapshotPlacement]): Boolean =
-    columns.exists(_.gutterWidthCells > 0)
-
   /** The pane row each column's first row has, in column order. */
   def firstRows(columns: Vector[ColumnSnapshotPlacement]): Vector[Int] =
     columns.scanLeft(0)(_ + _.snapshot.visualLines.size).dropRight(1)
@@ -34,3 +30,7 @@ private[renderer] object ColumnPaneRows:
       val rowCount = column.snapshot.visualLines.size
       dirtyRows.map(_.collect { case row if row >= first && row < first + rowCount => row - first })
     }
+
+  /** Each column's share of a pane-wide `rows` to repaint, as that column's own row indices. */
+  def localRepaints(columns: Vector[ColumnSnapshotPlacement], rows: Repaint[Int]): Vector[Repaint[Int]] =
+    localRows(columns, Option.unless(rows.everything)(rows.parts)).map(_.fold(Repaint.all[Int])(Repaint.only))
