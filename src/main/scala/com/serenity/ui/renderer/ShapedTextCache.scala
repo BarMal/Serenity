@@ -24,6 +24,11 @@ final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.Default
   /** How many stretches were shaped, as opposed to served from the cache. */
   def shapings: Long = shapedN.get()
 
+  def holds(text: String, font: Font, fontRenderContext: FontRenderContext): Boolean =
+    val key  = Key(text, font, fontRenderContext)
+    val held = generations.get()
+    held.current.containsKey(key) || held.previous.containsKey(key)
+
   def stretchOf(text: String, font: Font, fontRenderContext: FontRenderContext): ShapedStretch =
     val key  = Key(text, font, fontRenderContext)
     val held = generations.get()
@@ -81,12 +86,28 @@ final class ShapedStretch private (
     glyphCodes: Array[Int],
     charIndices: Array[Int],
     xs: Array[Float],
-    ys: Array[Float]
+    ys: Array[Float],
+    val advance: Float
 ):
   import ShapedStretch.*
 
-  private val whole  = glyphVector(font, fontRenderContext, glyphCodes, xs, ys)
-  private val ranges = new ConcurrentHashMap[Long, Option[GlyphVector]]()
+  // Measuring reads the glyph arrays alone, so a stretch only measured and never drawn builds no glyph vector.
+  private lazy val whole = glyphVector(font, fontRenderContext, glyphCodes, xs, ys)
+  private val ranges     = new ConcurrentHashMap[Long, Option[GlyphVector]]()
+
+  def glyphCount: Int = glyphCodes.length
+
+  def glyphCodeAt(glyph: Int): Int = glyphCodes(glyph)
+
+  /** The index in the text of the character the glyph was shaped from; a ligature reports its first character. */
+  def charIndexAt(glyph: Int): Int = charIndices(glyph)
+
+  def xAt(glyph: Int): Float = xs(glyph)
+
+  def yAt(glyph: Int): Float = ys(glyph)
+
+  /** Where the glyph ends: the next glyph's x, or the stretch's advance after the last one. */
+  def rightEdgeAt(glyph: Int): Float = if glyph + 1 < xs.length then xs(glyph + 1) else advance
 
   /** The shaped x of the glyph that starts at this character, `None` when no glyph does (inside a ligature). */
   def leftEdgeOf(charIndex: Int): Option[Float] =
@@ -140,7 +161,8 @@ object ShapedStretch:
       shaped.flatMap(_.glyphCodes).toArray,
       shaped.flatMap(_.charIndices).toArray,
       shaped.zip(offsets).flatMap((run, offset) => run.xs.map(_ + offset)).toArray,
-      shaped.flatMap(_.ys).toArray
+      shaped.flatMap(_.ys).toArray,
+      offsets.lastOption.getOrElse(0.0f)
     )
 
   /** What `TextLayout`, and so `drawString`, does for text that needs it: runs of one direction, left to right on the

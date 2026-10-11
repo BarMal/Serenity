@@ -57,9 +57,9 @@ private[perf] object LaptopFrameBenchmarks:
   val LogicalHeightPx = 1000
   val DeviceScale     = 2.0
 
-  private val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val textFont    = Font(Font.SERIF, Font.PLAIN, 14)
-  private val cellMetrics = CellMetrics.fromFont(codeFont)
+  private[perf] val codeFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
+  private val textFont       = Font(Font.SERIF, Font.PLAIN, 14)
+  private val cellMetrics    = CellMetrics.fromFont(codeFont)
   private val viewport =
     ViewportSize(LogicalWidthPx / cellMetrics.charWidth, LogicalHeightPx / cellMetrics.lineHeight)
   private val bufferId = BufferId(1)
@@ -128,7 +128,7 @@ private[perf] object LaptopFrameBenchmarks:
     )
     image
 
-  private def hasPixels(image: BufferedImage): Boolean =
+  private[perf] def hasPixels(image: BufferedImage): Boolean =
     val row = image.getHeight / 2
     (0 until image.getWidth).exists(x => image.getRGB(x, row) != image.getRGB(0, row))
 
@@ -141,7 +141,7 @@ private[perf] object LaptopFrameBenchmarks:
     )
 
   def benchmarks(presentWindow: SwingWindow)(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    renderBenchmarks ++ interactionBenchmarks ++ inputBenchmarks ++ typingBenchmarks ++
+    renderBenchmarks ++ interactionBenchmarks ++ LigatureTypingBenchmarks.benchmarks ++ inputBenchmarks ++ typingBenchmarks ++
       List(presentBenchmark(presentWindow), presentCaretBenchmark(presentWindow))
 
   private def renderBenchmarks: List[BenchmarkRunner.Benchmark] =
@@ -176,14 +176,16 @@ private[perf] object LaptopFrameBenchmarks:
     paragraphs: Int = 300,
     config: AppConfig = AppConfig.default,
     cursorLine: Int = 150,
-    dictionaryCache: Option[DictionaryCache] = None
+    dictionaryCache: Option[DictionaryCache] = None,
+    grid: ViewportSize = viewport
   )(using IORuntime): (StateManager, BufferId) =
     stateManagerHolding(
       BenchmarkFixtures.loremIpsumProse(paragraphs),
       config,
       cursorLine,
       cursorColumn = 40,
-      dictionaryCache
+      dictionaryCache,
+      grid
     )
 
   /** [[proseStateManager]] over any `text`, with the cursor placed at `cursorLine`, `cursorColumn`. */
@@ -192,7 +194,8 @@ private[perf] object LaptopFrameBenchmarks:
     config: AppConfig = AppConfig.default,
     cursorLine: Int = 0,
     cursorColumn: Int = 0,
-    dictionaryCache: Option[DictionaryCache] = None
+    dictionaryCache: Option[DictionaryCache] = None,
+    grid: ViewportSize = viewport
   )(using IORuntime): (StateManager, BufferId) =
     given LoggerFactory[IO] = NoOpFactory[IO]
     val sessionRoot         = TestTemp.directory("serenity-laptop-benchmarks")
@@ -209,7 +212,7 @@ private[perf] object LaptopFrameBenchmarks:
       state   <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, created)
-      _ <- stateManager.applyEvent(ResizeEvent(viewport))
+      _ <- stateManager.applyEvent(ResizeEvent(grid))
       _ <- stateManager.setCursorPosition(paneId, cursorLine, cursorColumn)
       _ <- stateManager.updateState(scrolledToCursor(created))
       // Every fixture is built before the first benchmark is timed, so an analysis still running here would overlap it.
@@ -396,7 +399,12 @@ private[perf] object LaptopFrameBenchmarks:
     * damaged, as `AppRuntime` reports it, so only damaged rows are redrawn and the rest of the image is kept. Like the
     * app's base frames it leaves the caret out; the window fills carets over the presented frame.
     */
-  final private class PersistingFrames:
+  final private[perf] class PersistingFrames(
+      codeFont: Font = LaptopFrameBenchmarks.codeFont,
+      textFont: Font = LaptopFrameBenchmarks.textFont,
+      cellMetrics: CellMetrics = LaptopFrameBenchmarks.cellMetrics,
+      viewport: ViewportSize = LaptopFrameBenchmarks.viewport
+  ):
     private val image  = frameImage()
     private val caches = RenderCaches.create()
     private val screen = ScreenIdentity(this)
