@@ -37,17 +37,40 @@ private[layout] object TextCaretMeasurement:
   ):
     val hasHidden: Boolean = runs.exists(_.hidden)
 
+    /** Whether the runs are sorted and disjoint, which is what lets [[runAt]] bisect. Overlapping or unordered runs
+      * keep the first-listed-wins scan, so the answer never depends on how the runs happened to be supplied.
+      */
+    private val bisectable: Boolean =
+      runs.forall(run => run.startColumn <= run.endColumn) &&
+        runs.zip(runs.drop(1)).forall((earlier, later) => earlier.endColumn <= later.startColumn)
+
+    /** Every column a run starts or ends at, ascending: the places a line's font can change. */
+    private val boundaries: Vector[Int] = runs.flatMap(run => Vector(run.startColumn, run.endColumn)).distinct.sorted
+
     private def runAt(column: Int): Option[ColumnFontRun] =
-      runs.find(run => column >= run.startColumn && column < run.endColumn)
+      if bisectable then
+        val latestStart = lastIndexWhere(runs.length)(runs(_).startColumn <= column)
+        runs.lift(latestStart).filter(run => column < run.endColumn)
+      else runs.find(run => column >= run.startColumn && column < run.endColumn)
+
+    /** The greatest index below `size` satisfying `holds`, or `-1`, for a predicate that holds on a prefix. */
+    private def lastIndexWhere(size: Int)(holds: Int => Boolean): Int =
+      @annotation.tailrec
+      def narrow(low: Int, high: Int): Int =
+        if low >= high then low - 1
+        else
+          val middle = (low + high) >>> 1
+          if holds(middle) then narrow(middle + 1, high) else narrow(low, middle)
+      narrow(0, size)
 
     def fontAt(column: Int): Font =
       runAt(column).map(_.font).getOrElse(baseFont)
 
     /** `[startColumn, endColumn)` cut into maximal ranges of one font each, hidden ranges kept apart. */
     def fontRuns(startColumn: Int, endColumn: Int): Vector[FontSpan] =
-      val cuts = (runs
-        .flatMap(run => Vector(run.startColumn, run.endColumn))
-        .filter(column => column > startColumn && column < endColumn) :+ startColumn :+ endColumn).distinct.sorted
+      val firstInside = lastIndexWhere(boundaries.length)(boundaries(_) <= startColumn) + 1
+      val inside      = boundaries.drop(firstInside).takeWhile(_ < endColumn)
+      val cuts        = (inside :+ startColumn :+ endColumn).distinct.sorted
       cuts.zip(cuts.drop(1)).foldLeft(Vector.empty[FontSpan]) {
         case (merged :+ previous, (_, cutEnd))
             if fontAt(cutEnd - 1) == previous.font && runAt(cutEnd - 1).exists(_.hidden) == previous.hidden =>
@@ -72,16 +95,11 @@ private[layout] object TextCaretMeasurement:
         case run if !run.hidden && run.endColumn > startColumn && run.startColumn < endColumn => run.font
       }
       val fonts = if covering.nonEmpty then covering else Vector(baseFont)
-      val (height, ascent) =
-        fonts.foldLeft((1, 1)) {
-          case ((maxHeight, maxAscent), font) =>
-            val line = font.getLineMetrics("Mg", frc)
-            (
-              math.max(maxHeight, math.ceil(line.getHeight.toDouble).toInt),
-              math.max(maxAscent, math.ceil(line.getAscent.toDouble).toInt)
-            )
-        }
-      (height, ascent)
+      fonts.foldLeft((1, 1)) {
+        case ((maxHeight, maxAscent), font) =>
+          val extent = FontLineExtents.shared(FontLineExtents.Key(font, frc))
+          (math.max(maxHeight, extent.heightPx), math.max(maxAscent, extent.ascentPx))
+      }
 
   /** A resolver with no per-run fonts: every column measures with the one base font, reproducing the pre-rich
     * single-font behaviour. Used by the plain-text measurement helpers that carry no rich document.
@@ -434,15 +452,22 @@ private[layout] object TextCaretMeasurement:
       fill(characters - 1, visible.length)
       IArray.unsafeFromArray(carets)
 
+  private val CollapsedCaretEpsilon = 0.01f
+
+  /** Only a pair of neighbouring stops at the same x past the first can be spread, so lines without one are returned as
+    * measured instead of being copied.
+    */
+  private def hasCollapsedStops(rawXs: IArray[Float]): Boolean =
+    (1 until rawXs.length - 1).exists(index => math.abs(rawXs(index + 1) - rawXs(index)) <= CollapsedCaretEpsilon)
+
   private[layout] def normalizeCollapsedCarets(rawXs: IArray[Float]): IArray[Float] =
-    if rawXs.length < 3 then rawXs
+    if rawXs.length < 3 || !hasCollapsedStops(rawXs) then rawXs
     else
       val normalized = Array.tabulate(rawXs.length)(rawXs(_))
-      val epsilon    = 0.01f
 
       @annotation.tailrec
       def plateauEndFrom(index: Int, plateauValue: Float): Int =
-        if index + 1 < normalized.length && math.abs(normalized(index + 1) - plateauValue) <= epsilon then
+        if index + 1 < normalized.length && math.abs(normalized(index + 1) - plateauValue) <= CollapsedCaretEpsilon then
           plateauEndFrom(index + 1, plateauValue)
         else index
 
@@ -450,7 +475,7 @@ private[layout] object TextCaretMeasurement:
       def normalizeFrom(index: Int): Unit =
         if index < normalized.length - 1 then
           val plateauValue = normalized(index)
-          if math.abs(normalized(index + 1) - plateauValue) <= epsilon then
+          if math.abs(normalized(index + 1) - plateauValue) <= CollapsedCaretEpsilon then
             val plateauEnd = plateauEndFrom(index + 1, plateauValue)
 
             val plateauStart = index - 1
