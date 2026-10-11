@@ -71,7 +71,7 @@ private[renderer] object RendererLineSegments:
           snapshot.proseScale
         )
       }
-      .filter(segments => segments.map(_.content).mkString == visualLine.text)
+      .filter(segments => StyledText.spell(segments, visualLine.text))
 
   private def focusDimmed(
     visualLine: TextVisualLine,
