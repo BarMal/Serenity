@@ -81,6 +81,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
     group("settings-editor").children.map(_.id) shouldBe List(
       "settings-text-display",
+      "settings-indentation",
       "settings-status-line",
       "settings-text-area",
       "settings-document-defaults",

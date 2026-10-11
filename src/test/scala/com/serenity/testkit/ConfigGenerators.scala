@@ -4,7 +4,7 @@ import java.awt.Color
 
 import com.serenity.config.*
 import com.serenity.keystroke.Modifier
-import com.serenity.state.models.{LargeFilePolicy, SurfacePlacement}
+import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import org.scalacheck.Gen
@@ -83,9 +83,15 @@ object ConfigGenerators:
 
   val genEditorConfig: Gen[EditorConfig] =
     for
-      fonts     <- genFontConfig
-      paneWidth <- Gen.choose(1, 200)
-    yield EditorConfig(fontConfig = fonts, minimumPaneWidth = paneWidth)
+      fonts        <- genFontConfig
+      paneWidth    <- Gen.choose(1, 200)
+      tabSize      <- Gen.choose(IndentationSettings.MinTabSize, IndentationSettings.MaxTabSize)
+      insertSpaces <- Gen.oneOf(true, false)
+    yield EditorConfig(
+      fontConfig = fonts,
+      minimumPaneWidth = paneWidth,
+      indentation = IndentationSettings(tabSize, insertSpaces)
+    )
 
   val genLargeFilePolicy: Gen[LargeFilePolicy] =
     for

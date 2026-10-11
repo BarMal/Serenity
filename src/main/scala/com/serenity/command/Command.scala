@@ -288,6 +288,8 @@ enum TextDisplayIntent:
   case SetTextAreaTopInset(value: Double)
   case SetTextAreaBottomInset(value: Double)
   case SetDropCapsEnabled(enabled: Boolean)
+  case SetTabSize(size: Int)
+  case SetInsertSpaces(enabled: Boolean)
 
 /** How interface surfaces are sized and spaced -- density, gaps, outlines, window chrome, key hints -- and where Escape
   * from a focused panel returns focus.

@@ -4,14 +4,12 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.*
 import com.serenity.state.models.*
 
-/** Primitives shared by every family of [[EditorEventReducer]] event handling: the per-event context bundle, tab
-  * insertion text, line-offset/line-end resolution and the Home/End/visual-line-navigation targets. Extracted from
-  * `EditorEventReducer` (which grew past its 600-line target) rather than owned by any one family, since more than one
-  * family depends on these staying in one place instead of reaching back into the dispatch file that used to hold them.
+/** Primitives shared by every family of [[EditorEventReducer]] event handling: the per-event context bundle,
+  * line-offset/line-end resolution and the Home/End/visual-line-navigation targets. Extracted from `EditorEventReducer`
+  * (which grew past its 600-line target) rather than owned by any one family, since more than one family depends on
+  * these staying in one place instead of reaching back into the dispatch file that used to hold them.
   */
 private[reducers] object EditorCursorSupport:
-
-  val TabInsertion = "    "
 
   /** Bundles the per-event state `EditorEventReducer.reduceCursorsTextEvent` computes once (the seeded buffer/state and
     * the cardinality flags every family function below branches on) so each family function takes one parameter instead

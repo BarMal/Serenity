@@ -108,7 +108,8 @@ private[serenity] object UiSceneBuilder:
               proseScale = proseScale,
               columnCount = columnCount,
               dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
-              wrapCache = wrappedLines
+              wrapCache = wrappedLines,
+              tabSize = state.persisted.config.indentation.tabSize
             )
             // Only a genuinely multi-column page carries per-column placements. A single fitted column is fully
             // served by `textSnapshots` alone (identical to the pre-multi-column render path, including its
@@ -140,7 +141,8 @@ private[serenity] object UiSceneBuilder:
                   forceCellLayout = cellMetrics.isDefined,
                   proseScale = proseScale,
                   dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
-                  wrapCache = wrappedLines
+                  wrapCache = wrappedLines,
+                  tabSize = state.persisted.config.indentation.tabSize
                 )
               )
             paneId -> (activeSnapshot, placements)
@@ -156,7 +158,8 @@ private[serenity] object UiSceneBuilder:
               proseScale = proseScale,
               dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
               wrapCache = wrappedLines,
-              markdownViewMode = state.persisted.config.inlineMarkdownViewMode
+              markdownViewMode = state.persisted.config.inlineMarkdownViewMode,
+              tabSize = state.persisted.config.indentation.tabSize
             )
             paneId -> (single, Vector.empty[ColumnSnapshotPlacement])
     }

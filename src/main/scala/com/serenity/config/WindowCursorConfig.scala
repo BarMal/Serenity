@@ -2,6 +2,7 @@ package com.serenity.config
 
 import java.awt.Color
 
+import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.fonts.FontLoader.FontConfig
 
 final case class PreferredWindowSize(width: Int, height: Int):
@@ -42,11 +43,12 @@ final case class CursorConfig(
 
 final case class EditorConfig(
     fontConfig: FontConfig = FontConfig(),
-    minimumPaneWidth: Int = 50
+    minimumPaneWidth: Int = 50,
+    indentation: IndentationSettings = IndentationSettings.Default
 ):
 
   def normalized: EditorConfig =
-    copy(minimumPaneWidth = math.max(1, minimumPaneWidth))
+    copy(minimumPaneWidth = math.max(1, minimumPaneWidth), indentation = indentation.normalized)
 
 final case class DocumentConfig(
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,

@@ -5,7 +5,7 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.config.LspUserConfig
-import com.serenity.state.models.{LargeFilePolicy, SurfacePlacement}
+import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 
 /** Global application configuration */
@@ -145,6 +145,11 @@ final case class AppConfig(
   /** Create a new config with minimum pane width setting */
   def withMinimumPaneWidth(width: Int): AppConfig =
     withEditorConfig(editorConfig.copy(minimumPaneWidth = width))
+
+  def withIndentation(settings: IndentationSettings): AppConfig =
+    withEditorConfig(editorConfig.copy(indentation = settings))
+
+  def indentation: IndentationSettings = editorConfig.indentation
 
   /** Create a new config with line numbers toggled */
   def withLineNumbers(enabled: Boolean): AppConfig =

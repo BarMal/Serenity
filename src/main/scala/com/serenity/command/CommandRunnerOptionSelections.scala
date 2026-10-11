@@ -43,6 +43,7 @@ object CommandRunnerOptionSelections:
       "line-numbers"               -> enabledIndex(surfaceConfig.showLineNumbers),
       "line-number-side"           -> lineNumberSideIndex(surfaceConfig.lineNumberLayout.side),
       "line-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
+      "insert-spaces"              -> enabledIndex(config.indentation.insertSpaces),
       "visual-line-navigation"     -> enabledIndex(surfaceConfig.visualLineCursorNavigation),
       "typewriter-scrolling"       -> enabledIndex(surfaceConfig.typewriterScrollingEnabled),
       "focused-text-body"          -> enabledIndex(surfaceConfig.focusedTextBodyEnabled),
