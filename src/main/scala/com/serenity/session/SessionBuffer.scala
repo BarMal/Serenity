@@ -41,7 +41,10 @@ final case class SessionBuffer(
     contentRef: Option[String] = None,
     // The next comment id to hand out (#1903), so a deleted comment's id is not given to a new one after a restore. A
     // session written before comment ids has none, and the ids are assigned on restore.
-    nextCommentId: Option[Int] = None
+    nextCommentId: Option[Int] = None,
+    // The indentation the user chose for this buffer (see `IndentationSettings.configKey`); what is detected from the
+    // text is worked out again on restore.
+    indentation: Option[String] = None
 )
 
 /** One note, flattened for JSON: `kind` says whether `title` is a chapter heading (with its `occurrence`) or a keyword.
@@ -146,22 +149,25 @@ object SessionBuffer:
       darlings = buffer.annotations.darlings.map(SessionDarling.fromDarling),
       revision = buffer.document.revision.map(_.value),
       hidden = buffer.hidden,
-      notes = buffer.annotations.notes.toList.map(SessionNote.fromEntry).sortBy(SessionNote.order)
+      notes = buffer.annotations.notes.toList.map(SessionNote.fromEntry).sortBy(SessionNote.order),
+      indentation = buffer.document.indentation.chosen.complete.map(IndentationSettings.configKey)
     )
     (session, unsaved)
 
   def toBuffer(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): Buffer =
+    // A clean rich-text buffer's session entry holds the formatted document instead of the text it describes.
+    val content = sessionBuffer.unsavedContent
+      .orElse(sessionBuffer.richTextDocument.map(_.plainText))
+      .map(Rope.apply)
+      .getOrElse(Rope.empty)
+    val language = sessionBuffer.language.flatMap(LanguageId.fromString)
     Buffer(
       id = BufferId(sessionBuffer.id),
       document = Document(
-        // A clean rich-text buffer's session entry holds the formatted document instead of the text it describes.
-        content = sessionBuffer.unsavedContent
-          .orElse(sessionBuffer.richTextDocument.map(_.plainText))
-          .map(Rope.apply)
-          .getOrElse(Rope.empty),
+        content = content,
         filePath = sessionBuffer.filePath.map(path => Paths.get(path)),
         isDirty = sessionBuffer.isDirty,
-        language = sessionBuffer.language.flatMap(LanguageId.fromString),
+        language = language,
         isNewEmpty = sessionBuffer.isNewEmpty,
         // A session written before line endings were recorded has no key to restore; LineEnding.default matches
         // what that session's buffers would have been saved with anyway.
@@ -169,7 +175,13 @@ object SessionBuffer:
         // Likewise for a session written before encodings were recorded (#1627): every file was read as UTF-8.
         encoding = sessionBuffer.encoding.flatMap(TextEncoding.fromConfigKey).getOrElse(TextEncoding.default),
         hasBom = sessionBuffer.hasBom,
-        revision = sessionBuffer.revision.map(DocumentRevision(_))
+        revision = sessionBuffer.revision.map(DocumentRevision(_)),
+        indentation = DocumentIndentation(
+          chosen = sessionBuffer.indentation
+            .flatMap(IndentationSettings.fromConfigKey)
+            .fold(IndentationHint.Empty)(IndentationHint.of),
+          detected = IndentationDetector.of(content, language)
+        )
       ),
       editing = EditingState(sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition)),
       viewport = SessionViewport.toViewport(sessionBuffer.viewport),
@@ -255,7 +267,9 @@ object SessionBuffer:
     else
       recorded
         .copy(
-          document = disk.document.copy(language = recorded.document.language.orElse(disk.document.language)),
+          document = disk.document
+            .copy(language = recorded.document.language.orElse(disk.document.language))
+            .keepingChosenIndentationOf(recorded.document),
           richText = disk.richText,
           findState = None
         )

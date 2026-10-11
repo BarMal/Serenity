@@ -142,6 +142,7 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     notes            <- cursor.getOrElse[List[SessionNote]]("notes")(Nil)
     contentRef       <- cursor.getOrElse[Option[String]]("contentRef")(None)
     nextCommentId    <- cursor.getOrElse[Option[Int]]("nextCommentId")(None)
+    indentation      <- cursor.getOrElse[Option[String]]("indentation")(None)
   yield SessionBuffer(
     id,
     filePath,
@@ -165,7 +166,8 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     hidden,
     notes,
     contentRef,
-    nextCommentId
+    nextCommentId,
+    indentation
   )
 }
 

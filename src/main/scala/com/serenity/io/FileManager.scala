@@ -15,7 +15,7 @@ import com.serenity.richtext.{
   RtfDocumentCodec
 }
 import com.serenity.rope.Balance
-import com.serenity.state.models.{Buffer, BufferId}
+import com.serenity.state.models.{Buffer, BufferId, DocumentIndentation, IndentationDetector}
 import com.serenity.text.TextEncoding
 
 /** Failures `FileManager` raises for its own file-open/save workflow, distinct from [[LossyRichTextOverwriteException]]
@@ -197,7 +197,7 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
 
   /** A fresh read starts at content version 0; carrying that over would move `buffer`'s version backwards (#1935). */
   private def reloadedInto(buffer: Buffer, reloaded: Buffer): Buffer =
-    val document = reloaded.document.replacingContentOf(buffer.document)
+    val document = reloaded.document.replacingContentOf(buffer.document).keepingChosenIndentationOf(buffer.document)
     buffer.copy(
       document = document,
       richText = reloaded.richText.withSyncedDocument(reloaded.richText.richTextDocument, document.contentVersion)
@@ -265,18 +265,20 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
     revision: Option[DocumentRevision]
   ): Buffer =
     val lineEndings = decoded.lineEndings
+    val language    = languageFromPath(path)
     Buffer(
       id = bufferId,
       document = com.serenity.state.models.Document(
         content = decoded.content,
         filePath = Some(path),
-        language = languageFromPath(path),
+        language = language,
         lineEnding = lineEndings.dominant,
         mixedLineEndings = Option.when(lineEndings.isMixed)(lineEndings),
         mixedNoticePending = lineEndings.isMixed,
         encoding = decoded.encoding,
         hasBom = decoded.hasBom,
-        revision = revision
+        revision = revision,
+        indentation = DocumentIndentation(detected = IndentationDetector.of(decoded.content, language))
       )
     )
 

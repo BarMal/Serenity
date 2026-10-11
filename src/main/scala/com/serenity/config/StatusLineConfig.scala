@@ -13,6 +13,7 @@ enum StatusSegment(val configKey: String):
   case ReadingTime extends StatusSegment("reading_time")
   case WordGoal    extends StatusSegment("word_goal")
   case LineEnding  extends StatusSegment("line_ending")
+  case Indentation extends StatusSegment("indentation")
 
 object StatusSegment:
 

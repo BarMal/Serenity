@@ -18,7 +18,7 @@ private[reducers] object EditorTextEditReducer:
 
   def reduce(event: TextEntryEvent, ctx: CursorEventContext): ReducerResult =
     import ctx.*
-    val indentation = currentState.persisted.config.indentation
+    val indentation = buffer.effectiveIndentation(currentState.persisted.config.indentation)
 
     /** Like a plain buffer update, but `f` also reports the edits it made, so the undo boundary can record them.
       * `grouping` decides, from those edits, whether they coalesce into the run before them or are one undo step

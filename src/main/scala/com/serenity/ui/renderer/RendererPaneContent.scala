@@ -308,7 +308,7 @@ object RendererPaneContent:
                 semanticTokens = lineSemanticTokens,
                 maxColumn = Some(rect.right),
                 highlightCache = context.caches.themeHighlightCache,
-                tabWidth = state.persisted.config.indentation.tabSize
+                tabWidth = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
               )
               DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, context.surface, screenX, screenY)
 
