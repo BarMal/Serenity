@@ -251,6 +251,7 @@ class SwingWindow(
       content.add(chromeNorth, BorderLayout.NORTH)
     content.add(canvas, BorderLayout.CENTER)
     f.setContentPane(content)
+    SwingWindow.presentDirectly(canvas)
     if usesCustomChrome then
       val glassPane = new ResizeGlassPane(() => frame, chromeMetricsRef, maximizedRef)
       f.setGlassPane(glassPane)
@@ -272,6 +273,8 @@ class SwingWindow(
     val install: Runnable = () =>
       menuBarRef.set(Some(bar))
       menuBarPaletteRef.get().foreach(MenuBarTheming.apply(bar, _))
+      // The root pane no longer buffers (presentDirectly), so a frame menu bar buffers its own hover repaints.
+      bar.setDoubleBuffered(true)
       SwingWindow.menuBarPlacement(System.getProperty("os.name", ""), usesCustomChrome) match
         case MenuBarPlacement.UnderCustomTitleBar                           => chromeNorth.add(bar, BorderLayout.SOUTH)
         case MenuBarPlacement.ScreenMenuBar | MenuBarPlacement.FrameMenuBar => frame.setJMenuBar(bar)

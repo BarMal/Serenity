@@ -2,6 +2,7 @@ package com.serenity
 
 import java.awt.image.BufferedImage
 import java.awt.{Color, Graphics2D, Rectangle}
+import javax.swing.{JPanel, JRootPane}
 
 import com.serenity.ui.terminal.SwingWindow
 import org.scalatest.flatspec.AnyFlatSpec
@@ -91,6 +92,41 @@ class SwingWindowPresentSpec extends AnyFlatSpec with Matchers:
     paintInto(target, new Rectangle(0, 0, 20, 20))(g => SwingWindow.paintPresentedFrame(g, Some(base), Nil, 20, 20))
 
     new Color(target.getRGB(10, 10), true) shouldBe Color.BLACK
+  }
+
+  it should "keep an opaque base image exact when the target held other pixels" in {
+    val target = filled(20, 20, Color.RED)
+    val base   = new BufferedImage(20, 20, BufferedImage.TYPE_INT_RGB)
+    paintInto(target, new Rectangle(0, 0, 20, 20))(g => SwingWindow.paintPresentedFrame(g, Some(base), Nil, 20, 20))
+
+    new Color(target.getRGB(10, 10), true) shouldBe Color.BLACK
+  }
+
+  "SwingWindow.needsBackgroundFill" should "be false for an opaque base frame, which overwrites every pixel it covers" in {
+    SwingWindow.needsBackgroundFill(Some(new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB))) shouldBe false
+  }
+
+  it should "be true for a base frame with alpha, whose transparent pixels would show what was painted before" in {
+    SwingWindow.needsBackgroundFill(Some(new BufferedImage(8, 8, BufferedImage.TYPE_INT_ARGB))) shouldBe true
+  }
+
+  it should "be true when there is no base frame yet" in {
+    SwingWindow.needsBackgroundFill(None) shouldBe true
+  }
+
+  "SwingWindow.presentDirectly" should "unbuffer the canvas and every Swing ancestor Swing would paint it through" in {
+    val root   = new JRootPane
+    val canvas = new JPanel
+    root.getContentPane.add(canvas)
+    val sibling = new JPanel
+    root.getContentPane.add(sibling)
+    List(root, root.getContentPane, canvas).foreach(_.isDoubleBuffered shouldBe true)
+
+    SwingWindow.presentDirectly(canvas)
+
+    List(root, root.getLayeredPane, root.getContentPane, canvas).foreach(_.isDoubleBuffered shouldBe false)
+    canvas.isOpaque shouldBe true
+    sibling.isDoubleBuffered shouldBe true
   }
 
   "SwingWindow.ReusableImagePool" should "not hand back an image the EDT is still painting" in {

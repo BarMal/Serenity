@@ -3,6 +3,7 @@ package com.serenity.ui.terminal
 import java.awt.*
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
+import javax.swing.JComponent
 
 import com.serenity.ui.layout.PixelRect
 
@@ -165,6 +166,26 @@ private[terminal] trait SwingWindowImageSupport:
       }
       .flatten
 
+  /** Stops `RepaintManager` copying each already-buffered frame through a back buffer of its own.
+    *
+    * `JComponent.paintImmediately` walks from the painted component up to its window and paints through the buffer of
+    * any double-buffered ancestor it passes, so unbuffering only `canvas` is not enough: the root pane, layered pane
+    * and content pane are buffered by default and would still be the buffer. Components that are not ancestors keep
+    * their own buffering.
+    */
+  private[serenity] def presentDirectly(canvas: JComponent): Unit =
+    canvas.setOpaque(true)
+    LazyList
+      .unfold[Component, Option[Component]](Some(canvas))(_.map(component => (component, Option(component.getParent))))
+      .collect { case swingComponent: JComponent => swingComponent }
+      .foreach(_.setDoubleBuffered(false))
+
+  /** An opaque frame is stretched over the whole panel and overwrites every pixel of the clip, so filling black first
+    * is a second full-clip write; only a missing or alpha-carrying frame leaves pixels to define.
+    */
+  private[serenity] def needsBackgroundFill(base: Option[BufferedImage]): Boolean =
+    !base.exists(image => image.getWidth > 0 && image.getHeight > 0 && image.getTransparency == Transparency.OPAQUE)
+
   /** Present a frame into `g`, touching only its clip: Java2D bounds a software image upload by the destination
     * rectangle, not the clip, so drawing the whole image for a caret-sized repaint copies the whole window.
     */
@@ -175,10 +196,11 @@ private[terminal] trait SwingWindowImageSupport:
     panelWidth: Int,
     panelHeight: Int
   ): Unit =
-    val clip       = Option(g.getClipBounds).getOrElse(new Rectangle(0, 0, panelWidth, panelHeight))
-    val background = g.create().asInstanceOf[Graphics2D]
-    try SwingWindow.paintCanvasBackground(background, panelWidth, panelHeight)
-    finally background.dispose()
+    val clip = Option(g.getClipBounds).getOrElse(new Rectangle(0, 0, panelWidth, panelHeight))
+    if needsBackgroundFill(base) then
+      val background = g.create().asInstanceOf[Graphics2D]
+      try SwingWindow.paintCanvasBackground(background, panelWidth, panelHeight)
+      finally background.dispose()
     base.foreach(image => drawImageRegion(g, image, clip, panelWidth, panelHeight))
     carets.filter(_.rect.intersects(clip)).foreach { caret =>
       g.setColor(caret.color)
