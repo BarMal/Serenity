@@ -68,13 +68,13 @@ class TypingFramePresentSpec extends AnyFlatSpec with Matchers:
     rects.foldLeft(0L)((sum, rect) => sum + rect.widthPx.toLong * rect.heightPx)
 
   "The keystroke the typing benchmark times" should "damage buffer rows and chrome only, as a keystroke in a modified buffer does" in {
-    val (before, after) = LaptopFrameBenchmarks.typingTransition(LaptopFrameBenchmarks.proseStateManager()._1)
+    val (before, after) = TypingTransition.of(LaptopFrameBenchmarks.proseStateManager()._1)
 
     Damage.isBufferRowsOrChromeOnly(DamageProducer.forTransition(before, after)) shouldBe true
   }
 
   it should "present the damaged rows and the status row, not the whole window" in {
-    val (before, after) = LaptopFrameBenchmarks.typingTransition(LaptopFrameBenchmarks.proseStateManager()._1)
+    val (before, after) = TypingTransition.of(LaptopFrameBenchmarks.proseStateManager()._1)
     val frames          = ScreenFrames()
     val _               = frames.present(before, Damage.Everything)
 

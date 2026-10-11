@@ -500,16 +500,6 @@ private[perf] object LaptopFrameBenchmarks:
     val pixelsB = b.getRGB(0, 0, width, b.getHeight, null, 0, width)
     pixelsA.indices.filter(index => pixelsA(index) != pixelsB(index)).map(index => (index % width, index / width))
 
-  /** One keystroke into a buffer the previous keystroke already modified. The first keystroke after a save also flips
-    * the dirty marker of the tab and header, which presents the whole window once; typing a frame after frame never
-    * does, so a benchmark alternating clean and modified would time that exception every frame.
-    */
-  private[perf] def typingTransition(stateManager: StateManager)(using IORuntime): (AppState, AppState) =
-    stateManager.applyEvent(InsertChar('x')).unsafeRunSync()
-    val before = stateManager.getCurrentState.unsafeRunSync()
-    stateManager.applyEvent(InsertChar('y')).unsafeRunSync()
-    (before, stateManager.getCurrentState.unsafeRunSync())
-
   /** Typing and wheel-scrolling as a session at this size meets them. The states come from a live `StateManager` (see
     * [[proseStateManager]]), so the damage is what the app itself reports for the step. Typing alternates one inserted
     * letter with its removal, so the edited row's wrapped layout is served from cache, unlike a real new keystroke.
@@ -517,7 +507,7 @@ private[perf] object LaptopFrameBenchmarks:
   private def interactionBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
     val (stateManager, _)           = proseStateManager()
     def current: AppState           = stateManager.getCurrentState.unsafeRunSync()
-    val (beforeTyping, afterTyping) = typingTransition(stateManager)
+    val (beforeTyping, afterTyping) = TypingTransition.of(stateManager)
     stateManager.applyEvent(ScrollDown(3)).unsafeRunSync()
     val afterScroll = current
     val typing      = AlternatingTransition(beforeTyping, afterTyping)
