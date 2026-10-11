@@ -129,6 +129,39 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
     written.indexOf(exitCaMode) should be > written.indexOf(enterCaMode)
   }
 
+  // #1895: the render surface now carries SGR attributes from one frame to the next instead of resetting after each
+  // one, so leaving the TUI must be what clears them -- or the user's shell inherits the last cell's colours.
+  "releasing the shell" should "reset the SGR attributes the render surface left set" in {
+    val harness = dumbTerminal()
+
+    TerminalShell.forTerminal(harness.terminal).use(_ => IO.unit).unsafeRunSync()
+
+    harness.written should include(s"$esc[0m")
+  }
+
+  "a shell on an xterm-256color terminal" should "advertise the scroll region capabilities DECSTBM scrolling needs" in {
+    val harness = dumbTerminal()
+
+    TerminalShell
+      .forTerminal(harness.terminal)
+      .use(shell => IO(shell.supportsScrollRegions))
+      .unsafeRunSync() shouldBe true
+  }
+
+  "a shell on a dumb terminal" should "not advertise scroll region support" in {
+    val terminal =
+      new DumbTerminal(
+        "test",
+        "dumb",
+        new ByteArrayInputStream(Array.emptyByteArray),
+        new ByteArrayOutputStream(),
+        StandardCharsets.UTF_8
+      )
+    terminal.setSize(new org.jline.terminal.Size(80, 24))
+
+    TerminalShell.forTerminal(terminal).use(shell => IO(shell.supportsScrollRegions)).unsafeRunSync() shouldBe false
+  }
+
   "releasing the shell after an escaping IO.raiseError" should "still restore terminal state" in {
     val harness  = dumbTerminal()
     val original = attributesSnapshot(harness.terminal)

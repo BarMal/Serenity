@@ -18,8 +18,13 @@ import com.serenity.ui.theme.TextStyle
   * this surface's cell coordinates -- `putString`/`fillRect` themselves are already cell-addressed, same as every other
   * `RenderSurface`.
   */
-final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellMetrics: CellMetrics)
-    extends RenderSurface
+final class TerminalRenderSurface(
+    width: Int,
+    height: Int,
+    writer: Writer,
+    cellMetrics: CellMetrics,
+    scrollRegions: Boolean = false
+) extends RenderSurface
     with TextDrawing
     with PixelDrawing
     with PanelOutlineDrawing
@@ -27,6 +32,10 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
 
   private val screenBuffer     = new TerminalScreenBuffer(width, height)
   private val previousFrameRef = new AtomicReference[Option[TerminalFrame]](None)
+
+  // The SGR attributes the last flush left on the terminal, so the next flush deltas against them instead of
+  // resetting first. `TerminalShell.restore` resets them on the way out; `None` (first frame) forces a full set.
+  private val penRef = new AtomicReference[Option[SgrState]](None)
 
   // The caret this surface's own hardware cursor is currently asked to show -- `None` is hidden (DECTCEM hide).
   // Diffed against `lastEmittedCaretRef` on flush the same way screen content is diffed, so a flush with no caret
@@ -105,8 +114,17 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   def flush(): Unit =
     val next      = screenBuffer.snapshot
     val dirtyRows = screenBuffer.consumeDirtyRows()
-    val ansi      = TerminalAnsiDiff.emit(previousFrameRef.getAndSet(Some(next)), next, Some(dirtyRows))
-    val caret     = caretEscape(forceReassert = ansi.nonEmpty)
+    val encoded =
+      TerminalAnsiDiff.encode(
+        previousFrameRef.getAndSet(Some(next)),
+        next,
+        Some(dirtyRows),
+        scrollRegions,
+        penRef.get()
+      )
+    penRef.set(encoded.endPen)
+    val ansi  = encoded.ansi
+    val caret = caretEscape(forceReassert = ansi.nonEmpty)
     if ansi.nonEmpty || caret.nonEmpty then
       writer.write(TerminalRenderSurface.BeginSyncUpdate)
       writer.write(ansi)

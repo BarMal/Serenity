@@ -233,7 +233,13 @@ object TuiRuntime:
       current.get() match
         case Some((existingSize, surface)) if existingSize == size => surface
         case _ =>
-          val surface = new TerminalRenderSurface(size.width, size.height, shell.writer, CellMetricsOne)
+          val surface = new TerminalRenderSurface(
+            size.width,
+            size.height,
+            shell.writer,
+            CellMetricsOne,
+            shell.supportsScrollRegions
+          )
           current.set(Some((size, surface)))
           surface
 
