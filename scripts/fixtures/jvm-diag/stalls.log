@@ -1,0 +1,4 @@
+# stall sampler started 2026-10-10T12:00:00Z; each line is a wake more than 250 ms late (interval 100 ms), stamped with the wake time -> jvm-diag/stalls.log
+2026-10-10T12:00:02.600Z uptime=2600ms late=300ms
+2026-10-10T12:00:05.100Z uptime=5100ms late=2400ms
+2026-10-10T12:00:09.000Z uptime=9000ms late=900ms

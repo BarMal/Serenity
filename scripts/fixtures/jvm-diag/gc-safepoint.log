@@ -1,0 +1,8 @@
+[2026-10-10T12:00:01.100+0000][1.100s][info ][gc,init] Version: 21.0.4+7-LTS (release)
+[2026-10-10T12:00:02.000+0000][2.000s][info ][gc,start    ] GC(0) Pause Young (Normal) (G1 Evacuation Pause)
+[2026-10-10T12:00:02.050+0000][2.050s][info ][gc          ] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 25M->5M(64M) 12.345ms
+[2026-10-10T12:00:03.000+0000][3.000s][info ][safepoint   ] Safepoint "G1CollectForAllocation", Time since last: 1000 ns, Reaching safepoint: 2000 ns, Cleanup: 300 ns, At safepoint: 12000000 ns, Total: 12302300 ns
+[2026-10-10T12:00:04.000+0000][4.000s][info ][gc          ] GC(1) Pause Full (System.gc()) 40M->3M(64M) 1500.250ms
+[2026-10-10T12:00:05.000+0000][5.000s][info ][safepoint   ] Safepoint "ICBufferFull", Time since last: 1 ns, Reaching safepoint: 2 ns, Cleanup: 3 ns, At safepoint: 4 ns, Total: 250000000 ns
+[2026-10-10T12:00:06.000+0000][6.000s][info ][gc          ] GC(2) Pause Remark 7M->7M(64M) 3.100ms
+[2026-10-10T12:00:07.000+0000][7.000s][info ][safepoint   ] Safepoint "Cleanup", Time since last: 1 ns, Reaching safepoint: 2 ns, Cleanup: 3 ns, At safepoint: 4 ns, Total: 90000 ns

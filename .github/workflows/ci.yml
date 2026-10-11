@@ -177,6 +177,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      # The artifact below cannot be read from every environment, so the headline numbers go into the log as well.
+      - name: Summarise JVM stall diagnostics
+        if: always()
+        shell: bash
+        run: bash .github/scripts/summarize-jvm-diag.sh jvm-diag | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Upload JVM stall diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -246,7 +252,7 @@ jobs:
 
       # Stdlib `unittest`, no Python dependency to install.
       - name: Test the benchmark comparison scripts
-        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs -v
+        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_summarize_jvm_diag -v
 
       # The benchmark suite builds a real `SwingWindow` (`PerformanceBenchmarks.main`'s `SwingWindow.resource`), which
       # needs a display even though nothing is ever shown on screen -- a runner with no X server at all raises
