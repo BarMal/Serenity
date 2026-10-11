@@ -323,7 +323,7 @@ object TuiRuntime:
     accessibilityBridge: TuiAccessibilityBridge
   ): IO[Unit] =
     accessibilitySync
-      .sync(state)(previous => IO(AccessibilitySnapshot.from(state, size, previous, accessibilitySync.previewCache)))
+      .sync(state)(previous => IO(AccessibilitySnapshot.from(state, size, previous)))
       .flatMap(snapshot =>
         IO {
           accessibilityBridge.publishTitle(TuiWindowTitle.from(state))

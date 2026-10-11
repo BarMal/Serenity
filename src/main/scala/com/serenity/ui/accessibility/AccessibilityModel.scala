@@ -3,7 +3,6 @@ package com.serenity.ui.accessibility
 import com.serenity.command.CommandSurfaceItem
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.InterfaceDensity
-import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -44,10 +43,9 @@ object AccessibilitySnapshot:
   def from(
     state: AppState,
     viewport: ViewportSize,
-    previous: Option[AccessibilitySnapshot] = None,
-    previewCache: MarkdownPreviewCache = MarkdownPreviewCache()
+    previous: Option[AccessibilitySnapshot] = None
   ): AccessibilitySnapshot =
-    val scene = UiSceneSnapshot.from(state, LayoutEngine.calculateLayoutWithUI(state, viewport), viewport, previewCache)
+    val scene = UiSceneSnapshot.nodes(state, LayoutEngine.calculateLayoutWithUI(state, viewport))
     val visibleNodes = state.topModal match
       case Some(dialog) => scene.modal.filter(_.id == SceneNodeId.Surface(dialog.id))
       case None         => scene.nodesInPaintOrder
