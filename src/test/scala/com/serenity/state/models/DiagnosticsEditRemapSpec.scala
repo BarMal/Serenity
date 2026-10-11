@@ -99,3 +99,45 @@ class DiagnosticsEditRemapSpec extends AnyFlatSpec with Matchers:
     )
     AnnotationLineIndex.diagnosticsBySpannedLine(List(ending)).keySet shouldBe Set(2, 3)
   }
+
+  "through" should "hand back the very list when the edit is after every diagnostic" in {
+    val state   = stateWith(Rope(text))
+    val flagged = published(state)
+    val content = state.persisted.buffers(bufferId).document.content
+    val change  = ChangeSet.single(content.weight, 19, 19, " cat")
+    val after   = Rope(text + " cat")
+    DiagnosticsEditRemap.through(flagged, change, content, after) should be theSameInstanceAs flagged
+  }
+
+  "A carried annotation index" should "equal the index built from scratch after an edit moved one diagnostic" in {
+    def flag(line: Int, from: Int): Diagnostic =
+      Diagnostic(range(line, from, from + 3), Some(DiagnosticSeverity.Warning), "w", Some("spell-check"), None)
+    val before  = List(flag(0, 0), flag(0, 10), flag(1, 0), flag(2, 5))
+    val after   = List(flag(0, 0), flag(0, 11), flag(1, 0), flag(2, 5))
+    val carried = AnnotationLineIndex.from(Nil, before).carriedTo(Nil, after, None)
+    carried.diagnosticsByLine shouldBe AnnotationLineIndex.from(Nil, after).diagnosticsByLine
+  }
+
+  it should "equal the index built from scratch after a diagnostic was dropped" in {
+    def flag(line: Int): Diagnostic =
+      Diagnostic(range(line, 0, 3), Some(DiagnosticSeverity.Warning), "w", Some("spell-check"), None)
+    val carried =
+      AnnotationLineIndex.from(Nil, List(flag(0), flag(1), flag(2))).carriedTo(Nil, List(flag(0), flag(2)), None)
+    carried.diagnosticsByLine shouldBe AnnotationLineIndex.from(Nil, List(flag(0), flag(2))).diagnosticsByLine
+  }
+
+  "carried" should "leave a document with more diagnostics than it can afford to carry where they stand" in {
+    val before = stateWith(Rope(text))
+    val crowd = List.fill(DiagnosticsEditRemap.MaxCarried + 1)(
+      Diagnostic(range(1, 0, 3), Some(DiagnosticSeverity.Warning), "w", Some("spell-check"), None)
+    )
+    val crowded = before.copy(runtime =
+      before.runtime.copy(languageService =
+        before.runtime.languageService.copy(diagnosticsState =
+          before.runtime.languageService.diagnosticsState.copy(diagnostics = Map(DocumentUri("buffer:1") -> crowd))
+        )
+      )
+    )
+    val after = DiagnosticsEditRemap.carried(crowded, editedState(crowded, 0, 0, "\n"))
+    published(after) should be theSameInstanceAs crowd
+  }

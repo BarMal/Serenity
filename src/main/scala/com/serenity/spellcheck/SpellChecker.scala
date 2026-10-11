@@ -212,7 +212,8 @@ object SpellChecker:
       val spell =
         if !now.contains(uri) then Nil
         else published.get(uri).fold(shown.filter(isSpellCheckDiagnostic))(_._1)
-      val all = shown.filterNot(isSpellCheckDiagnostic) ++ spell
+      val others = if shown.forall(isSpellCheckDiagnostic) then Nil else shown.filterNot(isSpellCheckDiagnostic)
+      val all    = if others.isEmpty then spell else others ++ spell
       Option.when(all.nonEmpty)(uri -> all)
     }.toMap
     val cache = now.keysIterator.flatMap { uri =>

@@ -203,11 +203,19 @@ object DamageProducer:
         SpellChecker.diagnosticsUri(beforeBuffer),
         Nil
       )
+    val afterUri = SpellChecker.diagnosticsUri(afterBuffer)
     val afterDiagnostics =
-      after.runtime.languageService.diagnosticsState.diagnostics
-        .getOrElse(SpellChecker.diagnosticsUri(afterBuffer), Nil)
-    if beforeDiagnostics == afterDiagnostics then Damage.Nothing
-    else Damage.BufferRows(bufferId, diagnosticLines(beforeDiagnostics) ++ diagnosticLines(afterDiagnostics))
+      after.runtime.languageService.diagnosticsState.diagnostics.getOrElse(afterUri, Nil)
+    // Edits carry diagnostics along with the text, so most are the same on both sides; only the changed ones need
+    // their rows repainted.
+    val lines = AnnotationLineIndex
+      .changedLines(
+        beforeDiagnostics,
+        afterDiagnostics,
+        after.runtime.languageService.diagnosticsState.lastMoves.get(afterUri)
+      )
+      .getOrElse(diagnosticLines(beforeDiagnostics) ++ diagnosticLines(afterDiagnostics))
+    if lines.isEmpty then Damage.Nothing else Damage.BufferRows(bufferId, lines)
 
   private def diagnosticLines(diagnostics: List[Diagnostic]): Set[Int] =
     diagnostics.iterator.flatMap(diagnostic => diagnostic.range.start.line to diagnostic.range.end.line).toSet
