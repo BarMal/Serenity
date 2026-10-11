@@ -42,7 +42,17 @@ object DropCapLayout:
     */
   def glyphWidthPx(glyphFont: Font, frc: FontRenderContext, glyphText: String): Float =
     if glyphText.isEmpty then 0.0f
-    else glyphFont.getStringBounds(glyphText, frc).getWidth.toFloat
+    else glyphWidths(GlyphKey(glyphFont, frc, glyphText))
+
+  /** How many glyph widths were measured rather than served from the cache. */
+  private[layout] def glyphWidthMeasurements: Long = glyphWidths.measurements
+
+  final private case class GlyphKey(font: Font, frc: FontRenderContext, text: String)
+
+  private val glyphWidths =
+    MeasurementMemo[GlyphKey, Float](maxEntries = 256)(key =>
+      key.font.getStringBounds(key.text, key.frc).getWidth.toFloat
+    )
 
   /** The extra left margin, in pixels, a visual line reserves for the drop cap glyph: the glyph's measured width on
     * every line it spans, zero elsewhere. Added to a line's ordinary left origin so its body text starts to the right
