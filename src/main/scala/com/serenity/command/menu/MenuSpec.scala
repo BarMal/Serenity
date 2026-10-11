@@ -44,6 +44,7 @@ object MenuSpec:
     items("undo", "redo") ++ List(MenuEntry.Separator) ++
       items("cut", "copy", "paste", "paste-from-history", "select-all") ++ List(MenuEntry.Separator) ++
       items("find", "find-all", "replace", "replace-all", "goto-line") ++ List(MenuEntry.Separator) ++
+      items("toggle-line-comment", "toggle-block-comment") ++ List(MenuEntry.Separator) ++
       items("cut-to-darlings", "restore-darling")
 
   private def view: List[MenuEntry] =

@@ -102,6 +102,23 @@ private[command] object CommandRegistryEditCommands:
     )
   )
 
+  private[command] def commentCommands: List[Command] = List(
+    Command.typed(
+      "toggle-line-comment",
+      "Comment or uncomment the selected lines with the language's line comment.",
+      CommandIntent.Edit(EditIntent.ToggleLineComment),
+      CommandCategory.Edit,
+      label = "Toggle Line Comment"
+    ),
+    Command.typed(
+      "toggle-block-comment",
+      "Wrap or unwrap the selection in the language's block comment.",
+      CommandIntent.Edit(EditIntent.ToggleBlockComment),
+      CommandCategory.Edit,
+      label = "Toggle Block Comment"
+    )
+  )
+
   private[command] def richTextCommands: List[Command] = List(
     RichTextCommands.convertToRichText(andThen = None),
     Command.typed(
