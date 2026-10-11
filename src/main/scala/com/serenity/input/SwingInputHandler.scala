@@ -377,14 +377,13 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
 
   private def translateTyped(e: KeyEvent): Option[KeyStrokeInfo] =
     val char = e.getKeyChar
-    if !e.isControlDown && !e.isMetaDown && char != KeyEvent.CHAR_UNDEFINED && !Character.isISOControl(char) &&
-        !(isAltShiftChord(e) && Character.isLetter(char))
-    then Some(KeyStrokeInfo(InputKey.Character, Some(char), Set.empty))
+    if !e.isControlDown && !e.isMetaDown && char != KeyEvent.CHAR_UNDEFINED && !Character.isISOControl(char) then
+      Some(KeyStrokeInfo(InputKey.Character, Some(char), Set.empty))
     else None
 
-  /** Shift+Alt without AltGr: a chord for a hotkey rather than a way to type, so the letter it would type is dropped
-    * and [[translatePressed]] reports the chord itself (`TextCharacterConverters` types the capital if nothing binds
-    * it).
+  /** Shift+Alt without AltGr, reported as a chord from KEY_PRESSED in addition to the character KEY_TYPED delivers.
+    * [[InputRouterImpl]] drops that character only when a hotkey took the chord, so macOS Option+Shift glyphs still
+    * type.
     */
   private def isAltShiftChord(e: KeyEvent): Boolean =
     e.isAltDown && e.isShiftDown && !e.isAltGraphDown && !e.isControlDown && !e.isMetaDown
