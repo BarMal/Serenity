@@ -22,6 +22,11 @@ private[perf] object EreaderTypingBenchmarks:
 
   private val MaxRowsDrawn = 20L
 
+  /** The paragraph [[LaptopFrameBenchmarks.proseStateManager]] types into; the ghosted manuscripts type into the same
+    * one, since paragraphs differ in length and so in how many rows a keystroke reflows.
+    */
+  private val ProseTypingLine = 150
+
   private val config = AppConfig.default.withColumnMode(true).withColumnTargetWidth(40).withLineNumbers(true)
 
   private val singleColumnConfig = AppConfig.default
@@ -30,9 +35,15 @@ private[perf] object EreaderTypingBenchmarks:
     * of the prose typed into.
     */
   private def ghostedStateManager(config: AppConfig)(using IORuntime) =
-    val manuscript = "# Chapter 1: Storm\n\n\n\n" + BenchmarkFixtures.loremIpsumProse(300)
+    val chapterOpening = "# Chapter 1: Storm\n\n\n\n"
+    val manuscript     = chapterOpening + BenchmarkFixtures.loremIpsumProse(300)
     val (stateManager, manuscriptId) =
-      LaptopFrameBenchmarks.stateManagerHolding(manuscript, config, cursorLine = 150, cursorColumn = 40)
+      LaptopFrameBenchmarks.stateManagerHolding(
+        manuscript,
+        config,
+        cursorLine = ProseTypingLine + chapterOpening.count(_ == '\n'),
+        cursorColumn = 40
+      )
     val noteId = stateManager.createBuffer("Gale hits\nLiz leaves", None).unsafeRunSync()
     stateManager
       .updateState { state =>
