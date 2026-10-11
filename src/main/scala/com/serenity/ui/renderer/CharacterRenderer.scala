@@ -136,7 +136,11 @@ object CharacterRenderer:
           if syntaxHighlightingEnabled then highlightCache.highlightLine(text, theme, language, semanticTokens)
           else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
         }
-      MeasuredLineRuns.of(visualLine, segments, graphemeCache.spansFor(text), theme).foreach { run =>
+      val runs = MeasuredLineRuns.of(visualLine, segments, graphemeCache.spansFor(text), theme)
+
+      val shaped = surface.text.shapesStretchesOf(text)
+
+      def paintRun(run: MeasuredRun, stretch: String, from: Int, until: Int): Unit =
         val startXPx      = xOriginPx + run.minXPx
         val endXPx        = xOriginPx + run.maxXPx
         val clippedEndXPx = clipRightXPx.fold(endXPx)(_.min(endXPx))
@@ -145,9 +149,16 @@ object CharacterRenderer:
           surface.setForegroundColor(run.foreground)
           surface.setBackgroundColor(run.background)
           withStyle(surface, run.style) {
-            surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text)
+            if shaped then
+              surface.text.drawShapedRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, stretch, from, until)
+            else surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text)
           }
-      }
+
+      if shaped then
+        MeasuredLineRuns
+          .stretched(runs, text)
+          .foreach(placed => paintRun(placed.run, placed.stretch, placed.from, placed.until))
+      else runs.foreach(run => paintRun(run, run.text, 0, run.text.length))
 
   private def renderStyledLine(
     surface: RenderSurface,
