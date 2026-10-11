@@ -107,15 +107,20 @@ object Damage:
       case _                                                                             => false
     }
 
-  /** As [[isBufferRowsOnly]], also allowing [[Chrome]] and [[PaneChrome]]: the status row and each pane's header have a
-    * known rect of their own, so they can join a bounded repaint rather than force the whole canvas.
+  /** As [[isBufferRowsOnly]], also allowing [[Chrome]], [[PaneChrome]] and the tab strip's [[Surface]]: the status row,
+    * each pane's header and the strip have a known rect of their own, so they can join a bounded repaint rather than
+    * force the whole canvas. Any other surface may reach pixels its rect does not describe, so it still does not.
     */
   def isBufferRowsOrChromeOnly(damage: Damage): Boolean =
     flatten(damage).forall {
       case BufferRows(_, _) | BufferCells(_, _, _, _) | BufferAll(_) | BufferScrolled(_) | Chrome | PaneChrome(_) =>
         true
-      case _ => false
+      case Surface(id) => id == UiSurface.TabBarSurfaceId
+      case _           => false
     }
+
+  def touchesTabBar(damage: Damage): Boolean =
+    flatten(damage).contains(Surface(UiSurface.TabBarSurfaceId))
 
   def touchesChrome(damage: Damage): Boolean =
     flatten(damage).contains(Chrome)

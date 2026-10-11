@@ -140,6 +140,15 @@ class DamageSpec extends AnyFlatSpec with Matchers:
       true
   }
 
+  it should "hold for the tab strip, which has a rect of its own, but for no other surface" in {
+    Damage.isBufferRowsOrChromeOnly(
+      (Damage.BufferRows(bufferId, Set(0)): Damage) |+| Damage.Surface(UiSurface.TabBarSurfaceId)
+    ) shouldBe true
+    Damage.isBufferRowsOrChromeOnly(
+      (Damage.Surface(UiSurface.TabBarSurfaceId): Damage) |+| Damage.Surface(SurfaceId("overlay"))
+    ) shouldBe false
+  }
+
   it should "not hold for Surface or Everything" in {
     Damage.isBufferRowsOrChromeOnly(Damage.Surface(SurfaceId("overlay"))) shouldBe false
     Damage.isBufferRowsOrChromeOnly(Damage.Everything) shouldBe false

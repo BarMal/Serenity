@@ -11,8 +11,9 @@ private[renderer] object RendererRepaintRegion:
 
   /** Each dirty row's band, the line-number cells beside the active pane's dirty rows (a number changes only with its
     * row, so it repaints with it), the pinned status row when `damage` names [[Damage.Chrome]], and the header of each
-    * pane a [[Damage.PaneChrome]] names -- coalesced into a few disjoint rects, so a caret row and the status row far
-    * below it stay two narrow rects rather than one spanning every row between them.
+    * pane a [[Damage.PaneChrome]] names, and the tab strip when `damage` names it -- coalesced into a few disjoint
+    * rects, so a caret row and the status row far below it stay two narrow rects rather than one spanning every row
+    * between them.
     */
   def rects(
     state: AppState,
@@ -36,7 +37,9 @@ private[renderer] object RendererRepaintRegion:
     }
     val statusRow = contract.gutterRect.filter(_ => Damage.touchesChrome(damage))
     val headers   = Damage.paneChromeIds(damage).toList.flatMap(contract.paneHeaderRect)
+    val tabBar    = contract.tabBarRect.filter(_ => Damage.touchesTabBar(damage))
     PixelRect.coalesced(
-      rowRects ++ (statusRow.toList ++ headers).map(RendererChromePlan.pixelRectOf(context.cellMetrics)),
+      rowRects ++ (statusRow.toList ++ headers ++ tabBar.toList)
+        .map(RendererChromePlan.pixelRectOf(context.cellMetrics)),
       PixelRect.RepaintRectLimit
     )
