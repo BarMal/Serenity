@@ -131,7 +131,7 @@ object RendererFramePlanner:
         // Recorded *after* `planFrame` (and thus `dirtyRowsFor`) has read this surface's snapshots for this frame, so
         // this frame's own snapshots become "previous" only for the frame after it -- see
         // `previousSnapshots`' doc comment.
-        caches.frameState.rememberSnapshots(surface, editorRenderPlan.snapshots)
+        caches.frameState.rememberSnapshots(surface, editorRenderPlan.recordSnapshots)
         framePlan match
           case Some(plan) if plan.preserved.nonEmpty =>
             RendererScrollReuse.clearKeeping(surface, state.persisted.theme.background, plan)
@@ -335,9 +335,16 @@ object RendererFramePlanner:
           if inputsOrPanesChanged || geometryChanged then Damage.Everything else bufferDamageSinceLastDraw
 
         // A ghost is derived from a note's text and from which chapters are empty, neither of which a buffer's own
-        // damage reports, so a pane showing ghosts repaints whole rather than reusing rows a stale ghost sits in.
-        val ghostPaneIds =
-          panes.filter((_, record) => RendererChapterGhosts.paneShowsGhosts(state, record.bufferId)).keySet
+        // damage reports, so a pane showing ghosts repaints whole rather than reusing rows a stale ghost sits in. So
+        // does a multi-column pane with line-number rails: the chrome layer fills each rail before the rows are
+        // drawn, which would overwrite the ink a kept row spills into it.
+        val wholeRedrawPaneIds =
+          panes
+            .filter((paneId, record) =>
+              RendererChapterGhosts.paneShowsGhosts(state, record.bufferId) ||
+                ColumnPaneRows.hasRails(renderPlan.columnSnapshotsFor(paneId))
+            )
+            .keySet
         val movable =
           RendererScrollReuse.rowsMayMove(state, context, renderPlan, persistenceKey, effectiveDamage, geometryChanged)
         val redraws = panes.map { (paneId, record) =>
@@ -345,7 +352,7 @@ object RendererFramePlanner:
           val dirty =
             damageDirtyRows(effectiveDamage, record, persistenceKey, context.caches, scrollIsEveryRow = !moving)
           paneId -> {
-            if ghostPaneIds.contains(paneId) then RendererScrollReuse.PaneRedraw.everyRow(record)
+            if wholeRedrawPaneIds.contains(paneId) then RendererScrollReuse.PaneRedraw.everyRow(record)
             else RendererScrollReuse.planPane(state, context, renderPlan, paneId, record, persistenceKey, dirty, moving)
           }
         }
@@ -398,7 +405,7 @@ object RendererFramePlanner:
         val screenDamageSincePublish = context.caches.frameState.drainScreenDamage(output)
         val boundedRepaintEligible =
           !context.caches.frameState.screenPaneIdsChanged(output, paneIds) && allPanesReusable && !geometryChanged &&
-            ghostPaneIds.isEmpty && Damage.isBufferRowsOrChromeOnly(screenDamageSincePublish)
+            wholeRedrawPaneIds.isEmpty && Damage.isBufferRowsOrChromeOnly(screenDamageSincePublish)
         val repaintRegion =
           Option.when(boundedRepaintEligible) {
             RendererRepaintRegion.rects(

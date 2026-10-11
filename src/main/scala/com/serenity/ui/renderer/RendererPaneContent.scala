@@ -123,8 +123,7 @@ object RendererPaneContent:
       preparedSnapshot.orElse(buffer.map(RendererPaneSetup.snapshotForBuffer(_, contentRect, state, context)))
     // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): a column-mode pane paints each column's own
     // snapshot at its own x-origin (`contentRect.x + placement.xOffsetCells`), so the page reads as columns side by
-    // side. `dirtyRows` (the row-reuse contract) is a per-column-snapshot row index, which the multi-column
-    // path does not track yet, so a column-mode pane always redraws in full (see report's slice-2 note).
+    // side. `dirtyRows` numbers the rows across the columns ([[ColumnPaneRows]]); each column draws its share.
     val paintsColumns =
       columnPlacements.nonEmpty && buffer.exists(_.document.content.weight > 0)
 
@@ -136,16 +135,17 @@ object RendererPaneContent:
       case Some(buf) if paintsColumns =>
         val bufferAnnotations =
           annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending))
-        columnPlacements.foreach { placement =>
-          renderBufferContent(
-            buf,
-            columnRect(contentRect, placement),
-            state,
-            context,
-            placement.snapshot,
-            bufferAnnotations,
-            dirtyRows = None
-          )
+        columnPlacements.zip(ColumnPaneRows.localRows(columnPlacements, dirtyRows)).foreach {
+          (placement, columnDirtyRows) =>
+            renderBufferContent(
+              buf,
+              columnRect(contentRect, placement),
+              state,
+              context,
+              placement.snapshot,
+              bufferAnnotations,
+              columnDirtyRows
+            )
         }
       case Some(buf) =>
         bufferSnapshot.fold(RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)) { snap =>
@@ -195,7 +195,7 @@ object RendererPaneContent:
     * column's own cell offset, past its line-number rail (`gutterWidthCells`, slice 2), and narrowed to the remaining
     * band -- so a column's text never paints over its own rail or past its neighbour.
     */
-  private def columnRect(contentRect: LayoutRect, placement: ColumnSnapshotPlacement): LayoutRect =
+  private[renderer] def columnRect(contentRect: LayoutRect, placement: ColumnSnapshotPlacement): LayoutRect =
     val leftX     = contentRect.x + placement.xOffsetCells + placement.gutterWidthCells
     val bandWidth = math.max(0, placement.columnWidthCells - placement.gutterWidthCells)
     val width     = math.min(bandWidth, math.max(0, contentRect.right - leftX))
