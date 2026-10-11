@@ -6,6 +6,7 @@ import com.serenity.keystroke.events.{InsertChar, NewLine}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.perf.BenchmarkFixtures.{editorState, largeRichTextDocument}
 import com.serenity.rope.Balance
+import com.serenity.state.core.NotesPaneSync
 import com.serenity.state.manager.ChapterGhostCache
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
@@ -31,7 +32,7 @@ private[perf] object ProseTypingBenchmarks:
   private val NoteBufferId      = BufferId(2)
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
-    List(richTextTyping(), markdownTypingWithGhosts(), markdownEnter())
+    List(richTextTyping(), markdownTypingWithGhosts(), markdownTypingWithNotesPane(), markdownEnter())
 
   /** Runs just these benchmarks, which need no window: `sbt "Test/runMain com.serenity.perf.ProseTypingBenchmarks"`. */
   def main(args: Array[String]): Unit =
@@ -83,6 +84,20 @@ private[perf] object ProseTypingBenchmarks:
     )
     withCursor(state, ProseLine, 5)
 
+  private val NotesPaneId = PaneId(1)
+
+  /** [[markdownState]] with the notes pane open beside the manuscript, as a writer keeping chapter notes has it. */
+  private def notesPaneState: AppState =
+    val base = markdownState
+    base.copy(
+      persisted = base.persisted.copy(layout =
+        base.persisted.layout.copy(editorPanes =
+          base.persisted.layout.editorPanes.updated(NotesPaneId, EditorPane.withBuffer(NotesPaneId, NoteBufferId))
+        )
+      ),
+      runtime = base.runtime.copy(notesPane = Some(NotesPane(NotesPaneId, PaneId(0))))
+    )
+
   private def typed(state: AtomicReference[AppState]): AppState =
     state.updateAndGet(current => EditorEventReducer.reduce(InsertChar('x'), PaneId(0), current).state)
 
@@ -112,6 +127,26 @@ private[perf] object ProseTypingBenchmarks:
       cache.ghostsFor(after.persisted.buffers(BufferIdUnderEdit), after.persisted.buffers)
     BenchmarkRunner.Benchmark(
       "prose.markdown_typing.chapter_ghosts",
+      3,
+      BenchmarkIterationCounts.Reducer,
+      verify,
+      run,
+      fixedSampleCount = true
+    )
+
+  private def markdownTypingWithNotesPane(): BenchmarkRunner.Benchmark =
+    val state = new AtomicReference(notesPaneState)
+    def verify(): Unit =
+      val before = notesPaneState
+      val after  = typed(new AtomicReference(before))
+      assert(
+        NotesPaneSync.synced(after, before).persisted.layout.editorPanes(NotesPaneId).bufferId.contains(NoteBufferId)
+      )
+    def run(): Any =
+      val before = state.get()
+      NotesPaneSync.synced(typed(state), before)
+    BenchmarkRunner.Benchmark(
+      "prose.markdown_typing.notes_pane",
       3,
       BenchmarkIterationCounts.Reducer,
       verify,
