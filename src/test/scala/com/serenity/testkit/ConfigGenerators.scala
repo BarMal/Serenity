@@ -4,7 +4,7 @@ import java.awt.Color
 
 import com.serenity.config.*
 import com.serenity.keystroke.Modifier
-import com.serenity.state.models.SurfacePlacement
+import com.serenity.state.models.{LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import org.scalacheck.Gen
@@ -86,6 +86,13 @@ object ConfigGenerators:
       fonts     <- genFontConfig
       paneWidth <- Gen.choose(1, 200)
     yield EditorConfig(fontConfig = fonts, minimumPaneWidth = paneWidth)
+
+  val genLargeFilePolicy: Gen[LargeFilePolicy] =
+    for
+      warn          <- Gen.choose(1, 100000000)
+      toolingOff    <- Gen.choose(1, 100000000)
+      optimizations <- Gen.oneOf(true, false)
+    yield LargeFilePolicy(warn, toolingOff, optimizations)
 
   val genSpellCheckConfig: Gen[SpellCheckConfig] =
     for
@@ -314,6 +321,7 @@ object ConfigGenerators:
       syntax           <- Gen.oneOf(true, false)
       smartPunctuation <- Gen.oneOf(true, false)
       spell            <- genSpellCheckConfig
+      largeFile        <- genLargeFilePolicy
       appMode          <- genAppModeConfig
       status           <- genStatusLineConfig
       exportTypography <- genExportTypographyConfig
@@ -330,7 +338,8 @@ object ConfigGenerators:
       languageToolsConfig = LanguageToolsConfig(
         syntaxHighlightingEnabled = syntax,
         spellCheck = spell,
-        smartPunctuationEnabled = smartPunctuation
+        smartPunctuationEnabled = smartPunctuation,
+        largeFile = largeFile
       ),
       appModeConfig = appMode,
       statusLine = status,
