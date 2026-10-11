@@ -1,12 +1,13 @@
 package com.serenity.lsp.client
 
+import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
 import scala.collection.mutable.ListBuffer
 
 import cats.effect.IO
 import fs2.{Chunk, Stream}
-import io.circe.Json
+import io.circe.{Json, Printer}
 
 object LspFramer:
 
@@ -18,96 +19,90 @@ object LspFramer:
 
   final private[lsp] case class FrameError(message: String) extends RuntimeException(message)
 
-  private enum ParseState:
-    case Header
-    case Body(length: Int)
-
   def encode(json: Json): Array[Byte] =
-    val body        = json.noSpaces.getBytes(StandardCharsets.UTF_8)
-    val header      = s"$LengthKey: ${body.length}\r\n\r\n"
-    val headerBytes = header.getBytes(StandardCharsets.UTF_8)
-    headerBytes ++ body
+    val body        = Printer.noSpaces.printToByteBuffer(json, StandardCharsets.UTF_8)
+    val headerBytes = s"$LengthKey: ${body.remaining}\r\n\r\n".getBytes(StandardCharsets.US_ASCII)
+    val framed      = new Array[Byte](headerBytes.length + body.remaining)
+    System.arraycopy(headerBytes, 0, framed, 0, headerBytes.length)
+    body.get(framed, headerBytes.length, body.remaining)
+    framed
 
   def decode: fs2.Pipe[IO, Byte, Json] =
-    in => decodeStream(in)
-
-  private def decodeStream(stream: Stream[IO, Byte]): Stream[IO, Json] =
-    stream.through(messageFrames).through(parseJson)
-
-  private def messageFrames: fs2.Pipe[IO, Byte, String] =
     in =>
       Stream.eval(IO(new FrameDecoder)).flatMap { decoder =>
         in.chunks.evalMap(chunk => IO.delay(decoder.feed(chunk))).flatMap(Stream.emits) ++
           Stream.eval(IO.delay(decoder.finish())).flatMap(Stream.emits)
       }
 
+  /** Incremental frame decoder for one stream. Each chunk is appended in bulk; the header terminator is searched from
+    * the previous scan position, and a pending body is waited for without rescanning.
+    */
   // This bounded buffer is local to one decode stream and avoids copying accumulated frames per chunk.
   // scalafix:off DisableSyntax
-  final private class FrameDecoder:
+  final private[lsp] class FrameDecoder:
+
+    private val NoBody = -1
 
     private var buffer         = new Array[Byte](1024)
     private var offset         = 0
     private var size           = 0
     private var headerScanFrom = 0
-    private var state          = ParseState.Header
+    private var bodyLength     = NoBody
+    private var scans          = 0
 
-    def feed(chunk: Chunk[Byte]): List[String] =
-      val frames = ListBuffer.empty[String]
-      chunk.foreach { byte =>
-        append(byte)
+    def headerScans: Int = scans
+
+    def feed(chunk: Chunk[Byte]): List[Json] =
+      val frames = ListBuffer.empty[Json]
+      if chunk.nonEmpty then
+        ensureCapacity(size + chunk.size)
+        chunk.copyToArray(buffer, offset + size)
+        size += chunk.size
         drain(frames)
-      }
       frames.toList
 
-    def finish(): List[String] =
-      state match
-        case ParseState.Header if size == 0 => Nil
-        case ParseState.Header =>
-          throw FrameError("Truncated LSP frame at EOF: incomplete header")
-        case ParseState.Body(length) =>
-          throw FrameError(s"Truncated LSP frame at EOF: truncated body, expected $length bytes but received $size")
+    def finish(): List[Json] =
+      if bodyLength != NoBody then
+        throw FrameError(s"Truncated LSP frame at EOF: truncated body, expected $bodyLength bytes but received $size")
+      else if size != 0 then throw FrameError("Truncated LSP frame at EOF: incomplete header")
+      else Nil
 
-    private def append(byte: Byte): Unit =
-      state match
-        case ParseState.Header if size >= MaxHeaderBytes + HeaderSepBytes.length =>
-          throw FrameError(s"LSP frame header exceeds $MaxHeaderBytes bytes")
-        case _ =>
-          ensureCapacity(size + 1)
-          buffer(offset + size) = byte
-          size += 1
-
-    private def drain(frames: ListBuffer[String]): Unit =
+    private def drain(frames: ListBuffer[Json]): Unit =
       var canContinue = true
       while canContinue do
-        state match
-          case ParseState.Header =>
-            findHeaderEnd() match
-              case None =>
-                if size > MaxHeaderBytes + HeaderSepBytes.length - 1 then
-                  throw FrameError(s"LSP frame header exceeds $MaxHeaderBytes bytes")
-                canContinue = false
-              case Some(headerEnd) =>
-                if headerEnd > MaxHeaderBytes then throw FrameError(s"LSP frame header exceeds $MaxHeaderBytes bytes")
-                val bodyLength = parseBodyLength(headerEnd)
-                discard(headerEnd + HeaderSepBytes.length)
-                state = ParseState.Body(bodyLength)
-          case ParseState.Body(length) =>
-            if size < length then canContinue = false
-            else
-              frames += new String(buffer, offset, length, StandardCharsets.UTF_8)
-              discard(length)
-              state = ParseState.Header
+        if bodyLength == NoBody then
+          findHeaderEnd() match
+            case None =>
+              if size > MaxHeaderBytes + HeaderSepBytes.length - 1 then
+                throw FrameError(s"LSP frame header exceeds $MaxHeaderBytes bytes")
+              canContinue = false
+            case Some(headerEnd) =>
+              if headerEnd > MaxHeaderBytes then throw FrameError(s"LSP frame header exceeds $MaxHeaderBytes bytes")
+              val length = parseBodyLength(headerEnd)
+              discard(headerEnd + HeaderSepBytes.length)
+              bodyLength = length
+        else if size < bodyLength then canContinue = false
+        else
+          frames += parseJson(bodyLength)
+          discard(bodyLength)
+          bodyLength = NoBody
 
     private def findHeaderEnd(): Option[Int] =
-      var index = headerScanFrom
-      while index <= size - HeaderSepBytes.length do
-        if HeaderSepBytes.indices.forall(offsetInSeparator =>
-              buffer(offset + index + offsetInSeparator) == HeaderSepBytes(offsetInSeparator)
-            )
-        then return Some(index)
-        index += 1
-      headerScanFrom = math.max(0, size - HeaderSepBytes.length + 1)
-      None
+      if size < HeaderSepBytes.length then None
+      else
+        scans += 1
+        val last  = size - HeaderSepBytes.length
+        var index = headerScanFrom
+        var found = -1
+        while found < 0 && index <= last do
+          if buffer(offset + index) == HeaderSepBytes(0) && buffer(offset + index + 1) == HeaderSepBytes(1) &&
+              buffer(offset + index + 2) == HeaderSepBytes(2) && buffer(offset + index + 3) == HeaderSepBytes(3)
+          then found = index
+          index += 1
+        if found >= 0 then Some(found)
+        else
+          headerScanFrom = math.max(0, size - HeaderSepBytes.length + 1)
+          None
 
     private def parseBodyLength(headerEnd: Int): Int =
       val header = new String(buffer, offset, headerEnd, StandardCharsets.US_ASCII)
@@ -128,6 +123,13 @@ object LspFramer:
           length.toInt
         case _ => throw FrameError("Malformed LSP header: multiple Content-Length values")
 
+    private def parseJson(length: Int): Json =
+      io.circe.jawn.parseByteBuffer(ByteBuffer.wrap(buffer, offset, length)) match
+        case Right(json) => json
+        case Left(failure) =>
+          val text = new String(buffer, offset, length, StandardCharsets.UTF_8)
+          throw new RuntimeException(s"JSON parse error: $failure in: $text")
+
     private def discard(count: Int): Unit =
       offset += count
       size -= count
@@ -147,8 +149,4 @@ object LspFramer:
         offset = 0
 
   // scalafix:on DisableSyntax
-
-  private def parseJson: fs2.Pipe[IO, String, Json] =
-    _.evalMap(s =>
-      IO.fromEither(io.circe.parser.parse(s).left.map(e => new RuntimeException(s"JSON parse error: $e in: $s")))
-    )
+end LspFramer
