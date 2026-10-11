@@ -38,6 +38,13 @@ final class TerminalShell private (
   private val pendingResize  = new AtomicReference[Option[ViewportSize]](None)
   private val resizeCallback = new AtomicReference[Option[() => Unit]](None)
 
+  /** Whether the terminfo entry advertises the scroll region (`csr`) and the parameterised scroll (`indn`, `rin`)
+    * capabilities that DECSTBM + SU/SD scrolling relies on -- absent on, for example, the Linux console.
+    */
+  def supportsScrollRegions: Boolean =
+    List(Capability.change_scroll_region, Capability.parm_index, Capability.parm_rindex)
+      .forall(capability => Option(terminal.getStringCapability(capability)).isDefined)
+
   /** The writer [[com.serenity.ui.tui.TerminalRenderSurface]] flushes damage-diffed ANSI bytes through. */
   def writer: PrintWriter = terminal.writer()
 
@@ -89,6 +96,7 @@ final class TerminalShell private (
     // mouse/paste disables are also sent by TerminalInputHandler.shutdown, but if that doesn't run (e.g. a CE3 runtime
     // crash) this is the last line of defence -- any left active after exit_ca_mode corrupt the shell the user returns to.
     TerminalShell.disableKeyboardProtocol(terminal, keyboardProtocolTier)
+    w.write(TerminalShell.ResetAttributes)
     w.write(TerminalShell.FocusReportingDisable)
     w.write(TerminalShell.AllInputModesDisable)
     terminal.flush()
@@ -196,6 +204,9 @@ object TerminalShell:
     */
   private[tui] val FocusReportingEnable: String  = "[?1004h"
   private[tui] val FocusReportingDisable: String = "[?1004l"
+
+  /** SGR 0. The render surface leaves its last cell's attributes set between frames; this is what clears them. */
+  private[tui] val ResetAttributes: String = "\u001b[0m"
 
   /** Windows `win32-input-mode` (#1320, [[KeyboardProtocolTier.Win32Input]]'s doc): `CSI ?9001h`/`CSI ?9001l`, the
     * DECSET/DECRST pair ConPTY defines for it (github.com/microsoft/terminal#8343).
