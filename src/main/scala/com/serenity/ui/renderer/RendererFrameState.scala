@@ -476,6 +476,7 @@ final class RendererFrameState(initialCapacity: Int):
 
   /** As [[drawStateChanged]], but for the screen's own published pane set -- distinct because the screen shows the
     * previous frame while a surface's own preserved pixels come from the one before that (see [[screenDamage]]).
+    * Records `paneIds` as it compares, so call it on every frame, ahead of any condition that could skip it.
     */
   def screenPaneIdsChanged(output: Option[FrameOutput], paneIds: Set[PaneId]): Boolean =
     output match

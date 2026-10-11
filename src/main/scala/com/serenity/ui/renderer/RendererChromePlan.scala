@@ -27,7 +27,11 @@ final case class ChromeRepaint(
 object ChromeRepaint:
   val Whole: ChromeRepaint = ChromeRepaint(spacers = true, statusRow = true, Repaint.all, Repaint.all)
 
-/** The rects chrome is painted into. Chrome kept from an earlier frame is only valid while they hold still. */
+/** The rects chrome is painted into. Chrome kept from an earlier frame is only valid while they hold still.
+  *
+  * A moved pane rect also repaints every pane row: the tab strip appearing or going away shifts them with no damage a
+  * `DamageProducer` transition could report, as it knows the state but not the layout.
+  */
 final case class ChromeGeometry(
     spacers: List[LayoutRect],
     statusRow: Option[LayoutRect],

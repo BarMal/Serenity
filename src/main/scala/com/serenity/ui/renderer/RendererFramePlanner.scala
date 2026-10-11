@@ -396,14 +396,15 @@ object RendererFramePlanner:
             paneIds,
             RendererFrameState.renderInputsFor(context, viewportSize)
           )
-        val effectiveDamage = if inputsOrPanesChanged then Damage.Everything else bufferDamageSinceLastDraw
+        val geometryChanged =
+          context.caches.frameState.chromeGeometryChanged(persistenceKey, ChromeGeometry.of(renderPlan))
+        val effectiveDamage =
+          if inputsOrPanesChanged || geometryChanged then Damage.Everything else bufferDamageSinceLastDraw
 
         // A ghost is derived from a note's text and from which chapters are empty, neither of which a buffer's own
         // damage reports, so a pane showing ghosts repaints whole rather than reusing rows a stale ghost sits in.
         val ghostPaneIds =
           panes.filter((_, record) => RendererChapterGhosts.paneShowsGhosts(state, record.bufferId)).keySet
-        val geometryChanged =
-          context.caches.frameState.chromeGeometryChanged(persistenceKey, ChromeGeometry.of(renderPlan))
         val movable =
           RendererScrollReuse.rowsMayMove(state, context, renderPlan, persistenceKey, effectiveDamage, geometryChanged)
         val redraws = panes.map { (paneId, record) =>
@@ -440,10 +441,8 @@ object RendererFramePlanner:
         // only when every pane is reusable and the published pane set hasn't shifted underneath it.
         val screenDamageSincePublish = context.caches.frameState.drainScreenDamage(output)
         val boundedRepaintEligible =
-          allPanesReusable &&
-            ghostPaneIds.isEmpty &&
-            !context.caches.frameState.screenPaneIdsChanged(output, paneIds) &&
-            Damage.isBufferRowsOrChromeOnly(screenDamageSincePublish)
+          !context.caches.frameState.screenPaneIdsChanged(output, paneIds) && allPanesReusable && !geometryChanged &&
+            ghostPaneIds.isEmpty && Damage.isBufferRowsOrChromeOnly(screenDamageSincePublish)
         val repaintRegion =
           Option.when(boundedRepaintEligible) {
             RendererRepaintRegion.rects(
