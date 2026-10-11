@@ -63,3 +63,15 @@ class RopeLineConversionSpec extends AnyPropSpec with ScalaCheckPropertyChecks w
   property("offsetsToLineColumns on an empty list is empty") {
     Rope("a\nb").offsetsToLineColumns(IndexedSeq.empty) shouldBe Vector.empty
   }
+
+  property("offsetsToLineColumns repeats offsets that coincide, at the start, middle and end of the text") {
+    forAll(genRopeWithText) { (rope, text) =>
+      val offsets = IndexedSeq(0, 0, text.length / 2, text.length / 2, text.length, text.length)
+      rope.offsetsToLineColumns(offsets) shouldBe offsets.map(rope.offsetToLineColumn).toVector
+    }
+  }
+
+  property("a rope built from CRLF text converts as the LF text it was normalised to") {
+    val rope = Rope("ab\r\ncd\r\n")
+    rope.offsetsToLineColumns(IndexedSeq(0, 2, 3, 5, 6)) shouldBe Vector((0, 0), (0, 2), (1, 0), (1, 2), (2, 0))
+  }
