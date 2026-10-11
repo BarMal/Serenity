@@ -91,7 +91,7 @@ object RendererPaneSetup:
       layoutContract,
       snapshots,
       columnSnapshots,
-      annotationsFor(state, context, snapshots)
+      annotationsFor(state, context, snapshots, columnSnapshots)
     )
 
   /** What each visible buffer line carries -- comments, diagnostics, semantic tokens, ghosts -- as of `state`. Read per
@@ -102,10 +102,12 @@ object RendererPaneSetup:
   def annotationsFor(
     state: AppState,
     context: RenderContext,
-    snapshots: Map[PaneId, TextLayoutSnapshot]
+    snapshots: Map[PaneId, TextLayoutSnapshot],
+    columnSnapshots: Map[PaneId, Vector[ColumnSnapshotPlacement]]
   ): Map[BufferId, BufferRenderAnnotations] =
     val inputs = AnnotationInputs(
       snapshots,
+      columnSnapshots,
       state.persisted.layout.editorPanes,
       state.persisted.buffers,
       state.runtime.bufferIndexMemos,
@@ -114,12 +116,15 @@ object RendererPaneSetup:
       java.lang.Boolean.valueOf(state.runtime.resolvedCommentsVisible),
       state.persisted.config.markdownViewMode
     )
-    context.caches.frameState.annotationsFor(context.surface, inputs)(visibleAnnotations(state, context, snapshots))
+    context.caches.frameState.annotationsFor(context.surface, inputs)(
+      visibleAnnotations(state, context, snapshots, columnSnapshots)
+    )
 
   private def visibleAnnotations(
     state: AppState,
     context: RenderContext,
-    snapshots: Map[PaneId, TextLayoutSnapshot]
+    snapshots: Map[PaneId, TextLayoutSnapshot],
+    columnSnapshots: Map[PaneId, Vector[ColumnSnapshotPlacement]]
   ): Map[BufferId, BufferRenderAnnotations] =
     val visibleLinesByBuffer = state.persisted.layout.editorPanes.toList
       .flatMap {
@@ -127,7 +132,10 @@ object RendererPaneSetup:
           for
             bufferId <- pane.bufferId
             snapshot <- snapshots.get(paneId)
-          yield bufferId -> snapshot.visualLines.map(_.bufferLine).toSet
+            columnLines = columnSnapshots
+              .getOrElse(paneId, Vector.empty)
+              .flatMap(_.snapshot.visualLines.map(_.bufferLine))
+          yield bufferId -> (snapshot.visualLines.map(_.bufferLine) ++ columnLines).toSet
       }
       .groupMap(_._1)(_._2)
       .view
