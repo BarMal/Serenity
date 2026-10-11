@@ -16,18 +16,22 @@ object ListPickerSearch:
         picker.withChoices(containing(choices, picker.queryText), ListPicker.NoMatches)
       case source: PickerSource.BufferText =>
         searchedBufferText(picker, source, state)
-      case PickerSource.ProjectFiles(root, listing) =>
-        FileFinder.refreshed(picker, root, listing, state.persisted.recentFiles)
+      case source: PickerSource.ProjectFiles =>
+        FileFinder.refreshed(picker, source, state.persisted.recentFiles)
     }
 
   /** Whether `refreshed` is cheap enough for the reducer to run on the dispatcher: short fixed lists, a handful of
-    * files, or buffers too small to be worth scanning off it. Anything bigger is matched in the background.
+    * files (or of the files an earlier match narrowed them to), or buffers too small to be worth scanning off it.
+    * Anything bigger is matched in the background.
     */
   def isCheap(picker: ListPicker, state: AppState): Boolean =
     picker.source.forall {
-      case PickerSource.Fixed(_)                 => true
-      case PickerSource.BufferText(_, _)         => picker.queryText.isEmpty || openText(state) <= CheapTextLength
-      case PickerSource.ProjectFiles(_, listing) => listing.toOption.forall(_.files.size <= CheapFileCount)
+      case PickerSource.Fixed(_)         => true
+      case PickerSource.BufferText(_, _) => picker.queryText.isEmpty || openText(state) <= CheapTextLength
+      case PickerSource.ProjectFiles(_, listing, matched) =>
+        listing.toOption.forall(project =>
+          FileMatching.candidates(project.files, picker.queryText, matched).size <= CheapFileCount
+        )
     }
 
   val CheapFileCount: Int  = 500

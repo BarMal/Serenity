@@ -34,23 +34,24 @@ object FileFinder:
     picker.copy(source = Some(PickerSource.ProjectFiles(root, listing.fold(Loadable.Failed(_), Loadable.Ready(_)))))
 
   /** The finder's rows for its current query. With nothing typed, files recently opened come first, then the rest by
-    * path; otherwise the files matching the query, best first.
+    * path; otherwise the files matching the query, best first. A query that extends the one `source` last matched looks
+    * only at the files that matched it.
     */
-  def refreshed(
-    picker: ListPicker,
-    root: Path,
-    listing: Loadable[ProjectFileListing],
-    recentFiles: List[Path]
-  ): ListPicker =
-    listing match
+  def refreshed(picker: ListPicker, source: PickerSource.ProjectFiles, recentFiles: List[Path]): ListPicker =
+    source.listing match
       case Loadable.Ready(project) =>
         val titled = picker.copy(title = if project.truncated then truncatedTitle else Title)
-        if project.files.isEmpty then titled.copy(items = Loadable.Empty(s"No files under $root"))
+        if project.files.isEmpty then titled.copy(items = Loadable.Empty(s"No files under ${source.root}"))
         else
-          val shown =
-            if picker.queryText.isEmpty then recentFirst(project.files, root, recentFiles)
-            else ranked(project.files, picker.queryText)
-          titled.withChoices(shown.take(MaxShownChoices).map(choice(root, _)), ListPicker.NoMatches)
+          val (shown, matched) =
+            if picker.queryText.isEmpty then (recentFirst(project.files, source.root, recentFiles), None)
+            else
+              val (best, matches) =
+                FileMatching.ranked(project.files, picker.queryText, source.matched, MaxShownChoices)
+              (best, Some(matches))
+          titled
+            .withChoices(shown.take(MaxShownChoices).map(choice(source.root, _)), ListPicker.NoMatches)
+            .copy(source = Some(source.copy(matched = matched)))
       case Loadable.Loading(progress) => picker.copy(items = Loadable.Loading(progress))
       case Loadable.Empty(message)    => picker.copy(items = Loadable.Empty(message))
       case Loadable.Failed(reason)    => picker.copy(items = Loadable.Failed(reason))
@@ -62,12 +63,6 @@ object FileFinder:
     }
 
   private def truncatedTitle: String = s"$Title (first ${"%,d".formatLocal(Locale.ROOT, MaxListedFiles)} files)"
-
-  private def ranked(files: Vector[Path], query: String): Vector[Path] =
-    files
-      .flatMap(file => FuzzyMatch.score(query, slashed(file)).map(file -> _))
-      .sortBy((file, score) => (-score, file.toString))
-      .map(_._1)
 
   private def recentFirst(files: Vector[Path], root: Path, recentFiles: List[Path]): Vector[Path] =
     val base   = root.normalize()
@@ -89,4 +84,4 @@ object FileFinder:
       FileFinderCommands.openFile(root.resolve(file))
     )
 
-  private def slashed(path: Path): String = path.toString.replace(File.separatorChar, '/')
+  private[models] def slashed(path: Path): String = path.toString.replace(File.separatorChar, '/')
