@@ -42,7 +42,10 @@ sealed trait Rope(using balance: Balance):
     * copied every character of the document each time; leaves that are already the right size are now reused as they
     * are, and only fragments are touched.
     */
-  def rebuild: Rope = Rope.fromLeafValues(leafValues)
+  def rebuild: Rope =
+    val values = leafValues
+    RopeRebuilds.record(values.size)
+    Rope.fromLeafValues(values)
 
   /** The non-empty leaf strings, left to right. */
   private[rope] def leafValues: Vector[String] =
