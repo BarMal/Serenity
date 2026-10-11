@@ -10,5 +10,11 @@ import com.serenity.lsp.model.Diagnostic
 final case class DiagnosticsState(
     diagnostics: Map[DocumentUri, List[Diagnostic]] = Map.empty,
     spellCheckCache: Map[DocumentUri, SpellCheckCacheEntry] = Map.empty,
-    spellIgnores: SpellIgnores = SpellIgnores.empty
+    spellIgnores: SpellIgnores = SpellIgnores.empty,
+    lastMoves: Map[DocumentUri, DiagnosticsMove] = Map.empty
 )
+
+/** What the last edit did to one document's diagnostics, for whoever compares the lists before and after it: the rows
+  * it changed are known without walking either list.
+  */
+final case class DiagnosticsMove(before: List[Diagnostic], after: List[Diagnostic], lines: Set[Int])

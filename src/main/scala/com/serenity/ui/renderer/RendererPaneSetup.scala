@@ -141,7 +141,7 @@ object RendererPaneSetup:
       .flatMap { bufferId =>
         state.persisted.buffers.get(bufferId).map { buffer =>
           val visibleLines = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
-          val cached       = state.annotationIndex(bufferId).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
+          val cached       = state.annotationIndex(bufferId).getOrElse(AnnotationLineIndex.from(Nil, Nil))
           val commentsByLine =
             shownComments(cached.commentsByLine(visibleLines), state.runtime.resolvedCommentsVisible)
           val diagnosticsByLine = visibleAnnotationLines(visibleLines, cached.diagnosticsByLine)
