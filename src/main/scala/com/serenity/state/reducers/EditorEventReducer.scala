@@ -178,7 +178,7 @@ object EditorEventReducer:
     event match
       case InsertChar(_) | TabKey | ReverseTabKey | DeleteBackward | DeleteForward | DeleteWordBackward |
           DeleteWordForward | DeleteToLineStart | DeleteToLineEnd | NewLine | Enter | Paste | Cut | CutToDarlings |
-          RestoreDarling | PasteFromHistory(_) =>
+          RestoreDarling | PasteFromHistory(_) | ToggleLineComment | ToggleBlockComment =>
         true
       case _ =>
         false
@@ -270,6 +270,9 @@ object EditorEventReducer:
         case InsertChar(_) | TabKey | NewLine | Enter | ReverseTabKey | DeleteBackward | DeleteForward |
             DeleteWordBackward | DeleteWordForward | DeleteToLineStart | DeleteToLineEnd =>
           EditorTextEditReducer.reduce(event, ctx)
+
+        case ToggleLineComment | ToggleBlockComment =>
+          EditorCommentReducer.reduce(event, ctx)
 
         case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveSubWordLeft | MoveSubWordRight | MoveToStart |
             MoveToEnd | MoveToStartOfFile | PageUp | PageDown | ColumnLeft | ColumnRight | MoveToEndOfFile |

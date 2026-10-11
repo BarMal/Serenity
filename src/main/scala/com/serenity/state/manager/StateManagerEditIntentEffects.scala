@@ -43,6 +43,10 @@ final private[manager] class StateManagerEditIntentEffects(
         enqueueEvent(com.serenity.keystroke.events.Undo)
       case EditIntent.Redo =>
         enqueueEvent(com.serenity.keystroke.events.Redo)
+      case EditIntent.ToggleLineComment =>
+        enqueueEvent(com.serenity.keystroke.events.ToggleLineComment)
+      case EditIntent.ToggleBlockComment =>
+        enqueueEvent(com.serenity.keystroke.events.ToggleBlockComment)
       case EditIntent.FormatCurrentFile =>
         logger.debug("[CMD] Format command requested")
 

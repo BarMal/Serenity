@@ -371,15 +371,9 @@ object HotkeyConfig:
   def defaultCommandBindings: Map[String, List[HotkeyTrigger]] =
     defaultCommandBindingsFor(System.getProperty("os.name", ""))
 
-  /** Keys for registry commands that have no [[HotkeyAction]]: the prose formatting toggles (issue #1858). A terminal
-    * sends Ctrl+I as Tab, and `TerminalInputDecoder` keeps it Tab, so italic's key reaches only the GUI and terminals
-    * that report modified keys distinctly -- the Tab key itself is never taken.
-    */
+  /** Keys for registry commands that have no [[HotkeyAction]]; see [[CommandDefaultBindings]]. */
   def defaultCommandBindingsFor(osName: String): Map[String, List[HotkeyTrigger]] =
-    val primaryModifier = primaryModifierFor(osName)
-    Map("bold" -> 'b', "italic" -> 'i', "underline" -> 'u').view
-      .mapValues(key => List(HotkeyTrigger(InputKey.Character, Some(key), Set(primaryModifier))))
-      .toMap
+    CommandDefaultBindings.forPrimaryModifier(primaryModifierFor(osName))
 
   private def isMac(osName: String): Boolean = osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
 

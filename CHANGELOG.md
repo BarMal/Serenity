@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Added Toggle Line Comment (`Ctrl+/`, `Cmd+/` on macOS) and Toggle Block Comment (`Shift+Alt+A`) (#1997): they comment or uncomment the cursor's line, every line of a selection, or the selection itself with the comment tokens of the file's language, keeping indentation, leaving blank lines alone and keeping the selection, as one undo step. A language with no line comment (Markdown, HTML, CSS) wraps each line in its block comment instead. Both are registry commands, so `hotkey.command.toggle-line-comment` and `hotkey.command.toggle-block-comment` rebind them. In a terminal Ctrl+/ arrives as Ctrl+_, which is bound too.
+- Made the file type shown in Save As and used for formats agree with the language table the editor and language servers use (#1897): `.tsx`, `.kt`, `.rb`, `.sbt` and `.h` now classify the same everywhere, and `.mjs`, `.cxx` and `.markdown` are known to the language table.
+
 ## 1.0.0-rc.2 — 2026-10-11
 
 ### 2026-10-11

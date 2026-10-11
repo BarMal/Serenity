@@ -5,7 +5,12 @@ import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 
 object TextCharacterConverters:
 
+  private val AltShift = Set(Modifier.Alt, Modifier.Shift)
+
   val characterConverter: PartialFunction[KeyStrokeInfo, TextEntryEvent] = {
+    // The GUI reports a Shift+Alt letter chord by its lowercase key; typed, it is the capital the chord would produce.
+    case KeyStrokeInfo(InputKey.Character, Some(char), modifiers) if modifiers == AltShift && char.isLower =>
+      InsertChar(char.toUpper)
     case KeyStrokeInfo(InputKey.Character, Some(char), modifiers)
         if isAcceptableForTextEntry(modifiers) && isPrintableChar(char) =>
       InsertChar(char)

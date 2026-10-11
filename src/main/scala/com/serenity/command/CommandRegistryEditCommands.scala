@@ -94,6 +94,20 @@ private[command] object CommandRegistryEditCommands:
       label = "Redo"
     ),
     Command.typed(
+      "toggle-line-comment",
+      "Comment or uncomment the selected lines with the language's line comment.",
+      CommandIntent.Edit(EditIntent.ToggleLineComment),
+      CommandCategory.Edit,
+      label = "Toggle Line Comment"
+    ),
+    Command.typed(
+      "toggle-block-comment",
+      "Wrap or unwrap the selection in the language's block comment.",
+      CommandIntent.Edit(EditIntent.ToggleBlockComment),
+      CommandCategory.Edit,
+      label = "Toggle Block Comment"
+    ),
+    Command.typed(
       "bold",
       "Toggle bold formatting on the active selection.",
       CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(com.serenity.richtext.InlineMark.Bold)),
