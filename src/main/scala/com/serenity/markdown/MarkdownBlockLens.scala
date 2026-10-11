@@ -24,25 +24,41 @@ object MarkdownBlockLens:
       ranges: Vector[Range.Inclusive],
       tables: Vector[Range.Inclusive] = Vector.empty,
       setext: Vector[SetextHeading] = Vector.empty
-  ):
+  ) extends BlockIndex:
+
+    def tablesIn(lines: Range.Inclusive): Vector[Range.Inclusive] =
+      tables.filter(table => table.end >= lines.start && table.start <= lines.end)
 
     def rangeAt(line: Int): Option[Range.Inclusive] = containing(ranges, line)(identity)
 
     def tableAt(line: Int): Option[Range.Inclusive] = containing(tables, line)(identity)
 
-    def tableRowAt(line: Int): TableRow =
+    def setextHeadingAt(line: Int): Option[SetextHeading] = containing(setext, line)(_.lines)
+
+  /** What layout and painting ask of a document's block structure, line by line. Answers are the same whether the index
+    * was built over the whole document or, as [[LazyBlockIndex]] does, only as far as the lines asked about.
+    */
+  trait BlockIndex:
+    def rangeAt(line: Int): Option[Range.Inclusive]
+    def tableAt(line: Int): Option[Range.Inclusive]
+    def setextHeadingAt(line: Int): Option[SetextHeading]
+
+    /** The tables that overlap `lines`, in order. */
+    def tablesIn(lines: Range.Inclusive): Vector[Range.Inclusive]
+
+    final def tableRowAt(line: Int): TableRow =
       tableAt(line).fold(TableRow.None) { table =>
         if line == table.start then TableRow.Header
         else if line == table.start + 1 then TableRow.Delimiter
         else TableRow.Body
       }
 
-    def setextAt(line: Int): SetextRole =
-      containing(setext, line)(_.lines).fold(SetextRole.None) { heading =>
+    final def setextAt(line: Int): SetextRole =
+      setextHeadingAt(line).fold(SetextRole.None) { heading =>
         if line == heading.lines.end then SetextRole.Underline else SetextRole.Text(heading.level)
       }
 
-  private def containing[A](items: Vector[A], line: Int)(range: A => Range.Inclusive): Option[A] =
+  private[markdown] def containing[A](items: Vector[A], line: Int)(range: A => Range.Inclusive): Option[A] =
     @annotation.tailrec
     def search(low: Int, high: Int): Option[A] =
       if low > high then None
@@ -58,58 +74,12 @@ object MarkdownBlockLens:
   def fenceRangeIndex(lineCount: Int, lineAt: Int => Option[String]): FenceRangeIndex =
     fenceRangeIndex((0 until lineCount).iterator.map(index => lineAt(index).getOrElse("")))
 
-  final private case class IndexScan(
-      fences: Vector[Int],
-      tables: Vector[Range.Inclusive],
-      inFence: Boolean,
-      header: Option[Int],
-      tableStart: Option[Int],
-      lineCount: Int,
-      paragraphStart: Option[Int],
-      setext: Vector[SetextHeading]
-  ):
-
-    def closeTable(lastLine: Int): IndexScan =
-      tableStart.fold(this)(start => copy(tables = tables :+ (start to lastLine), tableStart = None))
-
-    def next(line: String): IndexScan =
-      val index = lineCount
-      val seen  = copy(lineCount = lineCount + 1)
-      if isFenceLine(line) then
-        seen
-          .closeTable(index - 1)
-          .copy(fences = fences :+ index, inFence = !inFence, header = None, paragraphStart = None)
-      else if inFence then seen
-      else if tableStart.isDefined && MarkdownInlineTablePreview.isTableRow(line) then seen
-      else seen.closeTable(index - 1).candidate(line, index).paragraphs(line, index)
-
-    private def paragraphs(line: String, index: Int): IndexScan =
-      paragraphStart match
-        case _ if tableStart.isDefined => copy(paragraphStart = None)
-        case Some(start) if isSetextUnderline(line) =>
-          val level = if line.trim.startsWith("=") then 1 else 2
-          copy(setext = setext :+ SetextHeading(start to index, level), paragraphStart = None)
-        case _ if isParagraphLine(line) => copy(paragraphStart = paragraphStart.orElse(Some(index)))
-        case _                          => copy(paragraphStart = None)
-
-    private def candidate(line: String, index: Int): IndexScan =
-      if line.indexOf('|') < 0 then copy(header = None)
-      else if header.isDefined && MarkdownInlineTablePreview.isTableSeparator(line) then
-        copy(tableStart = header, header = None)
-      else copy(header = Option.when(MarkdownInlineTablePreview.isTableRow(line))(index))
-
   /** The fenced blocks of a document given its lines in order, each paired fence line to the next, its tables (a header
     * row, a delimiter row and the rows after them) and its setext headings, outside any fence.
     */
   def fenceRangeIndex(lines: Iterator[String]): FenceRangeIndex =
-    val scan =
-      lines.foldLeft(IndexScan(Vector.empty, Vector.empty, false, None, None, 0, None, Vector.empty))(_.next(_))
-    val done = scan.closeTable(scan.lineCount - 1)
-    FenceRangeIndex(
-      done.fences.grouped(2).collect { case Vector(open, close) => open to close }.toVector,
-      done.tables,
-      done.setext
-    )
+    val done = lines.foldLeft(BlockScan.empty)(_.next(_)).finished
+    FenceRangeIndex(done.closedFences, done.tables, done.setext)
 
   final private case class LineSource(lineCount: Int, lineAt: Int => Option[String], fenceProbeWindow: Option[Int]):
     def at(index: Int): String =
@@ -347,7 +317,7 @@ object MarkdownBlockLens:
   private def isBlockQuoteSeparator(line: String): Boolean =
     line.trim.drop(1).trim.isEmpty
 
-  private def isFenceLine(line: String): Boolean =
+  private[markdown] def isFenceLine(line: String): Boolean =
     val trimmed = line.trim
     trimmed.startsWith("```") || trimmed.startsWith("~~~")
 

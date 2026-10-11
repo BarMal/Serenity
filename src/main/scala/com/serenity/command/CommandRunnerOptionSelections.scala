@@ -104,9 +104,8 @@ object CommandRunnerOptionSelections:
     mode match
       case MarkdownViewMode.Source       => 0
       case MarkdownViewMode.SplitPreview => 1
-      case MarkdownViewMode.InlineLens   => 2
-      case MarkdownViewMode.LivePreview  => 3
-      case MarkdownViewMode.Read         => 4
+      case MarkdownViewMode.LivePreview  => 2
+      case MarkdownViewMode.Read         => 3
 
   private def autoSaveModeIndex(mode: AutoSaveMode): Int =
     mode match

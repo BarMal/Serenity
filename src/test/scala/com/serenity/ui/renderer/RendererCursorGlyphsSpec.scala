@@ -13,8 +13,8 @@ import org.scalatest.matchers.should.Matchers
   * [[RendererCursorGlyphs.caretWithin]], [[RendererCursorGlyphs.measuredRunWidthWithin]], and
   * [[RendererCursorGlyphs.cursorColorFor]]. `renderCursors` itself is exercised end-to-end by
   * `CursorPixelAlignmentSpec` and friends; these three are the pane-clipping and colour rules every one of those paint
-  * paths (and `RendererMarkdownLens`'s own caret, and `RendererHighlights`'s selection clipping) ultimately shares, so
-  * pinning them directly catches a regression no single integration spec would attribute correctly.
+  * paths (and `RendererHighlights`'s selection clipping) ultimately shares, so pinning them directly catches a
+  * regression no single integration spec would attribute correctly.
   */
 class RendererCursorGlyphsSpec extends AnyFlatSpec with Matchers:
 

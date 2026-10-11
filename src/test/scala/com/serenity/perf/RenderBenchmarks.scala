@@ -167,36 +167,14 @@ private[perf] object RenderBenchmarks:
           .withLineNumbers(false)
           .withoutStatusLine
           .withWordWrap(false)
-          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+          .withMarkdownViewMode(MarkdownViewMode.LivePreview)
       )
     )
-    val markdownPreviewWindow =
-      MarkdownDocumentPreview.previewWindow(
-        markdownLines,
-        activeLine = Some(1_200),
-        fallbackTopLine = 1_000,
-        cache = markdownPreviewCache,
-        maxSourceLines = 80
-      )
     val markdownHtmlFragment =
       MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
-    val markdownLensFrame = renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
+    val markdownLiveFrame = renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
 
     List(
-      BenchmarkRunner.Benchmark(
-        "markdown.preview.window_mapping",
-        3,
-        20,
-        () => assert(markdownPreviewWindow.firstSourceLine >= 0 && markdownPreviewWindow.source.nonEmpty),
-        () =>
-          MarkdownDocumentPreview.previewWindow(
-            markdownLines,
-            activeLine = Some(1_200),
-            fallbackTopLine = 1_000,
-            cache = markdownPreviewCache,
-            maxSourceLines = 80
-          )
-      ),
       BenchmarkRunner.Benchmark(
         "markdown.preview.html_fragment",
         2,
@@ -205,10 +183,10 @@ private[perf] object RenderBenchmarks:
         () => MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
       ),
       BenchmarkRunner.Benchmark(
-        "render.markdown.inline_lens",
+        "render.markdown.live_preview",
         2,
         BenchmarkIterationCounts.RenderMarkdown,
-        () => assert(renderedFrameHasPixels(markdownLensFrame)),
+        () => assert(renderedFrameHasPixels(markdownLiveFrame)),
         () => renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
       )
     )

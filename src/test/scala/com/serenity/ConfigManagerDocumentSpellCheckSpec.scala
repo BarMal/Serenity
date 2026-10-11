@@ -60,14 +60,28 @@ class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with
     val configFile = TestTemp.file("serenity-markdown-view-mode", ".conf")
     Files.writeString(
       configFile,
+      """editor.markdown_view = read
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.markdownViewMode shouldBe MarkdownViewMode.Read
+    ConfigManager.configToString(config) should include("editor.markdown_view = read")
+  }
+
+  it should "load a retired inline-lens markdown view as live preview and write it back as live-preview" in {
+    val configFile = TestTemp.file("serenity-markdown-view-retired", ".conf")
+    Files.writeString(
+      configFile,
       """editor.markdown_view = inline-lens
         |""".stripMargin
     )
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
-    config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
-    ConfigManager.configToString(config) should include("editor.markdown_view = inline-lens")
+    config.markdownViewMode shouldBe MarkdownViewMode.LivePreview
+    ConfigManager.configToString(config) should include("editor.markdown_view = live-preview")
   }
 
   it should "load and write spell-check configuration" in {

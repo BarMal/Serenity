@@ -83,11 +83,11 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
 
   it should "store markdown and default document settings inside the document sub-config" in {
     val config = AppConfig.default
-      .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      .withMarkdownViewMode(MarkdownViewMode.LivePreview)
       .withDefaultDocumentMode(DefaultDocumentMode.RichText)
 
     config.documentConfig shouldBe DocumentConfig(
-      markdownViewMode = MarkdownViewMode.InlineLens,
+      markdownViewMode = MarkdownViewMode.LivePreview,
       defaultMode = DefaultDocumentMode.RichText
     )
   }
@@ -95,7 +95,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
   it should "include a command runner settings option for markdown view mode" in {
     val runner = CommandRunner.empty.activate(
       com.serenity.command.CommandRegistry.withToggleUI,
-      AppConfig.default.withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      AppConfig.default.withMarkdownViewMode(MarkdownViewMode.LivePreview)
     )
 
     def descendants(group: CommandSurfaceItem.GroupItem): List[CommandSurfaceItem] =
@@ -108,9 +108,9 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       .flatMap(group => group :: descendants(group))
       .collectFirst { case item: CommandSurfaceItem.OptionItem if item.id == "markdown-view" => item }
 
-    markdownItem.map(_.selectedOption) shouldBe Some("Inline Lens")
+    markdownItem.map(_.selectedOption) shouldBe Some("Live Preview")
     markdownItem.map(_.options.map(_.label)) shouldBe Some(
-      List("Source", "Split Preview", "Inline Lens", "Live Preview", "Read")
+      List("Source", "Split Preview", "Live Preview", "Read")
     )
   }
 
@@ -283,7 +283,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     shownInPanel(bursting).mkString(" ") should not include "settled"
   }
 
-  "Markdown inline lens mode" should "leave markdown source untouched in source mode" in {
+  "Markdown source mode" should "leave markdown source untouched" in {
     val surface = new MockRenderSurface(100, 20)
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
 
@@ -302,107 +302,6 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val rows = surfaceRows(surface)
     rows.exists(_.contains("# Rendered")) shouldBe true
     rows.exists(_.contains("# Raw")) shouldBe true
-  }
-
-  it should "render markdown preview as an image and overlay the active block as raw source" in {
-    val surface = new MockRenderSurface(100, 20)
-    val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-
-    RendererEntryPoints.render(
-      markdownEditorState(MarkdownViewMode.InlineLens),
-      cursorVisible = true,
-      surface,
-      ViewportSize(100, 20),
-      codeFont = FontSpec.fromAwt(font),
-      textFont = FontSpec.fromAwt(font),
-      cellMetrics = CellMetrics.fromFont(font),
-      cursorColor = None,
-      com.serenity.state.manager.RenderCaches.create()
-    )
-
-    val rows = surfaceRows(surface)
-    surface.drawImageCalls should have size 1
-    rows.exists(_.contains("# Rendered")) shouldBe false
-    rows.exists(_.contains("# Raw")) shouldBe true
-    rows.exists(_.contains("continued")) shouldBe false
-  }
-
-  it should "render inline lens preview images at device scale on HiDPI surfaces" in {
-    val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
-    val surface = new HiDpiMockRenderSurface(100, 20, scaleX = 2.0, scaleY = 2.0)
-
-    RendererEntryPoints.render(
-      markdownEditorState(MarkdownViewMode.InlineLens),
-      cursorVisible = true,
-      surface,
-      ViewportSize(100, 20),
-      codeFont = FontSpec.fromAwt(font),
-      textFont = FontSpec.fromAwt(font),
-      cellMetrics = metrics,
-      cursorColor = None,
-      com.serenity.state.manager.RenderCaches.create()
-    )
-
-    surface.drawImageCalls should have size 1
-    val drawn = surface.drawImageCalls.head
-    drawn.image.getWidth shouldBe drawn.width * metrics.charWidth * 2
-    drawn.image.getHeight shouldBe drawn.height * metrics.lineHeight * 2
-  }
-
-  it should "render inactive markdown tables through the markdown preview image in inline lens mode" in {
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
-    val state = AppState.empty.copy(
-      persisted = AppState.empty.persisted.copy(
-        buffers = Map(
-          bufferId -> {
-            val base = Buffer.fromString(
-              bufferId,
-              """|| Task | Owner |
-                || ---- | ----- |
-                || Ship | Codex |
-                |
-                |Editing here""".stripMargin
-            )
-            base.copy(
-              document = base.document.copy(language = Some(LanguageId.Markdown)),
-              editing = EditingState(List(CursorPosition(4, 0))),
-              viewport = Viewport.default.copy(visibleLines = 10)
-            )
-          }
-        ),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
-        ),
-        focus = Focus.EditorPane(paneId),
-        config = AppConfig.default
-          .withSyntaxHighlighting(true)
-          .withLineNumbers(false)
-          .withoutStatusLine
-          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
-      )
-    )
-    val surface = new MockRenderSurface(100, 20)
-    val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-
-    RendererEntryPoints.render(
-      state,
-      cursorVisible = true,
-      surface,
-      ViewportSize(100, 20),
-      codeFont = FontSpec.fromAwt(font),
-      textFont = FontSpec.fromAwt(font),
-      cellMetrics = CellMetrics.fromFont(font),
-      cursorColor = None,
-      com.serenity.state.manager.RenderCaches.create()
-    )
-
-    surface.drawImageCalls should have size 1
-    surfaceRows(surface).exists(_.contains("| ---- | ----- |")) shouldBe false
   }
 
   private def surfaceRows(surface: MockRenderSurface): List[String] =

@@ -55,7 +55,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     val driver = UiScenarioDriver.create("isolated-config", isolatedConfig = true).unsafeRunSync()
     val config = driver.state.unsafeRunSync().persisted.config
 
-    config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
+    config.markdownViewMode shouldBe MarkdownViewMode.LivePreview
     config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(0)
   }
 

@@ -64,14 +64,14 @@ object RichTextContext:
     if mode == MarkerMode.Off || buffer.richText.richTextDocument.isDefined then MarkdownInlineView.Off
     else
       val content = buffer.document.content
-      val fences  = wrapCache.fenceIndex(buffer.id, content)
-      val mono    = FontLoader.isMonospacedFont(font)
+      val fences = wrapCache.fenceIndex(
+        buffer.id,
+        content,
+        Some(ContentRevision(buffer.document.contentVersion, buffer.document.changesSince))
+      )
+      val mono = FontLoader.isMonospacedFont(font)
       val columns =
-        if fences.tables.isEmpty then Map.empty
-        else
-          wrapCache.tableColumns(buffer.id, content, font, frc)(
-            MarkdownTableMetrics.columnsFor(content, fences.tables, font, frc, mono)
-          )
+        wrapCache.tableColumns(buffer.id, content, font, frc)(MarkdownTableMetrics.columnsFor(content, font, frc, mono))
       MarkdownInlineView(
         mode,
         if mode == MarkerMode.Live then revealedLines(buffer) else Vector.empty,

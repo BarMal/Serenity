@@ -2,10 +2,11 @@ package com.serenity.ui.layout
 
 import java.awt.Font
 import java.awt.font.FontRenderContext
+import java.util.concurrent.ConcurrentHashMap
 
 import com.serenity.markdown.MarkdownBlockLens.TableRow
 import com.serenity.markdown.MarkdownTableColumns.Columns
-import com.serenity.markdown.{MarkdownBlockSpans, MarkdownTableColumns}
+import com.serenity.markdown.{MarkdownBlockSpans, MarkdownTableColumns, TableColumns}
 import com.serenity.rope.Rope
 import com.serenity.ui.layout.TextCaretMeasurement.{
   LineFontResolver,
@@ -19,18 +20,20 @@ import com.serenity.ui.layout.TextCaretMeasurement.{
   */
 private[layout] object MarkdownTableMetrics:
 
-  /** The columns of every table in `tables` (line ranges of `content`), keyed by the table's first line. */
-  def columnsFor(
+  /** The columns of the tables of `content`, each measured when first asked for and then kept. */
+  def columnsFor(content: Rope, font: Font, frc: FontRenderContext, baseIsMonospaced: Boolean): TableColumns =
+    val measured = new ConcurrentHashMap[Int, Columns]
+    table =>
+      Some(measured.computeIfAbsent(table.start, _ => columnsOfTable(content, table, font, frc, baseIsMonospaced)))
+
+  private def columnsOfTable(
     content: Rope,
-    tables: Vector[Range.Inclusive],
+    table: Range.Inclusive,
     font: Font,
     frc: FontRenderContext,
     baseIsMonospaced: Boolean
-  ): Map[Int, Columns] =
-    tables.map { table =>
-      val rows = table.map(line => content.getLine(line).getOrElse("")).toVector
-      table.start -> columnsOf(rows, font, frc, baseIsMonospaced)
-    }.toMap
+  ): Columns =
+    columnsOf(table.map(line => content.getLine(line).getOrElse("")).toVector, font, frc, baseIsMonospaced)
 
   private def columnsOf(rows: Vector[String], font: Font, frc: FontRenderContext, mono: Boolean): Columns =
     val measured = rows.zipWithIndex.collect {

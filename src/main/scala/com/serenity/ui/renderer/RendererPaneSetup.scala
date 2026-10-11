@@ -148,7 +148,7 @@ object RendererPaneSetup:
           val semanticTokensAvailability =
             state.semanticTokensAvailability(bufferId).getOrElse(SemanticTokensAvailability.Pending)
           val ghostsByLine =
-            if state.runtime.chapterGhostsVisible && !RendererMarkdownLens.isInlineMarkdownLens(buffer, state) then
+            if state.runtime.chapterGhostsVisible then
               context.caches.chapterGhosts.ghostsFor(buffer, state.persisted.buffers)
             else Map.empty[Int, String]
           bufferId -> BufferRenderAnnotations(
@@ -337,7 +337,7 @@ object RendererPaneSetup:
           bufferId   <- pane.bufferId
           buffer     <- state.persisted.buffers.get(bufferId)
           snapshot   <- renderPlan.snapshots.get(paneId)
-          if buffer.document.content.weight > 0 && !RendererMarkdownLens.isInlineMarkdownLens(buffer, state)
+          if buffer.document.content.weight > 0
         yield paneId -> paneFrameRecord(bufferId, paneLayout.contentRect, context, snapshot)
     }.toMap
 

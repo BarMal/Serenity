@@ -463,12 +463,7 @@ final private[manager] class StateManagerEventPipeline(
     state.runtime.uiSurfaces.exists {
       case UiSurface(_, SurfaceContent.MarkdownPreview(id, _), _, _) => id == bufferId
       case _                                                         => false
-    } || (
-      state.persisted.config.markdownViewMode == com.serenity.config.MarkdownViewMode.InlineLens &&
-        state.persisted.buffers
-          .get(bufferId)
-          .exists(_.document.language.contains(com.serenity.lsp.config.LanguageId.Markdown))
-    )
+    }
 
   private[manager] def scheduleDocumentAnalysis(): cats.effect.IO[Unit] =
     operations.scheduleDocumentAnalysis()

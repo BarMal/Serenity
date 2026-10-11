@@ -4,21 +4,10 @@ import java.awt.{Color, Font}
 import java.io.StringWriter
 
 import com.serenity.TestWorkspaceTrees
-import com.serenity.config.{AppConfig, MarkdownViewMode, StatusLineColors, StatusLinePlacement}
-import com.serenity.lsp.config.LanguageId
+import com.serenity.config.{AppConfig, StatusLineColors, StatusLinePlacement}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
-import com.serenity.state.models.{
-  AppState,
-  Buffer,
-  BufferId,
-  CursorPosition,
-  EditingState,
-  EditorPane,
-  Focus,
-  PaneId,
-  Viewport
-}
+import com.serenity.state.models.{AppState, Buffer, BufferId, EditorPane, Focus, PaneId}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{
   CellMetrics,
@@ -192,25 +181,4 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
           )
         }
     }
-
-  "the raw-source markdown lens in the TUI under a transparent theme" should "paint the opaque panel colour" in {
-    val config = AppConfig.default.withLineNumbers(false).withMarkdownViewMode(MarkdownViewMode.InlineLens)
-    val state = editorState(
-      transparent,
-      config,
-      text = "# Lens\n\n# Raw\ncontinued",
-      configureBuffer = buffer =>
-        buffer.copy(
-          document = buffer.document.copy(language = Some(LanguageId.Markdown)),
-          editing = EditingState(List(CursorPosition(2, 0))),
-          viewport = Viewport.default.copy(visibleLines = 10)
-        )
-    )
-    val screen = render(state)
-
-    val (rawCol, rawRow) = screen.find("# Raw").getOrElse(fail(s"no raw lens:\n${screen.render}"))
-    (rawCol until viewport.width - 1).foreach { col =>
-      withClue(s"cell ($col, $rawRow):\n${screen.render}\n")(isPanel(screen.cellAt(col, rawRow).bg) shouldBe true)
-    }
-  }
 end TerminalEditorChromeBackdropSpec

@@ -7,11 +7,10 @@ import java.util.{ArrayDeque, HashMap, LinkedHashMap}
 
 import scala.jdk.CollectionConverters.*
 
-import com.serenity.markdown.MarkdownBlockLens
-import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
-import com.serenity.markdown.MarkdownTableColumns.Columns
+import com.serenity.markdown.MarkdownBlockLens.BlockIndex
+import com.serenity.markdown.{LazyBlockIndex, TableColumns}
 import com.serenity.richtext.ParagraphRole
-import com.serenity.rope.Rope
+import com.serenity.rope.{Balance, Rope, RopeDiff}
 import com.serenity.state.models.{BufferId, TextVisualLine}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 
@@ -41,17 +40,19 @@ sealed abstract class WrappedLineCache:
     revision: Option[ContentRevision] = None
   ): VisualRowCounts
 
-  /** The fenced code blocks of `content`, which a live Markdown preview leaves unstyled. Finding them reads the whole
-    * document, so a cache keeps the answer for as long as the buffer's content is the same rope.
+  /** The fenced code blocks, tables and setext headings of `content`, which a live Markdown preview restyles or leaves
+    * unstyled. It reads the document only as far as it is asked about, and a cache keeps it for as long as the buffer's
+    * content is the same rope; for an edited rope it resumes from the line the edit reached, found from `revision`'s
+    * recorded change when there is one.
     */
-  def fenceIndex(bufferId: BufferId, content: Rope): FenceRangeIndex
+  def fenceIndex(bufferId: BufferId, content: Rope, revision: Option[ContentRevision] = None): BlockIndex
 
   /** The column geometry of `content`'s pipe tables at `font`, which `compute` measures; a cache keeps it for as long
     * as the content is the same rope and the font the same.
     */
   def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
-    compute: => Map[Int, Columns]
-  ): Map[Int, Columns]
+    compute: => TableColumns
+  ): TableColumns
 
 /** Everything a line's wrap and caret measurement depends on except its buffer line number, which only labels the rows
   * -- so a line keeps its entry when lines are inserted or deleted above it. `resolver` carries the base font and the
@@ -103,9 +104,6 @@ object WrappedLineCache:
   /** How many buffers' fenced-block indexes are kept. */
   val MaxFenceIndexes = 16
 
-  private def fencesOf(content: Rope): FenceRangeIndex =
-    MarkdownBlockLens.fenceRangeIndex(content.linesIteratorFrom(0).map(_._2))
-
   /** How many recent wraps per [[WrapShape]] a line may resume from. */
   val MaxRecentPerShape = 8
 
@@ -133,11 +131,12 @@ object WrappedLineCache:
     ): VisualRowCounts =
       VisualRowCounts.walking(content.lineCount, measure)
 
-    def fenceIndex(bufferId: BufferId, content: Rope): FenceRangeIndex = fencesOf(content)
+    def fenceIndex(bufferId: BufferId, content: Rope, revision: Option[ContentRevision]): BlockIndex =
+      LazyBlockIndex.of(content)
 
     def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
-      compute: => Map[Int, Columns]
-    ): Map[Int, Columns] = compute
+      compute: => TableColumns
+    ): TableColumns = compute
 
   def bounded(maxLines: Int = DefaultMaxLines, maxChars: Long = DefaultMaxChars): Bounded =
     new Bounded(math.max(1, maxLines), math.max(1L, maxChars))
@@ -146,8 +145,28 @@ object WrappedLineCache:
       content: Rope,
       font: Font,
       frc: FontRenderContext,
-      columns: Map[Int, Columns]
+      columns: TableColumns
   )
+
+  final private case class FenceEntry(content: Rope, version: Option[Long], index: LazyBlockIndex)
+
+  /** The first line at which `content` differs from the text `previous` indexed: by the change `revision` recorded when
+    * it reaches back that far, by comparing the two ropes otherwise.
+    */
+  private def firstChangedLine(previous: FenceEntry, content: Rope, revision: Option[ContentRevision]): Int =
+    val recorded = for
+      current <- revision
+      since   <- previous.version
+      change  <- current.changesSince(since)
+      if change.oldLength == previous.content.weight && change.newLength == content.weight
+      span <- change.lineSpans(previous.content).headOption
+    yield span.newFirst
+    recorded.getOrElse {
+      given Balance = Balance.default
+      RopeDiff
+        .changedOffsetRange(previous.content, content)
+        .fold(content.lineCount)((from, _) => content.offsetToLineColumn(from)._1)
+    }
 
   /** `complete` is false when the wrap stopped at a row limit, so the entry only answers requests for that many rows.
     */
@@ -177,12 +196,12 @@ object WrappedLineCache:
     private val rowCount         = new AtomicLong(0L)
     private val measuredCount    = new AtomicLong(0L)
     private val visualRows       = new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries)
-    private val fences           = new LinkedHashMap[BufferId, (Rope, FenceRangeIndex)](16, 0.75f, true)
+    private val fences           = new LinkedHashMap[BufferId, FenceEntry](16, 0.75f, true)
     private val columns          = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
 
     def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
-      compute: => Map[Int, Columns]
-    ): Map[Int, Columns] =
+      compute: => TableColumns
+    ): TableColumns =
       cachedColumns(bufferId, content, font, frc).getOrElse {
         val found = compute
         synchronized {
@@ -201,19 +220,19 @@ object WrappedLineCache:
       }
     }
 
-    def fenceIndex(bufferId: BufferId, content: Rope): FenceRangeIndex =
-      cachedFences(bufferId, content).getOrElse {
-        val found = fencesOf(content)
-        synchronized {
-          val _ = fences.put(bufferId, (content, found))
-          trimFences()
-        }
-        found
-      }
-
-    private def cachedFences(bufferId: BufferId, content: Rope): Option[FenceRangeIndex] = synchronized {
-      Option(fences.get(bufferId)).flatMap { case (rope, index) => Option.when(sameRope(rope, content))(index) }
-    }
+    def fenceIndex(bufferId: BufferId, content: Rope, revision: Option[ContentRevision]): BlockIndex =
+      val known = synchronized(Option(fences.get(bufferId)))
+      known match
+        case Some(entry) if sameRope(entry.content, content) => entry.index
+        case _ =>
+          val index = known.fold(LazyBlockIndex.of(content))(entry =>
+            entry.index.after(content, firstChangedLine(entry, content, revision))
+          )
+          synchronized {
+            val _ = fences.put(bufferId, FenceEntry(content, revision.map(_.version), index))
+            trimFences()
+          }
+          index
 
     private def sameRope(a: Rope, b: Rope): Boolean = (a: AnyRef) eq (b: AnyRef)
 

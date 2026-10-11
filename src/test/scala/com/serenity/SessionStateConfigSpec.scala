@@ -54,7 +54,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
             preferredSize = Some(PreferredWindowSize(1400, 900))
           ),
           documentConfig = DocumentConfig(
-            markdownViewMode = MarkdownViewMode.InlineLens,
+            markdownViewMode = MarkdownViewMode.LivePreview,
             defaultMode = DefaultDocumentMode.Markdown
           ),
           interfaceConfig = InterfaceConfig(
@@ -105,7 +105,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
       preferredSize = Some(PreferredWindowSize(1400, 900))
     )
     decoded.config.documentConfig shouldBe DocumentConfig(
-      markdownViewMode = MarkdownViewMode.InlineLens,
+      markdownViewMode = MarkdownViewMode.LivePreview,
       defaultMode = DefaultDocumentMode.Markdown
     )
     decoded.config.interfaceConfig shouldBe InterfaceConfig(
