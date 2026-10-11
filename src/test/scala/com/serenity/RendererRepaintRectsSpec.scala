@@ -86,6 +86,25 @@ class RendererRepaintRectsSpec extends AnyFlatSpec with Matchers:
       )
     }
 
+  /** `state` with a second open buffer, which is what makes the tab strip appear. */
+  private def withSecondTab(state: AppState): AppState =
+    val other = Buffer.fromString(BufferId(2), "other")
+    state.copy(persisted =
+      state.persisted.copy(
+        buffers = state.persisted.buffers.updated(other.id, other),
+        bufferOrder = state.persisted.bufferOrder :+ other.id
+      )
+    )
+
+  private def saved(state: AppState): AppState =
+    withBuffer(state)(buffer => buffer.copy(document = buffer.document.copy(isDirty = false)))
+
+  private def tabBarOf(plan: EditorPaneRenderPlan): PixelRect =
+    plan.layoutContract.tabBarRect.map(pixelRectOf).getOrElse(fail("expected a tab strip"))
+
+  private def headerOf(plan: EditorPaneRenderPlan): PixelRect =
+    plan.layoutContract.paneHeaderRect(paneId).map(pixelRectOf).getOrElse(fail("expected a pane header"))
+
   private def render(
     state: AppState,
     image: BufferedImage,
@@ -253,6 +272,95 @@ class RendererRepaintRectsSpec extends AnyFlatSpec with Matchers:
       )
     )
     val after = firstKeystroke(before, line = 10)
+
+    screen.settle(before)
+    val _ = screen.present(after, DamageProducer.forTransition(before, after))
+
+    withClue("pixels left stale on screen: ")(stalePixels(screen.shown, cold(after)) shouldBe 0)
+  }
+
+  it should "repaint the edited row, header and tab strip, not the canvas, on the first keystroke with tabs" in {
+    val screen = PresentedScreen()
+    val before = withSecondTab(stateWith(CursorPosition(10, 0), StatusLinePlacement.Off))
+    val after  = firstKeystroke(before, line = 10)
+
+    screen.settle(before)
+    val (region, plan) = screen.present(after, DamageProducer.forTransition(before, after))
+
+    val rects  = region.getOrElse(fail("expected a bounded repaint"))
+    val header = headerOf(plan)
+    val tabBar = tabBarOf(plan)
+    withClue(s"rects $rects miss the header $header: ")(covers(rects, header) shouldBe true)
+    withClue(s"rects $rects miss the tab strip $tabBar: ")(covers(rects, tabBar) shouldBe true)
+    withClue(s"rects $rects: ")(
+      areaPx(rects) should be <= 3L * metrics.lineHeight * widthPx + areaPx(List(header, tabBar))
+    )
+    withClue("pixels left stale on screen: ")(stalePixels(screen.shown, cold(after)) shouldBe 0)
+  }
+
+  it should "repaint only the pane header and the tab strip when a save clears the dirty marker" in {
+    val screen = PresentedScreen()
+    val before = firstKeystroke(withSecondTab(stateWith(CursorPosition(10, 0), StatusLinePlacement.Off)), line = 10)
+    val after  = saved(before)
+
+    screen.settle(before)
+    val (region, plan) = screen.present(after, DamageProducer.forTransition(before, after))
+
+    val rects  = region.getOrElse(fail("expected a bounded repaint"))
+    val header = headerOf(plan)
+    val tabBar = tabBarOf(plan)
+    withClue(s"rects $rects miss the header $header: ")(covers(rects, header) shouldBe true)
+    withClue(s"rects $rects miss the tab strip $tabBar: ")(covers(rects, tabBar) shouldBe true)
+    withClue(s"rects $rects: ")(areaPx(rects) should be <= areaPx(List(header, tabBar)))
+    withClue("pixels left stale on screen: ")(stalePixels(screen.shown, cold(after)) shouldBe 0)
+  }
+
+  it should "leave no stale pixels when a tab is opened" in {
+    val screen = PresentedScreen()
+    val before = withSecondTab(stateWith(CursorPosition(10, 0), StatusLinePlacement.Off))
+    val third  = Buffer.fromString(BufferId(3), "third tab with a longer title")
+    val after = before.copy(persisted =
+      before.persisted.copy(
+        buffers = before.persisted.buffers.updated(third.id, third),
+        bufferOrder = before.persisted.bufferOrder :+ third.id
+      )
+    )
+
+    screen.settle(before)
+    val _ = screen.present(after, DamageProducer.forTransition(before, after))
+
+    withClue("pixels left stale on screen: ")(stalePixels(screen.shown, cold(after)) shouldBe 0)
+  }
+
+  it should "leave no stale pixels when a tab is closed" in {
+    val screen = PresentedScreen()
+    val third  = Buffer.fromString(BufferId(3), "third")
+    val two    = withSecondTab(stateWith(CursorPosition(10, 0), StatusLinePlacement.Off))
+    val before = two.copy(persisted =
+      two.persisted.copy(
+        buffers = two.persisted.buffers.updated(third.id, third),
+        bufferOrder = two.persisted.bufferOrder :+ third.id
+      )
+    )
+    val after = before.copy(persisted =
+      before.persisted.copy(
+        buffers = before.persisted.buffers.view.filterKeys(_ != third.id).toMap,
+        bufferOrder = before.persisted.bufferOrder.filterNot(_ == third.id)
+      )
+    )
+
+    screen.settle(before)
+    val _ = screen.present(after, DamageProducer.forTransition(before, after))
+
+    withClue("pixels left stale on screen: ")(stalePixels(screen.shown, cold(after)) shouldBe 0)
+  }
+
+  it should "leave no stale pixels when a tab is renamed" in {
+    val screen = PresentedScreen()
+    val before = withSecondTab(stateWith(CursorPosition(10, 0), StatusLinePlacement.Off))
+    val after = withBuffer(before)(buffer =>
+      buffer.copy(document = buffer.document.copy(filePath = Some(java.nio.file.Paths.get("renamed-chapter.md"))))
+    )
 
     screen.settle(before)
     val _ = screen.present(after, DamageProducer.forTransition(before, after))
