@@ -14,6 +14,7 @@ import com.serenity.richtext.{ParagraphAlignment, ParagraphRole, RichTextDocumen
 import com.serenity.state.models.{
   Buffer,
   CursorPosition,
+  IndentationSettings,
   NavigationGeometry,
   RowAffinity,
   TextCaretStop,
@@ -108,22 +109,23 @@ object TextLayoutSnapshot:
     font: Font,
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     cellMetricsOverride: Option[CellMetrics] = None,
-    forceCellLayout: Boolean = false
+    forceCellLayout: Boolean = false,
+    tabSize: Int = IndentationSettings.DefaultTabSize
   ): Int =
     if lineText.isEmpty || visibleWidthPx <= 0 then 0
     else
       val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
       val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
       val safeColumn     = cursorColumn.max(0).min(lineText.length)
-      // A display-width-aware grid takes the caret-stop path too: on it a column is not a cell count, so the uniform
-      // `column - visibleColumns + 1` arithmetic below would scroll to the wrong place through any wide glyph.
-      if !measuredLayout && !cellMetrics.displayWidthAware then
-        val charWidth      = math.max(1, cellMetrics.charWidth)
-        val visibleColumns = math.max(1, visibleWidthPx / charWidth)
+      // A display-width-aware grid, or a line with a tab, takes the caret-stop path too: there a column is not a cell
+      // count, so the uniform `column - visibleColumns + 1` arithmetic below would scroll wrong through a wide glyph.
+      if !measuredLayout && !cellMetrics.displayWidthAware && lineText.indexOf('\t') < 0 then
+        val visibleColumns = math.max(1, visibleWidthPx / math.max(1, cellMetrics.charWidth))
         math.max(0, safeColumn - visibleColumns + 1)
       else
-        val xs        = caretXs(lineText, 0, singleFontResolver(font), fontRenderContext, measuredLayout, cellMetrics)
-        val cursorXPx = xs(math.min(safeColumn, xs.length - 1))
+        val resolver      = singleFontResolver(font, tabSize)
+        val xs            = caretXs(lineText, 0, resolver, fontRenderContext, measuredLayout, cellMetrics)
+        val cursorXPx     = xs(math.min(safeColumn, xs.length - 1))
         val targetLeftXPx = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
         val firstPast     = xs.indexWhere(_ > targetLeftXPx)
         if firstPast < 0 then xs.length - 1 else math.max(0, firstPast - 1)
@@ -222,7 +224,8 @@ object TextLayoutSnapshot:
     // own default so callers that predate drop caps keep measuring exactly as before.
     dropCapsEnabled: Boolean = true,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
-    markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source
+    markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
+    tabSize: Int = IndentationSettings.DefaultTabSize
   ): TextLayoutSnapshot =
     val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val totalLines  = buffer.document.content.lineCount
@@ -230,7 +233,7 @@ object TextLayoutSnapshot:
       buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.document.content.weight))
     val markdownInline =
       RichTextContext.markdownViewFor(buffer, markdownViewMode, forceCellLayout, wrapCache, font, fontRenderContext)
-    val richText       = RichTextContext(richDocument, proseScale, dropCapsEnabled, markdownInline)
+    val richText       = RichTextContext(richDocument, proseScale, dropCapsEnabled, markdownInline, tabSize)
     val measuredLayout = LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText)
     // The non-measured (cell) path draws every row on `cellMetrics`' own grid (see `TextRowMetrics`'s non-measured
     // `lineTopPx`), so its line height/ascent must come from that same caller-supplied unit rather than the real

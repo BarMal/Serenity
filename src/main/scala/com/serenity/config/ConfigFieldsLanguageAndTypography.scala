@@ -1,5 +1,6 @@
 package com.serenity.config
 
+import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.fonts.FontLoader
 
 /** Language tools and typography: syntax highlighting, spell check, fonts. */
@@ -31,6 +32,16 @@ private[config] object ConfigFieldsLanguageAndTypography:
     field("editor.large_file.tooling_off_above_chars")(int.filtered(_ >= 1))(
       _.largeFiles.toolingOffAboveChars,
       (config, value) => config.withLargeFilePolicy(config.largeFiles.copy(toolingOffAboveChars = value))
+    ),
+    field("editor.tab_size")(
+      int.filtered(size => size >= IndentationSettings.MinTabSize && size <= IndentationSettings.MaxTabSize)
+    )(
+      _.indentation.tabSize,
+      (config, value) => config.withIndentation(config.indentation.copy(tabSize = value))
+    ),
+    field("editor.insert_spaces")(boolean)(
+      _.indentation.insertSpaces,
+      (config, value) => config.withIndentation(config.indentation.copy(insertSpaces = value))
     ),
     field("spellcheck.enabled", "spellcheck_enabled")(boolean)(
       _.languageToolsConfig.spellCheck.enabled,

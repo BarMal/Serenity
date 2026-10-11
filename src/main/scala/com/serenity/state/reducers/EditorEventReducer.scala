@@ -14,7 +14,7 @@ import com.serenity.state.models.*
   * that decides which family handles an event.
   */
 object EditorEventReducer:
-  import EditorCursorSupport.{countLines, endTarget, homeTarget, CursorEventContext, TabInsertion}
+  import EditorCursorSupport.{countLines, endTarget, homeTarget, CursorEventContext}
 
   // Re-exported so the effect boundary (`EditorGeometryProducer.forEvent`) can see the geometry-window
   // classification without reaching into `EditorCursorSupport`, which is `private[reducers]` (#1676).
@@ -311,7 +311,8 @@ object EditorEventReducer:
         )
 
       case TabKey =>
-        TabInsertion.foldLeft(ReducerResult.noEffects(currentState)) { (result, char) =>
+        val indentUnit = currentState.persisted.config.indentation.indentUnit
+        indentUnit.foldLeft(ReducerResult.noEffects(currentState)) { (result, char) =>
           handleEventWithoutBuffer(InsertChar(char), paneId, pane, result.state)
         }
 

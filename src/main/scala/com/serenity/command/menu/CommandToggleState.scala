@@ -34,5 +34,6 @@ object CommandToggleState:
           TextDisplayIntent.SetFocusedTextBody(_) | TextDisplayIntent.SetContextualToolbarEnabled(_) |
           TextDisplayIntent.SetContextualToolbarDisplayMode(_) | TextDisplayIntent.SetTextAreaLeftInset(_) |
           TextDisplayIntent.SetTextAreaRightInset(_) | TextDisplayIntent.SetTextAreaTopInset(_) |
-          TextDisplayIntent.SetTextAreaBottomInset(_) | TextDisplayIntent.SetDropCapsEnabled(_) =>
+          TextDisplayIntent.SetTextAreaBottomInset(_) | TextDisplayIntent.SetDropCapsEnabled(_) |
+          TextDisplayIntent.SetTabSize(_) | TextDisplayIntent.SetInsertSpaces(_) =>
         None

@@ -6,19 +6,20 @@ import java.awt.font.FontRenderContext
 import com.serenity.config.MarkdownViewMode
 import com.serenity.markdown.{MarkdownBlockSpans, MarkdownInlineView, MarkerMode}
 import com.serenity.richtext.RichTextDocument
-import com.serenity.state.models.{Buffer, Cursor}
+import com.serenity.state.models.{Buffer, Cursor, IndentationSettings}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.theme.RichTextStyling
 
 /** The inputs a logical line's wrap depends on besides its text: the rich-text paragraph styles that choose each run's
   * font and a drop cap's role, the prose zoom that scales them, whether drop caps are enabled at all, and how the
-  * line's inline Markdown is restyled.
+  * line's inline Markdown is restyled. `tabSize` is the width a tab takes on the cell grid.
   */
 final case class RichTextContext(
     document: Option[RichTextDocument],
     proseScale: Float,
     dropCapsEnabled: Boolean,
-    markdown: MarkdownInlineView = MarkdownInlineView.Off
+    markdown: MarkdownInlineView = MarkdownInlineView.Off,
+    tabSize: Int = IndentationSettings.DefaultTabSize
 ):
 
   /** Hiding a marker means measuring glyph by glyph, which a font laid out on the cell grid is not. */
@@ -39,14 +40,16 @@ object RichTextContext:
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     cellGrid: Boolean = false,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
-    frc: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext()
+    frc: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext(),
+    tabSize: Int = IndentationSettings.DefaultTabSize
   ): RichTextContext =
     val content = buffer.document.content
     RichTextContext(
       buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(content.lineCount, content.weight)),
       RichTextStyling.proseZoom(font.getSize2D),
       dropCapsEnabled,
-      markdownViewFor(buffer, markdownViewMode, cellGrid, wrapCache, font, frc)
+      markdownViewFor(buffer, markdownViewMode, cellGrid, wrapCache, font, frc),
+      tabSize
     )
 
   /** How `buffer`'s inline Markdown is restyled under `viewMode`. A buffer carrying a rich-text document styles its own

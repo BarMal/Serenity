@@ -7,6 +7,7 @@ import scala.annotation.tailrec
 import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
 import com.serenity.markdown.{LazyBlockIndex, MarkdownInlineView}
 import com.serenity.rope.{ChangeSet, Leaf, Node, Rope}
+import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.layout.VisualLineIndexStore.StampRelation
 
 /** The [[VisualLineIndex]] last built for each key -- a buffer under one wrap setting -- together with the content it
@@ -91,9 +92,14 @@ object VisualLineIndexStore:
 
   /** Rich-text styling is stamped by the identity of its document; a restyled Markdown view by what decides how it
     * restyles (mode, revealed lines, font kind) and by its block index, which is compared by how far two indexes are
-    * known to agree rather than by value (see [[stampsRelate]]).
+    * known to agree rather than by value (see [[stampsRelate]]). A tab size other than the default stamps too: a tab
+    * wraps by its width, so a new size leaves no row count standing.
     */
-  final private[layout] case class ViewStamp(base: AnyRef, markdown: MarkdownInlineView)
+  final private[layout] case class ViewStamp(
+      base: AnyRef,
+      markdown: MarkdownInlineView,
+      tabSize: Int = IndentationSettings.DefaultTabSize
+  )
 
   /** How a stamp the index was built under relates to the one asked for. */
   enum StampRelation:
@@ -108,7 +114,8 @@ object VisualLineIndexStore:
   private[layout] def stampsRelate(built: AnyRef, asked: AnyRef): StampRelation =
     (built, asked) match
       case _ if built eq asked => StampRelation.Same
-      case (x: ViewStamp, y: ViewStamp) if x.base == y.base && sameRestyling(x.markdown, y.markdown) =>
+      case (x: ViewStamp, y: ViewStamp)
+          if x.base == y.base && x.tabSize == y.tabSize && sameRestyling(x.markdown, y.markdown) =>
         (x.markdown.fences, y.markdown.fences) match
           case (a, b) if a eq b => StampRelation.Same
           case (a: LazyBlockIndex, b: LazyBlockIndex) if b.follows(a) =>
@@ -126,7 +133,9 @@ object VisualLineIndexStore:
 
   private[layout] def stampOf(richText: RichTextContext): AnyRef =
     val base = richText.document.getOrElse(Unstamped)
-    if richText.markdown.isActive then ViewStamp(base, richText.markdown) else base
+    if richText.markdown.isActive || richText.tabSize != IndentationSettings.DefaultTabSize then
+      ViewStamp(base, richText.markdown, richText.tabSize)
+    else base
 
   val DefaultMaxEntries = 32
 

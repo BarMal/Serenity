@@ -95,8 +95,8 @@ object LegacyLineMeasurement:
     if text.isEmpty then Vector(0.0f)
     else if !measuredLayout then
       val charWidth = cellMetrics.charWidth.toFloat
-      if cellMetrics.displayWidthAware then displayWidthCaretXs(text, charWidth)
-      else Vector.tabulate(text.length + 1)(index => index * charWidth)
+      if cellMetrics.displayWidthAware then displayWidthCaretXs(text, charWidth, resolver.tabSize)
+      else uniformCaretXs(text, charWidth, resolver.tabSize)
     else normalizeCollapsedCarets(layoutCaretXs(text, absoluteStartColumn, resolver, frc))
 
   def layoutCaretXs(
@@ -136,8 +136,9 @@ object LegacyLineMeasurement:
   ): Int =
     if !measuredLayout then
       val charWidth = math.max(1, cellMetrics.charWidth)
-      if cellMetrics.displayWidthAware then fittingDisplayWidthSegmentLength(line, from, panelWidthPx, charWidth)
-      else math.max(1, math.min(line.length - from, panelWidthPx / charWidth))
+      if cellMetrics.displayWidthAware then
+        fittingDisplayWidthSegmentLength(line, from, panelWidthPx, charWidth, resolver.tabSize)
+      else fittingUniformSegmentLength(line, from, panelWidthPx, charWidth, resolver.tabSize)
     else
       val remaining = line.length - from
       @annotation.tailrec
@@ -159,26 +160,66 @@ object LegacyLineMeasurement:
       val candidate = boundary.preceding(from + fittingLength + 1) - from
       if candidate > 0 then candidate else fittingLength
 
-  private def displayWidthCaretXs(text: String, charWidth: Float): Vector[Float] =
+  private def cellsOf(codePoint: Int, usedCells: Int, tabSize: Int): Int =
+    if codePoint == '\t' then tabSize - usedCells % tabSize else CharWidth.of(codePoint)
+
+  private def uniformCaretXs(text: String, charWidth: Float, tabSize: Int): Vector[Float] =
+    text
+      .foldLeft((Vector(0.0f), 0)) {
+        case ((acc, cells), char) =>
+          val next = cells + (if char == '\t' then tabSize - cells % tabSize else 1)
+          (acc :+ next * charWidth, next)
+      }
+      ._1
+
+  private def fittingUniformSegmentLength(
+    line: String,
+    from: Int,
+    panelWidthPx: Int,
+    charWidth: Int,
+    tabSize: Int
+  ): Int =
+    val cellsAvailable = panelWidthPx / charWidth
+    val fitted = line
+      .drop(from)
+      .foldLeft((0, 0, true)) {
+        case ((count, cells, open), char) =>
+          val next = cells + (if char == '\t' then tabSize - cells % tabSize else 1)
+          if open && next <= cellsAvailable then (count + 1, next, true) else (count, cells, false)
+      }
+      ._1
+    math.max(1, fitted)
+
+  private def displayWidthCaretXs(text: String, charWidth: Float, tabSize: Int): Vector[Float] =
     @annotation.tailrec
-    def loop(index: Int, xPx: Float, acc: Vector[Float]): Vector[Float] =
-      if index >= text.length then acc :+ xPx
+    def loop(index: Int, cells: Int, acc: Vector[Float]): Vector[Float] =
+      if index >= text.length then acc :+ cells * charWidth
       else
         val codePoint = text.codePointAt(index)
-        val advanced  = xPx + CharWidth.of(codePoint) * charWidth
+        val advanced  = cells + cellsOf(codePoint, cells, tabSize)
         val charCount = Character.charCount(codePoint)
-        loop(index + charCount, advanced, if charCount == 2 then acc :+ xPx :+ advanced else acc :+ xPx)
-    loop(0, 0.0f, Vector.empty)
+        loop(
+          index + charCount,
+          advanced,
+          if charCount == 2 then acc :+ cells * charWidth :+ advanced * charWidth else acc :+ cells * charWidth
+        )
+    loop(0, 0, Vector.empty)
 
-  private def fittingDisplayWidthSegmentLength(text: String, from: Int, panelWidthPx: Int, charWidth: Int): Int =
+  private def fittingDisplayWidthSegmentLength(
+    text: String,
+    from: Int,
+    panelWidthPx: Int,
+    charWidth: Int,
+    tabSize: Int
+  ): Int =
     @annotation.tailrec
-    def loop(index: Int, usedPx: Int): Int =
+    def loop(index: Int, usedCells: Int): Int =
       if index >= text.length then index
       else
         val codePoint = text.codePointAt(index)
-        val advance   = CharWidth.of(codePoint) * charWidth
-        if usedPx + advance > panelWidthPx then index
-        else loop(index + Character.charCount(codePoint), usedPx + advance)
+        val advance   = cellsOf(codePoint, usedCells, tabSize)
+        if (usedCells + advance) * charWidth > panelWidthPx then index
+        else loop(index + Character.charCount(codePoint), usedCells + advance)
     val fitted = loop(from, 0) - from
     if fitted > 0 then fitted else math.min(text.length - from, Character.charCount(text.codePointAt(from)))
 
