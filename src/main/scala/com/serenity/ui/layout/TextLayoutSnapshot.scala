@@ -15,6 +15,7 @@ import com.serenity.state.models.{
   Buffer,
   CursorPosition,
   IndentationSettings,
+  MeasuredRow,
   NavigationGeometry,
   RowAffinity,
   TextCaretStop,
@@ -91,15 +92,18 @@ object TextLayoutSnapshot:
   ): TextVisualLine =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
-    shapeSegment(
-      text,
+    TextVisualLine(
       bufferLine,
-      startColumn,
-      startColumn + text.length,
-      singleFontResolver(font),
-      fontRenderContext,
-      measuredLayout,
-      cellMetrics
+      measureSegment(
+        text,
+        startColumn,
+        startColumn + text.length,
+        singleFontResolver(font),
+        fontRenderContext,
+        measuredLayout,
+        cellMetrics
+      ),
+      xOffsetPx = 0.0f
     )
 
   def leftColumnForCursorVisibility(
@@ -330,23 +334,16 @@ object TextLayoutSnapshot:
                   wrapCache
                 )
               else
-                Vector(
-                  DropCapLayout.applyInset(
-                    shapeSegment(
-                      visibleSlice,
-                      lineIndex,
-                      startColumn,
-                      startColumn + visibleSlice.length,
-                      resolver,
-                      frc,
-                      measuredLayout,
-                      cellMetrics
-                    ),
-                    paragraphRole,
-                    lineWithinParagraph = 0,
-                    glyphWidthPx
-                  )
+                val row = measureSegment(
+                  visibleSlice,
+                  startColumn,
+                  startColumn + visibleSlice.length,
+                  resolver,
+                  frc,
+                  measuredLayout,
+                  cellMetrics
                 )
+                Vector(placed(row, lineIndex, paragraphRole, lineWithinParagraph = 0, glyphWidthPx))
             val aligned = applyParagraphAlignment(wrapped, lineIndex, panelWidthPx, richText.document)
             loop(rest, acc ++ aligned)
           case _ => acc
@@ -393,16 +390,27 @@ object TextLayoutSnapshot:
       )
       // Measuring keeps the caller's context so the shaped-text cache is shared with whoever draws with it; only the
       // cache identity ignores the device transform.
-      wrapCache.wrapped(spec.copy(frc = logicalFontRenderContext(frc)), bufferLine, maxVisualLines)(
-        limit => wrapRows(spec, bufferLine, limit),
-        predecessors => IncrementalWrap.rewrap(spec, bufferLine, predecessors)
+      val rows = wrapCache.wrapped(spec.copy(frc = logicalFontRenderContext(frc)), maxVisualLines)(
+        limit => wrapRows(spec, limit),
+        predecessors => IncrementalWrap.rewrap(spec, predecessors)
       )
+      Vector.tabulate(rows.length)(index => placed(rows(index), bufferLine, paragraphRole, index, dropCapGlyphWidthPx))
 
-  private[layout] def wrapRows(spec: WrappedLineKey, bufferLine: Int, maxVisualLines: Int): RowWrap =
-    import spec.{baseColumn, cellMetrics, dropCapGlyphWidthPx, frc, measuredLayout, paragraphRole, resolver, text}
+  /** A cached row read onto `bufferLine`; the drop cap inset is the only offset the row carries until alignment. */
+  private def placed(
+    row: MeasuredRow,
+    bufferLine: Int,
+    role: ParagraphRole,
+    lineWithinParagraph: Int,
+    glyphWidthPx: Float
+  ): TextVisualLine =
+    TextVisualLine(bufferLine, row, DropCapLayout.leftInsetPx(role, lineWithinParagraph, glyphWidthPx))
+
+  private[layout] def wrapRows(spec: WrappedLineKey, maxVisualLines: Int): RowWrap =
+    import spec.{baseColumn, cellMetrics, frc, measuredLayout, resolver, text}
     if text.isEmpty then
-      val empty = shapeSegment("", bufferLine, baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics)
-      RowWrap(Vector(DropCapLayout.applyInset(empty, paragraphRole, 0, dropCapGlyphWidthPx)), 1, 0, None)
+      val empty = measureSegment("", baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics)
+      RowWrap(Vector(empty), 1, 0, None)
     else
       val initial   = ParagraphMeasurement(spec, 0, maxVisualLines)
       val traceable = maxVisualLines == Int.MaxValue && IncrementalWrap.traceable(spec)
@@ -410,16 +418,16 @@ object TextLayoutSnapshot:
       def loop(
         startColumn: Int,
         measured: ParagraphMeasurement,
-        acc: Vector[TextVisualLine],
+        acc: Vector[MeasuredRow],
         reaches: Vector[Int]
-      ): (Vector[TextVisualLine], Vector[Int]) =
+      ): (Vector[MeasuredRow], Vector[Int]) =
         if startColumn >= text.length || acc.length >= maxVisualLines then (acc, reaches)
         else
           val paragraph = measured.coveringRowAt(startColumn, maxVisualLines - acc.length)
-          val row       = wrapRow(spec, bufferLine, paragraph, startColumn, acc.length)
+          val row       = wrapRow(spec, paragraph, startColumn, acc.length)
           val reach =
             if traceable then reaches :+ IncrementalWrap.reachOf(spec, startColumn, row.fitLength) else reaches
-          loop(row.endColumn, paragraph, acc :+ row.line, reach)
+          loop(row.endColumn, paragraph, acc :+ row.row, reach)
 
       val (rows, reaches) = loop(0, initial, Vector.empty, Vector.empty)
       val trace           = Option.when(traceable)(WrapTrace(IArray.from(reaches), initial.advances))
@@ -430,7 +438,6 @@ object TextLayoutSnapshot:
     */
   private[layout] def wrapRow(
     spec: WrappedLineKey,
-    bufferLine: Int,
     paragraph: ParagraphMeasurement,
     startColumn: Int,
     lineWithinParagraph: Int
@@ -442,9 +449,8 @@ object TextLayoutSnapshot:
     val fit              = fittingSegment(paragraph, text, startColumn, wrapWidthPx, segmentStart, spec)
     val segmentLength    = wordBoundarySegmentLength(text, startColumn, fit.length)
     val endColumnInSlice = startColumn + segmentLength
-    val visualLine = shapeSegment(
+    val row = measureSegment(
       text.substring(startColumn, endColumnInSlice),
-      bufferLine,
       segmentStart,
       baseColumn + endColumnInSlice,
       resolver,
@@ -454,11 +460,7 @@ object TextLayoutSnapshot:
       fit.caretXsForPrefix(segmentLength, resolver, segmentStart),
       Some(paragraph.graphemeOffsets(startColumn, endColumnInSlice))
     )
-    WrappedRow(
-      DropCapLayout.applyInset(visualLine, paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx),
-      endColumnInSlice,
-      fit.length
-    )
+    WrappedRow(row, endColumnInSlice, fit.length)
 
   /** Where to break `text` once `fittingLength` characters have used up the available pixel width: the last legal
     * UAX#14 line-break boundary at or before `fittingLength`, per `BreakIterator.getLineInstance` -- covering no-break
@@ -487,9 +489,8 @@ object TextLayoutSnapshot:
       val candidate = boundary.preceding(from + fittingLength + 1) - from
       if candidate > 0 then candidate else fittingLength
 
-  private[layout] def shapeSegment(
+  private[layout] def measureSegment(
     text: String,
-    bufferLine: Int,
     startColumn: Int,
     endColumn: Int,
     resolver: LineFontResolver,
@@ -498,7 +499,7 @@ object TextLayoutSnapshot:
     cellMetrics: CellMetrics,
     measuredXs: Option[IArray[Float]] = None,
     graphemeOffsets: Option[IArray[Int]] = None
-  ): TextVisualLine =
+  ): MeasuredRow =
     val xs      = measuredXs.getOrElse(caretXs(text, startColumn, resolver, frc, measuredLayout, cellMetrics))
     val offsets = graphemeOffsets.getOrElse(ParagraphMeasurement.graphemeBoundaryOffsets(text))
     val caretStops = Vector.tabulate(offsets.length) { index =>
@@ -511,8 +512,7 @@ object TextLayoutSnapshot:
       else caretStops.sortBy(_.xPx)
     val (heightPx, ascentPx) =
       if measuredLayout then resolver.lineMetrics(frc, startColumn, endColumn) else (0, 0)
-    TextVisualLine(
-      bufferLine = bufferLine,
+    MeasuredRow(
       startColumn = startColumn,
       endColumn = endColumn,
       text = text,
@@ -534,7 +534,8 @@ object TextLayoutSnapshot:
       .map(_.alignment)
       .getOrElse(ParagraphAlignment.Left)
 
-    lines.map(line => applyAlignment(line, alignment, panelWidthPx))
+    if alignment == ParagraphAlignment.Left then lines
+    else lines.map(line => applyAlignment(line, alignment, panelWidthPx))
 
   private def applyAlignment(
     line: TextVisualLine,
@@ -548,13 +549,7 @@ object TextLayoutSnapshot:
         case ParagraphAlignment.Center                            => availablePx / 2.0f
         case ParagraphAlignment.Right                             => availablePx
 
-    if offsetPx <= 0.0f then line
-    else
-      line.copy(
-        caretStops = line.caretStops.map(stop => stop.copy(xPx = stop.xPx + offsetPx)),
-        xSortedCaretStops = line.xSortedCaretStops.map(stop => stop.copy(xPx = stop.xPx + offsetPx)),
-        xOffsetPx = offsetPx
-      )
+    if offsetPx <= 0.0f then line else line.copy(xOffsetPx = line.xOffsetPx + offsetPx)
 
   private[layout] def shouldUseMeasuredLayout(font: Font, frc: FontRenderContext): Boolean =
     measuredLayoutCache.computeIfAbsent(

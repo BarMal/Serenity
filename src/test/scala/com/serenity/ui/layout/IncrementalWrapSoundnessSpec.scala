@@ -5,7 +5,7 @@ import java.awt.font.TextAttribute
 
 import scala.util.Random
 
-import com.serenity.state.models.TextVisualLine
+import com.serenity.state.models.MeasuredRow
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
 import com.serenity.ui.layout.WrapFixtures.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -18,7 +18,7 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
     layouts.filter(layout => !layout.forceCellLayout && TextLayoutSnapshot.shouldUseMeasuredLayout(layout.font, frc))
 
   private def cold(text: String, layout: Layout, widthPx: Int): RowWrap =
-    TextLayoutSnapshot.wrapRows(keyFor(text, layout, widthPx), 0, Int.MaxValue)
+    TextLayoutSnapshot.wrapRows(keyFor(text, layout, widthPx), Int.MaxValue)
 
   // -- ICU's lookahead ---------------------------------------------------------------------------------------------
 
@@ -108,10 +108,10 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
       val after  = change.applyTo(before)
       val oldKey = keyFor(before, layout, width)
       val newKey = keyFor(after, layout, width)
-      val old    = TextLayoutSnapshot.wrapRows(oldKey, 0, Int.MaxValue)
+      val old    = TextLayoutSnapshot.wrapRows(oldKey, Int.MaxValue)
       (old.trace, Option.when(IncrementalWrap.traceable(newKey))(())) match
         case (Some(trace), Some(_)) =>
-          val resumed = IncrementalWrap.rewrap(newKey, 0, Seq(Predecessor(oldKey, 0, old.rows, trace)))
+          val resumed = IncrementalWrap.rewrap(newKey, Seq(Predecessor(oldKey, old.rows, trace)))
           resumed.foreach { wrapped =>
             val whole = GlyphAdvances.measure(after, 0, after.length, 0, newKey.resolver, frc)
             withClue(s"${layout.name} $change in '${before.take(80)}': ") {
@@ -145,14 +145,14 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
         val after  = change.applyTo(before)
         val oldKey = keyFor(before, layout, width)
         val newKey = keyFor(after, layout, width)
-        val old    = TextLayoutSnapshot.wrapRows(oldKey, 0, Int.MaxValue)
+        val old    = TextLayoutSnapshot.wrapRows(oldKey, Int.MaxValue)
         val resumed =
-          old.trace.flatMap(trace => IncrementalWrap.rewrap(newKey, 0, Seq(Predecessor(oldKey, 0, old.rows, trace))))
+          old.trace.flatMap(trace => IncrementalWrap.rewrap(newKey, Seq(Predecessor(oldKey, old.rows, trace))))
         withClue(s"${layout.name} $change: ") {
           resumed.isDefined shouldBe true
           val whole = GlyphAdvances.measure(after, 0, after.length, 0, newKey.resolver, frc)
           resumed.flatMap(_.trace).flatMap(_.advances).exists(sameAdvances(_, whole, after.length)) shouldBe true
-          bitwise(resumed.get.rows) shouldBe bitwise(TextLayoutSnapshot.wrapRows(newKey, 0, Int.MaxValue).rows)
+          bitwiseRows(resumed.get.rows) shouldBe bitwiseRows(TextLayoutSnapshot.wrapRows(newKey, Int.MaxValue).rows)
         }
       }
     }
@@ -192,7 +192,7 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
       val wrapped = cold(text, layout, width)
       wrapped.trace.foreach { trace =>
         trace.reaches.length shouldBe wrapped.rows.length
-        wrapped.rows.zip(trace.reaches).foreach((row: TextVisualLine, reach) => reach should be > row.endColumn)
+        wrapped.rows.zip(trace.reaches).foreach((row: MeasuredRow, reach) => reach should be > row.endColumn)
       }
     }
   }

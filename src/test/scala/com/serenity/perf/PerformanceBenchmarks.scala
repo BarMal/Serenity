@@ -42,6 +42,7 @@ object PerformanceBenchmarks:
   private def benchmarks(cursorWindow: SwingWindow, projectRoot: Path): List[BenchmarkRunner.Benchmark] =
     ropeBenchmarks() ++
       RenderBenchmarks.frameBenchmarks(cursorWindow) ++
+      LayoutSnapshotBenchmarks.benchmarks() ++
       ReducerBenchmarks.benchmarks() ++
       ProseTypingBenchmarks.benchmarks() ++
       DamageBenchmarks.benchmarks() ++
