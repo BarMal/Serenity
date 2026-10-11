@@ -92,10 +92,10 @@ class FileFinderSpec extends AnyFlatSpec with Matchers:
     listed(many, "file").items.toOption.map(_.items.size) shouldBe Some(FileFinder.MaxShownChoices)
   }
 
-  it should "say in its title when the listing was cut short" in {
+  it should "say in its title while the listing is still being indexed" in {
     val cut = ProjectFileListing(Vector(Path.of("a.txt")), truncated = true)
 
-    listed(cut).title shouldBe "Go to File (first 20,000 files)"
+    listed(cut).title shouldBe "Go to File (indexing...)"
     listed(listing("a.txt")).title shouldBe "Go to File"
   }
 
