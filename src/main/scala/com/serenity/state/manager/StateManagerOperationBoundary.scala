@@ -30,6 +30,7 @@ final private[manager] class StateManagerOperationBoundary private (
     modelRef: Ref[IO, Model],
     documentAnalysisInputsRef: Ref[IO, Option[Map[DocumentUri, SpellCheckFingerprint]]],
     dictionaryFingerprintsRef: Ref[IO, Option[(SpellCheckConfig, List[SpellCheckDictionaryFingerprint])]],
+    heldDictionary: HeldDictionary,
     announcedNotices: Ref[IO, Set[String]],
     logger: Logger[IO],
     val effectLanes: EffectLanes,
@@ -43,7 +44,6 @@ final private[manager] class StateManagerOperationBoundary private (
     fileWriteLedger: FileWriteLedger,
     discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]],
     dictionaryCache: DictionaryCache,
-    loadDictionary: (SpellCheckConfig, DictionaryCache) => DictionarySnapshot,
     listDirectory: Path => IO[List[DirEntry]],
     commitObserver: Ref[IO, (AppState, AppState) => IO[Unit]],
     wrapCache: WrappedLineCache,
@@ -203,7 +203,7 @@ final private[manager] class StateManagerOperationBoundary private (
   private def discoverAndCacheDictionaryFingerprints(
     normalized: SpellCheckConfig
   ): IO[List[SpellCheckDictionaryFingerprint]] =
-    discoverDictionaryFingerprints(normalized).flatTap(fingerprints =>
+    heldDictionary.discard >> discoverDictionaryFingerprints(normalized).flatTap(fingerprints =>
       dictionaryFingerprintsRef.set(Some(normalized -> fingerprints))
     )
 
@@ -212,9 +212,9 @@ final private[manager] class StateManagerOperationBoundary private (
     * `refreshDictionaryFingerprints`) noticing an on-disk change under a watched dictionary directory in real time;
     * window focus-gain (`StateManagerFileCapability`'s `checkExternalChangesOnFocus`) calls this too, as a cheap
     * backstop for a change made while the watcher wasn't running or its poll window missed it. Either way, this is the
-    * signal `scheduleDocumentAnalysis`'s cache otherwise has no way to receive, since an on-disk dictionary edit
-    * changes nothing about the spell-check config itself. The next `scheduleDocumentAnalysis` call picks up the
-    * refreshed fingerprints and, if they actually differ, schedules re-analysis exactly as a buffer edit would.
+    * signal the caches otherwise have no way to receive, since an on-disk dictionary edit changes nothing about the
+    * spell-check config: it also drops the loaded dictionary. The next `scheduleDocumentAnalysis` call picks up the
+    * refreshed fingerprints and, if they differ, schedules re-analysis exactly as a buffer edit would.
     */
   def refreshDictionaryFingerprints(): IO[Unit] =
     modelCommit.currentState.flatMap { state =>
@@ -421,9 +421,8 @@ final private[manager] class StateManagerOperationBoundary private (
   private def postResult(result: EffectResult): IO[Unit] =
     dispatcher.post(modelCommit.applyResult(result, _ => IO.unit))
 
-  /** A parse cannot be interrupted, and cancelling a lane job waits for it to settle, so quitting or a newer analysis
-    * would wait out the rest of a dictionary parse (seconds on a loaded machine). The work runs on its own fiber and
-    * only the wait for it is cancelled; the shared cache keeps what it finishes for the next analysis.
+  /** Work that cannot be interrupted runs on its own fiber, so only the wait for it is cancelled (see
+    * [[HeldDictionary]]).
     */
   private def detachedBlocking[A](work: => A): IO[A] = IO.blocking(work).start.flatMap(_.joinWithNever)
 
@@ -433,7 +432,7 @@ final private[manager] class StateManagerOperationBoundary private (
       .timed("analysis.documentAnalysisJob") {
         modelCommit.currentState.flatMap { snapshot =>
           val spellCheckConfig = snapshot.persisted.config.languageToolsConfig.spellCheck
-          detachedBlocking(loadDictionary(spellCheckConfig, dictionaryCache)).flatMap { dictionary =>
+          heldDictionary.snapshotFor(spellCheckConfig).flatMap { dictionary =>
             val expected = SpellChecker.analysisFingerprints(snapshot, dictionary.fingerprints)
             val analyzed = SpellChecker.refreshDiagnostics(snapshot, dictionary)
             announceMissingDictionary(
@@ -557,6 +556,7 @@ private[manager] object StateManagerOperationBoundary:
       documentAnalysisInputsRef <- Ref.of[IO, Option[Map[DocumentUri, SpellCheckFingerprint]]](None)
       dictionaryFingerprintsRef <-
         Ref.of[IO, Option[(SpellCheckConfig, List[SpellCheckDictionaryFingerprint])]](None)
+      heldDictionary     <- HeldDictionary.create(loadDictionary(_, dictionaryCache))
       announcedNotices   <- Ref.of[IO, Set[String]](Set.empty)
       effectsShutdownRef <- Ref.of[IO, Boolean](false)
       effectsShutDown    <- Deferred[IO, Unit]
@@ -574,6 +574,7 @@ private[manager] object StateManagerOperationBoundary:
       modelRef,
       documentAnalysisInputsRef,
       dictionaryFingerprintsRef,
+      heldDictionary,
       announcedNotices,
       logger,
       effectLanes,
@@ -587,7 +588,6 @@ private[manager] object StateManagerOperationBoundary:
       fileWriteLedger,
       discoverDictionaryFingerprints,
       dictionaryCache,
-      loadDictionary,
       listDirectory,
       commitObserver,
       wrapCache,
