@@ -227,7 +227,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
 
     eventually(f.log.get.unsafeRunSync() should contain("end:adraft"))
     // The result is posted after the write; a later dispatch runs behind it.
-    IO.sleep(200.millis).unsafeRunSync()
+    f.stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
     f.stateManager.updateStateValidated(identity).unsafeRunSync()
     f.buffer(id) shouldBe None
     AppStateValidation.validationErrors(f.state) shouldBe Nil
