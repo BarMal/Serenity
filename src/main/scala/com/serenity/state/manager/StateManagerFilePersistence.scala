@@ -268,18 +268,24 @@ final private[manager] class StateManagerFilePersistence(
   private def commitLoad(result: EffectResult): IO[Unit] =
     result match
       case loaded @ EffectResult.FileLoaded(path, buffer) =>
-        commit(loaded) >> announceOpenedToLsp(path, buffer)
+        commit(loaded) >> announceOpenedToLsp(path, buffer) >> warnIfLarge(path, buffer)
       case EffectResult.FileLoadFailed(path, error) =>
         logger.error(error)(s"[FILE] Failed to load file at $path") >> showNotice(
           FileFailureNotice.openFailed(path, error)
         )
       case _ => IO.unit
 
+  private def warnIfLarge(path: Path, loaded: Buffer): IO[Unit] =
+    currentState.flatMap(state =>
+      state.persisted.config.largeFiles.openingNotice(path, loaded.document).traverse_(showNotice)
+    )
+
   private def announceOpenedToLsp(path: Path, loaded: Buffer): IO[Unit] =
     loaded.document.language.fold(IO.unit) { languageId =>
       currentState.flatMap { state =>
         val opened = state.persisted.buffers.values.exists(_.document.filePath.contains(path))
-        if opened && state.editingContext.hasCodeTooling then
+        val served = state.persisted.config.largeFiles.allowsLanguageTooling(loaded.document)
+        if opened && served && state.editingContext.hasCodeTooling then
           lspQueue.enqueue(LspEffect.FileOpened(path.toUri.toString, languageId, loaded.document.content))
         else IO.unit
       }
@@ -299,13 +305,18 @@ final private[manager] class StateManagerFilePersistence(
     lanes.submitToLane(lane, job).recover { case _: EffectLanes.Released => () }
 
   private def refreshLspBindingAfterSaveAs(before: Buffer, saved: Buffer): IO[Unit] =
+    currentState.flatMap(state => refreshLspBinding(before, saved, state.persisted.config.largeFiles))
+
+  private def refreshLspBinding(before: Buffer, saved: Buffer, largeFiles: LargeFilePolicy): IO[Unit] =
     val previous = for
       path       <- before.document.filePath
       languageId <- before.document.language
+      if largeFiles.allowsLanguageTooling(before.document)
     yield (path.toUri.toString, languageId)
     val next = for
       path       <- saved.document.filePath
       languageId <- saved.document.language
+      if largeFiles.allowsLanguageTooling(saved.document)
     yield (path.toUri.toString, languageId, saved.document.content)
     val nextIdentity = next.map { case (uri, languageId, _) => (uri, languageId) }
     if previous == nextIdentity then IO.unit

@@ -5,7 +5,7 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.config.LspUserConfig
-import com.serenity.state.models.SurfacePlacement
+import com.serenity.state.models.{LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 
 /** Global application configuration */
@@ -94,6 +94,11 @@ final case class AppConfig(
   /** Create a new config with as-you-type smart punctuation (curly quotes, em dashes, ellipses) toggled */
   def withSmartPunctuation(enabled: Boolean): AppConfig =
     withLanguageToolsConfig(languageToolsConfig.copy(smartPunctuationEnabled = enabled))
+
+  def withLargeFilePolicy(policy: LargeFilePolicy): AppConfig =
+    withLanguageToolsConfig(languageToolsConfig.copy(largeFile = policy))
+
+  def largeFiles: LargeFilePolicy = languageToolsConfig.largeFile
 
   def withHotkeyConfig(config: HotkeyConfig): AppConfig =
     withInputConfig(inputConfig.copy(hotkeyConfig = config))

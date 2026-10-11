@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-10-11
+
+- Added a large-file policy (#1867): a file above `editor.large_file.warn_above_chars` (default 5,000,000 characters) opens with a warning, and above `editor.large_file.tooling_off_above_chars` (default 20,000,000) it also goes without language servers and spell check, which would otherwise re-read the whole text on every change. A document that grows past the limit is closed on the server and one that shrinks back is announced again. `editor.large_file.optimizations = false` keeps the warning and switches nothing off.
+
 ### 2026-10-10
 
 - Kept spell-check squiggles and language-server diagnostics on their text while you type (#1929, #1924): each edit moves them with it at once instead of leaving them on the old line until the next check, deleting a flagged word clears its squiggle immediately, and a diagnostic spanning several lines now marks every line it covers. Spell check also starts at most a second after you begin typing however fast you type, and a check that finishes while you are still typing is kept (moved over what you typed) instead of thrown away.

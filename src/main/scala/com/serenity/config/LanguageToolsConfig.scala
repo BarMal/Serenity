@@ -7,6 +7,7 @@ import scala.util.Using
 import scala.util.control.NonFatal
 
 import com.serenity.lsp.config.LspUserConfig
+import com.serenity.state.models.LargeFilePolicy
 
 final case class SpellCheckDictionaryFingerprint(
     path: String,
@@ -219,7 +220,8 @@ final case class LanguageToolsConfig(
     syntaxHighlightingEnabled: Boolean = false,
     lspUserConfig: LspUserConfig = LspUserConfig.empty,
     spellCheck: SpellCheckConfig = SpellCheckConfig(),
-    smartPunctuationEnabled: Boolean = false
+    smartPunctuationEnabled: Boolean = false,
+    largeFile: LargeFilePolicy = LargeFilePolicy.Default
 ):
 
   def normalized: LanguageToolsConfig =

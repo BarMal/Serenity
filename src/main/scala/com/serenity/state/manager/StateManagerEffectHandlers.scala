@@ -403,14 +403,15 @@ final private[manager] class StateManagerEffectHandlers(
         val refreshLspBinding =
           buffer.document.filePath match
             case Some(path) if buffer.document.language != language =>
-              val uri  = path.toUri.toString
-              val text = buffer.document.content
+              val uri    = path.toUri.toString
+              val text   = buffer.document.content
+              val served = state.persisted.config.largeFiles.allowsLanguageTooling(buffer.document)
               val closeOld =
-                buffer.document.language.fold(IO.unit)(previous =>
-                  lspQueue.enqueue(LspEffect.FileClosed(uri, previous))
-                )
+                buffer.document.language
+                  .filter(_ => served)
+                  .fold(IO.unit)(previous => lspQueue.enqueue(LspEffect.FileClosed(uri, previous)))
               val openNew =
-                if !state.editingContext.hasCodeTooling then IO.unit
+                if !state.editingContext.hasCodeTooling || !served then IO.unit
                 else language.fold(IO.unit)(next => lspQueue.enqueue(LspEffect.FileOpened(uri, next, text)))
               closeOld >> openNew
             case _ =>
