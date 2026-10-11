@@ -94,6 +94,16 @@ private[command] object CommandRegistryEditCommands:
       label = "Redo"
     ),
     Command.typed(
+      "bold",
+      "Toggle bold formatting on the active selection.",
+      CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(com.serenity.richtext.InlineMark.Bold)),
+      CommandCategory.Edit,
+      label = "Bold"
+    )
+  )
+
+  private[command] def commentCommands: List[Command] = List(
+    Command.typed(
       "toggle-line-comment",
       "Comment or uncomment the selected lines with the language's line comment.",
       CommandIntent.Edit(EditIntent.ToggleLineComment),
@@ -106,13 +116,6 @@ private[command] object CommandRegistryEditCommands:
       CommandIntent.Edit(EditIntent.ToggleBlockComment),
       CommandCategory.Edit,
       label = "Toggle Block Comment"
-    ),
-    Command.typed(
-      "bold",
-      "Toggle bold formatting on the active selection.",
-      CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(com.serenity.richtext.InlineMark.Bold)),
-      CommandCategory.Edit,
-      label = "Bold"
     )
   )
 

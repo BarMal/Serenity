@@ -82,12 +82,15 @@ object CommandRegistry:
   def apply(commands: List[Command]): CommandRegistry = new CommandRegistry(commands)
 
   /** Registry with default commands. The command list is static, so this is built once and reused. */
-  lazy val default: CommandRegistry = new CommandRegistry(defaultCommands)
+  lazy val default: CommandRegistry = new CommandRegistry(defaultCommands ++ commentCommands)
 
   /** Registry with default commands plus UI toggle commands. The command list is static, so this is built once and
     * reused.
     */
-  lazy val withToggleUI: CommandRegistry = new CommandRegistry(defaultCommands ++ toggleUICommands)
+  lazy val withToggleUI: CommandRegistry = new CommandRegistry(defaultCommands ++ toggleUICommands ++ commentCommands)
+
+  // Last in every registry, so that adding them leaves the ranking of the commands before them as it was.
+  private def commentCommands: List[Command] = CommandRegistryEditCommands.commentCommands
 
   /** Pure typed UI toggle commands. */
   private def toggleUICommands: List[Command] = List(

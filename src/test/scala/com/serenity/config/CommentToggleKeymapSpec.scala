@@ -1,6 +1,6 @@
 package com.serenity.config
 
-import com.serenity.command.{CommandId, CommandRegistry}
+import com.serenity.command.{CommandId, CommandRegistry, CommandSearcher}
 import com.serenity.keystroke.events.RunCommand
 import com.serenity.keystroke.translators.TextHotkeyConverters
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
@@ -18,6 +18,14 @@ class CommentToggleKeymapSpec extends AnyFlatSpec with Matchers:
   "The comment commands" should "be registered" in {
     CommandRegistry.withToggleUI.isRegistered(CommandId(lineCommand)) shouldBe true
     CommandRegistry.withToggleUI.isRegistered(CommandId(blockCommand)) shouldBe true
+  }
+
+  they should "be found by searching for them" in {
+    val searcher = new CommandSearcher(CommandRegistry.withToggleUI.getAllCommands)
+
+    searcher.search("toggle line comment", 3).map(_.name) should contain(lineCommand)
+    searcher.search("toggle block comment", 3).map(_.name) should contain(blockCommand)
+    searcher.search("comment", 10).map(_.name) should contain allOf (lineCommand, blockCommand)
   }
 
   they should "default to Ctrl+/ (plus the byte a terminal sends for it) and Shift+Alt+A" in {
