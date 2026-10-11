@@ -181,12 +181,6 @@ object ContextualToolbar:
       "\uf06d"
     ),
     ContextualToolbarItem.Button(
-      "markdown-view-inline-lens",
-      "Lens",
-      CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.InlineLens)),
-      "\ue8b6"
-    ),
-    ContextualToolbarItem.Button(
       "markdown-view-live",
       "Live",
       CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.LivePreview)),

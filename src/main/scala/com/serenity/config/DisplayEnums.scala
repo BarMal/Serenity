@@ -97,18 +97,20 @@ object WindowChromeMode:
 enum MarkdownViewMode(val configKey: String):
   case Source       extends MarkdownViewMode("source")
   case SplitPreview extends MarkdownViewMode("split-preview")
-  case InlineLens   extends MarkdownViewMode("inline-lens")
   case LivePreview  extends MarkdownViewMode("live-preview")
   case Read         extends MarkdownViewMode("read")
 
 object MarkdownViewMode:
 
+  /** The retired inline lens spellings (`inline-lens`, `lens`, session `InlineLens`) decode as [[LivePreview]], its
+    * nearest successor: rendered text with the active block's raw source editable in place.
+    */
   def fromConfigKey(value: String): Option[MarkdownViewMode] =
     value.trim.toLowerCase match
       case "source"                                                => Some(MarkdownViewMode.Source)
       case "split-preview" | "split_preview" | "split" | "preview" => Some(MarkdownViewMode.SplitPreview)
-      case "inline-lens" | "inline_lens" | "lens"                  => Some(MarkdownViewMode.InlineLens)
       case "live-preview" | "live_preview" | "live"                => Some(MarkdownViewMode.LivePreview)
+      case "inline-lens" | "inline_lens" | "lens" | "inlinelens"   => Some(MarkdownViewMode.LivePreview)
       case "read" | "reading"                                      => Some(MarkdownViewMode.Read)
       case _                                                       => None
 

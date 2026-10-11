@@ -119,8 +119,7 @@ final private[manager] class StateManagerPanelEffects(
     mode match
       case MarkdownViewMode.SplitPreview =>
         updateConfigEffect >> openMarkdownPreview
-      case MarkdownViewMode.Source | MarkdownViewMode.InlineLens | MarkdownViewMode.LivePreview |
-          MarkdownViewMode.Read =>
+      case MarkdownViewMode.Source | MarkdownViewMode.LivePreview | MarkdownViewMode.Read =>
         updateConfigEffect >> commitApp(PanelTransitions.removePanel(PanelId.MarkdownPreview))
 
   // Hidden through the same animated, undoable unpin a drag-off uses.

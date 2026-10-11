@@ -40,7 +40,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
       cursorConfig = CursorConfig(mode = CursorMode.Blink),
       statusLine = StatusLineConfig(List(StatusSegment.Position, StatusSegment.Title), StatusLinePlacement.Pinned),
       documentConfig = DocumentConfig(
-        markdownViewMode = MarkdownViewMode.InlineLens,
+        markdownViewMode = MarkdownViewMode.LivePreview,
         defaultMode = DefaultDocumentMode.RichText
       ),
       interfaceConfig = InterfaceConfig(density = InterfaceDensity.Compact),

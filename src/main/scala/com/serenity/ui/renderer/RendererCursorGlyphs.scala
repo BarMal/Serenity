@@ -7,11 +7,9 @@ import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
 
 /** The package's caret authority: it paints the caret glyph(s) for a buffer's cursors, and owns the pane-clipping
-  * geometry every caret and measured run in the package is placed by. [[caretWithin]]/[[cursorColorFor]] are public
-  * because [[RendererMarkdownLens]] paints its own carets over the inline preview and must place and colour them
-  * identically to the pane path; [[measuredRunWidthWithin]] is public because [[RendererHighlights]] clips selection
-  * and diagnostic backgrounds to the same right edge a caret is clipped to, and a highlight that clipped differently
-  * would bleed past the pane the caret stops at.
+  * geometry every caret and measured run in the package is placed by. [[measuredRunWidthWithin]] is public because
+  * [[RendererHighlights]] clips selection and diagnostic backgrounds to the same right edge a caret is clipped to, and
+  * a highlight that clipped differently would bleed past the pane the caret stops at.
   */
 object RendererCursorGlyphs:
 

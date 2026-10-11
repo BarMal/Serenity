@@ -5,7 +5,6 @@ import java.net.URI
 
 import scala.util.Try
 
-import com.serenity.markdown.MarkdownDocumentPreview.InlinePreviewLine
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.{ColorFormat, Theme}
 import org.commonmark.Extension
@@ -13,8 +12,7 @@ import org.commonmark.node.Image
 import org.commonmark.renderer.html.*
 
 /** Assembles the XHTML document (and the CommonMark `HtmlRenderer` that resolves relative image sources within it) that
-  * [[MarkdownDocumentPreview]] hands to flying-saucer for layout, including the themed stylesheet shared by the panel
-  * preview and the inline Lens.
+  * [[MarkdownDocumentPreview]] hands to flying-saucer for layout, including its themed stylesheet.
   */
 private[markdown] object MarkdownPreviewXhtml:
 
@@ -58,15 +56,14 @@ private[markdown] object MarkdownPreviewXhtml:
     title: String,
     theme: Theme,
     font: Font,
-    panelChrome: Boolean,
-    inlineLineHeightPx: Option[Int]
+    panelChrome: Boolean
   ): String =
     s"""<?xml version="1.0" encoding="UTF-8"?>
        |<html xmlns="http://www.w3.org/1999/xhtml">
        |  <head>
        |    <title>${escapeXml(title)}</title>
        |    <style type="text/css">
-       |${stylesheet(theme, font, panelChrome, inlineLineHeightPx)}
+       |${stylesheet(theme, font, panelChrome)}
        |    </style>
        |  </head>
        |  <body>
@@ -76,47 +73,13 @@ private[markdown] object MarkdownPreviewXhtml:
        |  </body>
        |</html>""".stripMargin
 
-  def inlineRowHtml(row: InlinePreviewLine, sourceLines: Vector[String]): String =
-    val headingClass = row.sourceLine
-      .flatMap(sourceLines.lift)
-      .filter(_.matches("^\\s*#{1,6}\\s+.+$"))
-      .fold("")(_ => " inline-heading")
-    s"<div class=\"inline-row$headingClass\">${escapeXml(row.text)}</div>"
-
   private def stylesheet(
     theme: Theme,
     font: Font,
-    panelChrome: Boolean,
-    inlineLineHeightPx: Option[Int]
+    panelChrome: Boolean
   ): String =
     val background = if panelChrome then theme.panel.background else theme.background
     val foreground = if panelChrome then theme.panel.foreground else theme.foreground
-    val inlineLensOverrides = inlineLineHeightPx.fold("") { lineHeight =>
-      s"""      html, body { line-height: ${lineHeight.max(1)}px; }
-         |      .markdown-body { padding: 0; }
-         |      h1, h2, h3, h4, h5, h6 {
-         |        font-size: 1em;
-         |        line-height: ${lineHeight.max(1)}px;
-         |        margin: 0;
-         |        border-bottom: 0;
-         |        padding-bottom: 0;
-         |      }
-         |      p, blockquote, pre, table, ul, ol { margin: 0; }
-         |      li { margin: 0; }
-         |      .inline-rows {
-         |        margin: 0;
-         |      }
-         |      .inline-rows .inline-row {
-         |        border: 0;
-         |        height: ${lineHeight.max(1)}px;
-         |        line-height: ${lineHeight.max(1)}px;
-         |        margin: 0;
-         |        padding: 0;
-         |        white-space: pre;
-         |      }
-         |      .inline-heading { font-weight: 700; }
-         |""".stripMargin
-    }
     s"""      html, body {
        |        margin: 0;
        |        padding: 0;
@@ -180,7 +143,6 @@ private[markdown] object MarkdownPreviewXhtml:
        |      }
        |      ul, ol { padding-left: 1.5em; }
        |      li { margin: 0.25em 0; }
-       |$inlineLensOverrides
        |""".stripMargin
 
   private def css(color: RenderColor): String =

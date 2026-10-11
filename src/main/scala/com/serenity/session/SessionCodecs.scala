@@ -94,7 +94,14 @@ given Encoder[WindowChromeMode] = configKeyEncoder(_.configKey)
 given Decoder[WindowChromeMode] = configKeyDecoder("WindowChromeMode", WindowChromeMode.values, _.configKey)
 
 given Encoder[MarkdownViewMode] = configKeyEncoder(_.configKey)
-given Decoder[MarkdownViewMode] = configKeyDecoder("MarkdownViewMode", MarkdownViewMode.values, _.configKey)
+
+given Decoder[MarkdownViewMode] =
+  Decoder.decodeString.emap { value =>
+    MarkdownViewMode
+      .fromConfigKey(value)
+      .orElse(MarkdownViewMode.values.find(_.toString == value))
+      .toRight(s"Unknown MarkdownViewMode: $value")
+  }
 
 given Encoder[DefaultDocumentMode] = configKeyEncoder(_.configKey)
 

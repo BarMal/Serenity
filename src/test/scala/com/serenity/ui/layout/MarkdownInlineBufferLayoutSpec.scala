@@ -116,7 +116,6 @@ class MarkdownInlineBufferLayoutSpec extends AnyFlatSpec with Matchers:
 
     snapshot(markdownBuffer(text, Nil), MarkdownViewMode.Source).markdownInline.isActive shouldBe false
     snapshot(markdownBuffer(text, Nil), MarkdownViewMode.SplitPreview).markdownInline.isActive shouldBe false
-    snapshot(markdownBuffer(text, Nil), MarkdownViewMode.InlineLens).markdownInline.isActive shouldBe false
     snapshot(markdownBuffer(text, Nil, language = None), MarkdownViewMode.Read).markdownInline.isActive shouldBe false
   }
 

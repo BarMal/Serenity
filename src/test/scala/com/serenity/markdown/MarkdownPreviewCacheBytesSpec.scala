@@ -28,9 +28,7 @@ class MarkdownPreviewCacheBytesSpec extends AnyFlatSpec with Matchers:
       theme = Theme.default,
       font = font,
       baseUri = None,
-      panelChrome = true,
-      inlineLineHeightPx = None,
-      inlineRows = false
+      panelChrome = true
     )
 
   private def argb(width: Int, height: Int): BufferedImage =

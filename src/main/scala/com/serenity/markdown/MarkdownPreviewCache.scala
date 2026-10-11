@@ -16,16 +16,15 @@ import com.serenity.ui.theme.Theme
   * on a fingerprint of its input rather than the input itself, so repeated renders of unchanged content are free.
   *
   * `LinkedHashMap` + `synchronized` rather than `Ref[IO, ...]`: every reader/writer of these maps
-  * (`MarkdownDocumentPreview.renderHtmlFragment`/`renderImage`/`renderInlineImage`) is a plain synchronous `def` called
-  * from the renderer's paint path (`RendererFloatingPanels`, `TuiRuntime`), not from inside an IO fiber, so a
-  * `Ref`-backed cache would just have every call site force its `IO` via `unsafeRunSync` right back into the
-  * synchronous signature these callers need -- hiding a plain mutable map behind an effect type nothing here ever
-  * suspends on. This is the same tradeoff already settled for
-  * [[com.serenity.ui.renderer.RendererFrameState.BoundedRefCache]] (#1431/#1434) and `ThemeManager`'s highlight/lex
-  * caches (#1412/#1431/#1434). Unlike those two `AtomicReference`-backed caches, each map here is mutated in place
-  * rather than swapped by reference (there is no immutable snapshot to compare-and-set between), so `synchronized`
-  * around each `get`/`put` is the direct equivalent for a mutable `LinkedHashMap` -- the critical sections are short,
-  * so contention is not a concern in this rendering hot path.
+  * (`MarkdownDocumentPreview.renderHtmlFragment`/`renderImage`) is a plain synchronous `def` called from the renderer's
+  * paint path (`RendererFloatingPanels`, `TuiRuntime`), not from inside an IO fiber, so a `Ref`-backed cache would just
+  * have every call site force its `IO` via `unsafeRunSync` right back into the synchronous signature these callers need
+  * -- hiding a plain mutable map behind an effect type nothing here ever suspends on. This is the same tradeoff already
+  * settled for [[com.serenity.ui.renderer.RendererFrameState.BoundedRefCache]] (#1431/#1434) and `ThemeManager`'s
+  * highlight/lex caches (#1412/#1431/#1434). Unlike those two `AtomicReference`-backed caches, each map here is mutated
+  * in place rather than swapped by reference (there is no immutable snapshot to compare-and-set between), so
+  * `synchronized` around each `get`/`put` is the direct equivalent for a mutable `LinkedHashMap` -- the critical
+  * sections are short, so contention is not a concern in this rendering hot path.
   *
   * Instance-scoped (issue #1677): one instance is created per render-owning entity (held on
   * [[com.serenity.state.manager.RenderCaches]], threaded through [[com.serenity.ui.renderer.RenderContext]] and
@@ -164,9 +163,7 @@ object MarkdownPreviewCache:
       theme: Theme,
       font: Font,
       baseUri: Option[String],
-      panelChrome: Boolean,
-      inlineLineHeightPx: Option[Int],
-      inlineRows: Boolean
+      panelChrome: Boolean
   )
 
   /** Identifies an `ImageCacheKey` without its `source` fingerprint, so rapid successive renders of the same preview
@@ -180,9 +177,7 @@ object MarkdownPreviewCache:
       theme: Theme,
       font: Font,
       baseUri: Option[String],
-      panelChrome: Boolean,
-      inlineLineHeightPx: Option[Int],
-      inlineRows: Boolean
+      panelChrome: Boolean
   )
 
   object ImageSlotKey:
@@ -199,9 +194,7 @@ object MarkdownPreviewCache:
         key.theme,
         key.font,
         key.baseUri,
-        key.panelChrome,
-        key.inlineLineHeightPx,
-        key.inlineRows
+        key.panelChrome
       )
 
   final case class HtmlFragmentCacheKey(source: SourceFingerprint, title: String, baseUri: Option[String])

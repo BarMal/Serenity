@@ -522,7 +522,19 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  it should "bump markdownPreviewEditGeneration when an edit changes a buffer with a live inline markdown preview" in {
+  private def withPreviewPanel(bufferId: BufferId, buffer: Buffer): AppState =
+    val panel = UiSurface(
+      SurfaceId("markdown-preview"),
+      SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val initial = AppState.initial
+    initial.copy(
+      runtime = initial.runtime.copy(uiSurfaces = List(panel)),
+      persisted = initial.persisted.copy(buffers = Map(bufferId -> buffer))
+    )
+
+  it should "bump markdownPreviewEditGeneration when an edit changes a buffer with a live markdown preview panel" in {
     val bufferId       = BufferId(0)
     val paneId         = PaneId(0)
     val beforeUnstyled = Buffer.fromString(bufferId, "# Before")
@@ -530,17 +542,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       beforeUnstyled.copy(document =
         beforeUnstyled.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown))
       )
-    val after = before.copy(document = before.document.copy(content = Rope("# After")))
-    val prevState = focusedOnBuffer(
-      AppState.initial.copy(
-        persisted = AppState.initial.persisted.copy(
-          buffers = Map(bufferId -> before),
-          config = AppConfig.default.withMarkdownViewMode(com.serenity.config.MarkdownViewMode.InlineLens)
-        )
-      ),
-      paneId,
-      bufferId
-    )
+    val after        = before.copy(document = before.document.copy(content = Rope("# After")))
+    val prevState    = focusedOnBuffer(withPreviewPanel(bufferId, before), paneId, bufferId)
     val currentState = prevState.copy(persisted = prevState.persisted.copy(buffers = Map(bufferId -> after)))
     val program = for
       modelRef <- Ref.of[IO, Model](Model(currentState, UndoState()))
@@ -565,7 +568,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         beforeUnstyled.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown))
       )
     val after = before.copy(document = before.document.copy(content = Rope("# After")))
-    // No withMarkdownViewMode(InlineLens) and no MarkdownPreview surface -- markdownViewMode defaults to Source.
+    // No MarkdownPreview surface -- the buffer is edited in place with nothing previewing it.
     val prevState = focusedOnBuffer(
       AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> before))),
       paneId,
@@ -594,16 +597,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       bufferUnstyled.copy(document =
         bufferUnstyled.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown))
       )
-    val prevState = focusedOnBuffer(
-      AppState.initial.copy(
-        persisted = AppState.initial.persisted.copy(
-          buffers = Map(bufferId -> buffer),
-          config = AppConfig.default.withMarkdownViewMode(com.serenity.config.MarkdownViewMode.InlineLens)
-        )
-      ),
-      paneId,
-      bufferId
-    )
+    val prevState = focusedOnBuffer(withPreviewPanel(bufferId, buffer), paneId, bufferId)
     val program = for
       modelRef <- Ref.of[IO, Model](Model(prevState, UndoState()))
       operations <- StateManagerOperationBoundary.create(

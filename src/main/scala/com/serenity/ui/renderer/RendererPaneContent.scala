@@ -1,6 +1,5 @@
 package com.serenity.ui.renderer
 
-import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.manager.FocusedTextBody
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -122,21 +121,12 @@ object RendererPaneContent:
 
     val bufferSnapshot =
       preparedSnapshot.orElse(buffer.map(RendererPaneSetup.snapshotForBuffer(_, contentRect, state, context)))
-    val markdownLensFrame =
-      for
-        buf  <- buffer
-        snap <- bufferSnapshot
-        if RendererMarkdownLens.isInlineMarkdownLens(buf, state)
-      yield RendererMarkdownLens.markdownLensFrameFor(buf, snap, context.caches.markdownPreviewCache)
-
     // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): a column-mode pane paints each column's own
     // snapshot at its own x-origin (`contentRect.x + placement.xOffsetCells`), so the page reads as columns side by
-    // side. The markdown lens keeps its single full-width path -- its content is not the plain wrapped text these
-    // placements chunk. `dirtyRows` (the row-reuse contract) is a per-column-snapshot row index, which the multi-column
+    // side. `dirtyRows` (the row-reuse contract) is a per-column-snapshot row index, which the multi-column
     // path does not track yet, so a column-mode pane always redraws in full (see report's slice-2 note).
     val paintsColumns =
-      columnPlacements.nonEmpty &&
-        buffer.exists(buf => buf.document.content.weight > 0 && !RendererMarkdownLens.isInlineMarkdownLens(buf, state))
+      columnPlacements.nonEmpty && buffer.exists(_.document.content.weight > 0)
 
     buffer match
       case Some(buf) if buf.document.content.weight == 0 && buf.document.isNewEmpty =>
@@ -153,7 +143,6 @@ object RendererPaneContent:
             state,
             context,
             placement.snapshot,
-            markdownLensFrame = None,
             bufferAnnotations,
             dirtyRows = None
           )
@@ -166,7 +155,6 @@ object RendererPaneContent:
             state,
             context,
             snap,
-            markdownLensFrame,
             annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending)),
             dirtyRows
           )
@@ -193,27 +181,14 @@ object RendererPaneContent:
           )
         }
       case (Some(buf), Some(snap)) =>
-        if RendererMarkdownLens.isInlineMarkdownLens(buf, state) then
-          RendererMarkdownLens.renderMarkdownLensCursors(
-            buf,
-            contentRect,
-            state.persisted.theme,
-            state.persisted.config,
-            cursorContext,
-            snap,
-            markdownLensFrame.getOrElse(
-              RendererMarkdownLens.markdownLensFrameFor(buf, snap, context.caches.markdownPreviewCache)
-            )
-          )
-        else
-          val _ = RendererCursorGlyphs.renderCursors(
-            buf,
-            contentRect,
-            state.persisted.theme,
-            state.persisted.config,
-            cursorContext,
-            snap
-          )
+        val _ = RendererCursorGlyphs.renderCursors(
+          buf,
+          contentRect,
+          state.persisted.theme,
+          state.persisted.config,
+          cursorContext,
+          snap
+        )
       case _ => ()
 
   /** The x-shifted content rect a single page column's TEXT paints into: the pane's content rect moved right by the
@@ -232,18 +207,11 @@ object RendererPaneContent:
     state: AppState,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
-    markdownLensFrame: Option[MarkdownLensFrame],
     annotations: BufferRenderAnnotations,
     dirtyRows: Option[Set[Int]]
   ): Unit =
     context.surface.text.setFont(FontSpec.fromAwt(context.fontForBuffer(buffer)))
-    if RendererMarkdownLens.isInlineMarkdownLens(buffer, state) then
-      val frame = markdownLensFrame.getOrElse(
-        RendererMarkdownLens.markdownLensFrameFor(buffer, snapshot, context.caches.markdownPreviewCache)
-      )
-      renderInlineMarkdownPreview(buffer, rect, state, context, frame)
-      RendererMarkdownLens.renderMarkdownRawLenses(buffer, rect, state, context, snapshot, frame)
-    else renderPlainBufferContent(buffer, rect, state, context, snapshot, annotations, dirtyRows)
+    renderPlainBufferContent(buffer, rect, state, context, snapshot, annotations, dirtyRows)
 
   /** Paints `buffer` into `rect` as plain, annotation-free text: what a docked preview shows of the document. */
   private[renderer] def renderReadOnlyText(
@@ -480,41 +448,3 @@ object RendererPaneContent:
         .activeRange(buffer, activeLine)
         .map((range: Range.Inclusive) => (line: Int) => range.contains(line))
         .getOrElse((_: Int) => true)
-
-  private def renderInlineMarkdownPreview(
-    buffer: Buffer,
-    rect: LayoutRect,
-    state: AppState,
-    context: RenderContext,
-    frame: MarkdownLensFrame
-  ): Unit =
-    val widthPx = RendererMarkdownLens.scaledImagePixelDimension(
-      rect.width * context.cellMetrics.charWidth,
-      context.surface.devicePixelScaleX
-    )
-    val heightPx = RendererMarkdownLens.scaledImagePixelDimension(
-      rect.height * context.cellMetrics.lineHeight,
-      context.surface.devicePixelScaleY
-    )
-    val previewFont = MarkdownDocumentPreview.inlineLensFont(
-      context.textFont,
-      context.cellMetrics.lineHeight,
-      context.surface.devicePixelScaleY
-    )
-    val title = buffer.document.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
-    val image = MarkdownDocumentPreview.renderInlineRowsImage(
-      rows = frame.previewRows,
-      sourceLines = frame.lines,
-      title = title,
-      widthPx = widthPx,
-      heightPx = heightPx,
-      theme = state.persisted.theme,
-      font = previewFont,
-      inlineLineHeightPx = MarkdownDocumentPreview.lineHeightForDeviceScale(
-        context.cellMetrics.lineHeight,
-        context.surface.devicePixelScaleY
-      ),
-      cache = context.caches.markdownPreviewCache,
-      reuseLastRenderWhileEditing = buffer.markdownPreviewEditGeneration != buffer.markdownPreviewCommittedGeneration
-    )
-    context.surface.pixels.drawImage(RenderImage.fromAwt(image), rect.x, rect.y, rect.width, rect.height)

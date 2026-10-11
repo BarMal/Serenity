@@ -33,8 +33,8 @@ class PresetSettingsEditSpec extends AnyFlatSpec with Matchers:
       CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.RichText))
     ).config.documentConfig.defaultMode shouldBe DefaultDocumentMode.RichText
     edited(
-      CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.InlineLens))
-    ).config.documentConfig.markdownViewMode shouldBe MarkdownViewMode.InlineLens
+      CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.LivePreview))
+    ).config.documentConfig.markdownViewMode shouldBe MarkdownViewMode.LivePreview
     edited(
       settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetDropCapsEnabled(false)))
     ).config.documentConfig.dropCapsEnabled shouldBe false
