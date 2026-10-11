@@ -23,6 +23,14 @@ final case class EditorPaneRenderPlan(
   def columnSnapshotsFor(paneId: PaneId): Vector[ColumnSnapshotPlacement] =
     columnSnapshots.getOrElse(paneId, Vector.empty)
 
+  /** The snapshot each pane's row reuse is planned against: a column-mode pane's is every column's rows together
+    * ([[ColumnPaneRows]]), the rest are [[snapshots]].
+    */
+  def recordSnapshots: Map[PaneId, TextLayoutSnapshot] =
+    snapshots.map((paneId, snapshot) =>
+      paneId -> ColumnPaneRows.flatSnapshot(columnSnapshotsFor(paneId)).getOrElse(snapshot)
+    )
+
 /** Per-pane geometry for this frame: which buffer line each visual row shows, to translate `Damage`'s buffer-line facts
   * into row indices, and the pixel band each row owns, to know what a preserved row's pixels actually cover.
   */
@@ -338,8 +346,34 @@ object RendererPaneSetup:
           buffer     <- state.persisted.buffers.get(bufferId)
           snapshot   <- renderPlan.snapshots.get(paneId)
           if buffer.document.content.weight > 0
-        yield paneId -> paneFrameRecord(bufferId, paneLayout.contentRect, context, snapshot)
+          columns = renderPlan.columnSnapshotsFor(paneId)
+        yield paneId -> ColumnPaneRows
+          .flatSnapshot(columns)
+          .fold(paneFrameRecord(bufferId, paneLayout.contentRect, context, snapshot))(
+            columnFrameRecord(bufferId, paneLayout.contentRect, context, columns, _)
+          )
     }.toMap
+
+  private def columnFrameRecord(
+    bufferId: BufferId,
+    contentRect: LayoutRect,
+    context: RenderContext,
+    columns: Vector[ColumnSnapshotPlacement],
+    pageSnapshot: TextLayoutSnapshot
+  ): PaneFrameRecord =
+    val records = columns.map(column =>
+      paneFrameRecord(bufferId, RendererPaneContent.columnRect(contentRect, column), context, column.snapshot)
+    )
+    PaneFrameRecord(
+      bufferId = bufferId,
+      rowBufferLines = records.flatMap(_.rowBufferLines),
+      rowRects = records.flatMap(_.rowRects),
+      overflowingRows = records
+        .zip(ColumnPaneRows.firstRows(columns))
+        .flatMap((record, first) => record.overflowingRows.map(_ + first))
+        .toSet,
+      snapshot = pageSnapshot
+    )
 
   private def paneFrameRecord(
     bufferId: BufferId,
