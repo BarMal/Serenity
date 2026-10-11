@@ -31,9 +31,10 @@ private[renderer] object RendererRepaintRegion:
             (contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList)
               .map(RendererPaneSetup.paneRowRects(_, context, record.snapshot))
           else Nil
-        dirtyRows(paneId, record).toList.flatMap { row =>
+        val dirty = dirtyRows(paneId, record)
+        dirty.toList.flatMap { row =>
           record.rowRects.lift(row).toList ++ lineNumberRows.flatMap(_.lift(row))
-        }
+        } ++ columnRailRects(context, renderPlan, paneId, dirty)
     }
     val statusRow = contract.gutterRect.filter(_ => Damage.touchesChrome(damage))
     val headers   = Damage.paneChromeIds(damage).toList.flatMap(contract.paneHeaderRect)
@@ -43,3 +44,21 @@ private[renderer] object RendererRepaintRegion:
         .map(RendererChromePlan.pixelRectOf(context.cellMetrics)),
       PixelRect.RepaintRectLimit
     )
+
+  /** The rail bands of a multi-column pane's dirty rows, and the band under each column's last row. */
+  private def columnRailRects(
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    paneId: PaneId,
+    dirtyRows: Set[Int]
+  ): List[PixelRect] =
+    val columns = renderPlan.columnSnapshotsFor(paneId)
+    for
+      layout            <- renderPlan.paneLayouts.get(paneId).toList
+      (placement, rows) <- columns.zip(ColumnPaneRows.localRows(columns, Some(dirtyRows)))
+      if placement.gutterWidthCells > 0
+      rail  = ColumnRails.railRect(layout.contentRect, placement)
+      bands = ColumnRails.rowBands(context, rail, placement.snapshot)
+      band <- rows.toList.flatMap(_.toList).flatMap(bands.lift) ++
+        ColumnRails.unownedBands(context, rail, placement.snapshot)
+    yield band
