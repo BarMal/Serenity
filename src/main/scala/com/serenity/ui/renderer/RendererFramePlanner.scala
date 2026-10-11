@@ -189,7 +189,12 @@ object RendererFramePlanner:
           framePlan.map(_.dirtyRowsByPane).getOrElse(Map.empty),
           chrome
         )
-        RendererChapterGhosts.render(state, context, editorRenderPlan)
+        RendererChapterGhosts.render(
+          state,
+          context,
+          editorRenderPlan,
+          framePlan.map(_.dirtyRowsByPane).getOrElse(Map.empty)
+        )
       },
       PinnedPanelsLayerId -> { () => RendererFloatingPanels.renderPinnedPanels(state, context, scene, damage, panels) },
       FloatingPanelsLayerId -> { () => RendererFloatingPanels.renderFloatingPanels(state, context, damage, panels) },
@@ -340,20 +345,34 @@ object RendererFramePlanner:
           if inputsOrPanesChanged || geometryChanged then Damage.Everything else bufferDamageSinceLastDraw
 
         // A ghost is derived from a note's text and from which chapters are empty, neither of which a buffer's own
-        // damage reports, so a pane showing ghosts repaints whole rather than reusing rows a stale ghost sits in.
+        // damage reports. Rows whose ghost changed are found by comparing frames below; the screen's repaint region
+        // has no such comparison, so it is withheld from panes showing ghosts.
         val ghostPaneIds =
           panes.filter((_, record) => RendererChapterGhosts.paneShowsGhosts(state, record.bufferId)).keySet
         val movable =
           RendererScrollReuse.rowsMayMove(state, context, renderPlan, persistenceKey, effectiveDamage, geometryChanged)
+        val previousGhosts = context.caches.frameState.previousRowGhostsFor(persistenceKey)
         val redraws = panes.map { (paneId, record) =>
           val moving = movable && renderPlan.columnSnapshotsFor(paneId).isEmpty
+          val ghostRows = DirtyLineDiff.dilate(
+            RendererChapterGhosts.changedRows(previousGhosts.getOrElse(paneId, Vector.empty), record.rowGhosts),
+            record.rowRects.length
+          )
           val dirty =
-            damageDirtyRows(effectiveDamage, record, persistenceKey, context.caches, scrollIsEveryRow = !moving)
-          paneId -> {
-            if ghostPaneIds.contains(paneId) then RendererScrollReuse.PaneRedraw.everyRow(record)
-            else RendererScrollReuse.planPane(state, context, renderPlan, paneId, record, persistenceKey, dirty, moving)
-          }
+            damageDirtyRows(effectiveDamage, record, persistenceKey, context.caches, scrollIsEveryRow = !moving) ++
+              ghostRows
+          paneId -> RendererScrollReuse.planPane(
+            state,
+            context,
+            renderPlan,
+            paneId,
+            record,
+            persistenceKey,
+            dirty,
+            moving
+          )
         }
+        context.caches.frameState.rememberRowGhosts(persistenceKey, panes.view.mapValues(_.rowGhosts).toMap)
         val dirtyRowsByPane = redraws.map((paneId, redraw) => paneId -> redraw.dirtyRows)
 
         val chrome = RendererChromePlan.plan(
