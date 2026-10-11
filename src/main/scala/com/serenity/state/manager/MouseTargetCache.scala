@@ -2,10 +2,7 @@ package com.serenity.state.manager
 
 import java.awt.Font
 import java.util.LinkedHashMap
-import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
-
-import scala.jdk.CollectionConverters.SetHasAsScala
 
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{InterfaceDensity, StatusLineConfig, TextAreaInsets}
@@ -263,7 +260,7 @@ final private[serenity] class AuthoritativeUiScene(
     val wrappedLines: WrappedLineCache,
     buildScene: UiSceneBuilder.Build
 ):
-  import AuthoritativeUiScene.{PublishedScene, SceneFontKey, SceneKey}
+  import AuthoritativeUiScene.{SceneFontKey, SceneKey}
 
   private val layoutKeyCache = new MouseTargetLayoutKeyCache
 
@@ -289,8 +286,6 @@ final private[serenity] class AuthoritativeUiScene(
       size() > 64
 
   private val inFlight = new ConcurrentHashMap[SceneKey, CompletableFuture[Option[UiSceneSnapshot]]]()
-
-  private val latest = new AtomicReference[Option[PublishedScene]](None)
 
   /** `cellMetrics` is the "pixel" unit this scene's cell-based (non-measured) `TextLayoutSnapshot`s are built in --
     * `None` (every caller but the render entry points below) keeps this scene's long-standing behaviour of re-deriving
@@ -347,24 +342,7 @@ final private[serenity] class AuthoritativeUiScene(
 
   private def publish(key: SceneKey, scene: UiSceneSnapshot): UiSceneSnapshot =
     val _ = prepared.synchronized(prepared.put(key, scene))
-    latest.set(Some(PublishedScene(key.layout, key.cellMetrics, scene)))
     scene
-
-  /** The scene already published, or being built, for this exact layout whatever fonts it was built with. */
-  private def sceneForLayout(layout: MouseTargetLayoutKey, cellMetrics: Option[CellMetrics]): Option[UiSceneSnapshot] =
-    def matches(key: SceneKey) = key.layout == layout && key.cellMetrics == cellMetrics
-    latest
-      .get()
-      .collect {
-        case published if published.layout == layout && published.cellMetrics == cellMetrics => published.scene
-      }
-      .orElse(
-        inFlight
-          .entrySet()
-          .asScala
-          .collectFirst { case entry if matches(entry.getKey) => entry.getValue }
-          .flatMap(_.join())
-      )
 
   /** The convenience entry point every mouse-hit-testing call site actually uses (`MouseTargetCache.fromState`,
     * `ContextualToolbarHitTesting`, `CommandRunnerMouseHitTesting`, `MouseHitTestGeometry`,
@@ -374,15 +352,12 @@ final private[serenity] class AuthoritativeUiScene(
     * wrapped prose lands on the wrong character (#1215-class mismatch).
     */
   def forState(state: AppState, viewportSize: ViewportSize): UiSceneSnapshot =
-    val cellMetrics = Option.when(state.runtime.capabilities.isCellGrid)(CellMetrics.cellUnit)
-    sceneForLayout(layoutKeyFor(state, viewportSize), cellMetrics).getOrElse(
-      forState(
-        state,
-        viewportSize,
-        FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code),
-        FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose),
-        cellMetrics = cellMetrics
-      )
+    forState(
+      state,
+      viewportSize,
+      FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code),
+      FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose),
+      cellMetrics = Option.when(state.runtime.capabilities.isCellGrid)(CellMetrics.cellUnit)
     )
 
 private[serenity] object AuthoritativeUiScene:
@@ -393,12 +368,6 @@ private[serenity] object AuthoritativeUiScene:
       layout: MouseTargetLayoutKey,
       paneFonts: List[(PaneId, SceneFontKey)],
       cellMetrics: Option[CellMetrics]
-  )
-
-  final private case class PublishedScene(
-      layout: MouseTargetLayoutKey,
-      cellMetrics: Option[CellMetrics],
-      scene: UiSceneSnapshot
   )
 
   def apply(

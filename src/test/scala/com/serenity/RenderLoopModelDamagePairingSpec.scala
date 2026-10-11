@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
@@ -61,13 +63,19 @@ class RenderLoopModelDamagePairingSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  private def damagePerFrame(models: List[AppState], publishedDamage: Damage): List[Damage] =
+  private def damagePerFrame(
+    models: List[AppState],
+    publishedDamage: Damage,
+    damagePublishedFor: Option[AppState] = None,
+    diffs: AtomicInteger = AtomicInteger(0)
+  ): List[Damage] =
     val program = for
       current            <- Ref.of[IO, AppState](models.head)
       fastModeSignal     <- SignallingRef.of[IO, Boolean](true)
       pendingDamage      <- Ref.of[IO, Damage](Damage.Nothing)
       pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
       lastDrawn          <- Ref.of[IO, Option[AppState]](None)
+      coveredRef         <- Ref.of[IO, Option[AppState]](damagePublishedFor)
       frames             <- Ref.of[IO, Vector[Damage]](Vector.empty)
       engine = new StateEngine:
         def getCurrentState: IO[AppState]                                = current.get
@@ -85,7 +93,12 @@ class RenderLoopModelDamagePairingSpec extends AnyFlatSpec with Matchers:
           frames.update(_ :+ damage),
         RenderCaches.create(),
         sleep = _ => IO.unit,
-        lastDrawnState = lastDrawn
+        lastDrawnState = lastDrawn,
+        damagePublishedFor = coveredRef,
+        transitionDamage = Some((before: AppState, after: AppState) =>
+          diffs.incrementAndGet()
+          DamageProducer.forTransition(before, after)
+        )
       )
       _ <- models.zipWithIndex.traverse_ {
         case (model, index) =>
@@ -108,4 +121,20 @@ class RenderLoopModelDamagePairingSpec extends AnyFlatSpec with Matchers:
     val published = Damage.BufferRows(bufferId, Set(0))
 
     damagePerFrame(List(drawn, drawn), published).last shouldBe published
+  }
+
+  it should "diff nothing extra when the damage already published was computed for the model it draws" in {
+    val diffs = AtomicInteger(0)
+
+    damagePerFrame(List(drawn, selectionOnlyNewer), Damage.Everything, Some(selectionOnlyNewer), diffs)
+
+    diffs.get() shouldBe 0
+  }
+
+  it should "diff exactly once when the damage published was computed for an older model" in {
+    val diffs = AtomicInteger(0)
+
+    damagePerFrame(List(drawn, selectionOnlyNewer), Damage.Nothing, Some(drawn), diffs)
+
+    diffs.get() shouldBe 1
   }

@@ -6,10 +6,12 @@ import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
 import scala.concurrent.duration.*
 import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.jdk.CollectionConverters.IterableHasAsScala
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{Layout, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
@@ -83,16 +85,25 @@ class AuthoritativeUiSceneConcurrencySpec extends AnyFlatSpec with Matchers with
     gate.builds.get() shouldBe 1
   }
 
-  it should "hand hit-testing the scene the renderer painted even when the display fonts differ from the preview fonts" in {
-    val state       = stateWith("alpha\nbeta")
-    val gate        = GatedBuilds(stateWith("unused"))
-    val scene       = gate.scene
+  it should "give hit-testing geometry built from its own fonts, not the ones the renderer painted with" in {
+    val state     = stateWith("alpha\nbeta")
+    val codeFonts = java.util.concurrent.ConcurrentLinkedQueue[Font]()
+    val scene = AuthoritativeUiScene(decorateBuild =
+      real =>
+        (st, size, codeFont, textFont, metrics) =>
+          codeFonts.add(codeFont)
+          real(st, size, codeFont, textFont, metrics)
+    )
     val displayFont = Font(Font.MONOSPACED, Font.PLAIN, 23)
+    val previewCode = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)
+    assume(previewCode.getSize2D != displayFont.getSize2D)
 
     val painted = scene.forState(state, viewport, displayFont, displayFont)
+    val hitTest = scene.forState(state, viewport)
 
-    scene.forState(state, viewport) should be theSameInstanceAs painted
-    gate.builds.get() shouldBe 1
+    hitTest should not be theSameInstanceAs(painted)
+    codeFonts.asScala.toList.map(_.getSize2D) shouldBe List(displayFont.getSize2D, previewCode.getSize2D)
+    scene.forState(state, viewport) should be theSameInstanceAs hitTest
   }
 
   it should "not block a hit-test on another state while the renderer holds a cold build" in {

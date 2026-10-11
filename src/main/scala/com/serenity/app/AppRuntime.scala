@@ -227,6 +227,7 @@ object AppRuntime:
         )
         lastFastFrameStart <- Ref.of[IO, Option[FiniteDuration]](None)
         lastDrawnState     <- Ref.of[IO, Option[AppState]](Some(initialState))
+        damagePublishedFor <- Ref.of[IO, Option[AppState]](None)
         translatorCache    <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
         currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
@@ -242,6 +243,7 @@ object AppRuntime:
             translatorCache,
             runtime.frameTimings,
             onUserInput = firstInput.complete(()).void,
+            damagePublishedFor = published => damagePublishedFor.set(Some(published)),
             observeBatch = observeTransition,
             logEvent = (event, focus) => AppRuntimeLogging.logSelectiveEvents(event, focus, logger)
           )
@@ -282,6 +284,7 @@ object AppRuntime:
                     stateManager.renderCaches,
                     lastFrameStart = lastFastFrameStart,
                     lastDrawnState = lastDrawnState,
+                    damagePublishedFor = damagePublishedFor,
                     keyLatency = runtime.frameTimings.keyLatency
                   )
 
