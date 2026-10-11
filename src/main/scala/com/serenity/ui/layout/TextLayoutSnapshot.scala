@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import java.awt.font.*
+import java.awt.geom.AffineTransform
 import java.awt.image.BufferedImage
 import java.awt.{Font, RenderingHints}
 import java.text.StringCharacterIterator
@@ -380,7 +381,7 @@ object TextLayoutSnapshot:
         line,
         panelWidthPx,
         resolver,
-        frc,
+        logicalFontRenderContext(frc),
         measuredLayout,
         cellMetrics,
         baseColumn,
@@ -552,7 +553,7 @@ object TextLayoutSnapshot:
 
   private[layout] def shouldUseMeasuredLayout(font: Font, frc: FontRenderContext): Boolean =
     measuredLayoutCache.computeIfAbsent(
-      MeasuredLayoutKey(font, frc),
+      MeasuredLayoutKey(font, logicalFontRenderContext(frc)),
       key =>
         (!FontLoader.isMonospacedFont(key.font) ||
           FontLoader.ligaturesEnabled(key.font) ||
@@ -572,6 +573,14 @@ object TextLayoutSnapshot:
       val measuredAdvance = measuredXs(measuredXs.length - 1)
       val cellAdvance     = fontCellMetrics.charWidth.toFloat * sampleText.length
       math.abs(measuredAdvance - cellAdvance) > 0.5f
+
+  /** With fractional metrics the advances do not depend on the device transform, so a surface's scaled context and the
+    * identity one measure alike and must share cache entries; without them hinting does depend on it, so it stays.
+    */
+  private[layout] def logicalFontRenderContext(frc: FontRenderContext): FontRenderContext =
+    if frc.isTransformed && frc.usesFractionalMetrics then
+      FontRenderContext(AffineTransform(), frc.isAntiAliased, frc.usesFractionalMetrics)
+    else frc
 
   def defaultFontRenderContext(): FontRenderContext = sharedDefaultFontRenderContext
 

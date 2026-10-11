@@ -69,6 +69,9 @@ final private[layout] case class WrappedLineKey(
     paragraphRole: ParagraphRole,
     dropCapGlyphWidthPx: Float
 ):
+  // The text and fonts are hashed in full, and every map operation on a lookup rehashes the key.
+  override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
+
   def shape: WrapShape =
     WrapShape(panelWidthPx, resolver, frc, measuredLayout, cellMetrics, baseColumn, paragraphRole, dropCapGlyphWidthPx)
 
@@ -180,9 +183,11 @@ object WrappedLineCache:
 
     def covers(maxVisualLines: Int): Boolean = complete || rows.length >= maxVisualLines
 
-    def rowsFor(requestedBufferLine: Int, maxVisualLines: Int): Vector[TextVisualLine] =
-      val limited = rows.take(maxVisualLines)
-      if requestedBufferLine == bufferLine then limited else limited.map(_.copy(bufferLine = requestedBufferLine))
+    def rowsFor(maxVisualLines: Int): Vector[TextVisualLine] = rows.take(maxVisualLines)
+
+    def relabelled(requestedBufferLine: Int): Entry =
+      if requestedBufferLine == bufferLine then this
+      else copy(rows = rows.map(_.copy(bufferLine = requestedBufferLine)), bufferLine = requestedBufferLine)
 
   /** An access-ordered LRU. Rendering and the state dispatcher may run on different threads, so every map access holds
     * this instance's monitor; wrapping a missed line happens outside it.
@@ -266,7 +271,7 @@ object WrappedLineCache:
       cold: Int => RowWrap,
       incremental: Seq[Predecessor] => Option[RowWrap]
     ): Vector[TextVisualLine] =
-      val entry = lookup(key).filter(_.covers(maxVisualLines)).getOrElse {
+      val entry = lookup(key).filter(_.covers(maxVisualLines)).map(relabelInPlace(key, bufferLine, _)).getOrElse {
         val resumed = Option.when(maxVisualLines == Int.MaxValue)(predecessors(key)).flatMap(incremental(_))
         val wrap    = resumed.getOrElse(cold(maxVisualLines))
         (if resumed.isDefined then incrementalCount else coldCount).incrementAndGet()
@@ -276,7 +281,7 @@ object WrappedLineCache:
         store(key, fresh)
         fresh
       }
-      entry.rowsFor(bufferLine, maxVisualLines)
+      entry.rowsFor(maxVisualLines)
 
     private def predecessors(key: WrappedLineKey): Seq[Predecessor] = synchronized {
       Option(recent.get(key.shape)).fold(Seq.empty[Predecessor]) { candidates =>
@@ -285,6 +290,17 @@ object WrappedLineCache:
         }.toVector
       }
     }
+
+    /** Lines shifted by an edit above them are relabelled once and kept so, rather than copied on every lookup. */
+    private def relabelInPlace(key: WrappedLineKey, bufferLine: Int, entry: Entry): Entry =
+      if entry.bufferLine == bufferLine then entry
+      else
+        val moved = entry.relabelled(bufferLine)
+        synchronized {
+          if entries.containsKey(key) then
+            val _ = entries.put(key, moved)
+        }
+        moved
 
     private def lookup(key: WrappedLineKey): Option[Entry] = synchronized(Option(entries.get(key)))
 
