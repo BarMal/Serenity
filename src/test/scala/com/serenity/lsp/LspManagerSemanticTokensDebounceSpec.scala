@@ -21,6 +21,11 @@ class LspManagerSemanticTokensDebounceSpec extends AnyFlatSpec with SemanticToke
   private val fullMethod  = "textDocument/semanticTokens/full"
   private val rangeMethod = "textDocument/semanticTokens/range"
 
+  // Under TestControl, work due at the same instant runs in a random order. An edit landing at the very instant a
+  // request starts cancels it before it is sent, as any edit cancels an in-flight request, and a gap that divides
+  // MaxQuietWait evenly makes that happen in a few runs of a hundred.
+  private val EditGap = 130.millis
+
   private def countingSupervisor(started: Ref[IO, Int])(underlying: Supervisor[IO]): Supervisor[IO] =
     new Supervisor[IO]:
       def supervise[A](fa: IO[A]): IO[Fiber[IO, Throwable, A]] = started.update(_ + 1) >> underlying.supervise(fa)
@@ -130,7 +135,7 @@ class LspManagerSemanticTokensDebounceSpec extends AnyFlatSpec with SemanticToke
           requestTimes <- (1 to 30).toList.flatTraverse { n =>
             for
               _        <- server.edit(s"object Foo$n", n + 1)
-              _        <- IO.sleep(100.millis)
+              _        <- IO.sleep(EditGap)
               now      <- IO.monotonic
               messages <- drainOutgoing(server)
             yield messages.filter(server.methodOf(_) == fullMethod).as(now - firstAt)
@@ -157,7 +162,7 @@ class LspManagerSemanticTokensDebounceSpec extends AnyFlatSpec with SemanticToke
           requestTimes <- (1 to 30).toList.flatTraverse { n =>
             for
               _        <- server.send(LspEffect.VisibleRangeChanged(uri, LanguageId.Scala, n * 10, n * 10 + 30))
-              _        <- IO.sleep(100.millis)
+              _        <- IO.sleep(EditGap)
               now      <- IO.monotonic
               messages <- drainOutgoing(server)
             yield messages.filter(server.methodOf(_) == rangeMethod).as(now - firstAt)
