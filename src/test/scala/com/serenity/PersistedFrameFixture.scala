@@ -8,7 +8,7 @@ import com.serenity.config.{AppConfig, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{
   EditorPaneRenderPlan,
   FrameOutput,
@@ -126,6 +126,10 @@ trait PersistedFrameFixture:
       )
 
     private val frames = new AtomicInteger(0)
+    private val region = new AtomicReference[Option[List[PixelRect]]](None)
+
+    /** The pixel region the last frame bounded its present to, `None` when it asked for the whole canvas. */
+    def repaintRegion: Option[List[PixelRect]] = region.get()
 
     /** The image the next frame draws into, which holds the frame before the last. */
     def pendingImage: BufferedImage = pool(frames.get() % pool.size)
@@ -146,7 +150,7 @@ trait PersistedFrameFixture:
           cellMetrics,
           uiMetrics,
           None,
-          Some(FrameOutput(token, new AtomicReference(None))),
+          Some(FrameOutput(token, region)),
           damage,
           caches
         )
