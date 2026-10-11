@@ -3,6 +3,7 @@ package com.serenity
 import java.nio.file.Files
 
 import com.serenity.config.*
+import com.serenity.state.models.LargeFilePolicy
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -112,4 +113,44 @@ class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with
       "spellcheck.dictionary_paths = [\"C:\\\\Dictionaries\\\\en_US.dic\", \"/usr/share/hunspell/fr.dic\"]"
     )
     written should include("spellcheck.words = [\"serenity\", \"κόσμος\", \"café\"]")
+  }
+
+  it should "default the large-file policy and read configured thresholds" in {
+    AppConfig.default.largeFiles shouldBe LargeFilePolicy.Default
+
+    val configFile = TestTemp.file("serenity-large-file-config", ".conf")
+    Files.writeString(
+      configFile,
+      """editor.large_file.optimizations = false
+        |editor.large_file.warn_above_chars = 1000
+        |editor.large_file.tooling_off_above_chars = 2000
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.largeFiles shouldBe LargeFilePolicy(
+      warnAboveChars = 1000,
+      toolingOffAboveChars = 2000,
+      optimizations = false
+    )
+    ConfigManager.configToString(config) should include("editor.large_file.warn_above_chars = 1000")
+  }
+
+  it should "reject a non-positive large-file threshold and keep the default" in {
+    val configFile = TestTemp.file("serenity-large-file-invalid-config", ".conf")
+    Files.writeString(
+      configFile,
+      """editor.large_file.warn_above_chars = 0
+        |editor.large_file.tooling_off_above_chars = lots
+        |""".stripMargin
+    )
+
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
+
+    result.report.invalidEntries.map(_.key) should contain allOf (
+      "editor.large_file.warn_above_chars",
+      "editor.large_file.tooling_off_above_chars"
+    )
+    result.config.largeFiles shouldBe LargeFilePolicy.Default
   }

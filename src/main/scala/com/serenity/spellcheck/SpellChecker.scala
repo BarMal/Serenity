@@ -2,7 +2,7 @@ package com.serenity.spellcheck
 
 import java.nio.file.Path
 
-import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
+import com.serenity.config.{AppConfig, SpellCheckConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.model.*
 import com.serenity.state.models.*
@@ -98,7 +98,7 @@ object SpellChecker:
       state.persisted.buffers.values.foldLeft((preserved, Map.empty[DocumentUri, SpellCheckCacheEntry])) {
         case ((diagnostics, cache), buffer) =>
           val uri = diagnosticsUri(buffer)
-          if shouldCheck(buffer, state.persisted.config.languageToolsConfig.spellCheck) then
+          if shouldCheck(buffer, state.persisted.config) then
             val fingerprint = SpellCheckFingerprint.from(
               buffer,
               state.persisted.config.languageToolsConfig.spellCheck,
@@ -175,7 +175,7 @@ object SpellChecker:
     dictionaryFingerprints: List[SpellCheckDictionaryFingerprint]
   ): Map[DocumentUri, SpellCheckFingerprint] =
     state.persisted.buffers.values
-      .filter(buffer => shouldCheck(buffer, state.persisted.config.languageToolsConfig.spellCheck))
+      .filter(buffer => shouldCheck(buffer, state.persisted.config))
       .map(buffer =>
         diagnosticsUri(buffer) -> SpellCheckFingerprint
           .from(buffer, state.persisted.config.languageToolsConfig.spellCheck, dictionaryFingerprints)
@@ -339,8 +339,9 @@ object SpellChecker:
   def bufferDiagnosticsUri(bufferId: BufferId): DocumentUri =
     DocumentUri(s"buffer:${bufferId.value}")
 
-  private def shouldCheck(buffer: Buffer, config: SpellCheckConfig): Boolean =
-    config.enabled && buffer.usesTextFont
+  private def shouldCheck(buffer: Buffer, config: AppConfig): Boolean =
+    config.languageToolsConfig.spellCheck.enabled && buffer.usesTextFont &&
+      config.largeFiles.allowsSpellCheck(buffer.document)
 
   private def dictionaryLoadDiagnostics(failures: List[String]): List[Diagnostic] =
     failures.map { message =>

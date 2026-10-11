@@ -20,6 +20,18 @@ private[config] object ConfigFieldsLanguageAndTypography:
       _.languageToolsConfig.smartPunctuationEnabled,
       (config, value) => config.withSmartPunctuation(value)
     ),
+    field("editor.large_file.optimizations")(boolean)(
+      _.largeFiles.optimizations,
+      (config, value) => config.withLargeFilePolicy(config.largeFiles.copy(optimizations = value))
+    ),
+    field("editor.large_file.warn_above_chars")(int.filtered(_ >= 1))(
+      _.largeFiles.warnAboveChars,
+      (config, value) => config.withLargeFilePolicy(config.largeFiles.copy(warnAboveChars = value))
+    ),
+    field("editor.large_file.tooling_off_above_chars")(int.filtered(_ >= 1))(
+      _.largeFiles.toolingOffAboveChars,
+      (config, value) => config.withLargeFilePolicy(config.largeFiles.copy(toolingOffAboveChars = value))
+    ),
     field("spellcheck.enabled", "spellcheck_enabled")(boolean)(
       _.languageToolsConfig.spellCheck.enabled,
       (config, value) => config.withSpellCheck(config.languageToolsConfig.spellCheck.copy(enabled = value))
