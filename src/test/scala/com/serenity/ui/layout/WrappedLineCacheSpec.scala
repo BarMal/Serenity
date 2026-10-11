@@ -241,3 +241,29 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
     snapshot(buffer, cache, widthPx = 150) shouldBe expected
     snapshot(buffer, cache, widthPx = 150) shouldBe expected
   }
+
+  it should "share one entry between the state path's context and a 2x surface context" in {
+    val scaled = FontRenderContext(
+      AffineTransform.getScaleInstance(2.0, 2.0),
+      frc.getAntiAliasingHint,
+      frc.getFractionalMetricsHint
+    )
+    val cache = WrappedLineCache.bounded()
+    val state = wrap(prose, cache)
+    wrap(prose, cache, fontRenderContext = scaled) shouldBe state
+    cache.size shouldBe 1
+    wrap(prose, WrappedLineCache.Uncached, fontRenderContext = scaled) shouldBe
+      wrap(prose, WrappedLineCache.Uncached)
+  }
+
+  it should "relabel a line moved to another buffer line once, then serve it without copying rows" in {
+    val cache = WrappedLineCache.bounded()
+    val above = wrap(prose, cache, bufferLine = 3)
+    val moved = wrap(prose, cache, bufferLine = 4)
+    moved.map(_.bufferLine).distinct shouldBe Vector(4)
+    moved shouldBe above.map(_.copy(bufferLine = 4))
+    val again = wrap(prose, cache, bufferLine = 4)
+    again.zip(moved).foreach((a, b) => (a: AnyRef) should be theSameInstanceAs (b: AnyRef))
+    cache.size shouldBe 1
+    wrap(prose, cache, bufferLine = 3).map(_.bufferLine).distinct shouldBe Vector(3)
+  }
