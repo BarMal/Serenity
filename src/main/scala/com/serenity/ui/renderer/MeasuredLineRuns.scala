@@ -111,6 +111,11 @@ private[renderer] object MeasuredLineRuns:
     */
   def stretched(runs: Vector[MeasuredRun], text: String): Vector[StretchedRun] =
     val offsets = runs.scanLeft(0)(_ + _.text.length)
+    if runs.headOption.forall(first => runs.forall(_.style == first.style)) then
+      Vector.tabulate(runs.length)(index => StretchedRun(runs(index), text, offsets(index), offsets(index + 1)))
+    else mixedStretches(runs, text, offsets)
+
+  private def mixedStretches(runs: Vector[MeasuredRun], text: String, offsets: Vector[Int]): Vector[StretchedRun] =
     val firsts = runs.indices.foldLeft(Vector.empty[Int]) { (found, index) =>
       found :+ (if index > 0 && runs(index - 1).style == runs(index).style then found(index - 1) else index)
     }

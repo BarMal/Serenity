@@ -49,6 +49,14 @@ object ShapedTextCache:
 
   val DefaultCapacity: Int = 2048
 
+  /** Below the combining marks, in a font with no ligatures or kerning requested, `drawString` only maps characters to
+    * glyphs and shapes nothing, so a lookup and a glyph vector would cost more than it saves.
+    */
+  def worthShaping(font: Font, text: String): Boolean =
+    font.hasLayoutAttributes || text.exists(_ >= FirstCharNeedingLayout)
+
+  private val FirstCharNeedingLayout = '\u0300'
+
   /** Shared by every surface that is not handed its own: shaping is a pure function of its key. */
   val shared: ShapedTextCache = new ShapedTextCache()
 

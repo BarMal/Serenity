@@ -30,6 +30,11 @@ trait TextDrawing:
     clipGlyphToRun: Boolean = false
   ): Unit
 
+  /** Whether drawing `text` is better served by [[drawShapedRunPx]] than by a [[drawRunPx]] per run. A surface whose
+    * font shapes nothing for the text has no shaping to share, so the default says no.
+    */
+  def shapesStretchesOf(text: String): Boolean = false
+
   /** As [[drawRunPx]] for `stretch.substring(from, until)`, where `stretch` is text drawn in one font across several
     * runs. A raster surface shapes the stretch once and draws each run from those glyphs, so ligatures and kerning
     * reach across run boundaries; the default draws the run's own text.

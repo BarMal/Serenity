@@ -256,6 +256,30 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  "A plain font over simple text" should "draw with drawString, which shapes nothing there, and leave the cache alone" in {
+    val plain = new Font(Font.SERIF, Font.PLAIN, 14)
+    val cache = ShapedTextCache()
+    val image = freshImage()
+    val surface = new Java2DRenderSurface(
+      image,
+      metrics,
+      plain,
+      _ => (),
+      widthPx,
+      heightPx,
+      deviceScale,
+      deviceScale,
+      shapedText = cache
+    )
+    surface.setForegroundColor(black)
+    surface.setBackgroundColor(white)
+
+    paintLine(surface, codeLine, threeColours)
+
+    cache.shapings shouldBe 0L
+    inkOf(image) should be > 0
+  }
+
   "ShapedTextCache" should "serve a repeated text, font and render context without shaping it again" in {
     val cache = ShapedTextCache()
 

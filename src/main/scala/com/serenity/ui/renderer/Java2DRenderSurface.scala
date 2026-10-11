@@ -133,6 +133,9 @@ class Java2DRenderSurface(
         .foreach(g.drawGlyphVector(_, xPx, (yPx + ascentPx).toFloat))
     }
 
+  override def shapesStretchesOf(text: String): Boolean =
+    ShapedTextCache.worthShaping(baseFontRef.get(), text)
+
   private def paintRun(
     xPx: Float,
     yPx: Int,
