@@ -16,11 +16,15 @@ import com.serenity.ui.renderer.ShapedTextCache
   * [[GlyphAdvances.advancesAreUniform]]) a contextual substitution or ligature whose glyphs add up to the advances of
   * the characters they stand for does not count: Monaspace's "texture healing" alternates and its `//` and `=>`
   * ligatures change shapes, never widths. Carets over a context-free span are plain sums of advances taken from the
-  * span's start, so a row cut out of a measured paragraph has exactly the carets the row measures alone.
+  * span's start, so a row cut out of a measured paragraph has exactly the carets the row measures alone. A character
+  * whose only context is a kerning pair with its successor is not context-free but is measurable: the pair's kerning is
+  * kept beside its advance, which is all a row cut out of the paragraph needs to find its carets.
   */
 final private[layout] class GlyphAdvances private (
     private val advances: Array[Float],
-    private val contextFreeBefore: Array[Int]
+    private val contextFreeBefore: Array[Int],
+    private val kernAfter: Array[Float],
+    private val measurableBefore: Array[Int]
 ):
 
   def length: Int = advances.length
@@ -31,29 +35,54 @@ final private[layout] class GlyphAdvances private (
   def spliced(keep: Int, middle: GlyphAdvances, tailFrom: Int): GlyphAdvances =
     val tailLength = advances.length - tailFrom
     val tailAt     = keep + middle.length
-    val merged     = new Array[Float](tailAt + tailLength)
-    System.arraycopy(advances, 0, merged, 0, keep)
-    System.arraycopy(middle.advances, 0, merged, keep, middle.length)
-    System.arraycopy(advances, tailFrom, merged, tailAt, tailLength)
-    val keptFree   = contextFreeBefore(keep)
-    val middleFree = keptFree + middle.contextFreeBefore(middle.length)
-    val counts     = new Array[Int](merged.length + 1)
-    System.arraycopy(contextFreeBefore, 0, counts, 0, keep + 1)
-    (1 to middle.length).foreach(index => counts(keep + index) = keptFree + middle.contextFreeBefore(index))
-    val tailShift = middleFree - contextFreeBefore(tailFrom)
-    (1 to tailLength).foreach(index => counts(tailAt + index) = tailShift + contextFreeBefore(tailFrom + index))
-    new GlyphAdvances(merged, counts)
+    def join[A](whole: Array[A], inserted: Array[A], make: Int => Array[A]): Array[A] =
+      val merged = make(tailAt + tailLength)
+      System.arraycopy(whole, 0, merged, 0, keep)
+      System.arraycopy(inserted, 0, merged, keep, middle.length)
+      System.arraycopy(whole, tailFrom, merged, tailAt, tailLength)
+      merged
+    def joinCounts(counts: Array[Int], inserted: Array[Int]): Array[Int] =
+      val merged    = new Array[Int](tailAt + tailLength + 1)
+      val kept      = counts(keep)
+      val middleEnd = kept + inserted(middle.length)
+      System.arraycopy(counts, 0, merged, 0, keep + 1)
+      (1 to middle.length).foreach(index => merged(keep + index) = kept + inserted(index))
+      val tailShift = middleEnd - counts(tailFrom)
+      (1 to tailLength).foreach(index => merged(tailAt + index) = tailShift + counts(tailFrom + index))
+      merged
+    new GlyphAdvances(
+      join(advances, middle.advances, new Array[Float](_)),
+      joinCounts(contextFreeBefore, middle.contextFreeBefore),
+      join(kernAfter, middle.kernAfter, new Array[Float](_)),
+      joinCounts(measurableBefore, middle.measurableBefore)
+    )
 
   def isContextFree(from: Int, until: Int): Boolean =
     contextFreeBefore(until) - contextFreeBefore(from) == until - from
 
-  /** Each character's leading caret in `[from, from + count)`, plus the trailing edge, with `from` at 0. */
+  /** Whether a row cut out of `[from, until)` has the carets of these advances: every character is context-free, or
+    * only kerned (see [[GlyphAdvances.measure]]). Carets of kerned characters are read with [[caretsFrom]].
+    */
+  def isMeasurable(from: Int, until: Int): Boolean =
+    measurableBefore(until) - measurableBefore(from) == until - from
+
+  /** How far each of `count` characters from `from` pulls the next one closer (negative) or pushes it away. */
+  def kerningsFrom(from: Int, count: Int): IArray[Float] =
+    IArray.unsafeFromArray(java.util.Arrays.copyOfRange(kernAfter, from, from + count))
+
+  /** Each character's leading caret in `[from, from + count)`, plus the trailing edge, with `from` at 0. `TextLayout`
+    * puts a kerned character's leading caret half way between where the kerning moved it and where it would have been
+    * without, so the carets between characters read half the kerning of the one before; the trailing edge is the sum of
+    * the advances, a last character feeling no kerning from a successor the row does not hold.
+    */
   def caretsFrom(from: Int, count: Int): IArray[Float] =
     val carets = new Array[Float](count + 1)
     @annotation.tailrec
     def sum(index: Int, xPx: Float): Unit =
-      carets(index) = xPx
-      if index < count then sum(index + 1, xPx + advances(from + index))
+      carets(index) = if index > 0 && index < count then xPx - kernAfter(from + index - 1) / 2.0f else xPx
+      if index < count then
+        val kerning = if index + 1 < count then kernAfter(from + index) else 0.0f
+        sum(index + 1, xPx + advances(from + index) + kerning)
     sum(0, 0.0f)
     IArray.unsafeFromArray(carets)
 
@@ -71,10 +100,10 @@ private[layout] object GlyphAdvances:
 
   private val AgreementProbeText = "Hoxi "
 
-  /** Whether `TextLayout` ends a row where summed glyph advances do: a slanted face (a transformed font, or the italic
-    * AWT synthesises when a family has none) makes `TextLayout.getAdvance` include the slant overhang, so every row's
-    * trailing edge, and with it where rows wrap, would differ from the sum. Read off the font once, since the font
-    * alone does not say whether its italic is synthesised.
+  /** Whether `TextLayout` ends a row where the shaped glyphs' advances do, kerning included: a slanted face (a
+    * transformed font, or the italic AWT synthesises when a family has none) makes `TextLayout.getAdvance` include the
+    * slant overhang, so every row's trailing edge, and with it where rows wrap, would differ from the sum. Read off the
+    * font once, since the font alone does not say whether its italic is synthesised.
     */
   def layoutAdvanceMatchesSum(font: Font, frc: FontRenderContext): Boolean =
     layoutAgreement.computeIfAbsent(
@@ -84,8 +113,8 @@ private[layout] object GlyphAdvances:
 
   private def probeLayoutAdvance(font: Font, frc: FontRenderContext): Boolean =
     val chars  = AgreementProbeText.toCharArray
-    val glyphs = font.createGlyphVector(frc, chars)
-    val summed = (0 until glyphs.getNumGlyphs).map(glyphs.getGlyphMetrics(_).getAdvance).sum
+    val glyphs = font.layoutGlyphVector(frc, chars, 0, chars.length, Font.LAYOUT_LEFT_TO_RIGHT)
+    val summed = glyphs.getGlyphPosition(glyphs.getNumGlyphs).getX
     val text   = AttributedString(AgreementProbeText)
     text.addAttribute(TextAttribute.FONT, font)
     math.abs(TextLayout(text.getIterator, frc).getAdvance - summed) <= ShapingTolerancePx
@@ -107,6 +136,27 @@ private[layout] object GlyphAdvances:
     val glyphs   = font.createGlyphVector(frc, UniformProbeText.toCharArray)
     val advances = (0 until glyphs.getNumGlyphs).map(glyphs.getGlyphMetrics(_).getAdvance)
     advances.maxOption.zip(advances.minOption).forall((widest, narrowest) => widest - narrowest <= ShapingTolerancePx)
+
+  final private case class PairProbe(font: Font, frc: FontRenderContext, first: Char, second: Char)
+
+  private val pairKernings = ConcurrentHashMap[PairProbe, java.lang.Float]()
+
+  /** How far `first` pulls `second` closer (negative) when the two are shaped side by side. Read from the pair alone,
+    * since a width taken from glyph positions along a long run carries rounding that differs from run to run.
+    */
+  private def pairKerning(font: Font, frc: FontRenderContext, first: Char, second: Char): Float =
+    pairKernings.computeIfAbsent(
+      PairProbe(font, frc, first, second),
+      probe => probePairKerning(probe): java.lang.Float
+    )
+
+  private def probePairKerning(probe: PairProbe): Float =
+    val chars   = Array(probe.first, probe.second)
+    val nominal = probe.font.createGlyphVector(probe.frc, chars)
+    val shaped  = probe.font.layoutGlyphVector(probe.frc, chars, 0, chars.length, Font.LAYOUT_LEFT_TO_RIGHT)
+    if nominal.getNumGlyphs == chars.length && shaped.getNumGlyphs == chars.length then
+      shaped.getGlyphPosition(1).getX.toFloat - nominal.getGlyphMetrics(0).getAdvance
+    else 0.0f
 
   def hasContextFreeCharacters(text: String): Boolean =
     !Font.textRequiresLayout(text.toCharArray, 0, text.length) && text.forall(isContextFreeCharacter)
@@ -131,10 +181,14 @@ private[layout] object GlyphAdvances:
   ): GlyphAdvances =
     val chars       = text.substring(from, until).toCharArray
     val advances    = new Array[Float](chars.length)
+    val kernAfter   = new Array[Float](chars.length)
+    val measurable  = new Array[Boolean](chars.length)
     val contextFree = new Array[Boolean](chars.length)
     val origin      = absoluteStartColumn + from
     resolver.fontRuns(origin, origin + chars.length).foreach { span =>
-      if span.hidden then java.util.Arrays.fill(contextFree, span.startColumn - origin, span.endColumn - origin, true)
+      if span.hidden then
+        java.util.Arrays.fill(contextFree, span.startColumn - origin, span.endColumn - origin, true)
+        java.util.Arrays.fill(measurable, span.startColumn - origin, span.endColumn - origin, true)
       else
         measureRun(
           chars,
@@ -144,6 +198,8 @@ private[layout] object GlyphAdvances:
           frc,
           shapedText,
           advances,
+          kernAfter,
+          measurable,
           contextFree
         )
     }
@@ -151,8 +207,9 @@ private[layout] object GlyphAdvances:
       case (column, extraPx) =>
         if column >= origin && column < origin + chars.length then advances(column - origin) += extraPx
     }
-    val contextFreeBefore = contextFree.scanLeft(0)((count, free) => if free then count + 1 else count)
-    new GlyphAdvances(advances, contextFreeBefore)
+    def countBefore(flags: Array[Boolean]): Array[Int] =
+      flags.scanLeft(0)((count, flag) => if flag then count + 1 else count)
+    new GlyphAdvances(advances, countBefore(contextFree), kernAfter, countBefore(measurable))
 
   private def measureRun(
     chars: Array[Char],
@@ -162,6 +219,8 @@ private[layout] object GlyphAdvances:
     frc: FontRenderContext,
     shapedText: ShapedTextCache,
     advances: Array[Float],
+    kernAfter: Array[Float],
+    measurable: Array[Boolean],
     contextFree: Array[Boolean]
   ): Unit =
     val runChars = java.util.Arrays.copyOfRange(chars, start, end)
@@ -177,7 +236,9 @@ private[layout] object GlyphAdvances:
           (advance == 0.0f || advance >= SmallestDistinctAdvancePx)
       }
       if font.hasLayoutAttributes && (start until end).exists(contextFree(_)) then
-        clearShapedCharacters(runChars, start, font, frc, shapedText, codes, advances, contextFree)
+        clearShapedCharacters(runChars, start, font, frc, shapedText, codes, advances, kernAfter, contextFree)
+      java.lang.System.arraycopy(contextFree, start, measurable, start, end - start)
+      (start until end).foreach(char => if kernAfter(char) != 0.0f then contextFree(char) = false)
 
   /** With kerning or ligatures requested, AWT shapes the run; any character whose shaped glyph is not its own nominal
     * glyph at its nominal advance (a ligature, a kerning pair, a contextual substitution) needs per-row measurement. In
@@ -194,6 +255,7 @@ private[layout] object GlyphAdvances:
     shapedText: ShapedTextCache,
     nominalCodes: Array[Int],
     advances: Array[Float],
+    kernAfter: Array[Float],
     contextFree: Array[Boolean]
   ): Unit =
     val count                    = runChars.length
@@ -223,7 +285,13 @@ private[layout] object GlyphAdvances:
           val sameWidth    = math.abs(shapedWidth - nominalWidth) <= ShapingTolerancePx * (until - first)
           val keepsGlyph   = ownGlyph && shaped.glyphCodeAt(glyph) == nominalCodes(first)
           val unchanged    = if ownGlyph then keepsGlyph || substitutionKeepsAdvance else substitutionKeepsAdvance
-          if unchanged && sameWidth && onBaseline(glyph, last) then (first until until).foreach(faithful(_) = true)
+          val onLine       = onBaseline(glyph, last)
+          if unchanged && sameWidth && onLine then (first until until).foreach(faithful(_) = true)
+          else if keepsGlyph && onLine && last + 1 < shaped.glyphCount && until < count then
+            val pair = pairKerning(font, frc, runChars(first), runChars(until))
+            if pair != 0.0f && math.abs(shapedWidth - nominalWidth - pair) <= ShapingTolerancePx then
+              faithful(first) = true
+              kernAfter(start + first) = pair
         judgeClusters(last + 1)
 
     judgeClusters(0)

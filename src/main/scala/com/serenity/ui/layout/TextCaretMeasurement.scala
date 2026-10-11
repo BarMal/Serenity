@@ -3,6 +3,7 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.{FontRenderContext, TextAttribute, TextHitInfo, TextLayout}
 import java.text.AttributedString
+import java.util.concurrent.atomic.AtomicLong
 
 import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.RichTextDocument
@@ -168,6 +169,18 @@ private[layout] object TextCaretMeasurement:
         absoluteStartColumn
       )
 
+  private val textLayoutsBuilt: ThreadLocal[AtomicLong] = ThreadLocal.withInitial(() => AtomicLong(0))
+
+  /** How many `TextLayout`s caret and fit measurement has built on the calling thread: the cost wrapping pays when
+    * summed glyph advances cannot answer, which the wrap specs bound per paragraph. Counted per thread so specs running
+    * side by side do not see each other's layouts.
+    */
+  private[layout] def textLayoutsConstructed: Long = textLayoutsBuilt.get().get()
+
+  private def textLayoutOf(text: AttributedString, frc: FontRenderContext): TextLayout =
+    val _ = textLayoutsBuilt.get().incrementAndGet()
+    TextLayout(text.getIterator, frc)
+
   /** Each character's leading caret plus the run's full advance, before [[normalizeCollapsedCarets]]: summed glyph
     * advances when every character is context-free (see [[GlyphAdvances]]), a `TextLayout` otherwise.
     */
@@ -231,7 +244,7 @@ private[layout] object TextCaretMeasurement:
         span.endColumn - absoluteStartColumn
       )
     }
-    val layout = TextLayout(attributed.getIterator, frc)
+    val layout = textLayoutOf(attributed, frc)
     val carets = new Array[Float](text.length + 1)
     (0 until text.length).foreach(index => carets(index) = layout.getCaretInfo(TextHitInfo.leading(index))(0))
     carets(text.length) = layout.getAdvance
@@ -260,7 +273,7 @@ private[layout] object TextCaretMeasurement:
           visibleBefore(span.endColumn - absoluteStartColumn)
         )
       }
-      val layout = TextLayout(attributed.getIterator, frc)
+      val layout = textLayoutOf(attributed, frc)
       carets(text.length) = layout.getAdvance
       (text.length - 1 to 0 by -1).foreach { index =>
         carets(index) =
@@ -270,9 +283,15 @@ private[layout] object TextCaretMeasurement:
     IArray.unsafeFromArray(carets)
 
   /** How many characters of a row fit, plus -- when they came from summed advances -- the candidate's raw carets, so
-    * the chosen row reuses them instead of being measured a second time.
+    * the chosen row reuses them instead of being measured a second time. A kerned character's leading caret already
+    * holds half the kerning of the one before it, which a row ending there does not feel, so `kerningAfter` holds the
+    * pull of each candidate character on its successor, for a row cut short of the candidate.
     */
-  final private[layout] case class SegmentFit(length: Int, reusableRawCarets: Option[IArray[Float]] = None):
+  final private[layout] case class SegmentFit(
+      length: Int,
+      reusableRawCarets: Option[IArray[Float]] = None,
+      kerningAfter: IArray[Float] = IArray.empty[Float]
+  ):
 
     def caretXsForPrefix(
       prefixLength: Int,
@@ -281,7 +300,16 @@ private[layout] object TextCaretMeasurement:
     ): Option[IArray[Float]] =
       reusableRawCarets
         .filter(_.length > prefixLength)
-        .map(raw => normalizeCollapsedCarets(raw.take(prefixLength + 1), resolver, absoluteStartColumn))
+        .map { raw =>
+          val prefix = raw.take(prefixLength + 1)
+          val kerning =
+            if prefixLength > 0 && prefixLength < raw.length - 1 then kerningAfter(prefixLength - 1) else 0.0f
+          normalizeCollapsedCarets(
+            if kerning == 0.0f then prefix else prefix.updated(prefixLength, prefix(prefixLength) - kerning / 2.0f),
+            resolver,
+            absoluteStartColumn
+          )
+        }
 
   private[layout] def fittingSegment(
     paragraph: ParagraphMeasurement,
