@@ -14,6 +14,13 @@ enum FrameCounter(val label: String):
   case ShapingCalls    extends FrameCounter("shapings")
   case LayerComposites extends FrameCounter("layer-composites")
 
+  /** Device pixels of layer image the frame had to allocate; a layer buffer recycled from an earlier frame adds none.
+    */
+  case LayerBufferPx extends FrameCounter("layer-px")
+
+  /** Times the frame worked out its overlay view model, which one frame should do once. */
+  case OverlayModelBuilds extends FrameCounter("overlay-models")
+
   /** 1 on a frame that repainted any chrome, so its mean over a window is the share of frames that did. */
   case ChromePainted extends FrameCounter("chrome-painted")
 

@@ -30,6 +30,7 @@ class Java2DRenderSurface(
     deviceScaleY: Double = 1.0,
     contentPersists: Boolean = false,
     layerCacheOwnerOverride: Option[ScreenIdentity] = None,
+    imageOriginPx: DeviceOrigin = DeviceOrigin.Zero,
     labelSprites: LabelSprites = LabelSprites.shared,
     styledFonts: StyledFontCache = StyledFontCache.shared,
     shapedText: ShapedTextCache = ShapedTextCache.shared,
@@ -59,6 +60,20 @@ class Java2DRenderSurface(
     * why that matters).
     */
   override def newLayerSurface(onFlush: RenderImage => Unit, recycled: Option[RenderImage]): RenderSurface =
+    layerSurface(onFlush, recycled, None)
+
+  override def newBoundedLayerSurface(
+    bounds: PixelRect,
+    onFlush: RenderImage => Unit,
+    recycled: Option[RenderImage]
+  ): RenderSurface =
+    layerSurface(onFlush, recycled, Some(bounds))
+
+  private def layerSurface(
+    onFlush: RenderImage => Unit,
+    recycled: Option[RenderImage],
+    bounds: Option[PixelRect]
+  ): RenderSurface =
     Java2DRenderSurface.forLayer(
       metrics,
       baseFontRef.get(),
@@ -68,7 +83,8 @@ class Java2DRenderSurface(
       deviceScaleY,
       image => onFlush(RenderImage.fromAwt(image)),
       recycled = recycled.map(_.toAwt),
-      activity = activity
+      activity = activity,
+      bounds = bounds
     )
 
   private val g: Graphics2D = image.createGraphics()
@@ -81,6 +97,7 @@ class Java2DRenderSurface(
 
   g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
   g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
+  g.translate(-imageOriginPx.xPx.toDouble, -imageOriginPx.yPx.toDouble)
   g.scale(deviceScaleX, deviceScaleY)
   g.setFont(font)
 
@@ -391,11 +408,17 @@ class Java2DRenderSurface(
     * through [[drawImage]] instead would shrink it a little per composite.
     */
   override def compositeFullSurfaceLayer(layerImage: RenderImage): Unit =
+    blitLayer(layerImage, DeviceOrigin.Zero)
+
+  override def compositeLayer(layerImage: RenderImage, bounds: PixelRect): Unit =
+    blitLayer(layerImage, DeviceOrigin.of(bounds, deviceScaleX, deviceScaleY))
+
+  private def blitLayer(layerImage: RenderImage, origin: DeviceOrigin): Unit =
     activity.layerComposited()
     painted.forgetClear()
     val rawGraphics = image.createGraphics()
     try
-      val _ = rawGraphics.drawImage(layerImage.toAwt, 0, 0, Java2DRenderSurface.NoOpImageObserver)
+      val _ = rawGraphics.drawImage(layerImage.toAwt, origin.xPx, origin.yPx, Java2DRenderSurface.NoOpImageObserver)
     finally rawGraphics.dispose()
 
   /** In device pixels on an untransformed graphics, because `copyArea` is not implemented for a scaled one. A copy onto
@@ -540,34 +563,21 @@ object Java2DRenderSurface:
     deviceScaleY: Double,
     onFlush: BufferedImage => Unit,
     recycled: Option[BufferedImage] = None,
-    activity: SurfaceActivity = SurfaceActivity()
+    activity: SurfaceActivity = SurfaceActivity(),
+    bounds: Option[PixelRect] = None
   ): Java2DRenderSurface =
-    val width  = deviceImageDimension(logicalWidthPx, deviceScaleX)
-    val height = deviceImageDimension(logicalHeightPx, deviceScaleY)
-    val image = recycled
-      .filter(candidate => candidate.getWidth == width && candidate.getHeight == height)
-      .map(clearedForReuse)
-      .getOrElse(new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB))
-    new Java2DRenderSurface(
-      image,
+    LayerSurfaces.build(
       metrics,
       font,
+      logicalWidthPx,
+      logicalHeightPx,
+      deviceScaleX,
+      deviceScaleY,
       onFlush,
-      logicalWidthPx = logicalWidthPx,
-      logicalHeightPx = logicalHeightPx,
-      deviceScaleX = deviceScaleX,
-      deviceScaleY = deviceScaleY,
-      contentPersists = false,
-      activity = activity
+      recycled,
+      activity,
+      bounds
     )
-
-  private def clearedForReuse(image: BufferedImage): BufferedImage =
-    val graphics = image.createGraphics()
-    try
-      graphics.setComposite(AlphaComposite.Clear)
-      graphics.fillRect(0, 0, image.getWidth, image.getHeight)
-    finally graphics.dispose()
-    image
 
   private[serenity] def deviceImageDimension(logicalDimensionPx: Int, deviceScale: Double): Int =
     math.ceil(logicalDimensionPx.max(1) * deviceScale.max(1.0)).toInt.max(1)

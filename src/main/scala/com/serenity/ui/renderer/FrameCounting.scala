@@ -14,6 +14,8 @@ private[renderer] object FrameCounting:
       counters.add(FrameCounter.ChromePainted, if plan.forall(_.chrome.paintsAny) then 1L else 0L)
       counters.add(FrameCounter.PresentAreaPx, presentedArea(plan.flatMap(_.repaintRegion), viewport, metrics))
 
+  def overlayModelBuilt(counters: FrameCounters): Unit = counters.add(FrameCounter.OverlayModelBuilds, 1L)
+
   /** `dirtyRows` is the dirty-region contract of [[RendererPaneContent]]: `None` draws all `total` rows. */
   def rowsPainted(counters: FrameCounters, total: Int, dirtyRows: Option[Set[Int]]): Unit =
     if counters.isEnabled then counters.rows(total, dirtyRows.fold(total)(_.size))

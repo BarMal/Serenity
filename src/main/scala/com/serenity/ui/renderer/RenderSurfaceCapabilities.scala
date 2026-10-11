@@ -2,6 +2,8 @@ package com.serenity.ui.renderer
 
 import java.awt.font.FontRenderContext
 
+import scala.annotation.unused
+
 import com.serenity.config.CursorMode
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.PixelRect
@@ -95,6 +97,12 @@ trait PixelDrawing:
   def compositeFullSurfaceLayer(image: RenderImage): Unit =
     drawImage(image, 0, 0, image.widthPx, image.heightPx)
 
+  /** Composite a layer buffer made by [[LayerBufferSupport.newBoundedLayerSurface]] for `bounds` back where it was
+    * painted. A surface whose bounded layers are whole-surface ones (the default) composites them as such.
+    */
+  def compositeLayer(image: RenderImage, @unused bounds: PixelRect): Unit =
+    compositeFullSurfaceLayer(image)
+
   /** Translate drawing in device-independent logical pixels for fractional-cell floating geometry. */
   def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit
 
@@ -139,6 +147,18 @@ trait LayerBufferSupport:
     * allocating, when its size still matches.
     */
   def newLayerSurface(onFlush: RenderImage => Unit, recycled: Option[RenderImage] = None): RenderSurface
+
+  /** As [[newLayerSurface]], for a layer that paints only inside `bounds` (logical pixels): the surface still addresses
+    * the whole window, so a renderer paints at its usual coordinates, but the image it hands back covers `bounds` alone
+    * and goes back through [[PixelDrawing.compositeLayer]]. A capability with no smaller buffer to offer returns the
+    * whole-surface layer, which that composite handles too.
+    */
+  def newBoundedLayerSurface(
+    @unused bounds: PixelRect,
+    onFlush: RenderImage => Unit,
+    recycled: Option[RenderImage] = None
+  ): RenderSurface =
+    newLayerSurface(onFlush, recycled)
 
 /** A caret shape a real terminal's own cursor can be styled as via DECSCUSR (`CSI Ps SP q`). */
 enum HardwareCursorShape:

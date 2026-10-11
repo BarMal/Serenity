@@ -22,8 +22,16 @@ object RendererFloatingPanels:
     scene: UiSceneSnapshot,
     damage: Damage
   ): Unit =
+    renderFloatingPanels(state, context, damage, FramePanels.of(state, context, scene))
+
+  private[renderer] def renderFloatingPanels(
+    state: AppState,
+    context: RenderContext,
+    damage: Damage,
+    panels: FramePanels
+  ): Unit =
     context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
-    val overlays     = OverlayViewModel.fromState(state, scene)
+    val overlays     = panels.overlays
     val panelIsDirty = RendererFramePlanner.panelDirtyCheck(damage)
 
     def paintOverlay(overlay: TextOverlayView): Unit =
@@ -37,25 +45,24 @@ object RendererFloatingPanels:
           layerContext.uiFont,
           layerContext.cellMetrics
         )
-      overlay.surfaceId match
-        case Some(surfaceId) =>
-          RendererFramePlanner.paintPanelLayer(state, context, surfaceId, overlay.rect, panelIsDirty(surfaceId))(
-            paint
-          )
+      overlay.surfaceId.flatMap(panels.sites.get) match
+        case Some(site) =>
+          PanelLayers.paint(
+            state,
+            context,
+            site,
+            panelIsDirty(site.id),
+            panels.kept.contains(site.id)
+          )(paint)
         case None => paint(context)
 
-    overlays.tabBar.foreach(paintOverlay)
-    overlays.aboveCursorStack.foreach(paintOverlay)
-    val belowOverlays =
-      if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
-    belowOverlays.foreach(paintOverlay)
-    overlays.cornerStack.foreach(paintOverlay)
+    panels.floating.foreach(paintOverlay)
 
     // Recorded *after* this frame's panels are painted, so `dirtyRowsFor`'s read of this same state (via `planFrame`,
     // which always runs before this method for a given frame) still sees last frame's rects while planning this one --
     // see `RendererFrameState.previousFloatingSurfaceRects`' doc comment.
     val currentFloatingRects: Map[SurfaceId, PixelRect] =
-      (overlays.aboveCursorStack ++ belowOverlays ++ overlays.cornerStack).flatMap { overlay =>
+      (overlays.aboveCursorStack ++ panels.belowCursorOverlays ++ overlays.cornerStack).flatMap { overlay =>
         overlay.surfaceId.map(_ -> floatingPanelPixelRect(overlay.rect, context.cellMetrics))
       }.toMap
     context.caches.frameState.rememberFloatingSurfaceRects(context.surface, currentFloatingRects)
@@ -72,6 +79,14 @@ object RendererFloatingPanels:
   private val ModalBackdropEffect = LayerEffect(0.4f)
 
   def renderModalLayer(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
+    renderModalLayer(state, context, scene, FramePanels.of(state, context, scene))
+
+  private[renderer] def renderModalLayer(
+    state: AppState,
+    context: RenderContext,
+    scene: UiSceneSnapshot,
+    panels: FramePanels
+  ): Unit =
     scene.modalBackdrop.foreach { backdrop =>
       LayerCompositor.withEffect(context.surface)(ModalBackdropEffect) {
         context.surface.setBackgroundColor(state.persisted.theme.margin)
@@ -84,7 +99,7 @@ object RendererFloatingPanels:
         )
       }
     }
-    OverlayViewModel.fromState(state, scene).modal.foreach { overlay =>
+    panels.overlays.modal.foreach { overlay =>
       TextOverlayRenderer.render(
         context.surface,
         overlay,
@@ -101,6 +116,15 @@ object RendererFloatingPanels:
     context: RenderContext,
     scene: UiSceneSnapshot,
     damage: Damage
+  ): Unit =
+    renderPinnedPanels(state, context, scene, damage, FramePanels.of(state, context, scene))
+
+  private[renderer] def renderPinnedPanels(
+    state: AppState,
+    context: RenderContext,
+    scene: UiSceneSnapshot,
+    damage: Damage,
+    panels: FramePanels
   ): Unit =
     context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
     val surfaceNodes = scene.workspace.collect {
@@ -125,7 +149,12 @@ object RendererFloatingPanels:
               )
 
         val isDirty = RendererFramePlanner.panelDirtyCheck(damage)(surface.id)
-        RendererFramePlanner.paintPanelLayer(state, context, surface.id, rect, isDirty)(paintContent)
+        panels.sites.get(surface.id) match
+          case Some(site) =>
+            PanelLayers.paint(state, context, site, isDirty, panels.kept.contains(site.id))(
+              paintContent
+            )
+          case None => paintContent(context)
       }
     }
 
