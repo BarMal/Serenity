@@ -47,8 +47,8 @@ final private[layout] class ParagraphMeasurement private (
       IArray.unsafeFromArray(offsets)
 
   /** The row fit the per-row `TextLayout` search would find, read from the measured advances -- or `None` when the
-    * candidate leaves the window, holds a character needing per-row measurement, or lands too near the width for float
-    * rounding between the two measurements to be ruled out.
+    * candidate leaves the window, holds a character whose shaping depends on its neighbours beyond a kerning pair, or
+    * lands too near the width for float rounding between the two measurements to be ruled out.
     */
   def measuredFit(from: Int, panelWidthPx: Int): Option[SegmentFit] =
     val remaining = spec.text.length - from
@@ -56,12 +56,19 @@ final private[layout] class ParagraphMeasurement private (
     @annotation.tailrec
     def loop(limit: Int): Option[SegmentFit] =
       advances match
-        case Some(measured) if from + limit <= end && measured.isContextFree(from - start, from - start + limit) =>
+        case Some(measured) if from + limit <= end && measured.isMeasurable(from - start, from - start + limit) =>
           val raw  = measured.caretsFrom(from - start, limit)
           val last = raw(limit)
           if math.abs(last - width) < DecisionGuardPx then None
           else if limit >= remaining || last > width then
-            settledFit(raw, limit, width, spec.resolver, spec.baseColumn + from)
+            settledFit(
+              raw,
+              measured.kerningsFrom(from - start, limit),
+              limit,
+              width,
+              spec.resolver,
+              spec.baseColumn + from
+            )
           else loop(math.min(remaining, math.max(limit + 1, limit * 2)))
         case _ => None
     loop(math.min(remaining, initialCandidateLength(panelWidthPx, spec.cellMetrics)))
@@ -115,6 +122,7 @@ private[layout] object ParagraphMeasurement:
   /** Mirrors the per-row search's stopping rule over the candidate's normalized carets. */
   private def settledFit(
     raw: IArray[Float],
+    kerning: IArray[Float],
     limit: Int,
     width: Float,
     resolver: LineFontResolver,
@@ -125,4 +133,4 @@ private[layout] object ParagraphMeasurement:
     val maxFitting = if firstOver < 0 then limit else firstOver - 1
     val nearFit    = maxFitting >= 0 && width - carets(maxFitting) < DecisionGuardPx
     val nearOver   = firstOver >= 0 && carets(firstOver) - width < DecisionGuardPx
-    Option.unless(nearFit || nearOver)(SegmentFit(math.max(1, maxFitting), Some(raw)))
+    Option.unless(nearFit || nearOver)(SegmentFit(math.max(1, maxFitting), Some(raw), kerning))
