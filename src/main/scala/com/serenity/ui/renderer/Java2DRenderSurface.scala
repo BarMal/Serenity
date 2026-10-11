@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReferenc
 
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
+import com.serenity.ui.renderer.LabelAnchor.isWhole
 import com.serenity.ui.theme.TextStyle
 
 /** A RenderSurface backed by a BufferedImage via Graphics2D.
@@ -30,7 +31,8 @@ class Java2DRenderSurface(
     contentPersists: Boolean = false,
     layerCacheOwnerOverride: Option[ScreenIdentity] = None,
     labelSprites: LabelSprites = LabelSprites.shared,
-    styledFonts: StyledFontCache = StyledFontCache.shared
+    styledFonts: StyledFontCache = StyledFontCache.shared,
+    shapedText: ShapedTextCache = ShapedTextCache.shared
 ) extends RenderSurface
     with TextDrawing
     with PixelDrawing
@@ -110,6 +112,36 @@ class Java2DRenderSurface(
     s: String,
     clipGlyphToRun: Boolean = false
   ): Unit =
+    paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, s.nonEmpty, clipGlyphToRun)(
+      g.drawString(s, xPx, (yPx + ascentPx).toFloat)
+    )
+
+  override def drawShapedRunPx(
+    xPx: Float,
+    yPx: Int,
+    bgWidthPx: Float,
+    lineHeightPx: Int,
+    ascentPx: Int,
+    stretch: String,
+    from: Int,
+    until: Int
+  ): Unit =
+    paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun = false) {
+      shapedText
+        .stretchOf(stretch, g.getFont, renderContext)
+        .glyphsOf(from, until)
+        .foreach(g.drawGlyphVector(_, xPx, (yPx + ascentPx).toFloat))
+    }
+
+  private def paintRun(
+    xPx: Float,
+    yPx: Int,
+    bgWidthPx: Float,
+    lineHeightPx: Int,
+    ascentPx: Int,
+    hasText: Boolean,
+    clipGlyphToRun: Boolean
+  )(drawGlyphs: => Unit): Unit =
     val boundedLeft   = runLeft(xPx)
     val boundedRight  = runRight(xPx, bgWidthPx)
     val boundedTop    = runTop(yPx)
@@ -121,13 +153,13 @@ class Java2DRenderSurface(
       if painted.needsBackground(boundedLeft, boundedTop, boundedRight, boundedBottom, bgRef.get()) then
         fillBackground(bgRef.get(), boundedLeft, boundedTop, boundedWidth, boundedHeight)
         painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
-      if s.nonEmpty then
+      if hasText then
         g.setColor(fgRef.get())
         val savedClip = if userClipDepth.get() == 0 then None else Option(g.getClip)
         try
           if clipGlyphToRun then g.clipRect(boundedLeft, boundedTop, boundedWidth, boundedHeight)
           else g.clipRect(0, 0, cellGridWidthPx, cellGridHeightPx)
-          g.drawString(s, xPx, (yPx + ascentPx).toFloat)
+          drawGlyphs
         finally Java2DRenderSurface.restoreClip(g, savedClip)
         drawUnderline(boundedLeft, boundedWidth, yPx + ascentPx)
         painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
@@ -151,40 +183,6 @@ class Java2DRenderSurface(
       g.setColor(fgRef.get())
       g.fill(new Rectangle2D.Float(leftPx.toFloat, baselinePx + underline.offsetPx, widthPx.toFloat, thickness))
 
-  /** Where a label's ink lands in device pixels: its origin on the pixel grid plus the sixteenth of a pixel it starts
-    * past it, and the integral device scale it was drawn at.
-    */
-  final private case class LabelAnchor(
-      deviceX: Int,
-      deviceBaseline: Int,
-      phaseSixteenths: Int,
-      scaleX: Int,
-      scaleY: Int
-  )
-
-  /** Only an integral device scale puts a label's baseline on a whole device pixel, which a sprite needs: it is blitted
-    * 1:1, never resampled.
-    */
-  private def labelAnchor(xPx: Float, baselinePx: Int): Option[LabelAnchor] =
-    val transform      = g.getTransform
-    val deviceBaseline = transform.getTranslateY + transform.getScaleY * baselinePx
-    val axisAligned    = transform.getShearX == 0.0 && transform.getShearY == 0.0
-    Option.when(
-      axisAligned && isWhole(transform.getScaleX) && isWhole(transform.getScaleY) && transform.getScaleX >= 1.0 &&
-        transform.getScaleY >= 1.0 && isWhole(deviceBaseline)
-    ) {
-      val sixteenths = math.round((transform.getTranslateX + transform.getScaleX * xPx) * 16.0)
-      LabelAnchor(
-        Math.floorDiv(sixteenths, 16L).toInt,
-        math.rint(deviceBaseline).toInt,
-        Math.floorMod(sixteenths, 16L).toInt,
-        transform.getScaleX.toInt,
-        transform.getScaleY.toInt
-      )
-    }
-
-  private def isWhole(value: Double): Boolean = math.abs(value - math.rint(value)) < 1e-6
-
   override def drawLabelPx(
     xPx: Float,
     yPx: Int,
@@ -193,7 +191,7 @@ class Java2DRenderSurface(
     ascentPx: Int,
     s: String
   ): Unit =
-    labelAnchor(xPx, yPx + ascentPx) match
+    LabelAnchor.of(g.getTransform, xPx, yPx + ascentPx) match
       case Some(anchor) if s.nonEmpty && userClipDepth.get() == 0 =>
         drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, "")
         blitLabel(anchor, s)

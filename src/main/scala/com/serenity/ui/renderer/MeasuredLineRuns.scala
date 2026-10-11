@@ -19,6 +19,11 @@ final private[renderer] case class MeasuredRun(
     maxXPx: Float
 )
 
+/** A [[MeasuredRun]] with the stretch of text it shares a style, and so a font, with its neighbours: `stretch` is that
+  * text and the run is `stretch.substring(from, until)`.
+  */
+final private[renderer] case class StretchedRun(run: MeasuredRun, stretch: String, from: Int, until: Int)
+
 /** Splits a measured visual line into [[MeasuredRun]]s wherever a grapheme cluster's effective colours or style differ
   * from the cluster before it, so no cluster is ever split. Runs a full frame of prose through it, so it walks arrays
   * instead of building per-character collections.
@@ -100,6 +105,27 @@ private[renderer] object MeasuredLineRuns:
       group(1, segment, 0, first.endLocalIndex, attributesOf(segment), textOf(first), 0)
     }
     runs.result()
+
+  /** Places each run in its style stretch -- the consecutive runs of one style, which draw in one font and so can be
+    * shaped as one text -- where `runs` are the runs of `text`.
+    */
+  def stretched(runs: Vector[MeasuredRun], text: String): Vector[StretchedRun] =
+    val offsets = runs.scanLeft(0)(_ + _.text.length)
+    val firsts = runs.indices.foldLeft(Vector.empty[Int]) { (found, index) =>
+      found :+ (if index > 0 && runs(index - 1).style == runs(index).style then found(index - 1) else index)
+    }
+    val stretchTexts = runs.indices
+      .groupMapReduce(firsts(_))(index => offsets(index + 1))(math.max)
+      .map((first, end) => first -> text.substring(offsets(first), end.min(text.length)))
+    runs.indices.map { index =>
+      val first = firsts(index)
+      StretchedRun(
+        runs(index),
+        stretchTexts.getOrElse(first, runs(index).text),
+        offsets(index) - offsets(first),
+        offsets(index + 1) - offsets(first)
+      )
+    }.toVector
 
   /** The pixel extent of each grapheme cluster whose two boundaries both have a caret stop, in line order. A cluster
     * whose stops are missing has no extent of its own.
