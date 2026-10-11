@@ -82,6 +82,15 @@ object PerformanceBenchmarks:
     val projectTask             = ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test)
     val decodedLspMessages      = decodeLspMessages(framedLspMessages)
     val projectTaskPresentation = projectTask.map(ProjectTaskTerminal.started)
+    val largeFrame = List(
+      Json.obj(
+        "jsonrpc" -> Json.fromString("2.0"),
+        "id"      -> Json.fromInt(1),
+        "result"  -> Json.fromString("y" * 1_048_576)
+      )
+    )
+    val framedLargeFrame  = largeFrame.flatMap(LspFramer.encode).toArray
+    val decodedLargeFrame = decodeLspMessages(framedLargeFrame, PipeReadBytes)
 
     List(
       BenchmarkRunner.Benchmark(
@@ -90,6 +99,13 @@ object PerformanceBenchmarks:
         BenchmarkIterationCounts.LspFramer,
         () => assert(decodedLspMessages == lspMessages),
         () => decodeLspMessages(framedLspMessages)
+      ),
+      BenchmarkRunner.Benchmark(
+        "lsp.framer.large_frame",
+        3,
+        20,
+        () => assert(decodedLargeFrame == largeFrame),
+        () => decodeLspMessages(framedLargeFrame, PipeReadBytes)
       ),
       BenchmarkRunner.Benchmark(
         "project_task.responsiveness",
@@ -104,11 +120,15 @@ object PerformanceBenchmarks:
       )
     )
 
-  private def decodeLspMessages(bytes: Array[Byte]): List[Json] =
+  private val PipeReadBytes = 8 * 1024
+
+  private def decodeLspMessages(bytes: Array[Byte], chunkBytes: Int = Int.MaxValue): List[Json] =
     import cats.effect.unsafe.implicits.global
 
     fs2.Stream
       .chunk(fs2.Chunk.array(bytes))
+      .chunkLimit(chunkBytes)
+      .unchunks
       .through(LspFramer.decode)
       .compile
       .toList
