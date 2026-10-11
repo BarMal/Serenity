@@ -1,8 +1,5 @@
 package com.serenity
 
-import scala.concurrent.duration.*
-
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{CommandRunnerKeyAction, HotkeyAction, HotkeyConfig, KeymapGroup}
 import com.serenity.keystroke.events.*
@@ -88,7 +85,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
           runner.activeSettingsSurface.flatMap(_.current.recording).flatMap(_.pendingRecordedBinding)
         case _ => None) should not be empty
 
-    IO.sleep(500.millis).unsafeRunSync()
+    stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
 
     stateManager.getCurrentState
       .unsafeRunSync()

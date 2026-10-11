@@ -69,7 +69,7 @@ class AutoSaveScenarioSpec extends AnyFlatSpec with Matchers:
       AwaitCondition.awaitValue(IO.blocking(Files.readString(path)))(_ == expected).unsafeRunSync()
 
     def textAfterQuiet(path: Path): String =
-      (IO.sleep(Delay * 5) >> IO.blocking(Files.readString(path))).unsafeRunSync()
+      (stateManager.runtimeLifecycle.awaitEffects >> IO.blocking(Files.readString(path))).unsafeRunSync()
 
     def isDirty(id: BufferId): Boolean = state.persisted.buffers.get(id).exists(_.document.isDirty)
 
@@ -136,7 +136,7 @@ class AutoSaveScenarioSpec extends AnyFlatSpec with Matchers:
     f.autoSave(AutoSaveMode.AfterDelay)
 
     f.send(InsertChar('a'))
-    IO.sleep(Delay * 5).unsafeRunSync()
+    f.stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
 
     f.state.persisted.buffers.values.exists(_.document.isDirty) shouldBe true
     f.state.hasBlockingModal shouldBe false
