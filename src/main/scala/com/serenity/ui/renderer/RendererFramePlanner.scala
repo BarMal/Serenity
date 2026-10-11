@@ -124,7 +124,12 @@ object RendererFramePlanner:
         )
         // The prepared scene is reused while the layout is, which says nothing of the annotations drawn on it.
         val editorRenderPlan = prepared.renderPlan.copy(
-          annotations = RendererPaneSetup.annotationsFor(state, context, prepared.renderPlan.snapshots)
+          annotations = RendererPaneSetup.annotationsFor(
+            state,
+            context,
+            prepared.renderPlan.snapshots,
+            prepared.renderPlan.columnSnapshots
+          )
         )
         val panels    = FramePanels.of(state, context, finalizedScene)
         val framePlan = planFrame(state, context, editorRenderPlan, viewportSize, output, damage, panels)
