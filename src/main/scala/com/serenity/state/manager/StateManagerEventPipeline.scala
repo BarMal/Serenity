@@ -231,9 +231,10 @@ final private[manager] class StateManagerEventPipeline(
       ) >>
       Trace.timed(s"$eventLabel.scheduleMarkdownPreviewCommits")(scheduleMarkdownPreviewCommits(prevState))
 
-  /** The model a character typed into an editor pane commits, before centring, when its only effect is undo
-    * bookkeeping; `None` for any other event, which takes the general dispatch. Every typed key goes through here,
-    * whether dispatched alone or folded into a batch's run, and [[commitTypedRun]] centres and commits it (#1985).
+  /** The model a character typed, an edit or a one-character caret step in an editor pane commits, before centring,
+    * when its only effect is undo bookkeeping; `None` for any other event, which takes the general dispatch. Every such
+    * key goes through here, whether dispatched alone or folded into a batch's run, and [[commitTypedRun]] centres and
+    * commits it (#1985, #1879).
     *
     * A key joins a run even when it records an undo snapshot: the buffer it leaves is marked `FollowCaret`, so the
     * snapshot holds a viewport waiting for the caret, which undo and redo place when they restore it.
@@ -243,7 +244,7 @@ final private[manager] class StateManagerEventPipeline(
 
   private def typedKeyModel(event: Event, model: Model, nowNanos: Long): Option[Model] =
     event match
-      case key: InsertChar =>
+      case key: TextEntryEvent if EditorPaneComponent.joinsRun(key) =>
         val prevState = EventPipelineTransitions.typingObserved(event, nowNanos)(
           EventPipelineTransitions.commandRunnerFocusNormalized(model.app)
         )
