@@ -126,7 +126,10 @@ final case class Document(
     // ignores it.
     changes: ChangeLog = ChangeLog.empty,
     // The Markdown headings of `content` (#1848); a cache shared by every copy of this document, ignored by equality.
-    headingIndex: HeadingIndexCell = new HeadingIndexCell
+    headingIndex: HeadingIndexCell = new HeadingIndexCell,
+    // How this document is indented, by the sources that can say; `Buffer.effectiveIndentation` settles it against the global
+    // settings.
+    indentation: DocumentIndentation = DocumentIndentation()
 ):
 
   /** The headings of `content` read as Markdown, advanced from the last read rather than parsed afresh. */
@@ -192,6 +195,10 @@ final case class Document(
   /** This document's content at the version after `previous`, for text read from outside rather than edited. */
   def replacingContentOf(previous: Document): Document =
     copy(contentVersion = previous.contentVersion + 1, changes = ChangeLog.at(previous.contentVersion + 1))
+
+  /** This document with the indentation `previous` was given by the user, which a re-read of the file does not undo. */
+  def keepingChosenIndentationOf(previous: Document): Document =
+    copy(indentation = indentation.copy(chosen = previous.indentation.chosen))
 
   /** The change from `version` to now, or `None` when it cannot be known exactly. */
   def changesSince(version: Long): Option[ChangeSet] =
@@ -348,6 +355,10 @@ final case class Buffer(
 
   def usesTextFont: Boolean =
     typographyRole.usesTextFont
+
+  /** The indentation Tab types and layout measures for this buffer: its own sources first, `global` for the rest. */
+  def effectiveIndentation(global: IndentationSettings): IndentationSettings =
+    document.indentation.effective(global)
 
   def allSelections: List[Selection] =
     editing.cursors.toList.flatMap(_.selection)

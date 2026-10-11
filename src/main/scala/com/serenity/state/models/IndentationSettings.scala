@@ -11,6 +11,10 @@ final case class IndentationSettings(
   def normalized: IndentationSettings =
     copy(tabSize = tabSize.max(IndentationSettings.MinTabSize).min(IndentationSettings.MaxTabSize))
 
+  /** How the status line names these settings, such as `Spaces: 4`. */
+  def statusLabel: String =
+    if insertSpaces then s"Spaces: $tabSize" else s"Tab Size: $tabSize"
+
   /** What Tab inserts, and what Shift+Tab takes away one of. */
   def indentUnit: String =
     if insertSpaces then " " * normalized.tabSize else "\t"
@@ -22,3 +26,15 @@ object IndentationSettings:
   val DefaultTabSize: Int = 4
 
   val Default: IndentationSettings = IndentationSettings()
+
+  /** A setting as a session stores it, such as `spaces:4` or `tabs:8`. */
+  def configKey(settings: IndentationSettings): String =
+    s"${if settings.insertSpaces then "spaces" else "tabs"}:${settings.tabSize}"
+
+  def fromConfigKey(key: String): Option[IndentationSettings] =
+    key.split(":") match
+      case Array(style @ ("spaces" | "tabs"), size) =>
+        size.toIntOption
+          .filter(width => width >= MinTabSize && width <= MaxTabSize)
+          .map(IndentationSettings(_, insertSpaces = style == "spaces"))
+      case _ => None
