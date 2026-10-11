@@ -37,4 +37,26 @@ class RopeDiffAllocationSpec extends AnyFlatSpec with Matchers:
       case None =>
         info("JVM per-thread allocation counter unsupported on this runtime -- skipping the allocation assertion")
   }
+  private def chunked(text: String, size: Int): Rope =
+    Rope.fromLeafValues(text.grouped(size).toVector)
+
+  private def misalignedShapes(size: Int): (Rope, Rope) =
+    val text   = "the cat sat on the mat\n" * (size / 23)
+    val middle = text.length / 2
+    (chunked(text, 100), chunked(text.take(middle) + "x" + text.drop(middle), 64))
+
+  "Finding an edit between ropes of different shapes" should "allocate no more than its answer, however large they are" in {
+    val (before, after) = misalignedShapes(1024 * 1024)
+    val middle          = before.weight / 2
+    RopeDiff.changedOffsetRange(before, after) shouldBe Some((middle, middle + 1))
+    val (smallBefore, smallAfter) = misalignedShapes(10 * 1024)
+    SettledAllocation.perCall(
+      () => RopeDiff.changedOffsetRange(smallBefore, smallAfter),
+      () => RopeDiff.changedOffsetRange(before, after)
+    ) match
+      case Some((small, large)) =>
+        withClue(s"10 KB ropes allocated ${small}B, 1 MB ropes allocated ${large}B: ")(large should be <= 256L)
+      case None =>
+        info("JVM per-thread allocation counter unsupported on this runtime -- skipping the allocation assertion")
+  }
 end RopeDiffAllocationSpec

@@ -130,7 +130,7 @@ final case class Document(
 ):
 
   /** The headings of `content` read as Markdown, advanced from the last read rather than parsed afresh. */
-  def markdownHeadings: MarkdownHeadingIndex = headingIndex.indexFor(content)
+  def markdownHeadings: MarkdownHeadingIndex = headingIndex.indexFor(content, contentVersion, changeSinceText)
 
   /** The line ending saved from now on. Marks the document dirty whenever that changes the bytes a save writes, which
     * includes picking the detected ending for a mixed file: that save rewrites the minority lines.

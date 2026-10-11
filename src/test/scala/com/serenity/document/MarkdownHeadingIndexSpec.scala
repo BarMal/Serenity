@@ -3,7 +3,7 @@ package com.serenity.document
 import scala.util.Random
 
 import com.serenity.lsp.config.LanguageId
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.{Balance, ChangeSet, Rope}
 import com.serenity.state.models.{Buffer, BufferId, HeadingIdentity}
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
@@ -170,6 +170,37 @@ class MarkdownHeadingIndexSpec extends AnyFlatSpec with Matchers:
 
   it should "agree with a full parse after random edits to text with constructs that span blank lines" in
     agreesAfterRandomEdits(hazardousPieces, 100 to 130)
+
+  "an update given the edit's change" should "read the changed lines from the change rather than comparing the ropes" in {
+    val before  = Rope(novel(chapters = 300))
+    val index   = MarkdownHeadingIndex.build(before)
+    val from    = before.collect().indexOf("# Chapter 100\n")
+    val until   = before.collect().indexOf("# Chapter 130\n")
+    val retyped = before.sliceString(from, until).replace("Chapter 110", "Chapter 11O")
+    val after   = Rope(before.sliceString(0, from) + retyped + before.sliceString(until, before.weight))
+    val change  = ChangeSet.single(before.weight, from, until, retyped)
+
+    val next = index.updatedTo(after, Some(change))
+
+    next.parsedLines should be > 100
+    agreesWithFullParse(next, after)
+  }
+
+  "a document's heading index" should "advance across a recorded edit by that edit, not by comparing the texts" in {
+    val before   = Rope(novel(chapters = 300))
+    val plain    = Buffer.fromString(BufferId(901), "")
+    val markdown = plain.document.copy(language = Some(LanguageId.Markdown)).withContent(before)
+    markdown.markdownHeadings.parsedLines should be > 1_000
+
+    val from    = before.collect().indexOf("# Chapter 100\n")
+    val until   = before.collect().indexOf("# Chapter 130\n")
+    val retyped = before.sliceString(from, until).replace("Chapter 110", "Chapter 11O")
+    val after   = Rope(before.sliceString(0, from) + retyped + before.sliceString(until, before.weight))
+    val edited  = markdown.edited(after, ChangeSet.single(before.weight, from, until, retyped))
+
+    edited.markdownHeadings.parsedLines should be > 100
+    agreesWithFullParse(edited.markdownHeadings, after)
+  }
 
   "a document's heading index" should "give the headings of a buffer edited since they were last read" in {
     val plain    = Buffer.fromString(BufferId(900), "# One\n\nprose\n")
