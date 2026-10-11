@@ -23,28 +23,35 @@ object PickerAndGraphemeBenchmark:
     (System.nanoTime() - start) / 1e6 / rounds
 
   private def twentyThousandFilePicker: AppState =
-    val root  = Path.of("/work/project")
-    val files = (0 until 20000).map(i => Path.of(s"src/module${i % 97}/pkg$i/Service$i.scala")).toVector
+    val root = Path.of("/work/project")
+    val files =
+      (0 until 20000).map(i => Path.of(s"src/module${i % 97}/pkg$i/${stems(i % stems.size)}$i.scala")).toVector
     val picker = FileFinder
       .picker(root)
       .copy(source = Some(PickerSource.ProjectFiles(root, Loadable.Ready(ProjectFileListing(files, false)))))
     ModalStateReducer.show(Modal.ListPicker(picker), AppState.initial).state
 
+  private val stems = Vector("Service", "Widget", "Parser", "Layout")
+
   private def pickerReport(): Unit =
     val state             = twentyThousandFilePicker
-    val query             = "serv1"
+    val typed             = "service19"
+    val prefixes          = (1 to typed.length).map(typed.take).toVector
     def keystroke(): Unit = ModalEventReducer.reduce(ModalType.ListPicker, ModalInsertChar('s'), state)
-    def matching(): Unit =
-      val picker = state.modalSurface.collect {
-        case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.ListPicker(p)), _, _) => p
-      }
-      picker.foreach(p => ListPickerSearch.refreshed(p.copy(query = Some(TextField(query, query.length))), state))
+    val opened = state.modalSurface
+      .collect { case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.ListPicker(p)), _, _) => p }
+      .getOrElse(sys.error("no picker"))
+    def queried(picker: ListPicker, query: String): ListPicker =
+      ListPickerSearch.refreshed(picker.copy(query = Some(TextField(query, query.length))), state)
+    def eachFromScratch(): Unit = prefixes.foreach(queried(opened, _))
+    def carryingMatches(): Unit =
+      val _ = prefixes.foldLeft(opened)(queried)
     (0 until 5).foreach { _ =>
-      keystroke(); matching()
+      keystroke(); eachFromScratch(); carryingMatches()
     }
     (0 until 3).foreach { round =>
       println(
-        f"picker round $round: reducer step ${millis(20)(keystroke())}%.3f ms, full match (the old reducer step) ${millis(5)(matching())}%.3f ms"
+        f"picker round $round: reducer step ${millis(20)(keystroke())}%.3f ms; typing '$typed' (${prefixes.size} keystrokes): every match from scratch ${millis(3)(eachFromScratch())}%.1f ms, each narrowed from the last ${millis(3)(carryingMatches())}%.1f ms"
       )
     }
 

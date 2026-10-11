@@ -59,6 +59,34 @@ class PickerSearchSpec extends AnyFlatSpec with Matchers:
     labels(result.state, id) should not be labels(state, id)
   }
 
+  it should "match in the reducer once a landed match has narrowed the files to a cheap number" in {
+    val (state, id) = filled(bigList)
+    val first       = typing(state, '7').state
+    val searched    = PickerSearchTransitions.searched(first, id, "7").getOrElse(fail("no result"))
+    val landed      = PickerSearchTransitions.applied(first, id, "7", searched).state
+
+    val result = typing(landed, '1')
+
+    result.effects shouldBe Nil
+    picker(result.state, id).searchPending shouldBe false
+    val unnarrowed = picker(result.state, id).source.map {
+      case files: PickerSource.ProjectFiles => files.copy(matched = None)
+      case other                            => other
+    }
+    val fresh = ListPickerSearch.refreshed(picker(result.state, id).copy(source = unnarrowed), result.state)
+    labels(result.state, id) shouldBe fresh.items.toOption.fold(Vector.empty)(_.items.map(_.label))
+  }
+
+  it should "match in the background again once deleting leaves the narrowed query behind" in {
+    val (state, id) = filled(bigList)
+    val first       = typing(typing(state, '7').state, '1').state
+    val searched    = PickerSearchTransitions.searched(first, id, "71").getOrElse(fail("no result"))
+    val landed      = PickerSearchTransitions.applied(first, id, "71", searched).state
+
+    ModalEventReducer.reduce(ModalType.ListPicker, ModalDeleteBackward, landed).effects shouldBe
+      List(AppEffect.Workflow(WorkflowEffect.RefreshPicker(id, "7")))
+  }
+
   "Enter before the background match lands" should "open the row matching the query as typed, not the stale one" in {
     val (state, id) = filled(bigList)
     val typed       = "File49".foldLeft(state)((current, char) => typing(current, char).state)
