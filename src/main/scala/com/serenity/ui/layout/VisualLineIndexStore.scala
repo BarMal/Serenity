@@ -4,8 +4,10 @@ import java.util.LinkedHashMap
 
 import scala.annotation.tailrec
 
-import com.serenity.markdown.MarkdownInlineView
+import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
+import com.serenity.markdown.{LazyBlockIndex, MarkdownInlineView}
 import com.serenity.rope.{ChangeSet, Leaf, Node, Rope}
+import com.serenity.ui.layout.VisualLineIndexStore.StampRelation
 
 /** The [[VisualLineIndex]] last built for each key -- a buffer under one wrap setting -- together with the content it
   * describes. A key's index follows edits to its buffer: only the lines an edit touched lose their measurements, and
@@ -40,20 +42,27 @@ final class VisualLineIndexStore[K](maxEntries: Int):
     revision: Option[ContentRevision] = None
   ): VisualLineIndex =
     synchronized(Option(entries.get(key))) match
-      case Some(entry) if !sameStamp(entry.stamp, stamp)        => VisualLineIndex.unmeasured(content.lineCount)
-      case Some(entry) if isSameContent(entry.content, content) => entry.index
-      case Some(entry) =>
-        val recorded = for
-          current <- revision
-          since   <- entry.version
-          if since != current.version
-          change <- current.changesSince(since)
-          if change.oldLength == entry.content.weight && change.newLength == content.weight
-        yield change
-        recorded.fold(VisualLineIndexStore.followEdit(entry.index, entry.content, content))(
-          VisualLineIndexStore.followChange(entry.index, entry.content, content, _)
-        )
       case None => VisualLineIndex.unmeasured(content.lineCount)
+      case Some(entry) =>
+        VisualLineIndexStore.stampsRelate(entry.stamp, stamp) match
+          case StampRelation.Unrelated => VisualLineIndex.unmeasured(content.lineCount)
+          case StampRelation.Same      => followed(entry, content, revision)
+          case StampRelation.AgreesBefore(line) =>
+            VisualLineIndexStore.unmeasuredFrom(followed(entry, content, revision), line)
+
+  private def followed(entry: Entry, content: Rope, revision: Option[ContentRevision]): VisualLineIndex =
+    if isSameContent(entry.content, content) then entry.index
+    else
+      val recorded = for
+        current <- revision
+        since   <- entry.version
+        if since != current.version
+        change <- current.changesSince(since)
+        if change.oldLength == entry.content.weight && change.newLength == content.weight
+      yield change
+      recorded.fold(VisualLineIndexStore.followEdit(entry.index, entry.content, content))(
+        VisualLineIndexStore.followChange(entry.index, entry.content, content, _)
+      )
 
   private[layout] def update(
     key: K,
@@ -68,11 +77,6 @@ final class VisualLineIndexStore[K](maxEntries: Int):
 
   private def isSameContent(a: Rope, b: Rope): Boolean = (a: AnyRef) eq (b: AnyRef)
 
-  private def sameStamp(a: AnyRef, b: AnyRef): Boolean =
-    (a eq b) || ((a, b) match
-      case (x: VisualLineIndexStore.ViewStamp, y: VisualLineIndexStore.ViewStamp) => x == y
-      case _                                                                      => false)
-
   @tailrec
   private def evictEldest(eldestFirst: java.util.Iterator[Entry]): Unit =
     if entries.size() > maxEntries && eldestFirst.hasNext then
@@ -85,10 +89,40 @@ object VisualLineIndexStore:
   /** The stamp of content whose row counts depend on nothing but its text. */
   val Unstamped: AnyRef = new Object
 
-  /** Rich-text styling is stamped by the identity of its document; a restyled Markdown view by its value, since each
-    * frame builds an equal one.
+  /** Rich-text styling is stamped by the identity of its document; a restyled Markdown view by what decides how it
+    * restyles (mode, revealed lines, font kind) and by its block index, which is compared by how far two indexes are
+    * known to agree rather than by value (see [[stampsRelate]]).
     */
   final private[layout] case class ViewStamp(base: AnyRef, markdown: MarkdownInlineView)
+
+  /** How a stamp the index was built under relates to the one asked for. */
+  enum StampRelation:
+    /** Row counts depend on the same things: every measurement stands. */
+    case Same
+
+    /** Only lines from `line` on may count differently: the block structure above it is the same. */
+    case AgreesBefore(line: Int)
+
+    case Unrelated
+
+  private[layout] def stampsRelate(built: AnyRef, asked: AnyRef): StampRelation =
+    (built, asked) match
+      case _ if built eq asked => StampRelation.Same
+      case (x: ViewStamp, y: ViewStamp) if x.base == y.base && sameRestyling(x.markdown, y.markdown) =>
+        (x.markdown.fences, y.markdown.fences) match
+          case (a, b) if a eq b => StampRelation.Same
+          case (a: LazyBlockIndex, b: LazyBlockIndex) if b.follows(a) =>
+            StampRelation.AgreesBefore(b.agreesBefore)
+          case (a: FenceRangeIndex, b: FenceRangeIndex) if a == b => StampRelation.Same
+          case _                                                  => StampRelation.Unrelated
+      case _ => StampRelation.Unrelated
+
+  private def sameRestyling(a: MarkdownInlineView, b: MarkdownInlineView): Boolean =
+    a.mode == b.mode && a.revealed == b.revealed && a.baseIsMonospaced == b.baseIsMonospaced
+
+  private[layout] def unmeasuredFrom(index: VisualLineIndex, line: Int): VisualLineIndex =
+    val remaining = index.lineCount - line
+    if remaining <= 0 then index else index.replacedLines(line, remaining, remaining)
 
   private[layout] def stampOf(richText: RichTextContext): AnyRef =
     val base = richText.document.getOrElse(Unstamped)

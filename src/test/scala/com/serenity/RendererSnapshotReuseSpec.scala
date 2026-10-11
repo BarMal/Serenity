@@ -537,3 +537,71 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
     lineReads.get() should be < 200_000
   }
+
+  private def readsRenderingLivePreview(markdown: Vector[String], cursorLine: Int): Int =
+    val paneId    = PaneId(0)
+    val bufferId  = BufferId(1)
+    val lineReads = AtomicInteger(0)
+    val content   = CountingAccessRope(Rope(markdown.mkString("\n")), lineReads = lineReads)
+    val buffer = Buffer(bufferId, Document(content, language = Some(LanguageId.Markdown))).copy(
+      editing = EditingState(List(CursorPosition(cursorLine, 0))),
+      viewport = Viewport(topLine = cursorLine, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
+    )
+    val initial = AppState.initial
+    val state = initial.copy(persisted =
+      initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = singlePaneLayout(paneId, bufferId),
+        theme = Theme.light,
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withoutStatusLine
+          .withWordWrap(false)
+          .withMarkdownViewMode(MarkdownViewMode.LivePreview)
+      )
+    )
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      new MockRenderSurface(viewportSize.width, viewportSize.height),
+      viewportSize,
+      FontSpec.fromAwt(monoFont),
+      FontSpec.fromAwt(monoFont),
+      cellMetrics,
+      None,
+      com.serenity.state.manager.RenderCaches.create()
+    )
+    lineReads.get()
+
+  it should "share Live Preview source lines between content and cursor rendering" in {
+    val markdown = Vector.tabulate(2_000)(i => s"# Heading ${i + 1}")
+
+    readsRenderingLivePreview(markdown, cursorLine = 0) should be < 200
+  }
+
+  it should "read a fenced document as far as the construct open at the viewport bottom, not to its end" in {
+    val proseBefore   = 1_000
+    val fencedLines   = 499
+    val openParagraph = 1_000
+    val trailing      = 4_500
+    val markdown =
+      Vector.fill(proseBefore)("unrelated prose") ++ Vector("```scala") ++ Vector.fill(fencedLines)("fenced content") ++
+        Vector("```") ++ Vector.fill(openParagraph)("one unbroken paragraph") ++
+        Vector.fill(trailing)(Vector("", "spaced prose")).flatten
+    val viewportBottom = proseBefore + 1 + fencedLines + 1 + 6
+    val margin         = 100
+
+    val reads = readsRenderingLivePreview(markdown, cursorLine = proseBefore + fencedLines + 1)
+
+    reads should be <= viewportBottom + openParagraph + margin
+    reads should be < markdown.length / 4
+  }
+
+  it should "read only about the viewport when blank lines settle the constructs just below it" in {
+    val markdown = Vector.fill(2_500)(Vector("paragraph line", "")).flatten
+
+    val reads = readsRenderingLivePreview(markdown, cursorLine = 100)
+
+    reads should be < 200
+  }

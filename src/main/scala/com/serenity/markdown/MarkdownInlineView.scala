@@ -2,7 +2,7 @@ package com.serenity.markdown
 
 import com.serenity.config.MarkdownViewMode
 import com.serenity.lsp.config.LanguageId
-import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
+import com.serenity.markdown.MarkdownBlockLens.{BlockIndex, FenceRangeIndex}
 import com.serenity.markdown.MarkdownInlineSpans.Run
 import com.serenity.markdown.MarkdownTableColumns.Columns
 
@@ -30,6 +30,17 @@ object MarkerMode:
         case MarkdownViewMode.Read        => Read
         case _                            => Off
 
+/** The padding geometry of a document's tables, measured when a table is first asked about rather than for all of them
+  * at once.
+  */
+trait TableColumns:
+  def of(table: Range.Inclusive): Option[Columns]
+
+object TableColumns:
+
+  /** No table is padded. */
+  val None: TableColumns = _ => scala.None
+
 /** Everything layout and painting need to restyle one buffer's inline Markdown: how markers are hidden, the lines that
   * stay revealed, the fenced blocks whose text is code rather than prose, and whether the buffer's own font is already
   * monospaced, which decides if a code span needs a face of its own. It is a plain value, so two views that would lay a
@@ -38,9 +49,9 @@ object MarkerMode:
 final case class MarkdownInlineView(
     mode: MarkerMode,
     revealed: Vector[Range.Inclusive],
-    fences: FenceRangeIndex,
+    fences: BlockIndex,
     baseIsMonospaced: Boolean = false,
-    tableColumns: Map[Int, Columns] = Map.empty
+    tableColumns: TableColumns = TableColumns.None
 ):
 
   def isActive: Boolean = mode != MarkerMode.Off
@@ -59,8 +70,12 @@ final case class MarkdownInlineView(
 
   /** The padding geometry of the table `line` is a row of, when its pipes are to line up. */
   def columnsOn(line: Int): Option[Columns] =
-    if tableColumns.isEmpty || fences.tableRowAt(line) == MarkdownBlockLens.TableRow.Delimiter then None
-    else fences.tableAt(line).flatMap(table => tableColumns.get(table.start))
+    if (tableColumns eq TableColumns.None) || fences.tableRowAt(line) == MarkdownBlockLens.TableRow.Delimiter then None
+    else fences.tableAt(line).flatMap(tableColumns.of)
+
+  /** Whether `other` pads every one of `lines` just as this view does. */
+  def padsAlike(other: MarkdownInlineView, lines: Iterable[Int]): Boolean =
+    (tableColumns eq other.tableColumns) || lines.forall(line => columnsOn(line) == other.columnsOn(line))
 
   def hidesMarkersOn(line: Int): Boolean =
     mode match

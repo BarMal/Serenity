@@ -120,4 +120,4 @@ object DirtyLineDiff:
       previous.usesMeasuredLayout == current.usesMeasuredLayout &&
       sameRichParagraphCount(previous, current) &&
       previous.markdownInline.mode == current.markdownInline.mode &&
-      previous.markdownInline.tableColumns == current.markdownInline.tableColumns
+      previous.markdownInline.padsAlike(current.markdownInline, current.visualLines.map(_.bufferLine).distinct)
