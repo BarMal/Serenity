@@ -23,6 +23,7 @@ import com.serenity.keystroke.events.{
   ScrollDown
 }
 import com.serenity.rope.Balance
+import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.manager.{CursorViewport, DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
@@ -174,16 +175,24 @@ private[perf] object LaptopFrameBenchmarks:
   private[perf] def proseStateManager(
     paragraphs: Int = 300,
     config: AppConfig = AppConfig.default,
-    cursorLine: Int = 150
+    cursorLine: Int = 150,
+    dictionaryCache: Option[DictionaryCache] = None
   )(using IORuntime): (StateManager, BufferId) =
-    stateManagerHolding(BenchmarkFixtures.loremIpsumProse(paragraphs), config, cursorLine, cursorColumn = 40)
+    stateManagerHolding(
+      BenchmarkFixtures.loremIpsumProse(paragraphs),
+      config,
+      cursorLine,
+      cursorColumn = 40,
+      dictionaryCache
+    )
 
   /** [[proseStateManager]] over any `text`, with the cursor placed at `cursorLine`, `cursorColumn`. */
   private[perf] def stateManagerHolding(
     text: String,
     config: AppConfig = AppConfig.default,
     cursorLine: Int = 0,
-    cursorColumn: Int = 0
+    cursorColumn: Int = 0,
+    dictionaryCache: Option[DictionaryCache] = None
   )(using IORuntime): (StateManager, BufferId) =
     given LoggerFactory[IO] = NoOpFactory[IO]
     val sessionRoot         = TestTemp.directory("serenity-laptop-benchmarks")
@@ -191,7 +200,7 @@ private[perf] object LaptopFrameBenchmarks:
       .apply(
         NoOpLogger[IO],
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = WarmDictionary.cacheFor(config)
+        dictionaryCache = dictionaryCache.getOrElse(WarmDictionary.cacheFor(config))
       )
       .unsafeRunSync()
     val proseBufferId = (for
