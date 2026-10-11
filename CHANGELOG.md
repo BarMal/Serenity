@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-10-11
+
+- Added the first commands that create a second cursor (#1994, part of #1951): Select Next Occurrence (`Ctrl+D`, `Cmd+D` on macOS) selects the word at the caret and then adds the next match of the selected text as another cursor, Skip Occurrence (`Ctrl+Alt+K`) swaps the newest match for the one after it, and Select All Occurrences (`Ctrl+Shift+L`) selects every match (up to 10,000). A selection that began as a bare caret matches whole words only, one you made yourself matches anywhere, matching is case-sensitive, and typing then reaches every cursor. All three are in the palette and can be rebound with `hotkey.command.<name>`; the `Ctrl+K Ctrl+D` chord for skipping waits on chord bindings. To free `Ctrl+D`, Split Pane Horizontal moved to `Ctrl+Alt+V` (`Cmd+Alt+V`), and Toggle Notes Pin moved from `Ctrl+Shift+L` to `Ctrl+Alt+P`; a key you set yourself in `config.conf` keeps its meaning (the new default for a command is skipped where you already use that key), while an old file that merely lists the previous defaults moves to the new ones.
+
 ## 1.0.0-rc.2 — 2026-10-11
 
 ### 2026-10-11

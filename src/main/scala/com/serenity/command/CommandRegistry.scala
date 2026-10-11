@@ -174,7 +174,8 @@ object CommandRegistry:
       CommandRegistryPanelProjectCommands.panelCommands ++
       CommandRegistryPanelProjectCommands.paneCommands ++
       CommandRegistryPanelProjectCommands.projectCommands ++
-      builtInPresetCommands
+      builtInPresetCommands ++
+      CommandRegistryEditCommands.occurrenceCommands
 
   private def builtInPresetCommands: List[Command] =
     UiPreset.builtIns.map { preset =>

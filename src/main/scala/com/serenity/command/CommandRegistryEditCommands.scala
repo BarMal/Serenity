@@ -200,3 +200,27 @@ private[command] object CommandRegistryEditCommands:
       label = "Justify"
     )
   )
+
+  private[command] def occurrenceCommands: List[Command] = List(
+    Command.typed(
+      "select-next-occurrence",
+      "Select the word under the caret, then add the next match of the selected text as another cursor.",
+      CommandIntent.Edit(EditIntent.SelectNextOccurrence),
+      CommandCategory.Edit,
+      label = "Select Next Occurrence"
+    ),
+    Command.typed(
+      "skip-occurrence",
+      "Leave the newest selected match unselected and select the match after it instead.",
+      CommandIntent.Edit(EditIntent.SkipOccurrence),
+      CommandCategory.Edit,
+      label = "Skip Occurrence"
+    ),
+    Command.typed(
+      "select-all-occurrences",
+      "Select every match of the selected text, or of the word under the caret, as its own cursor.",
+      CommandIntent.Edit(EditIntent.SelectAllOccurrences),
+      CommandCategory.Edit,
+      label = "Select All Occurrences"
+    )
+  )

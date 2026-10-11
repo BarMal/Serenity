@@ -230,7 +230,11 @@ final case class Document(
   * `multiCursorVerticalStates`), which let a single cursor's own state drift across collections that had to be kept in
   * sync by hand; `NonEmptyList[Cursor]` makes that drift impossible by construction.
   */
-final case class EditingState(cursors: NonEmptyList[Cursor] = NonEmptyList.one(Cursor(CursorPosition(0, 0)))):
+final case class EditingState(
+    cursors: NonEmptyList[Cursor] = NonEmptyList.one(Cursor(CursorPosition(0, 0))),
+    // Only the occurrence commands set it; building a fresh `EditingState` for any other cursor change drops it.
+    occurrenceSearch: Option[OccurrenceSearch] = None
+):
   def cursorPositions: List[CursorPosition] = cursors.toList.map(_.position)
 
   /** Replaces the primary (first) cursor's full state while leaving every other live cursor untouched. */
