@@ -17,6 +17,7 @@ import com.serenity.input.*
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
+import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.*
 import com.serenity.state.models.{AppState, Damage, PointerShape}
 import com.serenity.ui.layout.ViewportSize
@@ -155,10 +156,11 @@ object AppRuntime:
     (Dispatcher.parallel[IO], Supervisor[IO](await = false)).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
       for
         _ <- logger.info("Starting Serenity text editor")
-        themeManager = com.serenity.ui.theme.config.AppThemeManager.create
-        stateManager <- makeStateManager.getOrElse(logger => StateManager.apply(logger, initialConfig = appConfig))(
-          logger
-        )
+        themeManager    = com.serenity.ui.theme.config.AppThemeManager.create
+        dictionaryCache = DictionaryCache()
+        stateManager <- makeStateManager.getOrElse(logger =>
+          StateManager.apply(logger, initialConfig = appConfig, dictionaryCache = dictionaryCache)
+        )(logger)
         startupTheme <- AppStartup.startupTheme(stateManager.sessionStartupInfo, themeManager)
         _ <- AppStartup.initializeState(
           stateManager,
@@ -226,6 +228,8 @@ object AppRuntime:
           )
         )
         lastFastFrameStart <- Ref.of[IO, Option[FiniteDuration]](None)
+        lastDrawnState     <- Ref.of[IO, Option[AppState]](Some(initialState))
+        damagePublishedFor <- Ref.of[IO, Option[AppState]](None)
         translatorCache    <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
         currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
@@ -241,6 +245,7 @@ object AppRuntime:
             translatorCache,
             runtime.frameTimings,
             onUserInput = firstInput.complete(()).void,
+            damagePublishedFor = published => damagePublishedFor.set(Some(published)),
             observeBatch = observeTransition,
             logEvent = (event, focus) => AppRuntimeLogging.logSelectiveEvents(event, focus, logger)
           )
@@ -251,7 +256,13 @@ object AppRuntime:
             runtime.renderFull(initialState, true, None, Damage.Everything, stateManager.renderCaches) >>
               onFirstFrame >>
               logger.info("Initial render completed, starting main loop") >>
-              startupWarmUp(runtime, initialState, initialViewportSize, firstInput)
+              startupWarmUp(
+                runtime,
+                initialState,
+                initialViewportSize,
+                firstInput,
+                Option.when(makeStateManager.isEmpty)(dictionaryCache)
+              )
                 .flatMap(_ =>
                   runtime.menuResource(stateManager.getModel, dispatchIfRunning(resizeCallbackDispatcher)(_))
                 )
@@ -280,6 +291,8 @@ object AppRuntime:
                     runtime.renderFull,
                     stateManager.renderCaches,
                     lastFrameStart = lastFastFrameStart,
+                    lastDrawnState = lastDrawnState,
+                    damagePublishedFor = damagePublishedFor,
                     keyLatency = runtime.frameTimings.keyLatency
                   )
 
@@ -396,25 +409,43 @@ object AppRuntime:
         )
     }
 
-  /** Runs [[StartupWarmUp]] in the background for as long as the main loop does, if the frontend can draw off-screen
-    * and `startup.warm_up` is on.
+  /** Runs [[StartupWarmUp]] and the spell-check dictionary preload in the background for as long as the main loop does.
+    * The warm-up needs a frontend that can draw off-screen and `startup.warm_up` on; the preload needs the
+    * `dictionaryCache` the editor's own state manager reads from.
     */
   private def startupWarmUp(
     runtime: FrontendRuntime,
     initialState: AppState,
     viewport: ViewportSize,
-    firstInput: Deferred[IO, Unit]
+    firstInput: Deferred[IO, Unit],
+    dictionaryCache: Option[DictionaryCache]
   )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Resource[IO, Unit] =
-    runtime.offscreenFrames.filter(_ => initialState.persisted.config.surfaceConfig.startupWarmUpEnabled) match
-      case None => Resource.unit
+    val config = initialState.persisted.config
+    val preload = dictionaryCache.fold(Resource.unit[IO])(cache =>
+      StartupWarmUp
+        .preloadSpellDictionary(config, cache)
+        .handleErrorWith(error => logger.warn(error)("[WARMUP] Spell dictionary preload failed"))
+        .background
+        .map(_ => ())
+    )
+    val warmUp = runtime.offscreenFrames.filter(_ => config.surfaceConfig.startupWarmUpEnabled) match
+      case None => Resource.unit[IO]
       case Some(frames) =>
         StartupWarmUp
-          .run(initialState.persisted.config, initialState.persisted.theme, viewport, frames, firstInput)
+          .run(
+            config,
+            initialState.persisted.theme,
+            viewport,
+            frames,
+            firstInput,
+            dictionaryCache = dictionaryCache.getOrElse(DictionaryCache())
+          )
           .timed
           .flatMap((elapsed, outcome) => logger.info(s"[WARMUP] $outcome after ${elapsed.toMillis}ms"))
           .handleErrorWith(error => logger.warn(error)("[WARMUP] Startup warm-up failed"))
           .background
           .map(_ => ())
+    preload.flatMap(_ => warmUp)
 
   private def runInputLoop(stateManager: StateManager, inputLoop: Stream[IO, Unit])(using
     logger: Logger[IO]
