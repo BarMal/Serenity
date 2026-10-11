@@ -30,7 +30,7 @@ final private[manager] class StateManagerWorkflowCapability(
     restarter: Option[RestartMode => IO[Unit]] = None,
     projectFiles: ProjectFileIndex = ProjectFileIndex.empty()
 )(using balance: com.serenity.rope.Balance):
-  import StateManagerWorkflowCapability.{PickerSearchLane, ProjectFilesLane, SessionLane}
+  import StateManagerWorkflowCapability.{ProjectFilesLane, SessionLane}
 
   private val close = new CloseWorkflowTransitions(operations.ensureCommandRunnerSurface)
 
@@ -428,17 +428,7 @@ final private[manager] class StateManagerWorkflowCapability(
     * already been shown; a newer keystroke supersedes it, and a result that finds the query changed is dropped.
     */
   private[manager] def refreshPickerEffect(surfaceId: SurfaceId, query: String): IO[Unit] =
-    lanes.submitEffect(
-      PickerSearchLane,
-      modelCommit.currentState.flatMap(state =>
-        IO.delay(PickerSearchTransitions.searched(state, surfaceId, query))
-          .flatMap(
-            _.traverse_(searched =>
-              lanes.dispatchEffectResult(EffectResult.PickerSearched(surfaceId, query, searched), _ => IO.unit)
-            )
-          )
-      )
-    )
+    PickerSearchEffect.refresh(lanes, modelCommit.currentState, surfaceId, query)
 
   private[manager] def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
     SessionWorkflowTransitions.restoredIntoViewport(restoredState, currentState)
@@ -449,5 +439,3 @@ private[manager] object StateManagerWorkflowCapability:
   val SessionLane: Lane.Keyed = Lane.Keyed(LaneKey.Session, LanePolicy.Sequential)
 
   val ProjectFilesLane: Lane.Keyed = Lane.Keyed(LaneKey.ProjectFiles, LanePolicy.SwitchLatest)
-
-  val PickerSearchLane: Lane.Keyed = Lane.Keyed(LaneKey.PickerSearch, LanePolicy.SwitchLatest)
