@@ -16,7 +16,7 @@ import com.serenity.richtext.{
 }
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
-import com.serenity.text.{LineEndingCounts, TextEncoding}
+import com.serenity.text.TextEncoding
 
 /** Failures `FileManager` raises for its own file-open/save workflow, distinct from [[LossyRichTextOverwriteException]]
   * (a richtext-package concern about a specific re-import losing content, not about format support in general).
@@ -89,7 +89,7 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
       case _ =>
         ensureSupported(path, _.canOpen, FileManagerError.UnsupportedForOpen.apply) >>
           openStored(location).flatMap { stored =>
-            IO.fromOption(TextFileCodec.decode(stored.content))(FileManagerError.BinaryContent(path))
+            IO.fromOption(TextFileCodec.decodeRope(stored.content))(FileManagerError.BinaryContent(path))
               .map(decoded => bufferFromContent(bufferId, path, decoded, stored.revision))
           }
 
@@ -139,10 +139,9 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
       case _ =>
         for
           _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
-          written = plainTextForSave(buffer)
-          encoded = encodedForSave(buffer, written)
+          (encoded, settled) = plainTextEncodedForSave(buffer)
           stored <- saveStored(path, encoded.bytes, expectedRevision)
-        yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision, settledToWritten(buffer, written))))
+        yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision, settled)))
 
   /** The document in the DOCX or ODT at `path` as it is now, when that file is still at `expected`, the revision a
     * document restored from a session was last read or written at. Only then do the body blocks a restored document
@@ -186,7 +185,7 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
       case Some(path) if storesFormatting(path) => IO.raiseError(FileManagerError.NotReadableAs(path, encoding))
       case Some(path) =>
         openStored(StorageLocation.Local(path)).flatMap { stored =>
-          IO.fromOption(TextFileCodec.decodeAs(stored.content, encoding))(
+          IO.fromOption(TextFileCodec.decodeRopeAs(stored.content, encoding))(
             FileManagerError.NotReadableAs(path, encoding)
           ).map(decoded => reloadedInto(buffer, bufferFromContent(buffer.id, path, decoded, stored.revision)))
         }
@@ -233,6 +232,26 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
       document.hasBom
     )
 
+  /** A plain-text save's bytes, and the text to settle the buffer to when it came from a rich document. A buffer with
+    * no rich document is encoded straight from its rope's leaves, which is what keeps a large save from joining,
+    * rewriting and re-encoding the whole text as three separate strings (#1910).
+    */
+  private def plainTextEncodedForSave(buffer: Buffer): (EncodedText, Option[com.serenity.rope.Rope]) =
+    val document = buffer.document
+    if buffer.richText.richTextDocument.isEmpty then
+      (
+        TextFileCodec.encodeRopeOrFallBackToUtf8(
+          document.content,
+          document.lineEnding,
+          document.encoding,
+          document.hasBom
+        ),
+        None
+      )
+    else
+      val written = plainTextForSave(buffer)
+      (encodedForSave(buffer, written), settledToWritten(buffer, written))
+
   /** Records what the file was actually written as, which differs from what it was opened as when
     * [[TextFileCodec.encodeOrFallBackToUtf8]] had to fall back.
     */
@@ -242,14 +261,14 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
   private def bufferFromContent(
     bufferId: BufferId,
     path: Path,
-    decoded: DecodedText,
+    decoded: DecodedRope,
     revision: Option[DocumentRevision]
   ): Buffer =
-    val lineEndings = LineEndingCounts.of(decoded.content)
+    val lineEndings = decoded.lineEndings
     Buffer(
       id = bufferId,
       document = com.serenity.state.models.Document(
-        content = com.serenity.rope.Rope(decoded.content),
+        content = decoded.content,
         filePath = Some(path),
         language = languageFromPath(path),
         lineEnding = lineEndings.dominant,
