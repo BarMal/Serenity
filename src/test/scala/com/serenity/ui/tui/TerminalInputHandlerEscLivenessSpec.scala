@@ -47,9 +47,6 @@ class TerminalInputHandlerEscLivenessSpec extends AnyFlatSpec with Matchers:
     terminal.setSize(new Size(80, 24))
     terminal
 
-  private def fakeTerminalWithReader(): (DumbTerminal, FakeTerminalReader) =
-    (structuralTerminal(), new FakeTerminalReader)
-
   /** The pump is the one fiber that reads, and it can be late getting back to the reader: the blocking pool is busy, or
     * the fiber is simply not scheduled. The whole of `ESC [ A` is already waiting in the terminal buffer, but the pump
     * does not read the `[A` until 70ms after the `ESC` -- past the 50ms deadline. A deadline that only asks "has a byte
@@ -58,21 +55,21 @@ class TerminalInputHandlerEscLivenessSpec extends AnyFlatSpec with Matchers:
     * Virtual time, so the 70ms is exact and no scheduler load can move it.
     */
   "an arrow key whose bytes the pump reads after the deadline" should "still decode as one ArrowUp" in {
-    val (terminal, reader) = fakeTerminalWithReader()
     val program = for
+      input     <- ParkingInput.create
       reads     <- Ref.of[IO, Int](0)
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
       lateAfterEsc = reads.getAndUpdate(_ + 1).flatMap(n => IO.whenA(n == 1)(IO.sleep(70.millis)))
       handler <- TerminalInputHandler.create(
-        terminal,
+        structuralTerminal(),
         router,
         clipboard,
         escDeadline = 50.millis,
-        readerOverride = Some(reader),
+        readSource = Some(input.readSource),
         beforeEachRead = lateAfterEsc
       )
-      _      <- IO { reader.feed(csi("A")); reader.feedEof() }
+      _      <- input.feed(csi("A")) >> input.feedEof
       events <- handler.eventStream.take(1).compile.toList
     yield events
 
@@ -81,53 +78,48 @@ class TerminalInputHandlerEscLivenessSpec extends AnyFlatSpec with Matchers:
 
   /** The wait for a late pump is bounded: a pump that never reads again must not hold an `ESC` forever. */
   "a lone ESC whose pump never reads again" should "still resolve to Escape" in {
-    val (terminal, reader) = fakeTerminalWithReader()
     val program = for
+      input     <- ParkingInput.create
       reads     <- Ref.of[IO, Int](0)
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
       stallsAfterEsc = reads.getAndUpdate(_ + 1).flatMap(n => IO.whenA(n == 1)(IO.never))
       handler <- TerminalInputHandler.create(
-        terminal,
+        structuralTerminal(),
         router,
         clipboard,
         escDeadline = 50.millis,
-        readerOverride = Some(reader),
+        readSource = Some(input.readSource),
         beforeEachRead = stallsAfterEsc
       )
-      _      <- IO(reader.feed(Array(esc)))
+      _      <- input.feed(Array(esc))
       events <- handler.eventStream.take(1).compile.toList
     yield events
 
     runVirtual(program) shouldBe List(translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)))
   }
 
-  /** A pump that is healthy and parked in a read finds nothing after a lone `ESC`, and that is the answer. A real
-    * parked read cannot run under virtual time, so the clock is real; instead the spec waits until the pump has parked
-    * again after reading the `ESC`, so the deadline always meets a parked pump and the outcome does not depend on how
-    * quickly the pump got back to the reader.
+  /** A pump that is healthy and parked in a read finds nothing after a lone `ESC`, and that is the answer. The pump
+    * parks on a queue under virtual time, so it is parked again the instant it has read the `ESC` and the deadline
+    * always meets a parked pump, however the real scheduler behaves.
     */
   "a lone ESC read by a healthy pump" should "resolve to Escape" in {
-    val (terminal, reader) = fakeTerminalWithReader()
     val program = for
+      input     <- ParkingInput.create
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
       handler <- TerminalInputHandler.create(
-        terminal,
+        structuralTerminal(),
         router,
         clipboard,
         escDeadline = 100.millis,
-        readerOverride = Some(reader)
+        readSource = Some(input.readSource)
       )
-      _      <- IO.interruptible(reader.awaitWaitingRead())
-      _      <- IO(reader.feed(Array(esc)))
-      _      <- IO.interruptible(reader.awaitWaitingRead())
+      _      <- input.feed(Array(esc))
       events <- handler.eventStream.take(1).compile.toList
     yield events
 
-    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe List(
-      translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty))
-    )
+    runVirtual(program) shouldBe List(translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)))
   }
 
   /** Shutting the handler down interrupts the blocked read: no reader thread is left parked in `read`. */

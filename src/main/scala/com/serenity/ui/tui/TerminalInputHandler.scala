@@ -185,8 +185,8 @@ object TerminalInputHandler:
     readerOverride: Option[NonBlockingReader] = None,
     metrics: TerminalInputMetrics = TerminalInputMetrics.Disabled,
     mouseTrackingSupported: Boolean = defaultMouseTrackingSupported,
-    // Runs in the pump ahead of every read; lets a test stand in for a pump that is slow to get back to the reader.
-    beforeEachRead: IO[Unit] = IO.unit
+    beforeEachRead: IO[Unit] = IO.unit,
+    readSource: Option[ReadGate => IO[Int]] = None
   ): IO[TerminalInputHandler] =
     for
       queue            <- Queue.unbounded[IO, Option[QueuedInput]]
@@ -197,12 +197,12 @@ object TerminalInputHandler:
       modifierTapState <- Ref.of[IO, ModifierTapState](ModifierTapState.empty)
       focusCallback    <- IO(new AtomicReference[Option[Boolean => Unit]](None))
       _                <- enableModes(terminal, mouseTrackingSupported)
-      // `readerOverride` lets a test drive the exact JLine reader in place of `terminal.reader()` -- in particular one
-      // that emulates a non-tty pipe, where a timed read misfires. Production always uses the terminal's own reader.
-      reader = readerOverride.getOrElse(terminal.reader())
+      // `readerOverride` lets a test drive the exact JLine reader in place of `terminal.reader()`, e.g. a non-tty pipe.
+      reader   = readerOverride.getOrElse(terminal.reader())
+      pumpRead = readSource.getOrElse((gate: ReadGate) => IO.interruptible(gate.read(reader)))
       // rawReadLoop runs on a dedicated fiber so the CE3 compute pool is never blocked waiting for the terminal;
       // guarantee(rawFiber.cancel) tears it down whenever readLoop exits (naturally or via cancellation).
-      fiber <- rawReadLoop(reader, rawQueue, escDeadline, metrics, beforeEachRead).start.flatMap { rawFiber =>
+      fiber <- rawReadLoop(pumpRead, rawQueue, escDeadline, metrics, beforeEachRead).start.flatMap { rawFiber =>
         readLoop(
           rawQueue,
           queue,
@@ -262,8 +262,8 @@ object TerminalInputHandler:
     * returns, both on the reading thread itself, so it is odd exactly while a read is in flight and one value says both
     * whether and which read -- an unchanged odd count across two samples is the same read, parked throughout.
     */
-  final private class ReadGate:
-    private val transitions = new AtomicLong(0L)
+  final private[tui] class ReadGate:
+    private[tui] val transitions = new AtomicLong(0L)
 
     def read(reader: NonBlockingReader): Int =
       transitions.incrementAndGet()
@@ -310,7 +310,7 @@ object TerminalInputHandler:
     * stretch to a deadline.
     */
   private def rawReadLoop(
-    reader: NonBlockingReader,
+    readSource: ReadGate => IO[Int],
     rawQueue: Queue[IO, ReadOutcome],
     escDeadline: FiniteDuration,
     metrics: TerminalInputMetrics,
@@ -320,7 +320,7 @@ object TerminalInputHandler:
       val gate = new ReadGate
 
       def pump: IO[Unit] =
-        (beforeEachRead >> IO.interruptible(gate.read(reader))).map(toOutcome).flatMap {
+        (beforeEachRead >> readSource(gate)).map(toOutcome).flatMap {
           case ReadOutcome.Eof                => pumpQueue.offer(ReadOutcome.Eof)
           case outcome @ ReadOutcome.Bytes(_) => metrics.recordCharsRead(1) >> pumpQueue.offer(outcome) >> pump
           case outcome                        => pumpQueue.offer(outcome) >> pump
