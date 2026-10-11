@@ -1,7 +1,6 @@
 package com.serenity.ui.accessibility
 
 import cats.effect.{IO, Ref}
-import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.models.{AppState, Buffer, BufferId, BufferMapChanges, TypingActivity, ViewportPlacement}
 
 /** Memoizes the accessibility snapshot against the `AppState` last synced, so the projection in
@@ -15,8 +14,7 @@ import com.serenity.state.models.{AppState, Buffer, BufferId, BufferMapChanges, 
   * (content/filePath/cursors), `focus`, `layout`, `uiSurfaces`, and `config`.
   */
 final class AccessibilitySync private (
-    ref: Ref[IO, Option[AccessibilitySync.CacheEntry]],
-    val previewCache: MarkdownPreviewCache
+    ref: Ref[IO, Option[AccessibilitySync.CacheEntry]]
 ):
   import AccessibilitySync.{CacheEntry, accessiblyEqual}
 
@@ -64,4 +62,4 @@ object AccessibilitySync:
     )
 
   def empty: IO[AccessibilitySync] =
-    Ref.of[IO, Option[CacheEntry]](None).map(new AccessibilitySync(_, MarkdownPreviewCache()))
+    Ref.of[IO, Option[CacheEntry]](None).map(new AccessibilitySync(_))

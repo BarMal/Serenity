@@ -100,13 +100,12 @@ class PinnedMarkdownPreviewTextSpec extends AnyFlatSpec with Matchers:
     collected.get shouldBe 1
   }
 
-  "AccessibilitySnapshot" should "read an unchanged previewed document's text once across projections sharing a cache" in {
+  "AccessibilitySnapshot" should "not read a previewed document's text across repeated projections" in {
     val collected = new AtomicInteger(0)
     val state     = previewState(new CountingLeaf("# Heading\n\nSome body text", collected))
-    val cache     = MarkdownPreviewCache()
 
-    val first = AccessibilitySnapshot.from(state, ViewportSize(120, 40), None, cache)
-    AccessibilitySnapshot.from(state, ViewportSize(120, 40), Some(first), cache)
+    val first = AccessibilitySnapshot.from(state, ViewportSize(120, 40), None)
+    AccessibilitySnapshot.from(state, ViewportSize(120, 40), Some(first))
 
-    collected.get shouldBe 1
+    collected.get shouldBe 0
   }

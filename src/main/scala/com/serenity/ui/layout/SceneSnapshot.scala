@@ -55,6 +55,22 @@ final case class SceneNode(
     zIndex: Int
 )
 
+/** The scene's nodes and the pane geometry they came from, without the editor layout contract. Consumers that only walk
+  * nodes (the accessibility projection) take this instead of a full [[UiSceneSnapshot]], whose contract resolves every
+  * pinned panel's content -- including a markdown preview's text.
+  */
+final case class SceneNodes(
+    calculatedLayout: CalculatedLayout,
+    paneLayouts: Map[PaneId, EditorPaneLayout],
+    workspace: List[SceneNode],
+    floating: List[SceneNode],
+    modalBackdrop: Option[SceneNode],
+    modal: List[SceneNode]
+):
+
+  def nodesInPaintOrder: List[SceneNode] =
+    workspace ++ floating ++ modalBackdrop.toList ++ modal
+
 /** Pure, authoritative UI geometry for a frame.
   *
   * `calculatedLayout` remains available temporarily for callers that have not yet migrated away from the legacy layout
@@ -116,13 +132,36 @@ object UiSceneSnapshot:
     viewportSize: ViewportSize,
     previewCache: MarkdownPreviewCache = MarkdownPreviewCache()
   ): UiSceneSnapshot =
-    val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
+    val sceneNodes = nodes(state, calculatedLayout)
     val editorContract = EditorLayoutContract.from(
       state,
       viewportSize,
       calculatedLayout,
       previewCache
     )
+    UiSceneSnapshot(
+      calculatedLayout = calculatedLayout,
+      paneLayouts = sceneNodes.paneLayouts,
+      editorContract = editorContract,
+      textSnapshots = Map.empty,
+      columnSnapshots = Map.empty,
+      workspace = sceneNodes.workspace,
+      floating = sceneNodes.floating,
+      modalBackdrop = sceneNodes.modalBackdrop,
+      modal = sceneNodes.modal,
+      focusOrder =
+        if sceneNodes.modal.nonEmpty then sceneNodes.modal.lastOption.toList.map(_.id)
+        else
+          orderedForFocus(
+            state.persisted.focus,
+            (sceneNodes.workspace ++ sceneNodes.floating ++ sceneNodes.modal).filterNot(_.id match
+              case SceneNodeId.EditorPaneHeader(_) => true
+              case _                               => false)
+          )
+    )
+
+  def nodes(state: AppState, calculatedLayout: CalculatedLayout): SceneNodes =
+    val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
     val workspacePanes = state.persisted.layout.orderedPaneIds.flatMap { paneId =>
       paneLayouts.get(paneId).toList.flatMap { pane =>
         val paneNode = SceneNode(
@@ -168,26 +207,13 @@ object UiSceneSnapshot:
         zIndex = workspacePanes.size + workspaceSurfaces.size + floating.size
       )
     )
-    val nodes = workspacePanes ++ workspaceSurfaces ++ floating ++ modal
-    UiSceneSnapshot(
+    SceneNodes(
       calculatedLayout = calculatedLayout,
       paneLayouts = paneLayouts,
-      editorContract = editorContract,
-      textSnapshots = Map.empty,
-      columnSnapshots = Map.empty,
       workspace = workspacePanes ++ workspaceSurfaces,
       floating = floating,
       modalBackdrop = modalBackdrop,
-      modal = modal,
-      focusOrder =
-        if modal.nonEmpty then modal.lastOption.toList.map(_.id)
-        else
-          orderedForFocus(
-            state.persisted.focus,
-            nodes.filterNot(_.id match
-              case SceneNodeId.EditorPaneHeader(_) => true
-              case _                               => false)
-          )
+      modal = modal
     )
 
   private def orderedForFocus(focus: Focus, nodes: List[SceneNode]): List[SceneNodeId] =
