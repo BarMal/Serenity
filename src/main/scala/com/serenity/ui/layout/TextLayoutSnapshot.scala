@@ -381,14 +381,16 @@ object TextLayoutSnapshot:
         line,
         panelWidthPx,
         resolver,
-        logicalFontRenderContext(frc),
+        frc,
         measuredLayout,
         cellMetrics,
         baseColumn,
         paragraphRole,
         dropCapGlyphWidthPx
       )
-      wrapCache.wrapped(spec, bufferLine, maxVisualLines)(
+      // Measuring keeps the caller's context so the shaped-text cache is shared with whoever draws with it; only the
+      // cache identity ignores the device transform.
+      wrapCache.wrapped(spec.copy(frc = logicalFontRenderContext(frc)), bufferLine, maxVisualLines)(
         limit => wrapRows(spec, bufferLine, limit),
         predecessors => IncrementalWrap.rewrap(spec, bufferLine, predecessors)
       )
