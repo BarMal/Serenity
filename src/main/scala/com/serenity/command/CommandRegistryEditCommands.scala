@@ -221,7 +221,7 @@ private[command] object CommandRegistryEditCommands:
   private[command] def occurrenceCommands: List[Command] = List(
     Command.typed(
       "select-next-occurrence",
-      "Select the word under the caret, then add the next match of the selected text as another cursor.",
+      "Select the text under the caret, then add the next match of the selected text as another cursor.",
       CommandIntent.Edit(EditIntent.SelectNextOccurrence),
       CommandCategory.Edit,
       label = "Select Next Occurrence"
@@ -235,7 +235,7 @@ private[command] object CommandRegistryEditCommands:
     ),
     Command.typed(
       "select-all-occurrences",
-      "Select every match of the selected text, or of the word under the caret, as its own cursor.",
+      "Select every match of the selected text, or of the text under the caret, as its own cursor.",
       CommandIntent.Edit(EditIntent.SelectAllOccurrences),
       CommandCategory.Edit,
       label = "Select All Occurrences"

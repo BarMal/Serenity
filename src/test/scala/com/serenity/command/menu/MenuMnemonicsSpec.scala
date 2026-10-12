@@ -39,6 +39,7 @@ class MenuMnemonicsSpec extends AnyFlatSpec with Matchers:
 
     MenuMnemonics.altLetters(linux.withBinding(HotkeyAction.Undo, "alt+u")) should contain('u')
     MenuMnemonics.altLetters(linux.withBinding(HotkeyAction.Undo, "ctrl+u")) should not contain 'u'
+    MenuMnemonics.altLetters(linux.withBinding(HotkeyAction.Undo, "ctrl+alt+u")) should not contain 'u'
   }
 
   "The default keymaps" should "leave Alt+F, E, V, W and H free for the top-level menus" in {
