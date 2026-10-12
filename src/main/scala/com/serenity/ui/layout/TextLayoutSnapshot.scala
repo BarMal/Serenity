@@ -23,6 +23,7 @@ import com.serenity.state.models.{
 }
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TextCaretMeasurement.*
+import com.serenity.ui.renderer.FontFirstUse
 
 final case class TextLayoutSnapshot(
     visualLines: Vector[TextVisualLine],
@@ -549,6 +550,7 @@ object TextLayoutSnapshot:
     if offsetPx <= 0.0f then line else line.copy(xOffsetPx = line.xOffsetPx + offsetPx)
 
   private[layout] def shouldUseMeasuredLayout(font: Font, frc: FontRenderContext): Boolean =
+    FontFirstUse.settle(font, frc)
     measuredLayoutCache.computeIfAbsent(
       MeasuredLayoutKey(font, logicalFontRenderContext(frc)),
       key =>

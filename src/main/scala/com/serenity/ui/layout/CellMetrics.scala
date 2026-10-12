@@ -1,5 +1,7 @@
 package com.serenity.ui.layout
 
+import com.serenity.ui.renderer.FontFirstUse
+
 /** Font-derived cell dimensions. Constant with respect to window size — resizing changes the cell count, not the cell
   * size. Derived from FontMetrics at startup and font changes only.
   *
@@ -51,6 +53,7 @@ object CellMetrics:
     val image = new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_RGB)
     val g     = image.createGraphics()
     g.setFont(font)
+    FontFirstUse.settle(font, g.getFontRenderContext)
     val fm     = g.getFontMetrics
     val result = CellMetrics(math.max(1, fm.charWidth('M')), math.max(1, fm.getHeight), math.max(1, fm.getAscent))
     g.dispose()

@@ -40,7 +40,12 @@ final class StyledFontCache(maxBaseFonts: Int = 16, maxStylesPerBaseFont: Int = 
 
   def underlineOf(font: Font): Underline =
     if underlines.size >= maxBaseFonts * maxStylesPerBaseFont then underlines.clear()
-    underlines.computeIfAbsent(font, _ => Underline.of(font.getLineMetrics("", MeasuringContext)))
+    underlines.computeIfAbsent(
+      font,
+      _ =>
+        FontFirstUse.settle(font, MeasuringContext)
+        Underline.of(font.getLineMetrics("", MeasuringContext))
+    )
 
 object StyledFontCache:
 

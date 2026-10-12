@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicLong
 import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.{IndentationSettings, MeasuredRow}
+import com.serenity.ui.renderer.FontFirstUse
 import com.serenity.ui.theme.{MarkdownInlineStyling, RichTextStyling, TextStyle}
 
 /** Caret-stop measurement for one logical line: which AWT font each column measures with, and the x position of every
@@ -208,6 +209,9 @@ private[layout] object TextCaretMeasurement:
     */
   private[layout] def textLayoutsConstructed: Long = textLayoutsBuilt.get().get()
 
+  private def settleFonts(resolver: LineFontResolver, frc: FontRenderContext): Unit =
+    FontFirstUse.settleAll(resolver.baseFont +: resolver.runs.map(_.font), frc)
+
   private def textLayoutOf(text: AttributedString, frc: FontRenderContext): TextLayout =
     val _ = textLayoutsBuilt.get().incrementAndGet()
     TextLayout(text.getIterator, frc)
@@ -264,6 +268,7 @@ private[layout] object TextCaretMeasurement:
     resolver: LineFontResolver,
     frc: FontRenderContext
   ): IArray[Float] =
+    settleFonts(resolver, frc)
     val attributed = AttributedString(text)
     // One FONT attribute per contiguous run of equal per-column fonts, so a mixed-size rich line's caret advances
     // (and thus wrap points and widths) match the per-run glyphs the draw path paints.
@@ -290,6 +295,7 @@ private[layout] object TextCaretMeasurement:
     resolver: LineFontResolver,
     frc: FontRenderContext
   ): IArray[Float] =
+    settleFonts(resolver, frc)
     val hidden        = resolver.hiddenMask(absoluteStartColumn, text.length)
     val visibleBefore = hidden.scanLeft(0)((count, isHidden) => if isHidden then count else count + 1)
     val visibleText   = text.indices.filterNot(hidden(_)).map(text.charAt(_)).mkString

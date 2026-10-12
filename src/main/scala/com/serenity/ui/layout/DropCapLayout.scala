@@ -4,6 +4,7 @@ import java.awt.Font
 import java.awt.font.FontRenderContext
 
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
+import com.serenity.ui.renderer.FontFirstUse
 import com.serenity.ui.theme.{RichTextStyling, TextStyle}
 
 /** Pure geometry for a multi-line drop cap paragraph: which of a paragraph's visual lines the glyph spans, and the left
@@ -49,9 +50,10 @@ object DropCapLayout:
   final private case class GlyphKey(font: Font, frc: FontRenderContext, text: String)
 
   private val glyphWidths =
-    MeasurementMemo[GlyphKey, Float](maxEntries = 256)(key =>
+    MeasurementMemo[GlyphKey, Float](maxEntries = 256) { key =>
+      FontFirstUse.settle(key.font, key.frc)
       key.font.getStringBounds(key.text, key.frc).getWidth.toFloat
-    )
+    }
 
   /** The extra left margin, in pixels, a visual line reserves for the drop cap glyph: the glyph's measured width on
     * every line it spans, zero elsewhere. Added to a line's ordinary left origin so its body text starts to the right

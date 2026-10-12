@@ -6,7 +6,7 @@ import java.text.AttributedString
 
 import com.serenity.ui.layout.TextCaretMeasurement.{ColumnFontRun, LineFontResolver}
 import com.serenity.ui.layout.TextMeasurer.{FontRun, LineFonts, LineMetrics, MetricsKey, ShapedRun}
-import com.serenity.ui.renderer.FontSpec
+import com.serenity.ui.renderer.{FontFirstUse, FontSpec}
 
 /** [[TextMeasurer]] over Java2D at one `FontRenderContext`, answering exactly as the layout's own Java2D measurement
   * does.
@@ -35,6 +35,7 @@ final case class Java2DTextMeasurer(frc: FontRenderContext) extends TextMeasurer
   def glyphWidthPx(font: FontSpec, text: String): Float = DropCapLayout.glyphWidthPx(font.toAwt, frc, text)
 
   def shape(text: String, startColumn: Int, run: FontRun, level: Byte): ShapedRun =
+    FontFirstUse.settle(run.font.toAwt, frc)
     val chars     = text.substring(run.startColumn - startColumn, run.endColumn - startColumn).toCharArray
     val flags     = if level % 2 == 0 then Font.LAYOUT_LEFT_TO_RIGHT else Font.LAYOUT_RIGHT_TO_LEFT
     val shaped    = run.font.toAwt.layoutGlyphVector(frc, chars, 0, chars.length, flags)
@@ -54,6 +55,7 @@ final case class Java2DTextMeasurer(frc: FontRenderContext) extends TextMeasurer
     else
       val attributed = AttributedString(text)
       itemise(text, 0, text.length, startColumn, fonts).foreach { run =>
+        FontFirstUse.settle(run.font.toAwt, frc)
         attributed.addAttribute(
           TextAttribute.FONT,
           run.font.toAwt,
