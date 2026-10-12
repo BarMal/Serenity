@@ -24,6 +24,8 @@ object BenchmarkRunner:
       "prose.markdown_typing.chapter_ghosts",
       "prose.markdown_enter.renumber",
       "render.long_measured_line.java2d",
+      "layout.aligned_prose.cached_snapshot",
+      "layout.aligned_prose.moved_lines",
       "damage.single_char_long_line.rows",
       "damage.single_char_long_line.cells",
       "damage.single_char_short_line.rows",

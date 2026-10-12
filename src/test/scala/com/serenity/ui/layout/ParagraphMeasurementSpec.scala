@@ -266,12 +266,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
       case ParagraphAlignment.Right  => available
       case _                         => 0.0f
     if offset <= 0.0f then row
-    else
-      row.copy(
-        caretStops = row.caretStops.map(stop => stop.copy(xPx = stop.xPx + offset)),
-        xSortedCaretStops = row.xSortedCaretStops.map(stop => stop.copy(xPx = stop.xPx + offset)),
-        xOffsetPx = offset
-      )
+    else row.copy(xOffsetPx = row.xOffsetPx + offset)
 
   it should "wrap rich text with per-run fonts, prose zoom, alignment and drop caps exactly as before" in
     Seq(sans, ligatured, kerned).foreach { font =>
