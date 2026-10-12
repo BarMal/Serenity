@@ -64,7 +64,7 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
     }
 
   // Entry points a spec launches as a separate JVM: their stdout is the channel the parent spec reads, not test noise.
-  private val ChildProcessMains = Set("crash/KillRecoveryChild.scala", "ui/layout/FontFirstUseRepro.scala")
+  private val ChildProcessMains = Set("crash/KillRecoveryChild.scala")
 
   private val DebugSuitePattern         = (raw"\bclass\s+" + "Deb" + "ug" + raw"\w*Sp" + "ec" + raw"\b").r
   private val ConsoleOutputPattern      = ("println" + raw"\s*\(").r
@@ -78,9 +78,8 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
     "app/instance/InstanceLockSpec.scala"         -> "child JVM parks forever so the lock stays held",
     "spellcheck/DictionaryCacheSharingSpec.scala" -> "simulates a slow dictionary build the sharing must not repeat",
     "SwingWindowPresentSpec.scala"                -> "paint thread holds its lease briefly while acquire blocks",
-    "ui/layout/FontFirstUseSpec.scala" -> "first use runs long enough for every losing thread to arrive and wait on it",
-    "testkit/StallSampler.scala"       -> "production default for the injected sleep",
-    "testkit/StallSamplerSpec.scala"   -> "yields the sampler thread once its scripted delays run out",
-    "testkit/RuntimeShutdownWatch.scala" -> "the watcher's own sampling interval on a daemon thread",
-    "io/MainThreadHandoffSpec.scala"     -> "work that overruns the handoff's start timeout"
+    "testkit/StallSampler.scala"                  -> "production default for the injected sleep",
+    "testkit/StallSamplerSpec.scala"              -> "yields the sampler thread once its scripted delays run out",
+    "testkit/RuntimeShutdownWatch.scala"          -> "the watcher's own sampling interval on a daemon thread",
+    "io/MainThreadHandoffSpec.scala"              -> "work that overruns the handoff's start timeout"
   )

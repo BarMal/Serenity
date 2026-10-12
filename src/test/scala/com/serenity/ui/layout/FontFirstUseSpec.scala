@@ -45,13 +45,15 @@ class FontFirstUseSpec extends AnyFlatSpec with Matchers:
     val firstUses  = AtomicInteger(0)
     val finishedAt = AtomicInteger(0)
     val seenEarly  = AtomicInteger(0)
+    val arrived    = CountDownLatch(16)
     onThreads(16) { _ =>
+      arrived.countDown()
       settling.settle(
         font,
         frc,
         (_, _) =>
           discard(firstUses.incrementAndGet())
-          Thread.sleep(20)
+          discard(arrived.await(1, TimeUnit.MINUTES))
           finishedAt.set(1)
       )
       if finishedAt.get != 1 then seenEarly.set(1)
@@ -66,13 +68,15 @@ class FontFirstUseSpec extends AnyFlatSpec with Matchers:
     val fonts    = Vector.fill(8)(unsettledFont())
     val inside   = AtomicInteger(0)
     val deepest  = AtomicInteger(0)
+    val arrived  = CountDownLatch(fonts.length)
     onThreads(fonts.length) { index =>
+      arrived.countDown()
       settling.settle(
         fonts(index),
         frc,
         (_, _) =>
           discard(deepest.accumulateAndGet(inside.incrementAndGet(), (a, b) => math.max(a, b)))
-          Thread.sleep(10)
+          discard(arrived.await(1, TimeUnit.MINUTES))
           discard(inside.decrementAndGet())
       )
     }
