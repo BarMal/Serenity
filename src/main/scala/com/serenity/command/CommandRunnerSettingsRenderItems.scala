@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.{RenderBackendSetting, RenderDamageGranularity, RenderFpsTarget}
+import com.serenity.config.{RenderBackendSetting, RenderDamageGranularity, RenderFpsTarget, WaylandRender}
 
 private[command] object CommandRunnerSettingsRenderItems:
 
@@ -101,4 +101,25 @@ private[command] object CommandRunnerSettingsRenderItems:
       selectedIndex = optionSelections.getOrElse("render-backend", 0),
       category = CommandCategory.Settings,
       hint = Some("Takes effect after restarting; Skia needs an X11 display on Linux")
+    )
+
+  private[command] def renderWaylandOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    def option(label: String, mode: WaylandRender) =
+      CommandOption(
+        label,
+        CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetRenderWayland(mode)))
+      )
+    CommandSurfaceItem.OptionItem(
+      id = "render-wayland",
+      label = "Wayland Renderer",
+      options = List(
+        option("Java2D", WaylandRender.Java2D),
+        option("Skia (CPU)", WaylandRender.SkiaRaster),
+        option("Skia via XWayland", WaylandRender.XWayland)
+      ),
+      selectedIndex = optionSelections.getOrElse("render-wayland", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Only when Skia would run on a Wayland session; takes effect after restarting")
     )

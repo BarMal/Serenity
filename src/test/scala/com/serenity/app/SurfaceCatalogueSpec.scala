@@ -33,3 +33,19 @@ class SurfaceCatalogueSpec extends AnyFlatSpec with Matchers:
     SurfaceCatalogue.Java2DOnly.skia shouldBe None
     SurfaceCatalogue.Java2DOnly.factoryFor(RenderBackend.Skia) shouldBe theSameInstanceAs(FrameSurfaceFactory.Java2D)
   }
+
+  it should "build the raster factory only for the raster backend, and fall back to Java2D without one" in {
+    val built = new AtomicInteger(0)
+    val raster = SurfaceCatalogue(
+      None,
+      Some(() =>
+        built.incrementAndGet(); skiaFactory
+      )
+    )
+    raster.factoryFor(RenderBackend.Java2D) shouldBe theSameInstanceAs(FrameSurfaceFactory.Java2D)
+    built.get shouldBe 0
+    raster.factoryFor(RenderBackend.SkiaRaster) shouldBe theSameInstanceAs(skiaFactory)
+    built.get shouldBe 1
+    SurfaceCatalogue.Java2DOnly.factoryFor(RenderBackend.SkiaRaster) shouldBe
+      theSameInstanceAs(FrameSurfaceFactory.Java2D)
+  }

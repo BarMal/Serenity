@@ -36,6 +36,9 @@ private[config] object ConfigFieldsDisplay:
         text => RenderBackendSetting.values.find(_.toString == text)
       )
     )(_.surfaceConfig.renderBackend, (config, value) => config.withRenderBackend(value)),
+    named("ui.render.wayland", "renderWayland", "render.wayland", "render_wayland")(
+      enumerated(WaylandRender.fromConfigKey, _.configKey, text => WaylandRender.values.find(_.toString == text))
+    )(_.surfaceConfig.renderWayland, (config, value) => config.withRenderWayland(value)),
     field(
       "ui.render.cache_capacity",
       "render.frame_state_cache_capacity",

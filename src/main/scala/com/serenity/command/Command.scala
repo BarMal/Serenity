@@ -339,6 +339,7 @@ enum GeneralSettingsIntent:
   case SetRenderFpsTarget(target: RenderFpsTarget)
   case SetRenderDamageGranularity(granularity: RenderDamageGranularity)
   case SetRenderBackend(backend: RenderBackendSetting)
+  case SetRenderWayland(mode: WaylandRender)
   case SetCommandRunnerVisibleRows(rows: Option[Int])
   case SetCommandRunnerItemGapRows(rows: Option[Double])
   case SetCommandRunnerCursorGapRows(rows: Option[Double])

@@ -8,34 +8,37 @@ import scala.util.control.NonFatal
 
 import cats.effect.IO
 
-/** Reads `ui.render.backend` alone, because the renderer is chosen before the full config is loaded: the choice can
-  * decide the toolkit, which is fixed before AWT starts. It logs nothing, so it can run ahead of log routing.
+/** The render settings that decide the toolkit and the renderer before any window exists. */
+final case class RenderStartupSettings(backend: RenderBackendSetting, wayland: WaylandRender)
+
+/** Reads the render startup settings alone, because they are needed before the full config is loaded: they can decide
+  * the toolkit, which is fixed before AWT starts. It logs nothing, so it can run ahead of log routing.
   */
 object RenderBackendPeek:
 
-  private val SettingKey = "ui.render.backend"
+  private val SettingKeys = Set("ui.render.backend", "ui.render.wayland")
 
-  def read(path: Path = ConfigManager.defaultConfigPath): IO[RenderBackendSetting] =
+  private val Defaults = RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.Java2D)
+
+  def read(path: Path = ConfigManager.defaultConfigPath): IO[RenderStartupSettings] =
     IO.blocking {
       if Files.exists(path) then
-        try settingIn(path)
-        catch case NonFatal(_) => RenderBackendSetting.Auto
-      else RenderBackendSetting.Auto
+        try settingsIn(path)
+        catch case NonFatal(_) => Defaults
+      else Defaults
     }
 
-  private def settingIn(path: Path): RenderBackendSetting =
-    ConfigManager
+  private def settingsIn(path: Path): RenderStartupSettings =
+    val applied = ConfigManager
       .parseHoconFile(path)
       .entrySet()
       .asScala
-      .toList
-      .flatMap { entry =>
+      .foldLeft(AppConfig.default) { (config, entry) =>
         val key = entry.getKey.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
         ConfigRegistry
           .find(key)
-          .filter(_.key == SettingKey)
-          .flatMap(_.readValue(AppConfig.default, entry.getValue))
-          .map(_.surfaceConfig.renderBackend)
+          .filter(field => SettingKeys.contains(field.key))
+          .flatMap(_.readValue(config, entry.getValue))
+          .getOrElse(config)
       }
-      .headOption
-      .getOrElse(RenderBackendSetting.Auto)
+    RenderStartupSettings(applied.surfaceConfig.renderBackend, applied.surfaceConfig.renderWayland)

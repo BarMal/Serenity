@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import cats.syntax.all.*
 import com.monovore.decline.{Command, Help, Opts}
+import com.serenity.config.{RenderBackendSetting, WaylandRender}
 
 /** @param showVersion
   *   `--version`: print the build identity and exit without starting the editor. Carried here rather than handled
@@ -18,6 +19,10 @@ import com.monovore.decline.{Command, Help, Opts}
   *   `--reset-config`: move `config.conf` aside to a timestamped backup before starting. See [[LaunchReset]].
   * @param resetSession
   *   `--reset-session`: move the saved session aside to a timestamped backup before starting. See [[LaunchReset]].
+  * @param renderer
+  *   `--renderer=auto|skia|java2d`: beats `SERENITY_RENDER_BACKEND` and `ui.render.backend`.
+  * @param waylandRender
+  *   `--wayland-render=java2d|skia-raster|xwayland`: beats `SERENITY_WAYLAND_RENDER` and `ui.render.wayland`.
   */
 final case class LaunchOptions(
     openPaths: List[Path] = Nil,
@@ -29,7 +34,9 @@ final case class LaunchOptions(
     safeMode: Boolean = false,
     smokeTest: Boolean = false,
     resetConfig: Boolean = false,
-    resetSession: Boolean = false
+    resetSession: Boolean = false,
+    renderer: Option[RenderBackendSetting] = None,
+    waylandRender: Option[WaylandRender] = None
 ):
   def openPath: Option[Path]     = openPaths.headOption
   def extraOpenPaths: List[Path] = openPaths.drop(1)
@@ -98,9 +105,40 @@ object LaunchOptions:
       )
       .orFalse
 
+  private val renderer: Opts[Option[RenderBackendSetting]] =
+    Opts
+      .option[String](
+        "renderer",
+        "Which renderer paints the window: auto, skia or java2d. Beats SERENITY_RENDER_BACKEND and ui.render.backend.",
+        metavar = "auto|skia|java2d"
+      )
+      .mapValidated(value =>
+        RenderBackendSetting
+          .fromConfigKey(value)
+          .toValidNel(s"Unknown renderer '$value'; expected auto, skia or java2d.")
+      )
+      .orNone
+
+  private val waylandRender: Opts[Option[WaylandRender]] =
+    Opts
+      .option[String](
+        "wayland-render",
+        "What a Wayland session does when Skia would paint the window: java2d (keep native Wayland and Java2D), " +
+          "skia-raster (Skia on the CPU under native Wayland) or xwayland (X11 toolkit, so Skia can use the GPU). " +
+          "Beats SERENITY_WAYLAND_RENDER and ui.render.wayland.",
+        metavar = "java2d|skia-raster|xwayland"
+      )
+      .mapValidated(value =>
+        WaylandRender
+          .fromConfigKey(value)
+          .toValidNel(s"Unknown Wayland render '$value'; expected java2d, skia-raster or xwayland.")
+      )
+      .orNone
+
   val command: Command[LaunchOptions] =
     Command("serenity", "A calm text editor.")(
-      (open, eco, tui, gui, alpha, version, safeMode, smokeTest, resetConfig, resetSession).mapN(LaunchOptions.apply)
+      (open, eco, tui, gui, alpha, version, safeMode, smokeTest, resetConfig, resetSession, renderer, waylandRender)
+        .mapN(LaunchOptions.apply)
     )
 
   /** `Left` carries the text to print. `Help.errors` distinguishes the two reasons: empty for a `--help` request,

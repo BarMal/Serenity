@@ -93,6 +93,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withRenderFpsTarget(RenderFpsTarget.Fps30)
     .withRenderDamageGranularity(RenderDamageGranularity.Cells)
     .withRenderBackend(RenderBackendSetting.Skia)
+    .withRenderWayland(WaylandRender.XWayland)
     .withRendererFrameStateCacheCapacity(96)
     .withLayerCaching(true)
     .withFrameTiming(true)

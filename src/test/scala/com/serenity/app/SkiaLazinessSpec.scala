@@ -4,6 +4,8 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.TimeUnit
 
+import scala.jdk.CollectionConverters.*
+
 import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -18,24 +20,30 @@ class SkiaLazinessSpec extends AnyFlatSpec with Matchers:
 
   final private case class ChildRun(exitCode: Int, output: List[String])
 
-  private def runChild(launchKind: String, configLines: List[String]): ChildRun =
+  private def runChild(
+    launchKind: String,
+    configLines: List[String],
+    environment: Map[String, String] = Map.empty,
+    jvmProperties: List[String] = Nil
+  ): ChildRun =
     val home = TestTemp.directory("serenity-laziness-home")
     val dir  = Files.createDirectories(home.resolve(".serenity"))
     Files.writeString(dir.resolve("config.conf"), configLines.mkString("", "\n", "\n"))
     val javaBin = Paths.get(System.getProperty("java.home"), "bin", "java").toString
-    val process = new ProcessBuilder(
-      javaBin,
-      "-Djava.awt.headless=true",
-      s"-Duser.home=$home",
-      "-Xshare:auto",
-      "-verbose:class",
-      "-cp",
-      testClasspath,
-      "com.serenity.app.SkiaLazinessChild",
-      launchKind
-    ).redirectErrorStream(true).start()
-    val output = new String(process.getInputStream.readAllBytes(), StandardCharsets.UTF_8).linesIterator.toList
-    val exited = process.waitFor(120, TimeUnit.SECONDS)
+    val builder = new ProcessBuilder(
+      (List(javaBin, "-Djava.awt.headless=true", s"-Duser.home=$home") ++ jvmProperties ++ List(
+        "-Xshare:auto",
+        "-verbose:class",
+        "-cp",
+        testClasspath,
+        "com.serenity.app.SkiaLazinessChild",
+        launchKind
+      )).asJava
+    ).redirectErrorStream(true)
+    environment.foreach((name, value) => builder.environment().put(name, value))
+    val process = builder.start()
+    val output  = new String(process.getInputStream.readAllBytes(), StandardCharsets.UTF_8).linesIterator.toList
+    val exited  = process.waitFor(120, TimeUnit.SECONDS)
     if !exited then process.destroyForcibly()
     ChildRun(if exited then process.exitValue() else -1, output)
 
@@ -48,6 +56,21 @@ class SkiaLazinessSpec extends AnyFlatSpec with Matchers:
     ("a window with ui.render.backend = java2d", "window", List("ui.render.backend = java2d")),
     ("a window while no Skia surface is registered", "window", Nil)
   )
+
+  private val waylandEnvironment = Map("WAYLAND_DISPLAY" -> "wayland-1", "DISPLAY" -> ":0")
+
+  "Resolving the renderer with --wayland-render=java2d on a Wayland session" should
+    "not load any Skiko or Kotlin class, even when the config asks for xwayland" in {
+      val run = runChild(
+        "wayland-java2d",
+        List("ui.render.wayland = xwayland"),
+        waylandEnvironment,
+        List("-Dawt.toolkit.name=WLToolkit")
+      )
+      run.exitCode shouldBe 0
+      run.output.exists(_.startsWith("resolved backend=java2d")) shouldBe true
+      loadedForbidden(run) shouldBe Nil
+    }
 
   cases.foreach { (description, kind, config) =>
     s"Resolving the renderer for $description" should "not load any Skiko or Kotlin class" in {

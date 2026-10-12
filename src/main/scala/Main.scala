@@ -63,25 +63,28 @@ object Main extends IOApp:
   def run(args: List[String]): IO[ExitCode] =
     // The terminal stream as it is now: a TUI launch silences System.err, and a failure must still reach a person.
     val console = System.err
-    // Before anything else: the toolkit is fixed the moment the first java.awt class initialises.
-    ToolkitSelection.install
-      .flatTap(toolkit =>
-        IO(System.setProperty(RuntimeIdentity.ToolkitProperty, s"${toolkit.choice} (${toolkit.reason})")).void
-      )
-      .flatMap { toolkit =>
-        // An unparseable command line is reported and nothing is started. `Help.errors` is empty for a `--help` request
-        // and non-empty for a rejected argument, which is the difference between exiting zero and exiting non-zero.
-        LaunchOptions.parse(args) match
-          case Left(help) =>
-            IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
-          case Right(options) if options.showVersion =>
-            IO(println(VersionBanner.current)).as(ExitCode.Success)
-          case Right(options) =>
-            GraphicsStartup
-              .current(GraphicsStartup.launchOf(options), toolkit)
-              .flatMap(launchUntilSettled(options, _))
-              .handleErrorWith(reportStartupFailure(options, console))
-      }
+    // An unparseable command line is reported and nothing is started. `Help.errors` is empty for a `--help` request
+    // and non-empty for a rejected argument, which is the difference between exiting zero and exiting non-zero.
+    LaunchOptions.parse(args) match
+      case Left(help) =>
+        IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
+      case Right(options) if options.showVersion =>
+        IO(println(VersionBanner.current)).as(ExitCode.Success)
+      case Right(options) =>
+        // Before anything else: the toolkit is fixed the moment the first java.awt class initialises, and the choice
+        // depends on the renderer, so both are settled together here.
+        GraphicsStartup
+          .current(GraphicsStartup.launchOf(options))
+          .flatTap(graphics =>
+            IO(
+              System.setProperty(
+                RuntimeIdentity.ToolkitProperty,
+                s"${graphics.toolkit.choice} (${graphics.toolkit.reason})"
+              )
+            ).void
+          )
+          .flatMap(launchUntilSettled(options, _))
+          .handleErrorWith(reportStartupFailure(options, console))
 
   /** Anything that ends the launch before or outside the editor's own supervision: a crash file and, for a window
     * launch, a native dialog, since a packaged app has no terminal to print to.

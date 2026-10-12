@@ -124,6 +124,9 @@ given Encoder[RenderBackendSetting] = configKeyEncoder(_.configKey)
 given Decoder[RenderBackendSetting] =
   configKeyDecoder("RenderBackendSetting", RenderBackendSetting.values, _.configKey)
 
+given Encoder[WaylandRender] = configKeyEncoder(_.configKey)
+given Decoder[WaylandRender] = configKeyDecoder("WaylandRender", WaylandRender.values, _.configKey)
+
 given Encoder[InterfaceDensity] = configKeyEncoder(_.configKey)
 given Decoder[InterfaceDensity] = configKeyDecoder("InterfaceDensity", InterfaceDensity.values, _.configKey)
 

@@ -81,7 +81,8 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
       "ui-outline-thickness",
       "render-fps",
       "render-damage-granularity",
-      "render-backend"
+      "render-backend",
+      "render-wayland"
     )
   }
 

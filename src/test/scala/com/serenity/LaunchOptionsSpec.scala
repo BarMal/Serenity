@@ -3,6 +3,7 @@ package com.serenity
 import java.nio.file.Path
 
 import com.serenity.app.LaunchOptions
+import com.serenity.config.{RenderBackendSetting, WaylandRender}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -313,4 +314,40 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
     LaunchOptions.detectTuiByDefault(Map("DISPLAY" -> ":0"), stdoutIsTty = true, osName = "Linux") shouldBe false
     LaunchOptions.detectTuiByDefault(Map.empty, stdoutIsTty = false, osName = "Linux") shouldBe false
     LaunchOptions.detectTuiByDefault(Map.empty, stdoutIsTty = true, osName = "Windows 11") shouldBe false
+  }
+
+  it should "leave the renderer and wayland render unset when no flag is given" in {
+    parsed(Nil).renderer shouldBe None
+    parsed(Nil).waylandRender shouldBe None
+  }
+
+  it should "accept --renderer=<value> in both spellings of the flag" in {
+    parsed(List("--renderer=skia")).renderer shouldBe Some(RenderBackendSetting.Skia)
+    parsed(List("--renderer", "java2d")).renderer shouldBe Some(RenderBackendSetting.Java2D)
+    parsed(List("--renderer=auto", "notes.md")).renderer shouldBe Some(RenderBackendSetting.Auto)
+  }
+
+  it should "accept --wayland-render=<value>" in {
+    parsed(List("--wayland-render=xwayland")).waylandRender shouldBe Some(WaylandRender.XWayland)
+    parsed(List("--wayland-render=skia-raster")).waylandRender shouldBe Some(WaylandRender.SkiaRaster)
+    parsed(List("--wayland-render", "java2d")).waylandRender shouldBe Some(WaylandRender.Java2D)
+  }
+
+  it should "fail fast on an invalid renderer, naming the value and the choices" in {
+    val result = LaunchOptions.parse(List("--renderer=vulkan"))
+    val errors = result.left.toOption.map(_.errors).getOrElse(Nil)
+    errors should not be empty
+    errors.mkString(" ") should (include("vulkan") and include("auto") and include("skia") and include("java2d"))
+  }
+
+  it should "fail fast on an invalid wayland render, naming the value and the choices" in {
+    val result = LaunchOptions.parse(List("--wayland-render=wl"))
+    val errors = result.left.toOption.map(_.errors).getOrElse(Nil)
+    errors should not be empty
+    errors.mkString(" ") should (include("wl") and include("java2d") and include("skia-raster") and include("xwayland"))
+  }
+
+  it should "describe both flags in --help" in {
+    val help = LaunchOptions.parse(List("--help")).left.toOption.map(_.toString).getOrElse("")
+    help should (include("--renderer") and include("--wayland-render"))
   }

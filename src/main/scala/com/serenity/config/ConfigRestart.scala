@@ -12,7 +12,8 @@ object ConfigRestart:
     "window.preferred.width/height"  -> (_.preferredWindowSize),
     "lsp.* language server settings" -> (_.languageToolsConfig.lspUserConfig),
     "startup.warm_up"                -> (_.surfaceConfig.startupWarmUpEnabled),
-    "ui.render.backend"              -> (_.surfaceConfig.renderBackend)
+    "ui.render.backend"              -> (_.surfaceConfig.renderBackend),
+    "ui.render.wayland"              -> (_.surfaceConfig.renderWayland)
   )
 
   /** The startup-only settings `after` sets differently from `before`. */

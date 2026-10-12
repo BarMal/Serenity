@@ -315,6 +315,8 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withRenderDamageGranularity(granularity)).void
       case GeneralSettingsIntent.SetRenderBackend(backend) =>
         updateAppearanceConfig(_.withRenderBackend(backend)).void
+      case GeneralSettingsIntent.SetRenderWayland(mode) =>
+        updateAppearanceConfig(_.withRenderWayland(mode)).void
       case GeneralSettingsIntent.SetCommandRunnerVisibleRows(rows) =>
         updateAppearanceConfig(_.withCommandRunnerVisibleRows(rows)).void
       case GeneralSettingsIntent.SetCommandRunnerItemGapRows(rows) =>

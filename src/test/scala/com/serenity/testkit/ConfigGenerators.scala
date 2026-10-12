@@ -258,6 +258,7 @@ object ConfigGenerators:
       fpsTarget        <- oneOfEnum(RenderFpsTarget.values)
       damage           <- oneOfEnum(RenderDamageGranularity.values)
       backend          <- oneOfEnum(RenderBackendSetting.values)
+      waylandRender    <- oneOfEnum(WaylandRender.values)
       insets           <- genTextAreaInsets
       lineNumberLayout <- genLineNumberLayout
       width            <- genViewportAxisSizing
@@ -300,6 +301,7 @@ object ConfigGenerators:
       renderFpsTarget = fpsTarget,
       renderDamageGranularity = damage,
       renderBackend = backend,
+      renderWayland = waylandRender,
       textAreaInsets = insets,
       lineNumberLayout = lineNumberLayout,
       viewportSizing = ViewportSizing(width, height),
