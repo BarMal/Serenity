@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.image.BufferedImage
-
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
@@ -17,27 +15,27 @@ import org.scalatest.matchers.should.Matchers
   * pooled image the next frame draws into. A row that was drawn again is cleared first, so it loses its stamp; a row
   * that was copied carries it to where the row now sits.
   */
-class ScrollReusePixelsSpec extends AnyFlatSpec with Matchers with PersistedFrameFixture:
+abstract class ScrollReusePixelsBehaviour extends AnyFlatSpec with Matchers with PersistedFrameFixture:
 
   private val sentinel = 0xff00ff
 
   final private case class Column(x: Int, fromY: Int, toY: Int)
 
-  private def stampColumn(image: BufferedImage, plan: EditorPaneRenderPlan, scale: Double): Column =
+  private def stampColumn(image: FramePixels, plan: EditorPaneRenderPlan, scale: Double): Column =
     val content = plan.paneLayouts.getOrElse(paneId, fail("expected the pane's layout")).contentRect
     val column = Column(
       x = math.round(cellMetrics.toPixelX(content.right) * scale).toInt - 3,
       fromY = math.round(cellMetrics.toPixelY(content.y) * scale).toInt,
       toY = math.round(cellMetrics.toPixelY(content.bottom) * scale).toInt
     )
-    (column.fromY until column.toY).foreach(y => image.setRGB(column.x, y, sentinel))
+    (column.fromY until column.toY).foreach(y => image.stamp(column.x, y, sentinel))
     column
 
   /** The share of `column`, between `from` and `to` as fractions of its height, that still carries a stamp. */
-  private def stamped(image: BufferedImage, column: Column, from: Double = 0.0, to: Double = 1.0): Double =
+  private def stamped(image: FramePixels, column: Column, from: Double = 0.0, to: Double = 1.0): Double =
     val height = column.toY - column.fromY
     val ys     = (column.fromY + (height * from).toInt) until (column.fromY + (height * to).toInt)
-    ys.count(y => (image.getRGB(column.x, y) & 0xffffff) == sentinel).toDouble / ys.size
+    ys.count(y => (image.rgbAt(column.x, y) & 0xffffff) == sentinel).toDouble / ys.size
 
   private def copiedShare(before: AppState, after: AppState, scale: Double = 2.0): Double =
     val session    = Session(scale)
@@ -46,7 +44,7 @@ class ScrollReusePixelsSpec extends AnyFlatSpec with Matchers with PersistedFram
     val (image, _) = session.draw(after, DamageProducer.forTransition(before, after))
     stamped(image, column)
 
-  private def drawnFrom(before: AppState, after: AppState): BufferedImage =
+  private def drawnFrom(before: AppState, after: AppState): FramePixels =
     val session = Session()
     val _       = session.settle(before)
     session.draw(after, DamageProducer.forTransition(before, after))._1
@@ -116,3 +114,13 @@ class ScrollReusePixelsSpec extends AnyFlatSpec with Matchers with PersistedFram
 
     copiedShare(before, after, scale = 1.5) should be < 0.02
   }
+
+class ScrollReusePixelsSpec extends ScrollReusePixelsBehaviour
+
+/** The same assertions with Skia painting into off-screen raster surfaces. Whether a row was repainted or copied is
+  * read from sentinel pixels and whether a frame equals a cold one is compared against Skia's own cold frame, so none
+  * of it depends on how Skia and Java2D rasterise a glyph differently: the tolerance is zero because both sides of
+  * every comparison come from the same rasteriser.
+  */
+class SkiaScrollReusePixelsSpec extends ScrollReusePixelsBehaviour:
+  override protected def frames: FrameBackend = SkiaFrames
