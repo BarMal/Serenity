@@ -151,6 +151,7 @@ object ShapedStretch:
   )
 
   def shape(text: String, font: Font, fontRenderContext: FontRenderContext): ShapedStretch =
+    FontFirstUse.settle(font, fontRenderContext)
     val chars   = text.toCharArray
     val shaped  = visualRuns(text, chars).map(shapeRun(chars, _, font, fontRenderContext))
     val offsets = shaped.scanLeft(0.0f)(_ + _.advance)
