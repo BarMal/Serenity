@@ -3,3 +3,18 @@ Monaspace Neon	1.101	OFL-1.1	src/main/resources/fonts/OFL.txt	Copyright (c) 2023
 Material Icons Round		Apache-2.0	src/main/resources/fonts/MATERIAL_ICONS_ROUND_LICENSE.txt	Google LLC	https://github.com/google/material-design-icons
 British English dictionary (en_GB)	4.0.1	LGPL-3.0-or-later (phonetic rules in the .aff: LGPL-2.1)	src/main/resources/spellcheck/README_en_GB.txt,LGPL-3.0,LGPL-2.1	Kevin Atkinson (Aspell word list); David Bartlett, Brian Kelk, Andrew Brown and Marco A.G.Pinto (en_GB); Björn Jacke (phonetic rules)	https://github.com/LibreOffice/dictionaries/tree/master/en
 Courier Prime	3.018	OFL-1.1	src/main/resources/fonts/COURIER_PRIME_OFL.txt	Copyright 2015 The Courier Prime Project Authors (https://github.com/quoteunquoteapps/CourierPrime); full notice in the licence file. Regular, Italic, Bold and Bold Italic TTFs from commit 7fd585a2dd4c1612c79b3308e300923d1c13df93 (fonts/ttf)	https://github.com/quoteunquoteapps/CourierPrime
+Skia (with skcms)	m153-e63f5d6129	BSD-3-Clause	BSD-3-Clause-skia	Copyright (c) 2011 Google Inc. All rights reserved.	https://github.com/JetBrains/skia
+HarfBuzz	9cb1fee51069	MIT	MIT-harfbuzz	Google, Inc.; Ebrahim Byagowi; and other HarfBuzz authors named in the licence file	https://github.com/harfbuzz/harfbuzz
+FreeType (Linux native library)	264b5fbf5b91	FTL (FTL OR GPL-2.0-or-later; the FreeType License is the one used)	FTL	Portions of this software are copyright (c) The FreeType Project (www.freetype.org). All rights reserved.	https://freetype.org/
+Expat	6154446fccef	MIT	MIT-expat	Expat maintainers and contributors named in the licence file	https://github.com/libexpat/libexpat
+libpng	d5515b5b8be3	libpng-2.0	libpng-2.0	PNG Reference Library authors named in the licence file	http://www.libpng.org/pub/png/libpng.html
+libjpeg-turbo	e14cbfaa8552	BSD-3-Clause AND IJG AND Zlib	libjpeg-turbo, IJG-libjpeg	D. R. Commander and the other copyright holders named in the licence file; The Independent JPEG Group	https://libjpeg-turbo.org/
+libwebp	845d5476a866	BSD-3-Clause	BSD-3-Clause-libwebp	Google Inc.	https://github.com/webmproject/libwebp
+zlib	646b7f569718	Zlib	Zlib	Jean-loup Gailly and Mark Adler	https://zlib.net/
+Wuffs	e3f919ccfe3e	Apache-2.0 (Apache-2.0 OR MIT; Apache-2.0 is the one used)	Apache-2.0	The Wuffs Authors	https://github.com/google/wuffs
+ICU4C (including embedded ICU data)	d578f2e8b793	Unicode-3.0	Unicode-3.0-icu4c	Unicode, Inc. and others named in the licence file	https://icu.unicode.org/
+PIEX	bb217acdca1c	Apache-2.0	Apache-2.0	Google Inc.	https://android.googlesource.com/platform/external/piex
+Adobe DNG SDK	dbe0a676450d	LicenseRef-Adobe-DNG-SDK	Adobe-DNG-SDK	Adobe Systems Incorporated; security patches by Google Inc.	https://android.googlesource.com/platform/external/dng_sdk
+ETC1 (Android PKM decoder)	a17429660467	Apache-2.0	Apache-2.0	The Android Open Source Project	https://android.googlesource.com/platform/frameworks/native/+/master/opengl/
+D3D12 Memory Allocator (Windows native library)	169895d529df	MIT	MIT-d3d12-memory-allocator	Advanced Micro Devices, Inc.	https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator
+PartitionAlloc (Windows native library)	03cc513177b4	BSD-3-Clause	BSD-3-Clause-chromium	The Chromium Authors	https://chromium.googlesource.com/chromium/src/base/allocator/partition_allocator.git
