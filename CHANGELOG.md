@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## 1.0.0-rc.3 — 2026-10-12
+
+### 2026-10-12
+
+- Added per-document indentation (#2245, #1996 part 2): Tab, Shift+Tab, tab-stop painting, wrap, caret and scroll maths follow the buffer's own indentation, taken from your choice, then the text itself (read from the first 10,000 lines, ignoring blank lines, block-comment continuations and Markdown list text), then the global `editor.tab_size` and `editor.insert_spaces`. The status line shows it ("Spaces: 4", "Tab Size: 4"), Change Indentation picks it, and the choice survives reload and sessions. Existing indentation is not converted.
+- Fixed comments and diagnostics (such as spelling marks) on lines shown in the second and later columns of a multi-column pane being dropped (#2242).
+- Redrew only the rows that changed in multi-column panes, including their line-number rails and chapter ghosts, instead of the whole pane on every keystroke (#2240, #2244, #2246).
+- Settled each font on one thread before anything measures with it (#2250, #2251), so two threads using a font for the first time can no longer leave a kerned font with wrong glyph advances for the rest of the session.
+- Stopped printing the unchanged config again on every session save (#2253).
+
 ### 2026-10-11
 
 - Added the first commands that create a second cursor (#1994, part of #1951): Select Next Occurrence (`Ctrl+D`, `Cmd+D` on macOS) selects the word at the caret and then adds the next match of the selected text as another cursor, Skip Occurrence (`Ctrl+Alt+K`) swaps the newest match for the one after it, and Select All Occurrences (`Ctrl+Shift+L`) selects every match (up to 10,000). A selection that began as a bare caret matches whole words only, one you made yourself matches anywhere, matching is case-sensitive, and typing then reaches every cursor. All three are in the palette and can be rebound with `hotkey.command.<name>`; the `Ctrl+K Ctrl+D` chord for skipping waits on chord bindings. To free `Ctrl+D`, Split Pane Horizontal moved to `Ctrl+Alt+V` (`Cmd+Alt+V`), and Toggle Notes Pin moved from `Ctrl+Shift+L` to `Ctrl+Alt+P`; a key you set yourself in `config.conf` keeps its meaning (the new default for a command is skipped where you already use that key), while an old file that merely lists the previous defaults moves to the new ones.
