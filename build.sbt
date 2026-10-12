@@ -290,7 +290,11 @@ lazy val root = (project in file("."))
           case _ => (assembly / assemblyMergeStrategy).value(x)
         }
       case PathList("module-info.class") => MergeStrategy.discard
-      case x                             => (assembly / assemblyMergeStrategy).value(x)
+      // Skiko natives sit at the root of their runtime jar; a build that puts two runtime jars on the classpath
+      // (the macOS jars both carry the same two dylibs) would otherwise fail on the duplicate entries.
+      case PathList(name) if name == "icudtl.dat" || name.matches("(lib)?skiko-.*\\.(so|dylib|dll)(\\.sha256)?") =>
+        MergeStrategy.first
+      case x => (assembly / assemblyMergeStrategy).value(x)
     },
     Test / testOptions ++= Seq(
       // One folder per test run holds everything the suites create (`TestTemp`, and the session folder of every

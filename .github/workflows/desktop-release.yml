@@ -28,6 +28,9 @@ jobs:
     name: Build ${{ matrix.artifact_suffix }}
     if: "!startsWith(github.head_ref, 'claude/')"
     runs-on: ${{ matrix.os }}
+    # Each OS image and jar carries only its own Skiko natives (#2028); build.sbt reads this to pick the runtime jar.
+    env:
+      SERENITY_SKIKO_TARGET: ${{ matrix.artifact_suffix }}
     strategy:
       fail-fast: false
       matrix:
@@ -69,6 +72,11 @@ jobs:
           set -euo pipefail
           mkdir -p package-input dist
           cp target/scala-*/Serenity.jar package-input/Serenity.jar
+          # Skiko loads its native library from app/natives (-Dskiko.library.path below), never from the jar: a Mach-O
+          # file inside a jar cannot carry our signature, and Skiko would otherwise unpack it into ~/.skiko (#2028).
+          # The runnable jar published beside the image keeps its natives; only the copy the image ships is stripped.
+          cp package-input/Serenity.jar "dist/Serenity-${{ matrix.artifact_suffix }}.jar"
+          java scripts/SkikoNatives.java package-input/Serenity.jar package-input/natives "${{ matrix.artifact_suffix }}"
           # GPL-3.0-or-later requires the licence to travel with every copy (#2019); jpackage copies the whole input
           # directory into the app image, so these land beside the jar inside the signed bundle on macOS too.
           cp LICENSE THIRD-PARTY-NOTICES.md package-input/
@@ -97,6 +105,7 @@ jobs:
             --java-options '-XX:+UseG1GC'
             --java-options '-XX:MaxRAMPercentage=25'
             --java-options '-XX:G1PeriodicGCInterval=60000'
+            --java-options '-Dskiko.library.path=$APPDIR/natives'
           )
           # AppCDS (see DEVELOPMENT.md): the launcher maps a class-data archive kept beside the jar and written on the
           # first exit. A dynamic archive needs the runtime's own base archive, and jlink needs the java launcher left
@@ -108,8 +117,16 @@ jobs:
               --java-options '-XX:+AutoCreateSharedArchive'
             )
           fi
-          cp package-input/Serenity.jar dist/Serenity.jar
           jpackage "${APP_ARGS[@]}"
+          if [ -z "$(find dist -type f -path "*/app/natives/*skiko-*" -print -quit)" ]; then
+            echo "App image is missing the Skiko native library under app/natives" >&2
+            exit 1
+          fi
+          IMAGE_JAR="$(find dist -type f -path "*/app/Serenity.jar" -print -quit)"
+          if jar tf "$IMAGE_JAR" | grep -E 'skiko-(linux|macos|windows)-' >/dev/null; then
+            echo "App image Serenity.jar still contains a Skiko native library" >&2
+            exit 1
+          fi
           for notice in LICENSE THIRD-PARTY-NOTICES.md; do
             if [ -z "$(find dist -type f -path "*/app/$notice" -print -quit)" ]; then
               echo "App image is missing $notice" >&2
@@ -185,7 +202,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          codesign --force --deep --sign - dist/Serenity.app
+          scripts/sign-macos-app.sh dist/Serenity.app -
 
       - name: Archive Windows app image
         if: runner.os == 'Windows'
@@ -204,12 +221,28 @@ jobs:
             zip -r Serenity-${{ matrix.artifact_suffix }}.zip Serenity
           fi
 
+      # Loads the natives from where the image ships them, after signing, with the stripped jar: a pass means the
+      # app/natives layout works and, on macOS, that the re-signed dylib is still accepted by the loader (#2028).
+      - name: Probe Skiko natives in the app image
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_DIR="$(dirname "$(find dist -type f -path '*/app/Serenity.jar' -print -quit)")"
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y xvfb libgl1 libfontconfig1
+            PROBE=(xvfb-run -a java)
+          else
+            PROBE=(java)
+          fi
+          "${PROBE[@]}" -Dskiko.library.path="$APP_DIR/natives" -cp "$APP_DIR/Serenity.jar" scripts/SkikoProbe.java | tee probe.log
+          grep -q '^SKIKO_PROBE_OK ' probe.log
+
       - name: Upload runnable JAR artifact
-        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: Serenity-jar
-          path: dist/Serenity.jar
+          name: Serenity-jar-${{ matrix.artifact_suffix }}
+          path: dist/Serenity-${{ matrix.artifact_suffix }}.jar
           if-no-files-found: error
           retention-days: 1
 
