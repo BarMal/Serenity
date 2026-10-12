@@ -53,6 +53,10 @@ class Java2DRenderSurface(
   override def pixelCopying: Option[PixelCopying] =
     Option.when(isWhole(deviceScaleX) && isWhole(deviceScaleY))(this)
 
+  private val lifting = new ImagePixelLifting(image, deviceScaleX, deviceScaleY, () => painted.forgetClear())
+
+  override def pixelLifting: Option[PixelLifting] = Some(lifting)
+
   override def layerCacheOwner: ScreenIdentity = layerCacheOwnerOverride.getOrElse(super.layerCacheOwner)
 
   /** A fresh, fully transparent surface with this surface's own metrics/font/logical-size/device-scale -- derived

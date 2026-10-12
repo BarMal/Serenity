@@ -11,9 +11,9 @@ private[renderer] object RendererRepaintRegion:
 
   /** Each dirty row's band, the line-number cells beside the active pane's dirty rows (a number changes only with its
     * row, so it repaints with it), the pinned status row when `damage` names [[Damage.Chrome]], and the header of each
-    * pane a [[Damage.PaneChrome]] names, and the tab strip when `damage` names it -- coalesced into a few disjoint
-    * rects, so a caret row and the status row far below it stay two narrow rects rather than one spanning every row
-    * between them.
+    * pane a [[Damage.PaneChrome]] names, the tab strip when `damage` names it, and the scrollbar column of each pane
+    * whose bar the screen shows differently ('scrollbarTracks') -- coalesced into a few disjoint rects, so a caret row
+    * and the status row far below it stay two narrow rects rather than one spanning every row between them.
     */
   def rects(
     state: AppState,
@@ -21,7 +21,8 @@ private[renderer] object RendererRepaintRegion:
     renderPlan: EditorPaneRenderPlan,
     panes: Map[PaneId, PaneFrameRecord],
     damage: Damage,
-    dirtyRows: (PaneId, PaneFrameRecord) => Set[Int]
+    dirtyRows: (PaneId, PaneFrameRecord) => Set[Int],
+    scrollbarTracks: List[PixelRect]
   ): List[PixelRect] =
     val contract = renderPlan.layoutContract
     val rowRects = panes.toList.flatMap {
@@ -40,7 +41,7 @@ private[renderer] object RendererRepaintRegion:
     val headers   = Damage.paneChromeIds(damage).toList.flatMap(contract.paneHeaderRect)
     val tabBar    = contract.tabBarRect.filter(_ => Damage.touchesTabBar(damage))
     PixelRect.coalesced(
-      rowRects ++ (statusRow.toList ++ headers ++ tabBar.toList)
+      rowRects ++ scrollbarTracks ++ (statusRow.toList ++ headers ++ tabBar.toList)
         .map(RendererChromePlan.pixelRectOf(context.cellMetrics)),
       PixelRect.RepaintRectLimit
     )

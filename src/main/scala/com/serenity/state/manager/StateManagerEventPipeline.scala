@@ -177,6 +177,14 @@ final private[manager] class StateManagerEventPipeline(
     TabBarDragHitTestingPort(currentState = modelCommit.currentState, applyReducerResult = applyReducerResult)
   )
 
+  private val scrollbarHitTesting = new ScrollbarHitTesting(
+    ScrollbarHitTestingPort(
+      currentState = modelCommit.currentState,
+      applyReducerResult = applyReducerResult,
+      authoritativeScene = state.authoritativeScene
+    )
+  )
+
   private val mouseHitTesting = new MouseHitTesting(
     MouseHitTestingPort(
       currentState = modelCommit.currentState,
@@ -190,7 +198,8 @@ final private[manager] class StateManagerEventPipeline(
     pinnedPanelMouseHitTesting,
     startupPageMouseHitTesting,
     commentLensMouseHitTesting,
-    tabBarDragHitTesting
+    tabBarDragHitTesting,
+    scrollbarHitTesting
   )
 
   /** Offers `event` to the state dispatcher and returns once it has been applied (#1570, #1697). Never called from code

@@ -51,8 +51,12 @@ object DamageProducer:
               granularity
             )
     }
-    bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+|
+    val damage = bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+|
       paneChromeDamage(before, after) |+| statusLineDamage(before, after) |+| tabBarDamage(before, after)
+    // Every combine regroups all the facts it holds, so a transition that grabs no thumb does not pay for one.
+    scrollbarDamage(before, after) match
+      case Damage.Nothing => damage
+      case grabbed        => damage |+| grabbed
 
   /** Everything about one buffer's own state that can dirty its visible rows without necessarily touching its rope
     * content -- cursor and selection movement, comment/diagnostic annotation changes, and a language reclassification
@@ -380,6 +384,15 @@ object DamageProducer:
       case (Some(beforeStrip), Some(afterStrip)) if beforeStrip != afterStrip =>
         Damage.Surface(UiSurface.TabBarSurfaceId)
       case _ => Damage.Nothing
+
+  /** A held thumb is painted differently, and nothing in the buffer says so. The thumb's position needs no fact here:
+    * scrolling and editing already report their damage, and the renderer finds the bar moved from its own geometry.
+    */
+  private def scrollbarDamage(before: AppState, after: AppState): Damage =
+    val (was, now) = (before.runtime.pointerGesture.scrollbarGrab, after.runtime.pointerGesture.scrollbarGrab)
+    if was == now then Damage.Nothing
+    else
+      (was.toList ++ now.toList).foldLeft(Damage.Nothing: Damage)((acc, grab) => acc |+| Damage.Scrollbar(grab.paneId))
 
   /** Whether `before`/`after` present the same *kind* of [[SurfacePresentation]] (ignoring the fields a non-marker kind
     * carries, e.g. a `Floating` surface's anchor/placement) -- the presentation-stability half of

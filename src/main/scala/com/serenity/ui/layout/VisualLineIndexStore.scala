@@ -21,7 +21,16 @@ import com.serenity.ui.layout.VisualLineIndexStore.StampRelation
   */
 final class VisualLineIndexStore[K](maxEntries: Int):
 
-  final private case class Entry(content: Rope, version: Option[Long], stamp: AnyRef, index: VisualLineIndex)
+  final private case class Entry(
+      content: Rope,
+      version: Option[Long],
+      stamp: AnyRef,
+      index: VisualLineIndex,
+      recent: List[Entry] = Nil
+  ):
+    /** This entry, or the one it remembers for `other`, if either described that very content. */
+    def describing(other: Rope): Option[Entry] =
+      if (content: AnyRef) eq (other: AnyRef) then Some(this) else recent.find(old => (old.content: AnyRef) eq other)
 
   private val entries = new LinkedHashMap[K, Entry](16, 0.75f, true)
 
@@ -44,7 +53,8 @@ final class VisualLineIndexStore[K](maxEntries: Int):
   ): VisualLineIndex =
     synchronized(Option(entries.get(key))) match
       case None => VisualLineIndex.unmeasured(content.lineCount)
-      case Some(entry) =>
+      case Some(head) =>
+        val entry = head.describing(content).getOrElse(head)
         VisualLineIndexStore.stampsRelate(entry.stamp, stamp) match
           case StampRelation.Unrelated => VisualLineIndex.unmeasured(content.lineCount)
           case StampRelation.Same      => followed(entry, content, revision)
@@ -72,7 +82,12 @@ final class VisualLineIndexStore[K](maxEntries: Int):
     stamp: AnyRef,
     revision: Option[ContentRevision] = None
   ): Unit = synchronized {
-    val _ = entries.put(key, Entry(content, revision.map(_.version), stamp, index))
+    val previous = Option(entries.get(key))
+    val recent = previous.fold(List.empty[Entry]) { head =>
+      val others = (head :: head.recent).filterNot(old => isSameContent(old.content, content))
+      others.take(VisualLineIndexStore.RecentContents)
+    }
+    val _ = entries.put(key, Entry(content, revision.map(_.version), stamp, index, recent.map(_.copy(recent = Nil))))
     evictEldest(entries.values().iterator())
   }
 
@@ -138,6 +153,9 @@ object VisualLineIndexStore:
     else base
 
   val DefaultMaxEntries = 32
+
+  /** How many earlier contents of a key the store still holds an index for. */
+  val RecentContents = 3
 
   /** `index`, which describes `before`, carried over to `after` by the `change` that made it: the lines the change's
     * parts touched become unmeasured and every other line keeps its measurement, without reading either text.
