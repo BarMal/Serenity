@@ -16,6 +16,9 @@ object ToolkitSelection:
   val OverrideVariable: String = "SERENITY_TOOLKIT"
   val ToolkitProperty: String  = "awt.toolkit.name"
 
+  /** The values `SERENITY_TOOLKIT` takes; anything else stops the launch (see [[LaunchEnvironment]]). */
+  val Accepted: List[String] = List("auto", "x11", "wayland")
+
   private val WaylandToolkitClassFile = "sun/awt/wl/WLToolkit.class"
 
   enum Choice(val toolkitProperty: Option[String]):

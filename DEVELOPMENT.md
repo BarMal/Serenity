@@ -191,8 +191,10 @@ on JBR too, but keep a separate archive per runtime or each switch will rewrite 
 
 Serenity paints with Java2D, or with Skia (Skiko) where it can load. Each setting below can be given as a launch flag,
 an environment variable or a config key; the flag wins over the variable, which wins over the file, which wins over the
-default. An unrecognised flag value stops the launch with a message naming the choices; an unrecognised environment
-variable or config value is ignored.
+default. An unrecognised flag value, or an unrecognised `SERENITY_RENDER_BACKEND`, `SERENITY_WAYLAND_RENDER` or
+`SERENITY_TOOLKIT`, stops the launch with a message naming the variable, the value and the choices. An unrecognised
+config value is reported by the usual config warning (log and start page) with the same choices, and the setting uses
+its default.
 
 | Config key | Values | Default | Environment variable | Flag |
 | --- | --- | --- | --- | --- |
