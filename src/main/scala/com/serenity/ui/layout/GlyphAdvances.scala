@@ -108,7 +108,7 @@ private[layout] object GlyphAdvances:
   def layoutAdvanceMatchesSum(font: Font, frc: FontRenderContext): Boolean =
     layoutAgreement.computeIfAbsent(
       Probe(font, frc),
-      probe => probeLayoutAdvance(probe.font, probe.frc): java.lang.Boolean
+      probe => SettledProbe(probeLayoutAdvance(probe.font, probe.frc)): java.lang.Boolean
     )
 
   private def probeLayoutAdvance(font: Font, frc: FontRenderContext): Boolean =
@@ -129,7 +129,7 @@ private[layout] object GlyphAdvances:
   def advancesAreUniform(font: Font, frc: FontRenderContext): Boolean =
     uniformAdvances.computeIfAbsent(
       Probe(font, frc),
-      probe => probeUniformAdvances(probe.font, probe.frc): java.lang.Boolean
+      probe => SettledProbe(probeUniformAdvances(probe.font, probe.frc)): java.lang.Boolean
     )
 
   private def probeUniformAdvances(font: Font, frc: FontRenderContext): Boolean =
@@ -147,7 +147,7 @@ private[layout] object GlyphAdvances:
   private def pairKerning(font: Font, frc: FontRenderContext, first: Char, second: Char): Float =
     pairKernings.computeIfAbsent(
       PairProbe(font, frc, first, second),
-      probe => probePairKerning(probe): java.lang.Float
+      probe => SettledProbe(probePairKerning(probe)): java.lang.Float
     )
 
   private def probePairKerning(probe: PairProbe): Float =
