@@ -70,6 +70,8 @@ object Main extends IOApp:
         IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
       case Right(options) if options.showVersion =>
         IO(println(VersionBanner.current)).as(ExitCode.Success)
+      case Right(_) if LaunchEnvironment.problems(sys.env).nonEmpty =>
+        IO(LaunchEnvironment.problems(sys.env).foreach(System.err.println)).as(ExitCode.Error)
       case Right(options) =>
         // Before anything else: the toolkit is fixed the moment the first java.awt class initialises, and the choice
         // depends on the renderer, so both are settled together here.
