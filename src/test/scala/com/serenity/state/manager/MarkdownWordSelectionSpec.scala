@@ -89,3 +89,13 @@ class MarkdownWordSelectionSpec extends AnyFlatSpec with Matchers:
     selectionAfterDoubleClick(state, CursorPosition(1, 8)) shouldBe
       Some(Selection(CursorPosition(1, 7), CursorPosition(1, 11)))
   }
+
+  it should "select the word when the click is on its first letter" in {
+    val source = "some **bold** text"
+    val state  = stateWith(source, MarkdownViewMode.Read, CursorPosition(0, 0))
+
+    selectionAfterDoubleClick(state, CursorPosition(0, source.indexOf("bold"))) shouldBe
+      Some(Selection(CursorPosition(0, 7), CursorPosition(0, 11)))
+    selectionAfterDoubleClick(state, CursorPosition(0, source.indexOf("text"))) shouldBe
+      Some(Selection(CursorPosition(0, 14), CursorPosition(0, 18)))
+  }

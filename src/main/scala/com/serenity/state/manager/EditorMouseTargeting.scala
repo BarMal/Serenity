@@ -211,7 +211,7 @@ private[manager] object EditorMouseTargeting:
         else clickedOffset
       if probeOffset < 0 || source.charAt(probeOffset).isWhitespace then None
       else
-        val start = TextEditing.previousWordBoundary(source, probeOffset)
+        val start = TextEditing.previousWordBoundary(source, probeOffset + 1)
         @annotation.tailrec
         def wordEndFrom(offset: Int): Int =
           if offset < source.length && !source.charAt(offset).isWhitespace then wordEndFrom(offset + 1)
