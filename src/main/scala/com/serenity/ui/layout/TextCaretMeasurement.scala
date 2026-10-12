@@ -7,7 +7,8 @@ import java.util.concurrent.atomic.AtomicLong
 
 import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.RichTextDocument
-import com.serenity.state.models.TextCaretStop
+import com.serenity.state.models.{IndentationSettings, MeasuredRow}
+import com.serenity.ui.renderer.FontFirstUse
 import com.serenity.ui.theme.{MarkdownInlineStyling, RichTextStyling, TextStyle}
 
 /** Caret-stop measurement for one logical line: which AWT font each column measures with, and the x position of every
@@ -33,7 +34,8 @@ private[layout] object TextCaretMeasurement:
   final private[layout] case class LineFontResolver(
       baseFont: Font,
       runs: Vector[ColumnFontRun],
-      extraAdvances: Map[Int, Float] = Map.empty
+      extraAdvances: Map[Int, Float] = Map.empty,
+      tabSize: Int = IndentationSettings.DefaultTabSize
   ):
     val hasHidden: Boolean = runs.exists(_.hidden)
 
@@ -104,8 +106,11 @@ private[layout] object TextCaretMeasurement:
   /** A resolver with no per-run fonts: every column measures with the one base font, reproducing the pre-rich
     * single-font behaviour. Used by the plain-text measurement helpers that carry no rich document.
     */
-  private[layout] def singleFontResolver(font: Font): LineFontResolver =
-    LineFontResolver(font, Vector.empty)
+  private[layout] def singleFontResolver(
+    font: Font,
+    tabSize: Int = IndentationSettings.DefaultTabSize
+  ): LineFontResolver =
+    LineFontResolver(font, Vector.empty, tabSize = tabSize)
 
   private[layout] def resolverForLine(
     baseFont: Font,
@@ -132,9 +137,18 @@ private[layout] object TextCaretMeasurement:
     * after it, so it would only ever compete with a column the writer can see. A row's last stop stays, so a row of
     * nothing but hidden columns still has somewhere to land.
     */
-  private[layout] def landableStops(stops: Vector[TextCaretStop], resolver: LineFontResolver): Vector[TextCaretStop] =
-    val landable = stops.dropRight(1).filterNot(stop => resolver.isHidden(stop.column)) ++ stops.lastOption
-    landable.sortBy(_.xPx)
+  private[layout] def landableStops(
+    xs: IArray[Float],
+    offsets: IArray[Int],
+    startColumn: Int,
+    resolver: LineFontResolver
+  ): (IArray[Float], IArray[Int]) =
+    val last = xs.length - 1
+    val landable =
+      IArray.from(
+        (0 until xs.length).filter(index => index == last || !resolver.isHidden(startColumn + offsets(index)))
+      )
+    MeasuredRow.orderedByX(landable.map(xs(_)), landable.map(offsets(_)))
 
   /** The resolver for a Markdown line whose emphasis and code `runs` are restyled: the decorated stretches measure in
     * their own fonts, every other column in `baseFont`, and the delimiter characters are hidden when `hideMarkers`.
@@ -178,8 +192,8 @@ private[layout] object TextCaretMeasurement:
     if text.isEmpty then IArray(0.0f)
     else if !measuredLayout then
       val charWidth = cellMetrics.charWidth.toFloat
-      if cellMetrics.displayWidthAware then displayWidthCaretXs(text, charWidth)
-      else IArray.tabulate(text.length + 1)(index => index * charWidth)
+      if cellMetrics.displayWidthAware then displayWidthCaretXs(text, charWidth, resolver.tabSize)
+      else uniformCaretXs(text, charWidth, resolver.tabSize)
     else
       normalizeCollapsedCarets(
         rawMeasuredCaretXs(text, absoluteStartColumn, resolver, frc),
@@ -194,6 +208,9 @@ private[layout] object TextCaretMeasurement:
     * side by side do not see each other's layouts.
     */
   private[layout] def textLayoutsConstructed: Long = textLayoutsBuilt.get().get()
+
+  private def settleFonts(resolver: LineFontResolver, frc: FontRenderContext): Unit =
+    FontFirstUse.settleAll(resolver.baseFont +: resolver.runs.map(_.font), frc)
 
   private def textLayoutOf(text: AttributedString, frc: FontRenderContext): TextLayout =
     val _ = textLayoutsBuilt.get().incrementAndGet()
@@ -251,6 +268,7 @@ private[layout] object TextCaretMeasurement:
     resolver: LineFontResolver,
     frc: FontRenderContext
   ): IArray[Float] =
+    settleFonts(resolver, frc)
     val attributed = AttributedString(text)
     // One FONT attribute per contiguous run of equal per-column fonts, so a mixed-size rich line's caret advances
     // (and thus wrap points and widths) match the per-run glyphs the draw path paints.
@@ -277,6 +295,7 @@ private[layout] object TextCaretMeasurement:
     resolver: LineFontResolver,
     frc: FontRenderContext
   ): IArray[Float] =
+    settleFonts(resolver, frc)
     val hidden        = resolver.hiddenMask(absoluteStartColumn, text.length)
     val visibleBefore = hidden.scanLeft(0)((count, isHidden) => if isHidden then count else count + 1)
     val visibleText   = text.indices.filterNot(hidden(_)).map(text.charAt(_)).mkString
@@ -341,8 +360,8 @@ private[layout] object TextCaretMeasurement:
     if !spec.measuredLayout then
       val charWidth = math.max(1, cellMetrics.charWidth)
       if cellMetrics.displayWidthAware then
-        SegmentFit(fittingDisplayWidthSegmentLength(line, from, panelWidthPx, charWidth))
-      else SegmentFit(math.max(1, math.min(line.length - from, panelWidthPx / charWidth)))
+        SegmentFit(fittingDisplayWidthSegmentLength(line, from, panelWidthPx, charWidth, spec.resolver.tabSize))
+      else SegmentFit(fittingUniformSegmentLength(line, from, panelWidthPx, charWidth, spec.resolver.tabSize))
     else
       paragraph
         .measuredFit(from, panelWidthPx)
@@ -384,21 +403,65 @@ private[layout] object TextCaretMeasurement:
     * [[ParagraphMeasurement.graphemeBoundaryOffsets]]) and so never a caret stop, and taking the glyph's trailing edge
     * there keeps the sequence non-decreasing for the callers that index it by raw column.
     */
-  private[layout] def displayWidthCaretXs(text: String, charWidth: Float): IArray[Float] =
+  private[layout] def displayWidthCaretXs(
+    text: String,
+    charWidth: Float,
+    tabSize: Int = IndentationSettings.DefaultTabSize
+  ): IArray[Float] =
     val stops = new Array[Float](text.length + 1)
     @annotation.tailrec
-    def loop(index: Int, xPx: Float): Unit =
-      if index >= text.length then stops(index) = xPx
+    def loop(index: Int, cells: Int): Unit =
+      if index >= text.length then stops(index) = cells * charWidth
       else
         val codePoint = text.codePointAt(index)
-        val advanced  = xPx + CharWidth.of(codePoint) * charWidth
+        val advanced  = cells + TabStops.advance(codePoint, cells, tabSize)
         val charCount = Character.charCount(codePoint)
-        stops(index) = xPx
-        if charCount == 2 then stops(index + 1) = advanced
+        stops(index) = cells * charWidth
+        if charCount == 2 then stops(index + 1) = advanced * charWidth
         loop(index + charCount, advanced)
 
-    loop(0, 0.0f)
+    loop(0, 0)
     IArray.unsafeFromArray(stops)
+
+  /** Caret stops for a grid where every character takes one cell and a tab takes its stop's worth. */
+  private[layout] def uniformCaretXs(text: String, charWidth: Float, tabSize: Int): IArray[Float] =
+    if text.indexOf('\t') < 0 then IArray.tabulate(text.length + 1)(index => index * charWidth)
+    else
+      val stops = new Array[Float](text.length + 1)
+      @annotation.tailrec
+      def loop(index: Int, cells: Int): Unit =
+        stops(index) = cells * charWidth
+        if index < text.length then
+          loop(index + 1, cells + (if text.charAt(index) == '\t' then TabStops.cellsAt(cells, tabSize) else 1))
+
+      loop(0, 0)
+      IArray.unsafeFromArray(stops)
+
+  /** How many characters of `line` from `from` fit `panelWidthPx` on a grid of one-cell characters and tab stops. Only
+    * the first `panelWidthPx / charWidth` characters can matter, since every character takes at least a cell.
+    */
+  private[layout] def fittingUniformSegmentLength(
+    line: String,
+    from: Int,
+    panelWidthPx: Int,
+    charWidth: Int,
+    tabSize: Int
+  ): Int =
+    val cellsAvailable = panelWidthPx / charWidth
+    val candidates     = math.min(line.length - from, cellsAvailable)
+
+    @annotation.tailrec
+    def hasTab(index: Int): Boolean =
+      index < from + candidates && (line.charAt(index) == '\t' || hasTab(index + 1))
+
+    @annotation.tailrec
+    def fitting(index: Int, usedCells: Int): Int =
+      if index >= line.length then index
+      else
+        val advance = if line.charAt(index) == '\t' then TabStops.cellsAt(usedCells, tabSize) else 1
+        if usedCells + advance > cellsAvailable then index else fitting(index + 1, usedCells + advance)
+
+    if hasTab(from) then math.max(1, fitting(from, 0) - from) else math.max(1, candidates)
 
   /** How many characters of `text`, starting at `from`, fit in `panelWidthPx` when each glyph costs its own cells.
     * Never splits a wide glyph across the wrap boundary, and never splits a surrogate pair; like the uniform-advance
@@ -408,16 +471,17 @@ private[layout] object TextCaretMeasurement:
     text: String,
     from: Int,
     panelWidthPx: Int,
-    charWidth: Int
+    charWidth: Int,
+    tabSize: Int = IndentationSettings.DefaultTabSize
   ): Int =
     @annotation.tailrec
-    def loop(index: Int, usedPx: Int): Int =
+    def loop(index: Int, usedCells: Int): Int =
       if index >= text.length then index
       else
         val codePoint = text.codePointAt(index)
-        val advance   = CharWidth.of(codePoint) * charWidth
-        if usedPx + advance > panelWidthPx then index
-        else loop(index + Character.charCount(codePoint), usedPx + advance)
+        val advance   = TabStops.advance(codePoint, usedCells, tabSize)
+        if (usedCells + advance) * charWidth > panelWidthPx then index
+        else loop(index + Character.charCount(codePoint), usedCells + advance)
 
     val fitted = loop(from, 0) - from
     if fitted > 0 then fitted else math.min(text.length - from, Character.charCount(text.codePointAt(from)))

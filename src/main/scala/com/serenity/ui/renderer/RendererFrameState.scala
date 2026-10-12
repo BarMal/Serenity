@@ -314,12 +314,25 @@ final class RendererFrameState(initialCapacity: Int):
   def rememberSnapshots(surface: RenderSurface, snapshots: Map[PaneId, TextLayoutSnapshot]): Unit =
     surface.persistentContentKey.foreach(key => previousSnapshots.put(key, snapshots))
 
+  /** Each pane's [[PaneFrameRecord.rowGhosts]] as of the previous frame planned for a surface, to find the rows whose
+    * ghost changed without any buffer damage saying so.
+    */
+  private val previousRowGhosts =
+    new BoundedRefCache[SurfaceContentIdentity, Map[PaneId, Vector[Option[String]]]](cacheCapacity)
+
+  def previousRowGhostsFor(key: SurfaceContentIdentity): Map[PaneId, Vector[Option[String]]] =
+    previousRowGhosts.get(key).getOrElse(Map.empty)
+
+  def rememberRowGhosts(key: SurfaceContentIdentity, ghosts: Map[PaneId, Vector[Option[String]]]): Unit =
+    previousRowGhosts.put(key, ghosts)
+
   /** Drops `key`'s remembered previous-frame snapshots and floating-panel rects -- used by
     * [[RendererFramePlanner.forgetPreservedContent]] when a surface's preserved pixels are no longer valid, since both
     * are reuse promises about pixels that surface no longer holds.
     */
   def forgetPreviousFrameState(key: SurfaceContentIdentity): Unit =
     previousSnapshots.remove(key)
+    previousRowGhosts.remove(key)
     previousFloatingSurfaceRects.remove(key)
     forgetPanelCompositions(key)
 

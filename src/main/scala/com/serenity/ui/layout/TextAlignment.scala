@@ -3,6 +3,8 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.FontRenderContext
 
+import com.serenity.ui.renderer.FontFirstUse
+
 enum TextHorizontalAlignment:
   case Left
   case Center
@@ -30,6 +32,7 @@ object TextAlignment:
     font: Font,
     fontRenderContext: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext()
   ): Float =
+    FontFirstUse.settle(font, fontRenderContext)
     font.getStringBounds(text, fontRenderContext).getWidth.toFloat
 
   def placeLine(

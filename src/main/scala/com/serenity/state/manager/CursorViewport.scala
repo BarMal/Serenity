@@ -93,6 +93,7 @@ object CursorViewport:
     val lineText            = buffer.document.content.getLine(cursor.line).getOrElse("")
     val dropCapsEnabled     = currentState.persisted.config.documentConfig.dropCapsEnabled
     val markdownViewMode    = currentState.persisted.config.inlineMarkdownViewMode
+    val tabSize             = buffer.effectiveIndentation(currentState.persisted.config.indentation).tabSize
     val cursorVisualLine =
       if !wordWrapEnabled then 0
       else
@@ -107,7 +108,8 @@ object CursorViewport:
           rowAffinity = cursor.rowAffinity,
           wrapCache = wrapCache,
           bufferLine = cursor.line,
-          richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, isTui, wrapCache)
+          richText = RichTextContext
+            .forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, isTui, wrapCache, tabSize = tabSize)
         )
 
     // Counted the same way `cursorVisualLine` above was measured, or the two disagree.
@@ -122,7 +124,8 @@ object CursorViewport:
           forceCellLayout,
           wrapCache,
           dropCapsEnabled,
-          markdownViewMode
+          markdownViewMode,
+          tabSize
         )
 
     // Desired top: halfVisibleLines rows of context above the cursor's own visual row, counted in visual rows (not
@@ -164,7 +167,8 @@ object CursorViewport:
             if isTui then wrapWidthPx else gridWidthPx,
             font,
             cellMetricsOverride = cellMetricsOverride,
-            forceCellLayout = forceCellLayout
+            forceCellLayout = forceCellLayout,
+            tabSize = tabSize
           )
         val minimumVisibleColumn = math.max(0, cursor.column - viewport.visibleColumns + 1)
         math.max(minimumVisibleColumn, measuredLeftColumn)
@@ -216,6 +220,7 @@ object CursorViewport:
 
     val dropCapsEnabled  = currentState.persisted.config.documentConfig.dropCapsEnabled
     val markdownViewMode = currentState.persisted.config.inlineMarkdownViewMode
+    val tabSize          = buffer.effectiveIndentation(currentState.persisted.config.indentation).tabSize
     val visualRows =
       VisualRowCounts.forBuffer(
         buffer,
@@ -225,7 +230,8 @@ object CursorViewport:
         forceCellLayout,
         wrapCache,
         dropCapsEnabled,
-        markdownViewMode
+        markdownViewMode,
+        tabSize
       )
 
     val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
@@ -241,7 +247,8 @@ object CursorViewport:
         rowAffinity = cursor.rowAffinity,
         wrapCache = wrapCache,
         bufferLine = cursor.line,
-        richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, isTui, wrapCache)
+        richText = RichTextContext
+          .forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, isTui, wrapCache, tabSize = tabSize)
       )
 
     // Multi-column page anchoring (issue #1338, Phase 2 / slice 1): a "page" shows `columnCount` columns side by side,

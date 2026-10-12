@@ -5,7 +5,7 @@ import java.awt.font.TextAttribute
 
 import scala.util.Random
 
-import com.serenity.state.models.TextVisualLine
+import com.serenity.state.models.{MeasuredRow, TextVisualLine}
 import com.serenity.ui.fonts.FontLoader
 import org.scalatest.Assertions
 
@@ -111,6 +111,8 @@ object WrapFixtures extends Assertions:
         row.ascentPx
       )
     }
+
+  def bitwiseRows(rows: Vector[MeasuredRow]): Vector[Any] = bitwise(rows.map(TextVisualLine(0, _, 0.0f)))
 
   def assertSameAsCold(
     actual: Vector[TextVisualLine],

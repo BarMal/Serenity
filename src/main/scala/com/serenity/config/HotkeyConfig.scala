@@ -371,45 +371,13 @@ object HotkeyConfig:
   def defaultCommandBindings: Map[String, List[HotkeyTrigger]] =
     defaultCommandBindingsFor(System.getProperty("os.name", ""))
 
-  /** Keys for registry commands that have no [[HotkeyAction]]: the prose formatting toggles (issue #1858). A terminal
-    * sends Ctrl+I as Tab, and `TerminalInputDecoder` keeps it Tab, so italic's key reaches only the GUI and terminals
-    * that report modified keys distinctly -- the Tab key itself is never taken.
-    */
+  /** Keys for registry commands that have no [[HotkeyAction]]; see [[CommandDefaultBindings]]. */
   def defaultCommandBindingsFor(osName: String): Map[String, List[HotkeyTrigger]] =
-    val primaryModifier = primaryModifierFor(osName)
-    Map("bold" -> 'b', "italic" -> 'i', "underline" -> 'u').view
-      .mapValues(key => List(HotkeyTrigger(InputKey.Character, Some(key), Set(primaryModifier))))
-      .toMap
+    CommandDefaultBindings.forPrimaryModifier(primaryModifierFor(osName))
 
   private def isMac(osName: String): Boolean = osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
 
   private def primaryModifierFor(osName: String): Modifier = if isMac(osName) then Modifier.Meta else Modifier.Ctrl
-
-  // Plain Alt rather than the primary modifier, so it is the same on every platform with no terminal rewrite. Nothing
-  // else binds Alt+Arrow, and the editor's word moves stay on Ctrl+Arrow.
-  private def directionalFocusBindings: Map[HotkeyAction, List[HotkeyTrigger]] =
-    Map(
-      HotkeyAction.FocusLeft  -> InputKey.ArrowLeft,
-      HotkeyAction.FocusRight -> InputKey.ArrowRight,
-      HotkeyAction.FocusUp    -> InputKey.ArrowUp,
-      HotkeyAction.FocusDown  -> InputKey.ArrowDown
-    ).view.mapValues(key => List(HotkeyTrigger(key, None, Set(Modifier.Alt)))).toMap
-
-  // Ctrl+G is Go to Line, so the chapter-note keys live on the shifted letters. None of them is Ctrl+Shift+H/I/J/M,
-  // which collapse into Backspace/Tab/Enter on terminals that cannot tell Ctrl+Shift+letter from Ctrl+letter.
-  private def chapterNoteBindings(primaryModifier: Modifier): Map[HotkeyAction, List[HotkeyTrigger]] =
-    def shifted(key: Char): List[HotkeyTrigger] =
-      List(HotkeyTrigger(InputKey.Character, Some(key), Set(primaryModifier, Modifier.Shift)))
-    Map(
-      HotkeyAction.ToggleChapterGhosts -> shifted('g'),
-      HotkeyAction.OpenChapterNote     -> shifted('n'),
-      HotkeyAction.OpenKeywordNote     -> shifted('k'),
-      HotkeyAction.ToggleNotesPin      -> shifted('l')
-    )
-
-  // VS Code's alternative Quick Open key: its main one, the primary modifier with P, is the command runner here.
-  private def goToFileBindings(primaryModifier: Modifier): Map[HotkeyAction, List[HotkeyTrigger]] =
-    Map(HotkeyAction.GoToFile -> List(HotkeyTrigger(InputKey.Character, Some('e'), Set(primaryModifier))))
 
   // Cmd+Shift+Z is the macOS convention, so it leads there and Cmd+Y stays as a secondary; Ctrl+Y leads elsewhere.
   private def redoBindings(osName: String, primaryModifier: Modifier): List[HotkeyTrigger] =
@@ -462,11 +430,10 @@ object HotkeyConfig:
       ),
       HotkeyAction.NewTab   -> List(primary('t')),
       HotkeyAction.CloseTab -> List(primary('w')),
-      // Mirrors macOS Terminal.app/iTerm2's own Cmd+D / Cmd+Shift+D split convention -- the vertical dividing line
-      // ("side by side" panes, this codebase's `SplitAxis.Horizontal`) on the plain key, the horizontal dividing line
-      // ("stacked" panes, `SplitAxis.Vertical`) on its shifted variant, same shift-for-the-broader/secondary-variant
-      // pattern as `FileSearch` over `Find` and `ToggleContextualToolbar` over `NewTab` below.
-      HotkeyAction.SplitPaneHorizontal -> List(primary('d')),
+      // Ctrl+D selects the next occurrence, as in VS Code and Sublime Text, so the side-by-side split (this codebase's
+      // `SplitAxis.Horizontal`, drawn as a vertical dividing line) is on Alt+V. The stacked split keeps its shifted D:
+      // nothing else wants it.
+      HotkeyAction.SplitPaneHorizontal -> List(primary('v', alt = true)),
       HotkeyAction.SplitPaneVertical   -> List(primary('d', shift = true)),
       // Shift-for-the-broader-scope variant of CloseTab, same pattern as FileSearch over Find and
       // ToggleContextualToolbar over NewTab above: closing a pane is a bigger action than closing one of its tabs.
@@ -494,7 +461,8 @@ object HotkeyConfig:
       // every terminal and by AWT regardless of platform, so it needs none of `forTerminalUse`'s Mac-Cmd rewriting
       // (issue #1213) and no per-OS branching here.
       HotkeyAction.ToggleShortcutsHelp -> List(HotkeyTrigger(InputKey.F1, None, Set.empty))
-    ) ++ directionalFocusBindings ++ goToFileBindings(primaryModifier) ++ chapterNoteBindings(primaryModifier)
+    ) ++ GlobalDefaultBindings.directionalFocus ++ GlobalDefaultBindings.goToFile(primaryModifier) ++
+      GlobalDefaultBindings.chapterNotes(primaryModifier)
 
   def validate(bindings: Map[HotkeyAction, List[HotkeyTrigger]]): Either[String, Unit] =
     conflictIn(actionTargets(bindings))

@@ -223,6 +223,10 @@ final private[manager] class StateManagerConfigEffects(
         updateTextDisplayConfig(_.withTextAreaBottomInset(value)).void
       case TextDisplayIntent.SetDropCapsEnabled(enabled) =>
         updateTextDisplayConfig(_.withDropCapsEnabled(enabled)).void
+      case TextDisplayIntent.SetTabSize(size) =>
+        updateTextDisplayConfig(config => config.withIndentation(config.indentation.copy(tabSize = size))).void
+      case TextDisplayIntent.SetInsertSpaces(enabled) =>
+        updateTextDisplayConfig(config => config.withIndentation(config.indentation.copy(insertSpaces = enabled))).void
 
   private def updateLineNumberLayout(update: LineNumberLayout => LineNumberLayout): IO[Unit] =
     updateTextDisplayConfig(config => config.withLineNumberLayout(update(config.lineNumberLayout))).void

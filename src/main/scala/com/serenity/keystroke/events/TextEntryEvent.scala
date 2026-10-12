@@ -40,6 +40,9 @@ case object ExtendSelectionPageDown     extends NavigationEvent
 case object MoveToStart                 extends NavigationEvent
 case object MoveToEnd                   extends NavigationEvent
 case object SelectAll                   extends TextEntryEvent
+case object SelectNextOccurrence        extends TextEntryEvent
+case object SkipOccurrence              extends TextEntryEvent
+case object SelectAllOccurrences        extends TextEntryEvent
 case object NewLine                     extends TextEntryEvent
 case object PageDown                    extends NavigationEvent
 case object PageUp                      extends NavigationEvent
@@ -66,6 +69,8 @@ case object OpenFind                       extends ModalRequestEvent
 case object Escape                         extends TextEntryEvent
 case object TabKey                         extends TextEntryEvent
 case object ReverseTabKey                  extends TextEntryEvent
+case object ToggleLineComment              extends TextEntryEvent
+case object ToggleBlockComment             extends TextEntryEvent
 case object Copy                           extends TextEntryEvent
 case object Paste                          extends TextEntryEvent
 case object Cut                            extends TextEntryEvent

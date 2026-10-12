@@ -3,6 +3,8 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.FontRenderContext
 
+import com.serenity.ui.renderer.FontFirstUse
+
 /** The line height and ascent a font contributes to a visual line, probed once per `(font, render context)`.
   *
   * Both are constants of the font, yet every row of every snapshot build used to allocate a fresh `LineMetrics` for
@@ -16,6 +18,7 @@ private[layout] object FontLineExtents:
 
   val shared: MeasurementMemo[Key, Extent] =
     MeasurementMemo[Key, Extent](maxEntries = 512) { key =>
+      FontFirstUse.settle(key.font, key.frc)
       val metrics = key.font.getLineMetrics("Mg", key.frc)
       Extent(math.ceil(metrics.getHeight.toDouble).toInt, math.ceil(metrics.getAscent.toDouble).toInt)
     }

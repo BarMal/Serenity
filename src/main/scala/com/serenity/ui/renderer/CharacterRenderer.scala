@@ -4,9 +4,9 @@ import java.util.LinkedHashMap
 
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.SemanticToken
-import com.serenity.state.models.TextVisualLine
+import com.serenity.state.models.{IndentationSettings, TextVisualLine}
 import com.serenity.text.TextEditing
-import com.serenity.ui.layout.CharWidth
+import com.serenity.ui.layout.{CharWidth, TabStops}
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 
 /** Paints text onto a [[RenderSurface]] in the two ways a surface can accept it: the cell-grid path (`putString`,
@@ -46,9 +46,9 @@ object CharacterRenderer:
     x: Int,
     y: Int,
     content: String,
-    tabWidth: Int = 4
+    tabWidth: Int = IndentationSettings.DefaultTabSize
   ): Unit =
-    val collectedRuns = collectPlainRuns(x, content, tabWidth)
+    val collectedRuns = collectPlainRuns(x, x, content, tabWidth)
     flushPlainRuns(surface, y, collectedRuns.runs)
 
   def renderChar(
@@ -79,16 +79,17 @@ object CharacterRenderer:
     styledSegments: Option[List[StyledText]] = None,
     semanticTokens: Option[List[SemanticToken]] = None,
     maxColumn: Option[Int] = None,
-    highlightCache: com.serenity.ui.theme.ThemeHighlightCache = com.serenity.ui.theme.ThemeHighlightCache()
+    highlightCache: com.serenity.ui.theme.ThemeHighlightCache = com.serenity.ui.theme.ThemeHighlightCache(),
+    tabWidth: Int = IndentationSettings.DefaultTabSize
   ): Unit =
     styledSegments match
       case Some(styledTexts) =>
-        renderStyledLine(surface, x, y, styledTexts, theme, maxColumn)
+        renderStyledLine(surface, x, y, styledTexts, theme, maxColumn, tabWidth)
       case None if syntaxHighlightingEnabled =>
         val styledTexts = highlightCache.highlightLine(content, theme, language, semanticTokens)
-        renderStyledLine(surface, x, y, styledTexts, theme, maxColumn)
+        renderStyledLine(surface, x, y, styledTexts, theme, maxColumn, tabWidth)
       case None =>
-        renderThemedPlain(surface, x, y, content, theme, maxColumn = maxColumn)
+        renderThemedPlain(surface, x, y, content, theme, tabWidth, maxColumn)
 
   def renderThemedPlain(
     surface: RenderSurface,
@@ -96,10 +97,10 @@ object CharacterRenderer:
     y: Int,
     content: String,
     theme: Theme,
-    tabWidth: Int = 4,
+    tabWidth: Int = IndentationSettings.DefaultTabSize,
     maxColumn: Option[Int] = None
   ): Unit =
-    val collectedRuns = collectPlainRuns(x, content, tabWidth)
+    val collectedRuns = collectPlainRuns(x, x, content, tabWidth)
     renderThemedRuns(surface, y, collectedRuns.runs, theme, maxColumn)
 
   /** Render a visual line using pixel-precision caret stops.
@@ -166,14 +167,15 @@ object CharacterRenderer:
     y: Int,
     styledTexts: List[com.serenity.ui.theme.StyledText],
     theme: Theme,
-    maxColumn: Option[Int]
+    maxColumn: Option[Int],
+    tabWidth: Int
   ): Unit =
     styledTexts.foldLeft(x) { (currentX, styledText) =>
       val segmentTheme = theme.copy(
         foreground = styledText.foregroundColor,
         background = styledText.backgroundColor
       )
-      val collectedRuns = collectPlainRuns(currentX, styledText.content, tabWidth = 4)
+      val collectedRuns = collectPlainRuns(x, currentX, styledText.content, tabWidth)
       withStyle(surface, styledText.style) {
         renderThemedRuns(surface, y, collectedRuns.runs, segmentTheme, maxColumn)
       }
@@ -185,7 +187,7 @@ object CharacterRenderer:
     try render
     finally surface.disableStyle(style)
 
-  private def collectPlainRuns(startX: Int, content: String, tabWidth: Int): CollectedRuns =
+  private def collectPlainRuns(originX: Int, startX: Int, content: String, tabWidth: Int): CollectedRuns =
     final case class PlainRunState(
         completed: List[TextRun],
         currentText: StringBuilder,
@@ -209,7 +211,7 @@ object CharacterRenderer:
         val nextState = codePoints.nextInt() match
           case '\t' =>
             val flushed     = state.flush
-            val spacesToAdd = tabWidth - (flushed.currentX % tabWidth)
+            val spacesToAdd = TabStops.cellsAt(flushed.currentX - originX, tabWidth)
             val tabSpaces   = " " * spacesToAdd
             flushed.copy(
               completed = TextRun(flushed.currentX, tabSpaces) :: flushed.completed,

@@ -90,6 +90,12 @@ object CommandRunnerSettingsGroups:
         CommandRunnerSettingsTextDisplayItems.contextualToolbarDisplayModeOptionItem(optionSelections)
       )
     )
+    val indentationGroup = group(
+      "settings-indentation",
+      "Indentation",
+      "Tab size, and spaces or tab characters",
+      input("tab-size") :+ CommandRunnerSettingsTextDisplayItems.insertSpacesOptionItem(optionSelections)
+    )
     val statusLineGroup = group(
       "settings-status-line",
       "Status Line",
@@ -200,7 +206,15 @@ object CommandRunnerSettingsGroups:
       "settings-editor",
       "Editor",
       "Display, status line, margins, documents, comments",
-      List(textDisplayGroup, statusLineGroup, textAreaGroup, documentDefaultsGroup, savingGroup, commentsGroup)
+      List(
+        textDisplayGroup,
+        indentationGroup,
+        statusLineGroup,
+        textAreaGroup,
+        documentDefaultsGroup,
+        savingGroup,
+        commentsGroup
+      )
     )
     val typographyGroup = group(
       "settings-typography",

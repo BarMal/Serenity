@@ -4,7 +4,7 @@ import java.awt.Font
 import java.awt.font.FontRenderContext
 
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
-import com.serenity.state.models.TextVisualLine
+import com.serenity.ui.renderer.FontFirstUse
 import com.serenity.ui.theme.{RichTextStyling, TextStyle}
 
 /** Pure geometry for a multi-line drop cap paragraph: which of a paragraph's visual lines the glyph spans, and the left
@@ -50,9 +50,10 @@ object DropCapLayout:
   final private case class GlyphKey(font: Font, frc: FontRenderContext, text: String)
 
   private val glyphWidths =
-    MeasurementMemo[GlyphKey, Float](maxEntries = 256)(key =>
+    MeasurementMemo[GlyphKey, Float](maxEntries = 256) { key =>
+      FontFirstUse.settle(key.font, key.frc)
       key.font.getStringBounds(key.text, key.frc).getWidth.toFloat
-    )
+    }
 
   /** The extra left margin, in pixels, a visual line reserves for the drop cap glyph: the glyph's measured width on
     * every line it spans, zero elsewhere. Added to a line's ordinary left origin so its body text starts to the right
@@ -98,25 +99,3 @@ object DropCapLayout:
           }
           .getOrElse(0.0f)
       case _ => 0.0f
-
-  /** Shifts a visual line's caret geometry right by the drop cap glyph's left margin, for a line within a drop cap
-    * paragraph's glyph span (`leftInsetPx`, `0` -- a no-op -- everywhere else). Mirrors `applyAlignment`'s own
-    * caret-stop shift so both compose the same way; `heightPx`/`ascentPx` are untouched -- this only ever moves text
-    * sideways, never the line-height math `resolver.lineMetrics` already keeps drop-cap-safe by measuring
-    * `RichTextStyling.styledFontSpans` (the paragraph's ordinary body style), not the oversized glyph style
-    * `RichTextStyling.dropCapGlyphStyle`/`dropCapSplitFontSpans` only the renderer's split-out glyph span uses.
-    */
-  def applyInset(
-    line: TextVisualLine,
-    role: ParagraphRole,
-    lineWithinParagraph: Int,
-    glyphWidthPx: Float
-  ): TextVisualLine =
-    val insetPx = leftInsetPx(role, lineWithinParagraph, glyphWidthPx)
-    if insetPx <= 0.0f then line
-    else
-      line.copy(
-        caretStops = line.caretStops.map(stop => stop.copy(xPx = stop.xPx + insetPx)),
-        xSortedCaretStops = line.xSortedCaretStops.map(stop => stop.copy(xPx = stop.xPx + insetPx)),
-        xOffsetPx = line.xOffsetPx + insetPx
-      )

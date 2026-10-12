@@ -7,14 +7,15 @@ import com.serenity.state.models.*
 /** Top-level dispatch for every editor text-entry and navigation event. The event-handling logic itself is split by
   * family into sibling objects in this package -- [[EditorTextEditReducer]] (insertion/deletion),
   * [[EditorNavigationEventReducer]] (caret movement/paging), [[EditorVerticalNavigationReducer]] (Up/Down, which alone
-  * needs measured geometry), [[EditorClipboardEventReducer]] (copy/cut/paste) and [[EditorFindEventReducer]]
-  * (goto-line/find/replace) -- with [[EditorCursorMovement]] and [[EditorEditSupport]] holding the primitives more than
-  * one family shares, and [[EditorCursorSupport]] holding the per-event context bundle plus the geometry-free
-  * home/end/line-counting helpers those families use. This file keeps only the entry points and the per-buffer routing
-  * that decides which family handles an event.
+  * needs measured geometry), [[EditorClipboardEventReducer]] (copy/cut/paste), [[EditorFindEventReducer]]
+  * (goto-line/find/replace) and [[EditorOccurrenceEventReducer]] (select-next/skip/select-all occurrences) -- with
+  * [[EditorCursorMovement]] and [[EditorEditSupport]] holding the primitives more than one family shares, and
+  * [[EditorCursorSupport]] holding the per-event context bundle plus the geometry-free home/end/line-counting helpers
+  * those families use. This file keeps only the entry points and the per-buffer routing that decides which family
+  * handles an event.
   */
 object EditorEventReducer:
-  import EditorCursorSupport.{countLines, endTarget, homeTarget, CursorEventContext, TabInsertion}
+  import EditorCursorSupport.{countLines, endTarget, homeTarget, CursorEventContext}
 
   // Re-exported so the effect boundary (`EditorGeometryProducer.forEvent`) can see the geometry-window
   // classification without reaching into `EditorCursorSupport`, which is `private[reducers]` (#1676).
@@ -178,7 +179,7 @@ object EditorEventReducer:
     event match
       case InsertChar(_) | TabKey | ReverseTabKey | DeleteBackward | DeleteForward | DeleteWordBackward |
           DeleteWordForward | DeleteToLineStart | DeleteToLineEnd | NewLine | Enter | Paste | Cut | CutToDarlings |
-          RestoreDarling | PasteFromHistory(_) =>
+          RestoreDarling | PasteFromHistory(_) | ToggleLineComment | ToggleBlockComment =>
         true
       case _ =>
         false
@@ -271,6 +272,9 @@ object EditorEventReducer:
             DeleteWordBackward | DeleteWordForward | DeleteToLineStart | DeleteToLineEnd =>
           EditorTextEditReducer.reduce(event, ctx)
 
+        case ToggleLineComment | ToggleBlockComment =>
+          EditorCommentReducer.reduce(event, ctx)
+
         case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveSubWordLeft | MoveSubWordRight | MoveToStart |
             MoveToEnd | MoveToStartOfFile | PageUp | PageDown | ColumnLeft | ColumnRight | MoveToEndOfFile |
             SelectAll =>
@@ -278,6 +282,9 @@ object EditorEventReducer:
 
         case OpenGotoLine | OpenFind | OpenReplace | FindNext | FindPrevious =>
           EditorFindEventReducer.reduce(event, ctx)
+
+        case SelectNextOccurrence | SkipOccurrence | SelectAllOccurrences =>
+          EditorOccurrenceEventReducer.reduce(event, ctx)
 
         case Copy | Cut | Paste | CutToDarlings | RestoreDarling | PasteFromHistory(_) =>
           EditorClipboardEventReducer.reduce(event, ctx)
@@ -311,7 +318,8 @@ object EditorEventReducer:
         )
 
       case TabKey =>
-        TabInsertion.foldLeft(ReducerResult.noEffects(currentState)) { (result, char) =>
+        val indentUnit = currentState.persisted.config.indentation.indentUnit
+        indentUnit.foldLeft(ReducerResult.noEffects(currentState)) { (result, char) =>
           handleEventWithoutBuffer(InsertChar(char), paneId, pane, result.state)
         }
 

@@ -3,6 +3,8 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.FontRenderContext
 
+import com.serenity.ui.renderer.FontFirstUse
+
 /** Stable keyboard-focus identity for an interactive surface primitive. */
 final case class SurfaceFocusId(value: String)
 
@@ -33,6 +35,7 @@ object SurfaceCompositionMetrics:
 
   /** Build immutable composition metrics from a UI font and render context. */
   def fromFont(font: Font, fontRenderContext: FontRenderContext): SurfaceCompositionMetrics =
+    FontFirstUse.settle(font, fontRenderContext)
     val lineHeight = math.max(1.0, font.getLineMetrics("Mg", fontRenderContext).getHeight.toDouble)
     SurfaceCompositionMetrics(font, fontRenderContext, lineHeight)
 

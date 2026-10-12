@@ -23,6 +23,14 @@ final case class EditorPaneRenderPlan(
   def columnSnapshotsFor(paneId: PaneId): Vector[ColumnSnapshotPlacement] =
     columnSnapshots.getOrElse(paneId, Vector.empty)
 
+  /** The snapshot each pane's row reuse is planned against: a column-mode pane's is every column's rows together
+    * ([[ColumnPaneRows]]), the rest are [[snapshots]].
+    */
+  def recordSnapshots: Map[PaneId, TextLayoutSnapshot] =
+    snapshots.map((paneId, snapshot) =>
+      paneId -> ColumnPaneRows.flatSnapshot(columnSnapshotsFor(paneId)).getOrElse(snapshot)
+    )
+
 /** Per-pane geometry for this frame: which buffer line each visual row shows, to translate `Damage`'s buffer-line facts
   * into row indices, and the pixel band each row owns, to know what a preserved row's pixels actually cover.
   */
@@ -31,7 +39,9 @@ final case class PaneFrameRecord(
     rowBufferLines: Vector[Int],
     rowRects: Vector[PixelRect],
     overflowingRows: Set[Int],
-    snapshot: TextLayoutSnapshot
+    snapshot: TextLayoutSnapshot,
+    // The chapter ghost each row paints (see `RendererChapterGhosts.rowGhosts`); empty when the pane has none.
+    rowGhosts: Vector[Option[String]] = Vector.empty
 )
 
 final case class BufferRenderAnnotations(
@@ -91,7 +101,7 @@ object RendererPaneSetup:
       layoutContract,
       snapshots,
       columnSnapshots,
-      annotationsFor(state, context, snapshots)
+      annotationsFor(state, context, snapshots, columnSnapshots)
     )
 
   /** What each visible buffer line carries -- comments, diagnostics, semantic tokens, ghosts -- as of `state`. Read per
@@ -102,10 +112,12 @@ object RendererPaneSetup:
   def annotationsFor(
     state: AppState,
     context: RenderContext,
-    snapshots: Map[PaneId, TextLayoutSnapshot]
+    snapshots: Map[PaneId, TextLayoutSnapshot],
+    columnSnapshots: Map[PaneId, Vector[ColumnSnapshotPlacement]]
   ): Map[BufferId, BufferRenderAnnotations] =
     val inputs = AnnotationInputs(
       snapshots,
+      columnSnapshots,
       state.persisted.layout.editorPanes,
       state.persisted.buffers,
       state.runtime.bufferIndexMemos,
@@ -114,12 +126,15 @@ object RendererPaneSetup:
       java.lang.Boolean.valueOf(state.runtime.resolvedCommentsVisible),
       state.persisted.config.markdownViewMode
     )
-    context.caches.frameState.annotationsFor(context.surface, inputs)(visibleAnnotations(state, context, snapshots))
+    context.caches.frameState.annotationsFor(context.surface, inputs)(
+      visibleAnnotations(state, context, snapshots, columnSnapshots)
+    )
 
   private def visibleAnnotations(
     state: AppState,
     context: RenderContext,
-    snapshots: Map[PaneId, TextLayoutSnapshot]
+    snapshots: Map[PaneId, TextLayoutSnapshot],
+    columnSnapshots: Map[PaneId, Vector[ColumnSnapshotPlacement]]
   ): Map[BufferId, BufferRenderAnnotations] =
     val visibleLinesByBuffer = state.persisted.layout.editorPanes.toList
       .flatMap {
@@ -127,7 +142,10 @@ object RendererPaneSetup:
           for
             bufferId <- pane.bufferId
             snapshot <- snapshots.get(paneId)
-          yield bufferId -> snapshot.visualLines.map(_.bufferLine).toSet
+            columnLines = columnSnapshots
+              .getOrElse(paneId, Vector.empty)
+              .flatMap(_.snapshot.visualLines.map(_.bufferLine))
+          yield bufferId -> (snapshot.visualLines.map(_.bufferLine) ++ columnLines).toSet
       }
       .groupMap(_._1)(_._2)
       .view
@@ -270,7 +288,8 @@ object RendererPaneSetup:
           forceCellLayout = !hasFontRenderContext,
           proseScale = proseScale,
           dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
-          wrapCache = context.caches.wrappedLines
+          wrapCache = context.caches.wrappedLines,
+          tabSize = renderBuffer.effectiveIndentation(state.persisted.config.indentation).tabSize
         )
       else
         TextLayoutSnapshot.fromBuffer(
@@ -288,7 +307,8 @@ object RendererPaneSetup:
           proseScale = proseScale,
           dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
           wrapCache = context.caches.wrappedLines,
-          markdownViewMode = state.persisted.config.inlineMarkdownViewMode
+          markdownViewMode = state.persisted.config.inlineMarkdownViewMode,
+          tabSize = renderBuffer.effectiveIndentation(state.persisted.config.indentation).tabSize
         )
     if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
 
@@ -338,8 +358,41 @@ object RendererPaneSetup:
           buffer     <- state.persisted.buffers.get(bufferId)
           snapshot   <- renderPlan.snapshots.get(paneId)
           if buffer.document.content.weight > 0
-        yield paneId -> paneFrameRecord(bufferId, paneLayout.contentRect, context, snapshot)
+          columns = renderPlan.columnSnapshotsFor(paneId)
+        yield paneId -> ColumnPaneRows
+          .flatSnapshot(columns)
+          .fold(
+            paneFrameRecord(bufferId, paneLayout.contentRect, context, snapshot).copy(rowGhosts =
+              RendererChapterGhosts.rowGhosts(
+                snapshot,
+                renderPlan.annotations.get(bufferId).map(_.ghostsByLine).getOrElse(Map.empty)
+              )
+            )
+          )(
+            columnFrameRecord(bufferId, paneLayout.contentRect, context, columns, _)
+          )
     }.toMap
+
+  private def columnFrameRecord(
+    bufferId: BufferId,
+    contentRect: LayoutRect,
+    context: RenderContext,
+    columns: Vector[ColumnSnapshotPlacement],
+    pageSnapshot: TextLayoutSnapshot
+  ): PaneFrameRecord =
+    val records = columns.map(column =>
+      paneFrameRecord(bufferId, RendererPaneContent.columnRect(contentRect, column), context, column.snapshot)
+    )
+    PaneFrameRecord(
+      bufferId = bufferId,
+      rowBufferLines = records.flatMap(_.rowBufferLines),
+      rowRects = records.flatMap(_.rowRects),
+      overflowingRows = records
+        .zip(ColumnPaneRows.firstRows(columns))
+        .flatMap((record, first) => record.overflowingRows.map(_ + first))
+        .toSet,
+      snapshot = pageSnapshot
+    )
 
   private def paneFrameRecord(
     bufferId: BufferId,

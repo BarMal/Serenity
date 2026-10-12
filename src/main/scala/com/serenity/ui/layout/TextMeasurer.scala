@@ -1,5 +1,6 @@
 package com.serenity.ui.layout
 
+import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.renderer.FontSpec
 
 /** The text measurement wrapping, caret placement and viewport centring take from a rendering backend. A backend must
@@ -54,13 +55,14 @@ trait TextMeasurer:
     startColumn: Int,
     fonts: TextMeasurer.LineFonts,
     measuredLayout: Boolean,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    tabSize: Int = IndentationSettings.DefaultTabSize
   ): IArray[Float] =
     if text.isEmpty then IArray(0.0f)
     else if !measuredLayout then
       val charWidth = cellMetrics.charWidth.toFloat
-      if cellMetrics.displayWidthAware then TextCaretMeasurement.displayWidthCaretXs(text, charWidth)
-      else IArray.tabulate(text.length + 1)(index => index * charWidth)
+      if cellMetrics.displayWidthAware then TextCaretMeasurement.displayWidthCaretXs(text, charWidth, tabSize)
+      else TextCaretMeasurement.uniformCaretXs(text, charWidth, tabSize)
     else TextCaretMeasurement.normalizeCollapsedCarets(rawCaretXs(text, startColumn, fonts))
 
   /** How many characters of `line` from `from` fit `panelWidthPx` when measured by full layout: candidates of growing

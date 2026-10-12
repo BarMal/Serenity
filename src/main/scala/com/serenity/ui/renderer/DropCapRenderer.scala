@@ -137,16 +137,26 @@ object DropCapRenderer:
 
   /** Drops the paragraph's split-out glyph character from a visual line's own drawable geometry: its text and the caret
     * stops at or past its new (shifted) start column -- the earlier stops belonged to the character the glyph itself
-    * now paints, and reusing their (already glyph-inset-shifted) `xPx` rather than rebasing to 0 keeps the remaining
-    * text exactly where `TextLayoutSnapshot`'s own drop cap left-inset already placed it.
+    * now paints. Keeping their `xPx` and the line's `xOffsetPx` rather than rebasing to 0 keeps the remaining text
+    * exactly where `TextLayoutSnapshot`'s own drop cap left-inset already placed it.
     */
   private def dropFirstGrapheme(visualLine: TextVisualLine, charCount: Int): TextVisualLine =
     val newStartColumn = visualLine.startColumn + charCount
-    visualLine.copy(
-      text = visualLine.text.drop(charCount),
-      startColumn = newStartColumn,
-      caretStops = visualLine.caretStops.filter(_.column >= newStartColumn),
-      xSortedCaretStops = visualLine.xSortedCaretStops.filter(_.column >= newStartColumn)
+    val row            = visualLine.row
+    def keptFrom(xs: IArray[Float], offsets: IArray[Int]): (IArray[Float], IArray[Int]) =
+      val kept = offsets.indices.filter(offsets(_) >= charCount)
+      (IArray.from(kept.map(xs(_))), IArray.from(kept.map(offsets(_) - charCount)))
+    val (caretXs, caretOffsets)     = keptFrom(row.caretXs, row.caretOffsets)
+    val (landingXs, landingOffsets) = keptFrom(row.landingXs, row.landingOffsets)
+    visualLine.copy(row =
+      row.copy(
+        text = row.text.drop(charCount),
+        startColumn = newStartColumn,
+        caretXs = caretXs,
+        caretOffsets = caretOffsets,
+        landingXs = landingXs,
+        landingOffsets = landingOffsets
+      )
     )
 
   /** Drops the same leading `count` characters from a parallel list of styled draw segments -- the coloured-text twin

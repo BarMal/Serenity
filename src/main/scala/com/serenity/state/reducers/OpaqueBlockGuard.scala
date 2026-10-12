@@ -27,7 +27,7 @@ private[reducers] object OpaqueBlockGuard:
     event match
       case InsertChar(_) | TabKey | ReverseTabKey | NewLine | Enter | DeleteBackward | DeleteForward |
           DeleteWordBackward | DeleteWordForward | DeleteToLineStart | DeleteToLineEnd | Cut | CutToDarlings |
-          RestoreDarling | Paste | PasteFromHistory(_) =>
+          RestoreDarling | Paste | PasteFromHistory(_) | ToggleLineComment | ToggleBlockComment =>
         true
       case _ => false
 

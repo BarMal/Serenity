@@ -211,7 +211,8 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     "status-char-count",
     "status-reading-time",
     "status-word-goal",
-    "status-line-ending"
+    "status-line-ending",
+    "status-indentation"
   )
 
   it should "expose the status line's placement and one toggle per segment in its own settings group" in {

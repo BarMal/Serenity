@@ -8,6 +8,7 @@ import com.serenity.config.AppMode
 import com.serenity.state.models.{AppState, TypographyRole}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.renderer.FontFirstUse
 
 /** The prose measure as a width on the editor grid, whose cells are the code font's whatever font a buffer draws in. */
 object ProseColumn:
@@ -56,6 +57,7 @@ object ProseColumn:
   private def chAdvancePx(font: Font): Double =
     val graphics = BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB).createGraphics()
     graphics.setFont(font)
+    FontFirstUse.settle(font, graphics.getFontRenderContext)
     val advance = font.getStringBounds("0", graphics.getFontRenderContext).getWidth
     graphics.dispose()
     advance.max(1.0)

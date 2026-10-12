@@ -22,15 +22,14 @@ object RendererGutter:
     state: AppState,
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
-    rows: Repaint[Int]
+    rows: Repaint[Int],
+    railRows: PaneId => Repaint[Int] = _ => Repaint.all[Int]
   ): Unit =
     if state.persisted.config.surfaceConfig.showLineNumbers then
       // Multi-column e-reader layout (issue #1338, Phase 2 / slice 2): a column-mode page has no single shared
       // pane-level rail (`LayoutEngine` reserves none in that case); each column carries its own rail on its left edge,
       // painted inline against that column's own chunk of rows.
-      val columnModeActive =
-        state.persisted.config.surfaceConfig.columnModeEnabled && state.persisted.config.surfaceConfig.wordWrapEnabled
-      if columnModeActive then renderPerColumnRails(state, context, renderPlan)
+      if paintsColumnRails(state) then renderPerColumnRails(state, context, renderPlan, railRows)
       else
         context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
         renderPlan.layoutContract.lineNumberRect.foreach(rect =>
@@ -40,6 +39,11 @@ object RendererGutter:
           renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = true, rows)
         )
 
+  /** Whether line numbers are drawn as one rail per e-reader column rather than as the pane's single counter. */
+  private[renderer] def paintsColumnRails(state: AppState): Boolean =
+    val surfaceConfig = state.persisted.config.surfaceConfig
+    surfaceConfig.showLineNumbers && surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
+
   /** Paint each e-reader column's own line-number rail (slice 2). Every pane carrying column placements draws a rail on
     * the leftmost `gutterWidthCells` of each column's band, aligned row-for-row against that column's own snapshot -- a
     * buffer line number on the row a buffer line starts, a continuation indicator on a wrapped row -- so the rails read
@@ -48,16 +52,18 @@ object RendererGutter:
   private def renderPerColumnRails(
     state: AppState,
     context: RenderContext,
-    renderPlan: EditorPaneRenderPlan
+    renderPlan: EditorPaneRenderPlan,
+    railRows: PaneId => Repaint[Int]
   ): Unit =
     context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
     state.persisted.layout.editorPanes.foreach {
       case (paneId, _) =>
         renderPlan.paneLayouts.get(paneId).foreach { paneLayout =>
-          renderPlan
-            .columnSnapshotsFor(paneId)
-            .filter(_.gutterWidthCells > 0)
-            .foreach(placement => renderColumnRail(state, context, paneLayout.contentRect, placement))
+          val columns = renderPlan.columnSnapshotsFor(paneId)
+          columns.zip(ColumnPaneRows.localRepaints(columns, railRows(paneId))).foreach { (placement, rows) =>
+            if placement.gutterWidthCells > 0 then
+              renderColumnRail(state, context, paneLayout.contentRect, placement, rows)
+          }
         }
     }
 
@@ -65,21 +71,26 @@ object RendererGutter:
     state: AppState,
     context: RenderContext,
     contentRect: LayoutRect,
-    placement: ColumnSnapshotPlacement
+    placement: ColumnSnapshotPlacement,
+    rows: Repaint[Int]
   ): Unit =
     val surface  = context.surface
-    val railX    = contentRect.x + placement.xOffsetCells
-    val railRect = LayoutRect(railX, contentRect.y, placement.gutterWidthCells, contentRect.height)
+    val railRect = ColumnRails.railRect(contentRect, placement)
     val snapshot = placement.snapshot
+    val kept     = ColumnRails.keptBands(context, railRect, snapshot, rows)
 
     surface.setBackgroundColor(gutterBackground(state))
     surface.setForegroundColor(state.persisted.theme.muted)
-    surface.fillRect(railRect.x, railRect.y, railRect.width, railRect.height, ' ')
+    if kept.isEmpty then surface.fillRect(railRect.x, railRect.y, railRect.width, railRect.height, ' ')
+    else
+      PixelRect
+        .uncoveredWithin(RendererChromePlan.pixelRectOf(context.cellMetrics)(railRect), kept)
+        .foreach(fillPixelRect(surface, _))
 
     val wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
     val rowMetrics      = RendererPaneContent.textRowMetrics(railRect, context, snapshot)
     snapshot.visualLines.zipWithIndex.foreach {
-      case (visualLine, rowIndex) if rowMetrics.lineFits(rowIndex) =>
+      case (visualLine, rowIndex) if rowMetrics.lineFits(rowIndex) && rows.includes(rowIndex) =>
         val text =
           if shouldRenderLineNumberForVisualLine(visualLine, wordWrapEnabled) then
             val numberWidth = math.max(1, railRect.width - 1)

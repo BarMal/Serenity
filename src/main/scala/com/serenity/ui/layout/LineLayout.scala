@@ -85,7 +85,7 @@ private[layout] object LineLayout:
     lineText: String
   ): LineLayoutInputs =
     val resolver =
-      if !measuredLayout then singleFontResolver(font)
+      if !measuredLayout then singleFontResolver(font, richText.tabSize)
       else if richText.markdown.isActive then
         markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText)
       else resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale)

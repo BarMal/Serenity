@@ -8,7 +8,7 @@ import com.serenity.TestTemp
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment, ThemeFollowConfig}
 import com.serenity.keystroke.Modifier
-import com.serenity.state.models.{LargeFilePolicy, SurfacePlacement}
+import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.typesafe.config.ConfigFactory
@@ -64,6 +64,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withSyntaxHighlighting(true)
     .withSmartPunctuation(true)
     .withLargeFilePolicy(LargeFilePolicy(warnAboveChars = 1234, toolingOffAboveChars = 5678, optimizations = false))
+    .withIndentation(IndentationSettings(tabSize = 2, insertSpaces = false))
     .withLineNumbers(false)
     .withLineNumberLayout(
       LineNumberLayout(side = LineNumberSide.Both, marginLeft = Some(2), marginRight = 3, padding = Some(1))
