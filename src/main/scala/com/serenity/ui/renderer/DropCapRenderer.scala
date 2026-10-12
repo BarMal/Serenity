@@ -143,12 +143,19 @@ object DropCapRenderer:
   private def dropFirstGrapheme(visualLine: TextVisualLine, charCount: Int): TextVisualLine =
     val newStartColumn = visualLine.startColumn + charCount
     val row            = visualLine.row
+    def keptFrom(xs: IArray[Float], offsets: IArray[Int]): (IArray[Float], IArray[Int]) =
+      val kept = offsets.indices.filter(offsets(_) >= charCount)
+      (IArray.from(kept.map(xs(_))), IArray.from(kept.map(offsets(_) - charCount)))
+    val (caretXs, caretOffsets)     = keptFrom(row.caretXs, row.caretOffsets)
+    val (landingXs, landingOffsets) = keptFrom(row.landingXs, row.landingOffsets)
     visualLine.copy(row =
       row.copy(
         text = row.text.drop(charCount),
         startColumn = newStartColumn,
-        caretStops = row.caretStops.filter(_.column >= newStartColumn),
-        xSortedCaretStops = row.xSortedCaretStops.filter(_.column >= newStartColumn)
+        caretXs = caretXs,
+        caretOffsets = caretOffsets,
+        landingXs = landingXs,
+        landingOffsets = landingOffsets
       )
     )
 

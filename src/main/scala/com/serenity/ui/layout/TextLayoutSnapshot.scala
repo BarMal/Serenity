@@ -18,7 +18,6 @@ import com.serenity.state.models.{
   MeasuredRow,
   NavigationGeometry,
   RowAffinity,
-  TextCaretStop,
   TextVisualLine,
   TypographyRole
 }
@@ -502,14 +501,10 @@ object TextLayoutSnapshot:
   ): MeasuredRow =
     val xs      = measuredXs.getOrElse(caretXs(text, startColumn, resolver, frc, measuredLayout, cellMetrics))
     val offsets = graphemeOffsets.getOrElse(ParagraphMeasurement.graphemeBoundaryOffsets(text))
-    val caretStops = Vector.tabulate(offsets.length) { index =>
-      TextCaretStop(startColumn + offsets(index), xs(math.min(offsets(index), xs.length - 1)))
-    }
-    val ascending = (1 until caretStops.length).forall(index => caretStops(index - 1).xPx <= caretStops(index).xPx)
-    val landingStops =
-      if resolver.hasHidden then landableStops(caretStops, resolver)
-      else if ascending then caretStops
-      else caretStops.sortBy(_.xPx)
+    val stopXs  = IArray.tabulate(offsets.length)(index => xs(math.min(offsets(index), xs.length - 1)))
+    val (landingXs, landingOffsets) =
+      if resolver.hasHidden then landableStops(stopXs, offsets, startColumn, resolver)
+      else MeasuredRow.orderedByX(stopXs, offsets)
     val (heightPx, ascentPx) =
       if measuredLayout then resolver.lineMetrics(frc, startColumn, endColumn) else (0, 0)
     MeasuredRow(
@@ -517,8 +512,10 @@ object TextLayoutSnapshot:
       endColumn = endColumn,
       text = text,
       widthPx = xs(xs.length - 1),
-      caretStops = caretStops,
-      xSortedCaretStops = landingStops,
+      caretXs = stopXs,
+      caretOffsets = offsets,
+      landingXs = landingXs,
+      landingOffsets = landingOffsets,
       heightPx = heightPx,
       ascentPx = ascentPx
     )
