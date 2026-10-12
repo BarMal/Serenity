@@ -1,76 +1,148 @@
 package com.serenity.state.models
 
-/** Immutable, UI-free text geometry. Produced from a rendered text layout at the effect boundary and consumed by pure
-  * navigation logic, so cursor movement never reaches for a font or a Java2D metric.
+import scala.util.hashing.MurmurHash3
+
+/** A caret position as a value, for callers that want a pair rather than two parallel arrays. Rows do not hold these:
+  * see [[MeasuredRow.caretStops]].
   */
 final case class TextCaretStop(column: Int, xPx: Float)
 
 /** A wrapped row's measured geometry, relative to the row's own origin: independent of the buffer line it sits on, the
   * paragraph's alignment and any drop cap inset, which [[TextVisualLine]] applies when the row is read. That makes it
   * the unit a wrap cache can share between every placement of the same text.
+  *
+  * Caret stops are two parallel primitive arrays rather than one object per stop: stop `i` sits at column
+  * `startColumn + caretOffsets(i)` and `caretXs(i)` pixels. The `landing` pair holds the same stops ordered by x for
+  * hit-testing (minus stops a hidden column makes unlandable); it is the same arrays as the caret pair whenever the
+  * stops already ascend. Offsets are relative to `startColumn`, so moving a row to another column is a field change.
   */
 final case class MeasuredRow(
     startColumn: Int,
     endColumn: Int,
     text: String,
     widthPx: Float,
-    caretStops: Vector[TextCaretStop],
-    xSortedCaretStops: Vector[TextCaretStop] = Vector.empty,
+    caretXs: IArray[Float],
+    caretOffsets: IArray[Int],
+    landingXs: IArray[Float],
+    landingOffsets: IArray[Int],
     // Per-line measured metrics (measured/proportional layout only): the tallest run on this visual line. 0 means
     // "unset" -- callers fall back to the snapshot's uniform lineHeightPx/ascentPx (cell layout, or non-rich buffers).
     heightPx: Int = 0,
     ascentPx: Int = 0
 ):
 
+  // Arrays compare by reference, so the generated equals would call two identical measurements different. Row
+  // equality drives dirty-row diffing; the `eq` fast path keeps it free for the shared rows a warm cache serves.
+  override def equals(other: Any): Boolean = other match
+    case that: MeasuredRow =>
+      (this eq that) || (startColumn == that.startColumn && endColumn == that.endColumn && text == that.text &&
+        widthPx == that.widthPx && heightPx == that.heightPx && ascentPx == that.ascentPx &&
+        caretXs.sameElements(that.caretXs) && caretOffsets.sameElements(that.caretOffsets) &&
+        landingXs.sameElements(that.landingXs) && landingOffsets.sameElements(that.landingOffsets))
+    case _ => false
+
+  override def hashCode: Int =
+    MurmurHash3.finalizeHash(
+      MurmurHash3.mix(MurmurHash3.mix(startColumn, endColumn), MurmurHash3.mix(text.hashCode, caretXs.length)),
+      4
+    )
+
+  def caretCount: Int = caretXs.length
+
+  def caretColumn(index: Int): Int = startColumn + caretOffsets(index)
+
+  /** The stops as objects, allocated on each call: for tests and diagnostics, never for layout or painting. */
+  def caretStops: Vector[TextCaretStop] = MeasuredRow.stops(startColumn, caretOffsets, caretXs)
+
+  def xSortedCaretStops: Vector[TextCaretStop] = MeasuredRow.stops(startColumn, landingOffsets, landingXs)
+
   def xForColumn(column: Int, offsetPx: Float = 0.0f): Option[Float] =
     @annotation.tailrec
-    def search(low: Int, high: Int, best: Option[TextCaretStop]): Option[Float] =
-      if low > high then best.orElse(caretStops.lastOption).map(_.xPx + offsetPx)
+    def search(low: Int, high: Int, best: Int): Option[Float] =
+      if low > high then
+        val resolved = if best >= 0 then best else caretXs.length - 1
+        Option.when(resolved >= 0)(caretXs(resolved) + offsetPx)
       else
         val middle = (low + high) >>> 1
-        val stop   = caretStops(middle)
-        if stop.column >= column then search(low, middle - 1, Some(stop))
+        if caretColumn(middle) >= column then search(low, middle - 1, middle)
         else search(middle + 1, high, best)
 
-    search(0, caretStops.length - 1, None)
+    search(0, caretXs.length - 1, -1)
 
   def nearestColumnForXPx(xPx: Float, offsetPx: Float = 0.0f): Int =
-    val stops = if xSortedCaretStops.nonEmpty then xSortedCaretStops else caretStops.sortBy(_.xPx)
+    val count = landingXs.length
 
-    stops.headOption match
-      case None => 0
-      case Some(firstStop) =>
-        @annotation.tailrec
-        def search(low: Int, high: Int): TextCaretStop =
-          if low > high then
-            // stops is non-empty here (headOption matched Some above), so the (None, None) case can only
-            // arise if both the low and high probes fell outside the array, which the binary search never
-            // does starting from a non-empty range -- firstStop is an unreachable-in-practice fallback.
-            (stops.lift(high), stops.lift(low)) match
-              case (Some(left), Some(right)) => closer(left, right, xPx, offsetPx)
-              case (Some(left), None)        => left
-              case (None, Some(right))       => right
-              case (None, None)              => firstStop
-          else
-            val middle = (low + high) >>> 1
-            if stops(middle).xPx + offsetPx < xPx then search(middle + 1, high)
-            else search(low, middle - 1)
+    @annotation.tailrec
+    def search(low: Int, high: Int): Int =
+      if low > high then
+        val left  = Option.when(high >= 0 && high < count)(high)
+        val right = Option.when(low >= 0 && low < count)(low)
+        (left, right) match
+          case (Some(l), Some(r)) => if closer(r, l, xPx, offsetPx) then r else l
+          case (Some(l), None)    => l
+          case (None, Some(r))    => r
+          case (None, None)       => 0
+      else
+        val middle = (low + high) >>> 1
+        if landingXs(middle) + offsetPx < xPx then search(middle + 1, high)
+        else search(low, middle - 1)
 
-        search(0, stops.length - 1).column
+    if count == 0 then 0 else startColumn + landingOffsets(search(0, count - 1))
 
-  private def closer(first: TextCaretStop, second: TextCaretStop, xPx: Float, offsetPx: Float): TextCaretStop =
-    if math.abs(second.xPx + offsetPx - xPx) < math.abs(first.xPx + offsetPx - xPx) then second else first
+  private def closer(candidate: Int, incumbent: Int, xPx: Float, offsetPx: Float): Boolean =
+    math.abs(landingXs(candidate) + offsetPx - xPx) < math.abs(landingXs(incumbent) + offsetPx - xPx)
+
+object MeasuredRow:
+
+  /** A row built from stop objects. `xSorted` empty means "order `stops` by x". */
+  def fromStops(
+    startColumn: Int,
+    endColumn: Int,
+    text: String,
+    widthPx: Float,
+    stops: Vector[TextCaretStop],
+    xSorted: Vector[TextCaretStop] = Vector.empty,
+    heightPx: Int = 0,
+    ascentPx: Int = 0
+  ): MeasuredRow =
+    val landing = if xSorted.nonEmpty then xSorted else stops.sortBy(_.xPx)
+    MeasuredRow(
+      startColumn,
+      endColumn,
+      text,
+      widthPx,
+      IArray.from(stops.map(_.xPx)),
+      IArray.from(stops.map(_.column - startColumn)),
+      IArray.from(landing.map(_.xPx)),
+      IArray.from(landing.map(_.column - startColumn)),
+      heightPx,
+      ascentPx
+    )
+
+  /** `xs` and `offsets` ordered by x, stably, or the arrays themselves when they already ascend. */
+  def orderedByX(xs: IArray[Float], offsets: IArray[Int]): (IArray[Float], IArray[Int]) =
+    val ascending = (1 until xs.length).forall(index => xs(index - 1) <= xs(index))
+    if ascending then (xs, offsets)
+    else
+      val order = xs.indices.sortBy(xs(_))
+      (IArray.from(order.map(xs(_))), IArray.from(order.map(offsets(_))))
+
+  private def stops(startColumn: Int, offsets: IArray[Int], xs: IArray[Float]): Vector[TextCaretStop] =
+    Vector.tabulate(xs.length)(index => TextCaretStop(startColumn + offsets(index), xs(index)))
 
 /** A [[MeasuredRow]] placed on a buffer line and shifted `xOffsetPx` right by its paragraph's alignment and drop cap
   * inset. Placing a cached row allocates only this wrapper: the measured geometry is shared, never copied.
   */
 final case class TextVisualLine(bufferLine: Int, row: MeasuredRow, xOffsetPx: Float):
-  export row.{ascentPx, endColumn, heightPx, startColumn, text, widthPx}
+  export row.{ascentPx, caretCount, caretColumn, endColumn, heightPx, startColumn, text, widthPx}
 
-  /** The row's caret stops in the coordinates of the pane, shifted by [[xOffsetPx]]. */
-  lazy val caretStops: Vector[TextCaretStop] = shifted(row.caretStops)
+  /** Caret x of stop `index` in the coordinates of the pane. */
+  def caretX(index: Int): Float = row.caretXs(index) + xOffsetPx
 
-  lazy val xSortedCaretStops: Vector[TextCaretStop] = shifted(row.xSortedCaretStops)
+  /** The row's caret stops in the coordinates of the pane, as objects; see [[MeasuredRow.caretStops]]. */
+  def caretStops: Vector[TextCaretStop] = shifted(row.caretStops)
+
+  def xSortedCaretStops: Vector[TextCaretStop] = shifted(row.xSortedCaretStops)
 
   def xForColumn(column: Int): Option[Float] = row.xForColumn(column, xOffsetPx)
 
@@ -96,7 +168,7 @@ object TextVisualLine:
   ): TextVisualLine =
     TextVisualLine(
       bufferLine,
-      MeasuredRow(startColumn, endColumn, text, widthPx, caretStops, xSortedCaretStops, heightPx, ascentPx),
+      MeasuredRow.fromStops(startColumn, endColumn, text, widthPx, caretStops, xSortedCaretStops, heightPx, ascentPx),
       xOffsetPx
     )
 

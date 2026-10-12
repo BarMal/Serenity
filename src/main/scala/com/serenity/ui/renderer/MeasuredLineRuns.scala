@@ -163,26 +163,24 @@ private[renderer] object MeasuredLineRuns:
   private object ClusterBounds:
 
     def apply(visualLine: TextVisualLine, spans: Vector[GraphemeSpan]): ClusterBounds =
-      val stops   = visualLine.row.caretStops
-      val offset  = visualLine.xOffsetPx
-      val starts  = new Array[Int](spans.length)
-      val ends    = new Array[Int](spans.length)
-      val startXs = new Array[Float](spans.length)
-      val endXs   = new Array[Float](spans.length)
+      val measured = visualLine.row
+      val offset   = visualLine.xOffsetPx
+      val starts   = new Array[Int](spans.length)
+      val ends     = new Array[Int](spans.length)
+      val startXs  = new Array[Float](spans.length)
+      val endXs    = new Array[Float](spans.length)
       @tailrec
       def collect(spanIndex: Int, stopIndex: Int, count: Int): Int =
-        if spanIndex >= spans.length || stopIndex + 1 >= stops.length then count
+        if spanIndex >= spans.length || stopIndex + 1 >= measured.caretCount then count
         else
-          val span      = spans(spanIndex)
-          val startStop = stops(stopIndex)
-          val endStop   = stops(stopIndex + 1)
-          if startStop.column == visualLine.startColumn + span.startLocalIndex &&
-              endStop.column == visualLine.startColumn + span.endLocalIndex
+          val span = spans(spanIndex)
+          if measured.caretColumn(stopIndex) == visualLine.startColumn + span.startLocalIndex &&
+              measured.caretColumn(stopIndex + 1) == visualLine.startColumn + span.endLocalIndex
           then
             starts(count) = span.startLocalIndex
             ends(count) = span.endLocalIndex
-            startXs(count) = startStop.xPx + offset
-            endXs(count) = endStop.xPx + offset
+            startXs(count) = measured.caretXs(stopIndex) + offset
+            endXs(count) = measured.caretXs(stopIndex + 1) + offset
             collect(spanIndex + 1, stopIndex + 1, count + 1)
           else collect(spanIndex, stopIndex + 1, count)
       new ClusterBounds(starts, ends, startXs, endXs, collect(0, 0, 0))
