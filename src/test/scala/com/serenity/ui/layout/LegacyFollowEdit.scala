@@ -2,7 +2,7 @@ package com.serenity.ui.layout
 
 import scala.annotation.tailrec
 
-import com.serenity.rope.{Leaf, Node, Rope}
+import com.serenity.rope.{Branch, Leaf, Rope}
 
 /** The leaf-vector diff `VisualLineIndexStore.followEdit` used before it walked both ropes in step, kept verbatim as
   * the oracle the walk must agree with on every input.
@@ -29,7 +29,7 @@ object LegacyFollowEdit:
     @tailrec
     def collect(pending: List[Rope], acc: Vector[String]): Vector[String] =
       pending match
-        case Node(left, right) :: rest            => collect(left :: right :: rest, acc)
+        case (branch: Branch) :: rest             => collect(branch.children.toList ::: rest, acc)
         case Leaf(value) :: rest if value.isEmpty => collect(rest, acc)
         case Leaf(value) :: rest                  => collect(rest, acc :+ value)
         case Nil                                  => acc

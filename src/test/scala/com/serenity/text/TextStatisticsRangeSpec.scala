@@ -1,6 +1,6 @@
 package com.serenity.text
 
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.{Balance, Rope, RopeBuilder}
 import com.serenity.testkit.Generators
 import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
@@ -31,7 +31,7 @@ class TextStatisticsRangeSpec extends AnyFlatSpec with Matchers with ScalaCheckP
     }
 
   it should "count a selection that splits a word at a leaf boundary as the whole word" in {
-    val rope = com.serenity.rope.Node(com.serenity.rope.Leaf("alp"), com.serenity.rope.Leaf("ha beta"))
+    val rope = RopeBuilder.fromLeaves(List("alp", "ha beta"))
 
     TextStatistics.ofRange(rope, 0, 5).wordCount shouldBe 1
     TextStatistics.ofRange(rope, 1, 7).wordCount shouldBe 2

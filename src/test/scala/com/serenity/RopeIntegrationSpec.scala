@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.keystroke.events.*
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.{Balance, Rope, RopeInvariants}
 import com.serenity.state.components.EditorPaneComponent
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -35,8 +35,8 @@ Final line with medium length content here""".replace("\r\n", "\n")
           recombined.collect() shouldBe text
 
           // And both parts should be valid ropes
-          left.isHeightBalanced shouldBe true
-          right.isHeightBalanced shouldBe true
+          RopeInvariants.violations(left) shouldBe Nil
+          RopeInvariants.violations(right) shouldBe Nil
       }
     }
 
@@ -116,8 +116,8 @@ Final line with medium length content here""".replace("\r\n", "\n")
     deletedRope.collect() shouldBe ("a" * 28 + "b" * 28)
 
     // Then: All operations should maintain rope integrity
-    insertedRope.isHeightBalanced shouldBe true
-    deletedRope.isHeightBalanced shouldBe true
+    RopeInvariants.violations(insertedRope) shouldBe Nil
+    RopeInvariants.violations(deletedRope) shouldBe Nil
 
   trait RopeIntegrationFixture:
 
