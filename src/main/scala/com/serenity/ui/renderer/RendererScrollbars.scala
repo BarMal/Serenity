@@ -25,7 +25,8 @@ private[renderer] object RendererScrollbars:
     renderPlan: EditorPaneRenderPlan,
     panels: FramePanels
   ): Map[PaneId, ScrollbarVisual] =
-    if state.runtime.modalStack.nonEmpty || renderPlan.scrolls.isEmpty then Map.empty
+    if state.runtime.modalStack.nonEmpty || renderPlan.scrolls.isEmpty || state.runtime.capabilities.isCellGrid then
+      Map.empty
     else
       val colors      = state.persisted.theme.scrollbar
       val obstruction = obstructions(context, renderPlan, panels)
@@ -121,6 +122,35 @@ private[renderer] object RendererScrollbars:
     */
   private def banded(context: RenderContext): Boolean =
     LabelAnchor.isWhole(context.surface.devicePixelScaleX) && LabelAnchor.isWhole(context.surface.devicePixelScaleY)
+
+  /** Draws each terminal pane's reserved column: the track and thumb in glyphs, or blanks where there is nothing to
+    * scroll. The column is the bar's alone, so unlike the GUI's overlay it is simply drawn again whole every frame; the
+    * terminal sends only the cells that changed. A modal, overlay or panel over a column leaves it as it is.
+    */
+  def paintTerminal(
+    state: AppState,
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    panels: FramePanels
+  ): Unit =
+    if state.runtime.capabilities.isCellGrid && state.runtime.modalStack.isEmpty then
+      val theme       = state.persisted.theme
+      val colors      = theme.scrollbar
+      val obstruction = obstructions(context, renderPlan, panels)
+      renderPlan.paneLayouts.foreach { (paneId, layout) =>
+        val column = layout.scrollbarRect
+        val pixels = RendererChromePlan.pixelRectOf(context.cellMetrics)(column)
+        if column.width > 0 && !obstruction.exists(_.intersects(pixels)) then
+          val glyphs = renderPlan.scrolls.get(paneId).flatMap(TerminalScrollbar.glyphs(_, column.height))
+          context.surface.setBackgroundColor(theme.background)
+          (0 until column.height).foreach { row =>
+            val glyph = glyphs.flatMap(_.lift(row))
+            context.surface.setForegroundColor(
+              if glyph.contains(ScrollGlyph.Track) then colors.track else theme.accent
+            )
+            context.surface.putString(column.x, column.y + row, glyph.fold(" ")(_.char.toString))
+          }
+      }
 
   private def bandsOf(thumb: PixelRect, banded: Boolean): Vector[PixelRect] =
     if !banded then Vector(thumb)

@@ -65,10 +65,11 @@ class UiSceneScrollSpec extends AnyFlatSpec with Matchers:
     scroll.extent.totalRows shouldBe paragraphs.size
   }
 
-  it should "be absent from a terminal, whose indicator is drawn without a pane of its own" in {
+  it should "be there in a terminal too, for the bar in its reserved column" in {
     val tui = stateOf(shortLines)
 
-    sceneOf(tui.copy(runtime = tui.runtime.copy(capabilities = FrontendCapabilities.tui()))).paneScrolls shouldBe empty
+    sceneOf(tui.copy(runtime = tui.runtime.copy(capabilities = FrontendCapabilities.tui()))).paneScrolls.keySet shouldBe
+      Set(paneId)
   }
 
   it should "be absent from a pane laid out in pages of columns" in {

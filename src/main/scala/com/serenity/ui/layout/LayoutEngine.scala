@@ -23,7 +23,10 @@ final case class EditorPaneLayout(
     titleRect: LayoutRect,
     contentRect: LayoutRect,
     topSpacerRect: LayoutRect = LayoutRect(0, 0, 0, 0),
-    bottomSpacerRect: LayoutRect = LayoutRect(0, 0, 0, 0)
+    bottomSpacerRect: LayoutRect = LayoutRect(0, 0, 0, 0),
+    // The column a terminal pane gives its scrollbar, taken out of `contentRect`; empty in the GUI, where the bar is
+    // an overlay (see ScrollbarLayout).
+    scrollbarRect: LayoutRect = LayoutRect(0, 0, 0, 0)
 )
 
 final case class EditorWorkspaceLayout(

@@ -157,7 +157,8 @@ class TuiEditingSpec extends TuiSpec:
     runTui(TuiEnvironment.withLines(10000)) {
       for
         _ <- verify("first window") { screen =>
-          screen.rowText(1).stripTrailing shouldBe "    1 line 0"
+          // Not the last column, which carries the scrollbar.
+          screen.rowText(1).dropRight(1).stripTrailing shouldBe "    1 line 0"
           screen.containsText("line 9999") shouldBe false
         }
         _ <- pressAll(List.fill(5)(TuiKeys.PageDown)*)

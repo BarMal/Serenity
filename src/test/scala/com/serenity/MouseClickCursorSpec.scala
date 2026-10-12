@@ -315,7 +315,8 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
 
     // One logical line, long enough to wrap into three visual rows on the cell grid: two full-width rows plus a
     // short third row. The click below lands on that third row's column range.
-    val fullRowLength      = contentRect.width
+    // A terminal pane's last column belongs to its scrollbar, so its text wraps one column short of the content band.
+    val fullRowLength      = contentRect.width - ScrollbarLayout.terminalColumns(state, contentRect.width)
     val lastRowLength      = 5
     val lineText           = "x" * (fullRowLength * 2 + lastRowLength)
     val lastRowStartColumn = fullRowLength * 2

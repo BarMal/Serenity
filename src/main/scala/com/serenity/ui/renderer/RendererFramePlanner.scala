@@ -147,6 +147,7 @@ object RendererFramePlanner:
         val framePanels = panels.keeping(framePlan.fold(Set.empty[SurfaceId])(_.keptPanels))
         paintFrameLayers(state, context, editorRenderPlan, finalizedScene, framePlan, damage, framePanels)
         RendererScrollbars.paint(context, scrollbars, settled)
+        RendererScrollbars.paintTerminal(state, context, editorRenderPlan, panels)
         commitFramePlan(framePlan, output)
         FrameCounting.planned(caches.frameCounters, framePlan, viewportSize, cellMetrics)
         Some(editorRenderPlan)

@@ -163,7 +163,7 @@ private[serenity] object UiSceneBuilder:
               markdownViewMode = state.persisted.config.inlineMarkdownViewMode,
               tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
             )
-            val scroll = Option.when(ScrollbarLayout.shown(state, paneLayout.contentRect))(
+            val scroll = Option.when(ScrollbarLayout.hasBar(state, paneLayout))(
               paneScroll(state, buffer, viewport, single, width, font, fontMetrics, cellMetrics.isDefined, wrappedLines)
             )
             paneId -> (single, Vector.empty[ColumnSnapshotPlacement], scroll)

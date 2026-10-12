@@ -117,12 +117,37 @@ class ScrollbarHitTestingSpec extends AnyFlatSpec with Matchers:
     ) shouldBe None
   }
 
-  it should "not exist in a terminal, which cannot draw anything thinner than a cell" in {
-    val tui   = stateOf(300)
-    val state = tui.copy(runtime = tui.runtime.copy(capabilities = com.serenity.frontend.FrontendCapabilities.tui()))
-    val scene = sceneOf(state)
+  private def terminalState(lines: Int, topLine: Int = 0): AppState =
+    val state = stateOf(lines, topLine)
+    LayoutEngine.syncViewportDimensions(
+      state.copy(runtime = state.runtime.copy(capabilities = com.serenity.frontend.FrontendCapabilities.tui())),
+      viewportSize
+    )
 
-    scene.paneScrolls shouldBe empty
+  "A terminal's scrollbar" should "be its reserved column, found by cell" in {
+    val state  = terminalState(300)
+    val scene  = sceneOf(state)
+    val column = scene.paneLayouts(paneId).scrollbarRect
+
+    scene.paneScrolls should contain key paneId
+    ScrollbarHitTesting.barAt(MousePress(column.x, column.y + 2), state, scene).map(_.paneId) shouldBe Some(paneId)
+    ScrollbarHitTesting.barAt(MousePress(column.x - 1, column.y + 2), state, scene) shouldBe None
+    ScrollbarHitTesting.barAt(MousePress(column.x, column.bottom), state, scene) shouldBe None
+  }
+
+  it should "page the view when its track is pressed below the thumb, and take hold of the thumb where it is pressed" in {
+    val state  = terminalState(300)
+    val scene  = sceneOf(state)
+    val column = scene.paneLayouts(paneId).scrollbarRect
+    val extent = scene.paneScrolls(paneId).extent
+    val thumb  = ScrollbarGeometry.thumb(extent, column.height * 2, 2).getOrElse(fail("expected a thumb"))
+
+    val (paged, _) = run(state)(ScrollbarHitTesting.press(MousePress(column.x, column.bottom - 1), state, scene))
+    val (held, _) =
+      run(state)(ScrollbarHitTesting.press(MousePress(column.x, column.y + thumb.offsetPx / 2), state, scene))
+
+    viewportOf(paged.state).topLine shouldBe extent.pageRows
+    held.state.runtime.pointerGesture.scrollbarGrab.map(_.paneId) shouldBe Some(paneId)
   }
 
   "A press on the thumb" should "take hold of it where it was pressed, without scrolling" in {

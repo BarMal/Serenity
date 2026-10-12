@@ -62,10 +62,54 @@ class ScrollbarLayoutSpec extends AnyFlatSpec with Matchers:
     ScrollbarLayout.shown(AppState.initial, paneLayout(AppState.initial).contentRect) shouldBe true
   }
 
-  it should "be absent from a terminal, which cannot draw anything thinner than a cell" in {
+  it should "not be a strip over a terminal's text, which cannot draw anything thinner than a cell" in {
     val tui = AppState.initial.copy(runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui()))
 
     ScrollbarLayout.shown(tui, paneLayout(tui).contentRect) shouldBe false
+  }
+
+  private val tui =
+    AppState.initial.copy(runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui()))
+
+  "A terminal pane" should "give the last column of its content band to the bar" in {
+    val gui  = paneLayout(AppState.initial)
+    val pane = paneLayout(tui)
+
+    val panel = LayoutEngine.calculateLayout(tui, viewportSize).editorPanelRect
+
+    pane.scrollbarRect.width shouldBe ScrollbarLayout.terminalColumns(tui, panel.width)
+    pane.scrollbarRect.width shouldBe 1
+    pane.contentRect.width shouldBe panel.width - 1
+    pane.scrollbarRect.x shouldBe pane.contentRect.right
+    pane.scrollbarRect.right shouldBe panel.right
+  }
+
+  it should "run the bar beside the content for its whole height" in {
+    val pane = paneLayout(tui)
+
+    pane.scrollbarRect.y shouldBe pane.contentRect.y
+    pane.scrollbarRect.height shouldBe pane.contentRect.height
+    ScrollbarLayout.hasBar(tui, pane) shouldBe true
+  }
+
+  it should "wrap its text one column short, so the viewport is one column narrower" in {
+    val synced = LayoutEngine.syncViewportDimensions(tui, viewportSize)
+    val panel  = LayoutEngine.calculateLayout(tui, viewportSize).editorPanelRect
+    val buffer = synced.persisted.buffers.values.headOption.getOrElse(fail("expected a buffer"))
+
+    buffer.viewport.visibleColumns shouldBe panel.width - 1
+  }
+
+  it should "give no column to a pane too narrow to carry a bar, nor to pages of columns" in {
+    val paged = withSurface(tui)(_.copy(columnModeEnabled = true, wordWrapEnabled = true))
+
+    paneLayout(tui, ViewportSize(8, 30)).scrollbarRect.width shouldBe 0
+    paneLayout(paged).scrollbarRect.width shouldBe 0
+  }
+
+  it should "stay out of the GUI, where the bar is an overlay" in {
+    paneLayout(AppState.initial).scrollbarRect.width shouldBe 0
+    ScrollbarLayout.hasBar(AppState.initial, paneLayout(AppState.initial)) shouldBe true
   }
 
   it should "be absent while text is laid out in pages of columns" in {

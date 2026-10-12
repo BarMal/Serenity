@@ -52,18 +52,29 @@ final private[manager] class ScrollbarHitTesting(port: ScrollbarHitTestingPort):
 
 private[manager] object ScrollbarHitTesting:
 
-  /** The bar under a pointer: the pane it scrolls, the strip it occupies in pixels, and where that pane is scrolled. */
-  final case class Bar(paneId: PaneId, strip: PixelRect, scroll: PaneScroll):
-    def trackTopPx: Int    = strip.yPx
-    def trackHeightPx: Int = strip.heightPx
+  /** The bar under a pointer: the pane it scrolls, the strip it occupies in pixels, and where that pane is scrolled. A
+    * terminal bar is placed to half a row, so its track is counted in half-rows.
+    */
+  final case class Bar(paneId: PaneId, strip: PixelRect, scroll: PaneScroll, terminal: Boolean):
+    private def unitsPerPixel: Int   = if terminal then 2 else 1
+    def trackTopPx: Int              = strip.yPx
+    def trackHeightPx: Int           = strip.heightPx * unitsPerPixel
+    def alongTrack(pixels: Int): Int = pixels * unitsPerPixel
+    def minThumbPx: Int              = if terminal then 2 else ScrollbarGeometry.MinThumbPx
+
+  private def isTerminal(state: AppState): Boolean = state.runtime.capabilities.isCellGrid
+
+  /** A terminal's pixel is a cell, so its bar and pointer are measured in cells. */
+  private def metricsOf(state: AppState): CellMetrics =
+    if isTerminal(state) then CellMetrics.cellUnit else MouseHitTestGeometry.floatingCellMetrics(state)
 
   /** Needs the pointer's pixel column: the strip is thinner than the cell under it, so a cell alone cannot say whether
     * the pointer is on the bar or on the text beside it.
     */
   def barAt(event: MouseInputEvent, state: AppState, scene: UiSceneSnapshot): Option[Bar] =
-    val metrics = MouseHitTestGeometry.floatingCellMetrics(state)
+    val metrics = metricsOf(state)
     for
-      pixelX <- event.pixelX
+      pixelX <- event.pixelX.orElse(Option.when(isTerminal(state))(event.col))
       pixelY = event.pixelY.getOrElse(metrics.toPixelY(event.row) + metrics.lineHeight / 2)
       bar <- scene.paneScrolls.keysIterator.flatMap(barOf(_, scene, metrics)).find(_.strip.contains(pixelX, pixelY))
     yield bar
@@ -72,7 +83,7 @@ private[manager] object ScrollbarHitTesting:
     for
       layout <- scene.paneLayouts.get(paneId)
       scroll <- scene.paneScrolls.get(paneId)
-    yield Bar(paneId, ScrollbarLayout.strip(layout.contentRect, metrics), scroll)
+    yield Bar(paneId, ScrollbarLayout.stripOf(layout, metrics), scroll, layout.scrollbarRect.width > 0)
 
   def press(press: MousePress, state: AppState, scene: UiSceneSnapshot): Transition[Boolean] =
     if press.button != MouseButton.Primary then Transition.pure(false)
@@ -80,8 +91,8 @@ private[manager] object ScrollbarHitTesting:
       barAt(press, state, scene) match
         case None => Transition.pure(false)
         case Some(bar) =>
-          val pointerPx = pointerAlong(press, bar, MouseHitTestGeometry.floatingCellMetrics(state))
-          ScrollbarGeometry.hit(bar.scroll.extent, bar.trackHeightPx, pointerPx) match
+          val pointerPx = pointerAlong(press, bar, metricsOf(state))
+          ScrollbarGeometry.hit(bar.scroll.extent, bar.trackHeightPx, pointerPx, bar.minThumbPx) match
             case None => Transition.pure(true)
             case Some(hit) =>
               val grab = hit match
@@ -98,21 +109,27 @@ private[manager] object ScrollbarHitTesting:
     else
       val held = for
         grab <- state.runtime.pointerGesture.scrollbarGrab
-        bar  <- barOf(grab.paneId, scene, MouseHitTestGeometry.floatingCellMetrics(state))
+        bar  <- barOf(grab.paneId, scene, metricsOf(state))
       yield (grab, bar)
       held match
         case None => Transition.pure(false)
         case Some((grab, bar)) =>
-          val pointerPx = pointerAlong(drag, bar, MouseHitTestGeometry.floatingCellMetrics(state))
+          val pointerPx = pointerAlong(drag, bar, metricsOf(state))
           val firstRow =
-            ScrollbarGeometry.firstRowForDrag(bar.scroll.extent, bar.trackHeightPx, pointerPx, grab.grabOffsetPx)
+            ScrollbarGeometry.firstRowForDrag(
+              bar.scroll.extent,
+              bar.trackHeightPx,
+              pointerPx,
+              grab.grabOffsetPx,
+              bar.minThumbPx
+            )
           Transition.modify(scrolledTo(_, bar, firstRow)).as(true)
 
   /** Pixels down the track, from the event's own pixel row when it has one: a cell row is too coarse to drag a thumb
     * by.
     */
   private def pointerAlong(event: MouseInputEvent, bar: Bar, metrics: CellMetrics): Int =
-    event.pixelY.getOrElse(metrics.toPixelY(event.row) + metrics.lineHeight / 2) - bar.trackTopPx
+    bar.alongTrack(event.pixelY.getOrElse(metrics.toPixelY(event.row) + metrics.lineHeight / 2) - bar.trackTopPx)
 
   private def holding(state: AppState, grab: Option[ScrollbarGrab]): AppState =
     val pointer = state.runtime.pointerGesture

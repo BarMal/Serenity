@@ -8,6 +8,7 @@ import com.serenity.ui.layout.{
   CellMetrics,
   LayoutEngine,
   RichTextContext,
+  ScrollbarLayout,
   TextLayoutSnapshot,
   ViewportSize,
   VisualRowCounts,
@@ -189,7 +190,8 @@ object EditorGeometryProducer:
 
   private def fullPanelWidth(state: AppState): Int =
     val viewportSize = state.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
-    LayoutEngine.calculateLayout(state, viewportSize).editorPanelRect.width
+    val panelWidth   = LayoutEngine.calculateLayout(state, viewportSize).editorPanelRect.width
+    panelWidth - ScrollbarLayout.terminalColumns(state, panelWidth)
 
   /** One column's TEXT width in cells for `buffer`'s own pane, derived the same way
     * `CursorViewport.adjustForCursorColumnMode` (via `columnCountForBuffer`) and `RendererPaneSetup` do -- the count
