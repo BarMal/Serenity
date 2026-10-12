@@ -171,7 +171,7 @@ object CommandRunnerSettingsGroups:
         onFrontend.rows(guiOnly, input("ui-outline-thickness")) ++ List(
           CommandRunnerSettingsRenderItems.renderFpsOptionItem(optionSelections),
           CommandRunnerSettingsRenderItems.renderDamageGranularityOptionItem(optionSelections)
-        )
+        ) ++ onFrontend.row(guiOnly, CommandRunnerSettingsRenderItems.renderBackendOptionItem(optionSelections))
     )
     val bufferLanguageGroup = CommandRunnerSettingsItems.bufferLanguageGroupItem(context.bufferLanguage)
     val keysGroup = group(

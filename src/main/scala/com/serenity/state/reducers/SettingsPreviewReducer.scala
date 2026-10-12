@@ -80,7 +80,8 @@ object SettingsPreviewReducer:
           GeneralSettingsIntent.SetCommandRunnerCursorGapRows(_) =>
         true
       case GeneralSettingsIntent.OpenSettings | GeneralSettingsIntent.SaveConfig | GeneralSettingsIntent.ResetSettings |
-          GeneralSettingsIntent.SetAutoSaveMode(_) | GeneralSettingsIntent.SetAutoSaveDelayMillis(_) =>
+          GeneralSettingsIntent.SetRenderBackend(_) | GeneralSettingsIntent.SetAutoSaveMode(_) |
+          GeneralSettingsIntent.SetAutoSaveDelayMillis(_) =>
         false
 
   /** Shows `command`'s value without committing it. The first preview of a `scope` records the committed config and

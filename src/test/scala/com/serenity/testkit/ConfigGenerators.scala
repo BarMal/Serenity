@@ -257,6 +257,7 @@ object ConfigGenerators:
       peekPlacement    <- oneOfEnum(Array(SurfacePlacement.AboveCursor, SurfacePlacement.BelowCursor))
       fpsTarget        <- oneOfEnum(RenderFpsTarget.values)
       damage           <- oneOfEnum(RenderDamageGranularity.values)
+      backend          <- oneOfEnum(RenderBackendSetting.values)
       insets           <- genTextAreaInsets
       lineNumberLayout <- genLineNumberLayout
       width            <- genViewportAxisSizing
@@ -298,6 +299,7 @@ object ConfigGenerators:
       commandRunnerCursorPeekPlacement = peekPlacement,
       renderFpsTarget = fpsTarget,
       renderDamageGranularity = damage,
+      renderBackend = backend,
       textAreaInsets = insets,
       lineNumberLayout = lineNumberLayout,
       viewportSizing = ViewportSizing(width, height),

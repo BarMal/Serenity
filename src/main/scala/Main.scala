@@ -40,9 +40,8 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.RestartMode
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
-import com.serenity.ui.color.RenderColor
 import com.serenity.ui.display.DisplayScale
-import com.serenity.ui.renderer.{FontSpec, PaintExecutionContext, RendererCursorOverlay, RendererEntryPoints}
+import com.serenity.ui.renderer.{FrameSurfaceFactory, PaintExecutionContext}
 import com.serenity.ui.terminal.{SwingFailureDialog, SwingMenuBar, SwingWindow}
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
 import fs2.Stream
@@ -78,7 +77,10 @@ object Main extends IOApp:
           case Right(options) if options.showVersion =>
             IO(println(VersionBanner.current)).as(ExitCode.Success)
           case Right(options) =>
-            launchUntilSettled(options, toolkit).handleErrorWith(reportStartupFailure(options, console))
+            GraphicsStartup
+              .current(GraphicsStartup.launchOf(options), toolkit)
+              .flatMap(launchUntilSettled(options, _))
+              .handleErrorWith(reportStartupFailure(options, console))
       }
 
   /** Anything that ends the launch before or outside the editor's own supervision: a crash file and, for a window
@@ -104,13 +106,13 @@ object Main extends IOApp:
     * carry straight over; the single-instance lock is released and taken again by the next launch. It drops the
     * one-shot resets.
     */
-  private def launchUntilSettled(options: LaunchOptions, toolkit: ToolkitSelection.Decision): IO[ExitCode] =
+  private def launchUntilSettled(options: LaunchOptions, graphics: GraphicsStartup.Resolved): IO[ExitCode] =
     Ref.of[IO, Option[RestartMode]](None).flatMap { restartRequested =>
-      launch(options, toolkit, mode => restartRequested.set(Some(mode))) >> restartRequested.get.flatMap {
+      launch(options, graphics, mode => restartRequested.set(Some(mode))) >> restartRequested.get.flatMap {
         case Some(mode) =>
           launchUntilSettled(
             options.copy(safeMode = mode == RestartMode.InSafeMode, resetConfig = false, resetSession = false),
-            toolkit
+            graphics
           )
         case None => IO.pure(ExitCode.Success)
       }
@@ -118,7 +120,7 @@ object Main extends IOApp:
 
   private def launch(
     launchOptionsForLogging: LaunchOptions,
-    toolkit: ToolkitSelection.Decision,
+    graphics: GraphicsStartup.Resolved,
     requestRestart: RestartMode => IO[Unit]
   ): IO[ExitCode] =
     // #1215/#1669: must run before the `given logger` below, which triggers logback's one-time console-appender setup
@@ -136,7 +138,8 @@ object Main extends IOApp:
     val build = RuntimeIdentity.current
     for
       _         <- BuildLogLines.announce
-      _         <- logger.info(s"[TOOLKIT] ${toolkit.choice} (${toolkit.reason})")
+      _         <- logger.info(s"[TOOLKIT] ${graphics.toolkit.choice} (${graphics.toolkit.reason})")
+      _         <- logger.info(s"[RENDER] ${graphics.backend.logLine}")
       _         <- logger.info(s"[LOGS] Writing to ${LogLocation.current}")
       _         <- migrateEarlierLogs
       _         <- Java2DPipeline.installSafeDefaults()
@@ -146,7 +149,7 @@ object Main extends IOApp:
       instances = SingleInstance.forConfigDirectory(SessionManager.defaultSessionRoot(), logger)
       _ <- SingleInstance.claim(instances, requested, logger).use {
         case LaunchRole.Forwarded => reportForwarded(requested)
-        case role                 => runAs(role, launchOptionsForLogging, requestRestart)
+        case role                 => runAs(role, launchOptionsForLogging, requestRestart, graphics.surfaces)
       }
     yield ExitCode.Success
 
@@ -165,17 +168,20 @@ object Main extends IOApp:
   /** Everything here follows the instance claim: a launch that handed its files to the running one has already
     * returned, so it records no start attempt and moves no file.
     */
-  private def runAs(role: LaunchRole, launchOptions: LaunchOptions, requestRestart: RestartMode => IO[Unit])(using
-    logger: Logger[IO]
-  ): IO[Unit] =
+  private def runAs(
+    role: LaunchRole,
+    launchOptions: LaunchOptions,
+    requestRestart: RestartMode => IO[Unit],
+    surfaces: FrameSurfaceFactory
+  )(using logger: Logger[IO]): IO[Unit] =
     val store = CrashRecord(LogLocation.current)
     role match
       case LaunchRole.Primary(_) =>
         // Leaving by any route but a lost process clears the marker; a crash caught on the way leaves its own file.
         recordRun(store)
-          .flatMap(runPlanned(role, launchOptions, requestRestart, store, _))
+          .flatMap(runPlanned(role, launchOptions, requestRestart, surfaces, store, _))
           .guarantee(store.markCleanExit)
-      case _ => runPlanned(role, launchOptions, requestRestart, store, PreviousRun.Clean)
+      case _ => runPlanned(role, launchOptions, requestRestart, surfaces, store, PreviousRun.Clean)
 
   /** How the last run ended, read before this one marks itself as running. */
   private def recordRun(store: CrashRecord): IO[PreviousRun] =
@@ -195,6 +201,7 @@ object Main extends IOApp:
     role: LaunchRole,
     launchOptions: LaunchOptions,
     requestRestart: RestartMode => IO[Unit],
+    surfaces: FrameSurfaceFactory,
     store: CrashRecord,
     previousRun: PreviousRun
   )(using logger: Logger[IO]): IO[Unit] =
@@ -234,7 +241,7 @@ object Main extends IOApp:
       opens <- LaunchOpens.resolve(launchOptions.openPaths)
       _     <- opens.notice.traverse_(logger.warn(_))
       appConfig = resolveAppConfig(loaded.config, launchOptions)
-      startup   = Startup(plan, requestRestart, StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker))
+      startup = Startup(plan, requestRestart, StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker), surfaces)
       // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
       instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten
       notice = plan.noticeWith(
@@ -259,7 +266,8 @@ object Main extends IOApp:
   final private case class Startup(
       plan: StartupRecovery.Plan,
       requestRestart: RestartMode => IO[Unit],
-      markStarted: IO[Unit]
+      markStarted: IO[Unit],
+      surfaces: FrameSurfaceFactory
   )
 
   /** A launch already in safe mode only reads the marker: a safe start that dies must not push the next one further. */
@@ -406,14 +414,15 @@ object Main extends IOApp:
                   timedFrame(frameTimings, FrameKind.Full, paintEc)(
                     syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                     IO(
-                      paintFullFrame(
+                      GuiFramePainting.paintFullFrame(
                         state,
                         vis,
                         cc,
                         swingWin,
                         displayState.snapshot,
                         damage,
-                        caches
+                        caches,
+                        startup.surfaces
                       )
                     )
                   ),
@@ -421,14 +430,15 @@ object Main extends IOApp:
                   timedFrame(frameTimings, FrameKind.CursorOnly, paintEc)(
                     syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                     IO(
-                      paintCursorFrame(
+                      GuiFramePainting.paintCursorFrame(
                         state,
                         vis,
                         cc,
                         swingWin,
                         displayState.snapshot,
                         damage,
-                        caches
+                        caches,
+                        startup.surfaces
                       )
                     )
                   ),
@@ -512,82 +522,3 @@ object Main extends IOApp:
       AlphaMode.applyIfRequested(EcoMode.applyIfRequested(loadedConfig, launchOptions), launchOptions),
       DisplayScale.defaultDeviceScale.textScale
     )
-
-  /** Paint a whole frame.
-    *
-    * `display` is taken once by the caller and threaded through: reading each font and metric from the runtime
-    * separately would let a concurrent font-config change land mid-frame and paint glyphs at one generation's advance
-    * with another's metrics.
-    */
-  private def paintFullFrame(
-    state: com.serenity.state.models.AppState,
-    cursorVisible: Boolean,
-    cursorColor: Option[RenderColor],
-    window: SwingWindow,
-    display: RuntimeDisplayState.Snapshot,
-    damage: com.serenity.state.models.Damage,
-    caches: com.serenity.state.manager.RenderCaches
-  ): Unit =
-    if cursorVisible then
-      val _ = RendererCursorOverlay.renderWithCursorOverlay(
-        state,
-        window,
-        FontSpec.fromAwt(display.codeFont),
-        FontSpec.fromAwt(display.textFont),
-        FontSpec.fromAwt(display.uiFont),
-        display.uiMetrics,
-        cursorColor,
-        damage,
-        caches
-      )
-      ()
-    else
-      RendererEntryPoints.render(
-        state,
-        cursorVisible = false,
-        window,
-        FontSpec.fromAwt(display.codeFont),
-        FontSpec.fromAwt(display.textFont),
-        FontSpec.fromAwt(display.uiFont),
-        display.uiMetrics,
-        None,
-        repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible),
-        damage = damage,
-        caches = caches
-      )
-
-  /** Repaint only the cursor overlay, falling back to a full frame when the overlay path declines. */
-  private def paintCursorFrame(
-    state: com.serenity.state.models.AppState,
-    cursorVisible: Boolean,
-    cursorColor: Option[RenderColor],
-    window: SwingWindow,
-    display: RuntimeDisplayState.Snapshot,
-    damage: com.serenity.state.models.Damage,
-    caches: com.serenity.state.manager.RenderCaches
-  ): Unit =
-    val rendered = RendererCursorOverlay.renderCursorOnly(
-      state,
-      cursorVisible,
-      window,
-      FontSpec.fromAwt(display.codeFont),
-      FontSpec.fromAwt(display.textFont),
-      FontSpec.fromAwt(display.uiFont),
-      display.uiMetrics,
-      cursorColor,
-      caches
-    )
-    if !rendered then
-      RendererEntryPoints.render(
-        state,
-        cursorVisible,
-        window,
-        FontSpec.fromAwt(display.codeFont),
-        FontSpec.fromAwt(display.textFont),
-        FontSpec.fromAwt(display.uiFont),
-        display.uiMetrics,
-        cursorColor,
-        repaintOnFlush = true,
-        damage = damage,
-        caches = caches
-      )

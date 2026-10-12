@@ -122,7 +122,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "ui-element-gap",
       "ui-outline-thickness",
       "render-fps",
-      "render-damage-granularity"
+      "render-damage-granularity",
+      "render-backend"
     )
     group("settings-language-tools").children.map(_.id) shouldBe List("buffer-language", "settings-spellcheck")
     nestedGroup("settings-text-display").label shouldBe "Text Display"

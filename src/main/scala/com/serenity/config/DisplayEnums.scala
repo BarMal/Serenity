@@ -34,6 +34,21 @@ object RenderDamageGranularity:
       case "cells" | "cell" => Some(Cells)
       case _                => None
 
+/** Which renderer paints the window. `Auto` lets startup pick Skia where it can load and Java2D everywhere else. */
+enum RenderBackendSetting(val configKey: String):
+  case Auto   extends RenderBackendSetting("auto")
+  case Skia   extends RenderBackendSetting("skia")
+  case Java2D extends RenderBackendSetting("java2d")
+
+object RenderBackendSetting:
+
+  def fromConfigKey(value: String): Option[RenderBackendSetting] =
+    value.trim.toLowerCase match
+      case "auto"            => Some(Auto)
+      case "skia" | "skiko"  => Some(Skia)
+      case "java2d" | "java" => Some(Java2D)
+      case _                 => None
+
 enum CursorMode(val configKey: String):
   case Blink  extends CursorMode("blink")
   case Steady extends CursorMode("steady")

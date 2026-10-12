@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.{RenderDamageGranularity, RenderFpsTarget}
+import com.serenity.config.{RenderBackendSetting, RenderDamageGranularity, RenderFpsTarget}
 
 private[command] object CommandRunnerSettingsRenderItems:
 
@@ -70,4 +70,35 @@ private[command] object CommandRunnerSettingsRenderItems:
       selectedIndex = optionSelections.getOrElse("render-damage-granularity", 0),
       category = CommandCategory.Settings,
       hint = Some("Cells applies to monospaced code buffers only")
+    )
+
+  private[command] def renderBackendOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "render-backend",
+      label = "Renderer",
+      options = List(
+        CommandOption(
+          "Auto",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetRenderBackend(RenderBackendSetting.Auto))
+          )
+        ),
+        CommandOption(
+          "Skia",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetRenderBackend(RenderBackendSetting.Skia))
+          )
+        ),
+        CommandOption(
+          "Java2D",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetRenderBackend(RenderBackendSetting.Java2D))
+          )
+        )
+      ),
+      selectedIndex = optionSelections.getOrElse("render-backend", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Takes effect after restarting; Skia needs an X11 display on Linux")
     )

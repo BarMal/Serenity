@@ -29,6 +29,13 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.renderDamageGranularity,
       (config, value) => config.withRenderDamageGranularity(value)
     ),
+    named("ui.render.backend", "renderBackend", "render.backend", "render_backend")(
+      enumerated(
+        RenderBackendSetting.fromConfigKey,
+        _.configKey,
+        text => RenderBackendSetting.values.find(_.toString == text)
+      )
+    )(_.surfaceConfig.renderBackend, (config, value) => config.withRenderBackend(value)),
     field(
       "ui.render.cache_capacity",
       "render.frame_state_cache_capacity",

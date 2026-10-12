@@ -325,7 +325,7 @@ object ConfigManager:
       removedKeys = removedKeys
     )
 
-  private def parseHoconFile(path: Path): Config =
+  private[config] def parseHoconFile(path: Path): Config =
     val options = ConfigParseOptions
       .defaults()
       .setOriginDescription(path.toString)

@@ -62,6 +62,7 @@ final case class SurfaceConfig(
     commandRunnerCursorPeekPlacement: SurfacePlacement = SurfacePlacement.BelowCursor,
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     renderDamageGranularity: RenderDamageGranularity = RenderDamageGranularity.Rows,
+    renderBackend: RenderBackendSetting = RenderBackendSetting.Auto,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     // Characters per line for the text column in a prose workspace (`ProseMeasure`); `None` leaves the width to the
     // insets above.
