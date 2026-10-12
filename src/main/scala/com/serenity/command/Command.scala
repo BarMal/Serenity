@@ -43,6 +43,9 @@ enum EditIntent:
   case ChoosePasteFromHistory
   case PasteFromHistory(entry: ClipboardEntry)
   case SelectAll
+  case SelectNextOccurrence
+  case SkipOccurrence
+  case SelectAllOccurrences
   case Undo
   case Redo
   case ToggleLineComment

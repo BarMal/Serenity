@@ -10,7 +10,7 @@ import com.serenity.state.reducers.AppEventReducer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Ctrl+G is Go to Line, so opening a chapter's note and pinning the notes pane sit on the shifted letters. */
+/** Ctrl+G is Go to Line, so opening a chapter's note sits on the shifted letters; Ctrl+Shift+L selects occurrences. */
 class ChapterNoteHotkeySpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
@@ -57,8 +57,10 @@ class ChapterNoteHotkeySpec extends AnyFlatSpec with Matchers:
     reduced.persisted.buffers(BufferId(0)).annotations.notes.keySet shouldBe Set(NoteKey.Keyword("sea"))
   }
 
-  "Pin/Unpin Notes" should "be bound to Ctrl+Shift+L (Cmd+Shift+L on macOS)" in
-    platforms.foreach(os => rendered(os, HotkeyAction.ToggleNotesPin) shouldBe List(s"${modifierFor(os)}+shift+l"))
+  "Pin/Unpin Notes" should "be bound to Ctrl+Alt+P (Cmd+Alt+P on macOS)" in
+    platforms.foreach(os =>
+      rendered(os, HotkeyAction.ToggleNotesPin) shouldBe List(if os == "Mac OS X" then "alt+meta+p" else "ctrl+alt+p")
+    )
 
   it should "pin a notes pane that is following when its event is reduced" in {
     val opened = AppEventReducer.reduce(OpenChapterNote, manuscript, CommandRegistry.withToggleUI).state
