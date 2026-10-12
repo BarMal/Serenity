@@ -213,7 +213,7 @@ object SessionBuffer:
       case Some(path) if !(sessionBuffer.isDirty && sessionBuffer.unsavedContent.isDefined) =>
         files.loadFile(path, recorded.id).map(fromDisk(recorded, _)).handleError(_ => recorded)
       case _ => IO.pure(recorded)
-    restored.flatMap(withSourcePackage(_, files))
+    restored.flatMap(files.withEditorConfigIndentation).flatMap(withSourcePackage(_, files))
 
   /** A restored rich document keeps no package bytes, so a DOCX or ODT one is linked to its file read again. The file
     * counts only when it is still at the revision the buffer was read or written at (the stat check): a file changed
