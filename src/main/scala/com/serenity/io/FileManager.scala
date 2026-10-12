@@ -62,6 +62,22 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
 
   def this()(using balance: Balance) = this(LocalDocumentStorageProvider())
 
+  private val editorConfig = EditorConfigResolver()
+
+  /** `buffer` with the indentation the `.editorconfig` files above its path ask for (#1996), read afresh whenever one
+    * of them has changed. A buffer with no path is left as it is.
+    */
+  def withEditorConfigIndentation(buffer: Buffer): IO[Buffer] =
+    buffer.document.filePath.fold(IO.pure(buffer)) { path =>
+      editorConfig
+        .indentationFor(path)
+        .map(configured =>
+          buffer.copy(document =
+            buffer.document.copy(indentation = buffer.document.indentation.copy(configured = configured))
+          )
+        )
+    }
+
   def loadFile(path: Path, bufferId: BufferId): IO[Buffer] =
     val location = StorageLocation.Local(path)
     FileUtils.detectFileType(path) match
@@ -91,9 +107,15 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
           openStored(location).flatMap { stored =>
             IO.fromOption(TextFileCodec.decodeRope(stored.content))(FileManagerError.BinaryContent(path))
               .map(decoded => bufferFromContent(bufferId, path, decoded, stored.revision))
+              .flatMap(withEditorConfigIndentation)
           }
 
   def saveBuffer(buffer: Buffer, path: Path): IO[Buffer] =
+    savedToPath(buffer, path).flatMap(saved =>
+      if buffer.document.filePath.contains(path) then IO.pure(saved) else withEditorConfigIndentation(saved)
+    )
+
+  private def savedToPath(buffer: Buffer, path: Path): IO[Buffer] =
     val expectedRevision = expectedRevisionFor(buffer, path)
     preventLossyOverwrite(buffer, path) >> (FileUtils.detectFileType(path) match
       case FileType.Markdown =>
@@ -187,7 +209,10 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
         openStored(StorageLocation.Local(path)).flatMap { stored =>
           IO.fromOption(TextFileCodec.decodeRopeAs(stored.content, encoding))(
             FileManagerError.NotReadableAs(path, encoding)
-          ).map(decoded => reloadedInto(buffer, bufferFromContent(buffer.id, path, decoded, stored.revision)))
+          ).flatMap(decoded =>
+            withEditorConfigIndentation(bufferFromContent(buffer.id, path, decoded, stored.revision))
+              .map(reloadedInto(buffer, _))
+          )
         }
 
   private def storesFormatting(path: Path): Boolean =
