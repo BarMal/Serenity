@@ -24,11 +24,17 @@ private[rope] object RopeContent:
       if a.eq(b) then sameTree(rest)
       else
         (a, b) match
-          case (Node(leftA, rightA), Node(leftB, rightB)) =>
-            leftA.weight == leftB.weight && sameTree(leftA :: leftB :: rightA :: rightB :: rest)
+          case (branchA: Branch, branchB: Branch) =>
+            sameShape(branchA, branchB) && sameTree(interleaved(branchA, branchB) ::: rest)
           case (Leaf(textA), Leaf(textB)) => textA == textB && sameTree(rest)
           case _                          => false
     case _ :: Nil => false
+
+  private def sameShape(a: Branch, b: Branch): Boolean =
+    a.children.size == b.children.size && a.starts.sameElements(b.starts)
+
+  private def interleaved(a: Branch, b: Branch): List[Rope] =
+    a.children.zip(b.children).flatMap((childA, childB) => List(childA, childB)).toList
 
   /** Agrees with `String.hashCode` on the rope's text. */
   def hash(rope: Rope): Int =
@@ -37,8 +43,8 @@ private[rope] object RopeContent:
       case Nil => acc
       case head :: rest =>
         head match
-          case Node(left, right) => go(left :: right :: rest, acc)
-          case Leaf(value)       => go(rest, value.foldLeft(acc)((running, char) => 31 * running + char))
+          case branch: Branch => go(branch.children.toList ::: rest, acc)
+          case Leaf(value)    => go(rest, value.foldLeft(acc)((running, char) => 31 * running + char))
     go(List(rope), 0)
 
   def equalsText(rope: Rope, text: String): Boolean =
@@ -57,9 +63,9 @@ private[rope] object RopeContent:
 
     /** Replaces the head subtree with its children, or loads it as the chunk if it is a leaf. */
     def descended: Cursor = pending match
-      case Node(left, right) :: rest => copy(pending = left :: right :: rest)
-      case Leaf(value) :: rest       => Cursor(rest, value, 0)
-      case Nil                       => this
+      case (branch: Branch) :: rest => copy(pending = branch.children.toList ::: rest)
+      case Leaf(value) :: rest      => Cursor(rest, value, 0)
+      case Nil                      => this
 
   private object Cursor:
     def over(rope: Rope): Cursor = Cursor(List(rope), "", 0)
@@ -71,7 +77,7 @@ private[rope] object RopeContent:
       (a.pending, b.pending) match
         case (Nil, _) | (_, Nil)                         => true
         case (headA :: _, headB :: _) if headA.eq(headB) => sameChunks(a.skippingHead, b.skippingHead)
-        case (_ :: _, Node(_, _) :: _)                   => sameChunks(a, b.descended)
+        case (_ :: _, (_: Branch) :: _)                  => sameChunks(a, b.descended)
         case _                                           => sameChunks(a.descended, b)
     else if a.exhausted then a.pending.nonEmpty && sameChunks(a.descended, b)
     else if b.exhausted then b.pending.nonEmpty && sameChunks(a, b.descended)
