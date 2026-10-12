@@ -139,7 +139,7 @@ class MarkdownLensMouseHitTestSpec extends AnyFlatSpec with Matchers:
     result.persisted.buffers(bufferId).primarySelection.map(_.focus) shouldBe Some(CursorPosition(8, 6))
   }
 
-  "A double click in Read mode" should "select the source word under the pointer, hidden markers included" in {
+  "A double click in Read mode" should "select only the visible word" in {
     val state  = stateIn(MarkdownViewMode.Read)
     val (x, y) = pointOn(state, CursorPosition(10, 12))
     val cells  = MouseHitTestGeometry.floatingCellMetrics(state)
@@ -149,5 +149,5 @@ class MarkdownLensMouseHitTestSpec extends AnyFlatSpec with Matchers:
     result.persisted
       .buffers(bufferId)
       .primarySelection
-      .map(selection => lines(10).substring(selection.anchor.column, selection.focus.column)) shouldBe Some("**bold**")
+      .map(selection => lines(10).substring(selection.anchor.column, selection.focus.column)) shouldBe Some("bold")
   }
