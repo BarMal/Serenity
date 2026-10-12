@@ -1,9 +1,10 @@
-package com.serenity.ui.renderer
+package com.serenity.ui.skia
 
 import java.awt.font.{FontRenderContext, TextAttribute}
 import java.awt.geom.AffineTransform
 import java.util.concurrent.ConcurrentHashMap
 
+import com.serenity.ui.renderer.{FontFirstUse, StyledFontCache}
 import org.jetbrains.skia.{Data, Font, FontEdging, FontHinting, FontMgr, FontStyleSet, FontVariation, Typeface}
 
 /** What painting with one AWT font needs from Skia: the Skia font, and the strikethrough the AWT font asks for, which
@@ -66,7 +67,7 @@ object SkiaFontCache:
   private val StrikeContext = FontRenderContext(AffineTransform(), true, true)
 
 /** Finds the Skia typeface for an AWT font's family and style, and sets a Skia font up the way layout measures. */
-private[renderer] object SkiaTypefaces:
+private[skia] object SkiaTypefaces:
 
   private val Bold = 700
 

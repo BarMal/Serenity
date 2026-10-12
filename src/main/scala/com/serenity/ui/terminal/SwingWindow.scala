@@ -17,6 +17,7 @@ import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.renderer.HostedCanvas
 import com.serenity.ui.theme.Theme
 
 class SwingWindow(
@@ -26,7 +27,8 @@ class SwingWindow(
     initialChromeMetrics: CellMetrics,
     frameTimings: FrameTimings = FrameTimings(),
     env: Map[String, String] = sys.env,
-    windowTitle: String = SwingWindow.WindowTitle
+    windowTitle: String = SwingWindow.WindowTitle,
+    hosted: Option[HostedCanvas] = None
 ):
 
   private val usesCustomChrome =
@@ -102,6 +104,9 @@ class SwingWindow(
         g2.dispose()
         frameTimings.paintFinished(paintStart)
 
+  /** What receives the mouse, keyboard and focus: the canvas itself, or the hosted component that covers it. */
+  def inputComponent: Component = hosted.fold[Component](canvas)(_.component)
+
   private val accessibilityBridge      = new SwingAccessibilityBridge(canvas)
   private val accessibilityPublishGate = new AccessibilityPublishGate
 
@@ -114,7 +119,8 @@ class SwingWindow(
       else SwingUtilities.invokeLater(publish)
 
   private val pointerCursorSync = new PointerCursorSync(shape =>
-    val apply: Runnable = () => canvas.setCursor(Cursor.getPredefinedCursor(PointerCursorSync.awtCursorType(shape)))
+    val apply: Runnable = () =>
+      inputComponent.setCursor(Cursor.getPredefinedCursor(PointerCursorSync.awtCursorType(shape)))
     if SwingUtilities.isEventDispatchThread then apply.run()
     else SwingUtilities.invokeLater(apply)
   )
@@ -293,17 +299,33 @@ class SwingWindow(
         frame.setExtendedState(frame.getExtendedState & ~Frame.ICONIFIED)
       frame.toFront()
       frame.requestFocus()
-      val _ = canvas.requestFocusInWindow()
+      val _ = inputComponent.requestFocusInWindow()
     }
 
   def start(): Unit =
     val showWindow: Runnable = () =>
+      hosted.foreach(attachHosted)
       frame.setVisible(true)
       if usesNativeThemedChrome then updateNativeChromeTheme(chromePaletteRef.get())
       publishCanvasResize(canvas.getSize())
-      val _ = canvas.requestFocusInWindow()
+      val _ = inputComponent.requestFocusInWindow()
     if SwingUtilities.isEventDispatchThread then showWindow.run()
     else SwingUtilities.invokeAndWait(showWindow)
+
+  /** Added on the event-dispatch thread, which a GPU layer insists on, and before the frame is shown. The canvas has no
+    * layout manager (the accessibility proxies position themselves), so the hosted component is fitted to it by hand.
+    */
+  private def attachHosted(canvasHost: HostedCanvas): Unit =
+    val component = canvasHost.component
+    def fit(): Unit = component.setBounds(0, 0, canvas.getWidth, canvas.getHeight)
+    component.setFocusable(true)
+    component.setFocusTraversalKeysEnabled(false)
+    canvas.add(component)
+    canvas.addComponentListener(
+      new ComponentAdapter:
+        override def componentResized(e: ComponentEvent): Unit = fit()
+    )
+    fit()
 
   def stop(): Unit =
     val dispose: Runnable = () =>
@@ -333,7 +355,7 @@ class SwingWindow(
       frame.validate()
       frame.setLocationRelativeTo(null)
       publishCanvasResize(canvas.getSize(), canvasFallback)
-      val _ = canvas.requestFocusInWindow()
+      val _ = inputComponent.requestFocusInWindow()
     }
 
   def metrics: CellMetrics =
@@ -467,7 +489,8 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
     preferredWindowSize: Option[PreferredWindowSize] = None,
     frameTimings: FrameTimings = FrameTimings(),
-    title: String = WindowTitle
+    title: String = WindowTitle,
+    hosted: Option[HostedCanvas] = None
   ): Resource[IO, SwingWindow] =
     Resource.make(
       IO.blocking {
@@ -478,7 +501,8 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
           chromeMode,
           chromeMetrics,
           frameTimings,
-          windowTitle = title
+          windowTitle = title,
+          hosted = hosted
         )
         win.start()
         win

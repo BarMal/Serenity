@@ -4,7 +4,7 @@ import cats.effect.IO
 import com.serenity.app.RenderBackendSelection.{Decision, Inputs, Probe}
 import com.serenity.config.{RenderBackendPeek, RenderBackendSetting, RenderStartupSettings, WaylandRender}
 import com.serenity.ui.renderer.FrameSurfaceFactory
-import com.serenity.ui.skia.SkiaProbe
+import com.serenity.ui.skia.{SkiaProbe, SkiaSurfaces}
 
 /** Settles the AWT toolkit and the renderer together, before any java.awt class loads and before any window exists.
   *
@@ -35,9 +35,12 @@ object GraphicsStartup:
       waylandRender = options.waylandRender
     )
 
+  /** What this build can paint with besides Java2D. Both Skia factories are thunks: Skiko is loaded when one runs. */
+  val catalogue: SurfaceCatalogue =
+    SurfaceCatalogue(skia = Some(() => SkiaSurfaces.gpu()), skiaRaster = Some(() => SkiaSurfaces.raster()))
+
   /** The production wiring: the config file and the Skiko probe, both reached only when a windowed launch gets that
-    * far, then the toolkit property is set. No Skia surface exists yet, so until one is registered the catalogue offers
-    * Java2D alone.
+    * far, then the toolkit property is set.
     */
   def current(launch: Launch): IO[Resolved] =
     ToolkitSelection.currentEnvironment
@@ -45,7 +48,7 @@ object GraphicsStartup:
         resolve(
           launch,
           environment,
-          SurfaceCatalogue.Java2DOnly,
+          catalogue,
           RenderBackendPeek.read(),
           IO.defer(SkiaProbe.run)
         )

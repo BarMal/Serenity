@@ -54,7 +54,7 @@ class SkiaLazinessSpec extends AnyFlatSpec with Matchers:
     ("a terminal launch", "terminal", Nil),
     ("safe mode", "safe", Nil),
     ("a window with ui.render.backend = java2d", "window", List("ui.render.backend = java2d")),
-    ("a window while no Skia surface is registered", "window", Nil)
+    ("a window while no Skia surface is registered", "unregistered", Nil)
   )
 
   private val waylandEnvironment = Map("WAYLAND_DISPLAY" -> "wayland-1", "DISPLAY" -> ":0")

@@ -20,6 +20,11 @@ final case class FrameSurfaceRequest(
 trait FrameSurfaceFactory:
   def create(request: FrameSurfaceRequest): RenderSurface
 
+  /** The canvas that replaces the window's Java2D one, for a backend that must draw inside its own render callback and
+    * so cannot hand [[create]]'s caller a surface to draw on. Built on first use, which is when the window is.
+    */
+  def hostedCanvas: Option[HostedCanvas] = None
+
 object FrameSurfaceFactory:
 
   val Java2D: FrameSurfaceFactory = request =>

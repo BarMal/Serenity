@@ -1,4 +1,4 @@
-package com.serenity.ui.renderer
+package com.serenity.ui.skia
 
 import java.awt.Color
 import java.awt.font.FontRenderContext
@@ -8,6 +8,22 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReferenc
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.LabelAnchor.isWhole
+import com.serenity.ui.renderer.{
+  Effects,
+  FontSpec,
+  Java2DRenderSurface,
+  PaintedPixels,
+  PanelOutlineDrawing,
+  PixelCopying,
+  PixelDrawing,
+  RenderImage,
+  RenderSurface,
+  ScreenIdentity,
+  StyledFontCache,
+  SurfaceActivity,
+  SurfaceContentIdentity,
+  TextDrawing
+}
 import com.serenity.ui.theme.TextStyle
 import org.jetbrains.skia.{BlendMode, Canvas, IRect, Paint, PaintMode, PaintStrokeCap, PaintStrokeJoin, Rect, Surface}
 

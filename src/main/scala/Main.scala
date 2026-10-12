@@ -359,7 +359,8 @@ object Main extends IOApp:
           appConfig.windowChromeMode,
           appConfig.preferredWindowSize,
           frameTimings,
-          startup.plan.windowTitle
+          startup.plan.windowTitle,
+          startup.surfaces.hostedCanvas
         ),
         PaintExecutionContext.resource
       ).tupled
@@ -405,7 +406,7 @@ object Main extends IOApp:
                 inputHandler = router =>
                   IO.pure(
                     new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
-                      swingWin.canvas,
+                      swingWin.inputComponent,
                       router,
                       () => swingWin.metrics,
                       () => displayState.uiMetrics,
@@ -427,7 +428,7 @@ object Main extends IOApp:
                         caches,
                         startup.surfaces
                       )
-                    )
+                    ).flatMap(GuiFramePainting.settle)
                   ),
                 renderCursorOnly = (state, vis, cc, damage, caches) =>
                   timedFrame(frameTimings, FrameKind.CursorOnly, paintEc)(
@@ -443,7 +444,7 @@ object Main extends IOApp:
                         caches,
                         startup.surfaces
                       )
-                    )
+                    ).flatMap(GuiFramePainting.settle)
                   ),
                 frameTimings = frameTimings,
                 menus = Option.when(SwingMenuBar.enabledFor(System.getProperty("os.name", "")))(

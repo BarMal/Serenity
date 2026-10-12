@@ -209,9 +209,68 @@ used, `ui.render.wayland` decides what happens when the backend resolves to Skia
 | --- | --- |
 | `java2d` | Keep `WLToolkit` and use Java2D (today's behaviour) |
 | `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and Java2D is used instead |
-| `skia-raster` | Keep `WLToolkit`; Skia paints on the CPU into an image that Java2D presents. Falls back to Java2D with the reason `skia raster surface unavailable` while no raster surface is registered |
+| `skia-raster` | Keep `WLToolkit`; Skia paints on the CPU into a retained surface whose pixels are copied into the image the Java2D canvas presents |
 
 The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.
+
+With the GPU backend the window's Java2D canvas is replaced by a Skia layer that is drawn only when the frame loop
+hands it a frame. Mouse, keyboard and focus go to that layer through the same input handler as before. A caret repaint
+is a whole frame on this backend, since a window's GPU buffer keeps nothing between frames.
+
+### Comparing renderers in a real window
+
+`RendererWindowBenchmark` opens a window on the desktop it is started on and compares Java2D, Skia on the GPU and Skia
+on the CPU (`skia-raster`) on typing, scrolling and new-letter frames. Each renderer runs in a child JVM started with
+the flags that select it in the editor (`--renderer=java2d`, `--renderer=skia`, `--renderer=skia --wayland-render=skia-raster`),
+because the backend is fixed at startup. Rounds are interleaved (java2d, skia, skia-raster, java2d, skia, ...) and the
+frames of all rounds are pooled. The table reports p50, p95 and p99 frame time, bytes allocated per frame by all Java
+threads (native Skia memory is not counted), and the Skia render API in use (`METAL`, `OPENGL`, `DIRECT3D`; `SOFTWARE_FAST`
+means Skiko could not create a GPU context). A frame ends when it is on screen: Swing has painted it and the display
+connection has caught up, or the Skia layer has rendered it. The device scale is the desktop's own; the window is
+1200x800 logical pixels unless `--logical-size=WxH` says otherwise. Vertical sync is turned off for the run, so a frame
+is not rounded up to the display's refresh interval; `--vsync` leaves it on.
+
+Run one command from the repository root:
+
+| OS | Command |
+| --- | --- |
+| macOS | `sbt "Test/runMain com.serenity.perf.RendererWindowBenchmark --renderers=java2d,skia --rounds=3"` |
+| Windows (cmd or PowerShell) | `sbt "Test/runMain com.serenity.perf.RendererWindowBenchmark --renderers=java2d,skia --rounds=3"` |
+| Linux, X11 session, or a Wayland session on a stock JDK (AWT runs on XWayland) | `sbt "Test/runMain com.serenity.perf.RendererWindowBenchmark --renderers=java2d,skia,skia-raster --rounds=3 --simulate-wayland-raster"` |
+| Linux, Wayland session on a JetBrains Runtime | `SERENITY_WAYLAND_RENDER=xwayland sbt "Test/runMain com.serenity.perf.RendererWindowBenchmark --renderers=java2d,skia,skia-raster --rounds=3"` |
+
+On a stock JDK there is no `WLToolkit`, so Java runs on XWayland and `--renderer=skia` is chosen with no further setting.
+XWayland does not tell Java the output scale: for a scaled output add `--jvm-option=-Dsun.java2d.uiScale=2` (use the
+output's scale), and consider `xwayland { force_zero_scale = true }` in Hyprland so XWayland windows are not stretched by
+the compositor.
+
+**NixOS.** Skiko loads `libGL`, `libX11` and friends by name, and NixOS has no global library path, so start sbt from a
+shell that provides them. This is untested here; the Intel driver comes from `/run/opengl-driver`. A `shell.nix` kept
+outside the repository:
+
+```nix
+{ pkgs ? import <nixpkgs> { } }:
+pkgs.mkShell {
+  packages = [ pkgs.openjdk21 pkgs.sbt ];
+  LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (with pkgs; [
+    libGL xorg.libX11 xorg.libXext xorg.libXrender xorg.libXtst xorg.libXi fontconfig freetype
+  ]) + ":/run/opengl-driver/lib";
+}
+```
+
+then, from the repository root:
+
+```bash
+nix-shell --run 'sbt "Test/runMain com.serenity.perf.RendererWindowBenchmark --renderers=java2d,skia,skia-raster --rounds=3 --simulate-wayland-raster --jvm-option=-Dsun.java2d.uiScale=2"'
+```
+
+`skia-raster` can only be selected by the flags on a native Wayland session (`WLToolkit`, which needs a JetBrains
+Runtime); anywhere else its row reads `unavailable here` with the reason startup gave. To measure it on another desktop
+add `--simulate-wayland-raster` (the Linux command above already does): startup then answers as a Wayland session
+would, and the frames are presented by that desktop's own Java2D canvas. Close other windows first, leave the machine alone while it runs, and pass
+`--jvm-option=-Dsun.java2d.uiScale=2` (or any other JVM option) to force a setting for every child. `--frames=`,
+`--warmup=` and `--rounds=` size the run. The report also lists how many distinct colours a screen capture of each
+window showed, so a window that stayed blank is visible; a desktop that refuses screen capture reports `unchecked`.
 
 ## Codex CLI
 

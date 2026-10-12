@@ -4,7 +4,8 @@ import java.awt.Font
 import java.awt.image.BufferedImage
 
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderSurface, ScreenIdentity, SkiaRenderSurface}
+import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderSurface, ScreenIdentity}
+import com.serenity.ui.skia.SkiaRenderSurface
 import org.jetbrains.skia.{Bitmap, BlendMode, ImageInfo, Paint, Rect, Surface}
 
 /** The pixels of one pooled frame, as the pixel specs read and stamp them whatever renders into them. */

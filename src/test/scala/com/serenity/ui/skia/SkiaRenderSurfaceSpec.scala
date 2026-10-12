@@ -1,4 +1,4 @@
-package com.serenity.ui.renderer
+package com.serenity.ui.skia
 
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
@@ -7,6 +7,7 @@ import com.serenity.SkiaPixels
 import com.serenity.diagnostics.{FrameCounter, FrameCounters}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
+import com.serenity.ui.renderer.{FontSpec, RenderImage, SurfaceActivity}
 import com.serenity.ui.theme.TextStyle
 import org.jetbrains.skia.Surface
 import org.scalatest.flatspec.AnyFlatSpec

@@ -1,4 +1,4 @@
-package com.serenity.ui.renderer
+package com.serenity.ui.skia
 
 import java.util.concurrent.ConcurrentHashMap
 

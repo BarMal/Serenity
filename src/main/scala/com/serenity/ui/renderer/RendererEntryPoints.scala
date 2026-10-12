@@ -248,7 +248,7 @@ object RendererEntryPoints:
     caches: RenderCaches = RenderCaches.create()
   ): Option[List[PixelRect]] =
     val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
-    val output        = Some(FrameOutput(ScreenIdentity(surface), repaintRegion))
+    val output        = Some(FrameOutput(surface.layerCacheOwner, repaintRegion))
     // #1105/#1215: see the surface-generic renderCursorOnly in RendererCursorOverlay for why this is scoped to a
     // surface with no real FontRenderContext.
     val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
