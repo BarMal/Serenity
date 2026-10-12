@@ -16,13 +16,16 @@ object MenuMnemonics:
     val withInitials = pick(labels, taken, initialsOnly = true)(List.fill(labels.size)(None))
     pick(labels, taken ++ withInitials.flatten.map(_.char.toLower), initialsOnly = false)(withInitials)
 
-  /** The characters the keymap binds under Alt, which a mnemonic must not shadow. */
+  /** The characters the keymap binds under Alt alone, which a mnemonic must not shadow; Ctrl+Alt+V is not Alt+V. */
   def altLetters(hotkeys: HotkeyConfig): Set[Char] =
     (hotkeys.bindings.values.flatten ++ hotkeys.commandBindings.values.flatten)
-      .filter(trigger => trigger.keyType == InputKey.Character && trigger.modifiers.contains(Modifier.Alt))
+      .filter(trigger => trigger.keyType == InputKey.Character && underAltAlone(trigger.modifiers))
       .flatMap(_.character)
       .map(_.toLower)
       .toSet
+
+  private def underAltAlone(modifiers: Set[Modifier]): Boolean =
+    modifiers.contains(Modifier.Alt) && !modifiers.contains(Modifier.Ctrl) && !modifiers.contains(Modifier.Meta)
 
   private def pick(labels: List[String], taken: Set[Char], initialsOnly: Boolean)(
     current: List[Option[Mnemonic]]

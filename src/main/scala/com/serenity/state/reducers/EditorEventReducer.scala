@@ -7,11 +7,12 @@ import com.serenity.state.models.*
 /** Top-level dispatch for every editor text-entry and navigation event. The event-handling logic itself is split by
   * family into sibling objects in this package -- [[EditorTextEditReducer]] (insertion/deletion),
   * [[EditorNavigationEventReducer]] (caret movement/paging), [[EditorVerticalNavigationReducer]] (Up/Down, which alone
-  * needs measured geometry), [[EditorClipboardEventReducer]] (copy/cut/paste) and [[EditorFindEventReducer]]
-  * (goto-line/find/replace) -- with [[EditorCursorMovement]] and [[EditorEditSupport]] holding the primitives more than
-  * one family shares, and [[EditorCursorSupport]] holding the per-event context bundle plus the geometry-free
-  * home/end/line-counting helpers those families use. This file keeps only the entry points and the per-buffer routing
-  * that decides which family handles an event.
+  * needs measured geometry), [[EditorClipboardEventReducer]] (copy/cut/paste), [[EditorFindEventReducer]]
+  * (goto-line/find/replace) and [[EditorOccurrenceEventReducer]] (select-next/skip/select-all occurrences) -- with
+  * [[EditorCursorMovement]] and [[EditorEditSupport]] holding the primitives more than one family shares, and
+  * [[EditorCursorSupport]] holding the per-event context bundle plus the geometry-free home/end/line-counting helpers
+  * those families use. This file keeps only the entry points and the per-buffer routing that decides which family
+  * handles an event.
   */
 object EditorEventReducer:
   import EditorCursorSupport.{countLines, endTarget, homeTarget, CursorEventContext}
@@ -281,6 +282,9 @@ object EditorEventReducer:
 
         case OpenGotoLine | OpenFind | OpenReplace | FindNext | FindPrevious =>
           EditorFindEventReducer.reduce(event, ctx)
+
+        case SelectNextOccurrence | SkipOccurrence | SelectAllOccurrences =>
+          EditorOccurrenceEventReducer.reduce(event, ctx)
 
         case Copy | Cut | Paste | CutToDarlings | RestoreDarling | PasteFromHistory(_) =>
           EditorClipboardEventReducer.reduce(event, ctx)

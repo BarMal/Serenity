@@ -39,7 +39,8 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "translate the split-pane hotkeys into pane-split events" in {
-    val horizontal = translator.translate(KeyStrokeInfo(InputKey.Character, Some('d'), Set(Modifier.Ctrl)))
+    val horizontal =
+      translator.translate(KeyStrokeInfo(InputKey.Character, Some('v'), Set(Modifier.Ctrl, Modifier.Alt)))
     val vertical =
       translator.translate(KeyStrokeInfo(InputKey.Character, Some('d'), Set(Modifier.Ctrl, Modifier.Shift)))
 
@@ -47,6 +48,11 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
     horizontal.isInstanceOf[AppEvent] shouldBe true
     vertical shouldBe SplitPaneVertical
     vertical.isInstanceOf[AppEvent] shouldBe true
+  }
+
+  it should "translate Ctrl+D into the select-next-occurrence command, not a pane split" in {
+    translator.translate(KeyStrokeInfo(InputKey.Character, Some('d'), Set(Modifier.Ctrl))) shouldBe
+      RunCommand("select-next-occurrence")
   }
 
   it should "keep application hotkeys in the application event family" in {

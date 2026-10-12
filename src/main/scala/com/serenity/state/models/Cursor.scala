@@ -24,3 +24,8 @@ final case class Cursor(
 
 object Cursor:
   def apply(selection: Selection): Cursor = Cursor(selection.focus, Some(selection.anchor))
+
+/** What a run of select-next-occurrence presses is looking for: the text of the selection they started from, and
+  * whether it began as a bare caret, which makes it match whole words only (#1994).
+  */
+final case class OccurrenceSearch(text: String, wholeWord: Boolean)

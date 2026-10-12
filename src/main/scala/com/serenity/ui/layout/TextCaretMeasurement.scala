@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.RichTextDocument
-import com.serenity.state.models.{IndentationSettings, TextCaretStop}
+import com.serenity.state.models.{IndentationSettings, MeasuredRow}
 import com.serenity.ui.renderer.FontFirstUse
 import com.serenity.ui.theme.{MarkdownInlineStyling, RichTextStyling, TextStyle}
 
@@ -137,9 +137,18 @@ private[layout] object TextCaretMeasurement:
     * after it, so it would only ever compete with a column the writer can see. A row's last stop stays, so a row of
     * nothing but hidden columns still has somewhere to land.
     */
-  private[layout] def landableStops(stops: Vector[TextCaretStop], resolver: LineFontResolver): Vector[TextCaretStop] =
-    val landable = stops.dropRight(1).filterNot(stop => resolver.isHidden(stop.column)) ++ stops.lastOption
-    landable.sortBy(_.xPx)
+  private[layout] def landableStops(
+    xs: IArray[Float],
+    offsets: IArray[Int],
+    startColumn: Int,
+    resolver: LineFontResolver
+  ): (IArray[Float], IArray[Int]) =
+    val last = xs.length - 1
+    val landable =
+      IArray.from(
+        (0 until xs.length).filter(index => index == last || !resolver.isHidden(startColumn + offsets(index)))
+      )
+    MeasuredRow.orderedByX(landable.map(xs(_)), landable.map(offsets(_)))
 
   /** The resolver for a Markdown line whose emphasis and code `runs` are restyled: the decorated stretches measure in
     * their own fonts, every other column in `baseFont`, and the delimiter characters are hidden when `hideMarkers`.

@@ -40,6 +40,9 @@ case object ExtendSelectionPageDown     extends NavigationEvent
 case object MoveToStart                 extends NavigationEvent
 case object MoveToEnd                   extends NavigationEvent
 case object SelectAll                   extends TextEntryEvent
+case object SelectNextOccurrence        extends TextEntryEvent
+case object SkipOccurrence              extends TextEntryEvent
+case object SelectAllOccurrences        extends TextEntryEvent
 case object NewLine                     extends TextEntryEvent
 case object PageDown                    extends NavigationEvent
 case object PageUp                      extends NavigationEvent

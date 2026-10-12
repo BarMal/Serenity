@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.state.models.{MeasuredRow, TextCaretStop}
+import com.serenity.state.models.MeasuredRow
 
 /** A wrapped line plus what resuming from it after an edit needs: the text offset up to which each row's break decision
   * read ([[IncrementalWrap.reachOf]]), and the glyph advances the wrap used.
@@ -213,13 +213,4 @@ private[layout] object IncrementalWrap:
   /** `row` moved by `delta` columns, which is what the cold wrap of the shifted text produces. */
   private def shifted(row: MeasuredRow, delta: Int): MeasuredRow =
     if delta == 0 then row
-    else
-      def move(stops: Vector[TextCaretStop]): Vector[TextCaretStop] =
-        stops.map(stop => stop.copy(column = stop.column + delta))
-      val stops = move(row.caretStops)
-      row.copy(
-        startColumn = row.startColumn + delta,
-        endColumn = row.endColumn + delta,
-        caretStops = stops,
-        xSortedCaretStops = if row.xSortedCaretStops eq row.caretStops then stops else move(row.xSortedCaretStops)
-      )
+    else row.copy(startColumn = row.startColumn + delta, endColumn = row.endColumn + delta)
