@@ -11,41 +11,45 @@ import scala.annotation.tailrec
 private[rope] object RopeContent:
 
   def equal(a: Rope, b: Rope): Boolean =
-    (a: AnyRef).eq(b) || (a.weight == b.weight && (sameTree(List(a, b)) || sameChunks(Cursor.over(a), Cursor.over(b))))
+    (a: AnyRef).eq(b) || (a.weight == b.weight && (sameTree(a, b) || sameChunks(Cursor.over(a), Cursor.over(b))))
 
   /** The common case -- ropes of identical shape, e.g. one rebuilt from the same text -- needs no cursor bookkeeping.
-    * Any mismatch, including a mere difference in shape, returns false and leaves the verdict to `sameChunks`. `pairs`
-    * holds the ropes still to compare, two at a time.
+    * Any mismatch, including a mere difference in shape, returns false and leaves the verdict to `sameChunks`. It walks
+    * by index and allocates nothing, so comparing two independently built ropes costs the string comparisons alone.
     */
+  private def sameTree(a: Rope, b: Rope): Boolean =
+    (a: AnyRef).eq(b) ||
+      ((a, b) match
+        case (branchA: Branch, branchB: Branch) =>
+          sameOffsets(branchA, branchB, 0) && sameChildren(branchA, branchB, 0)
+        case (Leaf(textA), Leaf(textB)) => textA == textB
+        case _                          => false)
+
   @tailrec
-  private def sameTree(pairs: List[Rope]): Boolean = pairs match
-    case Nil => true
-    case a :: b :: rest =>
-      if a.eq(b) then sameTree(rest)
-      else
-        (a, b) match
-          case (branchA: Branch, branchB: Branch) =>
-            sameShape(branchA, branchB) && sameTree(interleaved(branchA, branchB) ::: rest)
-          case (Leaf(textA), Leaf(textB)) => textA == textB && sameTree(rest)
-          case _                          => false
-    case _ :: Nil => false
+  private def sameOffsets(a: Branch, b: Branch, index: Int): Boolean =
+    a.children.size == b.children.size &&
+      (index > a.children.size || (a.starts(index) == b.starts(index) && sameOffsets(a, b, index + 1)))
 
-  private def sameShape(a: Branch, b: Branch): Boolean =
-    a.children.size == b.children.size && a.starts.sameElements(b.starts)
-
-  private def interleaved(a: Branch, b: Branch): List[Rope] =
-    a.children.zip(b.children).flatMap((childA, childB) => List(childA, childB)).toList
+  @tailrec
+  private def sameChildren(a: Branch, b: Branch, index: Int): Boolean =
+    index >= a.children.size || (sameTree(a.children(index), b.children(index)) && sameChildren(a, b, index + 1))
 
   /** Agrees with `String.hashCode` on the rope's text. */
-  def hash(rope: Rope): Int =
-    @tailrec
-    def go(stack: List[Rope], acc: Int): Int = stack match
-      case Nil => acc
-      case head :: rest =>
-        head match
-          case branch: Branch => go(branch.children.toList ::: rest, acc)
-          case Leaf(value)    => go(rest, value.foldLeft(acc)((running, char) => 31 * running + char))
-    go(List(rope), 0)
+  def hash(rope: Rope): Int = hashRope(rope, 0)
+
+  private def hashRope(rope: Rope, seed: Int): Int =
+    rope match
+      case branch: Branch => hashChildren(branch, 0, seed)
+      case Leaf(value)    => hashChars(value, 0, seed)
+
+  @tailrec
+  private def hashChildren(branch: Branch, index: Int, seed: Int): Int =
+    if index >= branch.children.size then seed
+    else hashChildren(branch, index + 1, hashRope(branch.children(index), seed))
+
+  @tailrec
+  private def hashChars(value: String, index: Int, seed: Int): Int =
+    if index >= value.length then seed else hashChars(value, index + 1, 31 * seed + value.charAt(index))
 
   def equalsText(rope: Rope, text: String): Boolean =
     rope.weight == text.length &&
