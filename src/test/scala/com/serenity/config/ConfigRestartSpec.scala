@@ -16,6 +16,10 @@ class ConfigRestartSpec extends AnyFlatSpec with Matchers:
       List("window.preferred.width/height")
     ConfigRestart.changed(base, base.withStartupWarmUp(!base.surfaceConfig.startupWarmUpEnabled)) shouldBe
       List("startup.warm_up")
+    ConfigRestart.changed(base, base.withRenderBackend(RenderBackendSetting.Skia)) shouldBe
+      List("ui.render.backend")
+    ConfigRestart.changed(base, base.withRenderWayland(WaylandRender.XWayland)) shouldBe
+      List("ui.render.wayland")
   }
 
   it should "name nothing for settings that apply live" in {

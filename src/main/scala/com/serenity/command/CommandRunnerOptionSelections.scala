@@ -17,6 +17,8 @@ object CommandRunnerOptionSelections:
     Map(
       "render-fps"                 -> renderFpsTargetIndex(surfaceConfig.renderFpsTarget),
       "render-damage-granularity"  -> renderDamageGranularityIndex(surfaceConfig.renderDamageGranularity),
+      "render-backend"             -> renderBackendIndex(surfaceConfig.renderBackend),
+      "render-wayland"             -> renderWaylandIndex(surfaceConfig.renderWayland),
       "cursor-mode"                -> cursorModeIndex(cursorConfig.mode),
       "status-placement"           -> statusPlacementIndex(config.statusLine.placement),
       "status-position"            -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Position)),
@@ -102,6 +104,18 @@ object CommandRunnerOptionSelections:
     granularity match
       case RenderDamageGranularity.Rows  => 0
       case RenderDamageGranularity.Cells => 1
+
+  private def renderBackendIndex(backend: RenderBackendSetting): Int =
+    backend match
+      case RenderBackendSetting.Auto   => 0
+      case RenderBackendSetting.Skia   => 1
+      case RenderBackendSetting.Java2D => 2
+
+  private def renderWaylandIndex(mode: WaylandRender): Int =
+    mode match
+      case WaylandRender.Java2D     => 0
+      case WaylandRender.SkiaRaster => 1
+      case WaylandRender.XWayland   => 2
 
   private def markdownViewModeIndex(mode: MarkdownViewMode): Int =
     mode match
