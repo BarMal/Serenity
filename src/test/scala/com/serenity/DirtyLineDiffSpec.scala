@@ -228,7 +228,8 @@ class DirtyLineDiffSpec extends AnyFlatSpec with Matchers:
   it should "mark the rows below a row whose measured height changed" in {
     val document = richDocument("alpha", "beta", "gamma")
     val before   = richSnapshot(document, richLines("alpha", "beta", "gamma"))
-    val taller   = richLines("alpha", "beta", "gamma").updated(0, visualLine(0, "alpha").copy(heightPx = 30))
+    val tallLine = visualLine(0, "alpha")
+    val taller   = richLines("alpha", "beta", "gamma").updated(0, tallLine.copy(row = tallLine.row.copy(heightPx = 30)))
     val bold =
       document.applyMark(RichTextRange(RichTextPosition(0, 0), RichTextPosition(0, 5)), InlineMark.Bold)
     val after = richSnapshot(bold, taller)

@@ -39,7 +39,9 @@ final case class PaneFrameRecord(
     rowBufferLines: Vector[Int],
     rowRects: Vector[PixelRect],
     overflowingRows: Set[Int],
-    snapshot: TextLayoutSnapshot
+    snapshot: TextLayoutSnapshot,
+    // The chapter ghost each row paints (see `RendererChapterGhosts.rowGhosts`); empty when the pane has none.
+    rowGhosts: Vector[Option[String]] = Vector.empty
 )
 
 final case class BufferRenderAnnotations(
@@ -359,7 +361,14 @@ object RendererPaneSetup:
           columns = renderPlan.columnSnapshotsFor(paneId)
         yield paneId -> ColumnPaneRows
           .flatSnapshot(columns)
-          .fold(paneFrameRecord(bufferId, paneLayout.contentRect, context, snapshot))(
+          .fold(
+            paneFrameRecord(bufferId, paneLayout.contentRect, context, snapshot).copy(rowGhosts =
+              RendererChapterGhosts.rowGhosts(
+                snapshot,
+                renderPlan.annotations.get(bufferId).map(_.ghostsByLine).getOrElse(Map.empty)
+              )
+            )
+          )(
             columnFrameRecord(bufferId, paneLayout.contentRect, context, columns, _)
           )
     }.toMap

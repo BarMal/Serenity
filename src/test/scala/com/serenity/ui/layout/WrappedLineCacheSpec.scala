@@ -256,14 +256,15 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
       wrap(prose, WrappedLineCache.Uncached)
   }
 
-  it should "relabel a line moved to another buffer line once, then serve it without copying rows" in {
+  it should "serve a line moved to another buffer line from the same cached rows, relabelling none of them" in {
     val cache = WrappedLineCache.bounded()
     val above = wrap(prose, cache, bufferLine = 3)
     val moved = wrap(prose, cache, bufferLine = 4)
     moved.map(_.bufferLine).distinct shouldBe Vector(4)
     moved shouldBe above.map(_.copy(bufferLine = 4))
-    val again = wrap(prose, cache, bufferLine = 4)
-    again.zip(moved).foreach((a, b) => (a: AnyRef) should be theSameInstanceAs (b: AnyRef))
-    cache.size shouldBe 1
+    moved.zip(above).foreach((a, b) => (a.row: AnyRef) should be theSameInstanceAs (b.row: AnyRef))
+    above.map(_.bufferLine).distinct shouldBe Vector(3)
     wrap(prose, cache, bufferLine = 3).map(_.bufferLine).distinct shouldBe Vector(3)
+    cache.size shouldBe 1
+    cache.wrapStats.coldWraps shouldBe 1L
   }

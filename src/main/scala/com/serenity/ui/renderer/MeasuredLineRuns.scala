@@ -163,7 +163,8 @@ private[renderer] object MeasuredLineRuns:
   private object ClusterBounds:
 
     def apply(visualLine: TextVisualLine, spans: Vector[GraphemeSpan]): ClusterBounds =
-      val stops   = visualLine.caretStops
+      val stops   = visualLine.row.caretStops
+      val offset  = visualLine.xOffsetPx
       val starts  = new Array[Int](spans.length)
       val ends    = new Array[Int](spans.length)
       val startXs = new Array[Float](spans.length)
@@ -180,8 +181,8 @@ private[renderer] object MeasuredLineRuns:
           then
             starts(count) = span.startLocalIndex
             ends(count) = span.endLocalIndex
-            startXs(count) = startStop.xPx
-            endXs(count) = endStop.xPx
+            startXs(count) = startStop.xPx + offset
+            endXs(count) = endStop.xPx + offset
             collect(spanIndex + 1, stopIndex + 1, count + 1)
           else collect(spanIndex, stopIndex + 1, count)
       new ClusterBounds(starts, ends, startXs, endXs, collect(0, 0, 0))

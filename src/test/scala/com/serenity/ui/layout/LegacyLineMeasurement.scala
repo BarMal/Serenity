@@ -32,8 +32,7 @@ object LegacyLineMeasurement:
     def shape(segment: String, start: Int, end: Int) =
       shapeSegment(segment, bufferLine, start, end, resolver, frc, measuredLayout, cellMetrics)
     if maxVisualLines <= 0 then Vector.empty
-    else if text.isEmpty then
-      Vector(DropCapLayout.applyInset(shape("", baseColumn, baseColumn), paragraphRole, 0, dropCapGlyphWidthPx))
+    else if text.isEmpty then Vector(inset(shape("", baseColumn, baseColumn), paragraphRole, 0, dropCapGlyphWidthPx))
     else
       @annotation.tailrec
       def loop(startColumn: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
@@ -47,8 +46,11 @@ object LegacyLineMeasurement:
           val segmentLength = wordBoundarySegmentLength(text, startColumn, fitted)
           val end           = startColumn + segmentLength
           val row           = shape(text.substring(startColumn, end), segmentStart, baseColumn + end)
-          loop(end, acc :+ DropCapLayout.applyInset(row, paragraphRole, acc.length, dropCapGlyphWidthPx))
+          loop(end, acc :+ inset(row, paragraphRole, acc.length, dropCapGlyphWidthPx))
       loop(0, Vector.empty)
+
+  private def inset(row: TextVisualLine, role: ParagraphRole, lineWithinParagraph: Int, glyphWidthPx: Float) =
+    row.copy(xOffsetPx = row.xOffsetPx + DropCapLayout.leftInsetPx(role, lineWithinParagraph, glyphWidthPx))
 
   def shapeSegment(
     text: String,

@@ -11,7 +11,7 @@ import com.serenity.markdown.MarkdownBlockLens.BlockIndex
 import com.serenity.markdown.{LazyBlockIndex, TableColumns}
 import com.serenity.richtext.ParagraphRole
 import com.serenity.rope.{Balance, Rope, RopeDiff}
-import com.serenity.state.models.{BufferId, TextVisualLine}
+import com.serenity.state.models.{BufferId, MeasuredRow}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 
 /** Memoises [[TextLayoutSnapshot]]'s wrap-and-measure of one logical line -- the AWT `TextLayout` work that otherwise
@@ -27,10 +27,10 @@ sealed abstract class WrappedLineCache:
   /** `cold(limit)` wraps the line into at most `limit` rows from scratch. `incremental` may instead resume from a
     * recently wrapped edit of the same line, and answers `None` whenever it cannot reproduce `cold` exactly.
     */
-  private[layout] def wrapped(key: WrappedLineKey, bufferLine: Int, maxVisualLines: Int)(
+  private[layout] def wrapped(key: WrappedLineKey, maxVisualLines: Int)(
     cold: Int => RowWrap,
     incremental: Seq[Predecessor] => Option[RowWrap]
-  ): Vector[TextVisualLine]
+  ): Vector[MeasuredRow]
 
   private[layout] def visualRowCounts(
     key: VisualRowKey,
@@ -54,9 +54,10 @@ sealed abstract class WrappedLineCache:
     compute: => TableColumns
   ): TableColumns
 
-/** Everything a line's wrap and caret measurement depends on except its buffer line number, which only labels the rows
-  * -- so a line keeps its entry when lines are inserted or deleted above it. `resolver` carries the base font and the
-  * per-column rich-text run fonts (style, size and prose zoom are all baked into those fonts).
+/** Everything a line's wrap and caret measurement depends on. The rows it yields are position-independent -- no buffer
+  * line, alignment or inset -- so a line keeps its entry when lines are inserted or deleted above it. `resolver`
+  * carries the base font and the per-column rich-text run fonts (style, size and prose zoom are all baked into those
+  * fonts).
   */
 final private[layout] case class WrappedLineKey(
     text: String,
@@ -90,8 +91,7 @@ final private[layout] case class WrapShape(
 /** An earlier complete wrap of a line with the same [[WrapShape]], and what [[IncrementalWrap]] resumes from. */
 final private[layout] case class Predecessor(
     key: WrappedLineKey,
-    bufferLine: Int,
-    rows: Vector[TextVisualLine],
+    rows: Vector[MeasuredRow],
     trace: WrapTrace
 )
 
@@ -120,10 +120,10 @@ object WrappedLineCache:
   /** Measures on every call; the default for callers that own no cache. */
   object Uncached extends WrappedLineCache:
 
-    private[layout] def wrapped(key: WrappedLineKey, bufferLine: Int, maxVisualLines: Int)(
+    private[layout] def wrapped(key: WrappedLineKey, maxVisualLines: Int)(
       cold: Int => RowWrap,
       incremental: Seq[Predecessor] => Option[RowWrap]
-    ): Vector[TextVisualLine] = cold(maxVisualLines).rows
+    ): Vector[MeasuredRow] = cold(maxVisualLines).rows
 
     private[layout] def visualRowCounts(
       key: VisualRowKey,
@@ -173,21 +173,12 @@ object WrappedLineCache:
 
   /** `complete` is false when the wrap stopped at a row limit, so the entry only answers requests for that many rows.
     */
-  final private case class Entry(
-      rows: Vector[TextVisualLine],
-      complete: Boolean,
-      bufferLine: Int,
-      trace: Option[WrapTrace]
-  ):
+  final private case class Entry(rows: Vector[MeasuredRow], complete: Boolean, trace: Option[WrapTrace]):
     val chars: Long = rows.foldLeft(0L)((sum, row) => sum + row.text.length)
 
     def covers(maxVisualLines: Int): Boolean = complete || rows.length >= maxVisualLines
 
-    def rowsFor(maxVisualLines: Int): Vector[TextVisualLine] = rows.take(maxVisualLines)
-
-    def relabelled(requestedBufferLine: Int): Entry =
-      if requestedBufferLine == bufferLine then this
-      else copy(rows = rows.map(_.copy(bufferLine = requestedBufferLine)), bufferLine = requestedBufferLine)
+    def rowsFor(maxVisualLines: Int): Vector[MeasuredRow] = rows.take(maxVisualLines)
 
   /** An access-ordered LRU. Rendering and the state dispatcher may run on different threads, so every map access holds
     * this instance's monitor; wrapping a missed line happens outside it.
@@ -267,17 +258,17 @@ object WrappedLineCache:
     ): VisualRowCounts =
       visualRows.counts(key, content, measure, stamp, revision)
 
-    private[layout] def wrapped(key: WrappedLineKey, bufferLine: Int, maxVisualLines: Int)(
+    private[layout] def wrapped(key: WrappedLineKey, maxVisualLines: Int)(
       cold: Int => RowWrap,
       incremental: Seq[Predecessor] => Option[RowWrap]
-    ): Vector[TextVisualLine] =
-      val entry = lookup(key).filter(_.covers(maxVisualLines)).map(relabelInPlace(key, bufferLine, _)).getOrElse {
+    ): Vector[MeasuredRow] =
+      val entry = lookup(key).filter(_.covers(maxVisualLines)).getOrElse {
         val resumed = Option.when(maxVisualLines == Int.MaxValue)(predecessors(key)).flatMap(incremental(_))
         val wrap    = resumed.getOrElse(cold(maxVisualLines))
         (if resumed.isDefined then incrementalCount else coldCount).incrementAndGet()
         rowCount.addAndGet(wrap.computedRows.toLong)
         measuredCount.addAndGet(wrap.measuredChars.toLong)
-        val fresh = Entry(wrap.rows, complete = wrap.rows.length < maxVisualLines, bufferLine, wrap.trace)
+        val fresh = Entry(wrap.rows, complete = wrap.rows.length < maxVisualLines, wrap.trace)
         store(key, fresh)
         fresh
       }
@@ -286,21 +277,10 @@ object WrappedLineCache:
     private def predecessors(key: WrappedLineKey): Seq[Predecessor] = synchronized {
       Option(recent.get(key.shape)).fold(Seq.empty[Predecessor]) { candidates =>
         candidates.asScala.iterator.flatMap { (candidate, entry) =>
-          entry.trace.map(Predecessor(candidate, entry.bufferLine, entry.rows, _))
+          entry.trace.map(Predecessor(candidate, entry.rows, _))
         }.toVector
       }
     }
-
-    /** Lines shifted by an edit above them are relabelled once and kept so, rather than copied on every lookup. */
-    private def relabelInPlace(key: WrappedLineKey, bufferLine: Int, entry: Entry): Entry =
-      if entry.bufferLine == bufferLine then entry
-      else
-        val moved = entry.relabelled(bufferLine)
-        synchronized {
-          if entries.containsKey(key) then
-            val _ = entries.put(key, moved)
-        }
-        moved
 
     private def lookup(key: WrappedLineKey): Option[Entry] = synchronized(Option(entries.get(key)))
 
