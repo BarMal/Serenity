@@ -215,6 +215,11 @@ jobs:
       - name: Run real-OS-boundary specs
         run: sbt -v realBoundaryTest
 
+      # `sbt test` excludes these specs: they read the JVM-wide heap and force collections, which stalls and skews any
+      # suite running beside them.
+      - name: Run heap-measurement specs
+        run: sbt -v heapMeasurementTest
+
   perf:
     # The 2x entry runs the suite on a HiDPI virtual display with Java2D at 2x, matching the target laptop, so Swing's
     # present path paints at the scale users actually see.

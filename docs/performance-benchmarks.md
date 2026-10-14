@@ -10,7 +10,7 @@ The cursor-only scenario opens a temporary Swing window so it can measure Sereni
 
 The `iterations` column is the number of samples actually taken (see "Run-to-run stability audit" below), and the millisecond columns carry seven decimals so a 10 ns benchmark is not rounded to a multiple of 10 ns.
 
-The harness prints CSV rows with `min_ms`, `p50_ms`, `p95_ms`, `max_ms`, `allocation_p50_bytes`, and `allocation_p95_bytes`. Allocation columns are populated for the long measured-line scenario and are sampled separately from timing so the allocation probe does not distort p50/p95. Every scenario builds its immutable document, state, search, LSP, and project-task fixtures before timing, runs the measured operation once, and asserts its observable result before warmup. Java2D frame drawing, reusable backing-buffer acquisition, cursor-overlay composition, and repaint requests remain inside their timed paths because they are part of the user-visible work being measured.
+The harness prints CSV rows with `min_ms`, `p50_ms`, `p95_ms`, `max_ms`, `allocation_p50_bytes`, and `allocation_p95_bytes`. Allocation columns are populated for every `laptop.*`, `render.*` and `command_runner.*` benchmark plus a hand-picked set from other families (see [Memory metrics](#memory-metrics-footprint-and-allocation)) and are sampled separately from timing so the allocation probe does not distort p50/p95. Every scenario builds its immutable document, state, search, LSP, and project-task fixtures before timing, runs the measured operation once, and asserts its observable result before warmup. Java2D frame drawing, reusable backing-buffer acquisition, cursor-overlay composition, and repaint requests remain inside their timed paths because they are part of the user-visible work being measured.
 
 Scenarios cover:
 
@@ -42,6 +42,23 @@ Scenarios cover:
   newlines, to show per-keystroke cost against paragraph length.
 
 Pass name prefixes to run only some scenarios, e.g. `sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks laptop."`.
+
+## Memory metrics: footprint and allocation
+
+The CSV ends with a `retained_bytes` column (header: `...,allocation_p50_bytes,allocation_p95_bytes,retained_bytes`). Older ten-column files still parse; a missing value is treated as absent.
+
+**Footprint (`footprint.*`)** is heap the app keeps resident. `FootprintBenchmarks` builds a real `AppState`, drops everything else, runs `System.gc()` until three consecutive used-heap readings agree (within 64 KiB), and records the growth over a baseline settled before the build, holding the state strongly reachable across the reading. One build is discarded to pay for static caches, and the median of three trials is reported. Scenarios: `empty_editor`, `plain_document_15k_lines`, `rich_document`, `after_1000_edits` (undo history), `ten_buffers`. Their timing columns are zero, so the latency gate ignores them. Run only these with `sbt "Test / runMain com.serenity.perf.FootprintBenchmarks"` or pass the `footprint.` prefix to `PerformanceBenchmarks`.
+
+**Allocation** (`allocation_p50_bytes`, `allocation_p95_bytes`) is bytes allocated per invocation, measured in a separate pass with `ThreadMXBean.getThreadAllocatedBytes`. Every benchmark whose name starts with `laptop.`, `render.` or `command_runner.` is tracked by prefix; others opt in through `AllocationTracked` in `BenchmarkRunner`.
+
+**CI gate (`scripts/check_perf_regression.py`)**
+
+| Metric | Condition | Effect |
+| --- | --- | --- |
+| `retained_bytes` | current > 1.25x baseline AND delta > 1 MiB | fails the build |
+| `allocation_p50_bytes` | current > 1.5x baseline AND delta > 64 KiB | `::warning::` only; `--gate-allocation` makes it fail |
+
+Thresholds are `--retained-threshold`, `--min-retained-delta-bytes`, `--allocation-threshold` and `--min-allocation-delta-bytes`. A baseline without the columns is skipped with a `::notice::` instead of failing. `combine_perf_runs.py` carries the columns through and keeps the largest retained value for a baseline (`--pick slowest`) and the smallest for a head.
 
 ## Profiling the keystroke path
 
