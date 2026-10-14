@@ -9,6 +9,7 @@ object ConfigRestart:
 
   private val startupOnly: List[(String, AppConfig => Any)] = List(
     "window.chrome"                  -> (_.windowChromeMode),
+    "ui.file_dialog"                 -> (_.fileDialogMode),
     "window.preferred.width/height"  -> (_.preferredWindowSize),
     "lsp.* language server settings" -> (_.languageToolsConfig.lspUserConfig),
     "startup.warm_up"                -> (_.surfaceConfig.startupWarmUpEnabled)

@@ -203,6 +203,13 @@ object ConfigFileFormat:
     field("ui.density"),
     comment("How strongly a misspelled-word/diagnostic highlight's severity colour shows through (0.0-1.0)"),
     field("ui.diagnostic_highlight_blend_weight"),
+    comment(
+      "File dialogs for open and save: auto uses the system dialog unless GTK's schemas are missing (which would"
+    ),
+    comment(
+      "crash the app), then Swing's own; native always uses the system dialog; swing never does. Needs a restart"
+    ),
+    field("ui.file_dialog"),
     field("ui.element_gap"),
     field("ui.outline_thickness"),
     comment("Where Escape in a focused panel returns focus, per app mode: editor (the active pane) or previous"),
