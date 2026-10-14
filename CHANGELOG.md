@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### 2026-10-14
+
+- Made the menu bar opt-in: the new `ui.menu_bar` setting is `hidden` (the default), `alt` or `visible`, and applies after a restart. `hidden` installs no bar at all, `alt` shows it for a tap of Alt on its own (not `Alt` with another key) and hides it again after a command runs, Escape or focus returning to the editor, and `visible` is the always-on bar of earlier builds. Every menu command stays in the command palette, which a new test checks, and the setting is in the palette's Interface Layout settings (docs/user/menu-bar.md).
+- Fixed installing a menu bar into a window that already had one leaving both in a window with Serenity's own title bar; the window now holds at most one bar and takes it out when the application stops.
+
 ### 2026-10-12
 
 - Replaced the binary-tree rope with a B-tree (#1900): each node holds 8 to 16 children, leaves hold up to 2,048 characters and are never cut through a surrogate pair, and every node caches its length, newline count and word counts. An edit copies the path to the leaf it touches and splits or merges one node at a time, so a paste or a large delete no longer rebuilds whole subtrees (on a 10 MB document, a 10-100 KB paste went from a median of about 530 us and a worst case of 100-200 ms to about 280 us and 8-11 ms) and the tree stays 5 levels deep where appending or prepending used to grow it from 15 to 20 or more.

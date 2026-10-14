@@ -23,25 +23,28 @@ import com.serenity.command.menu.{
   ResolvedEntry
 }
 import com.serenity.command.{Command, CommandId, CommandRegistry}
-import com.serenity.config.{AppMode, HotkeyConfig}
+import com.serenity.config.{AppMode, HotkeyConfig, MenuBarMode}
 import com.serenity.frontend.FrontendRuntime
 import com.serenity.input.{MenuActivationGuard, SwingInputHandler}
 import com.serenity.keystroke.events.Event
 import com.serenity.state.manager.Model
 import com.serenity.state.models.Shell
 
-/** The menu bar of the Swing window on Windows and Linux. The bar starts with one empty menu per title: a menu is
-  * filled the first time it opens, and every time it opens its items take their enabled and checked state from the
-  * model as it is then, which is read off the event-dispatch thread and applied back on it.
+/** The menu bar of the Swing window on Windows and Linux, when `ui.menu_bar` asks for one. The bar starts with one
+  * empty menu per title: a menu is filled the first time it opens, and every time it opens its items take their enabled
+  * and checked state from the model as it is then, which is read off the event-dispatch thread and applied back on it.
   */
 object SwingMenuBar:
 
   /** `guard` is where a keymap-handled accelerator is told from a click, and where an activation is finally sent. */
   final case class Host(readModel: IO[Model], runAsync: IO[Unit] => Unit, guard: MenuActivationGuard)
 
-  /** macOS has its own screen menu bar and application menu, which are not built here yet. */
-  def enabledFor(osName: String): Boolean =
-    !osName.toLowerCase(Locale.ROOT).contains("mac")
+  /** No bar is built at all for `Hidden`, and none on macOS, which has its own screen menu bar and application menu
+    * that are not built here yet. On macOS the JVM still gives the window the default application menu, which the
+    * platform requires and this code does not add to.
+    */
+  def enabledFor(osName: String, mode: MenuBarMode): Boolean =
+    mode != MenuBarMode.Hidden && !osName.toLowerCase(Locale.ROOT).contains("mac")
 
   /** `seed` is the model as it was when the bar was built. It lets a menu fill the moment it opens, so none is ever
     * shown empty; the read each open makes afterwards only brings it up to date.
@@ -64,33 +67,38 @@ object SwingMenuBar:
     )
     bar
 
-  /** Installs the bar in the window once the application is running. The input handler arrives through `handler`
-    * because the runtime builds it after this hook is chosen.
+  /** Installs the bar in the window once the application is running: at once for `Visible`, and for `Alt` only while a
+    * tap of Alt has it shown. The bar leaves the window when the resource is released. The input handler arrives
+    * through `handler` because the runtime builds it after this hook is chosen.
     */
   def resource(
     window: SwingWindow,
-    handler: IO[SwingInputHandler[IO, Event]]
+    handler: IO[SwingInputHandler[IO, Event]],
+    mode: MenuBarMode
   ): FrontendRuntime.MenuHost => Resource[IO, Unit] =
     menuHost =>
-      Resource.eval(
-        handler.flatMap: input =>
-          val guard = new MenuActivationGuard(() => input.lastPressed, input.submit(_))
-          val host  = Host(menuHost.readModel, menuHost.runAsync, guard)
-          menuHost.readModel.flatMap(seed =>
-            IO.blocking(
-              SwingUtilities.invokeAndWait(() =>
-                window.installMenuBar(
-                  build(
-                    host,
-                    MenuSpec.forOs(osName, seed.app.runtime.capabilities.opensFileOrFolder),
-                    CommandRegistry.withToggleUI,
-                    Some(seed)
-                  )
-                )
+      Resource
+        .eval(
+          handler.flatMap: input =>
+            val guard = new MenuActivationGuard(() => input.lastPressed, input.submit(_))
+            val host  = Host(menuHost.readModel, menuHost.runAsync, guard)
+            menuHost.readModel.map(seed =>
+              build(
+                host,
+                MenuSpec.forOs(osName, seed.app.runtime.capabilities.opensFileOrFolder),
+                CommandRegistry.withToggleUI,
+                Some(seed)
               )
             )
-          )
-      )
+        )
+        .flatMap(bar => presenting(window, bar, mode))
+
+  private def presenting(window: SwingWindow, bar: JMenuBar, mode: MenuBarMode): Resource[IO, Unit] =
+    mode match
+      case MenuBarMode.Visible =>
+        Resource.make(IO.blocking(window.installMenuBar(bar)))(_ => IO.blocking(window.removeMenuBar()))
+      case MenuBarMode.Alt    => AltMenuBar.resource(window, bar)
+      case MenuBarMode.Hidden => Resource.unit[IO]
 
   /** True when `current` is the very key press of the item's accelerator. An activation by another key, such as Enter
     * on a highlighted item, is not the keymap's key, even if that key was pressed on the canvas earlier.

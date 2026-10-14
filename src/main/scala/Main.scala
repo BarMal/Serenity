@@ -433,9 +433,10 @@ object Main extends IOApp:
                     )
                   ),
                 frameTimings = frameTimings,
-                menus = Option.when(SwingMenuBar.enabledFor(System.getProperty("os.name", "")))(
-                  SwingMenuBar.resource(swingWin, menuInput.get)
-                ),
+                menus =
+                  Option.when(SwingMenuBar.enabledFor(System.getProperty("os.name", ""), actualAppConfig.menuBarMode))(
+                    SwingMenuBar.resource(swingWin, menuInput.get, actualAppConfig.menuBarMode)
+                  ),
                 offscreenFrames = Some(
                   OffscreenWarmUpFrames.forCanvas(
                     swingWin.canvas,

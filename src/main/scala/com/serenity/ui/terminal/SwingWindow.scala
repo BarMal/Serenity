@@ -58,6 +58,7 @@ class SwingWindow(
   private val customChromePaletteCache = new SwingWindow.ChromePaletteCache
   private val menuBarRef               = new AtomicReference[Option[JMenuBar]](None)
   private val menuBarPaletteRef        = new AtomicReference[Option[MenuBarPalette]](None)
+  private val attachedBarRef           = new AtomicReference[Option[SwingWindow.AttachedBar]](None)
   private val pendingResize            = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch               = new CountDownLatch(1)
   private val baseImageRef             = new AtomicReference[Option[BufferedImage]](None)
@@ -267,24 +268,56 @@ class SwingWindow(
   def awaitClose: IO[Unit] = SwingWindow.awaitCloseLatch(closeLatch)
 
   /** Puts `bar` where [[SwingWindow.menuBarPlacement]] says, on the event-dispatch thread, and makes room for it so the
-    * canvas keeps its size: before the window is shown by packing, afterwards by growing the frame.
+    * canvas keeps its size: before the window is shown by packing, afterwards by growing the frame. A bar already
+    * installed, this one or another, is taken out first: the window carries at most one.
     */
   def installMenuBar(bar: JMenuBar): Unit =
-    val install: Runnable = () =>
+    onEventDispatchThread: () =>
       menuBarRef.set(Some(bar))
       menuBarPaletteRef.get().foreach(MenuBarTheming.apply(bar, _))
-      // The root pane no longer buffers (presentDirectly), so a frame menu bar buffers its own hover repaints.
-      bar.setDoubleBuffered(true)
-      SwingWindow.menuBarPlacement(System.getProperty("os.name", ""), usesCustomChrome) match
-        case MenuBarPlacement.UnderCustomTitleBar                           => chromeNorth.add(bar, BorderLayout.SOUTH)
-        case MenuBarPlacement.ScreenMenuBar | MenuBarPlacement.FrameMenuBar => frame.setJMenuBar(bar)
-      if frame.isShowing then
-        if (frame.getExtendedState & Frame.MAXIMIZED_BOTH) == 0 then
-          frame.setSize(frame.getWidth, frame.getHeight + bar.getPreferredSize.height)
-        frame.validate()
-      else frame.pack()
-    if SwingUtilities.isEventDispatchThread then install.run()
-    else SwingUtilities.invokeAndWait(install)
+      if !attachedBarRef.get().exists(_.bar eq bar) then
+        detachMenuBar()
+        attachMenuBar(bar)
+
+  /** Takes the installed bar out again and gives its room back to the canvas. It stays the bar the theme restyles, so a
+    * later [[installMenuBar]] of it shows it in the current colours.
+    */
+  def removeMenuBar(): Unit =
+    onEventDispatchThread(() => detachMenuBar())
+
+  def isMenuBarInstalled: Boolean = attachedBarRef.get().isDefined
+
+  def isActive: Boolean = frame.isActive
+
+  private def onEventDispatchThread(action: Runnable): Unit =
+    if SwingUtilities.isEventDispatchThread then action.run() else SwingUtilities.invokeAndWait(action)
+
+  private def attachMenuBar(bar: JMenuBar): Unit =
+    // The root pane no longer buffers (presentDirectly), so a frame menu bar buffers its own hover repaints.
+    bar.setDoubleBuffered(true)
+    SwingWindow.menuBarPlacement(System.getProperty("os.name", ""), usesCustomChrome) match
+      case MenuBarPlacement.UnderCustomTitleBar                           => chromeNorth.add(bar, BorderLayout.SOUTH)
+      case MenuBarPlacement.ScreenMenuBar | MenuBarPlacement.FrameMenuBar => frame.setJMenuBar(bar)
+    val height = bar.getPreferredSize.height
+    attachedBarRef.set(Some(SwingWindow.AttachedBar(bar, height)))
+    resizeFrameBy(height)
+
+  private def detachMenuBar(): Unit =
+    attachedBarRef
+      .getAndSet(None)
+      .foreach: attached =>
+        SwingWindow.menuBarPlacement(System.getProperty("os.name", ""), usesCustomChrome) match
+          case MenuBarPlacement.UnderCustomTitleBar                           => chromeNorth.remove(attached.bar)
+          case MenuBarPlacement.ScreenMenuBar | MenuBarPlacement.FrameMenuBar => frame.setJMenuBar(null)
+        resizeFrameBy(-attached.height)
+
+  private def resizeFrameBy(delta: Int): Unit =
+    if frame.isShowing then
+      if (frame.getExtendedState & Frame.MAXIMIZED_BOTH) == 0 then
+        frame.setSize(frame.getWidth, frame.getHeight + delta)
+      frame.validate()
+      frame.repaint()
+    else frame.pack()
 
   /** Raises the window for a later launch that handed its files over to this one (#2023). */
   def bringToFront(): Unit =
@@ -439,6 +472,8 @@ class SwingWindow(
 
 object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport with SwingWindowLayoutSupport:
   private val ApplicationIconResource = "/icons/serenity.png"
+
+  final private case class AttachedBar(bar: JMenuBar, height: Int)
 
   /** Blocks until the window-close latch is counted down (chrome close control or the AWT `windowClosing` event).
     *
