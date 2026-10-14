@@ -67,22 +67,8 @@ object CursorViewport:
     val fontConfig                 = currentState.persisted.config.editorConfig.fontConfig
     val font                       = previewFontForBuffer(buffer, fontConfig)
     val gridWidthPx                = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig)
-    // `viewport.visibleLines` is a code-grid row count (`LayoutEngine.updateViewportDimensions` sets it from the
-    // panel's grid rows, the same convention `gridWrapWidthPx` uses for columns) -- it does not vary with which font a
-    // pane actually draws with. A document-font pane whose font has a taller line height than the code font fits fewer
-    // of its own rows into that same pixel height than a code-font pane would, exactly what
-    // `RendererPaneSetup.snapshotForBuffer`'s own `visibleLines = panelHeightPx / bufferMetrics.lineHeight` computes
-    // for the pane actually painted. Using the code-grid count unadjusted let this centred/bottom-aligned scroll math
-    // assume more rows fit than the pane's own font renders, scrolling the cursor below the pane's real bottom edge on
-    // a long wrapped line (#1041).
-    val effectiveVisibleLines =
-      if isTui then viewport.visibleLines
-      else
-        val codeLineHeightPx =
-          CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
-        val panelHeightPx = viewport.visibleLines * codeLineHeightPx
-        math.max(1, panelHeightPx / math.max(1, CellMetrics.fromFont(font).lineHeight))
-    val halfVisibleLines = effectiveVisibleLines / 2
+    val effectiveVisibleLines      = rowsDrawnPerScreen(viewport, fontConfig, font, isTui)
+    val halfVisibleLines           = effectiveVisibleLines / 2
     // Count wrapped rows the way the terminal actually drew them: TUI wraps on a fixed 1px-per-cell grid
     // (`CellMetrics.cellUnit` + forceCellLayout), never a pixel measurement of the inert proportional prose font, which
     // folds each line across a different number of rows and so mis-places the centred viewport. Mirrors
@@ -179,6 +165,28 @@ object CursorViewport:
       topVisualLine = topVisualLine
     )
 
+  /** `viewport.visibleLines` is a code-grid row count (`LayoutEngine.updateViewportDimensions` sets it from the panel's
+    * grid rows, the same convention `gridWrapWidthPx` uses for columns) -- it does not vary with which font a pane
+    * actually draws with. A document-font pane whose font has a taller line height than the code font fits fewer of its
+    * own rows into that same pixel height than a code-font pane would, exactly what
+    * `RendererPaneSetup.snapshotForBuffer`'s own `visibleLines = panelHeightPx / bufferMetrics.lineHeight` computes for
+    * the pane actually painted. Using the code-grid count unadjusted let the centred/bottom-aligned scroll math assume
+    * more rows fit than the pane's own font renders, scrolling the cursor below the pane's real bottom edge on a long
+    * wrapped line (#1041), and let column mode's page anchor run past the last drawn column without turning.
+    */
+  private def rowsDrawnPerScreen(
+    viewport: Viewport,
+    fontConfig: FontLoader.FontConfig,
+    font: java.awt.Font,
+    isTui: Boolean
+  ): Int =
+    if isTui then viewport.visibleLines
+    else
+      val codeLineHeightPx =
+        CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
+      val panelHeightPx = viewport.visibleLines * codeLineHeightPx
+      math.max(1, panelHeightPx / math.max(1, CellMetrics.fromFont(font).lineHeight))
+
   /** Column-based document layout (issue #1338, Phase 1): fixed/discrete snapping only -- `topVisualLine` always lands
     * on an exact `activeColumnIndex * visibleLines` boundary (`activeColumnIndex` derived here as
     * `absoluteCursorRow / visibleLines`, never stored), so the column holding the cursor's visual row is always shown
@@ -216,7 +224,7 @@ object CursorViewport:
     val forceCellLayout     = isTui
     val wrapWidthPx         = if isTui then textColumns * CellMetrics.cellUnit.charWidth else gridWidthPx
     val lineCount           = buffer.document.content.lineCount
-    val visibleLines        = math.max(1, viewport.visibleLines)
+    val visibleLines        = math.max(1, rowsDrawnPerScreen(viewport, fontConfig, font, isTui))
 
     val dropCapsEnabled  = currentState.persisted.config.documentConfig.dropCapsEnabled
     val markdownViewMode = currentState.persisted.config.inlineMarkdownViewMode
