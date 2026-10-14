@@ -109,6 +109,20 @@ object MenuBarMode:
   def fromConfigKey(value: String): Option[MenuBarMode] =
     MenuBarMode.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
 
+enum FileDialogMode(val configKey: String):
+  case Auto   extends FileDialogMode("auto")
+  case Native extends FileDialogMode("native")
+  case Swing  extends FileDialogMode("swing")
+
+object FileDialogMode:
+
+  def fromConfigKey(value: String): Option[FileDialogMode] =
+    value.trim.toLowerCase match
+      case "auto"   => Some(FileDialogMode.Auto)
+      case "native" => Some(FileDialogMode.Native)
+      case "swing"  => Some(FileDialogMode.Swing)
+      case _        => None
+
 enum MarkdownViewMode(val configKey: String):
   case Source       extends MarkdownViewMode("source")
   case SplitPreview extends MarkdownViewMode("split-preview")

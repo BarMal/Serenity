@@ -35,7 +35,7 @@ import com.serenity.diagnostics.{
 }
 import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend}
 import com.serenity.input.SwingInputHandler
-import com.serenity.io.SwingFileDialog
+import com.serenity.io.{FileDialogSelection, SwingFileDialog}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.RestartMode
@@ -355,7 +355,8 @@ object Main extends IOApp:
         .use { (swingWin, paintEc) =>
           val actualAppConfig =
             resolveAutoTextScale(appConfig, swingWin.detectedDeviceTextScale)
-          val fileDialog = SwingFileDialog(swingWin.canvas)
+          val fileDialogSelection = FileDialogSelection.forThisProcess(actualAppConfig.fileDialogMode)
+          val fileDialog          = SwingFileDialog(swingWin.canvas, fileDialogSelection)
           val initialScaleSync =
             if actualAppConfig.editorConfig.fontConfig != appConfig.editorConfig.fontConfig then
               displayState.update(actualAppConfig.editorConfig.fontConfig) >>
@@ -447,7 +448,7 @@ object Main extends IOApp:
                 applyPointerShape = shape => IO(swingWin.updatePointerShape(shape))
               )
 
-              initialScaleSync >> AppRuntime.run(
+              initialScaleSync >> logger.info(s"[FILE_DIALOG] ${fileDialogSelection.description}") >> AppRuntime.run(
                 initialViewportSize = swingWin.viewportSize,
                 checkResize = IO(swingWin.doResizeIfNecessary()),
                 runtime = frontendRuntime,

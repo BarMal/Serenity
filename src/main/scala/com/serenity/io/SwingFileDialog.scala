@@ -18,13 +18,13 @@ import com.sun.jna.ptr.{IntByReference, PointerByReference}
 
 object SwingFileDialog:
 
-  def apply(parent: Component): FileDialog =
+  def apply(parent: Component, selection: FileDialogSelection.Decision): FileDialog =
     FileDialog(
-      chooseOpenFile =
-        initialDirectory => choose(parent, AwtFileDialog.LOAD, initialDirectory, None, _.showOpenDialog(parent)),
+      chooseOpenFile = initialDirectory =>
+        choose(parent, selection, AwtFileDialog.LOAD, initialDirectory, None, _.showOpenDialog(parent)),
       chooseSaveFile = (initialDirectory, suggestedFileName) =>
-        choose(parent, AwtFileDialog.SAVE, initialDirectory, suggestedFileName, _.showSaveDialog(parent)),
-      chooseFolder = initialDirectory => chooseFolder(parent, initialDirectory),
+        choose(parent, selection, AwtFileDialog.SAVE, initialDirectory, suggestedFileName, _.showSaveDialog(parent)),
+      chooseFolder = initialDirectory => chooseFolder(parent, selection, initialDirectory),
       chooseFileOrFolder = AppKitOpenPanel.choose,
       supportsFileOrFolder = AppKitOpenPanel.isAvailable(System.getProperty("os.name", ""))
     )
@@ -56,6 +56,7 @@ object SwingFileDialog:
 
   private def choose(
     parent: Component,
+    selection: FileDialogSelection.Decision,
     mode: Int,
     initialDirectory: Option[Path],
     suggestedFileName: Option[String],
@@ -63,7 +64,7 @@ object SwingFileDialog:
   ): IO[Option[Path]] =
     onEventThread {
       val nativeOwner = SwingFileDialog.nativeDialogOwner(parent)
-      SwingFileDialog.preferredBackend(nativeOwner.isDefined) match
+      SwingFileDialog.preferredBackend(nativeOwner.isDefined, nativeDialogs = selection.useNative) match
         case SwingFileDialog.Backend.WindowsModern =>
           nativeOwner match
             case Some(owner) =>
@@ -80,10 +81,14 @@ object SwingFileDialog:
   /** Folders are picked where the platform can: the Windows Common Item Dialog and the macOS AWT dialog. Linux's AWT
     * dialog has no directory mode, so it takes the Swing chooser, which does.
     */
-  private def chooseFolder(parent: Component, initialDirectory: Option[Path]): IO[Option[Path]] =
+  private def chooseFolder(
+    parent: Component,
+    selection: FileDialogSelection.Decision,
+    initialDirectory: Option[Path]
+  ): IO[Option[Path]] =
     onEventThread {
       val nativeOwner = SwingFileDialog.nativeDialogOwner(parent)
-      SwingFileDialog.preferredFolderBackend(nativeOwner.isDefined) match
+      SwingFileDialog.preferredFolderBackend(nativeOwner.isDefined, nativeDialogs = selection.useNative) match
         case SwingFileDialog.Backend.WindowsModern =>
           nativeOwner.flatMap(owner =>
             WindowsCommonFileDialog
@@ -109,9 +114,10 @@ object SwingFileDialog:
 
   private[io] def preferredBackend(
     hasNativeOwner: Boolean,
-    osName: String = System.getProperty("os.name", "")
+    osName: String = System.getProperty("os.name", ""),
+    nativeDialogs: Boolean = true
   ): Backend =
-    if !hasNativeOwner then Backend.SwingChooser
+    if !hasNativeOwner || !nativeDialogs then Backend.SwingChooser
     else if WindowsCommonFileDialog.isSupported(osName) then Backend.WindowsModern
     else Backend.Native
 
@@ -121,9 +127,10 @@ object SwingFileDialog:
 
   private[io] def preferredFolderBackend(
     hasNativeOwner: Boolean,
-    osName: String = System.getProperty("os.name", "")
+    osName: String = System.getProperty("os.name", ""),
+    nativeDialogs: Boolean = true
   ): Backend =
-    if !hasNativeOwner then Backend.SwingChooser
+    if !hasNativeOwner || !nativeDialogs then Backend.SwingChooser
     else if WindowsCommonFileDialog.isSupported(osName) then Backend.WindowsModern
     else if AppleDirectoryMode.appliesTo(osName) then Backend.Native
     else Backend.SwingChooser

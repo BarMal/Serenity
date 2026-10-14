@@ -117,6 +117,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withUiElementGap(Some(2.0))
     .withUiOutlineThicknessPx(3)
+    .withFileDialogMode(FileDialogMode.Swing)
     .withThemeFollowConfig(
       ThemeFollowConfig(followSystem = true, lightTheme = "paper", darkTheme = "ink", highContrastTheme = "contrast")
     )

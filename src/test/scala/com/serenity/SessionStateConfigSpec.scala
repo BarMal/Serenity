@@ -172,6 +172,28 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
     original.asJson.as[SessionState].toOption.map(_.config.windowChromeMode) shouldBe Some(WindowChromeMode.Auto)
   }
 
+  it should "round-trip the file dialog mode" in {
+    val original = SessionState.fromAppState(
+      AppState.initial.copy(persisted =
+        AppState.initial.persisted.copy(config = AppConfig.default.withFileDialogMode(FileDialogMode.Swing))
+      )
+    )
+
+    original.asJson.as[SessionState].toOption.map(_.config.fileDialogMode) shouldBe Some(FileDialogMode.Swing)
+  }
+
+  it should "restore a session saved before the file dialog mode existed, with the default mode" in {
+    val saved = SessionState.fromAppState(AppState.initial).asJson
+    val withoutMode = saved.hcursor
+      .downField("config")
+      .downField("ui.file_dialog")
+      .delete
+      .top
+      .getOrElse(fail("the saved session has no ui.file_dialog entry to remove"))
+
+    withoutMode.as[SessionState].toOption.map(_.config.fileDialogMode) shouldBe Some(FileDialogMode.Auto)
+  }
+
   it should "round trip decimal floating-surface spacing" in {
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(

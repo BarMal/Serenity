@@ -122,8 +122,10 @@ given Decoder[RenderDamageGranularity] =
 given Encoder[InterfaceDensity] = configKeyEncoder(_.configKey)
 given Decoder[InterfaceDensity] = configKeyDecoder("InterfaceDensity", InterfaceDensity.values, _.configKey)
 
-given Encoder[MenuBarMode] = configKeyEncoder(_.configKey)
-given Decoder[MenuBarMode] = configKeyDecoder("MenuBarMode", MenuBarMode.values, _.configKey)
+given Encoder[MenuBarMode]    = configKeyEncoder(_.configKey)
+given Decoder[MenuBarMode]    = configKeyDecoder("MenuBarMode", MenuBarMode.values, _.configKey)
+given Encoder[FileDialogMode] = configKeyEncoder(_.configKey)
+given Decoder[FileDialogMode] = configKeyDecoder("FileDialogMode", FileDialogMode.values, _.configKey)
 
 given Encoder[PreferredWindowSize] = deriveEncoder
 given Decoder[PreferredWindowSize] = deriveDecoder
