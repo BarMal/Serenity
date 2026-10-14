@@ -6,6 +6,8 @@ import javax.swing.{JComponent, JPanel, SwingUtilities}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.WindowChromeMode
+import com.serenity.testkit.DisplayExclusive
 import com.serenity.ui.accessibility.{
   AccessibilityRole,
   AccessibilitySnapshot,
@@ -13,8 +15,6 @@ import com.serenity.ui.accessibility.{
   AccessibleValue,
   SwingAccessibilityBridge
 }
-import com.serenity.config.WindowChromeMode
-import com.serenity.testkit.DisplayExclusive
 import com.serenity.ui.layout.LayoutRect
 import com.serenity.ui.terminal.SwingWindow
 import org.scalatest.flatspec.AnyFlatSpec
