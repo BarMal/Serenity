@@ -2,7 +2,7 @@ package com.serenity.ui.terminal
 
 import java.awt.event.{AWTEventListener, FocusAdapter, FocusEvent, KeyEvent, MouseEvent}
 import java.awt.{AWTEvent, KeyEventDispatcher, KeyboardFocusManager, Toolkit}
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.FutureTask
 import javax.swing.event.ChangeListener
 import javax.swing.{JMenuBar, MenuElement, MenuSelectionManager, SwingUtilities}
 
@@ -66,6 +66,6 @@ object AltMenuBar:
   private def onEventDispatchThread[A](action: () => A): A =
     if SwingUtilities.isEventDispatchThread then action()
     else
-      val result = new AtomicReference[A]()
-      SwingUtilities.invokeAndWait(() => result.set(action()))
-      result.get()
+      val task = new FutureTask[A](() => action())
+      SwingUtilities.invokeAndWait(task)
+      task.get()
