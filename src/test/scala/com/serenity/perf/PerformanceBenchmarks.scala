@@ -33,7 +33,7 @@ object PerformanceBenchmarks:
               RichDocumentOpenBenchmarks.benchmarks
             val unknown = BenchmarkIterationCounts.JitSettled -- all.map(_.name)
             require(unknown.isEmpty, s"JitSettled names no benchmark: ${unknown.mkString(", ")}")
-            val results = BenchmarkRunner.runMatching(args.toList, all)
+            val results = BenchmarkRunner.runMatching(args.toList, all) ++ FootprintBenchmarks.runMatching(args.toList)
             BenchmarkRunner.printResults(results)
           }
       }
