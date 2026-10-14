@@ -12,20 +12,23 @@ class RopeStructuralOperationsSpec extends AnyFlatSpec with Matchers:
     // silently-wrong result.
     private def orFail: Rope = result.getOrElse(fail("expected the rope operation to succeed"))
 
+  private def assertValidTree(rope: Rope)(using Balance): Unit =
+    RopeInvariants.violations(rope, checkCounts = false) shouldBe Nil
+
   "Rope" should "weight" in new RopeSpecScope:
-    val c: Node = Node(Leaf("Hello "), Leaf("my "))
+    val c: Rope = Leaf("Hello ").concat(Leaf("my "))
     c.weight shouldBe 9
-    val g: Node = Node(Leaf("na"), Leaf("me i"))
+    val g: Rope = Leaf("na").concat(Leaf("me i"))
     g.weight shouldBe 6
-    val h: Node = Node(Leaf("s"), Leaf(" Barney"))
+    val h: Rope = Leaf("s").concat(Leaf(" Barney"))
     h.weight shouldBe 8
 
-    val d: Node = Node(g, h)
+    val d: Rope = g.concat(h)
     d.weight shouldBe 14
-    val b: Node = Node(c, d)
+    val b: Rope = c.concat(d)
     b.weight shouldBe 23
 
-    val a: Node = Node(b, Leaf(""))
+    val a: Rope = b.concat(Leaf(""))
     a.weight shouldBe 23
 
     a.collect() shouldBe "Hello my name is Barney"
@@ -33,24 +36,14 @@ class RopeStructuralOperationsSpec extends AnyFlatSpec with Matchers:
   it should "concat" in new RopeSpecScope:
     Rope("Hello").concat(Rope(" world!")).collect() shouldBe "Hello world!"
 
-  it should "balance" in new RopeSpecScope:
-    val depth4: Node  = Node(Leaf("Deepest"), Leaf(""))
-    val depth3a: Node = Node(depth4, Node(Leaf("Up1"), Leaf("")))
-    val depth3b: Node = Node(Leaf("Up1a"), Leaf("Up1b"))
-    val depth2a: Node = Node(depth3a, depth3b)
-    val depth2b: Node = Node(Leaf("Up2"), Leaf(""))
-    val root: Node    = Node(depth2a, depth2b)
+  it should "keep a valid tree when ropes of different heights are joined" in new RopeSpecScope:
+    val deep    = Rope("Deepest level of the tree. " * 40)
+    val shallow = Rope("Up1")
 
-    root.isHeightBalanced shouldBe false
-    root.isWeightBalanced shouldBe false
-
-    val rebuiltRoot: Rope = root.rebuild
-    rebuiltRoot.isHeightBalanced shouldBe true
-    rebuiltRoot.isWeightBalanced shouldBe true
-
-    val rebalancedRoot: Rope = root.rebalance
-    rebalancedRoot.isHeightBalanced shouldBe true
-    rebalancedRoot.isWeightBalanced shouldBe true
+    deep.height should be > shallow.height
+    List(deep.concat(shallow), shallow.concat(deep), deep.concat(deep)).foreach(joined => assertValidTree(joined))
+    deep.concat(shallow).collect() shouldBe deep.collect() + "Up1"
+    shallow.concat(deep).collect() shouldBe "Up1" + deep.collect()
 
   it should "index" in new RopeSpecScope:
     val a: Rope = Rope("Hello, my name is Barney")
@@ -212,21 +205,17 @@ class RopeStructuralOperationsSpec extends AnyFlatSpec with Matchers:
 
       // Verify rope structure remains efficient
       rope.weight shouldBe largeText.length
-      rope.isWeightBalanced shouldBe true
-      rope.isHeightBalanced shouldBe true
+      assertValidTree(rope)
 
       // Test operations on large rope work correctly
       rope.index(0) shouldBe Some('H')
       if largeText.nonEmpty then rope.index(largeText.length - 1) should be(defined)
 
-      // Test that rebalancing works on large ropes
-      val rebalanced = rope.rebalance
-      rebalanced.isWeightBalanced shouldBe true
-      rebalanced.collect() shouldBe largeText
-
-      // Test rebuilding works without memory issues
-      val rebuilt = rope.rebuild
-      rebuilt.collect() shouldBe largeText
+      // Splitting a large rope and joining the halves again leaves a valid tree with the same text
+      val (front, back) = rope.splitAt(largeText.length / 2).getOrElse(fail("expected the split to succeed"))
+      val rejoined      = front.concat(back)
+      assertValidTree(rejoined)
+      rejoined.collect() shouldBe largeText
     }
 
   it should "simulate backspace correctly" in new RopeSpecScope:
@@ -261,14 +250,12 @@ class RopeStructuralOperationsSpec extends AnyFlatSpec with Matchers:
       val newRope = rope.insert(rope.weight, s"char$i ").orFail
       if i % 100 == 0 then
         // Periodically check balance
-        newRope.isHeightBalanced shouldBe true
-        newRope.isDepthBalanced shouldBe true
+        assertValidTree(newRope)
       newRope
     }
 
     // Final check
-    finalRope.isHeightBalanced shouldBe true
-    finalRope.isDepthBalanced shouldBe true
+    assertValidTree(finalRope)
     finalRope.weight should be > 6000 // Rough check for content
 
   it should "handle deletion at various positions efficiently" in new ChunkedRopeSpecScope:
@@ -296,8 +283,7 @@ class RopeStructuralOperationsSpec extends AnyFlatSpec with Matchers:
     val rope = (1 to 100).foldLeft(Rope(""))((acc, i) => acc.insert(acc.weight, s"Line $i content ").orFail)
 
     // Should trigger rebalancing to maintain performance
-    rope.isHeightBalanced shouldBe true
-    rope.isDepthBalanced shouldBe true
+    assertValidTree(rope)
 
     // Verify content is still correct after rebalancing
     val content = rope.collect()
@@ -384,8 +370,7 @@ class RopeStructuralOperationsSpec extends AnyFlatSpec with Matchers:
       .concat(Rope(" more"))
 
     // Should still be balanced and functional
-    rope.isWeightBalanced shouldBe true
-    rope.isHeightBalanced shouldBe true
+    assertValidTree(rope)
     rope.collect() should not be empty
 
     // All operations should work
@@ -404,14 +389,14 @@ class RopeStructuralOperationsSpec extends AnyFlatSpec with Matchers:
       if i % 20 == 0 then
         step4.weight should be > 0
         step4.collect() should not be empty
-        step4.isDepthBalanced shouldBe true
+        assertValidTree(step4)
 
       step4
     }
 
     // Final verification
     finalRope.weight should be > 0
-    finalRope.isDepthBalanced shouldBe true
+    assertValidTree(finalRope)
 
   it should "handle degenerate cases" in new RopeSpecScope:
     // Test with empty search terms
@@ -426,41 +411,31 @@ class RopeStructuralOperationsSpec extends AnyFlatSpec with Matchers:
     rope.deleteLeft(5, 0).collect() shouldBe "hello world"
     rope.deleteRight(5, 0).orFail.collect() shouldBe "hello world"
 
-  it should "preserve correctness after rebalancing operations" in new ChunkedRopeSpecScope:
-    // Create unbalanced rope manually
-    val left       = Rope("a" * 100)
-    val right      = Rope("b")
-    val unbalanced = left.concat(right)
+  it should "preserve correctness when a long rope is joined to a short one" in new ChunkedRopeSpecScope:
+    val left   = Rope("a" * 100)
+    val right  = Rope("b")
+    val joined = left.concat(right)
 
-    val original   = unbalanced.collect()
-    val rebalanced = unbalanced.rebalance
-    val rebuilt    = unbalanced.rebuild
+    joined.collect() shouldBe "a" * 100 + "b"
+    assertValidTree(joined)
+    assertValidTree(right.concat(left))
+    right.concat(left).collect() shouldBe "b" + "a" * 100
 
-    // All should have same content
-    rebalanced.collect() shouldBe original
-    rebuilt.collect() shouldBe original
+  it should "build a valid shallow tree from a long chain of concatenations" in new ChunkedRopeSpecScope:
+    val chained = (1 to 100000).foldLeft(Leaf("x"): Rope)((rope, _) => rope.concat(Leaf("x")))
 
-    // Rebalanced versions should be more balanced
-    rebalanced.isWeightBalanced shouldBe true
-    rebuilt.isWeightBalanced shouldBe true
+    chained.collect() shouldBe "x" * 100001
+    assertValidTree(chained)
+    chained.height should be <= 6
 
-  it should "rebalance deeply skewed trees without recursive descent" in new ChunkedRopeSpecScope:
-    val skewed = (1 to 100000).foldLeft(Leaf("x"): Rope)((rope, _) => Node(rope, Leaf("x")))
+  it should "compare a long chained rope to itself without a full structural descent" in new ChunkedRopeSpecScope:
+    val chained = (1 to 100000).foldLeft(Leaf("x"): Rope)((rope, _) => rope.concat(Leaf("x")))
 
-    val rebalanced = skewed.rebalance
-
-    rebalanced.collect() shouldBe "x" * 100001
-    rebalanced.isWeightBalanced shouldBe true
-    rebalanced.isHeightBalanced shouldBe true
-
-  it should "compare a deeply skewed rope to itself without a full structural descent" in new ChunkedRopeSpecScope:
-    val skewed = (1 to 100000).foldLeft(Leaf("x"): Rope)((rope, _) => Node(rope, Leaf("x")))
-
-    (skewed == skewed) shouldBe true
+    (chained == chained) shouldBe true
 
   it should "reject unequal ropes of different total length without a full structural descent" in new ChunkedRopeSpecScope:
-    val short = (1 to 100000).foldLeft(Leaf("x"): Rope)((rope, _) => Node(rope, Leaf("x")))
-    val long  = Node(short, Leaf("x"))
+    val short = (1 to 100000).foldLeft(Leaf("x"): Rope)((rope, _) => rope.concat(Leaf("x")))
+    val long  = short.concat(Leaf("x"))
 
     (short == long) shouldBe false
 

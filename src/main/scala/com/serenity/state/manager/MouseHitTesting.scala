@@ -5,7 +5,7 @@ import com.serenity.config.CommentDisplayMode
 import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{ReducerResult, Transition}
+import com.serenity.state.reducers.{HiddenMarkerCaret, ReducerResult, Transition}
 
 /** State the event pipeline exposes for applying a resolved editor click/press/drag target to buffer selection, as a
   * capability record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is
@@ -289,7 +289,12 @@ private[manager] object MouseHitTesting:
         val selection =
           if click.shiftDown then EditorMouseTargeting.rangeSelectionFromAnchor(current, clickedCursor)
           else if click.clickCount >= 3 then EditorMouseTargeting.lineSelectionAtCursor(current, clickedCursor)
-          else if click.clickCount >= 2 then EditorMouseTargeting.wordSelectionAtCursor(current, clickedCursor)
+          else if click.clickCount >= 2 then
+            EditorMouseTargeting.wordSelectionAtCursor(
+              current,
+              clickedCursor,
+              HiddenMarkerCaret.hiddenColumnsOn(s, current, clickedCursor.line)
+            )
           else None
         val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
         val withCursor = EditorContextMenuHitTesting.dismissContextMenu(

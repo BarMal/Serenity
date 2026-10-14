@@ -7,7 +7,14 @@ import java.lang.management.ManagementFactory
   */
 object BenchmarkRunner:
 
-  /** Benchmarks whose allocation per invocation is worth the second measurement pass. */
+  /** Every frame benchmark is tracked by prefix, so a new `laptop.*`, `render.*` or `command_runner.*` benchmark is
+    * covered without being listed. The set below adds the individually chosen ones from other families.
+    */
+  private val AllocationTrackedPrefixes = List("laptop.", "render.", "command_runner.")
+
+  private[perf] def tracksAllocation(name: String): Boolean =
+    AllocationTracked.contains(name) || AllocationTrackedPrefixes.exists(name.startsWith)
+
   private val AllocationTracked =
     Set(
       "reducer.normal_editing",
@@ -75,7 +82,8 @@ object BenchmarkRunner:
       p95Ms: Double,
       maxMs: Double,
       allocationP50Bytes: Option[Long],
-      allocationP95Bytes: Option[Long]
+      allocationP95Bytes: Option[Long],
+      retainedBytes: Option[Long] = None
   )
 
   /** Warm up until the JIT has had a fair chance rather than a fixed handful of invocations: HotSpot needs roughly 200
@@ -204,7 +212,7 @@ object BenchmarkRunner:
     val batch   = calibrate(benchmark.run, 1).max(benchmark.minBatch)
     val samples = sample(benchmark.run, batch, benchmark.iterations, !benchmark.fixedSampleCount)
     val allocationSamples =
-      if AllocationTracked.contains(benchmark.name) then
+      if tracksAllocation(benchmark.name) then
         allocationBean
           .map { bean =>
             val threadId = Thread.currentThread().threadId()
@@ -244,19 +252,25 @@ object BenchmarkRunner:
       val index = math.ceil(percentile.max(0.0).min(1.0) * samples.length).toInt - 1
       samples(index.max(0).min(samples.length - 1))
 
+  /** `retained_bytes` is filled only by the `footprint.*` rows, whose timing columns are zero; timed rows leave it
+    * empty. It comes last so a reader of the older ten-column layout still parses every row.
+    */
+  private[perf] val csvHeader =
+    "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms," +
+      "allocation_p50_bytes,allocation_p95_bytes,retained_bytes"
+
   private[perf] def printResults(results: List[BenchmarkResult]): Unit =
     println("Serenity performance benchmarks")
     println(s"context,java_runtime,${System.getProperty("java.runtime.version", "unknown")}")
     println(s"context,java_vendor,${System.getProperty("java.vendor", "unknown")}")
     println(s"context,os,${System.getProperty("os.name", "unknown")} ${System.getProperty("os.version", "unknown")}")
     println(s"context,available_processors,${Runtime.getRuntime.availableProcessors()}")
-    println(
-      "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,allocation_p95_bytes"
-    )
+    println(csvHeader)
     results.foreach(result => println(csvRow(result)))
 
   private[perf] def csvRow(result: BenchmarkResult): String =
     val allocationP50 = result.allocationP50Bytes.fold("")(_.toString)
     val allocationP95 = result.allocationP95Bytes.fold("")(_.toString)
+    val retained      = result.retainedBytes.fold("")(_.toString)
     f"${result.name},${result.iterations},${result.warmupInvocations},${result.batch}," +
-      f"${result.minMs}%.7f,${result.p50Ms}%.7f,${result.p95Ms}%.7f,${result.maxMs}%.7f,$allocationP50,$allocationP95"
+      f"${result.minMs}%.7f,${result.p50Ms}%.7f,${result.p95Ms}%.7f,${result.maxMs}%.7f,$allocationP50,$allocationP95,$retained"

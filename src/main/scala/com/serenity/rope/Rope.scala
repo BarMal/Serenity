@@ -2,17 +2,22 @@ package com.serenity.rope
 
 import scala.annotation.tailrec
 
+import com.serenity.rope.btree.{BTreeBuild, BTreeEdit, BTreeJoin, BTreeSplit}
 import com.serenity.text.TextSummary
 
 sealed trait Rope(using balance: Balance):
   def weight: Int
+
+  /** Levels of the tree: 1 for a single leaf, and one more than a child's for a branch, since every leaf is at one
+    * depth.
+    */
   def height: Int
   def newlineCount: Int
   def lastLineLength: Int
   def endsWithNewline: Boolean
 
-  /** Words and grapheme-cluster characters as `TextCounts` defines them, kept incrementally: a `Node` joins its
-    * children's summaries, recounting only a bounded window around the seam (see `TextSummary`).
+  /** Words and grapheme-cluster characters as `TextCounts` defines them, kept incrementally: a `Branch` joins its
+    * children's summaries, recounting only a bounded window around each seam (see `TextSummary`).
     */
   def textSummary: TextSummary
 
@@ -22,56 +27,25 @@ sealed trait Rope(using balance: Balance):
 
   def nonWhitespaceCount: Int = textSummary.counts.nonWhitespaceCharacters
 
-  def isWeightBalanced: Boolean
-  def isHeightBalanced: Boolean
-
-  /** Boehm, Atkinson and Plass: a rope of depth n is balanced when its length is at least the (n+2)th Fibonacci number.
-    *
-    * This is the invariant that protects traversal, because `index` and `splitAt` descend by depth. A weight comparison
-    * between two children says nothing about depth and cannot be held without rebuilding on every edit.
-    */
-  def isDepthBalanced: Boolean =
-    val index = height + 1 // a leaf is height 1 here where the paper counts it depth 0
-    weight == 0 || (index < Rope.minimumWeightsByHeight.size && weight >= Rope.minimumWeightsByHeight(index))
-
-  def concat(that: Rope): Rope = Node(this, that).rebalance
-
-  /** Reorganises the leaves the rope already holds rather than flattening it to a string and re-splitting.
-    *
-    * Every unbalanced `concat` and `splitAt` falls back here, so this is the cost of an edit. Going via `collect()`
-    * copied every character of the document each time; leaves that are already the right size are now reused as they
-    * are, and only fragments are touched.
-    */
-  def rebuild: Rope =
-    val values = leafValues
-    RopeRebuilds.record(values.size)
-    Rope.fromLeafValues(values)
-
-  /** The non-empty leaf strings, left to right. */
-  private[rope] def leafValues: Vector[String] =
-    @tailrec
-    def go(stack: List[Rope], acc: List[String]): List[String] = stack match
-      case Nil => acc
-      case head :: rest =>
-        head match
-          case Node(left, right)            => go(left :: right :: rest, acc)
-          case Leaf(value) if value.isEmpty => go(rest, acc)
-          case Leaf(value)                  => go(rest, value :: acc)
-
-    go(List(this), Nil).reverse.toVector
-
-  def rebalance: Rope
+  def concat(that: Rope): Rope = BTreeJoin.concat(this, that)
 
   def index(i: Int): Option[Char]
 
   def splitAt(index: Int): Option[(Rope, Rope)]
 
+  /** What [[splitAt]] gives before `index`, without building the half after it; `index` must be within `[0, weight]`.
+    */
+  private[rope] def prefixTo(index: Int): Rope = splitAt(index).fold(this)((before, _) => before)
+
+  /** What [[splitAt]] gives from `index`, without building the half before it; `index` must be within `[0, weight]`. */
+  private[rope] def suffixFrom(index: Int): Rope = splitAt(index).fold(this)((_, after) => after)
+
   /** `None` when `index` is outside `[0, weight]` -- the range in which every character position and the
     * one-past-the-end append position are both meaningful. Callers decide the out-of-range policy explicitly; this
-    * method never silently no-ops.
+    * method never silently no-ops. CR and CRLF in `str` become LF, as in [[Rope.apply]].
     */
   def insert(index: Int, str: String): Option[Rope] =
-    splitAt(index).map((pre, post) => pre.concat(Leaf(str)).concat(post).rebalance)
+    Option.when(index >= 0 && index <= weight)(BTreeEdit.insert(this, index, LineEndings.normalized(str)))
 
   /** `None` when the underlying `deleteRight` call fails -- see its doc for the exact range. */
   def delete(startIndex: Int, endIndex: Int): Option[Rope] =
@@ -88,8 +62,7 @@ sealed trait Rope(using balance: Balance):
     else
       val clampedStart = Math.min(start, weight)
       val actualCount  = Math.min(count, clampedStart)
-      // clampedStart - actualCount is always in [0, weight], so deleteRight cannot fail here.
-      deleteRight(clampedStart - actualCount, actualCount).getOrElse(this)
+      BTreeEdit.deleteRange(this, clampedStart - actualCount, clampedStart)
 
   /** `None` when `start` is outside `[0, weight]`. A `count` that overruns the end of the rope is clamped rather than
     * rejected -- "delete to the end" is a legitimate, well-defined request, unlike a genuinely invalid start. A
@@ -99,18 +72,11 @@ sealed trait Rope(using balance: Balance):
     if count == 0 then Some(this)
     else if count < 0 then Some(deleteLeft(start, Math.abs(count)))
     else if start < 0 || start > weight then None
-    else if start + count > weight then deleteRight(start, weight - start)
-    else
-      for
-        startAndRest <- splitAt(start)
-        (pre, rest) = startAndRest
-        restAndEnd <- rest.splitAt(count)
-        (_, end) = restAndEnd
-      yield Node(pre, end).rebalance
+    else Some(BTreeEdit.deleteRange(this, start, start + Math.min(count, weight - start)))
 
   def dropLeft(n: Int): Rope =
-    // start = 0 is always in [0, weight], so this can only fail if a splitAt implementation violates its own
-    // contract; treated as unreachable rather than threaded through dropLeft's own signature.
+    // start = 0 is always in [0, weight], so this can only fail if deleteRight violates its own contract; treated as
+    // unreachable rather than threaded through dropLeft's own signature.
     deleteRight(0, n).getOrElse(this)
 
   def dropRight(n: Int): Rope = deleteLeft(weight, n)
@@ -119,8 +85,9 @@ sealed trait Rope(using balance: Balance):
     * `index == weight`.
     */
   def replace(index: Int, char: Char): Option[Rope] =
-    if index < 0 || index >= weight then None
-    else splitAt(index).map((l, r) => l.concat(Leaf(char.toString).concat(r.dropLeft(1))))
+    Option.when(index >= 0 && index < weight)(
+      BTreeEdit.insert(BTreeEdit.deleteRange(this, index, index + 1), index, char.toString)
+    )
 
   def replaceAll(term: String, replacement: String): Rope =
     searchAll(term).sorted.reverse.foldLeft(this)((rope, index) =>
@@ -134,16 +101,9 @@ sealed trait Rope(using balance: Balance):
     )
 
   def collect(): String =
-    val sb = new StringBuilder
-    @tailrec
-    def go(stack: List[Rope]): Unit = stack match
-      case Nil => ()
-      case head :: rest =>
-        head match
-          case Node(l, r) => go(l :: r :: rest)
-          case Leaf(v)    => sb.append(v); go(rest)
-    go(List(this))
-    sb.toString
+    val text = new StringBuilder(weight)
+    Rope.appendLeaves(this, text)
+    text.toString
 
   /** Visit the leaf content intersecting a half-open rope range from left to right. */
   final private[rope] def chunksInRange(startIndex: Int, endIndex: Int): Iterator[(Int, String)] =
@@ -151,39 +111,14 @@ sealed trait Rope(using balance: Balance):
     val end   = math.max(start, math.min(endIndex, weight))
 
     if start == end then Iterator.empty
-    else
-      Iterator.unfold(List(this -> 0)) { stack =>
-        @tailrec
-        def nextChunk(remaining: List[(Rope, Int)]): Option[((Int, String), List[(Rope, Int)])] =
-          remaining match
-            case Nil => None
-            case (rope, baseOffset) :: tail if baseOffset >= end || baseOffset + rope.weight <= start =>
-              nextChunk(tail)
-            case (node: Node, baseOffset) :: tail =>
-              val rightOffset = baseOffset + node.left.weight
-              nextChunk((node.left -> baseOffset) :: (node.right -> rightOffset) :: tail)
-            case (Leaf(value), baseOffset) :: tail =>
-              val chunkStart = math.max(0, start - baseOffset)
-              val chunkEnd   = math.min(value.length, end - baseOffset)
-              Some((baseOffset + chunkStart, value.substring(chunkStart, chunkEnd)) -> tail)
-
-        nextChunk(stack)
-      }
+    else Iterator.unfold(List(this -> 0))(stack => Rope.nextChunk(stack, start, end))
 
   /** The whole leaf covering `index`, with its own absolute offset -- unlike `chunksInRange`, this never clips to a
     * caller-supplied window, so `RopeCharacterSource` can cache the entire leaf regardless of which direction the next
     * access moves. `None` only for an `index` outside `[0, weight)`.
     */
   private[rope] def leafAt(index: Int): Option[(Int, String)] =
-    if index < 0 || index >= weight then None
-    else
-      @tailrec
-      def go(rope: Rope, baseOffset: Int): (Int, String) = rope match
-        case node: Node =>
-          if index < baseOffset + node.left.weight then go(node.left, baseOffset)
-          else go(node.right, baseOffset + node.left.weight)
-        case Leaf(value) => (baseOffset, value)
-      Some(go(this, 0))
+    if index < 0 || index >= weight then None else Some(Rope.descendToLeaf(this, index, 0))
 
   def contentEquals(text: String): Boolean = RopeContent.equalsText(this, text)
 
@@ -338,26 +273,24 @@ sealed trait Rope(using balance: Balance):
 
 /** Deliberately not `final`, unlike every other case class in the codebase.
   *
-  * `RopeMetadataAndTraversalSpec` subclasses this to override `collect()` and `index()` with assertion-throwing
-  * versions, proving that search and sequential traversal never materialise the whole rope or walk it character by
-  * character. That is the representation-invariance coverage `docs/coding-standards.md` requires, and it needs a real
-  * subclass -- a stub cannot observe which methods the rope chose to call.
+  * Specs subclass this to override `collect()` and `index()` with assertion-throwing versions, proving that search and
+  * sequential traversal never materialise the whole rope or walk it character by character. That is the
+  * representation-invariance coverage `docs/coding-standards.md` requires, and it needs a real subclass -- a stub
+  * cannot observe which methods the rope chose to call.
   *
-  * Kept in this file (rather than its own `Leaf.scala`, as before `Rope` was sealed) because `sealed` in Scala requires
-  * every direct subtype to be defined in the same source file as the sealed type itself.
+  * Kept in this file (rather than its own `Leaf.scala`) because `sealed` in Scala requires every direct subtype to be
+  * defined in the same source file as the sealed type itself.
   */
 @SuppressWarnings(Array("org.wartremover.warts.FinalCaseClass"))
 case class Leaf(value: String)(using balance: Balance) extends Rope:
+  private val lines: Long = Leaf.scanLines(value)
+
   override def weight: Int                   = value.length
   override def height: Int                   = 1
-  override val newlineCount: Int             = value.count(_ == '\n')
-  override val lastLineLength: Int           = value.length - value.lastIndexOf('\n') - 1
+  override val newlineCount: Int             = (lines >>> 32).toInt
+  override val lastLineLength: Int           = value.length - lines.toInt
   override val endsWithNewline: Boolean      = value.endsWith("\n")
   override lazy val textSummary: TextSummary = TextSummary.of(value)
-  override def isWeightBalanced: Boolean     = true
-  override def isHeightBalanced: Boolean     = true
-  override def rebalance: Rope =
-    if value.length > balance.leafChunkSize then Rope(value) else this
 
   override def splitAt(index: Int): Option[(Rope, Rope)] =
     if index < 0 || index > value.length then None
@@ -365,12 +298,6 @@ case class Leaf(value: String)(using balance: Balance) extends Rope:
 
   override def index(i: Int): Option[Char] =
     Option.when(i >= 0 && i < value.length)(value.charAt(i))
-
-  override def insert(index: Int, str: String): Option[Rope] =
-    if index < 0 || index > value.length then None
-    else
-      val (pre, post) = value.splitAt(index)
-      Some(Rope((pre + str) + post))
 
   override def deleteLeft(start: Int, count: Int): Rope =
     val (pre, post) = value.splitAt(start)
@@ -386,81 +313,129 @@ case class Leaf(value: String)(using balance: Balance) extends Rope:
 
   override def collect(): String = value
 
-// Kept in this file (rather than its own `Node.scala`, as before `Rope` was sealed) -- see `Leaf`'s doc above.
-final case class Node(left: Rope, right: Rope)(using balance: Balance) extends Rope:
+object Leaf:
 
-  override val weight: Int       = left.weight + right.weight
-  override val height: Int       = Math.max(left.height, right.height) + 1
-  override val newlineCount: Int = left.newlineCount + right.newlineCount
-
-  override val lastLineLength: Int =
-    if right.weight == 0 then left.lastLineLength
-    else if right.newlineCount == 0 && !left.endsWithNewline then left.lastLineLength + right.lastLineLength
-    else right.lastLineLength
-
-  override val endsWithNewline: Boolean =
-    if right.weight == 0 then left.endsWithNewline else right.endsWithNewline
-
-  override lazy val textSummary: TextSummary = TextSummary.join(left.textSummary, right.textSummary)
-
-  override def isWeightBalanced: Boolean =
-    Math.abs(left.weight - right.weight) <= balance.weightBalance
-
-  override def isHeightBalanced: Boolean =
-    Math.abs(left.height - right.height) <= balance.heightBalance
-
-  /** Rebuilding is O(leaves), so the criterion decides how often an edit costs that. Weight symmetry between the two
-    * children cannot survive an edit without a rebuild, and says nothing about the depth `index` and `splitAt` descend;
-    * the Fibonacci bound is what those actually pay for.
+  /** The newline count in the high half and the offset just past the last newline (0 when there is none) in the low
+    * half, from one pass that jumps from newline to newline.
     */
-  override def rebalance: Rope =
-    if isDepthBalanced && isHeightBalanced then this else rebuild
+  private def scanLines(value: String): Long =
+    @tailrec
+    def go(from: Int, count: Int, pastLast: Int): Long =
+      val newline = value.indexOf('\n', from)
+      if newline < 0 then (count.toLong << 32) | pastLast.toLong
+      else go(newline + 1, count + 1, newline + 1)
 
-  /** Splices the text into the leaf that holds `index`, rebuilding only the path down to it.
-    *
-    * The inherited `splitAt` + `concat` + `concat` route rebuilt the whole rope for a single character, because
-    * concatenating a one-character leaf onto a large rope fails any symmetry criterion. Descending instead is the
-    * short-leaf case from Boehm, Atkinson and Plass, and what a b-tree rope does when it edits a chunk in place.
-    */
-  override def insert(index: Int, str: String): Option[Rope] =
-    if index < 0 || index > weight then None
-    else if index <= left.weight then left.insert(index, str).map(newLeft => Node(newLeft, right).rebalance)
-    else right.insert(index - left.weight, str).map(newRight => Node(left, newRight).rebalance)
+    go(0, 0, 0)
 
-  override def deleteRight(start: Int, count: Int): Option[Rope] =
-    if count == 0 then Some(this)
-    else if count < 0 then Some(deleteLeft(start, Math.abs(count)))
-    else if start < 0 || start > weight then None
-    else if start + count > weight then deleteRight(start, weight - start)
-    else if start >= left.weight then
-      right.deleteRight(start - left.weight, count).map(newRight => Node(left, newRight).rebalance)
-    else if start + count <= left.weight then
-      left.deleteRight(start, count).map(newLeft => Node(newLeft, right).rebalance)
+/** An internal node of the B-tree: between `Fanout.Min` and `Fanout.Max` children (two or more for the root), all of
+  * one height. It caches where each child starts and how many newlines precede it, so a descent by offset or by line
+  * picks the child without opening the others.
+  *
+  * Never mutated after construction: an edit builds a new branch for each node on its path and shares the rest.
+  */
+final class Branch private (val children: Vector[Rope])(using Balance) extends Rope:
+  private val measured: (Array[Int], Array[Int]) = Branch.measure(children)
+
+  /** `starts(i)` is the offset of child `i` within this branch, and `starts(children.size)` its weight. */
+  private[rope] val starts: Array[Int] = measured._1
+
+  /** `newlines(i)` is how many newlines precede child `i`, and `newlines(children.size)` is the branch's total. */
+  private[rope] val newlines: Array[Int] = measured._2
+
+  override val weight: Int              = starts(children.size)
+  override val height: Int              = children(0).height + 1
+  override val newlineCount: Int        = newlines(children.size)
+  override val lastLineLength: Int      = Branch.trailingLineLength(children)
+  override val endsWithNewline: Boolean = Branch.endsWithNewlineOf(children)
+
+  override lazy val textSummary: TextSummary =
+    children.drop(1).foldLeft(children(0).textSummary)((joined, child) => TextSummary.join(joined, child.textSummary))
+
+  /** The first child that has a character at `offset`; the last child for an offset at or past the end. */
+  private[rope] def childContaining(offset: Int): Int =
+    @tailrec
+    def go(child: Int): Int =
+      if child >= children.size - 1 || offset < starts(child + 1) then child else go(child + 1)
+
+    go(0)
+
+  /** The first child that reaches `offset`, so that an offset on a boundary belongs to the child that ends there. */
+  private[rope] def childEndingAtOrAfter(offset: Int): Int =
+    @tailrec
+    def go(child: Int): Int =
+      if child >= children.size - 1 || offset <= starts(child + 1) then child else go(child + 1)
+
+    go(0)
+
+  /** The children that overlap `[from, until)` (offsets within this branch) with their absolute offsets. */
+  private[rope] def overlapping(from: Int, until: Int, base: Int): List[(Rope, Int)] =
+    (childContaining(math.max(0, from)) until children.size).iterator
+      .takeWhile(child => starts(child) < until)
+      .map(child => (children(child), base + starts(child)))
+      .toList
+
+  /** The first child whose newlines include the `nth` (counting from 1) newline. */
+  private[rope] def childHoldingNewline(nth: Int): Int =
+    @tailrec
+    def go(child: Int): Int =
+      if child >= children.size - 1 || nth <= newlines(child + 1) then child else go(child + 1)
+
+    go(0)
+
+  override def index(i: Int): Option[Char] =
+    if i < 0 || i >= weight then None
     else
-      val fromLeft = left.weight - start
-      for
-        newLeft  <- left.deleteRight(start, fromLeft)
-        newRight <- right.deleteRight(0, count - fromLeft)
-      yield Node(newLeft, newRight).rebalance
+      val child = childContaining(i)
+      children(child).index(i - starts(child))
 
   override def splitAt(index: Int): Option[(Rope, Rope)] =
     if index < 0 || index > weight then None
     else if index == 0 then Some(Leaf(""), this)
-    else if weight == index then Some(this, Leaf(""))
-    else if left.weight == index then Some(left, right)
-    else if index < left.weight then
-      left.splitAt(index).map {
-        case (first, second) =>
-          (first.rebalance, Node(second, right).rebalance)
-      }
-    else
-      right.splitAt(index - left.weight).map {
-        case (first, second) =>
-          (Node(left, first).rebalance, second.rebalance)
-      }
+    else if index == weight then Some(this, Leaf(""))
+    else Some(BTreeSplit.split(this, index))
 
-  override def index(i: Int): Option[Char] =
-    if i < left.weight then left.index(i) else right.index(i - left.weight)
+  override private[rope] def prefixTo(index: Int): Rope =
+    if index <= 0 then Leaf("") else if index >= weight then this else BTreeSplit.prefix(this, index)
+
+  override private[rope] def suffixFrom(index: Int): Rope =
+    if index <= 0 then this else if index >= weight then Leaf("") else BTreeSplit.suffix(this, index)
+
+object Branch:
+
+  private[rope] def apply(children: Vector[Rope])(using Balance): Branch = new Branch(children)
+
+  private def measure(children: Vector[Rope]): (Array[Int], Array[Int]) =
+    val starts   = new Array[Int](children.size + 1)
+    val newlines = new Array[Int](children.size + 1)
+
+    @tailrec
+    def fill(child: Int): Unit =
+      if child < children.size then
+        starts(child + 1) = starts(child) + children(child).weight
+        newlines(child + 1) = newlines(child) + children(child).newlineCount
+        fill(child + 1)
+
+    fill(0)
+    (starts, newlines)
+
+  /** The characters after the last newline: a child without newlines extends the line begun in the one before it. */
+  private def trailingLineLength(children: Vector[Rope]): Int =
+    @tailrec
+    def go(child: Int, length: Int): Int =
+      if child < 0 then length
+      else if children(child).newlineCount > 0 then length + children(child).lastLineLength
+      else go(child - 1, length + children(child).lastLineLength)
+
+    go(children.size - 1, 0)
+
+  private def endsWithNewlineOf(children: Vector[Rope]): Boolean =
+    @tailrec
+    def go(child: Int): Boolean =
+      if child < 0 then false
+      else if children(child).weight > 0 then children(child).endsWithNewline
+      else go(child - 1)
+
+    go(children.size - 1)
 
 object Rope:
 
@@ -469,56 +444,40 @@ object Rope:
   // Normalizes CRLF and bare CR to LF on entry, in one pass, so all downstream code
   // (WrapEngine, RenderEngine, cursor arithmetic) only ever sees '\n'.
   def apply(in: String)(using balance: Balance): Rope =
-    build(LineEndings.normalized(in))
+    BTreeBuild.fromText(LineEndings.normalized(in))
 
-  /** Rebuilds a rope over leaf strings that are already in hand.
-    *
-    * Oversized leaves are split and adjacent fragments merged, so the leaves stay near the chunk size no matter how
-    * ragged the edits that produced them; without that, repeated splitting leaves a tail of one-character leaves and
-    * the tree deepens even though it is nominally rebuilt.
+  /** A rope over leaf strings that are already in hand: each is kept as it is unless it exceeds the largest leaf, and
+    * empty ones are dropped.
     */
-  /** F(0) to F(45). A rope deeper than that is degenerate under any criterion, so it is reported unbalanced rather than
-    * overflowing the bound.
-    */
-  private[rope] val minimumWeightsByHeight: Vector[Int] =
-    Vector.iterate((0, 1), 46) { case (current, next) => (next, current + next) }.map((current, _) => current)
-
   private[rope] def fromLeafValues(values: Vector[String])(using balance: Balance): Rope =
-    combineBalanced(values.filter(_.nonEmpty))
+    BTreeBuild.fromLeafValues(values)
 
-  /** Splits at the exact character midpoint, cutting the one leaf that straddles it.
-    *
-    * Splitting on a leaf boundary instead would leave the halves up to a chunk apart, and `isWeightBalanced` is checked
-    * after every edit against a threshold far tighter than that. Cutting the straddling leaf keeps the halves within
-    * one character while every other leaf passes through untouched, so the characters copied are bounded by the chunk
-    * size times the depth rather than by the size of the document.
-    */
-  private def combineBalanced(values: Vector[String])(using balance: Balance): Rope =
-    values match
-      case Vector()                                                 => Leaf("")
-      case Vector(single) if single.length <= balance.leafChunkSize => Leaf(single)
-      case _ =>
-        val total = values.foldLeft(0)((running, value) => running + value.length)
-        if total <= balance.leafChunkSize then Leaf(values.mkString)
-        else
-          val (left, right) = splitAtWeight(values, total / 2, Vector.empty)
-          Node(combineBalanced(left), combineBalanced(right))
+  private def appendLeaves(rope: Rope, text: StringBuilder): Unit =
+    rope match
+      case Leaf(value)    => val _ = text.append(value)
+      case branch: Branch => branch.children.foreach(child => appendLeaves(child, text))
 
   @tailrec
-  private def splitAtWeight(
-    values: Vector[String],
-    target: Int,
-    taken: Vector[String]
-  ): (Vector[String], Vector[String]) =
-    if values.isEmpty then (taken, Vector.empty)
-    else
-      val value = values(0)
-      if value.length <= target then splitAtWeight(values.drop(1), target - value.length, taken :+ value)
-      else if target == 0 then (taken, values)
-      else (taken :+ value.take(target), value.drop(target) +: values.drop(1))
+  private def descendToLeaf(rope: Rope, index: Int, baseOffset: Int): (Int, String) =
+    rope match
+      case Leaf(value) => (baseOffset, value)
+      case branch: Branch =>
+        val child = branch.childContaining(index)
+        descendToLeaf(branch.children(child), index - branch.starts(child), baseOffset + branch.starts(child))
 
-  private def build(in: String)(using balance: Balance): Rope =
-    if in.length <= balance.leafChunkSize then Leaf(in)
-    else
-      val (left, right) = in.splitAt(Math.floorDiv(in.length, 2))
-      Node(build(left), build(right)).rebalance
+  @tailrec
+  private def nextChunk(
+    remaining: List[(Rope, Int)],
+    start: Int,
+    end: Int
+  ): Option[((Int, String), List[(Rope, Int)])] =
+    remaining match
+      case Nil => None
+      case (rope, baseOffset) :: tail if baseOffset >= end || baseOffset + rope.weight <= start =>
+        nextChunk(tail, start, end)
+      case (branch: Branch, baseOffset) :: tail =>
+        nextChunk(branch.overlapping(start - baseOffset, end - baseOffset, baseOffset) ::: tail, start, end)
+      case (Leaf(value), baseOffset) :: tail =>
+        val chunkStart = math.max(0, start - baseOffset)
+        val chunkEnd   = math.min(value.length, end - baseOffset)
+        Some((baseOffset + chunkStart, value.substring(chunkStart, chunkEnd)) -> tail)

@@ -12,19 +12,19 @@ class RopeDiffAllocationSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  private def firstChildWeight(rope: Rope): Int = rope match
+    case branch: Branch => branch.children(0).weight
+    case other          => other.weight
+
   private def endOfLeftSubtreeEdit(size: Int): (Rope, Rope) =
-    val before = Rope("the cat sat on the mat\n" * (size / 23))
-    val boundary = before match
-      case Node(left, _) => left.weight
-      case other         => other.weight
+    val before   = Rope("the cat sat on the mat\n" * (size / 23))
+    val boundary = firstChildWeight(before)
     (before, before.insert(boundary, "x").getOrElse(before))
 
   "Finding an insertion at the end of a subtree" should "cost the same in a 1 MB rope as in a 10 KB one" in {
     val (before, after) = endOfLeftSubtreeEdit(1024 * 1024)
     withClue("the edit must land on the end of the left subtree: ") {
-      RopeDiff.changedOffsetRange(before, after).map(_._1) shouldBe Some(before match
-        case Node(left, _) => left.weight
-        case other         => other.weight)
+      RopeDiff.changedOffsetRange(before, after).map(_._1) shouldBe Some(firstChildWeight(before))
     }
     val (smallBefore, smallAfter) = endOfLeftSubtreeEdit(10 * 1024)
     SettledAllocation.perCall(

@@ -6,7 +6,7 @@ import scala.annotation.tailrec
 
 import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
 import com.serenity.markdown.{LazyBlockIndex, MarkdownInlineView}
-import com.serenity.rope.{ChangeSet, Leaf, Node, Rope}
+import com.serenity.rope.{Branch, ChangeSet, Leaf, Rope}
 import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.layout.VisualLineIndexStore.StampRelation
 
@@ -196,8 +196,8 @@ object VisualLineIndexStore:
     * side of the change without descending the ropes again.
     */
   private def sharedRun(a: Rope, b: Rope, limit: Int, fromEnd: Boolean): Run =
-    def expand(node: Node, rest: List[Rope]): List[Rope] =
-      if fromEnd then node.right :: node.left :: rest else node.left :: node.right :: rest
+    def expand(branch: Branch, rest: List[Rope]): List[Rope] =
+      (if fromEnd then branch.children.reverse else branch.children).toList ::: rest
 
     def matching(x: String, xUsed: Int, y: String, yUsed: Int, count: Int): Run =
       def at(value: String, used: Int, offset: Int): Char =
@@ -233,12 +233,12 @@ object VisualLineIndexStore:
                     else matching(s, leftUsed, t, rightUsed, count)
                   if shared.length < count then run.plus(shared)
                   else walk(left, leftUsed + count, right, rightUsed + count, run.plus(shared))
-                case (nodeX: Node, nodeY: Node) =>
-                  if nodeX.weight > nodeY.weight then walk(expand(nodeX, xs), leftUsed, right, rightUsed, run)
-                  else if nodeY.weight > nodeX.weight then walk(left, leftUsed, expand(nodeY, ys), rightUsed, run)
-                  else walk(expand(nodeX, xs), leftUsed, expand(nodeY, ys), rightUsed, run)
-                case (nodeX: Node, _) => walk(expand(nodeX, xs), leftUsed, right, rightUsed, run)
-                case (_, nodeY: Node) => walk(left, leftUsed, expand(nodeY, ys), rightUsed, run)
+                case (branchX: Branch, branchY: Branch) =>
+                  if branchX.weight > branchY.weight then walk(expand(branchX, xs), leftUsed, right, rightUsed, run)
+                  else if branchY.weight > branchX.weight then walk(left, leftUsed, expand(branchY, ys), rightUsed, run)
+                  else walk(expand(branchX, xs), leftUsed, expand(branchY, ys), rightUsed, run)
+                case (branchX: Branch, _) => walk(expand(branchX, xs), leftUsed, right, rightUsed, run)
+                case (_, branchY: Branch) => walk(left, leftUsed, expand(branchY, ys), rightUsed, run)
           case _ => run
 
     walk(List(a), 0, List(b), 0, Run(0, 0))
