@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-10-14
+
+- Fixed Open File and Save As killing the whole editor on Linux systems without the `org.gtk.Settings.FileChooser` GSettings schema (GLib aborts the process): Serenity now checks for the schema and uses Swing's own chooser when it is missing. New `ui.file_dialog = auto|native|swing` setting (restart to apply)
+
 ### 2026-10-12
 
 - Replaced the binary-tree rope with a B-tree (#1900): each node holds 8 to 16 children, leaves hold up to 2,048 characters and are never cut through a surrogate pair, and every node caches its length, newline count and word counts. An edit copies the path to the leaf it touches and splits or merges one node at a time, so a paste or a large delete no longer rebuilds whole subtrees (on a 10 MB document, a 10-100 KB paste went from a median of about 530 us and a worst case of 100-200 ms to about 280 us and 8-11 ms) and the tree stays 5 levels deep where appending or prepending used to grow it from 15 to 20 or more.

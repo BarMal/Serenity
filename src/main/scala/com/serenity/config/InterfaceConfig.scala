@@ -81,7 +81,8 @@ final case class InterfaceConfig(
     // the flush-to-edge density it always had), rather than baking either surface's default in here -- see
     // `AppState.effectiveUiElementGap`. `Some` is honoured on both surfaces unchanged.
     elementGap: Option[Double] = None,
-    outlineThicknessPx: Int = 2
+    outlineThicknessPx: Int = 2,
+    fileDialog: FileDialogMode = FileDialogMode.Auto
 ):
 
   def normalized: InterfaceConfig =

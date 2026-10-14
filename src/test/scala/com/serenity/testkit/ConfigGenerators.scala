@@ -181,10 +181,11 @@ object ConfigGenerators:
 
   val genInterfaceConfig: Gen[InterfaceConfig] =
     for
-      density   <- oneOfEnum(InterfaceDensity.values)
-      gap       <- Gen.option(double(AppConfig.MinUiElementGap, AppConfig.MaxUiElementGap))
-      thickness <- Gen.choose(AppConfig.MinUiOutlineThicknessPx, AppConfig.MaxUiOutlineThicknessPx)
-    yield InterfaceConfig(density, gap, thickness)
+      density    <- oneOfEnum(InterfaceDensity.values)
+      gap        <- Gen.option(double(AppConfig.MinUiElementGap, AppConfig.MaxUiElementGap))
+      thickness  <- Gen.choose(AppConfig.MinUiOutlineThicknessPx, AppConfig.MaxUiOutlineThicknessPx)
+      fileDialog <- oneOfEnum(FileDialogMode.values)
+    yield InterfaceConfig(density, gap, thickness, fileDialog)
 
   val genThemeFollowConfig: Gen[ThemeFollowConfig] =
     val themeName = Gen.oneOf("light", "dark", "paper", "ink", "high-contrast", "solar")
