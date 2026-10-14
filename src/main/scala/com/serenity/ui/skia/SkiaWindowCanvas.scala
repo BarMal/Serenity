@@ -39,7 +39,9 @@ final class SkiaWindowCanvas private (layer: SkiaLayer) extends HostedCanvas:
 
   def drawFrame(frame: HostedFrame)(paint: RenderSurface => Unit): HostedOutcome =
     if !layer.isShowing || layer.getWidth <= 0 || layer.getHeight <= 0 then
-      HostedOutcome.Skipped(s"the canvas is not showing (showing=${layer.isShowing}, ${layer.getWidth}x${layer.getHeight})")
+      HostedOutcome.Skipped(
+        s"the canvas is not showing (showing=${layer.isShowing}, ${layer.getWidth}x${layer.getHeight})"
+      )
     else
       val job    = new Job(frame, paint)
       val handle = Some(job)

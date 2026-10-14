@@ -170,10 +170,12 @@ private[perf] object RendererWindowBenchmarkChild:
 
   /** The window has been asked to show; its canvas has a size once the event-dispatch thread has laid it out. */
   private def awaitShown(window: SwingWindow): IO[Unit] =
-    def ready: Boolean = window.inputComponent.isShowing && window.inputComponent.getWidth > 0 && window.canvas.getWidth > 0 && window.canvas.getHeight > 0
+    def ready: Boolean =
+      window.inputComponent.isShowing && window.inputComponent.getWidth > 0 && window.canvas.getWidth > 0 && window.canvas.getHeight > 0
     def poll(waited: FiniteDuration): IO[Unit] =
       if ready then IO.unit
-      else if waited >= ShowTimeout then IO.raiseError(
+      else if waited >= ShowTimeout then
+        IO.raiseError(
           new IllegalStateException(
             s"the window never became visible: ${window.inputComponent.getClass.getSimpleName} " +
               s"${window.inputComponent.getWidth}x${window.inputComponent.getHeight} " +

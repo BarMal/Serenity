@@ -316,7 +316,7 @@ class SwingWindow(
     * layout manager (the accessibility proxies position themselves), so the hosted component is fitted to it by hand.
     */
   private def attachHosted(canvasHost: HostedCanvas): Unit =
-    val component = canvasHost.component
+    val component   = canvasHost.component
     def fit(): Unit = component.setBounds(0, 0, canvas.getWidth, canvas.getHeight)
     component.setFocusable(true)
     component.setFocusTraversalKeysEnabled(false)
