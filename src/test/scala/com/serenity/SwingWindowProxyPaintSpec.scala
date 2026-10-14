@@ -14,6 +14,7 @@ import com.serenity.ui.accessibility.{
   SwingAccessibilityBridge
 }
 import com.serenity.config.WindowChromeMode
+import com.serenity.testkit.DisplayExclusive
 import com.serenity.ui.layout.LayoutRect
 import com.serenity.ui.terminal.SwingWindow
 import org.scalatest.flatspec.AnyFlatSpec
@@ -75,57 +76,59 @@ class SwingWindowProxyPaintSpec extends AnyFlatSpec with Matchers:
     s"A shown SwingWindow ($mode chrome) with a dialog proxy over the frame" should "keep showing the frame after a RepaintManager repaint" in {
       assume(!GraphicsEnvironment.isHeadless, "Reading pixels back from the screen needs a display")
 
-      val mismatches = SwingWindow
-        .resource(chromeMode = mode)
-        .use { window =>
-          IO.blocking {
-            val canvas = window.canvas
-            onEventThread(())
-            canvas.isShowing shouldBe true
+      val mismatches = DisplayExclusive(
+        SwingWindow
+          .resource(chromeMode = mode)
+          .use { window =>
+            IO.blocking {
+              val canvas = window.canvas
+              onEventThread(())
+              canvas.isShowing shouldBe true
 
-            val width  = canvas.getWidth
-            val height = canvas.getHeight
-            val frame  = window.acquireBaseImage(width, height, BufferedImage.TYPE_INT_RGB)
-            val g      = frame.createGraphics()
-            try
-              g.setColor(new Color(0x202020))
-              g.fillRect(0, 0, width, height)
-              g.setColor(new Color(0x40a0ff))
-              (0 until height by 6).foreach(y => g.fillRect(0, y, width, 2))
-            finally g.dispose()
+              val width  = canvas.getWidth
+              val height = canvas.getHeight
+              val frame  = window.acquireBaseImage(width, height, BufferedImage.TYPE_INT_RGB)
+              val g      = frame.createGraphics()
+              try
+                g.setColor(new Color(0x202020))
+                g.fillRect(0, 0, width, height)
+                g.setColor(new Color(0x40a0ff))
+                (0 until height by 6).foreach(y => g.fillRect(0, y, width, 2))
+              finally g.dispose()
 
-            val metrics = window.metrics
-            val cells   = LayoutRect(2, 2, 20, 6)
-            val region = new Rectangle(
-              cells.x * metrics.charWidth,
-              cells.y * metrics.lineHeight,
-              cells.width * metrics.charWidth,
-              cells.height * metrics.lineHeight
-            )
+              val metrics = window.metrics
+              val cells   = LayoutRect(2, 2, 20, 6)
+              val region = new Rectangle(
+                cells.x * metrics.charWidth,
+                cells.y * metrics.lineHeight,
+                cells.width * metrics.charWidth,
+                cells.height * metrics.lineHeight
+              )
 
-            onEventThread {
-              window.onBaseImageReady(frame)
-              canvas.paintImmediately(0, 0, width, height)
+              onEventThread {
+                window.onBaseImageReady(frame)
+                canvas.paintImmediately(0, 0, width, height)
+              }
+              window.updateAccessibility(AccessibilitySnapshot(List(node(AccessibilityRole.Dialog, cells)), Nil))
+              onEventThread(())
+              onEventThread(canvas.repaint())
+              onEventThread(())
+              onEventThread(())
+              Toolkit.getDefaultToolkit.sync()
+
+              val origin = canvas.getLocationOnScreen
+              val shot = new Robot().createScreenCapture(
+                new Rectangle(origin.x + region.x, origin.y + region.y, region.width, region.height)
+              )
+              (for
+                y <- 0 until region.height
+                x <- 0 until region.width
+                if (shot.getRGB(x, y) & 0xffffff) != (frame.getRGB(region.x + x, region.y + y) & 0xffffff)
+              yield 1).size
             }
-            window.updateAccessibility(AccessibilitySnapshot(List(node(AccessibilityRole.Dialog, cells)), Nil))
-            onEventThread(())
-            onEventThread(canvas.repaint())
-            onEventThread(())
-            onEventThread(())
-            Toolkit.getDefaultToolkit.sync()
-
-            val origin = canvas.getLocationOnScreen
-            val shot = new Robot().createScreenCapture(
-              new Rectangle(origin.x + region.x, origin.y + region.y, region.width, region.height)
-            )
-            (for
-              y <- 0 until region.height
-              x <- 0 until region.width
-              if (shot.getRGB(x, y) & 0xffffff) != (frame.getRGB(region.x + x, region.y + y) & 0xffffff)
-            yield 1).size
           }
-        }
-        .unsafeRunSync()
+          .unsafeRunSync()
+      )
 
       mismatches shouldBe 0
     }
