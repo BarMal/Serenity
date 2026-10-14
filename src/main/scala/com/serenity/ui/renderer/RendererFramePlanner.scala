@@ -275,6 +275,15 @@ object RendererFramePlanner:
   def panelDirtyCheck(damage: Damage)(surfaceId: SurfaceId): Boolean =
     Damage.narrowToSurface(damage, surfaceId) != Damage.Nothing
 
+  /** A panel repainted over pixels it painted last frame blends with its own old pixels instead of the content it sits
+    * on, so a translucent panel (a theme `panel.background` with alpha, or a floating panel dimmed by
+    * `alphaMultiplier`) that must repaint takes the whole frame with it, which puts that content back first.
+    */
+  private def blendsOverFrame(state: AppState, panels: FramePanels, damage: Damage): Boolean =
+    val translucent =
+      state.persisted.theme.panel.background.alpha < 255 || panels.floating.exists(_.alphaMultiplier < 1f)
+    translucent && panels.sites.keys.exists(panelDirtyCheck(damage))
+
   /** Drop every reuse promise attached to this surface and force the next repaint to cover the whole canvas.
     *
     * Used by frames that repaint the canvas from scratch (the start page) or that stand `planFrame`'s optimisation down
@@ -342,7 +351,8 @@ object RendererFramePlanner:
         val geometryChanged =
           context.caches.frameState.chromeGeometryChanged(persistenceKey, ChromeGeometry.of(renderPlan))
         val effectiveDamage =
-          if inputsOrPanesChanged || geometryChanged then Damage.Everything else bufferDamageSinceLastDraw
+          if inputsOrPanesChanged || geometryChanged || blendsOverFrame(state, panels, damage) then Damage.Everything
+          else bufferDamageSinceLastDraw
 
         // A ghost is derived from a note's text and from which chapters are empty, neither of which a buffer's own
         // damage reports. Rows whose ghost changed are found by comparing frames below; the screen's repaint region

@@ -1,5 +1,6 @@
 package com.serenity.ui.tui
 
+import java.awt.Color
 import java.awt.font.FontRenderContext
 import java.io.Writer
 import java.util.concurrent.atomic.AtomicReference
@@ -23,7 +24,8 @@ final class TerminalRenderSurface(
     height: Int,
     writer: Writer,
     cellMetrics: CellMetrics,
-    scrollRegions: Boolean = false
+    scrollRegions: Boolean = false,
+    backdrop: Color = Color.BLACK
 ) extends RenderSurface
     with TextDrawing
     with PixelDrawing
@@ -44,6 +46,8 @@ final class TerminalRenderSurface(
 
   private val surfaceActivity = SurfaceActivity()
 
+  private def flatten(color: RenderColor): Color = BackdropBlend.flatten(color.toAwt, backdrop)
+
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
   override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
@@ -56,8 +60,8 @@ final class TerminalRenderSurface(
   override def persistentContentKey: Option[SurfaceContentIdentity] =
     Some(SurfaceContentIdentity(screenBuffer))
 
-  def setForegroundColor(color: RenderColor): Unit = screenBuffer.setForegroundColor(color.toAwt)
-  def setBackgroundColor(color: RenderColor): Unit = screenBuffer.setBackgroundColor(color.toAwt)
+  def setForegroundColor(color: RenderColor): Unit = screenBuffer.setForegroundColor(flatten(color))
+  def setBackgroundColor(color: RenderColor): Unit = screenBuffer.setBackgroundColor(flatten(color))
   def getBackgroundColor: RenderColor              = RenderColor.fromAwt(screenBuffer.getBackgroundColor)
 
   override def clearViewportExcept(color: RenderColor, preserved: List[PixelRect]): Unit =
@@ -228,7 +232,7 @@ final class TerminalRenderSurface(
     if width >= 2 && height >= 2 then
       val previousForeground = screenBuffer.getForegroundColor
       val previousBackground = screenBuffer.getBackgroundColor
-      screenBuffer.setForegroundColor(color.toAwt)
+      screenBuffer.setForegroundColor(flatten(color))
       TerminalRenderSurface.frameGlyphs(x, y, width, height).foreach { glyph =>
         screenBuffer.setBackgroundColor(screenBuffer.backgroundAt(glyph.x, glyph.y).getOrElse(previousBackground))
         screenBuffer.putString(glyph.x, glyph.y, glyph.char.toString)

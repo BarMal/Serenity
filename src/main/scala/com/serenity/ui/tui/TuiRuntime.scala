@@ -1,6 +1,6 @@
 package com.serenity.ui.tui
 
-import java.awt.Font
+import java.awt.{Color, Font}
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicReference
 
@@ -227,20 +227,22 @@ object TuiRuntime:
     * losing the previous frame's diff state on that transition is the correct behaviour, not a gap.
     */
   final private[tui] class SurfaceHolder(shell: TerminalShell):
-    private val current = new AtomicReference[Option[(ViewportSize, TerminalRenderSurface)]](None)
+    private val current = new AtomicReference[Option[(ViewportSize, Color, TerminalRenderSurface)]](None)
 
-    def forSize(size: ViewportSize): TerminalRenderSurface =
+    def forSize(size: ViewportSize, backdrop: Color = Color.BLACK): TerminalRenderSurface =
       current.get() match
-        case Some((existingSize, surface)) if existingSize == size => surface
+        case Some((existingSize, existingBackdrop, surface)) if existingSize == size && existingBackdrop == backdrop =>
+          surface
         case _ =>
           val surface = new TerminalRenderSurface(
             size.width,
             size.height,
             shell.writer,
             CellMetricsOne,
-            shell.supportsScrollRegions
+            shell.supportsScrollRegions,
+            backdrop
           )
-          current.set(Some((size, surface)))
+          current.set(Some((size, backdrop, surface)))
           surface
 
   /** The full-frame paint itself, separated from the `RenderFn` that sequences it so a spec can drive exactly the
@@ -347,7 +349,7 @@ object TuiRuntime:
     (state, cursorVisible, cursorColor, damage, caches) =>
       for
         size <- shell.viewportSize
-        surface = surfaceHolder.forSize(size)
+        surface = surfaceHolder.forSize(size, state.persisted.config.tuiConfig.backdrop)
         _ <- IO(paintFrame(state, surface, size, cursorVisible, cursorColor, damage, caches))
         _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability, caches)
@@ -363,7 +365,7 @@ object TuiRuntime:
     (state, cursorVisible, cursorColor, _, caches) =>
       for
         size <- shell.viewportSize
-        surface = surfaceHolder.forSize(size)
+        surface = surfaceHolder.forSize(size, state.persisted.config.tuiConfig.backdrop)
         _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor, caches))
         _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability, caches)

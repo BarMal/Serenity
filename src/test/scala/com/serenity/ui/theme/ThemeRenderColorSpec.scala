@@ -47,3 +47,17 @@ class ThemeRenderColorSpec extends AnyFlatSpec with Matchers:
     ColorFormat.toHex(RenderColor.fromArgb(0x80a1b2c3), withAlpha = true) shouldBe "#A1B2C380"
     ColorFormat.toHex(RenderColor.fromArgb(0xffa1b2c3), withAlpha = true) shouldBe "#A1B2C3"
   }
+
+  it should "round-trip a theme whose backgrounds carry alpha, including fully transparent" in {
+    val clear = RenderColor.fromArgb(0x00112233)
+    val frost = RenderColor.fromArgb(0x80445566)
+    val theme = Theme.dark.copy(
+      background = clear,
+      panel = Theme.dark.panel.copy(background = frost)
+    )
+    val config = ThemeConfigWriter.themeToConfig(theme)
+    config.ui.background shouldBe "#11223300"
+    config.ui.panel.background shouldBe "#44556680"
+    ConfigurableThemeManager.configToTheme(config).map(t => (t.background, t.panel.background)) shouldBe
+      Right((clear, frost))
+  }

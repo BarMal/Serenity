@@ -14,7 +14,7 @@ object ThemeConfigWriter:
       name = theme.name,
       ui = UiColors(
         foreground = hex(ThemeFieldSchema.uiForegroundField.themeValue(theme)),
-        background = hex(ThemeFieldSchema.uiBackgroundField.themeValue(theme)),
+        background = backgroundHex(ThemeFieldSchema.uiBackgroundField.themeValue(theme)),
         cursor = hex(ThemeFieldSchema.uiCursorField.themeValue(theme)),
         highlighted = tokenConfig(ThemeFieldSchema.uiHighlightedField.themeValue(theme)),
         menuItem = tokenConfig(ThemeFieldSchema.uiMenuItemField.themeValue(theme)),
@@ -23,7 +23,7 @@ object ThemeConfigWriter:
         warning = Some(tokenConfig(theme.warning)),
         border = hex(ThemeFieldSchema.uiBorderField.themeValue(theme)),
         panelBorder = Some(hex(theme.panelBorder)),
-        margin = Some(hex(theme.margin)),
+        margin = Some(backgroundHex(theme.margin)),
         muted = hex(ThemeFieldSchema.uiMutedField.themeValue(theme)),
         placeholder = hex(ThemeFieldSchema.uiPlaceholderField.themeValue(theme))
       ),
@@ -98,7 +98,7 @@ $mandatorySyntaxLines
   private def tokenConfig(color: ThemeColor): UiTokenConfig =
     UiTokenConfig(
       foreground = hex(color.foreground),
-      background = hex(color.background),
+      background = backgroundHex(color.background),
       style = StyleConfig(color.style.isBold, color.style.isItalic, color.style.isUnderlined)
     )
 
@@ -106,7 +106,7 @@ $mandatorySyntaxLines
     val color = theme.colorFor(element)
     SyntaxElementConfig(
       foreground = hex(color.foreground),
-      background = Some(hex(color.background)),
+      background = Some(backgroundHex(color.background)),
       style = StyleConfig(color.style.isBold, color.style.isItalic, color.style.isUnderlined)
     )
 
@@ -136,6 +136,10 @@ $mandatorySyntaxLines
 
   private def hex(color: RenderColor): String =
     ColorFormat.toHex(color, withAlpha = false)
+
+  // A background's alpha is the theme's way to ask for a translucent or terminal-native surface (#1240), so it is kept.
+  private def backgroundHex(color: RenderColor): String =
+    ColorFormat.toHex(color, withAlpha = true)
 
   private def escape(value: String): String =
     value.replace("\\", "\\\\").replace("\"", "\\\"")

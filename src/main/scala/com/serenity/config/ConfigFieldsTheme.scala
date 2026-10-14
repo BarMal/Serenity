@@ -24,5 +24,9 @@ private[config] object ConfigFieldsTheme:
     field("theme.high_contrast")(themeName)(
       _.themeFollowConfig.highContrastTheme,
       (config, value) => config.withThemeFollowConfig(config.themeFollowConfig.copy(highContrastTheme = value))
+    ),
+    field("tui.backdrop")(color)(
+      _.tuiConfig.backdrop,
+      (config, value) => config.withTuiConfig(config.tuiConfig.copy(backdrop = value))
     )
   )

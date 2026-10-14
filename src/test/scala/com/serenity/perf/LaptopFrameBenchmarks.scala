@@ -148,7 +148,7 @@ private[perf] object LaptopFrameBenchmarks:
     )
 
   def benchmarks(presentWindow: SwingWindow)(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    renderBenchmarks ++ interactionBenchmarks ++ LigatureTypingBenchmarks.benchmarks ++ PanelLayerCachingBenchmarks.benchmarks ++ EreaderTypingBenchmarks.benchmarks ++ inputBenchmarks ++ typingBenchmarks ++
+    renderBenchmarks ++ interactionBenchmarks ++ LigatureTypingBenchmarks.benchmarks ++ PanelLayerCachingBenchmarks.benchmarks ++ RunnerTranslucencyBenchmarks.benchmarks ++ EreaderTypingBenchmarks.benchmarks ++ inputBenchmarks ++ typingBenchmarks ++
       List(presentBenchmark(presentWindow), presentCaretBenchmark(presentWindow))
 
   private def renderBenchmarks: List[BenchmarkRunner.Benchmark] =

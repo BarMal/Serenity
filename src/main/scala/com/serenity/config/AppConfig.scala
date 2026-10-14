@@ -18,6 +18,7 @@ final case class AppConfig(
     documentConfig: DocumentConfig = DocumentConfig(),
     interfaceConfig: InterfaceConfig = InterfaceConfig(),
     themeFollowConfig: ThemeFollowConfig = ThemeFollowConfig(),
+    tuiConfig: TuiConfig = TuiConfig(),
     languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig(),
     appModeConfig: AppModeConfig = AppModeConfig(),
     statusLine: StatusLineConfig = StatusLineConfig.default,
@@ -366,6 +367,9 @@ final case class AppConfig(
 
   def withThemeFollowConfig(config: ThemeFollowConfig): AppConfig =
     copy(themeFollowConfig = config)
+
+  def withTuiConfig(config: TuiConfig): AppConfig =
+    copy(tuiConfig = config)
 
   def withTextAreaInsets(insets: TextAreaInsets): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(textAreaInsets = insets))
