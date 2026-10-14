@@ -57,6 +57,16 @@ private[perf] object BenchmarkFixtures:
       runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
     )
 
+  /** `count` buffers of `content` open at once, as tabs, with the first one shown in the pane. */
+  def editorStateWithBuffers(count: Int, content: String): AppState =
+    val base    = editorState(content, None)
+    val opened  = (2 to count).map(id => BufferId(id) -> Buffer.fromString(BufferId(id), content)).toMap
+    val buffers = base.persisted.buffers ++ opened
+    base.copy(
+      persisted = base.persisted.copy(buffers = buffers, bufferOrder = buffers.keys.toList.sortBy(_.value)),
+      runtime = base.runtime.copy(nextBufferId = BufferId(count + 1))
+    )
+
   def editorStateForRichDocument(document: RichTextDocument): AppState =
     val base = editorState(document.plainText, None)
     base.copy(persisted =

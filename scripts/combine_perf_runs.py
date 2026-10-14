@@ -19,8 +19,13 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
+from dataclasses import replace
 
 from check_perf_regression import Row, parse_csv
+
+
+def _extreme(values: list[int], slowest: bool) -> int | None:
+    return None if not values else (max(values) if slowest else min(values))
 
 
 def pick(runs: list[dict[str, Row]], slowest: bool) -> dict[str, Row]:
@@ -30,15 +35,40 @@ def pick(runs: list[dict[str, Row]], slowest: bool) -> dict[str, Row]:
             kept = combined.get(name)
             if kept is None or (row.p50_ms > kept.p50_ms if slowest else row.p50_ms < kept.p50_ms):
                 combined[name] = row
-    return combined
+    # Retained heap has no latency to rank by, so it takes the same extreme (largest for a baseline, smallest for a
+    # head) across every run that reported it.
+    return {
+        name: replace(
+            row,
+            retained_bytes=_extreme([r[name].retained_bytes for r in runs if name in r and r[name].retained_bytes is not None], slowest),
+        )
+        for name, row in combined.items()
+    }
 
 
 def write_csv(path: str, rows: dict[str, Row]) -> None:
     with open(path, "w", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow(["name", "warmups", "iterations", "batch", "min_ms", "p50_ms", "p95_ms", "max_ms"])
+        writer.writerow(
+            [
+                "name",
+                "iterations",
+                "warmup_invocations",
+                "batch",
+                "min_ms",
+                "p50_ms",
+                "p95_ms",
+                "max_ms",
+                "allocation_p50_bytes",
+                "allocation_p95_bytes",
+                "retained_bytes",
+            ]
+        )
         for name, row in sorted(rows.items()):
-            writer.writerow([name, "", "", "", "", row.p50_ms, row.p95_ms, ""])
+            writer.writerow(
+                [name, "", "", "", "", row.p50_ms, row.p95_ms, ""]
+                + ["" if v is None else v for v in (row.allocation_p50_bytes, row.allocation_p95_bytes, row.retained_bytes)]
+            )
 
 
 def main_with_args(argv: list[str]) -> int:
