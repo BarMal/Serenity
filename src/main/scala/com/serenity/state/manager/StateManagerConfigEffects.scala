@@ -243,6 +243,8 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withInterfaceDensity(density)).void
       case InterfaceChromeIntent.SetWindowChromeMode(mode) =>
         updateAppearanceConfig(_.withWindowChromeMode(mode)).void
+      case InterfaceChromeIntent.SetMenuBarMode(mode) =>
+        updateAppearanceConfig(_.withMenuBarMode(mode)).void
       case InterfaceChromeIntent.SetWheelScrollLines(lines) =>
         updateConfig(_.withWheelScrollLines(lines)).void
       case InterfaceChromeIntent.SetPanelEscapeTarget(mode, target) =>
