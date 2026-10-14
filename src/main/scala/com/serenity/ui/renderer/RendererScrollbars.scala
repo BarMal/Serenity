@@ -1,5 +1,7 @@
 package com.serenity.ui.renderer
 
+import scala.annotation.tailrec
+
 import com.serenity.state.models.*
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
@@ -89,7 +91,9 @@ private[renderer] object RendererScrollbars:
     held.map { (paneId, bar) =>
       val sameBar = visuals.get(paneId).contains(bar.visual)
       val (intact, off) =
-        if sameBar then bar.bands.partition(band => plan.exists(untouched(band.rect, _)))
+        if sameBar then
+          val untouched = untouchedRects(bar.bands.map(_.rect), plan).toSet
+          bar.bands.partition(band => untouched.contains(band.rect))
         else (Vector.empty[Band], bar.bands)
       lifting.foreach(support => off.foreach(band => support.putBack(band.beneath)))
       paneId -> Settled(sameBar, intact, off.map(band => band.rect -> band.beneath), off.map(_.beneath))
@@ -173,9 +177,35 @@ private[renderer] object RendererScrollbars:
   private def fill(context: RenderContext, rect: PixelRect, visual: ScrollbarVisual): Unit =
     context.surface.pixels.fillPixelRect(rect.xPx, rect.yPx, rect.widthPx, rect.heightPx, visual.color)
 
-  /** Whether nothing the frame does reaches `thumb`: no pixels copied, none cleared or repainted beneath it. */
-  private def untouched(thumb: PixelRect, plan: FramePlan): Boolean =
-    plan.blits.isEmpty && PixelRect.uncoveredWithin(thumb, plan.preserved).isEmpty
+  /** The `rects` nothing the frame does reaches: no pixels copied, none cleared or repainted beneath them. */
+  private[renderer] def untouchedRects(rects: Vector[PixelRect], plan: Option[FramePlan]): Vector[PixelRect] =
+    val keeping = plan.filter(_.blits.isEmpty)
+    PixelRect.unionOf(rects).zip(keeping).fold(Vector.empty[PixelRect]) { (bounds, found) =>
+      val repaints = repaintedWithin(bounds, found.preserved)
+      rects.filterNot(rect => repaints.exists(_.intersects(rect)))
+    }
+
+  /** The pixels of `bounds` the frame does not keep. Rows are kept in full-width rectangles, so a strip down the edge
+    * is found by one sweep over the rows that reach it rather than by splitting it at every rectangle's edges.
+    */
+  private def repaintedWithin(bounds: PixelRect, preserved: List[PixelRect]): List[PixelRect] =
+    val reaching = preserved.filter(_.intersects(bounds))
+    if reaching.forall(kept => kept.xPx <= bounds.xPx && kept.rightPx >= bounds.rightPx) then
+      gapsDownTo(bounds, reaching.sortBy(_.yPx), bounds.yPx, Nil)
+    else PixelRect.uncoveredWithin(bounds, reaching)
+
+  @tailrec
+  private def gapsDownTo(
+    bounds: PixelRect,
+    kept: List[PixelRect],
+    covered: Int,
+    gaps: List[PixelRect]
+  ): List[PixelRect] =
+    def gap(until: Int) = PixelRect(bounds.xPx, covered, bounds.widthPx, until - covered) :: gaps
+    kept match
+      case next :: rest =>
+        gapsDownTo(bounds, rest, covered.max(next.bottomPx), if next.yPx > covered then gap(next.yPx) else gaps)
+      case Nil => if covered < bounds.bottomPx then gap(bounds.bottomPx) else gaps
 
   private def obstructions(
     context: RenderContext,
