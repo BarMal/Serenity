@@ -105,6 +105,7 @@ class RowTest(unittest.TestCase):
             mode="gui",
             checkpoint="open_text",
             uptime_s=42,
+            cpu_s=7.5,
             smaps=_read("smaps_rollup.txt"),
             heap=_read("heap_info_g1.txt"),
             nmt=nmt,
@@ -115,6 +116,7 @@ class RowTest(unittest.TestCase):
         row = self._row(_read("nmt_summary.txt"))
         self.assertEqual(list(row.keys()), fp.COLUMNS)
         self.assertEqual(row["label"], "baseline")
+        self.assertEqual(row["cpu_s"], "7.5")
         self.assertEqual(row["rss_kb"], "69304")
         self.assertEqual(row["heap_used_kb"], "33022")
         self.assertEqual(row["nmt_code_kb"], "7592")
@@ -126,7 +128,7 @@ class RowTest(unittest.TestCase):
 
     def test_status_defaults_to_ok_and_can_carry_a_failure(self) -> None:
         self.assertEqual(self._row(_read("nmt_summary.txt"))["status"], "ok")
-        line = fp.build_row("x", "gui", "start", 1, "", "", "", status="oom")
+        line = fp.build_row("x", "gui", "start", 1, None, "", "", "", status="oom")
         self.assertEqual(next(csv.DictReader(io.StringIO(fp.HEADER + "\n" + line + "\n")))["status"], "oom")
 
     def test_row_without_nmt_has_blank_nmt_columns(self) -> None:

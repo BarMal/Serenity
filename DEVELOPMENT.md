@@ -152,6 +152,9 @@ is capped at a quarter of physical memory, and G1 (named explicitly, since the J
 a collection after 60 s idle so freed heap goes back to the OS. They are set beside the AppCDS flags in
 `.github/workflows/desktop-publish.yml` and `desktop-release.yml`; `sbt run` is unaffected.
 
+What the app actually holds, and what each flag does to it, is measured in [docs/memory-footprint.md](docs/memory-footprint.md);
+`scripts/measure-footprint.sh` reproduces it against an assembled jar.
+
 ### Startup warm-up
 
 Once the first frame is drawn, Serenity types, deletes and moves through a throwaway editor drawn off-screen, so the

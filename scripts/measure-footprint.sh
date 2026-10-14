@@ -31,7 +31,7 @@
 #
 # Each checkpoint reads /proc/PID/smaps_rollup (RSS, PSS), `jcmd PID GC.heap_info` (heap used/committed, metaspace)
 # and `jcmd PID VM.native_memory summary scale=KB` (non-heap by category). Rows go through scripts/footprint_parse.py;
-# columns are documented there. `status` is `ok` unless the process died, ran out of heap, or never went quiet.
+# columns are documented there (cpu_s is the process's cumulative CPU time). `status` is `ok` unless the process died, ran out of heap, or never went quiet.
 #
 # Caveats
 #   - NMT is on for every run so that the breakdown exists; it costs a little memory itself (the "Native Memory
@@ -222,10 +222,13 @@ capture() {
   [[ -n "$raw_dir" ]] && top_mappings >"$cap/top_mappings.txt" 2>/dev/null || true
   "$jcmd_bin" "$pid" GC.heap_info >"$cap/heap_info.txt" 2>&1 || : >"$cap/heap_info.txt"
   ((nmt)) && { "$jcmd_bin" "$pid" VM.native_memory summary scale=KB >"$cap/nmt.txt" 2>&1 || : >"$cap/nmt.txt"; }
-  local uptime
+  local uptime cpu_s ticks
+  ticks="$(cpu_ticks 2>/dev/null || true)"
+  cpu_s=""
+  [[ -n "$ticks" ]] && cpu_s="$(awk -v t="$ticks" -v h="$clk_tck" 'BEGIN { printf "%.2f", t / h }')"
   uptime="$(ps -o etimes= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
   local row
-  row="$(python3 "$parser" row "$label" "$mode" "$checkpoint" "${uptime:-0}" "$status" \
+  row="$(python3 "$parser" row "$label" "$mode" "$checkpoint" "${uptime:-0}" "$cpu_s" "$status" \
     "$cap/smaps_rollup.txt" "$cap/heap_info.txt" "$cap/nmt.txt")"
   if [[ -n "$csv_out" ]]; then echo "$row" >>"$csv_out"; else echo "$row"; fi
   if [[ -n "$raw_dir" ]]; then

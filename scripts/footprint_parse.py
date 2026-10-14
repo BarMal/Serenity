@@ -2,7 +2,7 @@
 """Turns the raw captures taken by scripts/measure-footprint.sh into one CSV row.
 
     footprint_parse.py header
-    footprint_parse.py row LABEL MODE CHECKPOINT UPTIME_S STATUS SMAPS_FILE HEAP_FILE [NMT_FILE]
+    footprint_parse.py row LABEL MODE CHECKPOINT UPTIME_S CPU_S STATUS SMAPS_FILE HEAP_FILE [NMT_FILE]
 
 Sizes are KiB. STATUS is "ok" or the reason the run is suspect. A figure the capture does not carry (no NMT, a collector whose heap_info this does not read) is left
 blank rather than reported as zero.
@@ -53,6 +53,7 @@ COLUMNS = [
     "mode",
     "checkpoint",
     "uptime_s",
+    "cpu_s",
     *_SMAPS_COLUMNS,
     *_HEAP_COLUMNS,
     *_NMT_ALL_COLUMNS,
@@ -120,13 +121,14 @@ def parse_nmt(text: str) -> dict[str, int | None]:
 
 
 def build_row(
-    label: str, mode: str, checkpoint: str, uptime_s: int, smaps: str, heap: str, nmt: str, status: str = "ok"
+    label: str, mode: str, checkpoint: str, uptime_s: int, cpu_s: float | None, smaps: str, heap: str, nmt: str, status: str = "ok"
 ) -> str:
     values: dict[str, int | str | None] = {
         "label": label,
         "mode": mode,
         "checkpoint": checkpoint,
         "uptime_s": uptime_s,
+        "cpu_s": cpu_s,
         **parse_smaps_rollup(smaps),
         **parse_heap_info(heap),
         **parse_nmt(nmt),
@@ -149,10 +151,11 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["header"]:
         print(HEADER)
         return 0
-    if argv[:1] == ["row"] and len(argv) in (8, 9):
-        label, mode, checkpoint, uptime, status, smaps, heap = argv[1:8]
-        nmt = argv[8] if len(argv) == 9 else None
-        print(build_row(label, mode, checkpoint, int(uptime), _read(smaps), _read(heap), _read(nmt), status))
+    if argv[:1] == ["row"] and len(argv) in (9, 10):
+        label, mode, checkpoint, uptime, cpu, status, smaps, heap = argv[1:9]
+        nmt = argv[9] if len(argv) == 10 else None
+        cpu_s = float(cpu) if cpu else None
+        print(build_row(label, mode, checkpoint, int(uptime), cpu_s, _read(smaps), _read(heap), _read(nmt), status))
         return 0
     print(__doc__, file=sys.stderr)
     return 2
