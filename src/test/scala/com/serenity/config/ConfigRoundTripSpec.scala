@@ -96,6 +96,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withLayerCaching(true)
     .withFrameTiming(true)
     .withLatencyTrace(true)
+    .withMemoryCompaction(false)
     .withStartupWarmUp(false)
     .withDiagnosticHighlightBlendWeight(0.2)
     .withCursorMode(CursorMode.Steady)

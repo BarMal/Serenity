@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-10-14
+
+- Added `performance.memory.compact` (default true): at startup Serenity tells the JVM to return unused heap to the operating system sooner (`MinHeapFreeRatio=10`, `MaxHeapFreeRatio=30`, and under G1 `G1PeriodicGCInterval=30000`), which took an idle window's resident memory from about 520 MiB to about 317 MiB in the footprint study (PR #2266). Set it to false to keep the JVM's launch values. It is read at startup, so a change needs a restart; a value that is not a boolean is reported as an invalid entry.
+
 ### 2026-10-12
 
 - Replaced the binary-tree rope with a B-tree (#1900): each node holds 8 to 16 children, leaves hold up to 2,048 characters and are never cut through a surrogate pair, and every node caches its length, newline count and word counts. An edit copies the path to the leaf it touches and splits or merges one node at a time, so a paste or a large delete no longer rebuilds whole subtrees (on a 10 MB document, a 10-100 KB paste went from a median of about 530 us and a worst case of 100-200 ms to about 280 us and 8-11 ms) and the tree stays 5 levels deep where appending or prepending used to grow it from 15 to 20 or more.

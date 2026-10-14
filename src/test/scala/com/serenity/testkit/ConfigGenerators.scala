@@ -269,6 +269,7 @@ object ConfigGenerators:
       frameTiming  <- Gen.oneOf(true, false)
       latencyTrace <- Gen.oneOf(true, false)
       warmUp       <- Gen.oneOf(true, false)
+      compaction   <- Gen.oneOf(true, false)
       diagnosticBlendWeight <- double(
         AppConfig.MinDiagnosticHighlightBlendWeight,
         AppConfig.MaxDiagnosticHighlightBlendWeight
@@ -306,6 +307,7 @@ object ConfigGenerators:
       frameTimingEnabled = frameTiming,
       latencyTraceEnabled = latencyTrace,
       startupWarmUpEnabled = warmUp,
+      memoryCompactionEnabled = compaction,
       diagnosticHighlightBlendWeight = diagnosticBlendWeight,
       columnModeEnabled = columnMode,
       columnTargetWidthCells = columnTargetWidth,

@@ -11,7 +11,8 @@ object ConfigRestart:
     "window.chrome"                  -> (_.windowChromeMode),
     "window.preferred.width/height"  -> (_.preferredWindowSize),
     "lsp.* language server settings" -> (_.languageToolsConfig.lspUserConfig),
-    "startup.warm_up"                -> (_.surfaceConfig.startupWarmUpEnabled)
+    "startup.warm_up"                -> (_.surfaceConfig.startupWarmUpEnabled),
+    "performance.memory.compact"     -> (_.surfaceConfig.memoryCompactionEnabled)
   )
 
   /** The startup-only settings `after` sets differently from `before`. */

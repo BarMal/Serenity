@@ -240,6 +240,9 @@ final case class AppConfig(
   def withStartupWarmUp(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(startupWarmUpEnabled = enabled))
 
+  def withMemoryCompaction(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(memoryCompactionEnabled = enabled))
+
   def withDiagnosticHighlightBlendWeight(weight: Double): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(diagnosticHighlightBlendWeight = weight))
 

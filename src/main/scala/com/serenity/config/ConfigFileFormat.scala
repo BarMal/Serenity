@@ -236,6 +236,12 @@ object ConfigFileFormat:
     field("ui.render.latency_trace"),
     comment("After the first frame, briefly exercise typing and drawing off-screen so early keystrokes are not slow"),
     field("startup.warm_up"),
+    comment("Return unused heap to the operating system sooner (smaller idle memory, a little more collector work)."),
+    comment(
+      "Applies at startup, so a change needs a restart. Under G1 it sets MinHeapFreeRatio=10, MaxHeapFreeRatio=30"
+    ),
+    comment("and G1PeriodicGCInterval=30000; false leaves the JVM's launch values alone."),
+    field("performance.memory.compact"),
     blank,
     comment(
       "Window chrome: auto uses themed chrome on Linux; native preserves OS snap/window animations; native-themed " +
