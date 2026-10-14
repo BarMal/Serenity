@@ -82,6 +82,7 @@ final case class InterfaceConfig(
     // `AppState.effectiveUiElementGap`. `Some` is honoured on both surfaces unchanged.
     elementGap: Option[Double] = None,
     outlineThicknessPx: Int = 2,
+    menuBar: MenuBarMode = MenuBarMode.Hidden,
     fileDialog: FileDialogMode = FileDialogMode.Auto
 ):
 

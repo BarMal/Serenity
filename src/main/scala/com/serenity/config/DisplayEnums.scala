@@ -96,6 +96,19 @@ object WindowChromeMode:
       case "native" | "os" | "system"                          => Some(WindowChromeMode.Native)
       case _                                                   => None
 
+/** Whether the desktop window shows a menu bar. Every command a menu holds stays reachable from the command runner, so
+  * `Hidden` loses none of them.
+  */
+enum MenuBarMode(val configKey: String):
+  case Hidden  extends MenuBarMode("hidden")
+  case Alt     extends MenuBarMode("alt")
+  case Visible extends MenuBarMode("visible")
+
+object MenuBarMode:
+
+  def fromConfigKey(value: String): Option[MenuBarMode] =
+    MenuBarMode.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
+
 enum FileDialogMode(val configKey: String):
   case Auto   extends FileDialogMode("auto")
   case Native extends FileDialogMode("native")

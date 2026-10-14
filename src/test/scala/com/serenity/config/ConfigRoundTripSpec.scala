@@ -127,6 +127,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withTextAreaBottomInset(5.0)
     .withMinimumPaneWidth(24)
     .withWindowChromeMode(WindowChromeMode.Native)
+    .withMenuBarMode(MenuBarMode.Visible)
     .withFontConfig(
       FontConfig(
         codeFontFamily = "Iosevka",

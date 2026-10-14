@@ -44,6 +44,25 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       )
     )
 
+  private[command] def menuBarOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    def option(label: String, mode: MenuBarMode) =
+      CommandOption(
+        label,
+        CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetMenuBarMode(mode)))
+      )
+    CommandSurfaceItem.OptionItem(
+      id = "menu-bar",
+      label = "Menu Bar",
+      options = List(
+        option("Hidden", MenuBarMode.Hidden),
+        option("Alt Toggles", MenuBarMode.Alt),
+        option("Visible", MenuBarMode.Visible)
+      ),
+      selectedIndex = optionSelections.getOrElse("menu-bar", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Applies after restart; every menu command stays in this palette whichever you pick")
+    )
+
   private[command] def windowChromeOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =

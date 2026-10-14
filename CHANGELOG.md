@@ -5,6 +5,8 @@
 ### 2026-10-14
 
 - Fixed Open File and Save As killing the whole editor on Linux systems without the `org.gtk.Settings.FileChooser` GSettings schema (GLib aborts the process): Serenity now checks for the schema and uses Swing's own chooser when it is missing. New `ui.file_dialog = auto|native|swing` setting (restart to apply)
+- Made the menu bar opt-in: the new `ui.menu_bar` setting is `hidden` (the default), `alt` or `visible`, and applies after a restart. `hidden` installs no bar at all, `alt` shows it for a tap of Alt on its own (not `Alt` with another key) and hides it again after a command runs, Escape or focus returning to the editor, and `visible` is the always-on bar of earlier builds. Every menu command stays in the command palette, which a new test checks, and the setting is in the palette's Interface Layout settings (docs/user/menu-bar.md).
+- Fixed installing a menu bar into a window that already had one leaving both in a window with Serenity's own title bar; the window now holds at most one bar and takes it out when the application stops.
 
 ### 2026-10-12
 
