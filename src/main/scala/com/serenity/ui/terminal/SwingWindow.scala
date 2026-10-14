@@ -251,7 +251,7 @@ class SwingWindow(
       content.add(chromeNorth, BorderLayout.NORTH)
     content.add(canvas, BorderLayout.CENTER)
     f.setContentPane(content)
-    SwingWindow.presentDirectly(canvas)
+    // probe: presentDirectly skipped (A/B for #2211)
     if usesCustomChrome then
       val glassPane = new ResizeGlassPane(() => frame, chromeMetricsRef, maximizedRef)
       f.setGlassPane(glassPane)
