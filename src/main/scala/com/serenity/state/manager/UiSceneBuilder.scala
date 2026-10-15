@@ -2,6 +2,8 @@ package com.serenity.state.manager
 
 import java.awt.Font
 
+import scala.annotation.tailrec
+
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -145,7 +147,7 @@ private[serenity] object UiSceneBuilder:
                   tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
                 )
               )
-            paneId -> (activeSnapshot, placements)
+            paneId -> (activeSnapshot, placements, Option.empty[PaneScroll])
           else
             val single = TextLayoutSnapshot.fromBuffer(
               buffer.copy(viewport = viewport),
@@ -161,8 +163,61 @@ private[serenity] object UiSceneBuilder:
               markdownViewMode = state.persisted.config.inlineMarkdownViewMode,
               tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
             )
-            paneId -> (single, Vector.empty[ColumnSnapshotPlacement])
+            val scroll = Option.when(ScrollbarLayout.hasBar(state, paneLayout))(
+              paneScroll(state, buffer, viewport, single, width, font, fontMetrics, cellMetrics.isDefined, wrappedLines)
+            )
+            paneId -> (single, Vector.empty[ColumnSnapshotPlacement], scroll)
     }
     val textSnapshots   = perPane.view.mapValues(_._1).toMap
     val columnSnapshots = perPane.view.mapValues(_._2).filter(_._2.nonEmpty).toMap
-    base.withTextSnapshots(textSnapshots).withColumnSnapshots(columnSnapshots)
+    val paneScrolls     = perPane.flatMap((paneId, parts) => parts._3.map(paneId -> _))
+    base.withTextSnapshots(textSnapshots).withColumnSnapshots(columnSnapshots).withPaneScrolls(paneScrolls)
+
+  /** Counted as the wrap that laid the pane's rows out, so the bar's rows and the viewport's agree. The lines the
+    * snapshot has just drawn whole are counted from it rather than wrapped a second time, which keeps an edit's cost to
+    * the bar at the edit's own line.
+    */
+  private def paneScroll(
+    state: AppState,
+    buffer: Buffer,
+    viewport: Viewport,
+    drawn: TextLayoutSnapshot,
+    widthPx: Int,
+    font: Font,
+    fontMetrics: CellMetrics,
+    forceCellLayout: Boolean,
+    wrappedLines: WrappedLineCache
+  ): PaneScroll =
+    val surfaceConfig = state.persisted.config.surfaceConfig
+    val rows =
+      if !surfaceConfig.wordWrapEnabled then VisualRowCounts.oneRowPerLine(buffer.document.content.lineCount)
+      else
+        val wholeLines = wholeLinesDrawn(drawn)
+        VisualRowCounts.forBuffer(
+          buffer,
+          widthPx,
+          font,
+          Some(fontMetrics),
+          forceCellLayout,
+          wrappedLines,
+          state.persisted.config.documentConfig.dropCapsEnabled,
+          state.persisted.config.inlineMarkdownViewMode,
+          buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
+          known = wholeLines.get
+        )
+    PaneScroll.of(rows, viewport.topLine, viewport.topVisualLine, viewport.visibleLines)
+
+  /** The rows of each line `snapshot` draws from its first row to its last: not the first when the view starts part-way
+    * through it, nor the last, which the snapshot may have cut short.
+    */
+  private def wholeLinesDrawn(snapshot: TextLayoutSnapshot): Map[Int, Int] =
+    val drawn = snapshot.visualLines
+    @tailrec
+    def from(first: Int, whole: Map[Int, Int]): Map[Int, Int] =
+      drawn.lift(first) match
+        case None => whole
+        case Some(row) =>
+          val next = drawn.indexWhere(_.bufferLine != row.bufferLine, first)
+          if next < 0 then whole
+          else from(next, if row.startColumn == 0 then whole.updated(row.bufferLine, next - first) else whole)
+    from(0, Map.empty)

@@ -176,6 +176,9 @@ final case class AppConfig(
   def withCommentDisplayMode(mode: CommentDisplayMode): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(commentDisplayMode = mode))
 
+  def withScrollbar(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(scrollbarEnabled = enabled))
+
   /** Create a new config with word wrapping toggled */
   def withWordWrap(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(wordWrapEnabled = enabled))

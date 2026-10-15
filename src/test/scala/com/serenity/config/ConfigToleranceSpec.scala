@@ -181,6 +181,14 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
     )
   }
 
+  it should "report a scrollbar value that is not a boolean, and keep the default" in {
+    val result = load(tempFile("editor.scrollbar = sometimes\n"))
+
+    result.config.surfaceConfig.scrollbarEnabled shouldBe true
+    result.report.invalidEntries.map(entry => entry.key -> entry.value) shouldBe
+      List("editor.scrollbar" -> "sometimes")
+  }
+
   it should "report a memory compaction value that is not a boolean, and keep the default" in {
     val result = load(tempFile("performance.memory.compact = sometimes\n"))
 

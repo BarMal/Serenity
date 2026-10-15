@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
+import com.serenity.ui.layout.ScrollbarLayout
 import com.serenity.ui.renderer.EditorPaneRenderPlan
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -26,7 +27,7 @@ class ScrollReusePixelsSpec extends AnyFlatSpec with Matchers with PersistedFram
   private def stampColumn(image: BufferedImage, plan: EditorPaneRenderPlan, scale: Double): Column =
     val content = plan.paneLayouts.getOrElse(paneId, fail("expected the pane's layout")).contentRect
     val column = Column(
-      x = math.round(cellMetrics.toPixelX(content.right) * scale).toInt - 3,
+      x = math.round(ScrollbarLayout.strip(content, cellMetrics).xPx * scale).toInt - 3,
       fromY = math.round(cellMetrics.toPixelY(content.y) * scale).toInt,
       toY = math.round(cellMetrics.toPixelY(content.bottom) * scale).toInt
     )

@@ -43,6 +43,9 @@ final case class Theme(
   /** Raised surface colour pair used by panels, overlays, and chrome. */
   def surface: ThemeColor = panel
 
+  /** Scrollbar thumb colours, derived from the theme's own background and foreground. */
+  def scrollbar: ScrollbarColors = ScrollbarColors.derive(this)
+
   /** Status treatments for error and warning feedback. */
   def status: ThemeStatus = ThemeStatus(error, warning)
 

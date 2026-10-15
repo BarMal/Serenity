@@ -78,6 +78,11 @@ trait RenderSurface:
   /** Copying pixels the surface already holds, when it can. `None` means a row that moved has to be drawn again. */
   def pixelCopying: Option[PixelCopying] = None
 
+  /** Lifting pixels off the surface and putting them back, when it can. `None` means nothing may be drawn over pixels
+    * that persist.
+    */
+  def pixelLifting: Option[PixelLifting] = None
+
   /** Panel borders and rectangular clipping, when this surface supports them. `None` means callers must fall back to
     * drawing without that chrome rather than assume it happened.
     */

@@ -68,6 +68,10 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.wordWrapEnabled,
       (config, value) => config.withWordWrap(value)
     ),
+    field("editor.scrollbar")(boolean)(
+      _.surfaceConfig.scrollbarEnabled,
+      (config, value) => config.withScrollbar(value)
+    ),
     named(
       "editor.visual_line_navigation",
       "visualLineCursorNavigation",

@@ -13,6 +13,7 @@ final case class SurfaceConfig(
     // so this defaults to the smaller, non-disruptive mode and callers opt into margin mode explicitly (#1222).
     commentDisplayMode: CommentDisplayMode = CommentDisplayMode.Floating,
     wordWrapEnabled: Boolean = true,
+    scrollbarEnabled: Boolean = true,
     // Whether Up/Down under word wrap follow visual rows (the wrapped screen line) rather than jumping straight to
     // the previous/next logical line. Independent of wordWrapEnabled itself: only takes effect while wrap is also on.
     visualLineCursorNavigation: Boolean = true,

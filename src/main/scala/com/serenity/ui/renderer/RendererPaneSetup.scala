@@ -16,7 +16,9 @@ final case class EditorPaneRenderPlan(
     // pane paints side by side. Empty for a pane not in column mode, where `snapshots` alone drives painting exactly as
     // before.
     columnSnapshots: Map[PaneId, Vector[ColumnSnapshotPlacement]],
-    annotations: Map[BufferId, BufferRenderAnnotations]
+    annotations: Map[BufferId, BufferRenderAnnotations],
+    // Where each pane that has a scrollbar sits in its document, in visual rows.
+    scrolls: Map[PaneId, ScrollExtent] = Map.empty
 ):
   def paneLayouts: Map[PaneId, EditorPaneLayout] = workspaceLayout.paneLayouts
 
@@ -101,7 +103,8 @@ object RendererPaneSetup:
       layoutContract,
       snapshots,
       columnSnapshots,
-      annotationsFor(state, context, snapshots, columnSnapshots)
+      annotationsFor(state, context, snapshots, columnSnapshots),
+      scene.paneScrolls.view.mapValues(_.extent).toMap
     )
 
   /** What each visible buffer line carries -- comments, diagnostics, semantic tokens, ghosts -- as of `state`. Read per

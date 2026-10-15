@@ -131,12 +131,14 @@ object RendererFramePlanner:
             prepared.renderPlan.columnSnapshots
           )
         )
-        val panels    = FramePanels.of(state, context, finalizedScene)
-        val framePlan = planFrame(state, context, editorRenderPlan, viewportSize, output, damage, panels)
+        val panels     = FramePanels.of(state, context, finalizedScene)
+        val scrollbars = RendererScrollbars.visualsFor(state, context, editorRenderPlan, panels)
+        val framePlan  = planFrame(state, context, editorRenderPlan, viewportSize, output, damage, panels, scrollbars)
         // Recorded *after* `planFrame` (and thus `dirtyRowsFor`) has read this surface's snapshots for this frame, so
         // this frame's own snapshots become "previous" only for the frame after it -- see
         // `previousSnapshots`' doc comment.
         caches.frameState.rememberSnapshots(surface, editorRenderPlan.recordSnapshots)
+        val settled = RendererScrollbars.release(context, scrollbars, framePlan)
         framePlan match
           case Some(plan) if plan.preserved.nonEmpty =>
             RendererScrollReuse.clearKeeping(surface, state.persisted.theme.background, plan)
@@ -144,6 +146,8 @@ object RendererFramePlanner:
             surface.clearViewport(state.persisted.theme.background)
         val framePanels = panels.keeping(framePlan.fold(Set.empty[SurfaceId])(_.keptPanels))
         paintFrameLayers(state, context, editorRenderPlan, finalizedScene, framePlan, damage, framePanels)
+        RendererScrollbars.paint(context, scrollbars, settled)
+        RendererScrollbars.paintTerminal(state, context, editorRenderPlan, panels)
         commitFramePlan(framePlan, output)
         FrameCounting.planned(caches.frameCounters, framePlan, viewportSize, cellMetrics)
         Some(editorRenderPlan)
@@ -319,7 +323,8 @@ object RendererFramePlanner:
     viewportSize: ViewportSize,
     output: Option[FrameOutput],
     damage: Damage,
-    panels: FramePanels
+    panels: FramePanels,
+    scrollbars: Map[PaneId, ScrollbarVisual]
   ): Option[FramePlan] =
     context.caches.frameState.accumulateBufferDamage(output, damage)
     context.caches.frameState.accumulateScreenDamage(output, damage)
@@ -420,6 +425,7 @@ object RendererFramePlanner:
         // so the repaint region is measured against damage accumulated since the screen was last published to, and
         // only when every pane is reusable and the published pane set hasn't shifted underneath it.
         val screenDamageSincePublish = context.caches.frameState.drainScreenDamage(output)
+        val screenScrollbars         = context.caches.frameState.scrollbarsChangedOnScreen(output, scrollbars)
         val boundedRepaintEligible =
           !context.caches.frameState.screenPaneIdsChanged(output, paneIds) && allPanesReusable && !geometryChanged &&
             ghostPaneIds.isEmpty && Damage.isBufferRowsOrChromeOnly(screenDamageSincePublish)
@@ -431,7 +437,8 @@ object RendererFramePlanner:
               renderPlan,
               panes,
               screenDamageSincePublish,
-              dirtyRowsFor(screenDamageSincePublish, _, _, persistenceKey, context.caches)
+              dirtyRowsFor(screenDamageSincePublish, _, _, persistenceKey, context.caches),
+              RendererScrollbars.strips(context, renderPlan, screenScrollbars)
             )
           }
 

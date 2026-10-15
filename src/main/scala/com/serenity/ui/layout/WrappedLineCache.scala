@@ -262,17 +262,26 @@ object WrappedLineCache:
       cold: Int => RowWrap,
       incremental: Seq[Predecessor] => Option[RowWrap]
     ): Vector[MeasuredRow] =
-      val entry = lookup(key).filter(_.covers(maxVisualLines)).getOrElse {
+      val held = lookup(key)
+      val entry = held.filter(_.covers(maxVisualLines)).getOrElse {
         val resumed = Option.when(maxVisualLines == Int.MaxValue)(predecessors(key)).flatMap(incremental(_))
         val wrap    = resumed.getOrElse(cold(maxVisualLines))
         (if resumed.isDefined then incrementalCount else coldCount).incrementAndGet()
         rowCount.addAndGet(wrap.computedRows.toLong)
         measuredCount.addAndGet(wrap.measuredChars.toLong)
-        val fresh = Entry(wrap.rows, complete = wrap.rows.length < maxVisualLines, wrap.trace)
+        val fresh = Entry(sharingRows(held, wrap.rows), complete = wrap.rows.length < maxVisualLines, wrap.trace)
         store(key, fresh)
         fresh
       }
       entry.rowsFor(maxVisualLines)
+
+    /** A longer wrap replacing a row-limited one keeps the rows it has in common with it, by reference: frames built
+      * before and after the replacement then compare their shared rows in constant time instead of float by float.
+      */
+    private def sharingRows(replaced: Option[Entry], wrapped: Vector[MeasuredRow]): Vector[MeasuredRow] =
+      replaced.fold(wrapped)(old =>
+        wrapped.zipWithIndex.map((row, index) => old.rows.lift(index).filter(_ == row).getOrElse(row))
+      )
 
     private def predecessors(key: WrappedLineKey): Seq[Predecessor] = synchronized {
       Option(recent.get(key.shape)).fold(Seq.empty[Predecessor]) { candidates =>
