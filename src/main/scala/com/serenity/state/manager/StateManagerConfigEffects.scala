@@ -16,6 +16,7 @@ import com.serenity.config.{
   FocusedKeymapConfig,
   HotkeyConfig,
   HotkeyOverrides,
+  LayoutPin,
   LayoutPreset,
   LineNumberLayout,
   StatusLinePlacement,
@@ -26,7 +27,7 @@ import com.serenity.config.{
 import com.serenity.io.{FileStamp, TimestampedBackup}
 import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{CommandRunnerReducer, SettingsPreviewReducer}
+import com.serenity.state.reducers.{CommandRunnerReducer, ModalStateReducer, SettingsPreviewReducer}
 
 /** Config-update infrastructure and the settings-intent dispatch that drives it: appearance, cursor, panel chrome,
   * spell-check, and general settings all funnel through the same commit-then-persist path. The state change commits
@@ -260,6 +261,14 @@ final private[manager] class StateManagerConfigEffects(
         changeSummon(_.summon.withLockChecked(lock))
       case InterfaceChromeIntent.SetSummonLetter(element, letter) =>
         changeSummon(config => config.summon.withLetterChecked(element, letter, hotkeysOf(config), keymapsOf(config)))
+      case InterfaceChromeIntent.ReviewUiLayoutOverride(layout) =>
+        pinsAwayFrom(layout).flatMap(pins =>
+          editor.updateModelValidated(model =>
+            Some(model.copy(app = UiPresetTransitions.openLayoutReview(model.app, layout, pins)))
+          )
+        )
+      case InterfaceChromeIntent.ConfirmUiLayoutOverride(layout, useLayoutKeys) =>
+        applyLayout(layout, useLayoutKeys.toSet)
       case InterfaceChromeIntent.SetWheelScrollLines(lines) =>
         updateConfig(_.withWheelScrollLines(lines)).void
       case InterfaceChromeIntent.SetPanelEscapeTarget(mode, target) =>
@@ -285,11 +294,58 @@ final private[manager] class StateManagerConfigEffects(
           )
     }
 
-  /** Moves the chrome the layout supplies, leaving what the file sets, and what was changed since, as it is. */
+  /** Moves the chrome the layout supplies. Chrome the file sets, to something the layout would change, is asked about
+    * first rather than silently kept: a person who switches layout expects to see it change.
+    */
   private def switchLayout(layout: UiLayout): IO[Unit] =
-    configPersistencePath
-      .fold(IO.pure(Set.empty[String]))(ConfigManager.settingKeysIO)
-      .flatMap(setKeys => updateAppearanceConfig(LayoutPreset.rebase(_, layout, setKeys)).void)
+    pinsAwayFrom(layout).flatMap {
+      case Nil => applyLayout(layout, Set.empty)
+      case pins =>
+        editor.updateModelValidated(model =>
+          Some(
+            model.copy(app =
+              ModalStateReducer.show(Modal.Confirm(ConfirmPrompt.layoutOverride(layout, pins)), model.app).state
+            )
+          )
+        )
+    }
+
+  /** The chrome the file sets that `layout` would give another value, as the live config has it. */
+  private def pinsAwayFrom(layout: UiLayout): IO[List[LayoutPin]] =
+    (settingKeys, currentState).mapN((keys, state) => LayoutPreset.pins(state.persisted.config, keys, layout))
+
+  private def settingKeys: IO[Set[String]] =
+    configPersistencePath.fold(IO.pure(Set.empty[String]))(ConfigManager.settingKeysIO)
+
+  /** Switches to `layout`. Of the chrome the file pins, `useLayout` goes back to the layout -- its lines come out of
+    * the file, so it follows the layout from then on -- and the rest stays as the file has it, as does anything changed
+    * in this session.
+    */
+  private def applyLayout(layout: UiLayout, useLayout: Set[String]): IO[Unit] =
+    for
+      pins <- pinsAwayFrom(layout)
+      released = pins.map(_.key).filter(useLayout.contains).toSet
+      _    <- releaseFromFile(released)
+      keys <- settingKeys
+      _ <- updateAppearanceConfig(config =>
+        LayoutPreset.adopt(LayoutPreset.rebase(config, layout, keys), layout, released)
+      )
+    yield ()
+
+  /** A key the file keeps anyway -- written inside a block, say -- still takes the layout's value, written back as one.
+    */
+  private def releaseFromFile(keys: Set[String]): IO[Unit] =
+    configFile.filter(_ => keys.nonEmpty).traverse_ { file =>
+      file.release(keys).flatMap {
+        case Left(error) => reportSaveFailure(error)
+        case Right(stuck) =>
+          IO.whenA(stuck.nonEmpty)(
+            logger.warn(
+              s"[CONFIG] Could not remove ${stuck.toList.sorted.mkString(", ")} from ${file.path}; set to the layout's value instead"
+            )
+          )
+      }
+    }
 
   private def interpretSpellCheckIntent(intent: SpellCheckIntent, state: AppState): IO[Unit] =
     SpellCheckConfigEdit(intent) match

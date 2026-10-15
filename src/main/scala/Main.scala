@@ -234,8 +234,9 @@ object Main extends IOApp:
       opens <- LaunchOpens.resolve(launchOptions.openPaths)
       _     <- opens.notice.traverse_(logger.warn(_))
       appConfig = resolveAppConfig(loaded.config, launchOptions)
-      _ <- MemoryCompaction.apply(appConfig.surfaceConfig.memoryCompactionEnabled)
-      startup = Startup(plan, requestRestart, StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker))
+      _         <- MemoryCompaction.apply(appConfig.surfaceConfig.memoryCompactionEnabled)
+      askedPlan <- LayoutOverrideReview.planned(plan, configLoaded = configResult.isRight, appConfig)
+      startup = Startup(askedPlan, requestRestart, StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker))
       // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
       instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten
       notice = plan.noticeWith(

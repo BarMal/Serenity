@@ -3,7 +3,15 @@ package com.serenity
 import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent, InterfaceChromeIntent, SettingsIntent}
+import com.serenity.command.{
+  Command,
+  CommandCategory,
+  CommandIntent,
+  CommandRunnerSurface,
+  CommandSurfaceItem,
+  InterfaceChromeIntent,
+  SettingsIntent
+}
 import com.serenity.config.{
   AppConfig,
   ConfigManager,
@@ -14,6 +22,7 @@ import com.serenity.config.{
 }
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.state.models.{ConfirmAction, ConfirmPrompt, Modal, SurfaceContent}
 import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -56,6 +65,35 @@ class StateManagerUiLayoutSpec extends AnyFlatSpec with Matchers with StateManag
   private def live(stateManager: StateManager): AppConfig =
     stateManager.getCurrentState.unsafeRunSync().persisted.config
 
+  private def prompts(stateManager: StateManager): List[ConfirmPrompt] =
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.runtime.modalStack.map(_.modal).collect { case Modal.Confirm(prompt) => prompt } ++
+      state.runtime.uiSurfaces.map(_.content).collect { case SurfaceContent.ModalWorkflow(Modal.Confirm(p)) => p }
+
+  private def run(stateManager: StateManager, intent: InterfaceChromeIntent): Unit =
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "layout-test",
+          "Change the layout",
+          CommandIntent.Settings(SettingsIntent.InterfaceChrome(intent)),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+    stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
+
+  /** Does what choosing `label` in the one open prompt does, as the modal would once it closed. */
+  private def choose(stateManager: StateManager, label: String): Unit =
+    val chosen = prompts(stateManager).flatMap(_.choices.items).find(_.label == label)
+    chosen.map(_.action) match
+      case Some(ConfirmAction.Run(command)) =>
+        stateManager.executeCommand(command).unsafeRunSync()
+        stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
+      case other => fail(s"expected a runnable choice named $label, got $other")
+
+  private val pinnedFile = "editor.line_numbers = false\nstatus.placement = floating\neditor.tab_size = 3\n"
+
   "toggle-layout" should "be a registered command" in {
     com.serenity.command.CommandRegistry.withToggleUI.getAllCommands.map(_.name) should contain("toggle-layout")
   }
@@ -87,11 +125,31 @@ class StateManagerUiLayoutSpec extends AnyFlatSpec with Matchers with StateManag
     Files.readString(path) should include("ui.layout = minimal")
   }
 
-  it should "leave a setting the file writes where the file put it" in {
-    val path         = configFile("editor.line_numbers = false\nstatus.placement = floating\n")
+  it should "ask before changing chrome the file sets, and leave the layout alone until asked" in {
+    val path         = configFile(pinnedFile)
     val stateManager = editorOn(path)
 
     toggleLayout(stateManager)
+
+    live(stateManager).uiLayout shouldBe UiLayout.Minimal
+    Files.readString(path) should not include "ui.layout = conventional"
+    val prompt = prompts(stateManager).headOption.getOrElse(fail("expected a layout prompt"))
+    prompt.message should contain("Editor Line Numbers: false -> true")
+    prompt.message should contain("Status Placement: floating -> pinned")
+    prompt.choices.items.map(_.label) shouldBe Vector(
+      "Use Conventional for all",
+      "Keep my settings",
+      "Choose one by one",
+      "Cancel"
+    )
+  }
+
+  it should "leave a setting the file writes where the file put it when told to keep it" in {
+    val path         = configFile(pinnedFile)
+    val stateManager = editorOn(path)
+
+    toggleLayout(stateManager)
+    choose(stateManager, "Keep my settings")
 
     live(stateManager).uiLayout shouldBe UiLayout.Conventional
     live(stateManager).surfaceConfig.showLineNumbers shouldBe false
@@ -101,6 +159,99 @@ class StateManagerUiLayoutSpec extends AnyFlatSpec with Matchers with StateManag
     text should include("editor.line_numbers = false")
     text should include("status.placement = floating")
     assigns(text, "editor.pane_headers") shouldBe false
+  }
+
+  it should "hand every pinned key back to the layout when told to use the layout for all" in {
+    val path         = configFile(pinnedFile)
+    val stateManager = editorOn(path)
+
+    toggleLayout(stateManager)
+    choose(stateManager, "Use Conventional for all")
+
+    live(stateManager).uiLayout shouldBe UiLayout.Conventional
+    live(stateManager).surfaceConfig.showLineNumbers shouldBe true
+    live(stateManager).statusLine.placement shouldBe StatusLinePlacement.Pinned
+    val text = Files.readString(path)
+    text should include("ui.layout = conventional")
+    text should include("editor.tab_size = 3")
+    assigns(text, "editor.line_numbers") shouldBe false
+    assigns(text, "status.placement") shouldBe false
+    live(stateManager) shouldBe ConfigManagerTestSupport.loadConfig(Some(path.toString))
+  }
+
+  it should "let a released key follow the layout on the next switch, without asking again" in {
+    val path         = configFile(pinnedFile)
+    val stateManager = editorOn(path)
+    toggleLayout(stateManager)
+    choose(stateManager, "Use Conventional for all")
+
+    toggleLayout(stateManager)
+
+    live(stateManager).uiLayout shouldBe UiLayout.Minimal
+    live(stateManager).surfaceConfig.showLineNumbers shouldBe false
+    live(stateManager).statusLine.placement shouldBe StatusLinePlacement.Off
+    ConfigManagerTestSupport.loadConfig(Some(path.toString)) shouldBe live(stateManager)
+  }
+
+  it should "release only the keys chosen one by one" in {
+    val path         = configFile(pinnedFile)
+    val stateManager = editorOn(path)
+
+    run(stateManager, InterfaceChromeIntent.ConfirmUiLayoutOverride(UiLayout.Conventional, List("status.placement")))
+
+    live(stateManager).uiLayout shouldBe UiLayout.Conventional
+    live(stateManager).surfaceConfig.showLineNumbers shouldBe false
+    live(stateManager).statusLine.placement shouldBe StatusLinePlacement.Pinned
+    val text = Files.readString(path)
+    text should include("editor.line_numbers = false")
+    assigns(text, "status.placement") shouldBe false
+  }
+
+  it should "open the preset diff review, one toggle per pinned key, when asked to choose one by one" in {
+    val path         = configFile(pinnedFile)
+    val stateManager = editorOn(path)
+
+    toggleLayout(stateManager)
+    choose(stateManager, "Choose one by one")
+
+    val runner = stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface.map(_.content) match
+      case Some(SurfaceContent.CommandPalette(runner)) => runner
+      case other                                       => fail(s"expected the command runner, got $other")
+    runner.surface shouldBe a[CommandRunnerSurface.PresetDiffReview]
+    runner.visibleItems.collect { case toggle: CommandSurfaceItem.ToggleItem => toggle.id } shouldBe
+      List("editor.line_numbers", "status.placement")
+    live(stateManager).uiLayout shouldBe UiLayout.Minimal
+  }
+
+  it should "ask in the same way when the settings row picks the layout" in {
+    val path         = configFile(pinnedFile)
+    val stateManager = editorOn(path)
+
+    run(stateManager, InterfaceChromeIntent.SetUiLayout(UiLayout.Conventional))
+
+    live(stateManager).uiLayout shouldBe UiLayout.Minimal
+    prompts(stateManager) should have size 1
+  }
+
+  it should "not ask about a pinned key that already says what the layout does" in {
+    val path         = configFile("editor.line_numbers = true\n")
+    val stateManager = editorOn(path)
+
+    toggleLayout(stateManager)
+
+    prompts(stateManager) shouldBe Nil
+    live(stateManager).uiLayout shouldBe UiLayout.Conventional
+    Files.readString(path) should include("editor.line_numbers = true")
+  }
+
+  it should "still apply the layout's value to a key it could not remove from the file" in {
+    val path         = configFile("editor {\n  line_numbers = false\n}\n")
+    val stateManager = editorOn(path)
+
+    run(stateManager, InterfaceChromeIntent.ConfirmUiLayoutOverride(UiLayout.Conventional, List("editor.line_numbers")))
+
+    live(stateManager).surfaceConfig.showLineNumbers shouldBe true
+    ConfigManagerTestSupport.loadConfig(Some(path.toString)).surfaceConfig.showLineNumbers shouldBe true
   }
 
   it should "apply the layout the settings row picks" in {

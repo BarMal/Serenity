@@ -225,12 +225,19 @@ object ConfigManager:
     case Patched(text: String, replacedKeys: Set[String])
     case Whole
 
-  private def explicitKeys(source: Config): Set[String] = hoconEntries(source).map(_.key).toSet
+  private[config] def explicitKeys(source: Config): Set[String] = hoconEntries(source).map(_.key).toSet
 
   /** The keys the config file at `path` sets, none when it cannot be read: what a layout change must leave alone. */
   def settingKeysIO(path: Path): IO[Set[String]] =
     IO.blocking(Try(explicitKeys(ConfigMigrations.migrate(parseHoconFile(path), ConfigMigrations.installed).config)))
       .map(_.getOrElse(Set.empty))
+
+  /** Takes the chrome `keys` out of the file, so each follows the layout again. The keys it could not take out -- one
+    * written inside a block, say -- are returned, and the file is otherwise left as the user wrote it, a copy of it
+    * kept first.
+    */
+  def releaseKeysIO(path: Path, keys: Set[String]): IO[Either[ConfigError, Set[String]]] =
+    IO.realTimeInstant.flatMap(now => IO.blocking(ConfigKeyRelease(path, keys, now)))
 
   private def canonicalKey(key: String): String = ConfigRegistry.find(key).map(_.key).getOrElse(key)
 
@@ -345,7 +352,7 @@ object ConfigManager:
       removedKeys = removedKeys
     )
 
-  private def parseHoconFile(path: Path): Config =
+  private[config] def parseHoconFile(path: Path): Config =
     val options = ConfigParseOptions
       .defaults()
       .setOriginDescription(path.toString)

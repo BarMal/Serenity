@@ -89,8 +89,32 @@ enum CommandRunnerSurface:
   // `searchTerm`/`filteredCommands` are never read for this case. Which changes are actually toggled off lives on
   // `CommandRunner.toggleSelections`, the same override map `ToggleItem` already uses everywhere else -- not
   // duplicated here.
+  //
+  // The same list serves a config file that pins chrome a layout would change (`PresetDiffPurpose.SwitchLayout`): each
+  // change is then a pinned key, checked while the layout replaces it and unchecked while the user's value stays.
   case PresetDiffReview(
       presetName: String,
       changes: List[com.serenity.ui.presets.PresetChange],
-      state: CommandPaletteState = CommandPaletteState()
+      state: CommandPaletteState = CommandPaletteState(),
+      purpose: PresetDiffPurpose = PresetDiffPurpose.ApplyPreset
   )
+
+/** What confirming a [[CommandRunnerSurface.PresetDiffReview]] does with the changes still checked. */
+enum PresetDiffPurpose:
+  case ApplyPreset
+  case SwitchLayout(layout: com.serenity.config.UiLayout)
+
+  def header(name: String): String = this match
+    case ApplyPreset     => s"Apply preset: $name"
+    case SwitchLayout(_) => s"Use the $name layout (uncheck a setting to keep yours)"
+
+  def confirmIntent(name: String, selectedKeys: List[String]): CommandIntent = this match
+    case ApplyPreset => CommandIntent.UiPresets(UiPresetsIntent.ConfirmUiPresetDiffApply(name, selectedKeys))
+    case SwitchLayout(layout) =>
+      CommandIntent.Settings(
+        SettingsIntent.InterfaceChrome(InterfaceChromeIntent.ConfirmUiLayoutOverride(layout, selectedKeys))
+      )
+
+  def confirmDescription(name: String): String = this match
+    case ApplyPreset     => s"Apply the selected changes from $name"
+    case SwitchLayout(_) => s"Use the $name layout for the selected settings"
