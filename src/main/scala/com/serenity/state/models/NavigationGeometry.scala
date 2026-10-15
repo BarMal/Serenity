@@ -209,7 +209,15 @@ final case class NavigationGeometry(visualLines: Vector[TextVisualLine]):
     visualLineFor(cursor).map(line => line.xForColumn(cursor.column).getOrElse(line.widthPx))
 
   def cursorForVisualRowAndXPx(row: Int, xPx: Float): Option[CursorPosition] =
-    visualLines.lift(row).map(line => CursorPosition(line.bufferLine, line.nearestColumnForXPx(xPx)))
+    visualLines.lift(row).map { line =>
+      val column = line.nearestColumnForXPx(xPx)
+      val landed = CursorPosition(line.bufferLine, column)
+      // A column shared with the next row would read as that row's start: a point on this row's right edge has to
+      // stay on this row, as End leaves it.
+      if visualLines.lift(row + 1).exists(next => next.bufferLine == line.bufferLine && next.startColumn == column) then
+        landed.upstream
+      else landed
+    }
 
   def moveVertical(cursor: CursorPosition, direction: Int, preferredXPx: Float): Option[CursorPosition] =
     visualRowIndexFor(cursor)
