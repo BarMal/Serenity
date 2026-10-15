@@ -237,6 +237,22 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
     ConfigManager.configToString(config) should include("startup.warm_up = false")
   }
 
+  it should "default memory compaction to on, then load and write it" in {
+    AppConfig.default.surfaceConfig.memoryCompactionEnabled shouldBe true
+
+    val configFile = TestTemp.file("serenity-memory-compact-config", ".conf")
+    Files.writeString(
+      configFile,
+      """performance.memory.compact = false
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.memoryCompactionEnabled shouldBe false
+    ConfigManager.configToString(config) should include("performance.memory.compact = false")
+  }
+
   it should "load and write the cursor info bar background alpha override" in {
     val configFile = TestTemp.file("serenity-cursor-info-bar-alpha-config", ".conf")
     Files.writeString(
