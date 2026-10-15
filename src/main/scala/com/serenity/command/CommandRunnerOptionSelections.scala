@@ -31,6 +31,7 @@ object CommandRunnerOptionSelections:
       "status-indentation"         -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Indentation)),
       "interface-density"          -> interfaceDensityIndex(interfaceConfig.density),
       "window-chrome"              -> windowChromeModeIndex(config.windowChromeMode),
+      "menu-bar"                   -> menuBarModeIndex(config.menuBarMode),
       "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
       "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
       "drop-caps-enabled"          -> enabledIndex(documentConfig.dropCapsEnabled),
@@ -89,6 +90,12 @@ object CommandRunnerOptionSelections:
       case WindowChromeMode.Native       => 1
       case WindowChromeMode.NativeThemed => 2
       case WindowChromeMode.Custom       => 3
+
+  private def menuBarModeIndex(mode: MenuBarMode): Int =
+    mode match
+      case MenuBarMode.Hidden  => 0
+      case MenuBarMode.Alt     => 1
+      case MenuBarMode.Visible => 2
 
   private def renderFpsTargetIndex(target: RenderFpsTarget): Int =
     target match

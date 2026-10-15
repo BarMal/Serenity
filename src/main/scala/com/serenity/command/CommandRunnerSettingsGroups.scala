@@ -156,10 +156,11 @@ object CommandRunnerSettingsGroups:
     val interfaceLayoutGroup = group(
       "settings-interface-layout",
       "Interface Layout",
-      "Density, window chrome, key hints, and how many command runner/palette items are visible",
+      "Density, window chrome, menu bar, key hints, and how many command runner/palette items are visible",
       List(
         Some(CommandRunnerSettingsAppearanceItems.interfaceDensityOptionItem(optionSelections)),
         onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.windowChromeOptionItem(optionSelections)),
+        onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.menuBarOptionItem(optionSelections)),
         Some(CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(optionSelections))
       ).flatten
     )

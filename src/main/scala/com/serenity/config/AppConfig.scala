@@ -72,11 +72,17 @@ final case class AppConfig(
   def interfaceDensity: InterfaceDensity =
     interfaceConfig.density
 
+  def fileDialogMode: FileDialogMode =
+    interfaceConfig.fileDialog
+
   def uiElementGap: Option[Double] =
     interfaceConfig.elementGap
 
   def uiOutlineThicknessPx: Int =
     interfaceConfig.outlineThicknessPx
+
+  def menuBarMode: MenuBarMode =
+    interfaceConfig.menuBar
 
   def uiChromeScale: Double =
     editorConfig.fontConfig.uiChromeScale
@@ -361,8 +367,14 @@ final case class AppConfig(
   def withInterfaceDensity(density: InterfaceDensity): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(density = density))
 
+  def withFileDialogMode(mode: FileDialogMode): AppConfig =
+    withInterfaceConfig(interfaceConfig.copy(fileDialog = mode))
+
   def withUiElementGap(gap: Option[Double]): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(elementGap = gap))
+
+  def withMenuBarMode(mode: MenuBarMode): AppConfig =
+    withInterfaceConfig(interfaceConfig.copy(menuBar = mode))
 
   def withUiOutlineThicknessPx(thickness: Int): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(outlineThicknessPx = thickness))

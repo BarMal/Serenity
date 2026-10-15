@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.{StatusSegment, WindowChromeMode}
+import com.serenity.config.{MenuBarMode, StatusSegment, WindowChromeMode}
 import com.serenity.ui.presets.UiPreset
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -37,6 +37,17 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
       )
     )
     chrome.options.map(_.label) shouldBe List("Auto (Linux Custom)", "Native", "Native Themed (Windows)", "Custom")
+  }
+
+  it should "offer the menu bar as hidden, alt or visible, hidden first" in {
+    val menuBar = CommandRunnerSettingsAppearanceItems.menuBarOptionItem(Map.empty)
+
+    menuBar.label shouldBe "Menu Bar"
+    menuBar.options.map(_.label) shouldBe List("Hidden", "Alt Toggles", "Visible")
+    menuBar.selectedOption shouldBe "Hidden"
+    CommandRunnerSettingsAppearanceItems.menuBarOptionItem(Map("menu-bar" -> 2)).selectedIntent shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetMenuBarMode(MenuBarMode.Visible)))
+    )
   }
 
   it should "offer the Arrange Panels list in place of a pin row per panel and separate order commands" in {
