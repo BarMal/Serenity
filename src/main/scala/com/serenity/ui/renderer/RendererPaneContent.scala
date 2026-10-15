@@ -31,20 +31,33 @@ object RendererPaneContent:
     orderedPanes.foreach { (paneId, pane) =>
       renderPlan.paneLayouts.get(paneId) match
         case Some(paneLayout) =>
-          renderEditorPane(
-            pane,
-            paneLayout,
-            state,
-            context,
-            renderPlan.snapshots.get(paneId),
-            renderPlan.columnSnapshotsFor(paneId),
-            renderPlan.layoutContract,
-            pane.bufferId.flatMap(renderPlan.annotations.get),
-            dirtyRowsByPane.get(paneId),
-            chrome
-          )
+          aboveBottomOf(paneLayout.contentRect, context) {
+            renderEditorPane(
+              pane,
+              paneLayout,
+              state,
+              context,
+              renderPlan.snapshots.get(paneId),
+              renderPlan.columnSnapshotsFor(paneId),
+              renderPlan.layoutContract,
+              pane.bufferId.flatMap(renderPlan.annotations.get),
+              dirtyRowsByPane.get(paneId),
+              chrome
+            )
+          }
         case None => ()
     }
+
+  /** A last row that starts inside the pane but ends past it is cut off at the pane's bottom edge. Left unclipped its
+    * glyphs land on the status row, which a frame that repaints chrome clears and one that does not leaves covered, so
+    * the same document drew two ways depending on the frame before. Only the bottom is bounded: glyph overscan to the
+    * sides is deliberate.
+    */
+  private def aboveBottomOf(contentRect: LayoutRect, context: RenderContext)(paint: => Unit): Unit =
+    context.surface.panelOutlines match
+      case Some(clipping) if contentRect.bottom < context.surface.viewportHeight =>
+        clipping.withRectClip(0, 0, context.surface.viewportWidth, contentRect.bottom)(paint)
+      case _ => paint
 
   /** Paint every pane's visible cursors and report the union of pixel rects painted across all of them. */
   def renderEditorCursors(
