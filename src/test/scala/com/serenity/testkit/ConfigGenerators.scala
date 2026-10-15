@@ -198,12 +198,42 @@ object ConfigGenerators:
       highContrast <- themeName
     yield ThemeFollowConfig(follow, light, dark, highContrast)
 
+  private val genChords: Gen[SummonConfig] =
+    for
+      modifiers <- Gen.oneOf(
+        Set(Modifier.Alt, Modifier.Shift),
+        Set(Modifier.Ctrl, Modifier.Alt),
+        Set(Modifier.Meta, Modifier.Shift)
+      )
+      lock <- Gen
+        .oneOf("space", "enter", "tab", "backspace", "g")
+        .map(SummonConfig.parseLock)
+        .map(_.getOrElse(SummonConfig.DefaultLock))
+      letters <- Gen.pick(ChromeElement.values.length, "qwxyz".toList).map(_.toList)
+      chosen  <- Gen.listOfN(ChromeElement.values.length, Gen.oneOf(true, false))
+    yield ChromeElement.values.toList
+      .zip(letters.zip(chosen))
+      .foldLeft(SummonConfig(modifiers = modifiers, lock = lock, letters = Map.empty)) {
+        case (config, (element, (letter, keep))) => config.withLetter(element, Option.when(keep)(letter))
+      }
+
+  /** Chords no default hotkey or keymap takes, one letter to an element, so that loading the config file back settles
+    * nothing and the round trip is the identity.
+    */
+  val genSummonConfig: Gen[SummonConfig] =
+    genChords.suchThat(_.settled(HotkeyConfig.forOs("linux"), FocusedKeymapConfig())._2.isEmpty)
+
   val genInputConfig: Gen[InputConfig] =
     for
       lines       <- Gen.choose(1, 50)
       codeEscape  <- oneOfEnum(PanelEscapeTarget.values)
       proseEscape <- oneOfEnum(PanelEscapeTarget.values)
-    yield InputConfig(wheelScrollLines = lines, panelEscapeReturnsTo = PerMode(codeEscape, proseEscape))
+      summon      <- genSummonConfig
+    yield InputConfig(
+      wheelScrollLines = lines,
+      panelEscapeReturnsTo = PerMode(codeEscape, proseEscape),
+      summon = summon
+    )
 
   val genTextAreaInsets: Gen[TextAreaInsets] =
     for

@@ -154,6 +154,7 @@ object CommandRunnerSettingsInputItems:
         v.elementGapValue,
         v.outlineThicknessValue
       ) ++
+      CommandRunnerSettingsInputItemsSummon.items(config.summon) ++
       CommandRunnerSettingsInputItemsUiLayout.indentationItems(config.indentation.tabSize) ++
       CommandRunnerSettingsInputItemsUiLayout.lineNumberSpacingItems(
         v.lineNumberMarginLeftValue,

@@ -192,6 +192,7 @@ given Decoder[SessionState] = Decoder.instance { cursor =>
     recentFilesByMode <- cursor.getOrElse[Map[String, List[String]]]("recentFilesByMode")(Map.empty)
     recentFolders     <- cursor.getOrElse[List[String]]("recentFolders")(Nil)
     commandUsage      <- cursor.getOrElse[Map[String, Int]]("commandUsage")(Map.empty)
+    lockedChrome      <- cursor.getOrElse[List[String]]("lockedChrome")(Nil)
   yield SessionState(
     buffers = buffers,
     layout = layout,
@@ -203,6 +204,7 @@ given Decoder[SessionState] = Decoder.instance { cursor =>
     recentFilesByMode = recentFilesByMode,
     recentFolders = recentFolders,
     commandUsage = commandUsage,
+    lockedChrome = lockedChrome,
     schemaVersion = schemaVersion
   )
 }

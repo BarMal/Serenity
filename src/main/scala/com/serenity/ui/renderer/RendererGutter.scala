@@ -25,7 +25,7 @@ object RendererGutter:
     rows: Repaint[Int],
     railRows: PaneId => Repaint[Int] = _ => Repaint.all[Int]
   ): Unit =
-    if state.persisted.config.surfaceConfig.showLineNumbers then
+    if state.chrome.lineNumbers then
       // Multi-column e-reader layout (issue #1338, Phase 2 / slice 2): a column-mode page has no single shared
       // pane-level rail (`LayoutEngine` reserves none in that case); each column carries its own rail on its left edge,
       // painted inline against that column's own chunk of rows.
@@ -42,7 +42,7 @@ object RendererGutter:
   /** Whether line numbers are drawn as one rail per e-reader column rather than as the pane's single counter. */
   private[renderer] def paintsColumnRails(state: AppState): Boolean =
     val surfaceConfig = state.persisted.config.surfaceConfig
-    surfaceConfig.showLineNumbers && surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
+    state.chrome.lineNumbers && surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
 
   /** Paint each e-reader column's own line-number rail (slice 2). Every pane carrying column placements draws a rail on
     * the leftmost `gutterWidthCells` of each column's band, aligned row-for-row against that column's own snapshot -- a

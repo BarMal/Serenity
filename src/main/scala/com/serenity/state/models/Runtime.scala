@@ -72,7 +72,10 @@ final case class Runtime(
     // comments stay in the buffer either way.
     resolvedCommentsVisible: Boolean = false,
     // Never persisted: the settings value the command runner is previewing, with the config and theme to save instead.
-    pendingSetting: Option[PendingSetting] = None
+    pendingSetting: Option[PendingSetting] = None,
+    // The chrome summoned over the config. Only what is locked is written to the session (`SessionState.lockedChrome`);
+    // the config file is never touched by it.
+    summons: ChromeSummons = ChromeSummons.empty
 ):
 
   /** A typed character restarts the quiet window for cursor-adjacent surfaces. */

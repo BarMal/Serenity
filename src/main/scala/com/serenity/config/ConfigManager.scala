@@ -115,7 +115,9 @@ object ConfigManager:
     val explicitCommandIds = entries.flatMap(entry => ConfigGroups.commandIdOf(entry.key)).toSet
     val hotkeys            = withLspLists.inputConfig.hotkeyConfig.yieldingDefaultCommandBindings(explicitCommandIds)
     val (settled, conflicts) = HotkeyConflict.settle(hotkeys)
-    (withLspLists.withHotkeyConfig(settled), conflicts)
+    val (summon, summonConflicts) =
+      withLspLists.summon.settled(settled, withLspLists.inputConfig.focusedKeymapConfig)
+    (withLspLists.withHotkeyConfig(settled).withSummon(summon), conflicts ++ summonConflicts)
 
   /** Generate configuration file content from AppConfig */
   def configToString(config: AppConfig): String = ConfigFileFormat.render(config)

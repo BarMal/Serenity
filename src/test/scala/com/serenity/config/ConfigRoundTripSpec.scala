@@ -7,7 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.TestTemp
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment, ThemeFollowConfig}
-import com.serenity.keystroke.Modifier
+import com.serenity.keystroke.{InputKey, Modifier}
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -131,6 +131,13 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withMinimumPaneWidth(24)
     .withWindowChromeMode(WindowChromeMode.Native)
     .withMenuBarMode(MenuBarMode.Visible)
+    .withSummon(
+      SummonConfig(
+        modifiers = Set(Modifier.Ctrl, Modifier.Alt),
+        lock = HotkeyTrigger(InputKey.Enter, None, Set.empty),
+        letters = Map(ChromeElement.LineNumbers -> 'x', ChromeElement.PaneHeaders -> 'z')
+      )
+    )
     .withFontConfig(
       FontConfig(
         codeFontFamily = "Iosevka",
@@ -228,6 +235,9 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     // Records that the bindings were adjusted for a terminal at startup; it is a property of the running frontend,
     // never written to the file (HotkeyOverridesSpec).
     "inputConfig.hotkeyConfig.terminalAdjusted",
+    // The summon lock is a single key pressed while the chord is held, so it never carries modifiers of its own
+    // (`SummonConfig.parseLock` refuses any); the key itself is moved off its default in `mutated`.
+    "inputConfig.summon.lock.modifiers",
     "inputConfig.hotkeyConfig.bindings"
   )
 

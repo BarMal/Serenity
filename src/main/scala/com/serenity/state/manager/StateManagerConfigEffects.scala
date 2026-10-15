@@ -13,12 +13,15 @@ import com.serenity.config.{
   ConfigManager,
   ConfigNotice,
   ConfigRestart,
+  FocusedKeymapConfig,
+  HotkeyConfig,
   HotkeyOverrides,
   LayoutPin,
   LayoutPreset,
   LineNumberLayout,
   StatusLinePlacement,
   StatusSegment,
+  SummonConfig,
   UiLayout
 }
 import com.serenity.io.{FileStamp, TimestampedBackup}
@@ -252,6 +255,12 @@ final private[manager] class StateManagerConfigEffects(
         switchLayout(layout)
       case InterfaceChromeIntent.ToggleUiLayout =>
         currentState.flatMap(current => switchLayout(current.persisted.config.uiLayout.toggled))
+      case InterfaceChromeIntent.SetSummonModifiers(modifiers) =>
+        changeSummon(config => config.summon.withModifiersChecked(modifiers, hotkeysOf(config), keymapsOf(config)))
+      case InterfaceChromeIntent.SetSummonLock(lock) =>
+        changeSummon(_.summon.withLockChecked(lock))
+      case InterfaceChromeIntent.SetSummonLetter(element, letter) =>
+        changeSummon(config => config.summon.withLetterChecked(element, letter, hotkeysOf(config), keymapsOf(config)))
       case InterfaceChromeIntent.ReviewUiLayoutOverride(layout) =>
         pinsAwayFrom(layout).flatMap(pins =>
           editor.updateModelValidated(model =>
@@ -264,6 +273,26 @@ final private[manager] class StateManagerConfigEffects(
         updateConfig(_.withWheelScrollLines(lines)).void
       case InterfaceChromeIntent.SetPanelEscapeTarget(mode, target) =>
         updateConfig(_.withPanelEscapeTarget(mode, target)).void
+
+  private def hotkeysOf(config: AppConfig): HotkeyConfig = config.inputConfig.hotkeyConfig
+
+  private def keymapsOf(config: AppConfig): FocusedKeymapConfig = config.inputConfig.focusedKeymapConfig
+
+  /** Applies a summon change, or says why it was left: a chord that another summon chord, a hotkey or the lock key
+    * holds would never fire.
+    */
+  private def changeSummon(change: AppConfig => Option[SummonConfig]): IO[Unit] =
+    currentState.flatMap { state =>
+      change(state.persisted.config) match
+        case Some(summon) => updateConfig(_.withSummon(summon)).void
+        case None =>
+          showNotice(
+            Notice(
+              NoticeLevel.Warning,
+              "That key is already taken by another summon chord, the lock key or a hotkey, so the summon setting was left as it was."
+            )
+          )
+    }
 
   /** Moves the chrome the layout supplies. Chrome the file sets, to something the layout would change, is asked about
     * first rather than silently kept: a person who switches layout expects to see it change.

@@ -148,7 +148,7 @@ object LayoutEngine:
     // text width instead.
     val columnModeActive =
       state.persisted.config.surfaceConfig.columnModeEnabled && state.persisted.config.surfaceConfig.wordWrapEnabled
-    val lineNumbersOn        = state.persisted.config.surfaceConfig.showLineNumbers && !columnModeActive
+    val lineNumbersOn        = state.chrome.lineNumbers && !columnModeActive
     val lineNumberLayout     = state.persisted.config.surfaceConfig.lineNumberLayout.normalized
     val lineNumberMarginLeft = state.effectiveLineNumberMarginLeft
     val lineNumberPadding    = state.effectiveLineNumberPadding
@@ -358,7 +358,7 @@ object LayoutEngine:
     )
 
   private[layout] def usesBottomGutter(state: AppState): Boolean =
-    state.persisted.config.statusLine.isPinned
+    state.chrome.statusLine.isPinned
 
   /** Whether the always-visible tab strip (issue #1074 epic, #1075-1077) reserves its own row. Only once 2+ buffers are
     * open -- with a single buffer there is nothing to switch between, so no strip is reserved or painted (issue #1074
@@ -368,7 +368,7 @@ object LayoutEngine:
     state.showsTabStrip
 
   private[layout] def paneHeaderHeight(state: AppState): Int =
-    if state.persisted.config.surfaceConfig.showPaneHeaders then EditorPaneHeaderHeight else 0
+    if state.chrome.paneHeaders then EditorPaneHeaderHeight else 0
 
   private def calculateLineNumberWidth(state: AppState): Int =
     lineNumberCounterWidth(state)
@@ -392,7 +392,7 @@ object LayoutEngine:
   def perColumnGutterWidth(state: AppState): Int =
     val surfaceConfig    = state.persisted.config.surfaceConfig
     val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
-    if surfaceConfig.showLineNumbers && columnModeActive then lineNumberCounterWidth(state) else 0
+    if state.chrome.lineNumbers && columnModeActive then lineNumberCounterWidth(state) else 0
 
   def calculateViewportForCursor(
     cursor: CursorPosition,

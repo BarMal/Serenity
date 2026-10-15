@@ -415,7 +415,8 @@ final private[manager] class StateManagerEventPipeline(
           PreviousTab | FileSearch | GoToFile | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane |
           _: CloseTabById | MoveTabLeft | MoveTabRight | _: FocusInDirection | ToggleChapterGhosts | OpenChapterNote |
           OpenKeywordNote | ToggleNotesPin | _: RunCommand | SettingsPreviewAbandoned | _: ActivateBuffer |
-          _: OpenRecentPath | _: OpenRecentFolder =>
+          _: OpenRecentPath | _: OpenRecentFolder | _: ChromeSummonPressed | _: ChromeSummonReleased |
+          ChromeSummonLocked | _: ChromeSummonToggled =>
         reduced
       case _: CursorPeekModifierPressed | _: CursorPeekModifierReleased | CursorPeekOtherKeyPressed =>
         applyReducerResult(EventPipelineTransitions.withCursorPeekAnchorResolved(result), prevState)

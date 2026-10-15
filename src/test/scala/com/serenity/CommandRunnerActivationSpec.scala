@@ -124,7 +124,8 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "ui-layout",
         "window-chrome",
         "menu-bar",
-        "command-runner-key-hints"
+        "command-runner-key-hints",
+        "settings-summon"
       )
     )
     settingsGroup(runner, "settings-interface-layout")

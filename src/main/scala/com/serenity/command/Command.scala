@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import com.serenity.config.*
+import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
@@ -308,6 +309,9 @@ enum InterfaceChromeIntent:
   case SetMenuBarMode(mode: MenuBarMode)
   case SetUiLayout(layout: UiLayout)
   case ToggleUiLayout
+  case SetSummonModifiers(modifiers: Set[Modifier])
+  case SetSummonLock(lock: HotkeyTrigger)
+  case SetSummonLetter(element: ChromeElement, letter: Option[Char])
   // `useLayoutKeys` are the `LayoutPin.key`s handed back to the layout; every other key the file pins stays as the
   // file has it. Reached from the prompt a switch (or the first launch) opens, never from the palette.
   case ReviewUiLayoutOverride(layout: UiLayout)

@@ -76,3 +76,53 @@ class AltTapSpec extends AnyFlatSpec with Matchers:
     AltTap.inputOf(key(KeyEvent.KEY_RELEASED, KeyEvent.VK_F)) shouldBe None
     AltTap.inputOf(key(KeyEvent.KEY_TYPED, KeyEvent.VK_UNDEFINED)) shouldBe None
   }
+
+  private val alt   = InputEvent.ALT_DOWN_MASK
+  private val shift = InputEvent.SHIFT_DOWN_MASK
+
+  private def tapsIn(events: KeyEvent*): Int =
+    taps(events.flatMap(AltTap.inputOf)*)
+
+  "A summon chord" should "not be an Alt tap when Alt goes down first" in {
+    tapsIn(
+      key(KeyEvent.KEY_PRESSED, KeyEvent.VK_ALT, alt),
+      key(KeyEvent.KEY_PRESSED, KeyEvent.VK_SHIFT, alt | shift),
+      key(KeyEvent.KEY_PRESSED, KeyEvent.VK_L, alt | shift),
+      key(KeyEvent.KEY_RELEASED, KeyEvent.VK_L, alt | shift),
+      key(KeyEvent.KEY_RELEASED, KeyEvent.VK_SHIFT, alt),
+      key(KeyEvent.KEY_RELEASED, KeyEvent.VK_ALT)
+    ) shouldBe 0
+  }
+
+  it should "not be an Alt tap when Shift goes down first" in {
+    tapsIn(
+      key(KeyEvent.KEY_PRESSED, KeyEvent.VK_SHIFT, shift),
+      key(KeyEvent.KEY_PRESSED, KeyEvent.VK_ALT, alt | shift),
+      key(KeyEvent.KEY_PRESSED, KeyEvent.VK_S, alt | shift),
+      key(KeyEvent.KEY_RELEASED, KeyEvent.VK_S, alt | shift),
+      key(KeyEvent.KEY_RELEASED, KeyEvent.VK_ALT, shift),
+      key(KeyEvent.KEY_RELEASED, KeyEvent.VK_SHIFT)
+    ) shouldBe 0
+  }
+
+  it should "not be an Alt tap when the letter is released and pressed again by auto-repeat, or Alt alone is the base" in {
+    tapsIn(
+      key(KeyEvent.KEY_PRESSED, KeyEvent.VK_ALT, alt),
+      key(KeyEvent.KEY_PRESSED, KeyEvent.VK_L, alt),
+      key(KeyEvent.KEY_RELEASED, KeyEvent.VK_L, alt),
+      key(KeyEvent.KEY_PRESSED, KeyEvent.VK_L, alt),
+      key(KeyEvent.KEY_RELEASED, KeyEvent.VK_L, alt),
+      key(KeyEvent.KEY_RELEASED, KeyEvent.VK_ALT)
+    ) shouldBe 0
+  }
+
+  it should "leave a plain Alt tap after the chord a tap" in {
+    tapsIn(
+      key(KeyEvent.KEY_PRESSED, KeyEvent.VK_ALT, alt),
+      key(KeyEvent.KEY_PRESSED, KeyEvent.VK_L, alt),
+      key(KeyEvent.KEY_RELEASED, KeyEvent.VK_L, alt),
+      key(KeyEvent.KEY_RELEASED, KeyEvent.VK_ALT),
+      key(KeyEvent.KEY_PRESSED, KeyEvent.VK_ALT, alt),
+      key(KeyEvent.KEY_RELEASED, KeyEvent.VK_ALT)
+    ) shouldBe 1
+  }

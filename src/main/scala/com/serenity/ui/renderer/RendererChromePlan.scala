@@ -282,7 +282,7 @@ private[renderer] object RendererChromePlan:
     for
       paneId <- state.persisted.layout.activeEditorPaneId.toList
       record <- panes.get(paneId).toList
-      if state.persisted.config.surfaceConfig.showLineNumbers
+      if state.chrome.lineNumbers
       rect <- contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList
       band <- RendererGutter.keptRowBands(state, context, record.snapshot, rect, rows)
     yield band

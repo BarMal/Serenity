@@ -82,6 +82,8 @@ final private[manager] case class MouseTargetLayoutKey(
     uiElementGap: Double,
     showPaneHeaders: Boolean,
     statusLine: StatusLineConfig,
+    scrollbarShown: Boolean,
+    tabStripShown: Boolean,
     commandRunnerVisibleRows: Int,
     commandRunnerItemGapRows: Double,
     commandRunnerCursorGapRows: Double,
@@ -163,7 +165,7 @@ private[manager] object MouseTargetLayoutKey:
     MouseTargetLayoutKey(
       viewportSize = viewportSize,
       fontConfig = state.persisted.config.editorConfig.fontConfig,
-      showLineNumbers = state.persisted.config.surfaceConfig.showLineNumbers,
+      showLineNumbers = state.chrome.lineNumbers,
       wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled,
       columnModeEnabled = state.persisted.config.surfaceConfig.columnModeEnabled,
       columnTargetWidthCells = state.persisted.config.surfaceConfig.columnTargetWidthCells,
@@ -174,8 +176,10 @@ private[manager] object MouseTargetLayoutKey:
       proseColumnCells = ProseColumn.widthCells(state),
       interfaceDensity = state.persisted.config.interfaceDensity,
       uiElementGap = state.effectiveUiElementGap,
-      showPaneHeaders = state.persisted.config.surfaceConfig.showPaneHeaders,
-      statusLine = state.persisted.config.statusLine,
+      showPaneHeaders = state.chrome.paneHeaders,
+      statusLine = state.chrome.statusLine,
+      scrollbarShown = state.chrome.scrollbar,
+      tabStripShown = state.showsTabStrip,
       commandRunnerVisibleRows = state.persisted.config.effectiveCommandRunnerVisibleRows,
       commandRunnerItemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
       commandRunnerCursorGapRows = state.persisted.config.effectiveCommandRunnerCursorGapRows,
@@ -216,7 +220,7 @@ private[manager] object MouseTargetLayoutKey:
         }
       },
       lineNumberContent =
-        if state.persisted.config.surfaceConfig.showLineNumbers then
+        if state.chrome.lineNumbers then
           state.persisted.buffers.toList
             .sortBy(_._1.value)
             .map((bufferId, buffer) => bufferId -> RopeIdentity(buffer.document.content))

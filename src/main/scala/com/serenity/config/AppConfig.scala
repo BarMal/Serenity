@@ -84,6 +84,9 @@ final case class AppConfig(
   def menuBarMode: MenuBarMode =
     interfaceConfig.menuBar
 
+  def summon: SummonConfig =
+    inputConfig.summon
+
   def uiLayout: UiLayout =
     interfaceConfig.layout
 
@@ -390,6 +393,9 @@ final case class AppConfig(
     */
   def withUiLayout(layout: UiLayout): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(layout = layout))
+
+  def withSummon(summon: SummonConfig): AppConfig =
+    withInputConfig(inputConfig.copy(summon = summon))
 
   def withMenuBarMode(mode: MenuBarMode): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(menuBar = mode))

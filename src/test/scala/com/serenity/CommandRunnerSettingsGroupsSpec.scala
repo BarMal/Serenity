@@ -116,7 +116,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "ui-layout",
       "window-chrome",
       "menu-bar",
-      "command-runner-key-hints"
+      "command-runner-key-hints",
+      "settings-summon"
     )
     // Blur, spacing, corners, outlines, render cadence and decorative extras are one Advanced leaf, not five groups.
     nestedGroup("settings-look-advanced").label shouldBe "Advanced"

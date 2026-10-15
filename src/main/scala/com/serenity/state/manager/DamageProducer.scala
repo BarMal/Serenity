@@ -282,7 +282,7 @@ object DamageProducer:
     * having to enumerate what every field does to a rendered frame.
     */
   private def chromeDamage(before: AppState, after: AppState): Damage =
-    if before.persisted.theme != after.persisted.theme ||
+    if before.persisted.theme != after.persisted.theme || before.runtime.summons != after.runtime.summons ||
         !(before.persisted.config == after.persisted.config || statusRowOnly(
           before.persisted.config,
           after.persisted.config
@@ -464,6 +464,6 @@ object DamageProducer:
     if statusRowInputs(before) == statusRowInputs(after) then Damage.Nothing else Damage.Chrome
 
   private def statusRowInputs(state: AppState): Option[(Option[String], Boolean)] =
-    Option.when(state.persisted.config.statusLine.isPinned)((state.statusLineText, state.activeBuffer.isDefined))
+    Option.when(state.chrome.statusLine.isPinned)((state.statusLineText, state.activeBuffer.isDefined))
 
   private def isSameReference(a: AnyRef, b: AnyRef): Boolean = a eq b
