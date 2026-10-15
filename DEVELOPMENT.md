@@ -155,6 +155,14 @@ a collection after 60 s idle so freed heap goes back to the OS. They are set bes
 What the app actually holds, and what each flag does to it, is measured in [docs/memory-footprint.md](docs/memory-footprint.md);
 `scripts/measure-footprint.sh` reproduces it against an assembled jar.
 
+### Returning heap to the OS
+
+At startup, unless `performance.memory.compact = false`, Serenity sets `MinHeapFreeRatio=10`, `MaxHeapFreeRatio=30` and
+(under G1 only) `G1PeriodicGCInterval=30000` through `HotSpotDiagnosticMXBean.setVMOption`, in both window and terminal
+modes. The packaged `-XX:G1PeriodicGCInterval=60000` is therefore replaced by 30 s once the app is up. With the setting
+off the JVM keeps its launch values. A measured idle footprint dropped from about 520 MiB to about 317 MiB
+(`docs/memory-footprint.md`, PR #2266). The log records what was applied on a `[MEMORY]` line.
+
 ### Startup warm-up
 
 Once the first frame is drawn, Serenity types, deletes and moves through a throwaway editor drawn off-screen, so the
