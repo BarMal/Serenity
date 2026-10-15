@@ -3,7 +3,7 @@ package com.serenity.app
 import java.nio.file.{Files, Path}
 
 import cats.effect.IO
-import com.serenity.config.{AppConfig, UiLayout}
+import com.serenity.config.AppConfig
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.session.UnreadableSession
 import com.serenity.state.manager.*
@@ -146,21 +146,18 @@ object AppStartup:
     for
       unreadable <- sessionStartupInfo.setAsideUnreadableSession
       startPageNotice = Option((configNotice.toList ++ unreadable.map(_.summary)).mkString(" ")).filter(_.nonEmpty)
-      showsStartPage  = openPath.isEmpty && appConfig.uiLayout == UiLayout.Conventional
       _ <- openPath.fold(
-        if showsStartPage then
-          startPageState(
-            stateManager.sessionService,
-            sessionStartupInfo,
-            theme,
-            initialViewportSize,
-            appConfig,
-            capabilities,
-            startPageNotice
-          ).flatMap(startState => stateManager.updateStateValidated(_ => startState))
-        else openEmptyDocument(stateManager, theme, initialViewportSize, appConfig, capabilities)
+        startPageState(
+          stateManager.sessionService,
+          sessionStartupInfo,
+          theme,
+          initialViewportSize,
+          appConfig,
+          capabilities,
+          startPageNotice
+        ).flatMap(startState => stateManager.updateStateValidated(_ => startState))
       )(openStraightInto(stateManager, _, theme, initialViewportSize, appConfig, capabilities))
-      unseenNotice = configNotice.filter(_ => !showsStartPage)
+      unseenNotice = configNotice.filter(_ => openPath.isDefined)
       _     <- stateManager.updateStateValidated(withStartupPrompts(_, unreadable, unseenNotice))
       state <- stateManager.getCurrentState
     yield state
@@ -183,21 +180,6 @@ object AppStartup:
         )
       )
     } >> stateManager.fileOpener.openFile(path)
-
-  /** The minimal layout has no start page: the editor opens on the empty document a fresh state already holds. */
-  private def openEmptyDocument(
-    stateManager: StateManager,
-    theme: Theme,
-    initialViewportSize: ViewportSize,
-    appConfig: AppConfig,
-    capabilities: FrontendCapabilities
-  ): IO[Unit] =
-    stateManager.updateStateValidated(current =>
-      current.copy(
-        persisted = current.persisted.copy(theme = theme, config = appConfig),
-        runtime = current.runtime.copy(viewportSize = Some(initialViewportSize), capabilities = capabilities)
-      )
-    )
 
   def withStartupPrompts(state: AppState, unreadable: Option[UnreadableSession], notice: Option[String]): AppState =
     val prompts =

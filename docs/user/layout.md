@@ -17,8 +17,7 @@ palette (`Ctrl+P`) to switch. The change applies at once, in the window and in t
 
 `editor.tab_strip = auto` shows the strip once two or more files are open; `off` never does.
 
-With no file to open, `minimal` starts on an empty document and `conventional` on the start page. Return to Start Page
-is in the command palette in both.
+With no file to open, both layouts start on the start page. Return to Start Page is in the command palette in both.
 
 The menu bar (`ui.menu_bar`) and the title bar (`window.chrome`) are not part of the layout; see menu-bar.md.
 

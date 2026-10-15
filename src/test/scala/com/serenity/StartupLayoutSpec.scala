@@ -25,18 +25,16 @@ class StartupLayoutSpec extends AnyFlatSpec with Matchers with StateManagerTestS
       .unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync()
 
-  "Launching with no path in the minimal layout" should "open straight into an empty document" in {
+  "Launching with no path in the minimal layout" should "show the start page" in {
     val state = startedWith("StartupLayoutSpec-minimal", AppConfig.default)
 
-    state.startPageSurface shouldBe None
-    state.persisted.focus shouldBe a[Focus.EditorPane]
-    state.persisted.buffers should have size 1
-    state.activeBuffer.map(_.document.content.toString) shouldBe Some("")
+    state.startPageSurface shouldBe defined
+    state.persisted.focus shouldBe a[Focus.Surface]
     state.persisted.config.uiLayout shouldBe com.serenity.config.UiLayout.Minimal
     state.runtime.viewportSize shouldBe Some(ViewportSize(80, 24))
   }
 
-  it should "still tell the user about a config problem, in a prompt, since there is no start page" in {
+  it should "put a config problem on the start page rather than in a prompt" in {
     val stateManager = createStateManager("StartupLayoutSpec-notice")
     AppStartup
       .initializeState(
@@ -49,7 +47,9 @@ class StartupLayoutSpec extends AnyFlatSpec with Matchers with StateManagerTestS
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().runtime.modalStack should not be empty
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.startPageSurface shouldBe defined
+    state.runtime.modalStack shouldBe empty
   }
 
   "Launching with no path in the conventional layout" should "show the start page" in {
