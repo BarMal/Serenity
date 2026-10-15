@@ -3,8 +3,8 @@ package com.serenity.config
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.AppConfigOps.*
 import com.serenity.TestTemp
+import com.serenity.config.AppConfigOps.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
