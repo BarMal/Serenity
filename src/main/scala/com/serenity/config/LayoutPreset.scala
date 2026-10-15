@@ -2,6 +2,11 @@ package com.serenity.config
 
 import com.typesafe.config.ConfigValue
 
+/** One piece of chrome the config file sets to something other than what a layout would give it. */
+final case class LayoutPin(key: String, current: String, layoutValue: String):
+
+  def label: String = key.split("[._]").filter(_.nonEmpty).map(_.capitalize).mkString(" ")
+
 /** The chrome each [[UiLayout]] starts from.
   *
   * A layout is a base, not an override: the config file is read over [[base]], so a key the user writes wins. Changing
@@ -30,6 +35,14 @@ object LayoutPreset:
     def isLayoutsOwn(config: AppConfig): Boolean = read(config) == valueIn(config.uiLayout)
 
     def spellings: Set[String] = ConfigRegistry.find(key).fold(Set(key))(_.spellings) ++ legacyKeys
+
+    def isPinnedAwayFrom(config: AppConfig, explicitKeys: Set[String], layout: UiLayout): Boolean =
+      spellings.exists(explicitKeys.contains) && read(config) != valueIn(layout)
+
+    def pin(config: AppConfig, layout: UiLayout): Option[LayoutPin] =
+      ConfigRegistry.find(key).map { field =>
+        LayoutPin(key, field.setting(config)._2.rendered, field.setting(setTo(config, layout))._2.rendered)
+      }
 
   private val elements: List[Element[?]] = List(
     Element[Boolean](
@@ -89,6 +102,18 @@ object LayoutPreset:
       val keeps = element.spellings.exists(explicitKeys.contains) || !element.isLayoutsOwn(config)
       if keeps then rebased else element.setTo(rebased, layout)
     }
+
+  /** The chrome `explicitKeys` set to something `layout` would change: what a switch to `layout` would leave as the
+    * file has it.
+    */
+  def pins(config: AppConfig, explicitKeys: Set[String], layout: UiLayout): List[LayoutPin] =
+    elements.filter(_.isPinnedAwayFrom(config, explicitKeys, layout)).flatMap(_.pin(config, layout))
+
+  /** `config` with the chrome named by `keys` at the value `layout` gives it, wherever it stood before. */
+  def adopt(config: AppConfig, layout: UiLayout, keys: Set[String]): AppConfig =
+    elements
+      .filter(element => keys.contains(element.key))
+      .foldLeft(config)((adopted, element) => element.setTo(adopted, layout))
 
   /** The keys whose value in `config` is the layout's own, so a file that never mentions them says the same. `setKeys`
     * are the keys the file does set, under any spelling: those are the user's even when they match the layout.

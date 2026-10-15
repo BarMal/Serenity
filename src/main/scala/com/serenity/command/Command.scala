@@ -308,6 +308,10 @@ enum InterfaceChromeIntent:
   case SetMenuBarMode(mode: MenuBarMode)
   case SetUiLayout(layout: UiLayout)
   case ToggleUiLayout
+  // `useLayoutKeys` are the `LayoutPin.key`s handed back to the layout; every other key the file pins stays as the
+  // file has it. Reached from the prompt a switch (or the first launch) opens, never from the palette.
+  case ReviewUiLayoutOverride(layout: UiLayout)
+  case ConfirmUiLayoutOverride(layout: UiLayout, useLayoutKeys: List[String])
   case SetWheelScrollLines(lines: Int)
   case SetPanelEscapeTarget(mode: AppMode, target: PanelEscapeTarget)
 

@@ -38,6 +38,10 @@ object UiPresetDiff:
       dockedPanelsChange(currentHasDockedPanels, preset).toList :::
       workspaceTreeChange(currentHasWorkspaceTree, preset).toList
 
+  /** The review's rows for chrome a config file pins away from a layout: each key as a change to the layout's value. */
+  def layoutChanges(pins: List[LayoutPin]): List[PresetChange] =
+    pins.map(pin => PresetChange(pin.key, pin.label, pin.current, pin.layoutValue))
+
   private def isBuiltInWorkflow(preset: UiPreset): Boolean = UiPreset.isBuiltInWorkflow(preset)
 
   /** Offered only when applying would change the theme: built-in workflows keep the user's theme, a preset naming no

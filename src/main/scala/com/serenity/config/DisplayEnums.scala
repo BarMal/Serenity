@@ -121,6 +121,8 @@ enum UiLayout(val configKey: String):
     case Minimal      => Conventional
     case Conventional => Minimal
 
+  def label: String = configKey.capitalize
+
 object UiLayout:
 
   def fromConfigKey(value: String): Option[UiLayout] =

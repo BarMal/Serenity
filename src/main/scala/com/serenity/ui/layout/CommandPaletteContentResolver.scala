@@ -141,7 +141,7 @@ private[layout] object CommandPaletteContentResolver:
     showKeyHints: Boolean
   ): ResolvedSurfaceContent =
     val allItems    = runner.visibleItems
-    val header      = Some(OverlayRow(plainText = s"Apply preset: ${review.presetName}"))
+    val header      = Some(OverlayRow(plainText = review.purpose.header(review.presetName)))
     val hasKeyHint  = showKeyHints && allItems.nonEmpty
     val hasFooter   = allItems.nonEmpty || runner.statusMessage.nonEmpty
     val frameLayout = SurfaceFrameLayout.forContent(rect, SurfaceContent.CommandPalette(runner))
