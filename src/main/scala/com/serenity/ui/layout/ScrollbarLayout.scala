@@ -15,18 +15,20 @@ object ScrollbarLayout:
   /** Narrower than this a pane is too small to carry a bar over. */
   private val MinPaneColumns: Int = 12
 
-  /** A column-mode page is scrolled a page at a time, so it has no bar. */
-  private def pagedColumns(state: AppState): Boolean =
+  /** A column-mode page is scrolled a page at a time, so it has no bar; nor has any pane when the user turned the
+    * scrollbar off (`editor.scrollbar`).
+    */
+  private def barless(state: AppState): Boolean =
     val surfaceConfig = state.persisted.config.surfaceConfig
-    surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
+    !surfaceConfig.scrollbarEnabled || (surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled)
 
   /** Whether the GUI draws a strip over a pane whose content is `contentRect`. */
   def shown(state: AppState, contentRect: LayoutRect): Boolean =
-    !state.runtime.capabilities.isCellGrid && !pagedColumns(state) && contentRect.width >= MinPaneColumns
+    !state.runtime.capabilities.isCellGrid && !barless(state) && contentRect.width >= MinPaneColumns
 
   /** The columns a terminal pane `bandWidth` wide gives its scrollbar. */
   def terminalColumns(state: AppState, bandWidth: Int): Int =
-    if state.runtime.capabilities.isCellGrid && !pagedColumns(state) && bandWidth >= MinPaneColumns then 1 else 0
+    if state.runtime.capabilities.isCellGrid && !barless(state) && bandWidth >= MinPaneColumns then 1 else 0
 
   /** Whether `layout`'s pane has a scrollbar, in the GUI or a terminal. */
   def hasBar(state: AppState, layout: EditorPaneLayout): Boolean =

@@ -64,6 +64,23 @@ class ScrollbarRenderSpec extends AnyFlatSpec with Matchers with PersistedFrameF
       )
     )
 
+  private def withoutScrollbar(state: AppState): AppState =
+    val config = state.persisted.config
+    state.copy(persisted =
+      state.persisted.copy(config = config.copy(surfaceConfig = config.surfaceConfig.copy(scrollbarEnabled = false)))
+    )
+
+  "A frame with the scrollbar turned off" should "paint no thumb and plan no scroll for the pane" in {
+    val off           = withoutScrollbar(viewingMiddle)
+    val (image, plan) = Session().draw(off, Damage.Everything)
+    val bar           = track(plan)
+    val middle        = (((bar.xPx + bar.widthPx / 2) * scale).toInt, ((bar.yPx + bar.heightPx / 4) * scale).toInt)
+
+    plan.scrolls shouldBe empty
+    withClue("where the thumb would be: ")(colorAt(image, middle) shouldBe rgb(Theme.light.background))
+    differingPixels(image, cold(off)) shouldBe empty
+  }
+
   "A first frame" should "paint the thumb in the theme's colour and leave the rest of the strip to the text" in {
     val (image, plan) = Session().draw(viewingMiddle, Damage.Everything)
 

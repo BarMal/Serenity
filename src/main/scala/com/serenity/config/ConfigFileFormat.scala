@@ -108,6 +108,8 @@ object ConfigFileFormat:
     field("editor.tab_size"),
     field("editor.insert_spaces"),
     field("editor.word_wrap"),
+    comment("A scrollbar in each editor pane: a thin overlay in the window, the last column in a terminal"),
+    field("editor.scrollbar"),
     field("editor.visual_line_navigation"),
     comment("Keep the cursor's line vertically centred (typewriter scrolling), padding past the document's end"),
     field("editor.typewriter_scrolling"),

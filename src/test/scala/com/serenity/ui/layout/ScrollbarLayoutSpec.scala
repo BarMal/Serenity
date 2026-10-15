@@ -68,6 +68,22 @@ class ScrollbarLayoutSpec extends AnyFlatSpec with Matchers:
     ScrollbarLayout.shown(tui, paneLayout(tui).contentRect) shouldBe false
   }
 
+  "A pane with the scrollbar turned off" should "have no overlay strip in the GUI" in {
+    val off = withSurface(AppState.initial)(_.copy(scrollbarEnabled = false))
+
+    ScrollbarLayout.shown(off, paneLayout(off).contentRect) shouldBe false
+    ScrollbarLayout.hasBar(off, paneLayout(off)) shouldBe false
+  }
+
+  it should "keep its whole content band for text in a terminal" in {
+    val off  = withSurface(tui)(_.copy(scrollbarEnabled = false))
+    val pane = paneLayout(off)
+
+    pane.scrollbarRect.width shouldBe 0
+    pane.contentRect.width shouldBe paneLayout(tui).contentRect.width + 1
+    ScrollbarLayout.hasBar(off, pane) shouldBe false
+  }
+
   private val tui =
     AppState.initial.copy(runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui()))
 

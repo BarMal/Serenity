@@ -237,6 +237,22 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
     ConfigManager.configToString(config) should include("startup.warm_up = false")
   }
 
+  it should "default the scrollbar to on, then load and write it" in {
+    AppConfig.default.surfaceConfig.scrollbarEnabled shouldBe true
+
+    val configFile = TestTemp.file("serenity-scrollbar-config", ".conf")
+    Files.writeString(
+      configFile,
+      """editor.scrollbar = false
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.scrollbarEnabled shouldBe false
+    ConfigManager.configToString(config) should include("editor.scrollbar = false")
+  }
+
   it should "load and write the cursor info bar background alpha override" in {
     val configFile = TestTemp.file("serenity-cursor-info-bar-alpha-config", ".conf")
     Files.writeString(

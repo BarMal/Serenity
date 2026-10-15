@@ -4,6 +4,7 @@ import java.awt.Font
 import java.io.StringWriter
 
 import com.serenity.TestWorkspaceTrees
+import com.serenity.config.AppConfig
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
@@ -87,6 +88,17 @@ class TerminalScrollbarRenderSpec extends AnyFlatSpec with Matchers:
 
     shown.head should (be('┃') or be('╿'))
     shown.last shouldBe '│'
+  }
+
+  "A long document with the scrollbar turned off" should "leave the last column to the text" in {
+    val config = AppConfig.default.copy(surfaceConfig = AppConfig.default.surfaceConfig.copy(scrollbarEnabled = false))
+    val base   = stateOf(longDocument)
+    val state  = base.copy(persisted = base.persisted.copy(config = config))
+    val screen = render(state)
+
+    column(state).width shouldBe 0
+    (0 until viewport.height).flatMap(row => screen.rowText(row)).exists(glyphs.contains(_)) shouldBe false
+    screen.find("line 0") should not be empty
   }
 
   "A document that fits the pane" should "leave the column blank" in {
