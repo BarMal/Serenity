@@ -1,0 +1,62 @@
+2026-10-15 20:36:33.985 [io-compute-5] INFO  Main - [BUILD] Serenity 0.0.0+1951-7c334c3b (7c334c3b6d9edcca887af9336d33ce79ca3cd459, 2026-10-15T15:42:28Z) dev; Linux 6.18.54/amd64; Java 21.0.12.1+1-nixos Oracle Corporation; launcher=java
+2026-10-15 20:36:33.996 [io-compute-5] INFO  Main - [JVM] arguments: none
+2026-10-15 20:36:33.998 [io-compute-5] INFO  Main - [TOOLKIT] PlatformDefault (Wayland session, but Oracle Corporation has no WLToolkit)
+2026-10-15 20:36:34.001 [io-compute-5] INFO  Main - [LOGS] Writing to /home/barney/.local/state/serenity
+2026-10-15 20:36:35.001 [io-compute-blocker-5] INFO  Main - [MEMORY] Applied for the G1 collector: MinHeapFreeRatio=10, MaxHeapFreeRatio=30, G1PeriodicGCInterval=30000
+2026-10-15 20:36:36.272 [io-compute-blocker-5] INFO  Main - [FILE_DIALOG] Swing chooser (org.gtk.Settings.FileChooser is not installed and GTK would abort the process; ui.file_dialog = native overrides)
+2026-10-15 20:36:36.521 [io-compute-blocker-5] INFO  Main - Starting Serenity text editor
+2026-10-15 20:36:37.511 [io-compute-blocker-5] INFO  com.serenity.state.manager.StateManager - [SESSION] Session loaded successfully with 0 buffers
+2026-10-15 20:36:37.682 [io-compute-4] INFO  com.serenity.state.manager.StateManager - [STATE MODAL] before=none after=surface-1 focus=Modal
+2026-10-15 20:36:38.111 [io-compute-blocker-3] INFO  Main - Initial render completed, starting main loop
+2026-10-15 20:36:44.012 [io-compute-2] INFO  Main - [WARMUP] Interrupted after 5878ms
+2026-10-15 20:36:50.474 [io-compute-3] INFO  com.serenity.state.manager.StateManager - [STATE MODAL] before=surface-1 after=none focus=Surface(surface-0)
+2026-10-15 20:37:12.200 [io-compute-2] INFO  com.serenity.state.manager.StateManager - [CONFIG] Reloaded /home/barney/.serenity/config.conf
+2026-10-15 20:37:14.017 [io-compute-0] INFO  com.serenity.state.manager.StateManager - [COMMAND] command=startup.restore-session category=Edit intent=Session(StartupRestoreSession)
+2026-10-15 20:37:14.017 [io-compute-0] INFO  com.serenity.state.manager.StateManager - [CMD] Session restore requested
+2026-10-15 20:37:14.063 [io-compute-blocker-9] INFO  com.serenity.state.manager.StateManager - [SESSION] Session loaded successfully with 0 buffers
+2026-10-15 20:37:14.080 [io-compute-blocker-9] INFO  com.serenity.state.manager.StateManager - [CMD] Session loaded with no buffers - creating default session
+2026-10-15 20:37:45.234 [io-compute-blocker-12] INFO  Main - Serenity editor shutdown complete
+2026-10-15 20:37:49.759 [io-compute-4] INFO  Main - [BUILD] Serenity 0.0.0+1951-7c334c3b (7c334c3b6d9edcca887af9336d33ce79ca3cd459, 2026-10-15T15:42:28Z) dev; Linux 6.18.54/amd64; Java 21.0.12.1+1-nixos Oracle Corporation; launcher=java
+2026-10-15 20:37:49.761 [io-compute-4] INFO  Main - [JVM] arguments: none
+2026-10-15 20:37:49.762 [io-compute-4] INFO  Main - [TOOLKIT] PlatformDefault (Wayland session, but Oracle Corporation has no WLToolkit)
+2026-10-15 20:37:49.765 [io-compute-4] INFO  Main - [LOGS] Writing to /home/barney/.local/state/serenity
+2026-10-15 20:37:51.050 [io-compute-blocker-4] INFO  Main - [MEMORY] Applied for the G1 collector: MinHeapFreeRatio=10, MaxHeapFreeRatio=30, G1PeriodicGCInterval=30000
+2026-10-15 20:37:51.953 [io-compute-blocker-4] INFO  Main - [FILE_DIALOG] Swing chooser (org.gtk.Settings.FileChooser is not installed and GTK would abort the process; ui.file_dialog = native overrides)
+2026-10-15 20:37:52.186 [io-compute-blocker-4] INFO  Main - Starting Serenity text editor
+2026-10-15 20:37:53.224 [io-compute-blocker-4] INFO  com.serenity.state.manager.StateManager - [SESSION] Session loaded successfully with 1 buffers
+2026-10-15 20:37:53.691 [io-compute-blocker-9] INFO  Main - Initial render completed, starting main loop
+2026-10-15 20:37:55.320 [io-compute-4] INFO  Main - [WARMUP] Interrupted after 1534ms
+2026-10-15 20:37:55.987 [io-compute-5] INFO  com.serenity.state.manager.StateManager - [COMMAND] command=startup.open-file category=Edit intent=Session(StartupOpenFile)
+2026-10-15 20:38:11.633 [io-compute-6] INFO  com.serenity.state.manager.StateManager - [CONFIG] Reloaded /home/barney/.serenity/config.conf
+2026-10-15 20:38:15.392 [io-compute-blocker-13] INFO  Main - Serenity editor shutdown complete
+2026-10-15 20:38:29.196 [io-compute-2] INFO  Main - [BUILD] Serenity 0.0.0+1951-7c334c3b (7c334c3b6d9edcca887af9336d33ce79ca3cd459, 2026-10-15T15:42:28Z) dev; Linux 6.18.54/amd64; Java 21.0.12.1+1-nixos Oracle Corporation; launcher=java
+2026-10-15 20:38:29.197 [io-compute-2] INFO  Main - [JVM] arguments: none
+2026-10-15 20:38:29.199 [io-compute-2] INFO  Main - [TOOLKIT] PlatformDefault (Wayland session, but Oracle Corporation has no WLToolkit)
+2026-10-15 20:38:29.202 [io-compute-2] INFO  Main - [LOGS] Writing to /home/barney/.local/state/serenity
+2026-10-15 20:38:30.508 [io-compute-blocker-2] INFO  Main - [MEMORY] Applied for the G1 collector: MinHeapFreeRatio=10, MaxHeapFreeRatio=30, G1PeriodicGCInterval=30000
+2026-10-15 20:38:32.216 [io-compute-blocker-2] INFO  Main - [FILE_DIALOG] Swing chooser (org.gtk.Settings.FileChooser is not installed and GTK would abort the process; ui.file_dialog = native overrides)
+2026-10-15 20:38:32.490 [io-compute-blocker-2] INFO  Main - Starting Serenity text editor
+2026-10-15 20:38:36.020 [io-compute-blocker-2] INFO  Main - Initial render completed, starting main loop
+2026-10-15 20:38:37.907 [io-compute-3] INFO  Main - [WARMUP] Interrupted after 1853ms
+2026-10-15 20:39:26.130 [io-compute-0] INFO  com.serenity.state.manager.StateManager - [CONFIG] Reloaded /home/barney/.serenity/config.conf
+2026-10-15 20:53:58.514 [io-compute-blocker-11] INFO  Main - Serenity editor shutdown complete
+2026-10-15 20:54:27.324 [io-compute-1] INFO  Main - [BUILD] Serenity 0.0.0+1951-7c334c3b (7c334c3b6d9edcca887af9336d33ce79ca3cd459, 2026-10-15T15:42:28Z) dev; Linux 6.18.54/amd64; Java 21.0.12.1+1-nixos Oracle Corporation; launcher=java
+2026-10-15 20:54:27.328 [io-compute-1] INFO  Main - [JVM] arguments: none
+2026-10-15 20:54:27.331 [io-compute-1] INFO  Main - [TOOLKIT] PlatformDefault (Wayland session, but Oracle Corporation has no WLToolkit)
+2026-10-15 20:54:27.339 [io-compute-1] INFO  Main - [LOGS] Writing to /home/barney/.local/state/serenity
+2026-10-15 20:54:28.788 [io-compute-blocker-1] INFO  Main - [MEMORY] Applied for the G1 collector: MinHeapFreeRatio=10, MaxHeapFreeRatio=30, G1PeriodicGCInterval=30000
+2026-10-15 20:54:30.100 [io-compute-blocker-1] INFO  Main - [FILE_DIALOG] Swing chooser (org.gtk.Settings.FileChooser is not installed and GTK would abort the process; ui.file_dialog = native overrides)
+2026-10-15 20:54:30.320 [io-compute-blocker-1] INFO  Main - Starting Serenity text editor
+2026-10-15 20:54:31.462 [io-compute-blocker-1] INFO  com.serenity.state.manager.StateManager - [SESSION] Session loaded successfully with 1 buffers
+2026-10-15 20:54:31.940 [io-compute-blocker-0] INFO  Main - Initial render completed, starting main loop
+2026-10-15 20:54:38.559 [io-compute-3] INFO  Main - [WARMUP] Completed(312) after 6583ms
+2026-10-15 20:55:26.264 [io-compute-2] INFO  Main - [BUILD] Serenity 0.0.0+1951-7c334c3b (7c334c3b6d9edcca887af9336d33ce79ca3cd459, 2026-10-15T15:42:28Z) dev; Linux 6.18.54/amd64; Java 21.0.12.1+1-nixos Oracle Corporation; launcher=java
+2026-10-15 20:55:26.265 [io-compute-2] INFO  Main - [JVM] arguments: none
+2026-10-15 20:55:26.267 [io-compute-2] INFO  Main - [TOOLKIT] PlatformDefault (Wayland session, but Oracle Corporation has no WLToolkit)
+2026-10-15 20:55:26.270 [io-compute-2] INFO  Main - [LOGS] Writing to /home/barney/.local/state/serenity
+2026-10-15 20:55:27.769 [io-compute-blocker-2] INFO  Main - [MEMORY] Applied for the G1 collector: MinHeapFreeRatio=10, MaxHeapFreeRatio=30, G1PeriodicGCInterval=30000
+2026-10-15 20:55:29.164 [io-compute-blocker-2] INFO  Main - [FILE_DIALOG] Swing chooser (org.gtk.Settings.FileChooser is not installed and GTK would abort the process; ui.file_dialog = native overrides)
+2026-10-15 20:55:29.419 [io-compute-blocker-2] INFO  Main - Starting Serenity text editor
+2026-10-15 20:55:30.717 [io-compute-blocker-2] INFO  com.serenity.state.manager.StateManager - [SESSION] Session loaded successfully with 1 buffers
+2026-10-15 20:55:31.108 [io-compute-blocker-4] INFO  Main - Initial render completed, starting main loop
+2026-10-15 20:55:37.959 [io-compute-7] INFO  Main - [WARMUP] Completed(312) after 6816ms
