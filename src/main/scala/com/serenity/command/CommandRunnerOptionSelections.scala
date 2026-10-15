@@ -31,6 +31,7 @@ object CommandRunnerOptionSelections:
       "status-indentation"         -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Indentation)),
       "interface-density"          -> interfaceDensityIndex(interfaceConfig.density),
       "window-chrome"              -> windowChromeModeIndex(config.windowChromeMode),
+      "ui-layout"                  -> uiLayoutIndex(config.uiLayout),
       "menu-bar"                   -> menuBarModeIndex(config.menuBarMode),
       "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
       "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
@@ -90,6 +91,11 @@ object CommandRunnerOptionSelections:
       case WindowChromeMode.Native       => 1
       case WindowChromeMode.NativeThemed => 2
       case WindowChromeMode.Custom       => 3
+
+  private def uiLayoutIndex(layout: UiLayout): Int =
+    layout match
+      case UiLayout.Minimal      => 0
+      case UiLayout.Conventional => 1
 
   private def menuBarModeIndex(mode: MenuBarMode): Int =
     mode match

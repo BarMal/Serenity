@@ -44,6 +44,22 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       )
     )
 
+  private[command] def layoutOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    def option(label: String, layout: UiLayout) =
+      CommandOption(
+        label,
+        CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiLayout(layout)))
+      )
+    CommandSurfaceItem.OptionItem(
+      id = "ui-layout",
+      label = "Layout",
+      options = List(option("Minimal", UiLayout.Minimal), option("Conventional", UiLayout.Conventional)),
+      selectedIndex = optionSelections.getOrElse("ui-layout", 0),
+      category = CommandCategory.Settings,
+      hint =
+        Some("Line numbers, pane headers, status bar, tab strip and scrollbar; settings you changed keep their value")
+    )
+
   private[command] def menuBarOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     def option(label: String, mode: MenuBarMode) =
       CommandOption(

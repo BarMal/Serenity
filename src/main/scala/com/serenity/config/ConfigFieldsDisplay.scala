@@ -72,6 +72,12 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.scrollbarEnabled,
       (config, value) => config.withScrollbar(value)
     ),
+    field("editor.tab_strip")(
+      enumerated(TabStripMode.fromConfigKey, _.configKey, text => TabStripMode.values.find(_.toString == text))
+    )(
+      _.surfaceConfig.tabStrip,
+      (config, value) => config.withTabStrip(value)
+    ),
     named(
       "editor.visual_line_navigation",
       "visualLineCursorNavigation",

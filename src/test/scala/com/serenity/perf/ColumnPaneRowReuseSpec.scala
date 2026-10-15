@@ -30,7 +30,8 @@ class ColumnPaneRowReuseSpec extends AnyFlatSpec with Matchers:
   private val uiMetrics   = CellMetrics.fromFont(uiFont)
   private val viewport    = ViewportSize(1500 / cellMetrics.charWidth, 1000 / cellMetrics.lineHeight)
 
-  private val columnConfig = AppConfig.default.withColumnMode(true).withColumnTargetWidth(40).withLineNumbers(false)
+  private val columnConfig =
+    AppConfig.conventional.withColumnMode(true).withColumnTargetWidth(40).withLineNumbers(false)
   private val railedConfig = columnConfig.withLineNumbers(true)
 
   final private class PersistingImage:

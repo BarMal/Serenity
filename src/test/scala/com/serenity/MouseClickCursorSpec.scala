@@ -26,7 +26,11 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        initialConfig = com.serenity.config.AppConfig.conventional
+      )(using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )

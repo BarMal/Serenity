@@ -109,6 +109,33 @@ object MenuBarMode:
   def fromConfigKey(value: String): Option[MenuBarMode] =
     MenuBarMode.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
 
+/** Which chrome the window starts from. A layout is a base the config file is read over: `Minimal` begins with line
+  * numbers, pane headers, the status bar, the tab strip and the scrollbar all off, `Conventional` with all of them on,
+  * and a key the user writes still wins over either.
+  */
+enum UiLayout(val configKey: String):
+  case Minimal      extends UiLayout("minimal")
+  case Conventional extends UiLayout("conventional")
+
+  def toggled: UiLayout = this match
+    case Minimal      => Conventional
+    case Conventional => Minimal
+
+object UiLayout:
+
+  def fromConfigKey(value: String): Option[UiLayout] =
+    UiLayout.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
+
+/** Whether the tab strip is shown: `Auto` once two or more buffers are open, `Off` never. */
+enum TabStripMode(val configKey: String):
+  case Auto extends TabStripMode("auto")
+  case Off  extends TabStripMode("off")
+
+object TabStripMode:
+
+  def fromConfigKey(value: String): Option[TabStripMode] =
+    TabStripMode.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
+
 enum FileDialogMode(val configKey: String):
   case Auto   extends FileDialogMode("auto")
   case Native extends FileDialogMode("native")

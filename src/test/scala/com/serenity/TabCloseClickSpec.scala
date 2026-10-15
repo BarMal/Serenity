@@ -31,7 +31,13 @@ class TabCloseClickSpec extends AnyFlatSpec with Matchers:
   private def makeStateManager(): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("TabCloseClickSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    StateManager
+      .apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        initialConfig = com.serenity.config.AppConfig.conventional
+      )
+      .unsafeRunSync()
 
   /** Two file-backed, unmodified tabs under `root`, with `first` shown in the active pane. */
   private def withTwoTabs(sm: StateManager, root: Path): (BufferId, BufferId) =

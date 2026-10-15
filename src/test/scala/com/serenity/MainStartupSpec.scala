@@ -40,7 +40,8 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         stateManager,
         stateManager.sessionStartupInfo,
         defaultTheme,
-        initialViewportSize
+        initialViewportSize,
+        appConfig = AppConfig.conventional
       )
     yield finalState
 
@@ -60,7 +61,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
 
     val logger = LoggerFactory[IO].getLogger(using LoggerName("Main"))
-    val config = AppConfig.default.withRendererFrameStateCacheCapacity(128)
+    val config = AppConfig.conventional.withRendererFrameStateCacheCapacity(128)
     val stateManager = StateManager
       .apply(logger, initialConfig = config, dictionaryCache = SharedDictionary.cacheFor(config))
       .unsafeRunSync()
@@ -85,7 +86,8 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
           stateManager.sessionStartupInfo,
           defaultTheme,
           initialViewportSize,
-          capabilities = capabilities
+          capabilities = capabilities,
+          appConfig = AppConfig.conventional
         )
       yield finalState
 
@@ -120,7 +122,8 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         defaultTheme,
         initialViewportSize,
         openPath = Some(file),
-        capabilities = com.serenity.frontend.FrontendCapabilities.tui()
+        capabilities = com.serenity.frontend.FrontendCapabilities.tui(),
+        appConfig = AppConfig.conventional
       )
     yield openedState
 
@@ -142,7 +145,8 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         stateManager,
         stateManager.sessionStartupInfo,
         defaultTheme,
-        wideViewportSize
+        wideViewportSize,
+        appConfig = AppConfig.conventional
       )
     yield finalState
 
@@ -178,7 +182,8 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
           stateManager.sessionStartupInfo,
           defaultTheme,
           initialViewportSize,
-          openPath = Some(selectedFile)
+          openPath = Some(selectedFile),
+          appConfig = AppConfig.conventional
         )
       yield finalState
 
@@ -250,7 +255,8 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         secondManager,
         secondManager.sessionStartupInfo,
         startupTheme,
-        initialViewportSize
+        initialViewportSize,
+        appConfig = AppConfig.conventional
       )
     yield finalState
 

@@ -362,10 +362,10 @@ object LayoutEngine:
 
   /** Whether the always-visible tab strip (issue #1074 epic, #1075-1077) reserves its own row. Only once 2+ buffers are
     * open -- with a single buffer there is nothing to switch between, so no strip is reserved or painted (issue #1074
-    * decision).
+    * decision), and never with `editor.tab_strip = off`.
     */
   private[layout] def showsTabBar(state: AppState): Boolean =
-    state.persisted.bufferOrder.size >= 2
+    state.showsTabStrip
 
   private[layout] def paneHeaderHeight(state: AppState): Int =
     if state.persisted.config.surfaceConfig.showPaneHeaders then EditorPaneHeaderHeight else 0

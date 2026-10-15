@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-10-15
+
+- Made Serenity open minimal: the new `ui.layout` setting is `minimal` (the default) or `conventional`. `minimal` starts with line numbers, pane headers, the status bar, the tab strip and the scrollbar all off,; `conventional` is the chrome of earlier builds. Both layouts still start on the start page when there is no file to open. The layout is a base the config file is read over, so any of `editor.line_numbers`, `editor.pane_headers`, `status.placement`, `editor.tab_strip` and `editor.scrollbar` you write still wins. It applies without a restart, in the window and the terminal, from the new Toggle Layout command or the Layout row in the palette's Interface Layout settings; switching moves only the settings you never set, and saving writes `ui.layout` without writing the settings it supplied. New `editor.tab_strip = auto|off` (`auto` shows the strip with two or more files open). There is no migration: an existing config that does not set these keys now opens in the minimal layout, and `ui.layout = conventional` keeps the earlier chrome (docs/user/layout.md).
+
 ### 2026-10-14
 
 - Added `performance.memory.compact` (default true): at startup Serenity tells the JVM to return unused heap to the operating system sooner (`MinHeapFreeRatio=10`, `MaxHeapFreeRatio=30`, and under G1 `G1PeriodicGCInterval=30000`), which took an idle window's resident memory from about 520 MiB to about 317 MiB in the footprint study (PR #2266). Set it to false to keep the JVM's launch values. It is read at startup, so a change needs a restart; a value that is not a boolean is reported as an invalid entry.

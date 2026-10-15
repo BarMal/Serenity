@@ -84,6 +84,12 @@ final case class AppConfig(
   def menuBarMode: MenuBarMode =
     interfaceConfig.menuBar
 
+  def uiLayout: UiLayout =
+    interfaceConfig.layout
+
+  def tabStripMode: TabStripMode =
+    surfaceConfig.tabStrip
+
   def uiChromeScale: Double =
     editorConfig.fontConfig.uiChromeScale
 
@@ -178,6 +184,9 @@ final case class AppConfig(
 
   def withScrollbar(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(scrollbarEnabled = enabled))
+
+  def withTabStrip(mode: TabStripMode): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(tabStrip = mode))
 
   /** Create a new config with word wrapping toggled */
   def withWordWrap(enabled: Boolean): AppConfig =
@@ -376,6 +385,12 @@ final case class AppConfig(
   def withUiElementGap(gap: Option[Double]): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(elementGap = gap))
 
+  /** Records which layout the config sits on without moving any chrome. [[LayoutPreset.rebase]] is what changes the
+    * layout of a running config; the config file reader needs this plain setter, since it has chosen the base itself.
+    */
+  def withUiLayout(layout: UiLayout): AppConfig =
+    withInterfaceConfig(interfaceConfig.copy(layout = layout))
+
   def withMenuBarMode(mode: MenuBarMode): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(menuBar = mode))
 
@@ -471,10 +486,16 @@ object AppConfig:
     if weight.isFinite then weight.max(MinDiagnosticHighlightBlendWeight).min(MaxDiagnosticHighlightBlendWeight)
     else MinDiagnosticHighlightBlendWeight
 
-  /** What the app ships with.
+  /** What the app ships with: the minimal layout.
     *
-    * Only the settings that differ from their own field's default belong here. Restating one that already matches hides
-    * which of the two is the real answer -- four of these used to, and telling them apart meant reading both.
-    * `ConfigRegistry.defaults` lists every setting's default, and `docs/default-config.conf` is generated from it.
+    * Only the settings that differ from their own field's default belong anywhere but [[LayoutPreset]]. Restating one
+    * that already matches hides which of the two is the real answer -- four of these used to, and telling them apart
+    * meant reading both. `ConfigRegistry.defaults` lists every setting's default, and `docs/default-config.conf` is
+    * generated from it.
     */
-  val default: AppConfig = AppConfig()
+  val default: AppConfig = LayoutPreset.base(UiLayout.Minimal)
+
+  /** The chrome earlier builds showed: line numbers, pane headers, a pinned status bar, the tab strip and a scrollbar.
+    * Specs that need chrome on, and the built-in workspace presets, start from this.
+    */
+  val conventional: AppConfig = LayoutPreset.base(UiLayout.Conventional)

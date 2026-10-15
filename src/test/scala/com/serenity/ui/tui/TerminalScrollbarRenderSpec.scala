@@ -28,7 +28,7 @@ class TerminalScrollbarRenderSpec extends AnyFlatSpec with Matchers:
   private val glyphs   = "│┃╿╽"
 
   private def stateOf(text: String): AppState =
-    val initial = AppState.initial
+    val initial = AppState.initial(AppConfig.conventional)
     initial.copy(
       runtime = initial.runtime.copy(capabilities = FrontendCapabilities.tui(), viewportSize = Some(viewport)),
       persisted = initial.persisted.copy(
@@ -91,7 +91,8 @@ class TerminalScrollbarRenderSpec extends AnyFlatSpec with Matchers:
   }
 
   "A long document with the scrollbar turned off" should "leave the last column to the text" in {
-    val config = AppConfig.default.copy(surfaceConfig = AppConfig.default.surfaceConfig.copy(scrollbarEnabled = false))
+    val config =
+      AppConfig.conventional.copy(surfaceConfig = AppConfig.conventional.surfaceConfig.copy(scrollbarEnabled = false))
     val base   = stateOf(longDocument)
     val state  = base.copy(persisted = base.persisted.copy(config = config))
     val screen = render(state)

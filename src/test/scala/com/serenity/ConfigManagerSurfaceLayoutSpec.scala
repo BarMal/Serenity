@@ -174,7 +174,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "default layer caching to off, then load and write it" in {
-    AppConfig.default.surfaceConfig.layerCachingEnabled shouldBe false
+    AppConfig.conventional.surfaceConfig.layerCachingEnabled shouldBe false
 
     val configFile = TestTemp.file("serenity-render-layer-cache-config", ".conf")
     Files.writeString(
@@ -190,7 +190,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "default frame timing to off, then load and write it" in {
-    AppConfig.default.surfaceConfig.frameTimingEnabled shouldBe false
+    AppConfig.conventional.surfaceConfig.frameTimingEnabled shouldBe false
 
     val configFile = TestTemp.file("serenity-render-frame-timing-config", ".conf")
     Files.writeString(
@@ -206,7 +206,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "default the keystroke latency trace to off, then load and write it" in {
-    AppConfig.default.surfaceConfig.latencyTraceEnabled shouldBe false
+    AppConfig.conventional.surfaceConfig.latencyTraceEnabled shouldBe false
 
     val configFile = TestTemp.file("serenity-render-latency-trace-config", ".conf")
     Files.writeString(
@@ -222,7 +222,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "default the startup warm-up to on, then load and write it" in {
-    AppConfig.default.surfaceConfig.startupWarmUpEnabled shouldBe true
+    AppConfig.conventional.surfaceConfig.startupWarmUpEnabled shouldBe true
 
     val configFile = TestTemp.file("serenity-startup-warm-up-config", ".conf")
     Files.writeString(
@@ -238,7 +238,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "default the scrollbar to on, then load and write it" in {
-    AppConfig.default.surfaceConfig.scrollbarEnabled shouldBe true
+    AppConfig.conventional.surfaceConfig.scrollbarEnabled shouldBe true
 
     val configFile = TestTemp.file("serenity-scrollbar-config", ".conf")
     Files.writeString(
@@ -254,7 +254,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "default memory compaction to on, then load and write it" in {
-    AppConfig.default.surfaceConfig.memoryCompactionEnabled shouldBe true
+    AppConfig.conventional.surfaceConfig.memoryCompactionEnabled shouldBe true
 
     val configFile = TestTemp.file("serenity-memory-compact-config", ".conf")
     Files.writeString(
@@ -284,10 +284,10 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "default the cursor info bar background alpha to unset (theme default) when not configured" in {
-    ConfigManager.configToString(AppConfig.default) should include(
+    ConfigManager.configToString(AppConfig.conventional) should include(
       "status.background_alpha = auto"
     )
-    AppConfig.default.statusLine.colors.backgroundAlpha shouldBe None
+    AppConfig.conventional.statusLine.colors.backgroundAlpha shouldBe None
   }
 
   it should "reject a cursor info bar background alpha outside 0.0-1.0" in {

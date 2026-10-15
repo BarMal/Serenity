@@ -36,7 +36,8 @@ class StartupPageComponentRoutingSpec extends AnyFlatSpec with Matchers:
         stateManager,
         stateManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
 
       // Verify the startup state

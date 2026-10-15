@@ -124,6 +124,10 @@ given Decoder[InterfaceDensity] = configKeyDecoder("InterfaceDensity", Interface
 
 given Encoder[MenuBarMode]    = configKeyEncoder(_.configKey)
 given Decoder[MenuBarMode]    = configKeyDecoder("MenuBarMode", MenuBarMode.values, _.configKey)
+given Encoder[UiLayout]       = configKeyEncoder(_.configKey)
+given Decoder[UiLayout]       = configKeyDecoder("UiLayout", UiLayout.values, _.configKey)
+given Encoder[TabStripMode]   = configKeyEncoder(_.configKey)
+given Decoder[TabStripMode]   = configKeyDecoder("TabStripMode", TabStripMode.values, _.configKey)
 given Encoder[FileDialogMode] = configKeyEncoder(_.configKey)
 given Decoder[FileDialogMode] = configKeyDecoder("FileDialogMode", FileDialogMode.values, _.configKey)
 

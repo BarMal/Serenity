@@ -14,9 +14,11 @@ import com.serenity.config.{
   ConfigNotice,
   ConfigRestart,
   HotkeyOverrides,
+  LayoutPreset,
   LineNumberLayout,
   StatusLinePlacement,
-  StatusSegment
+  StatusSegment,
+  UiLayout
 }
 import com.serenity.io.{FileStamp, TimestampedBackup}
 import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
@@ -245,10 +247,20 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withWindowChromeMode(mode)).void
       case InterfaceChromeIntent.SetMenuBarMode(mode) =>
         updateAppearanceConfig(_.withMenuBarMode(mode)).void
+      case InterfaceChromeIntent.SetUiLayout(layout) =>
+        switchLayout(layout)
+      case InterfaceChromeIntent.ToggleUiLayout =>
+        currentState.flatMap(current => switchLayout(current.persisted.config.uiLayout.toggled))
       case InterfaceChromeIntent.SetWheelScrollLines(lines) =>
         updateConfig(_.withWheelScrollLines(lines)).void
       case InterfaceChromeIntent.SetPanelEscapeTarget(mode, target) =>
         updateConfig(_.withPanelEscapeTarget(mode, target)).void
+
+  /** Moves the chrome the layout supplies, leaving what the file sets, and what was changed since, as it is. */
+  private def switchLayout(layout: UiLayout): IO[Unit] =
+    configPersistencePath
+      .fold(IO.pure(Set.empty[String]))(ConfigManager.settingKeysIO)
+      .flatMap(setKeys => updateAppearanceConfig(LayoutPreset.rebase(_, layout, setKeys)).void)
 
   private def interpretSpellCheckIntent(intent: SpellCheckIntent, state: AppState): IO[Unit] =
     SpellCheckConfigEdit(intent) match

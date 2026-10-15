@@ -14,6 +14,7 @@ final case class SurfaceConfig(
     commentDisplayMode: CommentDisplayMode = CommentDisplayMode.Floating,
     wordWrapEnabled: Boolean = true,
     scrollbarEnabled: Boolean = true,
+    tabStrip: TabStripMode = TabStripMode.Auto,
     // Whether Up/Down under word wrap follow visual rows (the wrapped screen line) rather than jumping straight to
     // the previous/next logical line. Independent of wordWrapEnabled itself: only takes effect while wrap is also on.
     visualLineCursorNavigation: Boolean = true,

@@ -44,17 +44,17 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   // ── AppConfig ────────────────────────────────────────────────────────────
 
   "AppConfig" should "default cursorMode to Blink" in {
-    AppConfig.default.cursorMode shouldBe CursorMode.Blink
+    AppConfig.conventional.cursorMode shouldBe CursorMode.Blink
   }
 
   it should "change cursorMode via withCursorMode" in {
-    AppConfig.default.withCursorMode(CursorMode.Blink).cursorMode shouldBe CursorMode.Blink
+    AppConfig.conventional.withCursorMode(CursorMode.Blink).cursorMode shouldBe CursorMode.Blink
   }
 
   it should "store cursor settings inside the cursor sub-config" in {
     val active   = new Color(0x22, 0x44, 0x88)
     val inactive = new Color(0x88, 0x44, 0x22, 0x99)
-    val config = AppConfig.default
+    val config = AppConfig.conventional
       .withCursorMode(CursorMode.Blink)
       .withCursorColors(CursorColorConfig(Some(active), Some(inactive)))
 
@@ -134,7 +134,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     import _root_.io.circe.Encoder
     val enc                   = summon[Encoder[AppConfig]]
     val dec                   = summon[_root_.io.circe.Decoder[AppConfig]]
-    val jsonWithoutCursorMode = enc(AppConfig.default).mapObject(_.remove("cursorMode"))
+    val jsonWithoutCursorMode = enc(AppConfig.conventional).mapObject(_.remove("cursorMode"))
     val decoded               = jsonWithoutCursorMode.as[AppConfig](using dec)
     decoded.isRight shouldBe true
     decoded.toOption.get.cursorMode shouldBe CursorMode.Blink
@@ -145,7 +145,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     val enc = summon[_root_.io.circe.Encoder[AppConfig]]
     val dec = summon[_root_.io.circe.Decoder[AppConfig]]
     List("breathe", "Breathe", "breathing").foreach { stored =>
-      val json    = enc(AppConfig.default).mapObject(_.add("cursorMode", Json.fromString(stored)))
+      val json    = enc(AppConfig.conventional).mapObject(_.add("cursorMode", Json.fromString(stored)))
       val decoded = json.as[AppConfig](using dec)
       withClue(s"stored cursor mode '$stored': ") {
         decoded.map(_.cursorMode) shouldBe Right(CursorMode.Blink)
@@ -154,9 +154,9 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "round-trip CursorMode.Blink through JSON" in {
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val appState = initialState.copy(persisted =
-      initialState.persisted.copy(config = AppConfig.default.withCursorMode(CursorMode.Blink))
+      initialState.persisted.copy(config = AppConfig.conventional.withCursorMode(CursorMode.Blink))
     )
     val decoded = SessionState.fromAppState(appState).asJson.as[SessionState]
     decoded.isRight shouldBe true
@@ -167,7 +167,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     import _root_.io.circe.Encoder
     val enc                     = summon[Encoder[AppConfig]]
     val dec                     = summon[_root_.io.circe.Decoder[AppConfig]]
-    val jsonWithoutCursorColors = enc(AppConfig.default).mapObject(_.remove("cursorColors"))
+    val jsonWithoutCursorColors = enc(AppConfig.conventional).mapObject(_.remove("cursorColors"))
     val decoded                 = jsonWithoutCursorColors.as[AppConfig](using dec)
     decoded.isRight shouldBe true
     decoded.toOption.get.cursorColors shouldBe CursorColorConfig()
@@ -181,10 +181,10 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
       0x22,
       0x99
     )
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val appState = initialState.copy(persisted =
       initialState.persisted.copy(config =
-        AppConfig.default.withCursorColors(CursorColorConfig(Some(active), Some(inactive)))
+        AppConfig.conventional.withCursorColors(CursorColorConfig(Some(active), Some(inactive)))
       )
     )
 
@@ -197,7 +197,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   // ── Renderer cursor color override ───────────────────────────────────────
 
   "Renderer" should "render the cursor using theme.cursor when no override is given" in {
-    val state   = AppState.initial
+    val state   = AppState.initial(AppConfig.conventional)
     val surface = new MockRenderSurface(80, 24)
     RendererEntryPoints.render(
       state,
@@ -212,7 +212,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render the cursor using cursorColor override instead of theme.cursor" in {
-    val state         = AppState.initial
+    val state         = AppState.initial(AppConfig.conventional)
     val surface       = new MockRenderSurface(80, 24)
     val overrideColor = RenderColor.fromRgba(255, 128, 0, 128)
     RendererEntryPoints.render(
@@ -229,7 +229,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "hide cursor when cursorVisible is false regardless of override" in {
-    val state         = AppState.initial
+    val state         = AppState.initial(AppConfig.conventional)
     val surface       = new MockRenderSurface(80, 24)
     val overrideColor = RenderColor.fromRgba(255, 128, 0, 128)
     RendererEntryPoints.render(

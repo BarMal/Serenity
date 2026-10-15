@@ -26,9 +26,15 @@ object ConfigFileFormat:
     case Field(key: String)
     case Group(settings: (AppConfig, String) => List[(String, HoconValue)])
 
-  /** `osName` picks the platform defaults that hotkeys are compared against, so the file holds only what differs. */
-  def render(config: AppConfig, osName: String = HotkeyOverrides.runningOs): String =
+  /** `osName` picks the platform defaults that hotkeys are compared against, so the file holds only what differs.
+    * `omitting` names settings left out, their comment lines kept: the chrome a layout supplies is not worth writing.
+    */
+  def render(config: AppConfig, osName: String = HotkeyOverrides.runningOs, omitting: Set[String] = Set.empty): String =
     lines(config, osName)
+      .filter {
+        case Right((key, _)) => !omitting.contains(key)
+        case Left(_)         => true
+      }
       .map {
         case Left(comment)       => comment
         case Right((key, value)) => s"$key = ${value.rendered}"
@@ -110,6 +116,8 @@ object ConfigFileFormat:
     field("editor.word_wrap"),
     comment("A scrollbar in each editor pane: a thin overlay in the window, the last column in a terminal"),
     field("editor.scrollbar"),
+    comment("The tab strip: auto shows it once two or more files are open, off never does"),
+    field("editor.tab_strip"),
     field("editor.visual_line_navigation"),
     comment("Keep the cursor's line vertically centred (typewriter scrolling), padding past the document's end"),
     field("editor.typewriter_scrolling"),
@@ -214,6 +222,11 @@ object ConfigFileFormat:
     field("ui.file_dialog"),
     field("ui.element_gap"),
     field("ui.outline_thickness"),
+    comment("Layout: minimal starts with line numbers, pane headers, the status bar, the tab strip and the scrollbar"),
+    comment("all off, conventional with all of them on. It only chooses what those start as: any of their own keys"),
+    comment("(editor.line_numbers, editor.pane_headers, status.placement, editor.tab_strip, editor.scrollbar) you"),
+    comment("set anywhere in this file still wins"),
+    field("ui.layout"),
     comment("Menu bar in the desktop window: hidden (every command stays in the command runner), alt (shown while Alt"),
     comment("is tapped on its own) or visible (always shown). Applies after restart"),
     field("ui.menu_bar"),

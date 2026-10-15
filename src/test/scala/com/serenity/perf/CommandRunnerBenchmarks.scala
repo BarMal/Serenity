@@ -74,7 +74,7 @@ private[perf] object CommandRunnerBenchmarks:
     )
 
   private def activated: CommandRunner =
-    CommandRunner.empty.copy(fontFamilies = fontCatalog).activate(registry, AppConfig.default)
+    CommandRunner.empty.copy(fontFamilies = fontCatalog).activate(registry, AppConfig.conventional)
 
   private def typed(state: AppState): CommandRunner =
     runnerIn(CommandRunnerReducer.reduce(RunnerInsertChar('t'), state, registry).state)

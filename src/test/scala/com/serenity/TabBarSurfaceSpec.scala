@@ -1,5 +1,6 @@
 package com.serenity
 
+import com.serenity.config.{AppConfig, TabStripMode}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -24,11 +25,11 @@ class TabBarSurfaceSpec extends AnyFlatSpec with Matchers:
     )
 
   "AppState.tabBarSurface" should "be absent with a single buffer open" in {
-    AppState.initial.tabBarSurface shouldBe None // one buffer, by construction
+    AppState.initial(AppConfig.conventional).tabBarSurface shouldBe None // one buffer, by construction
   }
 
   it should "carry one TabListEntry per open buffer, in bufferOrder, once 2+ buffers are open" in {
-    val state = withSecondBuffer(AppState.initial)
+    val state = withSecondBuffer(AppState.initial(AppConfig.conventional))
 
     val surface = state.tabBarSurface.getOrElse(fail("expected a tab bar surface"))
 
@@ -40,13 +41,13 @@ class TabBarSurfaceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "be reachable through surfaceById, like the other derived-per-frame surfaces" in {
-    val state = withSecondBuffer(AppState.initial)
+    val state = withSecondBuffer(AppState.initial(AppConfig.conventional))
 
     state.surfaceById(UiSurface.TabBarSurfaceId) shouldBe state.tabBarSurface
   }
 
   it should "go back to absent once a session drops back to a single buffer" in {
-    val twoBuffers = withSecondBuffer(AppState.initial)
+    val twoBuffers = withSecondBuffer(AppState.initial(AppConfig.conventional))
     val backToOne = twoBuffers.copy(persisted =
       twoBuffers.persisted.copy(
         buffers = twoBuffers.persisted.buffers - BufferId(1),
@@ -55,4 +56,11 @@ class TabBarSurfaceSpec extends AnyFlatSpec with Matchers:
     )
 
     backToOne.tabBarSurface shouldBe None
+  }
+
+  it should "stay absent with 2+ buffers open while the tab strip is off" in {
+    val state = withSecondBuffer(AppState.initial(AppConfig.conventional.withTabStrip(TabStripMode.Off)))
+
+    state.tabBarSurface shouldBe None
+    state.surfaceById(UiSurface.TabBarSurfaceId) shouldBe None
   }

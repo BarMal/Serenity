@@ -161,10 +161,13 @@ final case class AppState(
     * rather than stored -- carries the same `TabListContent.build` snapshot the mode/tab corner widget's own popup list
     * uses, so there is no separate "open tabs" state to keep in sync. Only appears with 2+ open buffers: with one
     * buffer there is nothing to switch between, so `LayoutEngine` reserves no strip (`LayoutEngine.showsTabBar`) and
-    * this returns `None` to match (issue #1074 decision).
+    * this returns `None` to match (issue #1074 decision). `editor.tab_strip = off` shows it never.
     */
+  def showsTabStrip: Boolean =
+    persisted.config.tabStripMode == TabStripMode.Auto && persisted.bufferOrder.size >= 2
+
   def tabBarSurface: Option[UiSurface] =
-    Option.when(persisted.bufferOrder.size >= 2) {
+    Option.when(showsTabStrip) {
       val tabList = TabListContent.build(this)
       UiSurface(
         id = UiSurface.TabBarSurfaceId,

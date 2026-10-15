@@ -41,7 +41,7 @@ class TypingBurstLatencySpec extends AnyFlatSpec with Matchers:
   private def burst: List[Char] = TypingBurst.letters.take(burstKeys).toList
 
   private def editor(): (StateManager, BufferId) =
-    LaptopFrameBenchmarks.proseStateManager(config = AppConfig.default.withWordWrap(true))
+    LaptopFrameBenchmarks.proseStateManager(config = AppConfig.conventional.withWordWrap(true))
 
   private def typedBuffer(stateManager: StateManager, bufferId: BufferId): Option[Buffer] =
     stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(bufferId)
@@ -85,7 +85,7 @@ class TypingBurstLatencySpec extends AnyFlatSpec with Matchers:
     frameTimings.keyLatency.setEnabled(true)
     val component = new JPanel()
     for
-      router <- InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default))
+      router <- InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.conventional))
       metrics = () => CellMetrics(8, 16, 13)
       handler = new SwingInputHandler[IO, Event](component, router, metrics, metrics, frameTimings = frameTimings)
       slices  <- Ref.of[IO, Long](0L)

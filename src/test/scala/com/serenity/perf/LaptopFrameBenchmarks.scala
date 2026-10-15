@@ -80,7 +80,7 @@ private[perf] object LaptopFrameBenchmarks:
     )
     base.copy(
       persisted = base.persisted.copy(
-        config = AppConfig.default,
+        config = AppConfig.conventional,
         buffers = Map(bufferId -> sized),
         focus = Focus.EditorPane(PaneId(0))
       ),
@@ -181,7 +181,7 @@ private[perf] object LaptopFrameBenchmarks:
     */
   private[perf] def proseStateManager(
     paragraphs: Int = 300,
-    config: AppConfig = AppConfig.default,
+    config: AppConfig = AppConfig.conventional,
     cursorLine: Int = 150,
     dictionaryCache: Option[DictionaryCache] = None,
     grid: ViewportSize = viewport
@@ -198,7 +198,7 @@ private[perf] object LaptopFrameBenchmarks:
   /** [[proseStateManager]] over any `text`, with the cursor placed at `cursorLine`, `cursorColumn`. */
   private[perf] def stateManagerHolding(
     text: String,
-    config: AppConfig = AppConfig.default,
+    config: AppConfig = AppConfig.conventional,
     cursorLine: Int = 0,
     cursorColumn: Int = 0,
     dictionaryCache: Option[DictionaryCache] = None,
@@ -347,7 +347,9 @@ private[perf] object LaptopFrameBenchmarks:
 
   private def typewriterBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
     val typewriter =
-      AppConfig.default.copy(surfaceConfig = AppConfig.default.surfaceConfig.copy(typewriterScrollingEnabled = true))
+      AppConfig.conventional.copy(surfaceConfig =
+        AppConfig.conventional.surfaceConfig.copy(typewriterScrollingEnabled = true)
+      )
     val (stateManager, proseBufferId) = proseStateManager(config = typewriter)
     def length: Option[Int] =
       stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(proseBufferId).map(_.document.content.weight)

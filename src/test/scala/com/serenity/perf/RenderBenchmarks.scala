@@ -163,7 +163,7 @@ private[perf] object RenderBenchmarks:
     val markdownStateBase    = editorState(markdownSource, Some(LanguageId.Markdown))
     val markdownState = markdownStateBase.copy(persisted =
       markdownStateBase.persisted.copy(config =
-        AppConfig.default
+        AppConfig.conventional
           .withLineNumbers(false)
           .withoutStatusLine
           .withWordWrap(false)

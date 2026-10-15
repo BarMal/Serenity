@@ -41,7 +41,7 @@ class SessionRestoreNoticeSpec extends AnyFlatSpec with Matchers with OptionValu
     finally stream.close()
 
   private def dirtyState(text: String): AppState =
-    val initial  = AppState.initial
+    val initial  = AppState.initial(com.serenity.config.AppConfig.conventional)
     val bufferId = initial.persisted.bufferOrder.head
     val buffer   = Buffer.fromString(bufferId, text)
     val dirty    = buffer.copy(document = buffer.document.copy(isDirty = true))
@@ -134,7 +134,8 @@ class SessionRestoreNoticeSpec extends AnyFlatSpec with Matchers with OptionValu
         stateManager.sessionStartupInfo,
         Theme.default,
         ViewportSize(80, 24),
-        openPath = openPath
+        openPath = openPath,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
     }
 

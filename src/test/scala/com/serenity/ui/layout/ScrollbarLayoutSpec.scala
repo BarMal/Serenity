@@ -25,7 +25,7 @@ class ScrollbarLayoutSpec extends AnyFlatSpec with Matchers:
     state.copy(persisted = state.persisted.copy(config = config.copy(surfaceConfig = change(config.surfaceConfig))))
 
   "A pane's scrollbar" should "lie over the right edge of the content, ending where the content ends" in {
-    val pane  = paneLayout(AppState.initial)
+    val pane  = paneLayout(AppState.initial(com.serenity.config.AppConfig.conventional))
     val strip = ScrollbarLayout.strip(pane.contentRect, metrics)
 
     strip.rightPx shouldBe metrics.toPixelX(pane.contentRect.right)
@@ -34,7 +34,7 @@ class ScrollbarLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "run beside the content for its whole height" in {
-    val pane  = paneLayout(AppState.initial)
+    val pane  = paneLayout(AppState.initial(com.serenity.config.AppConfig.conventional))
     val strip = ScrollbarLayout.strip(pane.contentRect, metrics)
 
     strip.yPx shouldBe metrics.toPixelY(pane.contentRect.y)
@@ -42,14 +42,14 @@ class ScrollbarLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "never be wider than the cell it lies over" in {
-    val pane   = paneLayout(AppState.initial)
+    val pane   = paneLayout(AppState.initial(com.serenity.config.AppConfig.conventional))
     val narrow = CellMetrics(charWidth = 4, lineHeight = 20, ascent = 15)
 
     ScrollbarLayout.strip(pane.contentRect, narrow).widthPx shouldBe 4
   }
 
   it should "take no width from the text, which wraps where it always did" in {
-    val state  = AppState.initial
+    val state  = AppState.initial(com.serenity.config.AppConfig.conventional)
     val layout = LayoutEngine.calculateLayout(state, viewportSize)
     val synced = LayoutEngine.syncViewportDimensions(state, viewportSize)
     val buffer = synced.persisted.buffers.values.headOption.getOrElse(fail("expected a buffer"))
@@ -59,17 +59,28 @@ class ScrollbarLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "be shown on a pane of the GUI" in {
-    ScrollbarLayout.shown(AppState.initial, paneLayout(AppState.initial).contentRect) shouldBe true
+    ScrollbarLayout.shown(
+      AppState.initial(com.serenity.config.AppConfig.conventional),
+      paneLayout(AppState.initial(com.serenity.config.AppConfig.conventional)).contentRect
+    ) shouldBe true
   }
 
   it should "not be a strip over a terminal's text, which cannot draw anything thinner than a cell" in {
-    val tui = AppState.initial.copy(runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui()))
+    val tui = AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(runtime =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .runtime
+          .copy(capabilities = FrontendCapabilities.tui())
+      )
 
     ScrollbarLayout.shown(tui, paneLayout(tui).contentRect) shouldBe false
   }
 
   "A pane with the scrollbar turned off" should "have no overlay strip in the GUI" in {
-    val off = withSurface(AppState.initial)(_.copy(scrollbarEnabled = false))
+    val off =
+      withSurface(AppState.initial(com.serenity.config.AppConfig.conventional))(_.copy(scrollbarEnabled = false))
 
     ScrollbarLayout.shown(off, paneLayout(off).contentRect) shouldBe false
     ScrollbarLayout.hasBar(off, paneLayout(off)) shouldBe false
@@ -85,10 +96,17 @@ class ScrollbarLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   private val tui =
-    AppState.initial.copy(runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui()))
+    AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(runtime =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .runtime
+          .copy(capabilities = FrontendCapabilities.tui())
+      )
 
   "A terminal pane" should "give the last column of its content band to the bar" in {
-    val gui  = paneLayout(AppState.initial)
+    val gui  = paneLayout(AppState.initial(com.serenity.config.AppConfig.conventional))
     val pane = paneLayout(tui)
 
     val panel = LayoutEngine.calculateLayout(tui, viewportSize).editorPanelRect
@@ -124,12 +142,17 @@ class ScrollbarLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "stay out of the GUI, where the bar is an overlay" in {
-    paneLayout(AppState.initial).scrollbarRect.width shouldBe 0
-    ScrollbarLayout.hasBar(AppState.initial, paneLayout(AppState.initial)) shouldBe true
+    paneLayout(AppState.initial(com.serenity.config.AppConfig.conventional)).scrollbarRect.width shouldBe 0
+    ScrollbarLayout.hasBar(
+      AppState.initial(com.serenity.config.AppConfig.conventional),
+      paneLayout(AppState.initial(com.serenity.config.AppConfig.conventional))
+    ) shouldBe true
   }
 
   it should "be absent while text is laid out in pages of columns" in {
-    val paged = withSurface(AppState.initial)(_.copy(columnModeEnabled = true, wordWrapEnabled = true))
+    val paged = withSurface(AppState.initial(com.serenity.config.AppConfig.conventional))(
+      _.copy(columnModeEnabled = true, wordWrapEnabled = true)
+    )
 
     ScrollbarLayout.shown(paged, paneLayout(paged).contentRect) shouldBe false
   }
@@ -137,5 +160,8 @@ class ScrollbarLayoutSpec extends AnyFlatSpec with Matchers:
   it should "be absent from a pane too narrow to carry one" in {
     val narrow = ViewportSize(8, 30)
 
-    ScrollbarLayout.shown(AppState.initial, paneLayout(AppState.initial, narrow).contentRect) shouldBe false
+    ScrollbarLayout.shown(
+      AppState.initial(com.serenity.config.AppConfig.conventional),
+      paneLayout(AppState.initial(com.serenity.config.AppConfig.conventional), narrow).contentRect
+    ) shouldBe false
   }

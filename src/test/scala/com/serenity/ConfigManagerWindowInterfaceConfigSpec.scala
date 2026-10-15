@@ -73,7 +73,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
   }
 
   it should "default the file dialog to auto, and load and write each mode" in {
-    AppConfig.default.fileDialogMode shouldBe FileDialogMode.Auto
+    AppConfig.conventional.fileDialogMode shouldBe FileDialogMode.Auto
 
     List("auto" -> FileDialogMode.Auto, "native" -> FileDialogMode.Native, "swing" -> FileDialogMode.Swing).foreach {
       (text, expected) =>
@@ -143,7 +143,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
   }
 
   it should "store interface density and chrome metrics inside the interface sub-config" in {
-    val config = AppConfig.default
+    val config = AppConfig.conventional
       .withInterfaceDensity(InterfaceDensity.Spacious)
       .withUiElementGap(Some(3))
       .withUiOutlineThicknessPx(4)
