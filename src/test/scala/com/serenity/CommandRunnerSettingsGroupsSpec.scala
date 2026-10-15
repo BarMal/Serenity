@@ -114,6 +114,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
       "window-chrome",
+      "menu-bar",
       "command-runner-key-hints"
     )
     // Blur, spacing, corners, outlines, render cadence and decorative extras are one Advanced leaf, not five groups.

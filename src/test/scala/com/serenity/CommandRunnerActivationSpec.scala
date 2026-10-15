@@ -121,6 +121,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       List(
         "interface-density",
         "window-chrome",
+        "menu-bar",
         "command-runner-key-hints"
       )
     )

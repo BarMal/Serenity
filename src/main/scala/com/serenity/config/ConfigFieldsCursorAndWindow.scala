@@ -49,6 +49,13 @@ private[config] object ConfigFieldsCursorAndWindow:
         thickness >= AppConfig.MinUiOutlineThicknessPx && thickness <= AppConfig.MaxUiOutlineThicknessPx
       )
     )(_.uiOutlineThicknessPx, (config, value) => config.withUiOutlineThicknessPx(value)),
+    field("ui.file_dialog")(enumerated(FileDialogMode.fromConfigKey, _.configKey))(
+      _.fileDialogMode,
+      (config, value) => config.withFileDialogMode(value)
+    ),
+    field("ui.menu_bar")(
+      enumerated(MenuBarMode.fromConfigKey, _.configKey, text => MenuBarMode.values.find(_.toString == text))
+    )(_.menuBarMode, (config, value) => config.withMenuBarMode(value)),
     panelEscapeTarget(AppMode.Code),
     panelEscapeTarget(AppMode.Prose),
 

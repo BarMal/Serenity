@@ -72,6 +72,31 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
     ConfigManager.configToString(config) should include("ui.density = spacious")
   }
 
+  it should "default the file dialog to auto, and load and write each mode" in {
+    AppConfig.default.fileDialogMode shouldBe FileDialogMode.Auto
+
+    List("auto" -> FileDialogMode.Auto, "native" -> FileDialogMode.Native, "swing" -> FileDialogMode.Swing).foreach {
+      (text, expected) =>
+        val configFile = TestTemp.file("serenity-file-dialog-config", ".conf")
+        Files.writeString(configFile, s"ui.file_dialog = $text\n")
+
+        val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+        config.fileDialogMode shouldBe expected
+        ConfigManager.configToString(config) should include(s"ui.file_dialog = $text")
+    }
+  }
+
+  it should "report an unknown file dialog mode as an invalid entry and keep the default" in {
+    val configFile = TestTemp.file("serenity-file-dialog-invalid-config", ".conf")
+    Files.writeString(configFile, "ui.file_dialog = gtk\n")
+
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
+
+    result.report.invalidEntries.map(_.key) should contain("ui.file_dialog")
+    result.config.fileDialogMode shouldBe FileDialogMode.Auto
+  }
+
   it should "report invalid interface config values through the interface schema" in {
     val configFile = TestTemp.file("serenity-interface-invalid-config", ".conf")
     Files.writeString(

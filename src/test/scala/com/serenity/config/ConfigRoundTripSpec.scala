@@ -117,6 +117,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withUiElementGap(Some(2.0))
     .withUiOutlineThicknessPx(3)
+    .withFileDialogMode(FileDialogMode.Swing)
     .withThemeFollowConfig(
       ThemeFollowConfig(followSystem = true, lightTheme = "paper", darkTheme = "ink", highContrastTheme = "contrast")
     )
@@ -126,6 +127,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withTextAreaBottomInset(5.0)
     .withMinimumPaneWidth(24)
     .withWindowChromeMode(WindowChromeMode.Native)
+    .withMenuBarMode(MenuBarMode.Visible)
     .withFontConfig(
       FontConfig(
         codeFontFamily = "Iosevka",

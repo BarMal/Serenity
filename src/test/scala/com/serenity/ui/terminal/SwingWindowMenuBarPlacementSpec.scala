@@ -1,5 +1,6 @@
 package com.serenity.ui.terminal
 
+import com.serenity.config.MenuBarMode
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -20,7 +21,12 @@ class SwingWindowMenuBarPlacementSpec extends AnyFlatSpec with Matchers:
   }
 
   "Menus" should "be installed on Windows and Linux only until the macOS integration lands" in {
-    SwingMenuBar.enabledFor("Linux") shouldBe true
-    SwingMenuBar.enabledFor("Windows 11") shouldBe true
-    SwingMenuBar.enabledFor("Mac OS X") shouldBe false
+    for mode <- List(MenuBarMode.Alt, MenuBarMode.Visible) do
+      SwingMenuBar.enabledFor("Linux", mode) shouldBe true
+      SwingMenuBar.enabledFor("Windows 11", mode) shouldBe true
+      SwingMenuBar.enabledFor("Mac OS X", mode) shouldBe false
+  }
+
+  it should "not be built on any OS while the setting is hidden" in {
+    for os <- List("Linux", "Windows 11", "Mac OS X") do SwingMenuBar.enabledFor(os, MenuBarMode.Hidden) shouldBe false
   }
