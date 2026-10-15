@@ -1,0 +1,8 @@
+run=1(A) time=2026-10-14T21:07:10+01:00  21:07:10 up 8 days, 23:05,  1 user,  load average: 2.48, 2.49, 2.54 | pkg_temp=+48.0°C | avg_mhz=731.478 | ac=0
+run=2(B) time=2026-10-14T21:12:49+01:00  21:12:49 up 8 days, 23:11,  1 user,  load average: 2.19, 2.91, 2.78 | pkg_temp=+52.0°C | avg_mhz=900.042 | ac=0
+run=3(B) time=2026-10-14T21:16:56+01:00  21:16:56 up 8 days, 23:15,  1 user,  load average: 2.37, 3.08, 2.92 | pkg_temp=+52.0°C | avg_mhz=900.106 | ac=0
+run=4(A) time=2026-10-14T21:21:14+01:00  21:21:14 up 8 days, 23:19,  1 user,  load average: 2.16, 2.95, 2.94 | pkg_temp=+54.0°C | avg_mhz=817.444 | ac=0
+run=5(A) time=2026-10-14T21:25:56+01:00  21:25:56 up 8 days, 23:24,  1 user,  load average: 2.22, 2.87, 2.94 | pkg_temp=+52.0°C | avg_mhz=900.038 | ac=0
+run=6(B) time=2026-10-14T21:30:51+01:00  21:30:51 up 8 days, 23:29,  1 user,  load average: 2.41, 2.99, 2.99 | pkg_temp=+51.0°C | avg_mhz=800.124 | ac=0
+run=7(B) time=2026-10-14T21:35:00+01:00  21:35:00 up 8 days, 23:33,  1 user,  load average: 2.43, 2.78, 2.91 | pkg_temp=+53.0°C | avg_mhz=900.227 | ac=0
+run=8(A) time=2026-10-14T21:40:01+01:00  21:40:01 up 8 days, 23:38,  1 user,  load average: 2.44, 3.05, 3.03 | pkg_temp=+49.0°C | avg_mhz=900.074 | ac=0
