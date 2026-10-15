@@ -186,7 +186,8 @@ object ConfigGenerators:
       thickness  <- Gen.choose(AppConfig.MinUiOutlineThicknessPx, AppConfig.MaxUiOutlineThicknessPx)
       menuBar    <- oneOfEnum(MenuBarMode.values)
       fileDialog <- oneOfEnum(FileDialogMode.values)
-    yield InterfaceConfig(density, gap, thickness, menuBar, fileDialog)
+      layout     <- oneOfEnum(UiLayout.values)
+    yield InterfaceConfig(density, gap, thickness, menuBar, fileDialog, layout)
 
   val genThemeFollowConfig: Gen[ThemeFollowConfig] =
     val themeName = Gen.oneOf("light", "dark", "paper", "ink", "high-contrast", "solar")
@@ -272,6 +273,7 @@ object ConfigGenerators:
       latencyTrace <- Gen.oneOf(true, false)
       warmUp       <- Gen.oneOf(true, false)
       scrollbar    <- Gen.oneOf(true, false)
+      tabStrip     <- oneOfEnum(TabStripMode.values)
       compaction   <- Gen.oneOf(true, false)
       diagnosticBlendWeight <- double(
         AppConfig.MinDiagnosticHighlightBlendWeight,
@@ -311,6 +313,7 @@ object ConfigGenerators:
       latencyTraceEnabled = latencyTrace,
       startupWarmUpEnabled = warmUp,
       scrollbarEnabled = scrollbar,
+      tabStrip = tabStrip,
       memoryCompactionEnabled = compaction,
       diagnosticHighlightBlendWeight = diagnosticBlendWeight,
       columnModeEnabled = columnMode,

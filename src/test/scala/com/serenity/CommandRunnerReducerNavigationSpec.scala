@@ -24,7 +24,7 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
       }
       .getOrElse(fail("Expected command runner surface"))
 
-  private def activeState(registry: CommandRegistry, config: AppConfig = AppConfig.default): AppState =
+  private def activeState(registry: CommandRegistry, config: AppConfig = AppConfig.conventional): AppState =
     val runner = CommandRunner.empty.activate(registry, config)
     val surface = UiSurface(
       SurfaceId("command-runner"),
@@ -46,7 +46,7 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
   private def settingsStateOnItem(
     groupId: String,
     itemId: String,
-    config: AppConfig = AppConfig.default
+    config: AppConfig = AppConfig.conventional
   ): AppState =
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
@@ -141,7 +141,7 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
     // through withSelectedItem/enterSelectedGroup (which only resolve a top-level selection) -- this test is about
     // adjustSelectedSubmenuOption's Left/Right behavior once inside a group, not about the navigation path to reach it.
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .openSettings
       .withDrilledSettingsSurface(SettingsSurfaceState(SettingsPage.Group("settings-interface-layout")))
     val surface = UiSurface(
@@ -179,7 +179,7 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .openSettings
     val surface = UiSurface(
       SurfaceId("command-runner"),

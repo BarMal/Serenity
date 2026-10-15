@@ -28,7 +28,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
   private def buildState(
     content: String,
     language: Option[LanguageId] = None,
-    config: AppConfig = AppConfig.default,
+    config: AppConfig = AppConfig.conventional,
     selection: Option[Selection] = None
   ): AppState =
     val paneId     = PaneId(0)
@@ -39,19 +39,24 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       editing = EditingStateFixtures(selection = selection)
     )
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        theme = Theme.light,
-        config = config
+    AppState
+      .initial(AppConfig.conventional)
+      .copy(
+        persisted = AppState
+          .initial(AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> pane),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+            ),
+            theme = Theme.light,
+            config = config
+          )
       )
-    )
 
   "Renderer" should "render a Markdown buffer (proportional textFont) via putString when the surface has no FontRenderContext" in {
     val state = buildState("hello markdown", language = Some(LanguageId.Markdown))

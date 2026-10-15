@@ -29,20 +29,25 @@ class StatusLineRenderSpec extends AnyFlatSpec with Matchers:
       document = buffer0.document.copy(language = language, filePath = title.map(java.nio.file.Paths.get(_))),
       editing = EditingStateFixtures(selection = selection)
     )
-    AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        buffers = Map(buffer.id -> buffer),
-        bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
-        ),
-        focus = Focus.EditorPane(PaneId(0)),
-        theme = Theme.light,
-        config = configure(AppState.initial.persisted.config)
+    AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(
+        persisted = AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(buffer.id -> buffer),
+            bufferOrder = List(buffer.id),
+            layout = Layout(
+              editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+              activeEditorPaneId = Some(PaneId(0)),
+              workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
+            ),
+            focus = Focus.EditorPane(PaneId(0)),
+            theme = Theme.light,
+            config = configure(AppState.initial(com.serenity.config.AppConfig.conventional).persisted.config)
+          )
       )
-    )
 
   private def rendered(state: AppState): MockRenderSurface =
     val surface = new MockRenderSurface(100, 24)

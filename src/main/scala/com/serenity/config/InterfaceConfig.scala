@@ -83,7 +83,10 @@ final case class InterfaceConfig(
     elementGap: Option[Double] = None,
     outlineThicknessPx: Int = 2,
     menuBar: MenuBarMode = MenuBarMode.Hidden,
-    fileDialog: FileDialogMode = FileDialogMode.Auto
+    fileDialog: FileDialogMode = FileDialogMode.Auto,
+    // The field's own default is the conventional layout, like the chrome settings it stands for; what a fresh install
+    // gets is `AppConfig.default`, built by `LayoutPreset`.
+    layout: UiLayout = UiLayout.Conventional
 ):
 
   def normalized: InterfaceConfig =

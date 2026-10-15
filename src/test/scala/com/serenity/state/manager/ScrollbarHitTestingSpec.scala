@@ -23,7 +23,7 @@ class ScrollbarHitTestingSpec extends AnyFlatSpec with Matchers:
     val text    = (0 until lines).map(line => s"line $line").mkString("\n")
     val base    = Buffer.fromString(bufferId, text)
     val buffer  = base.copy(viewport = base.viewport.scrolledTo(topLine, 0, 0))
-    val initial = AppState.initial
+    val initial = AppState.initial(com.serenity.config.AppConfig.conventional)
     val state = initial.copy(
       runtime = initial.runtime.copy(viewportSize = Some(viewportSize)),
       persisted = initial.persisted.copy(

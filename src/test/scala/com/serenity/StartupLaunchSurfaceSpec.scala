@@ -17,18 +17,24 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
 
   private def stateFor(page: StartupPage): AppState =
     val surfaceId = SurfaceId("startup")
-    AppState.empty.copy(
-      persisted = AppState.empty.persisted.copy(focus = Focus.Surface(surfaceId)),
-      runtime = AppState.empty.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            surfaceId,
-            SurfaceContent.StartPage(page),
-            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    AppState
+      .empty(com.serenity.config.AppConfig.conventional)
+      .copy(
+        persisted =
+          AppState.empty(com.serenity.config.AppConfig.conventional).persisted.copy(focus = Focus.Surface(surfaceId)),
+        runtime = AppState
+          .empty(com.serenity.config.AppConfig.conventional)
+          .runtime
+          .copy(
+            uiSurfaces = List(
+              UiSurface(
+                surfaceId,
+                SurfaceContent.StartPage(page),
+                SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+              )
+            )
           )
-        )
       )
-    )
 
   "Startup launch surface" should "omit Restore when no session is available and keep its visible shortcuts executable" in {
     val page = AppStartup.createStartPage(sessionExists = false, recentFiles = Nil)
@@ -146,7 +152,8 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        viewport
+        viewport,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       .unsafeRunSync()
     val page = stateManager.getCurrentState
@@ -187,7 +194,8 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        viewport
+        viewport,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       .unsafeRunSync()
     val page = stateManager.getCurrentState

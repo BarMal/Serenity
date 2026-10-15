@@ -306,6 +306,8 @@ enum InterfaceChromeIntent:
   case SetInterfaceDensity(density: InterfaceDensity)
   case SetWindowChromeMode(mode: WindowChromeMode)
   case SetMenuBarMode(mode: MenuBarMode)
+  case SetUiLayout(layout: UiLayout)
+  case ToggleUiLayout
   case SetWheelScrollLines(lines: Int)
   case SetPanelEscapeTarget(mode: AppMode, target: PanelEscapeTarget)
 

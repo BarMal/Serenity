@@ -36,11 +36,11 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   it should "show the active buffer language in the rendered gutter" in {
     val buffer0 = Buffer.fromString(BufferId(1), "# Heading")
     val buffer  = buffer0.copy(document = buffer0.document.copy(language = Some(LanguageId.Markdown)))
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
+        layout = ChromeOn.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
@@ -85,18 +85,18 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         SurfacePresentation.Floating(Some(CursorPosition(2, 4)), SurfacePlacement.BelowCursor)
       )
     }
-    val baseState = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val baseState = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
+        layout = ChromeOn.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
           activeEditorPaneId = Some(paneId),
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         ),
         theme = Theme.light
       ),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = surfaces)
+      runtime = ChromeOn.initial.runtime.copy(uiSurfaces = surfaces)
     )
     // #1307: the mode indicator's glyph is folded into the gutter row for the default bottom-right corner.
     val expected = " Line 3, Col 5 | Markdown | active.md | Code "
@@ -121,7 +121,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(80, 24)
 
     RendererEntryPoints.render(
-      AppState.empty,
+      ChromeOn.empty,
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
@@ -273,8 +273,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(1), lines)
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 5, visibleColumns = 20))
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
         layout = com.serenity.ui.layout.Layout(
@@ -310,8 +310,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val buffer2 = Buffer
       .fromString(BufferId(2), (1 to 20).map(i => s"right $i").mkString("\n"))
       .copy(viewport = Viewport(topLine = 5, leftColumn = 0, visibleLines = 10, visibleColumns = 20))
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
         bufferOrder = List(buffer1.id, buffer2.id),
         layout = com.serenity.ui.layout.Layout(
@@ -350,17 +350,17 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       val buffer = Buffer
         .fromString(BufferId(5), "alpha\nbeta\ngamma")
         .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 8, visibleColumns = 40))
-      val state = AppState.initial.copy(
-        persisted = AppState.initial.persisted.copy(
+      val state = ChromeOn.initial.copy(
+        persisted = ChromeOn.initial.persisted.copy(
           buffers = Map(buffer.id -> buffer),
           bufferOrder = List(buffer.id),
-          layout = AppState.initial.persisted.layout.copy(
+          layout = ChromeOn.initial.persisted.layout.copy(
             editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
             activeEditorPaneId = Some(PaneId(0)),
             workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
           ),
           focus = Focus.EditorPane(PaneId(0)),
-          config = AppState.initial.persisted.config
+          config = ChromeOn.initial.persisted.config
             .withInterfaceDensity(density)
             .withLineNumbers(true),
           theme = Theme.light
@@ -397,11 +397,11 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(3), s"$longLine\nsecond")
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 8, visibleColumns = 20))
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
+        layout = ChromeOn.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
@@ -482,17 +482,17 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   it should "render pinned cursor info in the gutter without a pinned panel shell" in {
     val buffer0 = Buffer.fromString(BufferId(4), "alpha\nbeta")
     val buffer  = buffer0.copy(editing = EditingState(List(CursorPosition(1, 2))))
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
+        layout = ChromeOn.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
         ),
         focus = Focus.EditorPane(PaneId(0)),
-        config = AppState.initial.persisted.config
+        config = ChromeOn.initial.persisted.config
           .withStatusLineSegments(List(StatusSegment.Position))
           .withStatusLinePlacement(StatusLinePlacement.Pinned),
         theme = Theme.light
@@ -523,17 +523,17 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val background = new Color(0x44, 0x55, 0x66)
     val buffer0    = Buffer.fromString(BufferId(6), "alpha\nbeta")
     val buffer     = buffer0.copy(editing = EditingState(List(CursorPosition(1, 2))))
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
+        layout = ChromeOn.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
         ),
         focus = Focus.EditorPane(PaneId(0)),
-        config = AppState.initial.persisted.config
+        config = ChromeOn.initial.persisted.config
           .withStatusLineSegments(List(StatusSegment.Position))
           .withStatusLinePlacement(StatusLinePlacement.Pinned)
           .withStatusLineColors(StatusLineColors(Some(foreground), Some(background))),
@@ -561,17 +561,17 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   it should "keep the theme's own panel colours in the gutter when no cursor info bar colour override is configured" in {
     val buffer0 = Buffer.fromString(BufferId(7), "alpha\nbeta")
     val buffer  = buffer0.copy(editing = EditingState(List(CursorPosition(1, 2))))
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
+        layout = ChromeOn.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
         ),
         focus = Focus.EditorPane(PaneId(0)),
-        config = AppState.initial.persisted.config
+        config = ChromeOn.initial.persisted.config
           .withStatusLineSegments(List(StatusSegment.Position))
           .withStatusLinePlacement(StatusLinePlacement.Pinned),
         theme = Theme.light
@@ -598,17 +598,17 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   it should "render pinned cursor info with UI font metrics inside the gutter row" in {
     val buffer0 = Buffer.fromString(BufferId(5), "alpha")
     val buffer  = buffer0.copy(editing = EditingState(List(CursorPosition(0, 4))))
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
+        layout = ChromeOn.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
         ),
         focus = Focus.EditorPane(PaneId(0)),
-        config = AppState.initial.persisted.config
+        config = ChromeOn.initial.persisted.config
           .withStatusLineSegments(List(StatusSegment.Position))
           .withStatusLinePlacement(StatusLinePlacement.Pinned),
         theme = Theme.light

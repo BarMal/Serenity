@@ -28,25 +28,33 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
       source = Some("spellcheck"),
       code = Some("unknown-word")
     )
-    AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        theme = Theme.light,
-        config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
-      ),
-      runtime = AppState.initial.runtime.copy(
-        languageService = LanguageServiceState(
-          diagnosticsState =
-            DiagnosticsState(diagnostics = Map(SpellChecker.diagnosticsUri(buffer) -> List(diagnostic)))
-        )
+    AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(
+        persisted = AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> pane),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+            ),
+            theme = Theme.light,
+            config = com.serenity.config.AppConfig.conventional.withSyntaxHighlighting(false)
+          ),
+        runtime = AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .runtime
+          .copy(
+            languageService = LanguageServiceState(
+              diagnosticsState =
+                DiagnosticsState(diagnostics = Map(SpellChecker.diagnosticsUri(buffer) -> List(diagnostic)))
+            )
+          )
       )
-    )
 
   "RendererEntryPoints.render" should "highlight a misspelled word's diagnostic range in the measured (GUI) drawing path" in {
     val paneId   = PaneId(0)

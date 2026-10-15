@@ -53,6 +53,9 @@ private[config] object ConfigFieldsCursorAndWindow:
       _.fileDialogMode,
       (config, value) => config.withFileDialogMode(value)
     ),
+    field("ui.layout")(
+      enumerated(UiLayout.fromConfigKey, _.configKey, text => UiLayout.values.find(_.toString == text))
+    )(_.uiLayout, (config, value) => config.withUiLayout(value)),
     field("ui.menu_bar")(
       enumerated(MenuBarMode.fromConfigKey, _.configKey, text => MenuBarMode.values.find(_.toString == text))
     )(_.menuBarMode, (config, value) => config.withMenuBarMode(value)),

@@ -45,7 +45,7 @@ class StatusLineSegmentsSpec extends AnyFlatSpec with Matchers:
     sm.getCurrentState.unsafeRunSync().persisted.config.statusLine.segments
 
   "AppConfig" should "show position, language, title and mode on a pinned row by default" in {
-    AppConfig.default.statusLine shouldBe StatusLineConfig(
+    AppConfig.conventional.statusLine shouldBe StatusLineConfig(
       List(StatusSegment.Position, StatusSegment.Language, StatusSegment.Title, StatusSegment.Mode),
       StatusLinePlacement.Pinned
     )
@@ -135,20 +135,33 @@ class StatusLineSegmentsSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "hello world")
       .copy(editing = EditingState(List(CursorPosition(0, 3))))
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = AppState.initial.persisted.layout.copy(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId)
-        ),
-        focus = Focus.EditorPane(paneId),
-        config = AppState.initial.persisted.config.withStatusLineSegments(
-          List(StatusSegment.WordCount, StatusSegment.Position)
-        )
+    val state = AppState
+      .initial(AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = AppState
+              .initial(AppConfig.conventional)
+              .persisted
+              .layout
+              .copy(
+                editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+                activeEditorPaneId = Some(paneId)
+              ),
+            focus = Focus.EditorPane(paneId),
+            config = AppState
+              .initial(AppConfig.conventional)
+              .persisted
+              .config
+              .withStatusLineSegments(
+                List(StatusSegment.WordCount, StatusSegment.Position)
+              )
+          )
       )
-    )
 
     state.statusLineText shouldBe Some("2 words | Line 1, Col 4")
   }

@@ -104,7 +104,15 @@ class SessionCommandRecentsSpec extends AnyFlatSpec with Matchers with StateMana
     val savedRecents = recents(previous)
 
     val next = stateManagerAt(root)
-    AppStartup.initializeState(next, next.sessionStartupInfo, Theme.default, ViewportSize(120, 40)).unsafeRunSync()
+    AppStartup
+      .initializeState(
+        next,
+        next.sessionStartupInfo,
+        Theme.default,
+        ViewportSize(120, 40),
+        appConfig = com.serenity.config.AppConfig.conventional
+      )
+      .unsafeRunSync()
     next.applyEvent(TabKey).unsafeRunSync()
     next.runtimeLifecycle.awaitEffects.unsafeRunSync()
 

@@ -63,7 +63,7 @@ trait PersistedFrameFixture:
         Viewport(topLine = topLine, leftColumn = 0, visibleLines = viewport.height, visibleColumns = viewport.width),
       editing = EditingState(List(cursor))
     )
-    val initial = AppState.initial
+    val initial = AppState.initial(AppConfig.conventional)
     initial.copy(persisted =
       initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
@@ -75,7 +75,7 @@ trait PersistedFrameFixture:
         ),
         focus = Focus.EditorPane(paneId),
         theme = Theme.light,
-        config = withMargins(AppConfig.default.withoutStatusLine)
+        config = withMargins(AppConfig.conventional.withoutStatusLine)
       )
     )
 

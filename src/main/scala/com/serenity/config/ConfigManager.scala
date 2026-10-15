@@ -11,7 +11,6 @@ import scala.util.control.NonFatal
 
 import cats.effect.IO
 import com.serenity.io.AtomicFileWriter
-import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigParseOptions, ConfigValue, ConfigValueType}
 import org.slf4j.LoggerFactory
@@ -77,12 +76,15 @@ object ConfigManager:
       )
     )
 
-  /** The file is read on top of the defaults of `osName`, the same platform it is rendered and migrated against. */
+  /** The file is read on top of the defaults of `osName`, the same platform it is rendered and migrated against, with
+    * the chrome of the layout the file names: a key it writes for any of that chrome still wins.
+    */
   private def parseConfig(source: Config, osName: String): (AppConfig, List[HotkeyConflict]) =
-    val entries = hoconEntries(source)
+    val entries    = hoconEntries(source)
+    val layoutBase = LayoutPreset.base(LayoutPreset.chosenBy(entries.map(entry => entry.key -> entry.raw)))
     val defaults =
-      if osName == HotkeyOverrides.runningOs then AppConfig.default
-      else AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs(osName))
+      if osName == HotkeyOverrides.runningOs then layoutBase
+      else layoutBase.withHotkeyConfig(HotkeyConfig.forOs(osName))
 
     val parsed = entries.foldLeft(defaults) { (config, entry) =>
       val HoconEntry(key, value, _, raw) = entry
@@ -95,7 +97,7 @@ object ConfigManager:
           case "editor.minimum_pane_width" | "editor.minimum.pane.width" | "editor_minimum_pane_width" =>
             value.trim.toIntOption.map(config.withMinimumPaneWidth).getOrElse(config)
           case lspKey if lspKey.startsWith("lsp.") =>
-            parseLspConfigEntry(config, lspKey, value.trim)
+            LspConfigEntries.parse(config, lspKey, value.trim)
           case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
             parseHotkeyEntry(config, hotkeyKey, value).getOrElse(config)
           case keymapKey if keymapKey.startsWith("keymap.") =>
@@ -106,12 +108,12 @@ object ConfigManager:
             config)
     }
 
-    val scaled               = inferTextScaleMode(parsed, entries)
-    val withStatus           = LegacyStatusLineKeys.applied(scaled, entries.map(entry => entry.key -> entry.value))
-    val withLists            = applyHoconLists(withStatus, source)
-    val withLspLists         = PreferredWindowSizeParsing.applied(applyHoconLspLists(withLists, source), source)
-    val explicitCommandIds   = entries.flatMap(entry => ConfigGroups.commandIdOf(entry.key)).toSet
-    val hotkeys              = withLspLists.inputConfig.hotkeyConfig.yieldingDefaultCommandBindings(explicitCommandIds)
+    val scaled             = inferTextScaleMode(parsed, entries)
+    val withStatus         = LegacyStatusLineKeys.applied(scaled, entries.map(entry => entry.key -> entry.value))
+    val withLists          = applyHoconLists(withStatus, source)
+    val withLspLists       = PreferredWindowSizeParsing.applied(LspConfigEntries.applyLists(withLists, source), source)
+    val explicitCommandIds = entries.flatMap(entry => ConfigGroups.commandIdOf(entry.key)).toSet
+    val hotkeys            = withLspLists.inputConfig.hotkeyConfig.yieldingDefaultCommandBindings(explicitCommandIds)
     val (settled, conflicts) = HotkeyConflict.settle(hotkeys)
     (withLspLists.withHotkeyConfig(settled), conflicts)
 
@@ -129,11 +131,12 @@ object ConfigManager:
     */
   private[config] def renderedConfig(
     config: AppConfig,
-    osName: String = HotkeyOverrides.runningOs
+    osName: String = HotkeyOverrides.runningOs,
+    omitting: Set[String] = Set.empty
   ): Either[String, String] =
     ConfigFileFormat.unwritableSettings(config, osName) match
       case Nil =>
-        val text = ConfigFileFormat.render(config, osName)
+        val text = ConfigFileFormat.render(config, osName, omitting)
         Try(ConfigFactory.parseString(text)).toEither
           .map(_ => text)
           .left
@@ -188,10 +191,14 @@ object ConfigManager:
           logger.info(s"[CONFIG] Backed up $path to $backup before changing it")
           write(text)
 
-    renderedConfig(config, plan.osName) match
+    val existing = existingConfig(path, plan)
+    val omitted = existing match
+      case readable: ExistingConfig.Readable => LayoutPreset.inheritedKeys(config, explicitKeys(readable.source))
+      case _                                 => LayoutPreset.inheritedKeys(config)
+    renderedConfig(config, plan.osName, omitted) match
       case Left(problem) => failure(problem)
       case Right(text) =>
-        existingConfig(path, plan) match
+        existing match
           case ExistingConfig.Absent => write(text)
           case ExistingConfig.Unparseable(problem) =>
             failure(
@@ -216,6 +223,13 @@ object ConfigManager:
     case Patched(text: String, replacedKeys: Set[String])
     case Whole
 
+  private def explicitKeys(source: Config): Set[String] = hoconEntries(source).map(_.key).toSet
+
+  /** The keys the config file at `path` sets, none when it cannot be read: what a layout change must leave alone. */
+  def settingKeysIO(path: Path): IO[Set[String]] =
+    IO.blocking(Try(explicitKeys(ConfigMigrations.migrate(parseHoconFile(path), ConfigMigrations.installed).config)))
+      .map(_.getOrElse(Set.empty))
+
   private def canonicalKey(key: String): String = ConfigRegistry.find(key).map(_.key).getOrElse(key)
 
   private def editInPlace(
@@ -232,11 +246,15 @@ object ConfigManager:
     val after                                 = ConfigFileFormat.settings(config, plan.osName)
     val kept                                  = after.map(_._1).toSet
     def spellingsOf(key: String): Set[String] = ConfigRegistry.find(key).fold(Set(key))(_.spellings)
+    // Chrome the layout supplies and the file never set is not the user's to have written down.
+    val fromLayout = LayoutPreset.inheritedKeys(config, explicitKeys(existing.source))
     val settingChanges =
-      after.collect {
-        case (key, value) if !before.get(key).contains(value.rendered) =>
-          ConfigTextPatch.Change(key, spellingsOf(key), Some(value.rendered))
-      } ++ before.keys.toList.sorted
+      after
+        .collect {
+          case (key, value) if !before.get(key).contains(value.rendered) =>
+            ConfigTextPatch.Change(key, spellingsOf(key), Some(value.rendered))
+        }
+        .filterNot(change => fromLayout.contains(change.key)) ++ before.keys.toList.sorted
         .filterNot(kept.contains)
         .map(key => ConfigTextPatch.Change(key, spellingsOf(key), None))
 
@@ -429,20 +447,6 @@ object ConfigManager:
     )
     config.withSpellCheck(updatedSpellCheck)
 
-  private def applyHoconLspLists(config: AppConfig, source: Config): AppConfig =
-    source.entrySet().asScala.foldLeft(config) { (current, entry) =>
-      val key = entry.getKey.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
-      if key.startsWith("lsp.") && key.endsWith(".args") && entry.getValue.valueType == ConfigValueType.LIST then
-        key.split("\\.", 3).toList match
-          case "lsp" :: languageKey :: "args" :: Nil =>
-            LanguageId.fromString(languageKey).fold(current) { languageId =>
-              val args = source.getList(entry.getKey).asScala.map(_.unwrapped().toString).toList
-              updateLspOverride(current, languageId)(_.copy(args = Some(args)))
-            }
-          case _ => current
-      else current
-    }
-
   private def deprecatedReplacement(key: String): Option[String] =
     ConfigKeySchema.deprecatedReplacement(key)
 
@@ -492,7 +496,9 @@ object ConfigManager:
             case key if key.startsWith("lsp.") =>
               key.split("\\.", 3).toList match
                 case "lsp" :: _ :: "enabled" :: Nil =>
-                  Option.when(parseBoolean(value).isEmpty)("expected true or false, using the server's default")
+                  Option.when(LspConfigEntries.parseBoolean(value).isEmpty)(
+                    "expected true or false, using the server's default"
+                  )
                 case "lsp" :: _ :: "command" :: Nil =>
                   Option.when(value.trim.isEmpty)("the command is empty, using the default command")
                 case "lsp" :: _ :: "args" :: Nil =>
@@ -554,45 +560,3 @@ object ConfigManager:
     config.withFontConfig(withMode.resolveAutoTextScale(1.0))
 
   private val textScaleModeKeys: Set[String] = Set("font.scale.mode", "font_scale_mode")
-
-  private def parseLspConfigEntry(config: AppConfig, key: String, value: String): AppConfig =
-    key.split("\\.", 3).toList match
-      case "lsp" :: languageKey :: field :: Nil =>
-        LanguageId.fromString(languageKey).fold(config) { languageId =>
-          field match
-            case "enabled" =>
-              parseBoolean(value)
-                .map(enabled => updateLspOverride(config, languageId)(_.copy(enabled = Some(enabled))))
-                .getOrElse(config)
-            case "command" =>
-              updateLspOverride(config, languageId)(_.copy(command = Option(value).filter(_.nonEmpty)))
-            case "args" =>
-              val args = value
-                .split(",")
-                .toList
-                .map(_.trim)
-                .filter(_.nonEmpty)
-              updateLspOverride(config, languageId)(_.copy(args = Some(args)))
-            case _ =>
-              config
-        }
-      case _ =>
-        config
-
-  private def updateLspOverride(
-    config: AppConfig,
-    languageId: LanguageId
-  )(update: LspServerOverride => LspServerOverride): AppConfig =
-    val servers  = config.languageToolsConfig.lspUserConfig.servers.getOrElse(Map.empty)
-    val existing = servers.getOrElse(languageId.id, LspServerOverride(command = None, args = None))
-    config.withLspUserConfig(
-      LspUserConfig(
-        servers = Some(servers + (languageId.id -> update(existing)))
-      )
-    )
-
-  private def parseBoolean(value: String): Option[Boolean] =
-    value.toLowerCase match
-      case "true" | "on" | "enabled"    => Some(true)
-      case "false" | "off" | "disabled" => Some(false)
-      case _                            => None

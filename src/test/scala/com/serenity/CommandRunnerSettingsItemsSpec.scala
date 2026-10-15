@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.{MenuBarMode, StatusSegment, WindowChromeMode}
+import com.serenity.config.{MenuBarMode, StatusSegment, UiLayout, WindowChromeMode}
 import com.serenity.ui.presets.UiPreset
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -37,6 +37,18 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
       )
     )
     chrome.options.map(_.label) shouldBe List("Auto (Linux Custom)", "Native", "Native Themed (Windows)", "Custom")
+  }
+
+  it should "offer the layout as minimal or conventional, minimal first" in {
+    val layout = CommandRunnerSettingsAppearanceItems.layoutOptionItem(Map.empty)
+
+    layout.id shouldBe "ui-layout"
+    layout.label shouldBe "Layout"
+    layout.options.map(_.label) shouldBe List("Minimal", "Conventional")
+    layout.selectedOption shouldBe "Minimal"
+    CommandRunnerSettingsAppearanceItems.layoutOptionItem(Map("ui-layout" -> 1)).selectedIntent shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiLayout(UiLayout.Conventional)))
+    )
   }
 
   it should "offer the menu bar as hidden, alt or visible, hidden first" in {

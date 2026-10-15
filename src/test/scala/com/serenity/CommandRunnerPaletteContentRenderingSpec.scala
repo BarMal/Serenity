@@ -47,7 +47,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
   ): AppState =
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .updateSearchTerm(searchTerm)(using registry)
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
@@ -55,7 +55,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
         editing = EditingState(cursors)
       )
 
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),
@@ -169,7 +169,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val commands = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .updateSearchTerm("open")(using registry)
     val content = (1 to 60).map(i => s"line $i").mkString("\n")
 
@@ -177,7 +177,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       val buffer = Buffer
         .fromString(bufferId, content)
         .copy(editing = EditingState(List(cursor)))
-      val initialState = AppState.initial
+      val initialState = AppState.initial(AppConfig.conventional)
       val state = initialState.copy(
         persisted = initialState.persisted.copy(
           buffers = Map(bufferId -> buffer),
@@ -232,14 +232,14 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val registry          = CommandRegistry(commands)
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
+      .activate(registry, AppConfig.conventional.withShowAllSettingsRegardlessOfMode(true))
       .openSettings
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
         editing = EditingState(List(CursorPosition(1, 2)))
       )
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),
@@ -328,7 +328,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .openSettings
       .enterSelectedGroup
     val buffer = Buffer
@@ -336,7 +336,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       .copy(
         editing = EditingState(List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),
@@ -389,7 +389,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .updateSearchTerm("UI Outline Thickness")
       .enterSelectedGroup
     val buffer = Buffer
@@ -397,7 +397,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       .copy(
         editing = EditingState(List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),

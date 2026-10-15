@@ -25,15 +25,21 @@ class TuiEditIdleSessionSaveSpec extends AnyFlatSpec with Matchers with StateMan
     val saved = (for
       sessionRoot <- IO.blocking(TestTemp.directory("tui-edit-idle-session-save"))
       makeEditor = TuiRuntime.makeStateManager(
-        AppConfig.default,
+        AppConfig.conventional,
         sessionRootOverride = Some(sessionRoot),
         configPersistencePath = None,
         previewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
       )
       editor <- makeEditor(testLogger("TuiEditIdleSessionSaveSpec"))
-      _      <- AppStartup.initializeState(editor, editor.sessionStartupInfo, Theme.default, ViewportSize(80, 24))
-      _      <- editor.applyEvent(Enter)
-      _      <- "draft".toList.traverse_(char => editor.applyEvent(InsertChar(char)))
+      _ <- AppStartup.initializeState(
+        editor,
+        editor.sessionStartupInfo,
+        Theme.default,
+        ViewportSize(80, 24),
+        appConfig = AppConfig.conventional
+      )
+      _ <- editor.applyEvent(Enter)
+      _ <- "draft".toList.traverse_(char => editor.applyEvent(InsertChar(char)))
       reader = SessionManager.create(
         sessionRoot,
         AppThemeManager.create,

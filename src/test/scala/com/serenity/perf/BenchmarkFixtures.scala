@@ -47,7 +47,7 @@ private[perf] object BenchmarkFixtures:
           workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(false).withoutStatusLine.withWordWrap(false)
+        config = AppConfig.conventional.withLineNumbers(false).withoutStatusLine.withWordWrap(false)
       ),
       // AppState.initial seeds runtime.nextBufferId = BufferId(1) to follow its own initial buffer 0. This fixture
       // replaces the buffer map wholesale with a hand-picked BufferId(1), so nextBufferId must move past it too --
