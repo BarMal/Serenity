@@ -12,6 +12,9 @@ final case class AppState(
     runtime: Runtime = Runtime()
 ):
 
+  /** What the chrome shows now: the config's choice with anything summoned added. See [[EffectiveChrome]]. */
+  lazy val chrome: EffectiveChrome = EffectiveChrome.of(persisted.config, runtime.summons)
+
   // The paned buffers' annotation and semantic-token indexes are read by the renderer every frame. They are derived
   // values (#1864): `withBufferIndexesRefreshed` brings their memos up to date once per commit, recomputing only those
   // whose inputs changed, and every copy made afterwards reads them for free. A memo whose inputs have since changed is
@@ -130,9 +133,9 @@ final case class AppState(
     * always leads with the safe-mode label, even with nothing open.
     */
   def statusLineText: Option[String] =
-    if !persisted.config.statusLine.isShown then None
+    if !chrome.statusLine.isShown then None
     else
-      val text = StatusLineText.render(this, persisted.config.statusLine.segments)
+      val text = StatusLineText.render(this, chrome.statusLine.segments)
       if runtime.safeMode then Some((StatusLineText.SafeModeLabel :: text.toList).mkString(StatusLineText.Separator))
       else text
 
@@ -140,13 +143,13 @@ final case class AppState(
     * changes on screen, so with any other placement it needs no frames at all.
     */
   def typingHidesFloatingStatusLine: Boolean =
-    persisted.config.statusLine.isFloating && runtime.typingActivity.isActive
+    chrome.statusLine.isFloating && runtime.typingActivity.isActive
 
   /** The floating status row, derived each frame rather than stored: it follows the caret and steps aside for the
     * length of a typing burst (`runtime.typingActivity`) so nothing near the caret moves while text is going in.
     */
   def floatingStatusLineSurface: Option[UiSurface] =
-    if !persisted.config.statusLine.isFloating || runtime.typingActivity.isActive then None
+    if !chrome.statusLine.isFloating || runtime.typingActivity.isActive then None
     else
       for
         text   <- statusLineText
@@ -164,7 +167,7 @@ final case class AppState(
     * this returns `None` to match (issue #1074 decision). `editor.tab_strip = off` shows it never.
     */
   def showsTabStrip: Boolean =
-    persisted.config.tabStripMode == TabStripMode.Auto && persisted.bufferOrder.size >= 2
+    chrome.tabStrip && persisted.bufferOrder.size >= 2
 
   def tabBarSurface: Option[UiSurface] =
     Option.when(showsTabStrip) {

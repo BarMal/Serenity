@@ -65,6 +65,7 @@ object ChromeLayoutMemo:
         gutterCounterWidth = LayoutEngine.lineNumberCounterWidth(state),
         values = List(
           statusLineSurface,
+          state.chrome,
           persisted.bufferOrder.size,
           runtime.pointerGesture.cursorPeekResolvedAnchor
         ),

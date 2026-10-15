@@ -20,7 +20,7 @@ object ScrollbarLayout:
     */
   private def barless(state: AppState): Boolean =
     val surfaceConfig = state.persisted.config.surfaceConfig
-    !surfaceConfig.scrollbarEnabled || (surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled)
+    !state.chrome.scrollbar || (surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled)
 
   /** Whether the GUI draws a strip over a pane whose content is `contentRect`. */
   def shown(state: AppState, contentRect: LayoutRect): Boolean =

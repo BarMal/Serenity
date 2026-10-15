@@ -19,6 +19,7 @@ object ConfigRegistry:
   val fields: List[ConfigField[?]] =
     ConfigFieldsLanguageAndTypography.fields ++
       ConfigFieldsCursorAndWindow.fields ++
+      ConfigFieldsSummon.fields ++
       ConfigFieldsStatusLine.fields ++
       ConfigFieldsDocumentsAndCommandRunner.fields ++
       ConfigFieldsDisplay.fields ++

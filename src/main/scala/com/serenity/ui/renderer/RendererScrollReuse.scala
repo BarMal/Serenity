@@ -123,7 +123,7 @@ private[renderer] object RendererScrollReuse:
     val contract = renderPlan.layoutContract
     val numbers =
       if state.persisted.layout.activeEditorPaneId
-            .contains(paneId) && state.persisted.config.surfaceConfig.showLineNumbers
+            .contains(paneId) && state.chrome.lineNumbers
       then contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList
       else Nil
     val reach = math.ceil(SurfaceTextInset.px(state.persisted.config)).toInt

@@ -153,16 +153,31 @@ object CommandRunnerSettingsGroups:
     // issue #1549: that consolidation also buried the setting from a single-word settings search (a query short
     // enough to match by group rather than leaf) -- naming it in this group's own hint, which
     // `CommandRunnerSearch.directGroupSearchText` already searches, is what makes "palette" alone find this group.
+    val summonGroup = group(
+      "settings-summon",
+      "Summon Chrome",
+      "Hold a chord to show line numbers, status bar, tab strip, scrollbar or pane headers; the terminal toggles instead",
+      input(
+        "summon-modifiers",
+        "summon-lock",
+        "summon-line-numbers",
+        "summon-status-bar",
+        "summon-tab-strip",
+        "summon-scrollbar",
+        "summon-pane-headers"
+      )
+    )
     val interfaceLayoutGroup = group(
       "settings-interface-layout",
       "Interface Layout",
-      "Density, layout, window chrome, menu bar, key hints, and how many command runner/palette items are visible",
+      "Density, layout, window chrome, menu bar, key hints, summoned chrome, and how many command runner/palette items are visible",
       List(
         Some(CommandRunnerSettingsAppearanceItems.interfaceDensityOptionItem(optionSelections)),
         Some(CommandRunnerSettingsAppearanceItems.layoutOptionItem(optionSelections)),
         onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.windowChromeOptionItem(optionSelections)),
         onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.menuBarOptionItem(optionSelections)),
-        Some(CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(optionSelections))
+        Some(CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(optionSelections)),
+        Some(summonGroup)
       ).flatten
     )
     val lookAdvancedGroup = group(
