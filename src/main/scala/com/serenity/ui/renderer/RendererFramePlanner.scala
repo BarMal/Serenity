@@ -426,6 +426,10 @@ object RendererFramePlanner:
         // only when every pane is reusable and the published pane set hasn't shifted underneath it.
         val screenDamageSincePublish = context.caches.frameState.drainScreenDamage(output)
         val screenScrollbars         = context.caches.frameState.scrollbarsChangedOnScreen(output, scrollbars)
+        val screenVacated = context.caches.frameState.bandsVacatedOnScreen(
+          output,
+          panes.flatMap((paneId, record) => PixelRect.unionOf(record.rowRects).map(paneId -> _))
+        )
         val boundedRepaintEligible =
           !context.caches.frameState.screenPaneIdsChanged(output, paneIds) && allPanesReusable && !geometryChanged &&
             ghostPaneIds.isEmpty && Damage.isBufferRowsOrChromeOnly(screenDamageSincePublish)
@@ -438,7 +442,7 @@ object RendererFramePlanner:
               panes,
               screenDamageSincePublish,
               dirtyRowsFor(screenDamageSincePublish, _, _, persistenceKey, context.caches),
-              RendererScrollbars.strips(context, renderPlan, screenScrollbars)
+              RendererScrollbars.strips(context, renderPlan, screenScrollbars) ++ screenVacated
             )
           }
 

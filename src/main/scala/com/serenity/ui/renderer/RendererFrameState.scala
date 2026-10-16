@@ -352,6 +352,11 @@ final class RendererFrameState(initialCapacity: Int):
       )
     }
 
+  private val screenPaneExtents = new BoundedRefCache[ScreenIdentity, Map[PaneId, PixelRect]](cacheCapacity)
+
+  def bandsVacatedOnScreen(output: Option[FrameOutput], current: Map[PaneId, PixelRect]): List[PixelRect] =
+    output.fold(Nil)(value => screenPaneExtents.modify(ScreenPaneExtents.exchange(value.screenToken, current)))
+
   /** Drops `key`'s remembered previous-frame snapshots and floating-panel rects -- used by
     * [[RendererFramePlanner.forgetPreservedContent]] when a surface's preserved pixels are no longer valid, since both
     * are reuse promises about pixels that surface no longer holds.
