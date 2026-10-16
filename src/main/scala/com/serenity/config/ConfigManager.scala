@@ -227,10 +227,19 @@ object ConfigManager:
 
   private[config] def explicitKeys(source: Config): Set[String] = hoconEntries(source).map(_.key).toSet
 
-  /** The keys the config file at `path` sets, none when it cannot be read: what a layout change must leave alone. */
-  def settingKeysIO(path: Path): IO[Set[String]] =
-    IO.blocking(Try(explicitKeys(ConfigMigrations.migrate(parseHoconFile(path), ConfigMigrations.installed).config)))
-      .map(_.getOrElse(Set.empty))
+  /** The keys the config file at `path` sets: what a layout change must leave alone. None for a file that is not there
+    * yet; a file that is there but cannot be read is an error, since reading it as empty would let a change overwrite
+    * what it sets.
+    */
+  def settingKeysIO(path: Path): IO[Either[ConfigError, Set[String]]] =
+    IO.blocking {
+      if !Files.exists(path) then Right(Set.empty[String])
+      else
+        try Right(explicitKeys(ConfigMigrations.migrate(parseHoconFile(path), ConfigMigrations.installed).config))
+        catch
+          case NonFatal(error) =>
+            Left(ConfigError("read setting keys", path, s"Could not read $path: ${error.getMessage}", Some(error)))
+    }
 
   /** Takes the chrome `keys` out of the file, so each follows the layout again. The keys it could not take out -- one
     * written inside a block, say -- are returned, and the file is otherwise left as the user wrote it, a copy of it

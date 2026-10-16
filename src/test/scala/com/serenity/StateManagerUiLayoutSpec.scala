@@ -2,6 +2,9 @@ package com.serenity
 
 import java.nio.file.{Files, Path}
 
+import scala.concurrent.duration.*
+
+import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{
   Command,
@@ -22,7 +25,7 @@ import com.serenity.config.{
 }
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.state.models.{ConfirmAction, ConfirmPrompt, Modal, SurfaceContent}
+import com.serenity.state.models.{ConfirmAction, ConfirmPrompt, Modal, Notice, NoticeLevel, NoticeTopic, SurfaceContent}
 import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -70,17 +73,25 @@ class StateManagerUiLayoutSpec extends AnyFlatSpec with Matchers with StateManag
     state.runtime.modalStack.map(_.modal).collect { case Modal.Confirm(prompt) => prompt } ++
       state.runtime.uiSurfaces.map(_.content).collect { case SurfaceContent.ModalWorkflow(Modal.Confirm(p)) => p }
 
+  // A warning sweeps itself away after a few seconds, which `awaitEffects` and the command itself would wait out: watch for it while the command runs.
+  private def noticesAfter(stateManager: StateManager, command: Command): List[Notice] =
+    def shown: IO[List[Notice]] =
+      stateManager.getCurrentState.flatMap { state =>
+        val found = state.runtime.uiSurfaces.map(_.content).collect { case SurfaceContent.Notice(notice, _) => notice }
+        if found.nonEmpty then IO.pure(found) else IO.sleep(10.millis) >> shown
+      }
+    (stateManager.executeCommand(command).start >> shown.timeout(5.seconds)).unsafeRunSync()
+
+  private def layoutCommand(intent: InterfaceChromeIntent): Command =
+    Command.typed(
+      "layout-test",
+      "Change the layout",
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(intent)),
+      CommandCategory.Settings
+    )
+
   private def run(stateManager: StateManager, intent: InterfaceChromeIntent): Unit =
-    stateManager
-      .executeCommand(
-        Command.typed(
-          "layout-test",
-          "Change the layout",
-          CommandIntent.Settings(SettingsIntent.InterfaceChrome(intent)),
-          CommandCategory.Settings
-        )
-      )
-      .unsafeRunSync()
+    stateManager.executeCommand(layoutCommand(intent)).unsafeRunSync()
     stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
 
   /** Does what choosing `label` in the one open prompt does, as the modal would once it closed. */
@@ -123,6 +134,40 @@ class StateManagerUiLayoutSpec extends AnyFlatSpec with Matchers with StateManag
     live(stateManager).uiLayout shouldBe UiLayout.Minimal
     live(stateManager).surfaceConfig.showLineNumbers shouldBe false
     Files.readString(path) should include("ui.layout = minimal")
+  }
+
+  it should "warn and change nothing when the config file cannot be read" in {
+    val path         = configFile(pinnedFile)
+    val stateManager = editorOn(path)
+    val before       = live(stateManager)
+    val unreadable   = "this is not = valid = hocon {\n"
+    Files.writeString(path, unreadable)
+
+    val shown = noticesAfter(stateManager, layoutCommand(InterfaceChromeIntent.ToggleUiLayout))
+
+    shown.map(_.level) should contain(NoticeLevel.Warning)
+    shown.flatMap(_.topic) should contain(NoticeTopic.ConfigFile)
+    live(stateManager) shouldBe before
+    Files.readString(path) shouldBe unreadable
+    prompts(stateManager) shouldBe Nil
+  }
+
+  it should "warn and change nothing when the config file becomes unreadable before the layout is confirmed" in {
+    val path         = configFile(pinnedFile)
+    val stateManager = editorOn(path)
+    val before       = live(stateManager)
+    val unreadable   = "this is not = valid = hocon {\n"
+    Files.writeString(path, unreadable)
+
+    val shown =
+      noticesAfter(
+        stateManager,
+        layoutCommand(InterfaceChromeIntent.ConfirmUiLayoutOverride(UiLayout.Conventional, Nil))
+      )
+
+    shown.flatMap(_.topic) should contain(NoticeTopic.ConfigFile)
+    live(stateManager) shouldBe before
+    Files.readString(path) shouldBe unreadable
   }
 
   it should "ask before changing chrome the file sets, and leave the layout alone until asked" in {
