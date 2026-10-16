@@ -6,9 +6,9 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, StatusLinePlacement, TabStripMode}
 import com.serenity.keystroke.events.PageDown
-import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun, RtfDocumentCodec}
+import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun, RichTextStyle, RtfDocumentCodec}
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
@@ -30,9 +30,11 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
   private val uiFont      = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
   private val cellMetrics = CellMetrics.fromFont(codeFont)
   private val uiMetrics   = CellMetrics.fromFont(uiFont)
-  private val logicalW    = 1920
-  private val logicalH    = 1080
-  private val viewport    = ViewportSize(logicalW / cellMetrics.charWidth, logicalH / cellMetrics.lineHeight)
+
+  final private case class Window(width: Int, height: Int):
+    def viewport: ViewportSize = ViewportSize(width / cellMetrics.charWidth, height / cellMetrics.lineHeight)
+
+  private val fullHd = Window(1920, 1080)
 
   private def chapters(count: Int, bodies: Int): RichTextDocument =
     RichTextDocument(
@@ -48,12 +50,12 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       }
     )
 
-  final private class Pooled(pool: Int, scale: Double, persists: Boolean = true):
+  final private class Pooled(window: Window, pool: Int, scale: Double, persists: Boolean = true):
 
     private val images = Vector.fill(pool)(
       new BufferedImage(
-        math.ceil(logicalW * scale).toInt,
-        math.ceil(logicalH * scale).toInt,
+        math.ceil(window.width * scale).toInt,
+        math.ceil(window.height * scale).toInt,
         BufferedImage.TYPE_INT_RGB
       )
     )
@@ -62,15 +64,15 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     private val screen = ScreenIdentity(this)
     private val drawn  = AtomicInteger(0)
 
-    def render(state: AppState, damage: Damage): BufferedImage =
+    def render(state: AppState, damage: Damage, cursorVisible: Boolean = false): BufferedImage =
       val image = images(drawn.getAndIncrement() % pool)
       val surface = new Java2DRenderSurface(
         image,
         cellMetrics,
         codeFont,
         _ => (),
-        logicalWidthPx = logicalW,
-        logicalHeightPx = logicalH,
+        logicalWidthPx = window.width,
+        logicalHeightPx = window.height,
         deviceScaleX = scale,
         deviceScaleY = scale,
         contentPersists = persists,
@@ -78,10 +80,10 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
-        cursorVisible = false,
+        cursorVisible = cursorVisible,
         surface,
-        viewport,
-        caches.authoritativeScene.forState(state, viewport, codeFont, textFont),
+        window.viewport,
+        caches.authoritativeScene.forState(state, window.viewport, codeFont, textFont),
         codeFont,
         textFont,
         uiFont,
@@ -94,8 +96,14 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       )
       image
 
-  private def differing(drawn: BufferedImage, state: AppState, scale: Double): Seq[(Int, Int)] =
-    val cold = Pooled(1, scale, persists = false).render(state, Damage.Everything)
+  private def differing(
+    window: Window,
+    drawn: BufferedImage,
+    state: AppState,
+    scale: Double,
+    cursorVisible: Boolean = false
+  ): Seq[(Int, Int)] =
+    val cold = Pooled(window, 1, scale, persists = false).render(state, Damage.Everything, cursorVisible)
     for
       x <- 0 until drawn.getWidth
       y <- 0 until drawn.getHeight
@@ -106,8 +114,18 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     val ys = d.map(_._2)
     s"${d.size} px differ, y ${ys.minOption.getOrElse(0)}-${ys.maxOption.getOrElse(0)}"
 
-  private def pagedThrough(config: AppConfig, pool: Int, scale: Double, document: RichTextDocument): List[String] =
-    val (stateManager, id) = LaptopFrameBenchmarks.stateManagerHolding(document.plainText, config, grid = viewport)
+  private def pagedThrough(
+    config: AppConfig,
+    window: Window,
+    pool: Int,
+    scale: Double,
+    document: RichTextDocument,
+    pageDowns: Int = 12,
+    perFrame: Int = 1,
+    blinks: Int = 0
+  ): List[String] =
+    val (stateManager, id) =
+      LaptopFrameBenchmarks.stateManagerHolding(document.plainText, config, grid = window.viewport)
     stateManager
       .updateState(state =>
         state.copy(persisted =
@@ -119,16 +137,24 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    val frames = Pooled(pool, scale)
+    val frames = Pooled(window, pool, scale)
     val first  = stateManager.getCurrentState.unsafeRunSync()
     val _      = frames.render(first, Damage.Everything)
-    val steps = (1 to 12).foldLeft((first, List.empty[String])) {
+    val steps = (1 to pageDowns).foldLeft((first, List.empty[String])) {
       case ((before, found), step) =>
-        stateManager.applyEvent(PageDown).unsafeRunSync()
+        (1 to perFrame).foreach(_ => stateManager.applyEvent(PageDown).unsafeRunSync())
         val after = stateManager.getCurrentState.unsafeRunSync()
-        val diff  = differing(frames.render(after, DamageProducer.forTransition(before, after)), after, scale)
+        val diff  = differing(window, frames.render(after, DamageProducer.forTransition(before, after)), after, scale)
         val top   = after.persisted.buffers.get(id).map(_.viewport.topLine)
-        (after, if diff.isEmpty then found else s"step $step top=$top: ${summary(diff)}" :: found)
+        val blinked = (1 to blinks).flatMap { blink =>
+          val visible = blink % 2 == 1
+          val idle    = differing(window, frames.render(after, Damage.Nothing, visible), after, scale, visible)
+          Option.when(idle.nonEmpty)(s"step $step blink $blink top=$top: ${summary(idle)}")
+        }.toList
+        (
+          after,
+          blinked.reverse ++ (if diff.isEmpty then Nil else List(s"step $step top=$top: ${summary(diff)}")) ++ found
+        )
     }
     steps._2.reverse.take(3)
 
@@ -152,5 +178,92 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
   do
     s"PageDown through $documentName in the $layoutName layout at ${scale}x" should
       "draw what a cold frame draws at every step" in {
-        pagedThrough(config, 2, scale, document) shouldBe empty
+        pagedThrough(config, fullHd, 2, scale, document) shouldBe empty
+      }
+
+  private val ownersConfig: AppConfig =
+    AppConfig.default
+      .withStatusLinePlacement(StatusLinePlacement.Pinned)
+      .withLineNumbers(false)
+      .withPaneHeaders(false)
+      .withScrollbar(false)
+      .withTabStrip(TabStripMode.Off)
+
+  private val windows = List(
+    "1920x1080"                 -> fullHd,
+    "800x600"                   -> Window(800, 600),
+    "a height off the row grid" -> Window(1000, 777),
+    "a short, wide window"      -> Window(1400, 333)
+  )
+
+  private def novel(count: Int, bodies: Int): RichTextDocument =
+    val big = RichTextStyle(fontSize = Some(28f), marks = Set(InlineMark.Bold))
+    RichTextDocument(
+      (1 to count).toList.flatMap { chapter =>
+        val bodyParagraphs = (1 to bodies).toList.map { body =>
+          val text =
+            s"Chapter $chapter paragraph $body. " + "the mage said nothing and watched the rain " * (4 + body * 5 % 19)
+          RichTextParagraph(
+            List(RichTextRun(text.take(40)), RichTextRun(text.drop(40), RichTextStyle(marks = Set(InlineMark.Italic)))),
+            alignment = ParagraphAlignment.Justify
+          )
+        }
+        List(
+          RichTextParagraph(
+            List(RichTextRun(s"Chapter $chapter", big)),
+            ParagraphAlignment.Center,
+            ParagraphRole.Heading(1)
+          ),
+          RichTextParagraph(List(RichTextRun("")), ParagraphAlignment.Center),
+          RichTextParagraph(List(RichTextRun("A subtitle")), ParagraphAlignment.Center, ParagraphRole.Heading(2))
+        ) ++ bodyParagraphs.headOption.map(_.copy(role = ParagraphRole.dropCap())).toList ++ bodyParagraphs.drop(1)
+      }
+    )
+
+  private val chaptered = List(
+    "centred headings over justified, italic prose" -> novel(6, 10),
+    "chapters ending in a short one" -> RichTextDocument(
+      chapters(4, 9).paragraphs ++ chapters(1, 2).paragraphs.map(p =>
+        p.copy(runs = p.runs.map(r => r.copy(text = r.text.replace("Chapter 1", "Chapter 5"))))
+      )
+    ),
+    "six chapters of twelve paragraphs" -> chapters(6, 12),
+    "a single long chapter"             -> chapters(1, 40)
+  )
+
+  for
+    (chromeName, config) <- List(
+      "the owner's chrome (status pinned, no scrollbar)" -> ownersConfig,
+      "pinned status with a scrollbar"                   -> ownersConfig.withScrollbar(true)
+    )
+    scale                    <- List(1.0, 2.0)
+    (windowName, window)     <- windows
+    (documentName, document) <- chaptered
+  do
+    s"PageDown through $documentName with $chromeName at ${scale}x in a $windowName window" should
+      "draw what a cold frame draws at every step, past the end too" in {
+        pagedThrough(config, window, 2, scale, document, pageDowns = 40) shouldBe empty
+      }
+
+  for
+    (shape, perFrame, blinks) <- List(
+      ("one PageDown a frame", 1, 0),
+      ("three PageDowns a frame", 3, 0),
+      ("blinking between PageDowns", 1, 2)
+    )
+    scale                    <- List(1.0, 2.0)
+    (documentName, document) <- ("Word's sample" -> wordSample) :: chaptered.take(2)
+  do
+    s"PageDown through $documentName with the owner's chrome at ${scale}x with $shape" should
+      "draw what a cold frame draws at every step" in {
+        pagedThrough(
+          ownersConfig,
+          fullHd,
+          2,
+          scale,
+          document,
+          pageDowns = 20,
+          perFrame = perFrame,
+          blinks = blinks
+        ) shouldBe empty
       }
