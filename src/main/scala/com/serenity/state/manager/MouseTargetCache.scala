@@ -139,6 +139,9 @@ private[manager] object MouseTargetLayoutKey:
       runtime.modalStack,
       // Read by `effectiveUiElementGap`, and by the status line text through `editingContext`.
       runtime.capabilities,
+      // `compute` reads `state.chrome`, which is the config overlaid with these. `chrome` is a lazy val rebuilt per state,
+      // so it cannot stand in as a reference.
+      runtime.summons,
       // `pinnedPanels` sizes docked panels from the state's own viewport, not the one passed in.
       runtime.viewportSize,
       // `floatingStatusLineSurface` is hidden while typing.
