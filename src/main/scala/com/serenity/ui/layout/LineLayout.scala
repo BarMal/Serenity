@@ -116,6 +116,7 @@ private[layout] object LineLayout:
         lineLength,
         runs,
         richText.markdown.hidesMarkersOn(lineIndex),
-        richText.markdown.baseIsMonospaced
+        richText.markdown.baseIsMonospaced,
+        richText.headings
       )
       richText.markdown.columnsOn(lineIndex).fold(resolver)(MarkdownTableMetrics.padded(lineText, resolver, _, frc))

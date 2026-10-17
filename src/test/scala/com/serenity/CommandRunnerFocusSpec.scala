@@ -96,7 +96,7 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     openSettingsViaCommand(stateManager)
-    (1 to 4).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
+    moveRootSelectionTo(stateManager, "settings-look")
     stateManager.applyEvent(Enter).unsafeRunSync()
     moveSubmenuSelectionTo(stateManager, "settings-look-advanced")
     stateManager.applyEvent(Enter).unsafeRunSync()

@@ -3,7 +3,8 @@ package com.serenity.config
 import java.util.Locale
 
 import com.serenity.richtext.ParagraphAlignment
-import com.serenity.ui.theme.HeadingStyle
+import com.serenity.ui.color.RenderColor
+import com.serenity.ui.theme.{HeadingColour, HeadingStyle}
 
 /** How headings are styled, per level and overall. */
 private[config] object ConfigFieldsHeadings:
@@ -36,6 +37,32 @@ private[config] object ConfigFieldsHeadings:
       }
     ).orAuto
 
+  private def parseColour(text: String): Option[HeadingColour] =
+    text.trim.toLowerCase(Locale.ROOT) match
+      case "text"    => Some(HeadingColour.Text)
+      case "heading" => Some(HeadingColour.Heading)
+      case other     => colorFromHex(other).map(color => HeadingColour.Fixed(RenderColor.fromAwt(color)))
+
+  private def colourKey(colour: HeadingColour): String =
+    colour match
+      case HeadingColour.Text         => "text"
+      case HeadingColour.Heading      => "heading"
+      case HeadingColour.Fixed(color) => colorToHex(color.toAwt)
+
+  /** `auto` follows the global colour; `text`, `heading` or `#RRGGBB` say what this level is. */
+  private val levelColour: FieldCodec[Option[HeadingColour]] = enumerated(parseColour, colourKey).orAuto
+
+  /** `auto` keeps each kind of document's own look; `text` or `heading` applies to both. */
+  private val globalColour: FieldCodec[Option[HeadingColour]] =
+    enumerated[HeadingColour](
+      text =>
+        parseColour(text).flatMap {
+          case HeadingColour.Fixed(_) => None
+          case choice                 => Some(choice)
+        },
+      colourKey
+    ).orAuto
+
   private val threshold: FieldCodec[Float] =
     float.filtered(value => value >= HeadingsConfig.ThresholdRange._1 && value <= HeadingsConfig.ThresholdRange._2)
 
@@ -55,11 +82,16 @@ private[config] object ConfigFieldsHeadings:
       levelField(level, "bold", flag)(_.bold, (current, value) => current.copy(bold = value)),
       levelField(level, "italic", flag)(_.italic, (current, value) => current.copy(italic = value)),
       levelField(level, "family", family)(_.family, (current, value) => current.copy(family = value)),
+      levelField(level, "colour", levelColour)(_.colour, (current, value) => current.copy(colour = value)),
       levelField(level, "align", alignment)(_.align, (current, value) => current.copy(align = value))
     )
 
   val fields: List[ConfigField[?]] =
     (1 to HeadingStyle.LevelCount).toList.flatMap(levelFields) ++ List(
+      field("headings.colour")(globalColour)(
+        _.headingsConfig.colour,
+        (config, value) => config.withHeadingsConfig(config.headingsConfig.copy(colour = value))
+      ),
       field("headings.damping")(boolean)(
         _.headingsConfig.damping,
         (config, value) => config.withHeadingsConfig(config.headingsConfig.copy(damping = value))

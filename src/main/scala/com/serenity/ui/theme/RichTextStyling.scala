@@ -42,7 +42,7 @@ object RichTextStyling:
         StyledText(
           content,
           scaledTextStyle(style, role, scale, headings),
-          foregroundColor(style, theme),
+          foregroundColor(style, role, theme, headings),
           theme.background
         )
     }
@@ -222,8 +222,18 @@ object RichTextStyling:
         (Some(RichSpan(glyphText, glyphStyle)), remainderSpan.toList ++ restOfFirstSpan)
       case _ => (None, spans)
 
-  private def foregroundColor(style: com.serenity.richtext.RichTextStyle, theme: Theme): RenderColor =
-    style.color.flatMap(hexColor).getOrElse(theme.foreground)
+  private def foregroundColor(
+    style: com.serenity.richtext.RichTextStyle,
+    role: ParagraphRole,
+    theme: Theme,
+    headings: HeadingSettings
+  ): RenderColor =
+    style.color.flatMap(hexColor).getOrElse(roleColor(role, theme, headings))
+
+  private def roleColor(role: ParagraphRole, theme: Theme, headings: HeadingSettings): RenderColor =
+    role match
+      case ParagraphRole.Heading(level) => headings.colourFor(level, markdown = false).resolve(theme)
+      case _                            => theme.foreground
 
   private def hexColor(value: String): Option[RenderColor] =
     val normalized = value.stripPrefix("#")

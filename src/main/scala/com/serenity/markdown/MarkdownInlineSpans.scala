@@ -12,13 +12,15 @@ import scala.annotation.tailrec
   */
 object MarkdownInlineSpans:
 
-  /** `scale` is the text's size over the base font's, `muted` paints it in the theme's muted colour. */
+  /** `headingLevel` is 1 to 6 for text that is a heading's, whose size and look the heading settings decide, and 0
+    * otherwise; `muted` paints the text in the theme's muted colour.
+    */
   final case class Style(
       bold: Boolean,
       italic: Boolean,
       code: Boolean,
       muted: Boolean = false,
-      scale: Float = 1.0f,
+      headingLevel: Int = 0,
       strike: Boolean = false
   )
 

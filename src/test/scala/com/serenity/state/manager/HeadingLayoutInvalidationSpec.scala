@@ -1,11 +1,21 @@
 package com.serenity.state.manager
 
+import com.serenity.command.{
+  CommandIntent,
+  CommandRegistry,
+  CommandRunner,
+  CommandSurfaceItem,
+  HeadingsConfigEdit,
+  SettingsIntent
+}
 import com.serenity.config.{AppConfig, HeadingLevelConfig, HeadingsConfig}
 import com.serenity.richtext.{ParagraphAlignment, ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader.{FontConfig, TextScaleMode}
 import com.serenity.ui.layout.{Layout, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.theme.HeadingColour
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -76,6 +86,17 @@ class HeadingLayoutInvalidationSpec extends AnyFlatSpec with Matchers:
     ).foreach { case (what, config) => withClue(what)(keyFor(config) should not be base) }
   }
 
+  it should "change when a heading's colour does, since the prepared scene paints from it" in {
+    val base = keyFor(AppConfig.default)
+
+    keyFor(
+      withH1(_.copy(colour = Some(HeadingColour.Fixed(RenderColor.fromRgba(0xcc, 0x33, 0x33)))))
+    ) should not be base
+    keyFor(
+      AppConfig.default.withHeadingsConfig(HeadingsConfig(colour = Some(HeadingColour.Heading)))
+    ) should not be base
+  }
+
   it should "stay put when a damping setting changes nothing at the current body size" in {
     val base = keyFor(AppConfig.default)
 
@@ -101,6 +122,29 @@ class HeadingLayoutInvalidationSpec extends AnyFlatSpec with Matchers:
 
     unchanged should be theSameInstanceAs before
     after should not be theSameInstanceAs(before)
+  }
+
+  it should "paint a heading in a new colour from the first frame after it changes" in {
+    val scene = AuthoritativeUiScene()
+    val red   = RenderColor.fromRgba(0xcc, 0x33, 0x33)
+
+    def h1Colour(config: AppConfig): Option[HeadingColour] =
+      MouseTargetCache
+        .fromState(stateWith(config), viewport, scene)
+        .scene
+        .textSnapshot(paneId)
+        .flatMap(_.headings.colour(1))
+
+    h1Colour(AppConfig.default) shouldBe None
+    h1Colour(withH1(_.copy(colour = Some(HeadingColour.Fixed(red))))) shouldBe Some(HeadingColour.Fixed(red))
+    h1Colour(AppConfig.default) shouldBe None
+  }
+
+  it should "repaint the whole frame when only a heading colour changed" in {
+    val before = stateWith(AppConfig.default)
+    val after  = stateWith(withH1(_.copy(colour = Some(HeadingColour.Fixed(RenderColor.fromRgba(0xcc, 0x33, 0x33))))))
+
+    Damage.isEverything(DamageProducer.forTransition(before, after)) shouldBe true
   }
 
   it should "measure a taller heading row after the size grows, and leave the body row alone" in {
@@ -140,4 +184,22 @@ class HeadingLayoutInvalidationSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("expected prepared rows"))
 
     rows.filter(_.bufferLine == 1).map(_.xOffsetPx).distinct shouldBe List(0.0f)
+  }
+
+  "A heading size chosen in the settings palette" should "make the heading row taller once applied" in {
+    val sizeRow = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .submenuItems("settings-heading-h1")
+      .collectFirst { case item: CommandSurfaceItem.OptionItem if item.id == "heading-h1-size" => item }
+      .getOrElse(fail("expected the H1 size row"))
+    val chosen = sizeRow.options
+      .find(_.label == "2.0")
+      .map(_.intent)
+      .getOrElse(fail("expected a 2.0 size option"))
+    val applied = chosen match
+      case CommandIntent.Settings(SettingsIntent.Headings(intent)) =>
+        AppConfig.default.withHeadingsConfig(HeadingsConfigEdit(intent)(AppConfig.default.headingsConfig))
+      case other => fail(s"unexpected intent $other")
+
+    titleRow(applied).heightPx should be > titleRow(AppConfig.default).heightPx
   }

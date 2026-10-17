@@ -9,12 +9,15 @@ final case class HeadingSettings(
     styles: Vector[HeadingStyle] = HeadingStyle.defaults,
     logicalBodyPt: Float = RichTextStyling.ProseZoomBaselinePx,
     dampingThresholdPt: Float = HeadingScale.DefaultDampingThresholdPt,
-    dampingOn: Boolean = true
+    dampingOn: Boolean = true,
+    globalColour: Option[HeadingColour] = None
 ):
 
+  private val multiples: Vector[Float] =
+    styles.map(style => HeadingScale.effective(style.sizeScale, logicalBodyPt, dampingThresholdPt, dampingOn))
+
   private val textStyles: Vector[TextStyle] =
-    styles.map { style =>
-      val multiple = HeadingScale.effective(style.sizeScale, logicalBodyPt, dampingThresholdPt, dampingOn)
+    styles.zip(multiples).map { (style, multiple) =>
       TextStyle(
         isBold = style.bold,
         isItalic = style.italic,
@@ -23,10 +26,23 @@ final case class HeadingSettings(
       )
     }
 
-  /** The style for `level`; a level outside 1 to 6 takes the smallest heading's, as it always has. */
-  def textStyle(level: Int): TextStyle =
-    if level >= 1 && level <= HeadingStyle.LevelCount then textStyles(level - 1)
-    else textStyles(HeadingStyle.LevelCount - 1)
+  /** A level outside 1 to 6 takes the smallest heading's, as it always has. */
+  private def indexOf(level: Int): Int =
+    if level >= 1 && level <= HeadingStyle.LevelCount then level - 1 else HeadingStyle.LevelCount - 1
+
+  def textStyle(level: Int): TextStyle = textStyles(indexOf(level))
+
+  /** How many times the body size `level` is set at, after damping. */
+  def sizeMultiple(level: Int): Float = multiples(indexOf(level))
+
+  /** The colour `level` is set to on its own; none follows the global setting. */
+  def colour(level: Int): Option[HeadingColour] = styles(indexOf(level)).colour
+
+  /** What `level` is painted in: its own colour, else the global one, else what a document of that kind has always had
+    * -- the theme's heading colour in Markdown, the text colour in rich text.
+    */
+  def colourFor(level: Int, markdown: Boolean): HeadingColour =
+    colour(level).orElse(globalColour).getOrElse(if markdown then HeadingColour.Heading else HeadingColour.Text)
 
   def alignment(level: Int): Option[ParagraphAlignment] =
     styles(math.max(1, math.min(level, HeadingStyle.LevelCount)) - 1).align
