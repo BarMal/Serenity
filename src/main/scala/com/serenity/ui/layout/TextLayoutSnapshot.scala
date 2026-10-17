@@ -45,6 +45,12 @@ final case class TextLayoutSnapshot(
 
   def navigationGeometry: NavigationGeometry = NavigationGeometry(visualLines)
 
+  /** What each visual row occupies when rows are stacked: its measured height, or the snapshot's uniform one, plus the
+    * height its paragraph reserves below it. Painting, row bands and click targeting all stack rows by this.
+    */
+  def rowHeightsPx: Vector[Int] =
+    visualLines.map(line => (if line.heightPx > 0 then line.heightPx else lineHeightPx) + line.reservedBelowPx)
+
   def xPxForCursor(cursor: CursorPosition): Option[Float] =
     navigationGeometry.xPxForCursor(cursor)
 
@@ -346,7 +352,10 @@ object TextLayoutSnapshot:
                   measuredLayout,
                   cellMetrics
                 )
-                Vector(placed(row, lineIndex, paragraphRole, lineWithinParagraph = 0, glyphWidthPx))
+                DropCapLayout.reservingGlyphHeight(
+                  Vector(placed(row, lineIndex, paragraphRole, lineWithinParagraph = 0, glyphWidthPx)),
+                  paragraphRole
+                )
             val aligned = ParagraphAlignmentLayout.apply(wrapped, lineIndex, panelWidthPx, richText)
             loop(rest, acc ++ aligned)
           case _ => acc
@@ -397,7 +406,11 @@ object TextLayoutSnapshot:
         limit => wrapRows(spec, limit),
         predecessors => IncrementalWrap.rewrap(spec, predecessors)
       )
-      Vector.tabulate(rows.length)(index => placed(rows(index), bufferLine, paragraphRole, index, dropCapGlyphWidthPx))
+      val placedRows =
+        Vector.tabulate(rows.length)(index =>
+          placed(rows(index), bufferLine, paragraphRole, index, dropCapGlyphWidthPx)
+        )
+      if rows.length < maxVisualLines then DropCapLayout.reservingGlyphHeight(placedRows, paragraphRole) else placedRows
 
   /** A cached row read onto `bufferLine`; the drop cap inset is the only offset the row carries until alignment. */
   private def placed(

@@ -257,6 +257,7 @@ object RendererPaneContent:
     val contentRightXPx   = context.cellMetrics.toPixelX(rect.right).toFloat
     val activeBodyLines   = focusedTextBodyLines(buffer, state)
     val rowMetrics        = textRowMetrics(rect, context, snapshot)
+    val rowsBottomPx      = rowMetrics.lineTopPx(visualLines.size).min(rowMetrics.contentBottomPx)
     val findMatchesByLine = findMatchesOnDrawnRows(buffer, state, visualLines, dirtyRows)
     FrameCounting.rowsPainted(context.caches.frameCounters, visualLines.size, dirtyRows)
 
@@ -306,7 +307,8 @@ object RendererPaneContent:
                 rowHeightPxFor(visualLine, snapshot),
                 rowAscentPxFor(visualLine, snapshot),
                 contentRightXPx,
-                lineSemanticTokens
+                lineSemanticTokens,
+                rowsBottomPx
               )
             else
               CharacterRenderer.renderStyledString(
@@ -438,8 +440,7 @@ object RendererPaneContent:
       gridMetrics = context.cellMetrics,
       rowLineHeightPx = snapshot.lineHeightPx,
       usesMeasuredLayout = RendererPaneSetup.usesMeasuredDrawing(snapshot, context),
-      rowHeightsPx =
-        snapshot.visualLines.map(line => if line.heightPx > 0 then line.heightPx else snapshot.lineHeightPx)
+      rowHeightsPx = snapshot.rowHeightsPx
     )
 
   def visualLineCellOffset(visualLine: TextVisualLine, context: RenderContext): Int =
