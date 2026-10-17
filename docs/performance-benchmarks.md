@@ -25,6 +25,12 @@ Scenarios cover:
 - `command_runner.*`: one keystroke and one arrow press in the command palette and the settings view, each measured as
   the reducer step plus the renderer's read of the result, against a 720-family font catalogue
 - visible animation tick advancement
+- `render.modal_wrap.*`: the frame height plus the composition of three representative dialogs (the layout-override
+  prompt, a long Confirm, a Save As file workflow) in a 72-cell frame, wrapped by cells against by the GUI font's pixels,
+  with a `nowrap` baseline and `cold_*` variants whose text the pixel measurements have not seen. Run alone with
+  `xvfb-run -a sbt "Test/runMain com.serenity.perf.ModalWrapBenchmarks"`. Wrapping by cells costs the same as not
+  wrapping; by pixels adds a few microseconds warm and about 1.7 ms on the first frame of a changed prompt, so the GUI
+  wraps by cells (`TextMeasure.forState`).
 - `laptop.*`: the editor at a real laptop's size (1500x1000 logical at 2x, word-wrapped lorem ipsum, default config):
   full frames with and without a Frosted pinned panel, keystrokes applied through a live `StateManager`, and Swing
   presenting into a 1500x1000 window. The window needs a screen at least that large, so run it with

@@ -3,8 +3,8 @@ package com.serenity.ui.layout
 import com.serenity.state.models.ConfirmPrompt
 import com.serenity.ui.widget.ButtonEmphasis
 
-/** The one composition every [[ConfirmPrompt]] is drawn with: its title, its message lines, then one action row per
-  * choice, the highlighted choice selected.
+/** The one composition every [[ConfirmPrompt]] is drawn with: its title, its message lines wrapped to the frame, then
+  * one action row per choice, the highlighted choice selected.
   */
 object ConfirmComposition:
 
@@ -20,11 +20,16 @@ object ConfirmComposition:
     * much text as fits and lays the choices side by side along its bottom row, so a cramped terminal still offers every
     * answer.
     */
-  def forPrompt(prompt: ConfirmPrompt, frameRect: LayoutRect, targetRows: Int): ResolvedSurfaceComposition =
+  def forPrompt(
+    prompt: ConfirmPrompt,
+    frameRect: LayoutRect,
+    targetRows: Int,
+    measure: TextMeasure = TextMeasure.Cells
+  ): ResolvedSurfaceComposition =
     val content     = SurfaceFrameLayout(frameRect).contentRect
     val actionRows  = math.max(1, targetRows)
     val bounds      = ModalSurfaceComposition.logicalRect(content.x, content.y, content.width, content.height)
-    val lines       = textLines(prompt)
+    val lines       = textLines(prompt, ModalWrap.ofContent(content.width, measure))
     val choiceCount = prompt.choices.items.size
     val stacked     = content.height >= lines.length + choiceCount * actionRows
     val sideBySide  = !stacked && content.height >= 1 && content.width >= choiceCount
@@ -89,11 +94,12 @@ object ConfirmComposition:
       }
       ._2
 
-  def frameHeight(prompt: ConfirmPrompt, targetRows: Int): Int =
-    SurfaceFrameLayout.DefaultBorderCells * 2 + textLines(prompt).length +
+  def frameHeight(prompt: ConfirmPrompt, targetRows: Int, wrap: ModalWrap): Int =
+    SurfaceFrameLayout.DefaultBorderCells * 2 + textLines(prompt, wrap).length +
       prompt.choices.items.size * math.max(1, targetRows)
 
-  private def textLines(prompt: ConfirmPrompt): List[String] = prompt.title :: prompt.message
+  private def textLines(prompt: ConfirmPrompt, wrap: ModalWrap): List[String] =
+    wrap.lines(prompt.title :: prompt.message)
 
   private def toneFor(emphasis: ButtonEmphasis): OverlayTone =
     emphasis match
