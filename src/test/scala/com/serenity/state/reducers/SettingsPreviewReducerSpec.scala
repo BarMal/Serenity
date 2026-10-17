@@ -1,8 +1,9 @@
 package com.serenity.state.reducers
 
 import com.serenity.command.*
-import com.serenity.config.{AppConfig, AppMode, AutoSaveMode, MarkdownViewMode, StatusSegment}
+import com.serenity.config.{AppConfig, AppMode, AutoSaveMode, HeadingsConfig, MarkdownViewMode, StatusSegment}
 import com.serenity.keystroke.events.*
+import com.serenity.richtext.ParagraphAlignment
 import com.serenity.rope.Balance
 import com.serenity.session.SessionState
 import com.serenity.state.models.*
@@ -125,6 +126,46 @@ class SettingsPreviewReducerSpec extends AnyFlatSpec with Matchers:
     closed.state.commandRunnerSurface shouldBe None
     closed.effects should contain(AppEffect.Settings(SettingsEffect.ReapplyConfig))
   }
+
+  "Cycling a heading option" should "preview the level's value, and Escape should put the config back" in {
+    val cycled = press(RunnerNavigate(Direction.Right), drilledOn("settings-heading-h1", "heading-h1-bold"))
+
+    unrecorded(cycled) shouldBe List(
+      CommandIntent.Settings(
+        SettingsIntent.Headings(HeadingsIntent.SetLevel(1, HeadingLevelChange.Bold(Some(true))))
+      )
+    )
+    recorded(cycled) shouldBe empty
+    cycled.state.runtime.pendingSetting.map(_.scope) shouldBe Some("heading-h1-bold")
+
+    val previewed = AppConfig.default.withHeadingsConfig(HeadingsConfig().withLevel(1)(_.copy(bold = Some(true))))
+    val live      = cycled.state.copy(persisted = cycled.state.persisted.copy(config = previewed))
+    val escaped   = press(RunnerDismiss, live)
+
+    escaped.state.persisted.config shouldBe AppConfig.default
+    escaped.state.runtime.pendingSetting shouldBe None
+    runnerOf(escaped.state).optionSelections.get("heading-h1-bold") shouldBe Some(0)
+    escaped.effects shouldBe List(AppEffect.Settings(SettingsEffect.ReapplyConfig))
+  }
+
+  it should "commit the previewed value on Enter" in {
+    val cycled    = press(RunnerNavigate(Direction.Right), drilledOn("settings-headings", "headings-damping"))
+    val submitted = press(RunnerSubmit, cycled.state)
+
+    recorded(submitted) shouldBe List(
+      CommandIntent.Settings(SettingsIntent.Headings(HeadingsIntent.SetDamping(false)))
+    )
+    submitted.state.runtime.pendingSetting shouldBe None
+  }
+
+  "Every heading intent" should "be previewable, being one value that restoring the config puts back" in
+    List(
+      HeadingsIntent.SetLevel(2, HeadingLevelChange.Align(Some(ParagraphAlignment.Right))),
+      HeadingsIntent.SetDamping(false),
+      HeadingsIntent.SetDampingThreshold(32.0f)
+    ).foreach(intent =>
+      SettingsPreviewReducer.isPreviewable(CommandIntent.Settings(SettingsIntent.Headings(intent))) shouldBe true
+    )
 
   "Stepping a numeric setting" should "preview the step and commit it on Enter" in {
     val stepped   = press(RunnerNavigate(Direction.Right), drilledOn("settings-code-font", "code-font-size"))

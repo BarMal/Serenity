@@ -247,6 +247,7 @@ object CommandRunnerSettingsGroups:
         ).flatten
       ) ++ Option.when(showProseSettings && richTextGroup.children.nonEmpty)(richTextGroup)
     )
+    val headingsGroup = CommandRunnerSettingsHeadingItems.group(optionSelections, inputItems, fontFamilies, onFrontend)
     val lookGroup = group(
       "settings-look",
       "Look",
@@ -263,4 +264,4 @@ object CommandRunnerSettingsGroups:
     List(workspaceGroup, presetsGroup, editorGroup) ++ Option.when(typographyGroup.children.nonEmpty)(
       typographyGroup
     ) ++
-      List(lookGroup, languageToolsGroup, keysGroup)
+      List(headingsGroup, lookGroup, languageToolsGroup, keysGroup)

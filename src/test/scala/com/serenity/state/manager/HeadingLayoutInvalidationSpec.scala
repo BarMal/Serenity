@@ -1,5 +1,13 @@
 package com.serenity.state.manager
 
+import com.serenity.command.{
+  CommandIntent,
+  CommandRegistry,
+  CommandRunner,
+  CommandSurfaceItem,
+  HeadingsConfigEdit,
+  SettingsIntent
+}
 import com.serenity.config.{AppConfig, HeadingLevelConfig, HeadingsConfig}
 import com.serenity.richtext.{ParagraphAlignment, ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
@@ -140,4 +148,22 @@ class HeadingLayoutInvalidationSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("expected prepared rows"))
 
     rows.filter(_.bufferLine == 1).map(_.xOffsetPx).distinct shouldBe List(0.0f)
+  }
+
+  "A heading size chosen in the settings palette" should "make the heading row taller once applied" in {
+    val sizeRow = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .submenuItems("settings-heading-h1")
+      .collectFirst { case item: CommandSurfaceItem.OptionItem if item.id == "heading-h1-size" => item }
+      .getOrElse(fail("expected the H1 size row"))
+    val chosen = sizeRow.options
+      .find(_.label == "2.0")
+      .map(_.intent)
+      .getOrElse(fail("expected a 2.0 size option"))
+    val applied = chosen match
+      case CommandIntent.Settings(SettingsIntent.Headings(intent)) =>
+        AppConfig.default.withHeadingsConfig(HeadingsConfigEdit(intent)(AppConfig.default.headingsConfig))
+      case other => fail(s"unexpected intent $other")
+
+    titleRow(applied).heightPx should be > titleRow(AppConfig.default).heightPx
   }

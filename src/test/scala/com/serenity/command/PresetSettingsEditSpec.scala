@@ -54,6 +54,13 @@ class PresetSettingsEditSpec extends AnyFlatSpec with Matchers:
     result.config.interfaceConfig shouldBe preset.config.interfaceConfig
   }
 
+  it should "refuse a heading setting, which is the person's own and not a preset's" in
+    List(
+      HeadingsIntent.SetLevel(1, HeadingLevelChange.Size(Some(2.0f))),
+      HeadingsIntent.SetDamping(false),
+      HeadingsIntent.SetDampingThreshold(40.0f)
+    ).foreach(intent => PresetSettingsEdit(settings(SettingsIntent.Headings(intent)), preset) shouldBe None)
+
   it should "refuse a setting a preset does not hold" in {
     PresetSettingsEdit(
       settings(SettingsIntent.General(GeneralSettingsIntent.SetAutoSaveMode(AutoSaveMode.Off))),
