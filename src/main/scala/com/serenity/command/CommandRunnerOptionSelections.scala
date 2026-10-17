@@ -60,7 +60,7 @@ object CommandRunnerOptionSelections:
       "code-ligatures"             -> ligaturesIndex(editorConfig.fontConfig.codeLigatures),
       "text-ligatures"             -> ligaturesIndex(editorConfig.fontConfig.textLigatures),
       "ui-ligatures"               -> ligaturesIndex(editorConfig.fontConfig.uiLigatures)
-    )
+    ) ++ CommandRunnerSettingsHeadingItems.selections(config.headingsConfig)
 
   private def cursorModeIndex(mode: CursorMode): Int =
     mode match

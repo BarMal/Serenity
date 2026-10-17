@@ -125,6 +125,10 @@ final private[manager] class StateManagerConfigEffects(
       case SettingsIntent.StatusLine(statusLineIntent)   => interpretStatusLineIntent(statusLineIntent)
       case SettingsIntent.Cursor(cursorIntent)           => interpretCursorIntent(cursorIntent)
       case SettingsIntent.TextDisplay(textDisplayIntent) => interpretTextDisplayIntent(textDisplayIntent)
+      case SettingsIntent.Headings(headingsIntent) =>
+        applyConfigUpdate(config =>
+          config.withHeadingsConfig(HeadingsConfigEdit(headingsIntent)(config.headingsConfig))
+        ).void
       case SettingsIntent.InterfaceChrome(interfaceChromeIntent) =>
         interpretInterfaceChromeIntent(interfaceChromeIntent)
       case SettingsIntent.SpellCheck(spellCheckIntent) => interpretSpellCheckIntent(spellCheckIntent, state)

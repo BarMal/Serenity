@@ -7,12 +7,23 @@ import cats.effect.{IO, Ref}
 import com.serenity.TestTemp
 import com.serenity.command.*
 import com.serenity.config.AppConfigOps.*
-import com.serenity.config.{AppConfig, AppMode, ConfigManager, PanelEscapeTarget, PerMode, WindowChromeMode}
+import com.serenity.config.{
+  AppConfig,
+  AppMode,
+  ConfigManager,
+  HeadingLevelConfig,
+  HeadingsConfig,
+  PanelEscapeTarget,
+  PerMode,
+  WindowChromeMode
+}
 import com.serenity.keystroke.events.Event
+import com.serenity.richtext.ParagraphAlignment
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.theme.TextStyle
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.noop.NoOpLogger
@@ -341,6 +352,70 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
       .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetDropCapsEnabled(true)), AppState.initial)
       .unsafeRunSync()
     fixture.currentConfig.documentConfig.dropCapsEnabled shouldBe true
+  }
+
+  private def interpretHeadings(fixture: Harness, intents: HeadingsIntent*): Unit =
+    intents.foreach(intent =>
+      fixture.config.interpret(SettingsIntent.Headings(intent), AppState.initial).unsafeRunSync()
+    )
+
+  it should "set each heading style for one level, reaching the effective heading settings" in {
+    val fixture = harness()
+
+    interpretHeadings(
+      fixture,
+      HeadingsIntent.SetLevel(1, HeadingLevelChange.Size(Some(2.0f))),
+      HeadingsIntent.SetLevel(1, HeadingLevelChange.Bold(Some(false))),
+      HeadingsIntent.SetLevel(1, HeadingLevelChange.Italic(Some(true))),
+      HeadingsIntent.SetLevel(1, HeadingLevelChange.Family(Some("Serif"))),
+      HeadingsIntent.SetLevel(1, HeadingLevelChange.Align(Some(ParagraphAlignment.Center)))
+    )
+
+    val config = fixture.currentConfig
+    config.headingsConfig.levels.head shouldBe HeadingLevelConfig(
+      size = Some(2.0f),
+      bold = Some(false),
+      italic = Some(true),
+      family = Some("Serif"),
+      align = Some(ParagraphAlignment.Center)
+    )
+    config.headingsConfig.levels.tail.foreach(_ shouldBe HeadingLevelConfig())
+    config.headingSettings.textStyle(1) shouldBe
+      TextStyle(isBold = false, isItalic = true, fontFamily = Some("Serif"), fontSize = Some(24.0f))
+    config.headingSettings.alignment(1) shouldBe Some(ParagraphAlignment.Center)
+    config.headingSettings.textStyle(2) shouldBe AppConfig.default.headingSettings.textStyle(2)
+  }
+
+  it should "put a heading level back to auto" in {
+    val fixture = harness()
+
+    interpretHeadings(
+      fixture,
+      HeadingsIntent.SetLevel(3, HeadingLevelChange.Size(Some(2.0f))),
+      HeadingsIntent.SetLevel(3, HeadingLevelChange.Size(None))
+    )
+
+    fixture.currentConfig.headingsConfig shouldBe HeadingsConfig()
+  }
+
+  it should "set heading damping and its threshold" in {
+    val fixture = harness()
+
+    interpretHeadings(fixture, HeadingsIntent.SetDamping(false), HeadingsIntent.SetDampingThreshold(40.0f))
+
+    fixture.currentConfig.headingsConfig shouldBe HeadingsConfig(damping = false, dampingThresholdPt = 40.0f)
+  }
+
+  it should "change only the heading keys that were chosen in the config file" in {
+    val fixture                                  = harness()
+    def headingLines(text: String): List[String] = text.linesIterator.map(_.trim).filter(_.contains("headings.")).toList
+
+    interpretHeadings(fixture, HeadingsIntent.SetLevel(3, HeadingLevelChange.Bold(Some(false))))
+
+    val written = fixture.configPath.map(Files.readString).getOrElse(fail("expected a config file"))
+    val before  = headingLines(textOf(AppConfig.default))
+    headingLines(written).diff(before) shouldBe List("headings.h3.bold = false")
+    before.diff(headingLines(written)) shouldBe List("headings.h3.bold = auto")
   }
 
   it should "set where Escape from a focused panel returns focus for one app mode only" in {
