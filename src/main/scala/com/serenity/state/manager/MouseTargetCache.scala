@@ -5,7 +5,7 @@ import java.util.LinkedHashMap
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 
 import com.serenity.config.AppConfigOps.*
-import com.serenity.config.{InterfaceDensity, StatusLineConfig, TextAreaInsets}
+import com.serenity.config.{InterfaceDensity, LineNumberLayout, StatusLineConfig, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkerMode
 import com.serenity.richtext.RichTextDocument
@@ -112,7 +112,12 @@ final private[manager] case class MouseTargetLayoutKey(
     lineNumberContent: List[(BufferId, RopeIdentity)],
     // Heading sizes set a heading row's height and its alignment its offset; the config reference alone is not a field
     // of the key, so without this a heading change would be served the old scene.
-    headings: HeadingSettings
+    headings: HeadingSettings,
+    // Like `headings`, each of these reaches layout through `persisted.config` without being a field of the key.
+    dropCapsEnabled: Boolean,
+    lineNumberLayout: LineNumberLayout,
+    // Per pane, since a buffer can override the configured indentation; a tab's width sets where a row wraps.
+    paneTabSizes: List[(PaneId, Option[Int])]
 )
 
 private[manager] object MouseTargetLayoutKey:
@@ -232,7 +237,16 @@ private[manager] object MouseTargetLayoutKey:
             .sortBy(_._1.value)
             .map((bufferId, buffer) => bufferId -> RopeIdentity(buffer.document.content))
         else Nil,
-      headings = state.persisted.config.headingSettings
+      headings = state.persisted.config.headingSettings,
+      dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
+      lineNumberLayout = state.persisted.config.surfaceConfig.lineNumberLayout.normalized,
+      paneTabSizes = state.persisted.layout.orderedPaneIds.map { paneId =>
+        paneId -> state.persisted.layout.editorPanes
+          .get(paneId)
+          .flatMap(_.bufferId)
+          .flatMap(state.persisted.buffers.get)
+          .map(_.effectiveIndentation(state.persisted.config.indentation).tabSize)
+      }
     )
 
 /** Instance-scoped (issue #1677) single-slot memo of the last [[MouseTargetLayoutKey]] computed, held as a
