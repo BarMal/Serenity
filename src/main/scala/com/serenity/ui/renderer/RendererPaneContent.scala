@@ -264,7 +264,7 @@ object RendererPaneContent:
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
         if dirtyRows.forall(_.contains(screenLineIndex)) && rowMetrics.lineFits(screenLineIndex) then
-          val screenY   = rect.y + screenLineIndex
+          val screenY   = rowMetrics.screenRow(screenLineIndex)
           val lineTopPx = rowMetrics.lineTopPx(screenLineIndex)
           val screenX   = rect.x + visualLineCellOffset(visualLine, context)
 
@@ -435,12 +435,11 @@ object RendererPaneContent:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): TextRowMetrics =
-    TextRowMetrics(
-      contentRect = rect,
-      gridMetrics = context.cellMetrics,
-      rowLineHeightPx = snapshot.lineHeightPx,
-      usesMeasuredLayout = RendererPaneSetup.usesMeasuredDrawing(snapshot, context),
-      rowHeightsPx = snapshot.rowHeightsPx
+    TextRowMetrics.forSnapshot(
+      rect,
+      context.cellMetrics,
+      snapshot,
+      measured = RendererPaneSetup.usesMeasuredDrawing(snapshot, context)
     )
 
   def visualLineCellOffset(visualLine: TextVisualLine, context: RenderContext): Int =

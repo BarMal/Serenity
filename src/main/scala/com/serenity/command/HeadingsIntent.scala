@@ -10,6 +10,8 @@ enum HeadingLevelChange:
   case Italic(enabled: Option[Boolean])
   case Family(family: Option[String])
   case Align(alignment: Option[ParagraphAlignment])
+  case SpaceBefore(em: Option[Float])
+  case SpaceAfter(em: Option[Float])
 
 /** How headings are styled. Global only: a UI preset neither holds nor changes these. */
 enum HeadingsIntent:
@@ -33,3 +35,5 @@ object HeadingsConfigEdit:
       case HeadingLevelChange.Italic(enabled)  => _.copy(italic = enabled)
       case HeadingLevelChange.Family(family)   => _.copy(family = family)
       case HeadingLevelChange.Align(alignment) => _.copy(align = alignment)
+      case HeadingLevelChange.SpaceBefore(em)  => _.copy(spaceBefore = em)
+      case HeadingLevelChange.SpaceAfter(em)   => _.copy(spaceAfter = em)

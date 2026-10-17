@@ -440,12 +440,10 @@ object RendererPaneSetup:
     val rowMetrics    = RendererPaneContent.textRowMetrics(contentRect, context, snapshot)
     val leftPx        = context.cellMetrics.toPixelX(contentRect.x)
     val widthPx       = context.cellMetrics.toPixelX(contentRect.right) - leftPx
-    val measured      = usesMeasuredDrawing(snapshot, context)
     val topLimitPx    = context.cellMetrics.toPixelY(contentRect.y)
     val bottomLimitPx = rowMetrics.contentBottomPx
     snapshot.visualLines.indices.toVector.map { row =>
-      val heightPx = if measured then rowMetrics.rowHeightPx(row) else context.cellMetrics.lineHeight
-      val topPx    = rowMetrics.lineTopPx(row).max(topLimitPx)
-      val bottomPx = (rowMetrics.lineTopPx(row) + heightPx).min(bottomLimitPx)
+      val topPx    = rowMetrics.bandTopPx(row).max(topLimitPx)
+      val bottomPx = rowMetrics.bandBottomPx(row).min(bottomLimitPx)
       PixelRect(leftPx, topPx, widthPx.max(0), (bottomPx - topPx).max(0))
     }

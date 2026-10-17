@@ -209,8 +209,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
             family = Some("Charter"),
             colour = Some(HeadingColour.Fixed(RenderColor.fromRgba(0x12, 0x34, 0x56, 0x78)))
           ),
-          HeadingLevelConfig(align = Some(ParagraphAlignment.Right)),
-          HeadingLevelConfig(size = Some(1.25f), italic = Some(true)),
+          HeadingLevelConfig(align = Some(ParagraphAlignment.Right), spaceAfter = Some(0.5f)),
+          HeadingLevelConfig(size = Some(1.25f), italic = Some(true), spaceBefore = Some(1.5f)),
           HeadingLevelConfig(bold = Some(false), align = Some(ParagraphAlignment.Justify))
         ),
         colour = Some(HeadingColour.Text),

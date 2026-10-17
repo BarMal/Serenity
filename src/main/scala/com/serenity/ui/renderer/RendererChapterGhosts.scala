@@ -106,5 +106,11 @@ object RendererChapterGhosts:
           RendererPaneContent.rowAscentPxFor(visualLine, snapshot),
           text
         )
-      else CharacterRenderer.renderString(surface, screenX, rect.y + index, text)
+      else
+        CharacterRenderer.renderString(
+          surface,
+          screenX,
+          RendererPaneContent.textRowMetrics(rect, context, snapshot).screenRow(index),
+          text
+        )
       surface.setForegroundColor(theme.foreground)
