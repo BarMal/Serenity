@@ -6,9 +6,10 @@ import scala.annotation.tailrec
 
 import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
 import com.serenity.markdown.{LazyBlockIndex, MarkdownInlineView}
-import com.serenity.rope.{Branch, ChangeSet, Leaf, Rope}
+import com.serenity.rope.{Branch, ChangeSet, Leaf, LineSpan, Rope}
 import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.layout.VisualLineIndexStore.StampRelation
+import com.serenity.ui.openings.OpeningInvalidation
 import com.serenity.ui.theme.HeadingSettings
 
 /** The [[VisualLineIndex]] last built for each key -- a buffer under one wrap setting -- together with the content it
@@ -169,10 +170,12 @@ object VisualLineIndexStore:
   def followChange(index: VisualLineIndex, before: Rope, after: Rope, change: ChangeSet): VisualLineIndex =
     if index.lineCount != before.lineCount then VisualLineIndex.unmeasured(after.lineCount)
     else
-      val followed = change.lineSpans(before).foldLeft(index) { (current, span) =>
+      val spans = change.lineSpans(before)
+      val followed = spans.foldLeft(index) { (current, span) =>
         current.replacedLines(span.newFirst, span.oldLast - span.oldFirst + 1, span.newLast - span.newFirst + 1)
       }
-      if followed.lineCount == after.lineCount then followed else VisualLineIndex.unmeasured(after.lineCount)
+      if followed.lineCount == after.lineCount then unmeasuredBeyond(followed, before, after, spans)
+      else VisualLineIndex.unmeasured(after.lineCount)
 
   /** `index`, which describes `before`, carried over to `after`: the lines an edit may have changed become unmeasured,
     * and every line outside them -- identical text, so an identical row count -- keeps its measurement.
@@ -189,7 +192,24 @@ object VisualLineIndexStore:
         val lastBefore = before.newlineCount - suffix.newlines
         val lastAfter  = after.newlineCount - suffix.newlines
         val followed   = index.replacedLines(firstLine, lastBefore - firstLine + 1, lastAfter - firstLine + 1)
-        if followed.lineCount == after.lineCount then followed else VisualLineIndex.unmeasured(after.lineCount)
+        if followed.lineCount == after.lineCount then
+          unmeasuredBeyond(followed, before, after, Vector(LineSpan(firstLine, lastBefore, firstLine, lastAfter)))
+        else VisualLineIndex.unmeasured(after.lineCount)
+
+  /** `index`, which describes `after`, with the lines unmeasured that an edit can change the chapter-opening status of
+    * without touching them (see [[OpeningInvalidation]]).
+    */
+  private def unmeasuredBeyond(
+    index: VisualLineIndex,
+    before: Rope,
+    after: Rope,
+    spans: Vector[LineSpan]
+  ): VisualLineIndex =
+    spans
+      .flatMap(OpeningInvalidation.widenedLines(before, after, _))
+      .distinct
+      .filter(_ < index.lineCount)
+      .foldLeft(index)((current, line) => current.replacedLines(line, 1, 1))
 
   final private case class Run(length: Int, newlines: Int):
     def plus(more: Run): Run = Run(length + more.length, newlines + more.newlines)
