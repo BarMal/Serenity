@@ -524,10 +524,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
     layout.belowCursorOverlayRect.map(_.height) shouldBe Some(
-      ModalSurfaceComposition.frameHeight(
-        prompt,
-        SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
-      )
+      ModalSurfaceComposition.frameHeightFor(prompt, layout.belowCursorOverlayRect.map(_.width).getOrElse(0), state)
     )
   }
 
@@ -551,7 +548,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
       layout.belowCursorOverlayRect.map(_.height) shouldBe Some(
-        ModalSurfaceComposition.frameHeight(modal, targetRows = 2)
+        ModalSurfaceComposition.frameHeight(modal, targetRows = 2, width = 72)
       )
     }
 end CursorOverlayLayoutSpec

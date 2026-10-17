@@ -48,6 +48,7 @@ object PerformanceBenchmarks:
       DamageBenchmarks.benchmarks() ++
       TuiBenchmarks.benchmarks() ++
       CommandRunnerBenchmarks.benchmarks() ++
+      ModalWrapBenchmarks.benchmarks() ++
       EqualsBenchmarks.benchmarks() ++
       FindReplaceBenchmarks.benchmarks() ++
       lspAndProjectBenchmarks(projectRoot) ++

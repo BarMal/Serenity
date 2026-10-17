@@ -97,6 +97,18 @@ object ConfigNotice:
       "settings already in use were kept. Your file is untouched and settings changes will not be saved until it is " +
       "fixed."
 
+  /** What the start page says when the first-launch layout review could not read the file it was to review. */
+  def unreadableForReview(path: java.nio.file.Path, error: ConfigError): String =
+    s"Couldn't read ${path.getFileName} to review the layout: ${reason(error)}. " +
+      "Your file is untouched, and the review will be tried again at the next launch."
+
+  /** What a layout switch says when it cannot read the file whose settings it must leave alone. */
+  def unreadableForLayoutSwitch(path: java.nio.file.Path, error: ConfigError): String =
+    s"Couldn't read ${path.getFileName} to switch the layout: ${reason(error)}. " +
+      "The layout and your file are unchanged."
+
+  private def reason(error: ConfigError): String = error.cause.map(_.getMessage).getOrElse(error.message)
+
   private def unparseable(path: java.nio.file.Path, error: ConfigError): String =
     s"${path.getFileName} could not be parsed (${error.cause.map(_.getMessage).getOrElse(error.message)}), so this " +
       "session is using defaults. Your file is untouched and settings changes will not be saved until it is fixed."

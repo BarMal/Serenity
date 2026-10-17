@@ -262,11 +262,13 @@ final private[manager] class StateManagerConfigEffects(
       case InterfaceChromeIntent.SetSummonLetter(element, letter) =>
         changeSummon(config => config.summon.withLetterChecked(element, letter, hotkeysOf(config), keymapsOf(config)))
       case InterfaceChromeIntent.ReviewUiLayoutOverride(layout) =>
-        pinsAwayFrom(layout).flatMap(pins =>
-          editor.updateModelValidated(model =>
-            Some(model.copy(app = UiPresetTransitions.openLayoutReview(model.app, layout, pins)))
-          )
-        )
+        pinsAwayFrom(layout).flatMap {
+          case Left(error) => reportUnreadable(error)
+          case Right(pins) =>
+            editor.updateModelValidated(model =>
+              Some(model.copy(app = UiPresetTransitions.openLayoutReview(model.app, layout, pins)))
+            )
+        }
       case InterfaceChromeIntent.ConfirmUiLayoutOverride(layout, useLayoutKeys) =>
         applyLayout(layout, useLayoutKeys.toSet)
       case InterfaceChromeIntent.SetWheelScrollLines(lines) =>
@@ -299,8 +301,9 @@ final private[manager] class StateManagerConfigEffects(
     */
   private def switchLayout(layout: UiLayout): IO[Unit] =
     pinsAwayFrom(layout).flatMap {
-      case Nil => applyLayout(layout, Set.empty)
-      case pins =>
+      case Left(error) => reportUnreadable(error)
+      case Right(Nil)  => applyLayout(layout, Set.empty)
+      case Right(pins) =>
         editor.updateModelValidated(model =>
           Some(
             model.copy(app =
@@ -311,26 +314,32 @@ final private[manager] class StateManagerConfigEffects(
     }
 
   /** The chrome the file sets that `layout` would give another value, as the live config has it. */
-  private def pinsAwayFrom(layout: UiLayout): IO[List[LayoutPin]] =
-    (settingKeys, currentState).mapN((keys, state) => LayoutPreset.pins(state.persisted.config, keys, layout))
+  private def pinsAwayFrom(layout: UiLayout): IO[Either[ConfigError, List[LayoutPin]]] =
+    (settingKeys, currentState).mapN((keys, state) => keys.map(LayoutPreset.pins(state.persisted.config, _, layout)))
 
-  private def settingKeys: IO[Set[String]] =
-    configPersistencePath.fold(IO.pure(Set.empty[String]))(ConfigManager.settingKeysIO)
+  private def settingKeys: IO[Either[ConfigError, Set[String]]] =
+    configPersistencePath.fold(IO.pure(Right(Set.empty[String])))(ConfigManager.settingKeysIO)
+
+  private def reportUnreadable(error: ConfigError): IO[Unit] =
+    showConfigNotice(List(ConfigNotice.unreadableForLayoutSwitch(error.path, error)))
 
   /** Switches to `layout`. Of the chrome the file pins, `useLayout` goes back to the layout -- its lines come out of
     * the file, so it follows the layout from then on -- and the rest stays as the file has it, as does anything changed
     * in this session.
     */
   private def applyLayout(layout: UiLayout, useLayout: Set[String]): IO[Unit] =
-    for
-      pins <- pinsAwayFrom(layout)
-      released = pins.map(_.key).filter(useLayout.contains).toSet
-      _    <- releaseFromFile(released)
-      keys <- settingKeys
-      _ <- updateAppearanceConfig(config =>
-        LayoutPreset.adopt(LayoutPreset.rebase(config, layout, keys), layout, released)
-      )
-    yield ()
+    pinsAwayFrom(layout).flatMap {
+      case Left(error) => reportUnreadable(error)
+      case Right(pins) =>
+        val released = pins.map(_.key).filter(useLayout.contains).toSet
+        releaseFromFile(released) *> settingKeys.flatMap {
+          case Left(error) => reportUnreadable(error)
+          case Right(keys) =>
+            updateAppearanceConfig(config =>
+              LayoutPreset.adopt(LayoutPreset.rebase(config, layout, keys), layout, released)
+            ).void
+        }
+    }
 
   /** A key the file keeps anyway -- written inside a block, say -- still takes the layout's value, written back as one.
     */

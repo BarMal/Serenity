@@ -43,7 +43,11 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       2,
       1,
       40,
-      ModalSurfaceComposition.frameHeight(Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")), targetRows = 2)
+      ModalSurfaceComposition.frameHeight(
+        Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")),
+        targetRows = 2,
+        width = 72
+      )
     )
     val overlay = TextOverlayView(
       rect = frame,

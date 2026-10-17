@@ -234,13 +234,13 @@ object Main extends IOApp:
       opens <- LaunchOpens.resolve(launchOptions.openPaths)
       _     <- opens.notice.traverse_(logger.warn(_))
       appConfig = resolveAppConfig(loaded.config, launchOptions)
-      _         <- MemoryCompaction.apply(appConfig.surfaceConfig.memoryCompactionEnabled)
-      askedPlan <- LayoutOverrideReview.planned(plan, configLoaded = configResult.isRight, appConfig)
+      _                         <- MemoryCompaction.apply(appConfig.surfaceConfig.memoryCompactionEnabled)
+      (askedPlan, reviewNotice) <- LayoutOverrideReview.planned(plan, configLoaded = configResult.isRight, appConfig)
       startup = Startup(askedPlan, requestRestart, StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker))
       // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
       instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten
       notice = plan.noticeWith(
-        Option((configNotice.toList ++ instanceNotice ++ opens.notice).mkString(" ")).filter(_.nonEmpty)
+        Option((configNotice.toList ++ reviewNotice ++ instanceNotice ++ opens.notice).mkString(" ")).filter(_.nonEmpty)
       )
       // The first file opens as part of startup; the folder and the other files open as a later launch's would.
       startupOptions = launchOptions.copy(openPaths = opens.files)

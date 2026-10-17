@@ -157,3 +157,31 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
         )
       case Left(error) => fail(s"expected binding validation errors in the report, received $error")
   }
+
+  "settingKeysIO" should "give no keys for a path with no file, which is not a failure" in {
+    val absent = TestTemp.directory("serenity-setting-keys-absent").resolve("config.conf")
+
+    ConfigManager.settingKeysIO(absent).unsafeRunSync() shouldBe Right(Set.empty)
+  }
+
+  it should "name the keys a readable file sets" in {
+    val configFile = TestTemp.file("serenity-setting-keys-readable", ".conf")
+    Files.writeString(configFile, "editor.tab_size = 3\n")
+
+    ConfigManager.settingKeysIO(configFile).unsafeRunSync().map(_ contains "editor.tab_size") shouldBe Right(true)
+  }
+
+  it should "report an unreadable path rather than call it empty" in {
+    val directory = TestTemp.directory("serenity-setting-keys-directory")
+
+    val result = ConfigManager.settingKeysIO(directory).unsafeRunSync()
+
+    result.left.map(_.path) shouldBe Left(directory)
+  }
+
+  it should "report malformed HOCON rather than call it empty" in {
+    val configFile = TestTemp.file("serenity-setting-keys-malformed", ".conf")
+    Files.writeString(configFile, "this is not = valid = hocon {\n")
+
+    ConfigManager.settingKeysIO(configFile).unsafeRunSync().isLeft shouldBe true
+  }

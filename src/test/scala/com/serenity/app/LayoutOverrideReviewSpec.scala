@@ -75,6 +75,43 @@ class LayoutOverrideReviewSpec extends AnyFlatSpec with Matchers with StateManag
     due(marker, configFile(pinned)) shouldBe Nil
   }
 
+  it should "ask nothing of a file it cannot parse, and leave no marker so the next launch tries again" in {
+    val marker = freshMarker
+    val file   = configFile("this is not = valid = hocon {\n")
+
+    LayoutOverrideReview.due(marker, file, AppConfig.default).unsafeRunSync() shouldBe Nil
+    Files.exists(marker) shouldBe false
+  }
+
+  it should "ask nothing of a config path it cannot read, and leave no marker" in {
+    val marker    = freshMarker
+    val directory = TestTemp.directory("layout-review-unreadable")
+
+    LayoutOverrideReview.due(marker, directory, AppConfig.default).unsafeRunSync() shouldBe Nil
+    Files.exists(marker) shouldBe false
+  }
+
+  it should "ask once the file can be read again, and only then leave the marker" in {
+    val marker = freshMarker
+    val file   = configFile("this is not = valid = hocon {\n")
+    LayoutOverrideReview.due(marker, file, AppConfig.default).unsafeRunSync() shouldBe Nil
+
+    Files.writeString(file, pinned)
+
+    due(marker, file) should not be empty
+    Files.exists(marker) shouldBe true
+    due(marker, file) shouldBe Nil
+  }
+
+  it should "say why it could not read the file" in {
+    val marker = freshMarker
+    val file   = configFile("this is not = valid = hocon {\n")
+
+    val review = LayoutOverrideReview.review(marker, file, AppConfig.default).unsafeRunSync()
+
+    review.left.map(_.path) shouldBe Left(file)
+  }
+
   "The first launch prompt" should "offer the layout, a choice per key, or keeping the file as it is" in {
     val pins   = List(LayoutPin("editor.line_numbers", "true", "false"))
     val prompt = ConfirmPrompt.layoutOverrideAtStartup(UiLayout.Minimal, pins)

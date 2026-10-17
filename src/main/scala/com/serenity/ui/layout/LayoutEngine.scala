@@ -343,13 +343,10 @@ object LayoutEngine:
 
   /** Center a blocking dialog in the editor workspace without changing workspace allocation. */
   def calculateModalRect(dialog: ModalDialog, state: AppState, layout: CalculatedLayout): LayoutRect =
-    val bounds = layout.editorPanelRect
-    val width  = math.max(3, math.min(72, bounds.width))
-    val rawHeight = ModalSurfaceComposition.frameHeight(
-      dialog.modal,
-      SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
-    )
-    val height = math.max(3, math.min(bounds.height, rawHeight))
+    val bounds    = layout.editorPanelRect
+    val width     = math.max(3, math.min(72, bounds.width))
+    val rawHeight = ModalSurfaceComposition.frameHeightFor(dialog.modal, width, state)
+    val height    = math.max(3, math.min(bounds.height, rawHeight))
     LayoutRect(
       x = bounds.x + math.max(0, (bounds.width - width) / 2),
       y = bounds.y + math.max(0, (bounds.height - height) / 2),
