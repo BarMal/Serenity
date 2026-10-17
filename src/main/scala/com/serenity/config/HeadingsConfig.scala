@@ -1,6 +1,7 @@
 package com.serenity.config
 
 import com.serenity.richtext.ParagraphAlignment
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.{HeadingScale, HeadingSettings, HeadingStyle}
 
 /** One heading level's overrides under `headings.hN.*`; `None` is `auto`, the level's own default. */
@@ -9,6 +10,7 @@ final case class HeadingLevelConfig(
     bold: Option[Boolean] = None,
     italic: Option[Boolean] = None,
     family: Option[String] = None,
+    colour: Option[RenderColor] = None,
     align: Option[ParagraphAlignment] = None
 ):
 
@@ -19,6 +21,7 @@ final case class HeadingLevelConfig(
       bold = bold.getOrElse(base.bold),
       italic = italic.getOrElse(base.italic),
       family = family.orElse(base.family),
+      colour = colour.orElse(base.colour),
       align = align.orElse(base.align)
     )
 

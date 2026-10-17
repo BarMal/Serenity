@@ -10,6 +10,7 @@ import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment
 import com.serenity.keystroke.{InputKey, Modifier}
 import com.serenity.richtext.ParagraphAlignment
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.typesafe.config.ConfigFactory
@@ -203,7 +204,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
         levels = Vector(
           HeadingLevelConfig(size = Some(2.5f), bold = Some(false)),
           HeadingLevelConfig(italic = Some(true), align = Some(ParagraphAlignment.Center)),
-          HeadingLevelConfig(family = Some("Charter")),
+          HeadingLevelConfig(family = Some("Charter"), colour = Some(RenderColor.fromRgba(0x12, 0x34, 0x56, 0x78))),
           HeadingLevelConfig(align = Some(ParagraphAlignment.Right)),
           HeadingLevelConfig(size = Some(1.25f), italic = Some(true)),
           HeadingLevelConfig(bold = Some(false), align = Some(ParagraphAlignment.Justify))

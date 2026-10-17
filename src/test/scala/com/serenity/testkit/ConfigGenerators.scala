@@ -6,6 +6,7 @@ import com.serenity.config.*
 import com.serenity.keystroke.Modifier
 import com.serenity.richtext.ParagraphAlignment
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.theme.HeadingStyle
@@ -144,8 +145,9 @@ object ConfigGenerators:
       bold   <- Gen.option(Gen.oneOf(true, false))
       italic <- Gen.option(Gen.oneOf(true, false))
       family <- Gen.option(Gen.oneOf("Charter", "Serif", "Inter"))
+      colour <- Gen.option(genColor.map(RenderColor.fromAwt))
       align  <- Gen.option(oneOfEnum(ParagraphAlignment.values))
-    yield HeadingLevelConfig(size, bold, italic, family, align)
+    yield HeadingLevelConfig(size, bold, italic, family, colour, align)
 
   val genHeadingsConfig: Gen[HeadingsConfig] =
     for

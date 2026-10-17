@@ -65,7 +65,10 @@ final case class Theme(
   def selectionTextContrast: Double = Theme.contrastRatio(selection.foreground, selection.background)
 
   def colorFor(element: SyntaxElement): ThemeColor =
-    syntaxColors.getOrElse(element, ThemeColor(foreground, background, TextStyle.normal))
+    syntaxColors
+      .get(element)
+      .orElse(SyntaxElement.fallback(element).map(colorFor))
+      .getOrElse(ThemeColor(foreground, background, TextStyle.normal))
 
   def foregroundColor: RenderColor = foreground
   def backgroundColor: RenderColor = background

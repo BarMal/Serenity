@@ -81,6 +81,23 @@ object ThemeFieldSchema:
   val syntaxFields: List[SyntaxFieldSchema] =
     List(typeField, delimiterField, whitespaceField, errorField, normalField)
 
+  /** An optional `SyntaxColors` field with no colour of its own: left out, the theme colours the element as
+    * [[SyntaxElement.fallback]] says, so a theme file only carries it when it differs.
+    */
+  final case class InheritingSyntaxFieldSchema(
+      element: SyntaxElement,
+      hoconKey: String,
+      select: SyntaxColors => Option[SyntaxElementConfig]
+  )
+
+  val headingField: InheritingSyntaxFieldSchema =
+    InheritingSyntaxFieldSchema(SyntaxElement.Heading, "heading", _.heading)
+
+  val headingMarkerField: InheritingSyntaxFieldSchema =
+    InheritingSyntaxFieldSchema(SyntaxElement.HeadingMarker, "heading-marker", _.headingMarker)
+
+  val inheritingSyntaxFields: List[InheritingSyntaxFieldSchema] = List(headingField, headingMarkerField)
+
   // ── Mandatory fields ─────────────────────────────────────────────────────
   //
   // Unlike the optional fields above, these are always present on both `ThemeConfig` and `Theme` -- there is no

@@ -39,7 +39,8 @@ private[renderer] object RendererLineSegments:
             view.hidesMarkersOn(visualLine.bufferLine),
             theme,
             view.baseIsMonospaced,
-            context.fontForBuffer(buffer).getSize2D
+            context.fontForBuffer(buffer).getSize2D,
+            snapshot.headings
           )
         )
 

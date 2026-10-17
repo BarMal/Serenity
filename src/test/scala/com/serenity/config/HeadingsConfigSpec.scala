@@ -13,7 +13,7 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
   private val levelKeys =
     for
       level     <- levels.toList
-      attribute <- List("size", "bold", "italic", "family", "align")
+      attribute <- List("size", "bold", "italic", "family", "colour", "align")
     yield s"headings.h$level.$attribute"
 
   private val globalKeys = List("headings.damping", "headings.damping_threshold")
@@ -64,6 +64,19 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
     configured.styles.drop(4) shouldBe HeadingStyle.defaults.drop(4)
   }
 
+  it should "read a colour as #RRGGBB, and auto or heading as the theme's heading colour" in {
+    val red = com.serenity.ui.color.RenderColor.fromRgba(0xcc, 0x33, 0x33)
+
+    read(AppConfig.default, "headings.h1.colour" -> "#CC3333").headingsConfig.styles(0).colour shouldBe Some(red)
+    List("auto", "heading", "HEADING").foreach { text =>
+      withClue(text) {
+        read(AppConfig.default, "headings.h1.colour" -> "#CC3333", "headings.h1.colour" -> text).headingsConfig shouldBe
+          HeadingsConfig()
+      }
+    }
+    AppConfig.default.headingsConfig.styles.map(_.colour).distinct shouldBe List(None)
+  }
+
   it should "read auto as the level's own default" in {
     val configured = read(
       AppConfig.default,
@@ -110,6 +123,9 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
       "headings.h2.bold"           -> "maybe",
       "headings.h3.italic"         -> "2",
       "headings.h4.align"          -> "diagonal",
+      "headings.h1.colour"         -> "blue",
+      "headings.h2.colour"         -> "#12345",
+      "headings.h3.colour"         -> "#GGGGGG",
       "headings.damping"           -> "sometimes",
       "headings.damping_threshold" -> "0",
       "headings.damping_threshold" -> "-3",
@@ -123,7 +139,10 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
         levels = Vector(
           HeadingLevelConfig(size = Some(2.25f), bold = Some(false)),
           HeadingLevelConfig(italic = Some(true), align = Some(ParagraphAlignment.Right)),
-          HeadingLevelConfig(family = Some("Charter")),
+          HeadingLevelConfig(
+            family = Some("Charter"),
+            colour = Some(com.serenity.ui.color.RenderColor.fromRgba(1, 2, 3))
+          ),
           HeadingLevelConfig(),
           HeadingLevelConfig(align = Some(ParagraphAlignment.Justify)),
           HeadingLevelConfig(size = Some(1.5f))

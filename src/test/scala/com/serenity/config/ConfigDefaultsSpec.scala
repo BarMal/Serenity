@@ -44,7 +44,7 @@ class ConfigDefaultsSpec extends AnyFlatSpec with Matchers:
   it should "ship every heading level automatic, with damping on above a 24pt body" in {
     val headingKeys = ConfigRegistry.writtenKeys.filter(_.startsWith("headings."))
 
-    headingKeys.size shouldBe 32
+    headingKeys.size shouldBe 38
     headingKeys.filter(_.startsWith("headings.h")).flatMap(ConfigRegistry.defaultFor).map(_.rendered).distinct shouldBe
       List("auto")
     ConfigRegistry.defaultFor("headings.damping").map(_.rendered) shouldBe Some("true")

@@ -3,6 +3,7 @@ package com.serenity.config
 import java.util.Locale
 
 import com.serenity.richtext.ParagraphAlignment
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.theme.HeadingStyle
 
 /** How headings are styled, per level and overall. */
@@ -36,6 +37,11 @@ private[config] object ConfigFieldsHeadings:
       }
     ).orAuto
 
+  /** `#RRGGBB`, or `auto` or `heading` for the theme's heading colour. */
+  private val colour: FieldCodec[Option[RenderColor]] =
+    val explicit = color.mapped(RenderColor.fromAwt, _.toAwt).orAuto
+    explicit.copy(parse = text => if text.trim.equalsIgnoreCase("heading") then Some(None) else explicit.parse(text))
+
   private val threshold: FieldCodec[Float] =
     float.filtered(value => value >= HeadingsConfig.ThresholdRange._1 && value <= HeadingsConfig.ThresholdRange._2)
 
@@ -55,6 +61,7 @@ private[config] object ConfigFieldsHeadings:
       levelField(level, "bold", flag)(_.bold, (current, value) => current.copy(bold = value)),
       levelField(level, "italic", flag)(_.italic, (current, value) => current.copy(italic = value)),
       levelField(level, "family", family)(_.family, (current, value) => current.copy(family = value)),
+      levelField(level, "colour", colour)(_.colour, (current, value) => current.copy(colour = value)),
       levelField(level, "align", alignment)(_.align, (current, value) => current.copy(align = value))
     )
 

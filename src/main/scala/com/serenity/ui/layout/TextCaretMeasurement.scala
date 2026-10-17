@@ -153,15 +153,17 @@ private[layout] object TextCaretMeasurement:
       )
     MeasuredRow.orderedByX(landable.map(xs(_)), landable.map(offsets(_)))
 
-  /** The resolver for a Markdown line whose emphasis and code `runs` are restyled: the decorated stretches measure in
-    * their own fonts, every other column in `baseFont`, and the delimiter characters are hidden when `hideMarkers`.
+  /** The resolver for a Markdown line whose emphasis, code and heading `runs` are restyled: the decorated stretches
+    * measure in their own fonts, every other column in `baseFont`, and the delimiter characters are hidden when
+    * `hideMarkers`.
     */
   private[layout] def markdownResolver(
     baseFont: Font,
     lineLength: Int,
     runs: Vector[MarkdownInlineSpans.Run],
     hideMarkers: Boolean,
-    baseIsMonospaced: Boolean
+    baseIsMonospaced: Boolean,
+    headings: HeadingSettings
   ): LineFontResolver =
     def runFor(run: MarkdownInlineSpans.Run): ColumnFontRun =
       if run.isMarker then ColumnFontRun(run.startColumn, run.endColumn, baseFont, hidden = hideMarkers)
@@ -171,7 +173,7 @@ private[layout] object TextCaretMeasurement:
           run.endColumn,
           TextStyle.styledFont(
             baseFont,
-            MarkdownInlineStyling.textStyle(run.style, baseIsMonospaced, baseFont.getSize2D)
+            MarkdownInlineStyling.textStyle(run.style, baseIsMonospaced, baseFont.getSize2D, headings)
           )
         )
     val (covered, columnRuns) = runs.foldLeft((0, Vector.empty[ColumnFontRun])) {
