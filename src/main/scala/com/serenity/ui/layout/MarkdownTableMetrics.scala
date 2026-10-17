@@ -14,6 +14,7 @@ import com.serenity.ui.layout.TextCaretMeasurement.{
   normalizeCollapsedCarets,
   rawMeasuredCaretXs
 }
+import com.serenity.ui.theme.HeadingSettings
 
 /** Measures the cells of Markdown pipe tables so their pipes can be lined up: the width of each column is the widest of
   * its cells in the fonts the rows are painted in, and a row's own padding follows from where its pipes fall.
@@ -48,7 +49,14 @@ private[layout] object MarkdownTableMetrics:
     )
 
   private def hiddenMarkerResolver(row: String, role: TableRow, font: Font, mono: Boolean): LineFontResolver =
-    markdownResolver(font, row.length, MarkdownBlockSpans.scan(row, role), hideMarkers = true, baseIsMonospaced = mono)
+    markdownResolver(
+      font,
+      row.length,
+      MarkdownBlockSpans.scan(row, role),
+      hideMarkers = true,
+      baseIsMonospaced = mono,
+      headings = HeadingSettings.default
+    )
 
   /** The width of each cell of `line`, from the pipe before it to the pipe after it, as `resolver` measures it. */
   def cellWidths(line: String, resolver: LineFontResolver, frc: FontRenderContext): Vector[Float] =

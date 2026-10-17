@@ -1,7 +1,6 @@
 package com.serenity.ui.theme
 
 import com.serenity.richtext.ParagraphAlignment
-import com.serenity.ui.color.RenderColor
 
 /** How one heading level looks. `sizeScale` is a multiple of the body size. */
 final case class HeadingStyle(
@@ -9,7 +8,7 @@ final case class HeadingStyle(
     bold: Boolean = true,
     italic: Boolean = false,
     family: Option[String] = None,
-    colour: Option[RenderColor] = None,
+    colour: Option[HeadingColour] = None,
     align: Option[ParagraphAlignment] = None,
     spaceBeforeEm: Float = 0.0f,
     spaceAfterEm: Float = 0.0f
