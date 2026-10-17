@@ -12,7 +12,6 @@ import com.serenity.ui.layout.TextCaretMeasurement.{
   resolverForLine,
   singleFontResolver
 }
-import com.serenity.ui.theme.RichTextStyling
 
 /** The line-level inputs of a wrap -- per-run fonts, drop cap role and glyph width -- shared by the painted layout and
   * every row count so the two cannot disagree.
@@ -94,15 +93,22 @@ private[layout] object LineLayout:
       if !measuredLayout then singleFontResolver(font, richText.tabSize)
       else
         markdownRuns.fold(
-          resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale, richText.headings)
+          resolverForLine(
+            font,
+            richText.document,
+            lineIndex,
+            lineLength,
+            richText.proseScale,
+            richText.headings,
+            richText.roles
+          )
         )(markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText, _))
-    val ownRole       = richText.document.flatMap(_.paragraphAt(lineIndex)).map(_.role).getOrElse(ParagraphRole.Body)
-    val paragraphRole = RichTextStyling.effectiveRole(ownRole, richText.dropCapsEnabled)
+    val paragraphRole = richText.layoutRole(lineIndex)
     val glyphWidthPx =
       if measuredLayout then
         DropCapLayout.measuredGlyphWidthPx(font, frc, richText.document, lineIndex, paragraphRole, richText.proseScale)
       else 0.0f
-    LineLayoutInputs(resolver, paragraphRole, glyphWidthPx, headingLevelOf(ownRole, markdownRuns))
+    LineLayoutInputs(resolver, paragraphRole, glyphWidthPx, headingLevelOf(paragraphRole, markdownRuns))
 
   private def headingLevelOf(role: ParagraphRole, markdownRuns: Option[Vector[MarkdownInlineSpans.Run]]): Option[Int] =
     role match
@@ -120,7 +126,15 @@ private[layout] object LineLayout:
     runs: Vector[MarkdownInlineSpans.Run]
   ): LineFontResolver =
     if runs.isEmpty then
-      resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale, richText.headings)
+      resolverForLine(
+        font,
+        richText.document,
+        lineIndex,
+        lineLength,
+        richText.proseScale,
+        richText.headings,
+        richText.roles
+      )
     else
       val resolver = markdownResolver(
         font,

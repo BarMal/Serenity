@@ -23,6 +23,7 @@ import com.serenity.state.models.{
 }
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TextCaretMeasurement.*
+import com.serenity.ui.openings.ParagraphRoles
 import com.serenity.ui.renderer.FontFirstUse
 import com.serenity.ui.theme.HeadingSettings
 
@@ -40,7 +41,9 @@ final case class TextLayoutSnapshot(
     // How the draw path restyles inline Markdown, so the glyphs it paints are the ones this snapshot measured.
     markdownInline: MarkdownInlineView = MarkdownInlineView.Off,
     // The heading look the rows were measured with, so the draw path paints the sizes this snapshot laid out.
-    headings: HeadingSettings = HeadingSettings.default
+    headings: HeadingSettings = HeadingSettings.default,
+    // How the rows' paragraphs were resolved to roles, so paint and dirty tracking read the roles layout used.
+    roles: ParagraphRoles = ParagraphRoles.enabled
 ):
 
   def navigationGeometry: NavigationGeometry = NavigationGeometry(visualLines)
@@ -289,7 +292,8 @@ object TextLayoutSnapshot:
       richTextDocument = richDocument,
       proseScale = proseScale,
       markdownInline = markdownInline,
-      headings = headings
+      headings = headings,
+      roles = richText.roles
     )
 
   // Column-based document layout (issue #1338, Phase 1): `columnChunksForBuffer`/`fromBufferColumn` live in

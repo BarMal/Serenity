@@ -102,7 +102,8 @@ private[renderer] object RendererLineSegments:
           visualLine.endColumn,
           theme,
           snapshot.proseScale,
-          snapshot.headings
+          snapshot.headings,
+          snapshot.roles
         )
       }
       .filter(segments => StyledText.spell(segments, visualLine.text))

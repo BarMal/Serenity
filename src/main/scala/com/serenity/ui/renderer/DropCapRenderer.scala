@@ -188,23 +188,13 @@ object DropCapRenderer:
       case other => other
 
   /** Shared home-line detection for the two hooks below: the drop cap role (if any) `visualLine`'s own paragraph should
-    * paint a glyph for, honouring the `document.drop_caps_enabled` config toggle exactly as
-    * `RichTextStyling.effectiveRole` does. `None` when there's no rich document, the toggle is off, the paragraph isn't
-    * a drop cap, or this isn't its home line (`DropCapLayout.homeLineRole`).
+    * paint a glyph for, as the snapshot's role resolver resolved it (so honouring the `document.drop_caps_enabled`
+    * config toggle). `None` when there's no rich document, the paragraph isn't a drop cap, or this isn't its home line
+    * (`DropCapLayout.homeLineRole`).
     */
-  private def homeLineRoleFor(
-    snapshot: TextLayoutSnapshot,
-    state: AppState,
-    visualLine: TextVisualLine
-  ): Option[ParagraphRole.DropCap] =
+  private def homeLineRoleFor(snapshot: TextLayoutSnapshot, visualLine: TextVisualLine): Option[ParagraphRole.DropCap] =
     snapshot.richTextDocument.flatMap(doc =>
-      DropCapLayout.homeLineRole(
-        RichTextStyling.effectiveRole(
-          doc.paragraphAt(visualLine.bufferLine).map(_.role).getOrElse(ParagraphRole.Body),
-          state.persisted.config.documentConfig.dropCapsEnabled
-        ),
-        visualLine.startColumn
-      )
+      DropCapLayout.homeLineRole(snapshot.roles.layoutRole(doc, visualLine.bufferLine), visualLine.startColumn)
     )
 
   /** `RendererPaneContent`'s one hook for the ordinary body-text draw call: on a drop cap paragraph's home line, when
@@ -216,7 +206,6 @@ object DropCapRenderer:
     */
   def adjustHomeLineDraw(
     snapshot: TextLayoutSnapshot,
-    state: AppState,
     visualLine: TextVisualLine,
     styledSegments: Option[List[StyledText]],
     measured: Boolean,
@@ -232,7 +221,7 @@ object DropCapRenderer:
     (for
       _         <- Option.when(measured)(())
       document  <- snapshot.richTextDocument
-      dropCap   <- homeLineRoleFor(snapshot, state, visualLine)
+      dropCap   <- homeLineRoleFor(snapshot, visualLine)
       renderFrc <- frc
     yield paintMeasuredHomeLine(
       surface,
@@ -272,7 +261,6 @@ object DropCapRenderer:
     val theme = state.persisted.theme
     val (drawLine, drawSegments) = adjustHomeLineDraw(
       snapshot,
-      state,
       visualLine,
       styledSegments,
       true,
@@ -313,6 +301,6 @@ object DropCapRenderer:
     x: Int,
     y: Int
   ): Unit =
-    homeLineRoleFor(snapshot, state, visualLine).foreach(_ =>
+    homeLineRoleFor(snapshot, visualLine).foreach(_ =>
       paintCellHomeLine(surface, visualLine, x, y, state.persisted.theme)
     )

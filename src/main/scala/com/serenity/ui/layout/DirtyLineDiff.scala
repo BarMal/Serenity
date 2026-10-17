@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.richtext.RichTextParagraph
+import com.serenity.richtext.{ParagraphRole, RichTextParagraph}
 import com.serenity.state.models.TextVisualLine
 
 /** Diffs two consecutive frames of one editor pane's text layout and reports which visible rows can no longer reuse the
@@ -103,7 +103,7 @@ object DirtyLineDiff:
     (previous.richTextDocument, current.richTextDocument) match
       case (Some(before), Some(after)) if !(before eq after) =>
         (before.paragraphAt(line), after.paragraphAt(line)) match
-          case (Some(was), Some(now)) => was != now
+          case (Some(was), Some(now)) => withoutRole(was) != withoutRole(now) || roleDiffers(previous, current, line)
           case (None, None)           => false
           case _                      => true
       case _ => false
@@ -119,7 +119,7 @@ object DirtyLineDiff:
           previous.visualLines
             .lift(row)
             .exists(old => old.heightPx != line.heightPx || old.ascentPx != line.ascentPx) ||
-          formattingDiffers(before.paragraphAt(line.bufferLine), after.paragraphAt(line.bufferLine))
+          formattingDiffers(previous, current, line.bufferLine)
         }
       case _ => None
 
@@ -135,11 +135,23 @@ object DirtyLineDiff:
   private def extentOf(line: TextVisualLine): Int =
     line.spaceBeforePx + line.heightPx + line.reservedBelowPx + line.spaceAfterPx
 
-  private def formattingDiffers(before: Option[RichTextParagraph], after: Option[RichTextParagraph]): Boolean =
-    (before, after) match
-      case (Some(was), Some(now)) => was.role != now.role || was.alignment != now.alignment
+  private def formattingDiffers(previous: TextLayoutSnapshot, current: TextLayoutSnapshot, line: Int): Boolean =
+    (
+      previous.richTextDocument.flatMap(_.paragraphAt(line)),
+      current.richTextDocument.flatMap(_.paragraphAt(line))
+    ) match
+      case (Some(was), Some(now)) => roleDiffers(previous, current, line) || was.alignment != now.alignment
       case (None, None)           => false
       case _                      => true
+
+  private def roleDiffers(previous: TextLayoutSnapshot, current: TextLayoutSnapshot, line: Int): Boolean =
+    (previous.richTextDocument, current.richTextDocument) match
+      case (Some(before), Some(after)) =>
+        previous.roles.roleFor(before, line) != current.roles.roleFor(after, line)
+      case _ => false
+
+  private def withoutRole(paragraph: RichTextParagraph): RichTextParagraph =
+    paragraph.copy(role = ParagraphRole.Body)
 
   /** Whether rows of `previous` and `current` can be compared at all: nothing about the whole snapshot moved. */
   def comparableShape(previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Boolean =

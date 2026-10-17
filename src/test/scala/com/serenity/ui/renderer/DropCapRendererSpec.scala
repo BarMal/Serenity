@@ -150,7 +150,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
 
       val (drawLine, drawSegments) = DropCapRenderer.adjustHomeLineDraw(
         snapshot = snapshot,
-        state = state,
         visualLine = visualLine,
         styledSegments = None,
         measured = true,
@@ -185,7 +184,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
 
     val (_, drawSegments) = DropCapRenderer.adjustHomeLineDraw(
       snapshot = snapshot,
-      state = state,
       visualLine = visualLine,
       styledSegments = segments,
       measured = true,
@@ -212,7 +210,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
 
     val (drawLine, drawSegments) = DropCapRenderer.adjustHomeLineDraw(
       snapshot = snapshot,
-      state = state,
       visualLine = visualLine,
       styledSegments = None,
       measured = false,
@@ -241,7 +238,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
 
     val (drawLine, _) = DropCapRenderer.adjustHomeLineDraw(
       snapshot = snapshot,
-      state = state,
       visualLine = visualLine,
       styledSegments = None,
       measured = true,
@@ -282,9 +278,11 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "do nothing when the config toggle is off, even for a drop cap paragraph" in {
-    val (snapshot, visualLine) = dropCapSnapshot("Hello world")
-    val state                  = AppState.empty(com.serenity.config.AppConfig.default.withDropCapsEnabled(false))
-    val surface                = MockRenderSurface(200, 40)
+    val (enabledSnapshot, visualLine) = dropCapSnapshot("Hello world")
+    val snapshot =
+      enabledSnapshot.copy(roles = com.serenity.ui.openings.ParagraphRoles.standard(dropCapsEnabled = false))
+    val state   = AppState.empty(com.serenity.config.AppConfig.default.withDropCapsEnabled(false))
+    val surface = MockRenderSurface(200, 40)
 
     DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, surface, x = 2, y = 1)
 
