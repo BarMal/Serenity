@@ -52,6 +52,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "settings-ui-presets",
       "settings-editor",
       "settings-typography",
+      "settings-headings",
       "settings-look",
       "settings-language-tools",
       "settings-keymap"

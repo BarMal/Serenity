@@ -38,10 +38,33 @@ private[layout] object ShapingBarriers:
     search(math.min(limit, text.length - 1))
 
   private def isCut(text: String, cut: Int, font: Font, frc: FontRenderContext): Boolean =
-    text.charAt(cut - 1) == ' ' && cutsCleanly(font, frc, text.charAt(cut))
+    text.charAt(cut - 1) == ' ' && cutsCleanly(font, frc, text.charAt(cut)) && !substitutesAcross(text, cut, font, frc)
+
+  private val ContextChars = 8
+
+  private val AdvanceTolerancePx = 0.01f
+
+  /** A font whose own tables substitute glyphs, with no ligatures or kerning requested, can do so by rules that reach
+    * past the space and the one character `cutsCleanly` probes, so the cut is checked in the text around it.
+    */
+  private def substitutesAcross(text: String, cut: Int, font: Font, frc: FontRenderContext): Boolean =
+    !font.hasLayoutAttributes && GlyphAdvances.shapingMaySubstitute(font, frc) && {
+      val from                           = math.max(0, cut - ContextChars)
+      val until                          = math.min(text.length, cut + ContextChars)
+      val resolver                       = singleFontResolver(font)
+      def measured(start: Int, end: Int) = GlyphAdvances.measure(text, start, end, 0, resolver, frc)
+      val whole                          = measured(from, until)
+      val left                           = measured(from, cut)
+      val right                          = measured(cut, until)
+      !(from until until).forall { index =>
+        val (part, at) = if index < cut then (left, index - from) else (right, index - cut)
+        whole.isContextFree(index - from, index - from + 1) == part.isContextFree(at, at + 1) &&
+        math.abs(whole.caretsFrom(index - from, 1)(1) - part.caretsFrom(at, 1)(1)) <= AdvanceTolerancePx
+      }
+    }
 
   private[layout] def cutsCleanly(font: Font, frc: FontRenderContext, next: Char): Boolean =
-    (!font.hasLayoutAttributes && GlyphAdvances.layoutAdvanceMatchesSum(font, frc)) ||
+    (!GlyphAdvances.shapingMaySubstitute(font, frc) && GlyphAdvances.layoutAdvanceMatchesSum(font, frc)) ||
       probed.computeIfAbsent(
         Probe(font, frc, next),
         probe =>
