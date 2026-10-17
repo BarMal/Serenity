@@ -10,7 +10,7 @@ import java.util.Locale
 import com.ibm.icu.text.BreakIterator
 import com.serenity.config.MarkdownViewMode
 import com.serenity.markdown.MarkdownInlineView
-import com.serenity.richtext.{ParagraphAlignment, ParagraphRole, RichTextDocument}
+import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{
   Buffer,
   CursorPosition,
@@ -24,6 +24,7 @@ import com.serenity.state.models.{
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TextCaretMeasurement.*
 import com.serenity.ui.renderer.FontFirstUse
+import com.serenity.ui.theme.HeadingSettings
 
 final case class TextLayoutSnapshot(
     visualLines: Vector[TextVisualLine],
@@ -37,7 +38,9 @@ final case class TextLayoutSnapshot(
     // sizes this snapshot measured caret advances and per-line heights with.
     proseScale: Float = 1.0f,
     // How the draw path restyles inline Markdown, so the glyphs it paints are the ones this snapshot measured.
-    markdownInline: MarkdownInlineView = MarkdownInlineView.Off
+    markdownInline: MarkdownInlineView = MarkdownInlineView.Off,
+    // The heading look the rows were measured with, so the draw path paints the sizes this snapshot laid out.
+    headings: HeadingSettings = HeadingSettings.default
 ):
 
   def navigationGeometry: NavigationGeometry = NavigationGeometry(visualLines)
@@ -229,7 +232,8 @@ object TextLayoutSnapshot:
     dropCapsEnabled: Boolean = true,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    headings: HeadingSettings = HeadingSettings.default
   ): TextLayoutSnapshot =
     val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val totalLines  = buffer.document.content.lineCount
@@ -237,7 +241,7 @@ object TextLayoutSnapshot:
       buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.document.content.weight))
     val markdownInline =
       RichTextContext.markdownViewFor(buffer, markdownViewMode, forceCellLayout, wrapCache, font, fontRenderContext)
-    val richText       = RichTextContext(richDocument, proseScale, dropCapsEnabled, markdownInline, tabSize)
+    val richText       = RichTextContext(richDocument, proseScale, dropCapsEnabled, markdownInline, tabSize, headings)
     val measuredLayout = LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText)
     // The non-measured (cell) path draws every row on `cellMetrics`' own grid (see `TextRowMetrics`'s non-measured
     // `lineTopPx`), so its line height/ascent must come from that same caller-supplied unit rather than the real
@@ -277,7 +281,8 @@ object TextLayoutSnapshot:
       usesMeasuredLayout = measuredLayout,
       richTextDocument = richDocument,
       proseScale = proseScale,
-      markdownInline = markdownInline
+      markdownInline = markdownInline,
+      headings = headings
     )
 
   // Column-based document layout (issue #1338, Phase 1): `columnChunksForBuffer`/`fromBufferColumn` live in
@@ -344,7 +349,7 @@ object TextLayoutSnapshot:
                   cellMetrics
                 )
                 Vector(placed(row, lineIndex, paragraphRole, lineWithinParagraph = 0, glyphWidthPx))
-            val aligned = applyParagraphAlignment(wrapped, lineIndex, panelWidthPx, richText.document)
+            val aligned = ParagraphAlignmentLayout.apply(wrapped, lineIndex, panelWidthPx, richText)
             loop(rest, acc ++ aligned)
           case _ => acc
 
@@ -520,34 +525,6 @@ object TextLayoutSnapshot:
       heightPx = heightPx,
       ascentPx = ascentPx
     )
-
-  private def applyParagraphAlignment(
-    lines: Vector[TextVisualLine],
-    lineIndex: Int,
-    panelWidthPx: Int,
-    richDocument: Option[RichTextDocument]
-  ): Vector[TextVisualLine] =
-    val alignment = richDocument
-      .flatMap(_.paragraphAt(lineIndex))
-      .map(_.alignment)
-      .getOrElse(ParagraphAlignment.Left)
-
-    if alignment == ParagraphAlignment.Left then lines
-    else lines.map(line => applyAlignment(line, alignment, panelWidthPx))
-
-  private def applyAlignment(
-    line: TextVisualLine,
-    alignment: ParagraphAlignment,
-    panelWidthPx: Int
-  ): TextVisualLine =
-    val availablePx = math.max(0.0f, panelWidthPx.toFloat - line.widthPx)
-    val offsetPx =
-      alignment match
-        case ParagraphAlignment.Left | ParagraphAlignment.Justify => 0.0f
-        case ParagraphAlignment.Center                            => availablePx / 2.0f
-        case ParagraphAlignment.Right                             => availablePx
-
-    if offsetPx <= 0.0f then line else line.copy(xOffsetPx = line.xOffsetPx + offsetPx)
 
   private[layout] def shouldUseMeasuredLayout(font: Font, frc: FontRenderContext): Boolean =
     FontFirstUse.settle(font, frc)

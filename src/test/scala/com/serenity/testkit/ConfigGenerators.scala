@@ -4,9 +4,11 @@ import java.awt.Color
 
 import com.serenity.config.*
 import com.serenity.keystroke.Modifier
+import com.serenity.richtext.ParagraphAlignment
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.theme.HeadingStyle
 import org.scalacheck.Gen
 
 /** Generators over [[AppConfig]], for properties about the config file format.
@@ -135,6 +137,22 @@ object ConfigGenerators:
       margin = margin,
       firstLineIndent = firstLineIndent
     )
+
+  private val genHeadingLevelConfig: Gen[HeadingLevelConfig] =
+    for
+      size   <- Gen.option(Gen.choose(2, 16).map(_ / 2f))
+      bold   <- Gen.option(Gen.oneOf(true, false))
+      italic <- Gen.option(Gen.oneOf(true, false))
+      family <- Gen.option(Gen.oneOf("Charter", "Serif", "Inter"))
+      align  <- Gen.option(oneOfEnum(ParagraphAlignment.values))
+    yield HeadingLevelConfig(size, bold, italic, family, align)
+
+  val genHeadingsConfig: Gen[HeadingsConfig] =
+    for
+      levels    <- Gen.listOfN(HeadingStyle.LevelCount, genHeadingLevelConfig).map(_.toVector)
+      damping   <- Gen.oneOf(true, false)
+      threshold <- Gen.choose(HeadingsConfig.ThresholdRange._1.toInt, HeadingsConfig.ThresholdRange._2.toInt)
+    yield HeadingsConfig(levels, damping, threshold.toFloat)
 
   val genStatusLineConfig: Gen[StatusLineConfig] =
     for
@@ -370,6 +388,7 @@ object ConfigGenerators:
       appMode          <- genAppModeConfig
       status           <- genStatusLineConfig
       exportTypography <- genExportTypographyConfig
+      headings         <- genHeadingsConfig
       autoSave         <- genAutoSaveConfig
     yield AppConfig(
       editorConfig = editor,
@@ -389,5 +408,6 @@ object ConfigGenerators:
       appModeConfig = appMode,
       statusLine = status,
       exportTypographyConfig = exportTypography,
+      headingsConfig = headings,
       autoSaveConfig = autoSave
     )

@@ -9,6 +9,7 @@ import com.serenity.markdown.{LazyBlockIndex, MarkdownInlineView}
 import com.serenity.rope.{Branch, ChangeSet, Leaf, Rope}
 import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.layout.VisualLineIndexStore.StampRelation
+import com.serenity.ui.theme.HeadingSettings
 
 /** The [[VisualLineIndex]] last built for each key -- a buffer under one wrap setting -- together with the content it
   * describes. A key's index follows edits to its buffer: only the lines an edit touched lose their measurements, and
@@ -113,7 +114,8 @@ object VisualLineIndexStore:
   final private[layout] case class ViewStamp(
       base: AnyRef,
       markdown: MarkdownInlineView,
-      tabSize: Int = IndentationSettings.DefaultTabSize
+      tabSize: Int = IndentationSettings.DefaultTabSize,
+      headings: HeadingSettings = HeadingSettings.default
   )
 
   /** How a stamp the index was built under relates to the one asked for. */
@@ -130,7 +132,10 @@ object VisualLineIndexStore:
     (built, asked) match
       case _ if built eq asked => StampRelation.Same
       case (x: ViewStamp, y: ViewStamp)
-          if x.base == y.base && x.tabSize == y.tabSize && sameRestyling(x.markdown, y.markdown) =>
+          if x.base == y.base && x.tabSize == y.tabSize && x.headings == y.headings && sameRestyling(
+            x.markdown,
+            y.markdown
+          ) =>
         (x.markdown.fences, y.markdown.fences) match
           case (a, b) if a eq b => StampRelation.Same
           case (a: LazyBlockIndex, b: LazyBlockIndex) if b.follows(a) =>
@@ -148,8 +153,9 @@ object VisualLineIndexStore:
 
   private[layout] def stampOf(richText: RichTextContext): AnyRef =
     val base = richText.document.getOrElse(Unstamped)
-    if richText.markdown.isActive || richText.tabSize != IndentationSettings.DefaultTabSize then
-      ViewStamp(base, richText.markdown, richText.tabSize)
+    if richText.markdown.isActive || richText.tabSize != IndentationSettings.DefaultTabSize ||
+        richText.headings != HeadingSettings.default
+    then ViewStamp(base, richText.markdown, richText.tabSize, richText.headings)
     else base
 
   val DefaultMaxEntries = 32

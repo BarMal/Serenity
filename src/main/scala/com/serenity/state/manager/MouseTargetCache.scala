@@ -14,6 +14,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
+import com.serenity.ui.theme.HeadingSettings
 
 final private[manager] case class RopeIdentity private (value: Rope):
 
@@ -108,7 +109,10 @@ final private[manager] case class MouseTargetLayoutKey(
     modalStack: List[ModalDialog],
     derivedStatusLineSurface: Option[UiSurface],
     pinnedPanels: List[(SurfaceId, PanelPosition, Int)],
-    lineNumberContent: List[(BufferId, RopeIdentity)]
+    lineNumberContent: List[(BufferId, RopeIdentity)],
+    // Heading sizes set a heading row's height and its alignment its offset; the config reference alone is not a field
+    // of the key, so without this a heading change would be served the old scene.
+    headings: HeadingSettings
 )
 
 private[manager] object MouseTargetLayoutKey:
@@ -227,7 +231,8 @@ private[manager] object MouseTargetLayoutKey:
           state.persisted.buffers.toList
             .sortBy(_._1.value)
             .map((bufferId, buffer) => bufferId -> RopeIdentity(buffer.document.content))
-        else Nil
+        else Nil,
+      headings = state.persisted.config.headingSettings
     )
 
 /** Instance-scoped (issue #1677) single-slot memo of the last [[MouseTargetLayoutKey]] computed, held as a

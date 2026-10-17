@@ -55,7 +55,7 @@ private[renderer] object RendererLineSegments:
       context.caches.themeHighlightCache.highlightLine(visualLine.text, theme, buffer.document.language, semanticTokens)
     else List(StyledText(visualLine.text, TextStyle.normal, theme.foreground, theme.background))
 
-  private def richTextStyledSegments(
+  private[renderer] def richTextStyledSegments(
     visualLine: TextVisualLine,
     theme: Theme,
     snapshot: TextLayoutSnapshot
@@ -68,7 +68,8 @@ private[renderer] object RendererLineSegments:
           visualLine.startColumn,
           visualLine.endColumn,
           theme,
-          snapshot.proseScale
+          snapshot.proseScale,
+          snapshot.headings
         )
       }
       .filter(segments => StyledText.spell(segments, visualLine.text))
