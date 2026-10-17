@@ -33,6 +33,7 @@ object BenchmarkRunner:
       "render.long_measured_line.java2d",
       "layout.aligned_prose.cached_snapshot",
       "layout.aligned_prose.moved_lines",
+      "layout.heading_prose.uncached_snapshot",
       "damage.single_char_long_line.rows",
       "damage.single_char_long_line.cells",
       "damage.single_char_short_line.rows",

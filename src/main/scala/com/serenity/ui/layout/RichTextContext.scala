@@ -8,18 +8,20 @@ import com.serenity.markdown.{MarkdownBlockSpans, MarkdownInlineView, MarkerMode
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.{Buffer, Cursor, IndentationSettings}
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.theme.RichTextStyling
+import com.serenity.ui.theme.{HeadingSettings, RichTextStyling}
 
 /** The inputs a logical line's wrap depends on besides its text: the rich-text paragraph styles that choose each run's
   * font and a drop cap's role, the prose zoom that scales them, whether drop caps are enabled at all, and how the
-  * line's inline Markdown is restyled. `tabSize` is the width a tab takes on the cell grid.
+  * line's inline Markdown is restyled. `tabSize` is the width a tab takes on the cell grid, and `headings` the look its
+  * heading paragraphs resolve to.
   */
 final case class RichTextContext(
     document: Option[RichTextDocument],
     proseScale: Float,
     dropCapsEnabled: Boolean,
     markdown: MarkdownInlineView = MarkdownInlineView.Off,
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    headings: HeadingSettings = HeadingSettings.default
 ):
 
   /** Hiding a marker means measuring glyph by glyph, which a font laid out on the cell grid is not. */
