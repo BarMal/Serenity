@@ -36,6 +36,9 @@ object DropCapRenderer:
     *   total pixel height the glyph should span (`DropCapLayout.glyphHeightPx`)
     * @param glyphAscentPx
     *   the glyph font's own ascent, so its baseline sits correctly within `glyphHeightPx`
+    * @param clipBottomPx
+    *   the lowest pixel row the pane draws rows on: a glyph that would reach past it is cut there, since nothing below
+    *   it is a row to repaint the glyph's rest from
     */
   def renderGlyphPx(
     surface: RenderSurface,
@@ -47,13 +50,24 @@ object DropCapRenderer:
     glyphText: String,
     glyphStyle: TextStyle,
     foreground: RenderColor,
-    background: RenderColor
+    background: RenderColor,
+    clipBottomPx: Int = Int.MaxValue
   ): Unit =
-    if glyphText.nonEmpty && glyphWidthPx > 0.0f && glyphHeightPx > 0 then
+    val drawnHeightPx = glyphHeightPx.min(clipBottomPx - yTopPx)
+    if glyphText.nonEmpty && glyphWidthPx > 0.0f && drawnHeightPx > 0 then
       surface.setForegroundColor(foreground)
       surface.setBackgroundColor(background)
       surface.enableStyle(glyphStyle)
-      try surface.text.drawRunPx(xOriginPx, yTopPx, glyphWidthPx, glyphHeightPx, glyphAscentPx, glyphText)
+      try
+        surface.text.drawRunPx(
+          xOriginPx,
+          yTopPx,
+          glyphWidthPx,
+          drawnHeightPx,
+          glyphAscentPx,
+          glyphText,
+          clipGlyphToRun = drawnHeightPx < glyphHeightPx
+        )
       finally surface.disableStyle(glyphStyle)
 
   /** TUI fallback: highlight the first character's own cell as bold in `accentForeground`, with no attempt at multi-row
@@ -93,7 +107,8 @@ object DropCapRenderer:
     theme: Theme,
     xOriginPx: Float,
     lineTopPx: Int,
-    normalLineHeightPx: Int
+    normalLineHeightPx: Int,
+    clipBottomPx: Int = Int.MaxValue
   ): (TextVisualLine, Option[List[StyledText]]) =
     val glyph = document
       .paragraphAt(visualLine.bufferLine)
@@ -123,7 +138,8 @@ object DropCapRenderer:
           glyphText,
           glyphStyle,
           theme.foreground,
-          theme.background
+          theme.background,
+          clipBottomPx
         )
         (dropFirstGrapheme(visualLine, charCount), styledSegments.map(dropLeadingChars(_, charCount)))
 
@@ -210,7 +226,8 @@ object DropCapRenderer:
     theme: Theme,
     xOriginPx: Float,
     lineTopPx: Int,
-    normalLineHeightPx: Int
+    normalLineHeightPx: Int,
+    clipBottomPx: Int = Int.MaxValue
   ): (TextVisualLine, Option[List[StyledText]]) =
     (for
       _         <- Option.when(measured)(())
@@ -229,7 +246,8 @@ object DropCapRenderer:
       theme,
       xOriginPx,
       lineTopPx,
-      normalLineHeightPx
+      normalLineHeightPx,
+      clipBottomPx
     )).getOrElse((visualLine, styledSegments))
 
   /** `RendererPaneContent`'s single call for the measured (GUI) path: computes the drop-cap-adjusted line/segments
@@ -248,7 +266,8 @@ object DropCapRenderer:
     lineHeightPx: Int,
     ascentPx: Int,
     clipRightXPx: Float,
-    semanticTokens: Option[List[SemanticToken]]
+    semanticTokens: Option[List[SemanticToken]],
+    clipBottomPx: Int = Int.MaxValue
   ): Unit =
     val theme = state.persisted.theme
     val (drawLine, drawSegments) = adjustHomeLineDraw(
@@ -263,7 +282,8 @@ object DropCapRenderer:
       theme,
       xOriginPx,
       lineTopPx,
-      lineHeightPx
+      lineHeightPx,
+      clipBottomPx
     )
     CharacterRenderer.renderMeasuredLine(
       context.surface,

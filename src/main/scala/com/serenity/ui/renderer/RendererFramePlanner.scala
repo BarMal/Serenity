@@ -359,9 +359,12 @@ object RendererFramePlanner:
         val previousGhosts = context.caches.frameState.previousRowGhostsFor(persistenceKey)
         val redraws = panes.map { (paneId, record) =>
           val moving = movable && renderPlan.columnSnapshotsFor(paneId).isEmpty
-          val ghostRows = DirtyLineDiff.dilate(
-            RendererChapterGhosts.changedRows(previousGhosts.getOrElse(paneId, Vector.empty), record.rowGhosts),
-            record.rowRects.length
+          val ghostRows = DropCapLayout.closedOverGlyphs(
+            DirtyLineDiff.dilate(
+              RendererChapterGhosts.changedRows(previousGhosts.getOrElse(paneId, Vector.empty), record.rowGhosts),
+              record.rowRects.length
+            ),
+            record.snapshot
           )
           val dirty =
             damageDirtyRows(effectiveDamage, record, persistenceKey, context.caches, scrollIsEveryRow = !moving) ++
@@ -509,9 +512,12 @@ object RendererFramePlanner:
         case (bufferLine, row) if facts.lines.contains(bufferLine) => row
       }.toSet
       val dirty = lineRows ++ rowsUnderSpans(record, facts.spans)
-      DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
-        record.overflowingRows ++
-        vacatedFloatingSurfaceRows(damage, record, persistenceKey, caches)
+      DropCapLayout.closedOverGlyphs(
+        DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
+          record.overflowingRows ++
+          vacatedFloatingSurfaceRows(damage, record, persistenceKey, caches),
+        record.snapshot
+      )
 
   /** The visual rows each span's columns fall on. A column at a wrap boundary matches both rows it sits between, as the
     * caret lookup does. A span that matches no row of its line (whitespace dropped at a wrap, say) dirties the whole

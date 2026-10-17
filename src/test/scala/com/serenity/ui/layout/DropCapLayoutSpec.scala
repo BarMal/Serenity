@@ -74,3 +74,84 @@ class DropCapLayoutSpec extends AnyFlatSpec with Matchers:
     DropCapLayout.homeLineRole(ParagraphRole.Body, startColumn = 0) shouldBe None
     DropCapLayout.homeLineRole(ParagraphRole.Heading(1), startColumn = 0) shouldBe None
   }
+
+  "DropCapLayout.glyphRowSpan" should "span the cap's lines from the row the glyph is painted from" in {
+    val snapshot = DropCapSnapshots.snapshot(DropCapSnapshots.dropCap(3, rows = 5), DropCapSnapshots.body(2))
+
+    DropCapLayout.glyphRowSpan(snapshot) shouldBe Map(0 -> (0 until 3))
+  }
+
+  it should "end at the paragraph's last row when it wraps to fewer rows than the cap" in {
+    val snapshot = DropCapSnapshots.snapshot(DropCapSnapshots.dropCap(4, rows = 2), DropCapSnapshots.body(3))
+
+    DropCapLayout.glyphRowSpan(snapshot) shouldBe Map(0 -> (0 until 2))
+  }
+
+  it should "key each glyph by its own home row" in {
+    val snapshot = DropCapSnapshots.snapshot(
+      DropCapSnapshots.body(1),
+      DropCapSnapshots.dropCap(2, rows = 4),
+      DropCapSnapshots.dropCap(3, rows = 3)
+    )
+
+    DropCapLayout.glyphRowSpan(snapshot) shouldBe Map(1 -> (1 until 3), 5 -> (5 until 8))
+  }
+
+  it should "find no glyph once the paragraph's first row has scrolled out of view" in {
+    val snapshot =
+      DropCapSnapshots.snapshot(DropCapSnapshots.Paragraph(ParagraphRole.dropCap(3), rows = 3, firstRow = 1))
+
+    DropCapLayout.glyphRowSpan(snapshot) shouldBe empty
+  }
+
+  it should "reach as many rows as it takes to cover the glyph's height when rows differ in height" in {
+    val tall = DropCapSnapshots.Paragraph(ParagraphRole.dropCap(3), rows = 4, heightsPx = Map(1 -> 40))
+
+    DropCapLayout.glyphRowSpan(DropCapSnapshots.snapshot(tall)) shouldBe Map(0 -> (0 until 2))
+  }
+
+  it should "find nothing in a cell layout, which never spans a glyph across rows" in {
+    val snapshot = DropCapSnapshots.snapshot(DropCapSnapshots.dropCap(3, rows = 3)).copy(usesMeasuredLayout = false)
+
+    DropCapLayout.glyphRowSpan(snapshot) shouldBe empty
+  }
+
+  "DropCapLayout.closedOverGlyphs" should "add every row of a span that has one dirty row" in {
+    val snapshot = DropCapSnapshots.snapshot(DropCapSnapshots.dropCap(3, rows = 5), DropCapSnapshots.body(2))
+
+    DropCapLayout.closedOverGlyphs(Set(2), snapshot) shouldBe Set(0, 1, 2)
+  }
+
+  it should "leave rows outside every span as they are" in {
+    val snapshot = DropCapSnapshots.snapshot(DropCapSnapshots.dropCap(3, rows = 5), DropCapSnapshots.body(2))
+
+    DropCapLayout.closedOverGlyphs(Set(3, 6), snapshot) shouldBe Set(3, 6)
+    DropCapLayout.closedOverGlyphs(Set.empty, snapshot) shouldBe Set.empty[Int]
+  }
+
+  "DropCapLayout.reservingGlyphHeight" should "pad the last row of a paragraph shorter than its glyph" in {
+    val snapshot = DropCapSnapshots.snapshot(DropCapSnapshots.dropCap(4, rows = 2))
+    val padded   = DropCapLayout.reservingGlyphHeight(snapshot.visualLines, ParagraphRole.dropCap(4))
+
+    padded.map(_.reservedBelowPx) shouldBe Vector(0, 2 * DropCapSnapshots.RowHeightPx)
+  }
+
+  it should "leave a paragraph at least as tall as its glyph as it is" in {
+    val snapshot = DropCapSnapshots.snapshot(DropCapSnapshots.dropCap(3, rows = 3))
+
+    DropCapLayout.reservingGlyphHeight(snapshot.visualLines, ParagraphRole.dropCap(3)) shouldBe snapshot.visualLines
+  }
+
+  it should "leave rows with no measured height as they are" in {
+    val unmeasured = DropCapSnapshots.snapshot(DropCapSnapshots.dropCap(3, rows = 1)).visualLines.map { line =>
+      line.copy(row = line.row.copy(heightPx = 0))
+    }
+
+    DropCapLayout.reservingGlyphHeight(unmeasured, ParagraphRole.dropCap(3)) shouldBe unmeasured
+  }
+
+  it should "leave every other role as it is" in {
+    val snapshot = DropCapSnapshots.snapshot(DropCapSnapshots.body(1))
+
+    DropCapLayout.reservingGlyphHeight(snapshot.visualLines, ParagraphRole.Body) shouldBe snapshot.visualLines
+  }

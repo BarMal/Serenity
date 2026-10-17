@@ -130,8 +130,7 @@ private[manager] object EditorMouseTargeting:
       gridMetrics = MouseHitTestGeometry.floatingCellMetrics(state),
       rowLineHeightPx = snapshot.lineHeightPx,
       usesMeasuredLayout = snapshot.usesMeasuredLayout,
-      rowHeightsPx =
-        snapshot.visualLines.map(line => if line.heightPx > 0 then line.heightPx else snapshot.lineHeightPx)
+      rowHeightsPx = snapshot.rowHeightsPx
     )
     val visualRow = click.pixelY match
       case Some(pixelY) if snapshot.usesMeasuredLayout => rowMetrics.visualRowAt(pixelY)

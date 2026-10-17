@@ -3,7 +3,10 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.FontRenderContext
 
+import scala.annotation.tailrec
+
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
+import com.serenity.state.models.TextVisualLine
 import com.serenity.ui.renderer.FontFirstUse
 import com.serenity.ui.theme.{RichTextStyling, TextStyle}
 
@@ -70,6 +73,50 @@ object DropCapLayout:
     role match
       case ParagraphRole.DropCap(lines) => normalLineHeightPx.max(0) * lines.max(1)
       case _                            => 0
+
+  /** `lines` with the last row padded so the paragraph is at least as tall as its glyph: a paragraph that wraps to
+    * fewer rows than the cap spans would otherwise leave the next paragraph's first rows under the glyph's opaque box.
+    * Only a complete wrap from the home row can be measured, and only a measured layout has row heights to add up.
+    */
+  def reservingGlyphHeight(lines: Vector[TextVisualLine], role: ParagraphRole): Vector[TextVisualLine] =
+    role match
+      case dropCap: ParagraphRole.DropCap =>
+        (lines.headOption, lines.lastOption) match
+          case (Some(home), Some(last)) if home.startColumn == 0 && home.heightPx > 0 =>
+            val shortfallPx = glyphHeightPx(dropCap, home.heightPx) - lines.map(_.heightPx).sum
+            if shortfallPx <= 0 then lines
+            else lines.updated(lines.length - 1, last.copy(row = last.row.copy(reservedBelowPx = shortfallPx)))
+          case _ => lines
+      case _ => lines
+
+  /** The rows each drop cap glyph of `snapshot` is painted over, keyed by the row it is painted from. A glyph is one
+    * opaque box, so a pixel changed on any of these rows without repainting the others loses or leaves behind part of
+    * it. Empty when the layout is not measured (the cell grid never spans a glyph across rows).
+    */
+  def glyphRowSpan(snapshot: TextLayoutSnapshot): Map[Int, Range] =
+    snapshot.richTextDocument.filter(_ => snapshot.usesMeasuredLayout).fold(Map.empty[Int, Range]) { document =>
+      val lines = snapshot.visualLines
+      (for
+        home <- lines.indices if lines(home).startColumn == 0
+        dropCap <- document
+          .paragraphAt(lines(home).bufferLine)
+          .flatMap(p => homeLineRole(p.role, lines(home).startColumn))
+      yield home -> spanFrom(snapshot, home, dropCap)).toMap
+    }
+
+  private def spanFrom(snapshot: TextLayoutSnapshot, home: Int, dropCap: ParagraphRole.DropCap): Range =
+    val lines                   = snapshot.visualLines
+    def heightOf(row: Int): Int = if lines(row).heightPx > 0 then lines(row).heightPx else snapshot.lineHeightPx
+    val glyphBottomPx           = glyphHeightPx(dropCap, heightOf(home))
+    @tailrec def end(row: Int, topPx: Int): Int =
+      if topPx >= glyphBottomPx || row >= lines.length || lines(row).bufferLine != lines(home).bufferLine then row
+      else end(row + 1, topPx + heightOf(row))
+    home until end(home, 0)
+
+  /** `rows` with every row of each glyph span they touch. */
+  def closedOverGlyphs(rows: Set[Int], snapshot: TextLayoutSnapshot): Set[Int] =
+    if rows.isEmpty then rows
+    else rows ++ glyphRowSpan(snapshot).valuesIterator.filter(_.exists(rows.contains)).flatten
 
   /** The drop cap glyph's measured pixel width for the paragraph at `lineIndex`, sized exactly as
     * `RichTextStyling.dropCapGlyphStyle` sizes the glyph the renderer paints -- so the space this reserves always

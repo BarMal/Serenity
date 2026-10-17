@@ -41,6 +41,51 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
     call.foreground shouldBe RenderColor.fromRgba(255, 0, 0)
   }
 
+  it should "cut a glyph that would reach below the rows the pane draws, since no row would repaint the rest" in {
+    val surface = MockRenderSurface(80, 40)
+
+    DropCapRenderer.renderGlyphPx(
+      surface,
+      xOriginPx = 10.0f,
+      yTopPx = 5,
+      glyphWidthPx = 24.0f,
+      glyphHeightPx = 48,
+      glyphAscentPx = 36,
+      glyphText = "C",
+      glyphStyle = TextStyle(isBold = true, fontSize = Some(36.0f)),
+      foreground = RenderColor.fromRgba(255, 0, 0),
+      background = RenderColor.Black,
+      clipBottomPx = 35
+    )
+
+    val call = surface.drawRunPxCalls.head
+    call.lineHeightPx shouldBe 30
+    call.ascentPx shouldBe 36
+    call.clipGlyphToRun shouldBe true
+  }
+
+  it should "draw a glyph that fits above the rows' bottom whole and unclipped" in {
+    val surface = MockRenderSurface(80, 40)
+
+    DropCapRenderer.renderGlyphPx(
+      surface,
+      xOriginPx = 10.0f,
+      yTopPx = 5,
+      glyphWidthPx = 24.0f,
+      glyphHeightPx = 48,
+      glyphAscentPx = 36,
+      glyphText = "C",
+      glyphStyle = TextStyle(isBold = true, fontSize = Some(36.0f)),
+      foreground = RenderColor.fromRgba(255, 0, 0),
+      background = RenderColor.Black,
+      clipBottomPx = 53
+    )
+
+    val call = surface.drawRunPxCalls.head
+    call.lineHeightPx shouldBe 48
+    call.clipGlyphToRun shouldBe false
+  }
+
   it should "draw nothing for an empty glyph" in {
     val surface = MockRenderSurface(80, 40)
 
