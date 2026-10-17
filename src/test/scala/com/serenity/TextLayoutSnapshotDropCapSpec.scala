@@ -5,7 +5,14 @@ import java.awt.Font
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, DropCapLayout, TextLayoutSnapshot}
+import com.serenity.ui.layout.{
+  BundledInterFont,
+  CellMetrics,
+  DropCapLayout,
+  LayoutRect,
+  TextLayoutSnapshot,
+  TextRowMetrics
+}
 import com.serenity.ui.theme.{RichTextStyling, TextStyle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -98,4 +105,99 @@ class TextLayoutSnapshotDropCapSpec extends AnyFlatSpec with Matchers:
     toggledOffSnapshot.visualLines.map(_.text) shouldBe plainBodySnapshot.visualLines.map(_.text)
     toggledOffSnapshot.visualLines.map(_.xOffsetPx) shouldBe plainBodySnapshot.visualLines.map(_.xOffsetPx)
     toggledOffSnapshot.visualLines.map(_.heightPx) shouldBe plainBodySnapshot.visualLines.map(_.heightPx)
+  }
+
+  private def snapshotOf(
+    paragraphs: List[RichTextParagraph],
+    forceCellLayout: Boolean = false,
+    font: Font = BundledInterFont.plain(14f)
+  ): TextLayoutSnapshot =
+    val document = RichTextDocument(paragraphs)
+    val buffer = Buffer
+      .fromString(BufferId(34), document.plainText)
+      .copy(
+        richText = RichTextState(richTextDocument = Some(document)),
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 12)
+      )
+    TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 600, font, forceCellLayout = forceCellLayout)
+
+  private def topsOf(snapshot: TextLayoutSnapshot): Vector[Int] = snapshot.rowHeightsPx.scanLeft(0)(_ + _)
+
+  "A drop cap paragraph shorter than its glyph" should
+    "reserve the glyph's height, so the next paragraph starts at or below the glyph box's bottom" in {
+      val lines = 4
+      val snapshot = snapshotOf(
+        List(
+          RichTextParagraph.plain("A short opening paragraph.", role = ParagraphRole.dropCap(lines)),
+          RichTextParagraph.plain("The paragraph that follows it.")
+        )
+      )
+      val home        = snapshot.visualLines.head
+      val glyphBottom = DropCapLayout.glyphHeightPx(ParagraphRole.dropCap(lines), home.heightPx)
+      val nextTopPx   = topsOf(snapshot)(snapshot.visualLines.indexWhere(_.bufferLine == 1))
+
+      snapshot.visualLines.count(_.bufferLine == 0) should be < lines
+      nextTopPx should be >= glyphBottom
+      nextTopPx shouldBe glyphBottom
+    }
+
+  it should "keep the rows, text and caret geometry of the same paragraph without the cap" in {
+    val text = "A short opening paragraph."
+    val capped =
+      snapshotOf(List(RichTextParagraph.plain(text, role = ParagraphRole.dropCap(4)), RichTextParagraph.plain("Next.")))
+    val uncapped = snapshotOf(List(RichTextParagraph.plain(text), RichTextParagraph.plain("Next.")))
+
+    capped.visualLines.map(line => (line.bufferLine, line.startColumn, line.endColumn)) shouldBe
+      uncapped.visualLines.map(line => (line.bufferLine, line.startColumn, line.endColumn))
+    capped.visualLines.map(_.heightPx) shouldBe uncapped.visualLines.map(_.heightPx)
+  }
+
+  it should "own the pixels of its padding for clicks, which land on its last row" in {
+    val snapshot = snapshotOf(
+      List(
+        RichTextParagraph.plain("A short opening paragraph.", role = ParagraphRole.dropCap(4)),
+        RichTextParagraph.plain("The paragraph that follows it.")
+      )
+    )
+    val metrics = TextRowMetrics(
+      LayoutRect(0, 0, 80, 40),
+      CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1),
+      snapshot.lineHeightPx,
+      usesMeasuredLayout = true,
+      rowHeightsPx = snapshot.rowHeightsPx
+    )
+    val nextRow = snapshot.visualLines.indexWhere(_.bufferLine == 1)
+    val nextTop = topsOf(snapshot)(nextRow)
+
+    metrics.visualRowAt(nextTop - 1) shouldBe nextRow - 1
+    metrics.visualRowAt(nextTop) shouldBe nextRow
+    metrics.lineTopPx(nextRow) shouldBe nextTop
+  }
+
+  it should "reserve nothing when the paragraph already reaches the foot of the glyph" in {
+    val snapshot = snapshotOf(
+      List(
+        RichTextParagraph.plain(
+          "Hello there this wraps across several lines of body text. " * 6,
+          role = ParagraphRole.dropCap(2)
+        )
+      )
+    )
+
+    snapshot.visualLines.map(_.reservedBelowPx).distinct shouldBe Vector(0)
+  }
+
+  it should "reserve nothing in the cell layout, where a glyph never spans rows" in {
+    val snapshot = snapshotOf(
+      List(
+        RichTextParagraph.plain("A short opening paragraph.", role = ParagraphRole.dropCap(4)),
+        RichTextParagraph.plain("The paragraph that follows it.")
+      ),
+      forceCellLayout = true,
+      font = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    )
+
+    snapshot.usesMeasuredLayout shouldBe false
+    snapshot.visualLines.map(_.reservedBelowPx).distinct shouldBe Vector(0)
+    snapshot.rowHeightsPx.distinct shouldBe Vector(snapshot.lineHeightPx)
   }

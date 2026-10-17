@@ -29,11 +29,12 @@ object DirtyLineDiff:
         if !comparableShape(previousSnapshot, current) then allRows(current)
         else
           val reflowFrom = richReflowStart(previousSnapshot, current)
-          current.visualLines.indices.filter { row =>
+          val changed = current.visualLines.indices.filter { row =>
             reflowFrom.exists(row >= _) ||
             !previousSnapshot.visualLines.lift(row).contains(current.visualLines(row)) ||
             richParagraphEdited(previousSnapshot, current, current.visualLines(row).bufferLine)
           }.toSet
+          closedOverGlyphs(changed, previousSnapshot, current)
 
   /** As [[dirtyRows]], additionally comparing a caller-supplied style key per row.
     *
@@ -57,9 +58,13 @@ object DirtyLineDiff:
             currentRowKeys.length == current.visualLines.length
         if !alignedKeys then allRows(current)
         else
-          layoutDirty ++ current.visualLines.indices.filter { row =>
-            !previousRowKeys.lift(row).contains(currentRowKeys(row))
-          }
+          closedOverGlyphs(
+            layoutDirty ++ current.visualLines.indices.filter { row =>
+              !previousRowKeys.lift(row).contains(currentRowKeys(row))
+            },
+            previousSnapshot,
+            current
+          )
     end match
 
   /** Grow a dirty set by one row in each direction, bounded to `rowCount`.
@@ -71,6 +76,14 @@ object DirtyLineDiff:
   def dilate(rows: Set[Int], rowCount: Int): Set[Int] =
     if rows.isEmpty then Set.empty
     else rows.flatMap(row => Set(row - 1, row, row + 1)).filter(row => row >= 0 && row < rowCount)
+
+  /** A drop cap glyph is one opaque box painted by its first row over every row it spans, so a span with any dirty row
+    * is dirty whole, in the frame being drawn and in the one whose pixels are kept.
+    */
+  def closedOverGlyphs(rows: Set[Int], previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Set[Int] =
+    DropCapLayout
+      .closedOverGlyphs(DropCapLayout.closedOverGlyphs(rows, previous), current)
+      .filter(row => row < current.visualLines.length)
 
   private def allRows(snapshot: TextLayoutSnapshot): Set[Int] =
     snapshot.visualLines.indices.toSet
