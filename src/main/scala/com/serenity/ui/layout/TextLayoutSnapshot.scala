@@ -115,7 +115,9 @@ object TextLayoutSnapshot:
         measuredLayout,
         cellMetrics
       ),
-      xOffsetPx = 0.0f
+      xOffsetPx = 0.0f,
+      spaceBeforePx = 0,
+      spaceAfterPx = 0
     )
 
   def leftColumnForCursorVisibility(
@@ -278,9 +280,10 @@ object TextLayoutSnapshot:
         wordWrapEnabled,
         wrapCache
       ).drop(viewportTopVisualLine).take(buffer.viewport.visibleLines)
+    val windowed = HeadingSpacingLayout.droppingLeadingSpace(visualLines)
 
     TextLayoutSnapshot(
-      visualLines = visualLines,
+      visualLines = windowed,
       panelWidthPx = math.max(1, panelWidthPx),
       lineHeightPx = lineHeightPx,
       ascentPx = ascentPx,
@@ -360,8 +363,11 @@ object TextLayoutSnapshot:
                   Vector(placed(row, lineIndex, paragraphRole, lineWithinParagraph = 0, glyphWidthPx)),
                   paragraphRole
                 )
-            val aligned = ParagraphAlignmentLayout.apply(wrapped, lineIndex, panelWidthPx, richText)
-            loop(rest, acc ++ aligned)
+            val aligned  = ParagraphAlignmentLayout.apply(wrapped, lineIndex, panelWidthPx, richText)
+            val complete = !wordWrapEnabled || wrapped.length < remainingVisualLines
+            val spaced = HeadingSpacingLayout
+              .apply(aligned, inputs.headingLevel, complete, font, measuredLayout, cellMetrics, richText)
+            loop(rest, acc ++ spaced)
           case _ => acc
 
     val maxLogicalLines = math.min(math.max(0, totalLines - buffer.viewport.topLine), math.max(1, visualLineLimit))
@@ -424,7 +430,13 @@ object TextLayoutSnapshot:
     lineWithinParagraph: Int,
     glyphWidthPx: Float
   ): TextVisualLine =
-    TextVisualLine(bufferLine, row, DropCapLayout.leftInsetPx(role, lineWithinParagraph, glyphWidthPx))
+    TextVisualLine(
+      bufferLine,
+      row,
+      DropCapLayout.leftInsetPx(role, lineWithinParagraph, glyphWidthPx),
+      spaceBeforePx = 0,
+      spaceAfterPx = 0
+    )
 
   private[layout] def wrapRows(spec: WrappedLineKey, maxVisualLines: Int): RowWrap =
     import spec.{baseColumn, cellMetrics, frc, measuredLayout, resolver, text}

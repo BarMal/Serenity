@@ -1,7 +1,7 @@
 package com.serenity.config
 
 import com.serenity.richtext.ParagraphAlignment
-import com.serenity.ui.theme.{HeadingColour, HeadingStyle, RichTextStyling}
+import com.serenity.ui.theme.{HeadingColour, HeadingSettings, HeadingStyle, RichTextStyling}
 import com.typesafe.config.ConfigFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -13,7 +13,7 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
   private val levelKeys =
     for
       level     <- levels.toList
-      attribute <- List("size", "bold", "italic", "family", "colour", "align")
+      attribute <- List("size", "bold", "italic", "family", "colour", "align", "space_before", "space_after")
     yield s"headings.h$level.$attribute"
 
   private val globalKeys = List("headings.colour", "headings.damping", "headings.damping_threshold")
@@ -62,6 +62,42 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
     configured.styles(2) shouldBe HeadingStyle.default(3).copy(family = Some("Charter"))
     configured.styles(3) shouldBe HeadingStyle.default(4).copy(align = Some(ParagraphAlignment.Center))
     configured.styles.drop(4) shouldBe HeadingStyle.defaults.drop(4)
+  }
+
+  it should "read the space above and below a heading in em of its own font size" in {
+    val configured = read(
+      AppConfig.default,
+      "headings.h1.space_before" -> "1.5",
+      "headings.h1.space_after"  -> "0.25",
+      "headings.h3.space_after"  -> "2"
+    ).headingsConfig
+
+    configured.styles(0) shouldBe HeadingStyle.default(1).copy(spaceBeforeEm = 1.5f, spaceAfterEm = 0.25f)
+    configured.styles(2) shouldBe HeadingStyle.default(3).copy(spaceAfterEm = 2.0f)
+    configured.styles(1) shouldBe HeadingStyle.default(2)
+  }
+
+  it should "read auto and zero as no space, leaving the look it has today" in {
+    val configured = read(
+      AppConfig.default,
+      "headings.h2.space_before" -> "1",
+      "headings.h2.space_before" -> "auto",
+      "headings.h2.space_after"  -> "0"
+    ).headingsConfig
+
+    configured.styles(1).spaceBeforeEm shouldBe 0.0f
+    configured.styles(1).spaceAfterEm shouldBe 0.0f
+    AppConfig.default.headingsConfig.styles.map(style => (style.spaceBeforeEm, style.spaceAfterEm)).distinct shouldBe
+      List((0.0f, 0.0f))
+  }
+
+  it should "carry the spacing into the settings a layout resolves headings with" in {
+    val configured = read(AppConfig.default, "headings.h2.space_before" -> "1.5", "headings.h2.space_after" -> "0.5")
+
+    configured.headingsConfig.settings(12.0f).spacing(2) shouldBe (1.5f, 0.5f)
+    configured.headingsConfig.settings(12.0f).spacing(1) shouldBe (0.0f, 0.0f)
+    configured.headingsConfig.settings(12.0f) should not be HeadingSettings.default
+    AppConfig.default.headingsConfig.settings(12.0f) shouldBe HeadingSettings.default
   }
 
   it should "read a level's colour as auto, text, heading or #RRGGBB" in {
@@ -132,6 +168,10 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
       "headings.h2.bold"           -> "maybe",
       "headings.h3.italic"         -> "2",
       "headings.h4.align"          -> "diagonal",
+      "headings.h1.space_before"   -> "-0.5",
+      "headings.h1.space_before"   -> "9",
+      "headings.h1.space_after"    -> "tall",
+      "headings.h6.space_after"    -> "-1",
       "headings.h1.colour"         -> "blue",
       "headings.h2.colour"         -> "#12345",
       "headings.h3.colour"         -> "#GGGGGG",
@@ -149,14 +189,18 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
       HeadingsConfig(
         levels = Vector(
           HeadingLevelConfig(size = Some(2.25f), bold = Some(false)),
-          HeadingLevelConfig(italic = Some(true), align = Some(ParagraphAlignment.Right)),
+          HeadingLevelConfig(
+            italic = Some(true),
+            align = Some(ParagraphAlignment.Right),
+            spaceBefore = Some(2.0f)
+          ),
           HeadingLevelConfig(
             family = Some("Charter"),
             colour = Some(HeadingColour.Fixed(com.serenity.ui.color.RenderColor.fromRgba(1, 2, 3)))
           ),
           HeadingLevelConfig(),
           HeadingLevelConfig(align = Some(ParagraphAlignment.Justify)),
-          HeadingLevelConfig(size = Some(1.5f))
+          HeadingLevelConfig(size = Some(1.5f), spaceBefore = Some(0.75f), spaceAfter = Some(1.25f))
         ),
         colour = Some(HeadingColour.Heading),
         damping = false,

@@ -137,8 +137,18 @@ object MeasuredRow:
 
 /** A [[MeasuredRow]] placed on a buffer line and shifted `xOffsetPx` right by its paragraph's alignment and drop cap
   * inset. Placing a cached row allocates only this wrapper: the measured geometry is shared, never copied.
+  *
+  * `spaceBeforePx` and `spaceAfterPx` are blank room above and below the row -- a heading's space, on the first and
+  * last row of its paragraph. They are laid out when the row is placed, like the offset, never in the cache, and they
+  * hold no caret position: the row's own height is what the caret and a selection span.
   */
-final case class TextVisualLine(bufferLine: Int, row: MeasuredRow, xOffsetPx: Float):
+final case class TextVisualLine(
+    bufferLine: Int,
+    row: MeasuredRow,
+    xOffsetPx: Float,
+    spaceBeforePx: Int,
+    spaceAfterPx: Int
+):
   export row.{ascentPx, caretCount, caretColumn, endColumn, heightPx, reservedBelowPx, startColumn, text, widthPx}
 
   /** Caret x of stop `index` in the coordinates of the pane. */
@@ -174,7 +184,9 @@ object TextVisualLine:
     TextVisualLine(
       bufferLine,
       MeasuredRow.fromStops(startColumn, endColumn, text, widthPx, caretStops, xSortedCaretStops, heightPx, ascentPx),
-      xOffsetPx
+      xOffsetPx,
+      spaceBeforePx = 0,
+      spaceAfterPx = 0
     )
 
 /** The immutable geometry a vertical cursor move needs, produced once at the effect boundary and handed to the pure
