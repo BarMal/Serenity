@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicLong
 import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.{IndentationSettings, MeasuredRow}
+import com.serenity.ui.openings.ParagraphRoles
 import com.serenity.ui.renderer.FontFirstUse
 import com.serenity.ui.theme.{HeadingSettings, MarkdownInlineStyling, RichTextStyling, TextStyle}
 
@@ -120,12 +121,13 @@ private[layout] object TextCaretMeasurement:
     bufferLine: Int,
     lineLength: Int,
     proseScale: Float,
-    headings: HeadingSettings = HeadingSettings.default
+    headings: HeadingSettings = HeadingSettings.default,
+    roles: ParagraphRoles = ParagraphRoles.enabled
   ): LineFontResolver =
     val runs = richDocument match
       case Some(document) =>
         RichTextStyling
-          .styledFontSpans(document, bufferLine, 0, lineLength, proseScale, headings)
+          .styledFontSpans(document, bufferLine, 0, lineLength, proseScale, headings, roles)
           .foldLeft((0, Vector.empty[ColumnFontRun])) {
             case ((offset, acc), span) =>
               val end = offset + span.text.length

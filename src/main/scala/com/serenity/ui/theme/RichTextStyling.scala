@@ -2,6 +2,7 @@ package com.serenity.ui.theme
 
 import com.serenity.richtext.{InlineAtom, InlineMark, ParagraphRole, RichTextDocument}
 import com.serenity.ui.color.RenderColor
+import com.serenity.ui.openings.{ChapterOpenings, ParagraphRoles}
 
 object RichTextStyling:
 
@@ -35,9 +36,10 @@ object RichTextStyling:
     endColumn: Int,
     theme: Theme,
     scale: Float = 1.0f,
-    headings: HeadingSettings = HeadingSettings.default
+    headings: HeadingSettings = HeadingSettings.default,
+    roles: ParagraphRoles = ParagraphRoles.enabled
   ): List[StyledText] =
-    slices(document, bufferLine, startColumn, endColumn).map {
+    slices(document, bufferLine, startColumn, endColumn, roles).map {
       case (content, style, role) =>
         StyledText(
           content,
@@ -56,9 +58,10 @@ object RichTextStyling:
     startColumn: Int,
     endColumn: Int,
     scale: Float = 1.0f,
-    headings: HeadingSettings = HeadingSettings.default
+    headings: HeadingSettings = HeadingSettings.default,
+    roles: ParagraphRoles = ParagraphRoles.enabled
   ): List[RichSpan] =
-    slices(document, bufferLine, startColumn, endColumn).map {
+    slices(document, bufferLine, startColumn, endColumn, roles).map {
       case (content, style, role) => RichSpan(content, scaledTextStyle(style, role, scale, headings))
     }
 
@@ -66,8 +69,10 @@ object RichTextStyling:
     document: RichTextDocument,
     bufferLine: Int,
     startColumn: Int,
-    endColumn: Int
+    endColumn: Int,
+    roles: ParagraphRoles
   ): List[(String, com.serenity.richtext.RichTextStyle, ParagraphRole)] =
+    val role = roles.layoutRole(document, bufferLine)
     document
       .paragraphAt(bufferLine)
       .map { paragraph =>
@@ -75,7 +80,7 @@ object RichTextStyling:
           .foldLeft((0, List.empty[(String, com.serenity.richtext.RichTextStyle, ParagraphRole)])) {
             case ((offset, acc), run) =>
               val nextOffset = offset + run.text.length
-              val slice      = sliceRun(run, paragraph.role, offset, startColumn, endColumn)
+              val slice      = sliceRun(run, role, offset, startColumn, endColumn)
               (nextOffset, slice.fold(acc)(_ :: acc))
           }
           ._2
@@ -160,9 +165,7 @@ object RichTextStyling:
     * unchanged.
     */
   def effectiveRole(role: ParagraphRole, dropCapsEnabled: Boolean): ParagraphRole =
-    role match
-      case ParagraphRole.DropCap(_) if !dropCapsEnabled => ParagraphRole.Body
-      case other                                        => other
+    ChapterOpenings.degraded(role, dropCapsEnabled)
 
   /** The resolved, zoom-scaled style for a drop cap paragraph's singled-out first character: bold, sized to span
     * `role.lines` visual lines at the paragraph's base body font size, with any inline styling on that character
@@ -201,12 +204,13 @@ object RichTextStyling:
     startColumn: Int,
     endColumn: Int,
     baseFontSizePx: Float,
-    scale: Float = 1.0f
+    scale: Float = 1.0f,
+    roles: ParagraphRoles = ParagraphRoles.enabled
   ): (Option[RichSpan], List[RichSpan]) =
-    val spans = styledFontSpans(document, bufferLine, startColumn, endColumn, scale)
-    val role  = document.paragraphAt(bufferLine).map(_.role)
+    val spans = styledFontSpans(document, bufferLine, startColumn, endColumn, scale, roles = roles)
+    val role  = roles.layoutRole(document, bufferLine)
     (role, startColumn, spans) match
-      case (Some(dropCap: ParagraphRole.DropCap), 0, firstSpan :: restOfFirstSpan) if firstSpan.text.nonEmpty =>
+      case (dropCap: ParagraphRole.DropCap, 0, firstSpan :: restOfFirstSpan) if firstSpan.text.nonEmpty =>
         val firstCharacterStyle = document
           .paragraphAt(bufferLine)
           .flatMap(_.runs.headOption)

@@ -97,10 +97,8 @@ object DropCapLayout:
     snapshot.richTextDocument.filter(_ => snapshot.usesMeasuredLayout).fold(Map.empty[Int, Range]) { document =>
       val lines = snapshot.visualLines
       (for
-        home <- lines.indices if lines(home).startColumn == 0
-        dropCap <- document
-          .paragraphAt(lines(home).bufferLine)
-          .flatMap(p => homeLineRole(p.role, lines(home).startColumn))
+        home    <- lines.indices if lines(home).startColumn == 0
+        dropCap <- homeLineRole(snapshot.roles.layoutRole(document, lines(home).bufferLine), lines(home).startColumn)
       yield home -> spanFrom(snapshot, home, dropCap)).toMap
     }
 

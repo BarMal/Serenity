@@ -11,7 +11,6 @@ import com.serenity.ui.layout.TextCaretMeasurement.{
   resolverForLine,
   singleFontResolver
 }
-import com.serenity.ui.theme.RichTextStyling
 
 /** The line-level inputs of a wrap -- per-run fonts, drop cap role and glyph width -- shared by the painted layout and
   * every row count so the two cannot disagree.
@@ -88,11 +87,17 @@ private[layout] object LineLayout:
       if !measuredLayout then singleFontResolver(font, richText.tabSize)
       else if richText.markdown.isActive then
         markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText)
-      else resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale, richText.headings)
-    val paragraphRole = RichTextStyling.effectiveRole(
-      richText.document.flatMap(_.paragraphAt(lineIndex)).map(_.role).getOrElse(ParagraphRole.Body),
-      richText.dropCapsEnabled
-    )
+      else
+        resolverForLine(
+          font,
+          richText.document,
+          lineIndex,
+          lineLength,
+          richText.proseScale,
+          richText.headings,
+          richText.roles
+        )
+    val paragraphRole = richText.layoutRole(lineIndex)
     val glyphWidthPx =
       if measuredLayout then
         DropCapLayout.measuredGlyphWidthPx(font, frc, richText.document, lineIndex, paragraphRole, richText.proseScale)
@@ -109,7 +114,15 @@ private[layout] object LineLayout:
   ): LineFontResolver =
     val runs = richText.markdown.runsOn(lineIndex, lineText)
     if runs.isEmpty then
-      resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale, richText.headings)
+      resolverForLine(
+        font,
+        richText.document,
+        lineIndex,
+        lineLength,
+        richText.proseScale,
+        richText.headings,
+        richText.roles
+      )
     else
       val resolver = markdownResolver(
         font,

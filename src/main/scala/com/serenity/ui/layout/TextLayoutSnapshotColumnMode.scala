@@ -5,6 +5,7 @@ import java.awt.font.FontRenderContext
 
 import com.serenity.state.models.{Buffer, IndentationSettings, TextVisualLine}
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.openings.ParagraphRoles
 import com.serenity.ui.theme.HeadingSettings
 
 /** Column-based document layout (issue #1338, Phase 1): the two entry points column-mode rendering needs on top of
@@ -166,7 +167,8 @@ object TextLayoutSnapshotColumnMode:
         usesMeasuredLayout = measuredLayout,
         richTextDocument = richDocument,
         proseScale = proseScale,
-        headings = headings
+        headings = headings,
+        roles = ParagraphRoles.standard(dropCapsEnabled)
       )
     }
 
