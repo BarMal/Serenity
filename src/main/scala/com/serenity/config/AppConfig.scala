@@ -7,6 +7,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.lsp.config.LspUserConfig
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.theme.HeadingSettings
 
 /** Global application configuration */
 final case class AppConfig(
@@ -22,8 +23,18 @@ final case class AppConfig(
     appModeConfig: AppModeConfig = AppModeConfig(),
     statusLine: StatusLineConfig = StatusLineConfig.default,
     exportTypographyConfig: ExportTypographyConfig = ExportTypographyConfig(),
-    autoSaveConfig: AutoSaveConfig = AutoSaveConfig()
+    autoSaveConfig: AutoSaveConfig = AutoSaveConfig(),
+    headingsConfig: HeadingsConfig = HeadingsConfig()
 ):
+
+  /** Resolved once per config: the logical body is the prose size before any device scale, so a hi-DPI display never
+    * tightens the headings.
+    */
+  lazy val headingSettings: HeadingSettings =
+    headingsConfig.settings(editorConfig.fontConfig.logicalTextFontSize)
+
+  def withHeadingsConfig(config: HeadingsConfig): AppConfig =
+    copy(headingsConfig = config)
 
   def withEditorConfig(config: EditorConfig): AppConfig =
     copy(editorConfig = config.normalized)

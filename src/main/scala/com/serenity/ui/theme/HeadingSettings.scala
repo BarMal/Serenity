@@ -1,5 +1,7 @@
 package com.serenity.ui.theme
 
+import com.serenity.richtext.ParagraphAlignment
+
 /** The heading look a layout resolves its paragraphs with. The per-level text styles are resolved once here, so styling
   * a heading run is a lookup.
   */
@@ -25,6 +27,9 @@ final case class HeadingSettings(
   def textStyle(level: Int): TextStyle =
     if level >= 1 && level <= HeadingStyle.LevelCount then textStyles(level - 1)
     else textStyles(HeadingStyle.LevelCount - 1)
+
+  def alignment(level: Int): Option[ParagraphAlignment] =
+    styles(math.max(1, math.min(level, HeadingStyle.LevelCount)) - 1).align
 
 object HeadingSettings:
 

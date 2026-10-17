@@ -111,7 +111,8 @@ private[serenity] object UiSceneBuilder:
               columnCount = columnCount,
               dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
               wrapCache = wrappedLines,
-              tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
+              tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
+              headings = state.persisted.config.headingSettings
             )
             // Only a genuinely multi-column page carries per-column placements. A single fitted column is fully
             // served by `textSnapshots` alone (identical to the pre-multi-column render path, including its
@@ -144,7 +145,8 @@ private[serenity] object UiSceneBuilder:
                   proseScale = proseScale,
                   dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
                   wrapCache = wrappedLines,
-                  tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
+                  tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
+                  headings = state.persisted.config.headingSettings
                 )
               )
             paneId -> (activeSnapshot, placements, Option.empty[PaneScroll])
@@ -161,7 +163,8 @@ private[serenity] object UiSceneBuilder:
               dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
               wrapCache = wrappedLines,
               markdownViewMode = state.persisted.config.inlineMarkdownViewMode,
-              tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
+              tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
+              headings = state.persisted.config.headingSettings
             )
             val scroll = Option.when(ScrollbarLayout.hasBar(state, paneLayout))(
               paneScroll(state, buffer, viewport, single, width, font, fontMetrics, cellMetrics.isDefined, wrappedLines)
@@ -203,7 +206,8 @@ private[serenity] object UiSceneBuilder:
           state.persisted.config.documentConfig.dropCapsEnabled,
           state.persisted.config.inlineMarkdownViewMode,
           buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
-          known = wholeLines.get
+          known = wholeLines.get,
+          headings = state.persisted.config.headingSettings
         )
     PaneScroll.of(rows, viewport.topLine, viewport.topVisualLine, viewport.visibleLines)
 

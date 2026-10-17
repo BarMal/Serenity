@@ -5,6 +5,7 @@ import java.awt.font.FontRenderContext
 
 import com.serenity.state.models.{Buffer, IndentationSettings, TextVisualLine}
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.theme.HeadingSettings
 
 /** Column-based document layout (issue #1338, Phase 1): the two entry points column-mode rendering needs on top of
   * [[TextLayoutSnapshot.fromBuffer]]'s ordinary single-window slice. Split out of `TextLayoutSnapshot` itself once
@@ -34,7 +35,8 @@ object TextLayoutSnapshotColumnMode:
     // `document.drop_caps_enabled` config toggle -- see `TextLayoutSnapshot.fromBuffer`'s own parameter.
     dropCapsEnabled: Boolean = true,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    headings: HeadingSettings = HeadingSettings.default
   ): Vector[Vector[TextVisualLine]] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -54,7 +56,7 @@ object TextLayoutSnapshotColumnMode:
       measuredLayout,
       cellMetrics,
       visualLineLimit,
-      RichTextContext(richDocument, proseScale, dropCapsEnabled, tabSize = tabSize),
+      RichTextContext(richDocument, proseScale, dropCapsEnabled, tabSize = tabSize, headings = headings),
       wordWrapEnabled = true,
       wrapCache
     ).drop(topVisualLine).take(totalRowsNeeded)
@@ -79,7 +81,8 @@ object TextLayoutSnapshotColumnMode:
     proseScale: Float = 1.0f,
     dropCapsEnabled: Boolean = true,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    headings: HeadingSettings = HeadingSettings.default
   ): TextLayoutSnapshot =
     fromBufferColumns(
       buffer,
@@ -92,9 +95,18 @@ object TextLayoutSnapshotColumnMode:
       columnCount = 1,
       dropCapsEnabled,
       wrapCache,
-      tabSize
+      tabSize,
+      headings
     ).headOption.getOrElse(
-      emptyColumnSnapshot(columnWidthPx, font, fontRenderContext, cellMetricsOverride, forceCellLayout, proseScale)
+      emptyColumnSnapshot(
+        columnWidthPx,
+        font,
+        fontRenderContext,
+        cellMetricsOverride,
+        forceCellLayout,
+        proseScale,
+        headings
+      )
     )
 
   /** All `columnCount` per-column snapshots for the page anchored at the viewport's own `topLine`/`topVisualLine` (the
@@ -116,7 +128,8 @@ object TextLayoutSnapshotColumnMode:
     columnCount: Int = 1,
     dropCapsEnabled: Boolean = true,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    headings: HeadingSettings = HeadingSettings.default
   ): Vector[TextLayoutSnapshot] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -143,7 +156,8 @@ object TextLayoutSnapshotColumnMode:
       columnCount,
       dropCapsEnabled,
       wrapCache,
-      tabSize
+      tabSize,
+      headings
     ).map { chunk =>
       TextLayoutSnapshot(
         visualLines = chunk,
@@ -153,7 +167,8 @@ object TextLayoutSnapshotColumnMode:
         isProportional = !FontLoader.isMonospacedFont(font),
         usesMeasuredLayout = measuredLayout,
         richTextDocument = richDocument,
-        proseScale = proseScale
+        proseScale = proseScale,
+        headings = headings
       )
     }
 
@@ -167,7 +182,8 @@ object TextLayoutSnapshotColumnMode:
     fontRenderContext: FontRenderContext,
     cellMetricsOverride: Option[CellMetrics],
     forceCellLayout: Boolean,
-    proseScale: Float
+    proseScale: Float,
+    headings: HeadingSettings
   ): TextLayoutSnapshot =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -186,5 +202,6 @@ object TextLayoutSnapshotColumnMode:
       ascentPx = ascentPx,
       isProportional = !FontLoader.isMonospacedFont(font),
       usesMeasuredLayout = measuredLayout,
-      proseScale = proseScale
+      proseScale = proseScale,
+      headings = headings
     )

@@ -6,6 +6,7 @@ import java.awt.{Font, GraphicsEnvironment}
 import cats.effect.IO
 import com.serenity.state.models.TypographyRole
 import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.theme.HeadingScale
 import org.typelevel.log4cats.Logger
 
 object FontLoader:
@@ -36,6 +37,15 @@ object FontLoader:
 
     def codeLigatures: Boolean =
       enableLigatures
+
+    /** The prose size with only a manual text scale applied: what headings damp against, never the detected device
+      * scale.
+      */
+    def logicalTextFontSize: Float =
+      textScaleMode match
+        case TextScaleMode.Manual =>
+          HeadingScale.logicalBodyPt(textFontSize, FontConfig.clampTextScale(textScaleMultiplier).toFloat)
+        case _ => textFontSize
 
     def scaledCodeFontSize: Float =
       scaledPointSize(fontSize)

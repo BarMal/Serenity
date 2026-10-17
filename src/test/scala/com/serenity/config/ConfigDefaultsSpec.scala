@@ -41,6 +41,16 @@ class ConfigDefaultsSpec extends AnyFlatSpec with Matchers:
     ConfigRegistry.writtenKeys.filter(key => ConfigRegistry.defaultFor(key).isEmpty) shouldBe Nil
   }
 
+  it should "ship every heading level automatic, with damping on above a 24pt body" in {
+    val headingKeys = ConfigRegistry.writtenKeys.filter(_.startsWith("headings."))
+
+    headingKeys.size shouldBe 32
+    headingKeys.filter(_.startsWith("headings.h")).flatMap(ConfigRegistry.defaultFor).map(_.rendered).distinct shouldBe
+      List("auto")
+    ConfigRegistry.defaultFor("headings.damping").map(_.rendered) shouldBe Some("true")
+    ConfigRegistry.defaultFor("headings.damping_threshold").map(_.rendered) shouldBe Some("24.0")
+  }
+
   it should "put a single changed setting back without disturbing its neighbours" in {
     val edited = AppConfig.default.withoutStatusLine
       .withLineNumbers(!AppConfig.default.surfaceConfig.showLineNumbers)
