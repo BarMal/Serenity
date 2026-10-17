@@ -232,7 +232,10 @@ class HeadingSettingsRowsSpec extends AnyFlatSpec with Matchers:
         List("bold", "italic", "align").map(row => s"heading-h$n-$row")
     }
     group(tree, "settings-headings").children.map(_.id).take(2) shouldBe
-      List("headings-damping", "headings-damping-threshold")
+      List("settings-heading-h1", "settings-heading-h2")
+    val ids = tree.flatMap(g => g :: descendants(g)).map(_.id)
+    ids should not contain "headings-damping"
+    ids should not contain "headings-damping-threshold"
   }
 
   it should "bring the size and font rows back, led by an inert note, when Show All Settings is on" in {
@@ -244,6 +247,10 @@ class HeadingSettingsRowsSpec extends AnyFlatSpec with Matchers:
     input(tree, "heading-h1-size-custom").hint should startWith("Inert in TUI mode -- ")
     group(tree, "heading-h1-font").hint.getOrElse("") should startWith("Inert in TUI mode -- ")
     option(tree, "heading-h1-bold").hint.getOrElse("") should not include "Inert in TUI mode"
+    group(tree, "settings-headings").children.map(_.id).take(2) shouldBe
+      List("headings-damping", "headings-damping-threshold")
+    option(tree, "headings-damping").hint.getOrElse("") should startWith("Inert in TUI mode -- ")
+    input(tree, "headings-damping-threshold").hint should startWith("Inert in TUI mode -- ")
   }
 
   "A UI preset's settings" should "hold no heading row" in {

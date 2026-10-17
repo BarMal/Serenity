@@ -113,7 +113,8 @@ private[command] object CommandRunnerSettingsHeadingItems:
     CommandSurfaceItem.GroupItem(
       id = "settings-headings",
       label = "Headings",
-      children = List(damping) ++ inputItems.filter(_.id == "headings-damping-threshold") ++
+      children = onFrontend.row(FrontendSupport.GuiOnly, damping).toList ++
+        onFrontend.rows(FrontendSupport.GuiOnly, inputItems.filter(_.id == "headings-damping-threshold")) ++
         levels.map(level => levelGroup(level, optionSelections, inputItems, fontFamilies, onFrontend)),
       category = CommandCategory.Settings,
       hint = Some("Size, weight, style and alignment of each heading level")
