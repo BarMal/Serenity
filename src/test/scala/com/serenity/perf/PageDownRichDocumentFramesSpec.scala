@@ -199,7 +199,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     (layoutName, config)     <- List("minimal" -> AppConfig.default, "conventional" -> AppConfig.conventional)
     scale                    <- List(1.0, 2.0)
     (documentName, document) <- documents
-    if (scale == 1.0 || documentName.startsWith("six")) && (layoutName == "minimal" || !documentName.startsWith("Word"))
+    if scale == 1.0 || documentName.startsWith("six") || documentName.startsWith("Word")
   do
     s"PageDown through $documentName in the $layoutName layout at ${scale}x" should
       "draw what a cold frame draws at every step" in {

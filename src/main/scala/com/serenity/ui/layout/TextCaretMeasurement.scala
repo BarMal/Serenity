@@ -28,8 +28,9 @@ private[layout] object TextCaretMeasurement:
   final private[layout] case class FontSpan(startColumn: Int, endColumn: Int, font: Font, hidden: Boolean)
 
   /** Per-logical-line font lookup for the measured path: maps an absolute buffer column to its run's scaled font, and
-    * reports a visual line's height/ascent from the tallest run covering it. Non-rich lines carry no runs and fall back
-    * to the base font everywhere, reproducing the old single-font behaviour exactly.
+    * reports a visual line's height/ascent from the highest ascent and deepest descent of the runs covering it.
+    * Non-rich lines carry no runs and fall back to the base font everywhere, reproducing the old single-font behaviour
+    * exactly.
     */
   final private[layout] case class LineFontResolver(
       baseFont: Font,
@@ -97,11 +98,12 @@ private[layout] object TextCaretMeasurement:
         case run if !run.hidden && run.endColumn > startColumn && run.startColumn < endColumn => run.font
       }
       val fonts = if covering.nonEmpty then covering else Vector(baseFont)
-      fonts.foldLeft((1, 1)) {
-        case ((maxHeight, maxAscent), font) =>
-          val extent = FontLineExtents.shared(FontLineExtents.Key(font, frc))
-          (math.max(maxHeight, extent.heightPx), math.max(maxAscent, extent.ascentPx))
+      val (maxAscent, maxDescent) = fonts.foldLeft((1, 0)) {
+        case ((ascent, descent), font) =>
+          val extent = FontLineExtents.of(font, frc)
+          (math.max(ascent, extent.ascentPx), math.max(descent, extent.descentPx))
       }
+      (maxAscent + maxDescent, maxAscent)
 
   /** A resolver with no per-run fonts: every column measures with the one base font, reproducing the pre-rich
     * single-font behaviour. Used by the plain-text measurement helpers that carry no rich document.
