@@ -156,6 +156,39 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
       }
     }
 
+  private val shapedLatinCorpus = Table(
+    "line",
+    "ffl -> ",
+    "-> => ->> =>> a->b a=>b",
+    "office affluent fluffy fjord efficient waffle shuffle ffi ffl -> => != <= " * 3,
+    prose
+  )
+
+  private def assertShapedLatinMatchesPerRowMeasurement(font: Font): Assertion =
+    TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc) shouldBe true
+    forAll(shapedLatinCorpus) { line =>
+      widths.foreach { widthPx =>
+        withClue(s"$font at $widthPx px: ") {
+          assertSameRows(
+            TextLayoutSnapshot.boundedVisualLinesForText(line, 3, widthPx, font, frc),
+            legacyLine(line, widthPx, font, CellMetrics.fromFont(font), measured = true)
+          )
+        }
+      }
+      val xs = TextLayoutSnapshot.caretXsForText(line, font, frc)
+      val legacy =
+        LegacyLineMeasurement.caretXs(line, 0, singleFontResolver(font), frc, true, CellMetrics.fromFont(font))
+      xs.length shouldBe legacy.length
+      xs.zip(legacy).foreach((x, expected) => x shouldBe expected +- tolerance)
+    }
+    succeed
+
+  it should "measure arrows and ligatures of a substituting font as per-row measurement did, without the ligatures attribute" in
+    assertShapedLatinMatchesPerRowMeasurement(BundledInterFont.plain(13f))
+
+  it should "measure arrows and ligatures of a substituting font as per-row measurement did, with the ligatures attribute" in
+    assertShapedLatinMatchesPerRowMeasurement(BundledInterFont.ligatured(13f))
+
   it should "wrap cell layouts, uniform and display-width aware, exactly as before" in {
     val cellLayouts =
       Seq(CellMetrics.fromFont(mono), CellMetrics(1, 1, 0), CellMetrics(1, 1, 0, displayWidthAware = true))
