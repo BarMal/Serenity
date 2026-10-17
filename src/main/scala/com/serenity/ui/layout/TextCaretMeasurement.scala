@@ -9,7 +9,7 @@ import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.{IndentationSettings, MeasuredRow}
 import com.serenity.ui.renderer.FontFirstUse
-import com.serenity.ui.theme.{MarkdownInlineStyling, RichTextStyling, TextStyle}
+import com.serenity.ui.theme.{HeadingSettings, MarkdownInlineStyling, RichTextStyling, TextStyle}
 
 /** Caret-stop measurement for one logical line: which AWT font each column measures with, and the x position of every
   * caret boundary under either the fixed cell grid or the measured (proportional/ligature/rich) path. Pure geometry
@@ -117,12 +117,13 @@ private[layout] object TextCaretMeasurement:
     richDocument: Option[RichTextDocument],
     bufferLine: Int,
     lineLength: Int,
-    proseScale: Float
+    proseScale: Float,
+    headings: HeadingSettings = HeadingSettings.default
   ): LineFontResolver =
     val runs = richDocument match
       case Some(document) =>
         RichTextStyling
-          .styledFontSpans(document, bufferLine, 0, lineLength, proseScale)
+          .styledFontSpans(document, bufferLine, 0, lineLength, proseScale, headings)
           .foldLeft((0, Vector.empty[ColumnFontRun])) {
             case ((offset, acc), span) =>
               val end = offset + span.text.length

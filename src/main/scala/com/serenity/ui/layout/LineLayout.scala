@@ -88,7 +88,7 @@ private[layout] object LineLayout:
       if !measuredLayout then singleFontResolver(font, richText.tabSize)
       else if richText.markdown.isActive then
         markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText)
-      else resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale)
+      else resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale, richText.headings)
     val paragraphRole = RichTextStyling.effectiveRole(
       richText.document.flatMap(_.paragraphAt(lineIndex)).map(_.role).getOrElse(ParagraphRole.Body),
       richText.dropCapsEnabled
@@ -108,7 +108,8 @@ private[layout] object LineLayout:
     lineText: String
   ): LineFontResolver =
     val runs = richText.markdown.runsOn(lineIndex, lineText)
-    if runs.isEmpty then resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale)
+    if runs.isEmpty then
+      resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale, richText.headings)
     else
       val resolver = markdownResolver(
         font,
