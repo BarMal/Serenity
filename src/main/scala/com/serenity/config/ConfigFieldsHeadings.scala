@@ -15,6 +15,9 @@ private[config] object ConfigFieldsHeadings:
   private val size: FieldCodec[Option[Float]] =
     float.filtered(value => value >= HeadingsConfig.SizeRange._1 && value <= HeadingsConfig.SizeRange._2).orAuto
 
+  private val space: FieldCodec[Option[Float]] =
+    float.filtered(value => value >= HeadingsConfig.SpaceRange._1 && value <= HeadingsConfig.SpaceRange._2).orAuto
+
   private val flag: FieldCodec[Option[Boolean]] = boolean.orAuto
 
   private val family: FieldCodec[Option[String]] = string.filtered(_.nonEmpty).orAuto
@@ -83,7 +86,12 @@ private[config] object ConfigFieldsHeadings:
       levelField(level, "italic", flag)(_.italic, (current, value) => current.copy(italic = value)),
       levelField(level, "family", family)(_.family, (current, value) => current.copy(family = value)),
       levelField(level, "colour", levelColour)(_.colour, (current, value) => current.copy(colour = value)),
-      levelField(level, "align", alignment)(_.align, (current, value) => current.copy(align = value))
+      levelField(level, "align", alignment)(_.align, (current, value) => current.copy(align = value)),
+      levelField(level, "space_before", space)(
+        _.spaceBefore,
+        (current, value) => current.copy(spaceBefore = value)
+      ),
+      levelField(level, "space_after", space)(_.spaceAfter, (current, value) => current.copy(spaceAfter = value))
     )
 
   val fields: List[ConfigField[?]] =

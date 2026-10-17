@@ -71,12 +71,39 @@ class HeadingSettingsRowsSpec extends AnyFlatSpec with Matchers:
     allLevels.foreach(n => group(tree, s"settings-heading-h$n").label shouldBe s"H$n")
   }
 
-  it should "give every level a size, custom size, bold, italic, font and alignment row" in {
+  it should "give every level a size, custom size, bold, italic, font, alignment and spacing rows" in {
     val tree = treeOf(AppConfig.default)
 
     allLevels.foreach { n =>
       group(tree, s"settings-heading-h$n").children.map(_.id) shouldBe
-        List("size", "size-custom", "bold", "italic", "font", "align").map(row => s"heading-h$n-$row")
+        List(
+          "size",
+          "size-custom",
+          "bold",
+          "italic",
+          "font",
+          "align",
+          "space-before",
+          "space-before-custom",
+          "space-after",
+          "space-after-custom"
+        ).map(row => s"heading-h$n-$row")
+    }
+  }
+
+  it should "offer auto and the usual spaces in em for above and below a heading, each choosing that level's" in {
+    val tree    = treeOf(AppConfig.default)
+    val presets = List(None, Some(0.25f), Some(0.5f), Some(0.75f), Some(1.0f), Some(1.5f), Some(2.0f))
+
+    allLevels.foreach { n =>
+      val before = option(tree, s"heading-h$n-space-before")
+      val after  = option(tree, s"heading-h$n-space-after")
+      before.label shouldBe "Space Before"
+      after.label shouldBe "Space After"
+      before.options.map(_.label) shouldBe List("Auto", "0.25", "0.5", "0.75", "1.0", "1.5", "2.0")
+      after.options.map(_.label) shouldBe before.options.map(_.label)
+      before.options.map(_.intent) shouldBe presets.map(em => level(n, HeadingLevelChange.SpaceBefore(em)))
+      after.options.map(_.intent) shouldBe presets.map(em => level(n, HeadingLevelChange.SpaceAfter(em)))
     }
   }
 
@@ -136,11 +163,13 @@ class HeadingSettingsRowsSpec extends AnyFlatSpec with Matchers:
     val tree = treeOf(AppConfig.default)
 
     allLevels.foreach { n =>
-      List("size", "bold", "italic", "align").foreach(row =>
+      List("size", "bold", "italic", "align", "space-before", "space-after").foreach(row =>
         option(tree, s"heading-h$n-$row").selectedOption shouldBe "Auto"
       )
       group(tree, s"heading-h$n-font").hint shouldBe Some("Auto")
       input(tree, s"heading-h$n-size-custom").currentValue shouldBe "auto"
+      input(tree, s"heading-h$n-space-before-custom").currentValue shouldBe "auto"
+      input(tree, s"heading-h$n-space-after-custom").currentValue shouldBe "auto"
     }
     option(tree, "headings-damping").selectedOption shouldBe "On"
     input(tree, "headings-damping-threshold").currentValue shouldBe "24.0"
@@ -156,7 +185,9 @@ class HeadingSettingsRowsSpec extends AnyFlatSpec with Matchers:
             bold = Some(false),
             italic = Some(true),
             family = Some(family),
-            align = Some(ParagraphAlignment.Justify)
+            align = Some(ParagraphAlignment.Justify),
+            spaceBefore = Some(1.5f),
+            spaceAfter = Some(0.5f)
           )
         ).copy(damping = false, dampingThresholdPt = 40.0f)
       )
@@ -166,6 +197,9 @@ class HeadingSettingsRowsSpec extends AnyFlatSpec with Matchers:
     option(tree, "heading-h2-bold").selectedOption shouldBe "Off"
     option(tree, "heading-h2-italic").selectedOption shouldBe "On"
     option(tree, "heading-h2-align").selectedOption shouldBe "Justify"
+    option(tree, "heading-h2-space-before").selectedOption shouldBe "1.5"
+    option(tree, "heading-h2-space-after").selectedOption shouldBe "0.5"
+    option(tree, "heading-h1-space-before").selectedOption shouldBe "Auto"
     group(tree, "heading-h2-font").hint shouldBe Some(family)
     option(tree, "heading-h1-bold").selectedOption shouldBe "Auto"
     option(tree, "headings-damping").selectedOption shouldBe "Off"
@@ -180,6 +214,37 @@ class HeadingSettingsRowsSpec extends AnyFlatSpec with Matchers:
     size.selectedIntent shouldBe Some(level(4, HeadingLevelChange.Size(Some(1.25f))))
     size.options.size shouldBe 8
     input(tree, "heading-h4-size-custom").currentValue shouldBe "1.25"
+  }
+
+  it should "keep a space that is not one of the usual ones visible and selected" in {
+    val tree  = treeOf(configured(_.withLevel(3)(_.copy(spaceBefore = Some(1.25f)))))
+    val above = option(tree, "heading-h3-space-before")
+
+    above.selectedOption shouldBe "1.25"
+    above.selectedIntent shouldBe Some(level(3, HeadingLevelChange.SpaceBefore(Some(1.25f))))
+    above.options.size shouldBe 8
+    input(tree, "heading-h3-space-before-custom").currentValue shouldBe "1.25"
+    option(tree, "heading-h3-space-after").options.size shouldBe 7
+  }
+
+  "A custom space" should "parse em within range, or auto, and reject the rest" in {
+    val tree   = treeOf(AppConfig.default)
+    val before = input(tree, "heading-h4-space-before-custom")
+    val after  = input(tree, "heading-h4-space-after-custom")
+
+    before.parse("1.25") shouldBe Some(level(4, HeadingLevelChange.SpaceBefore(Some(1.25f))))
+    before.parse(" 0 ") shouldBe Some(level(4, HeadingLevelChange.SpaceBefore(Some(0.0f))))
+    before.parse("AUTO") shouldBe Some(level(4, HeadingLevelChange.SpaceBefore(None)))
+    after.parse("3") shouldBe Some(level(4, HeadingLevelChange.SpaceAfter(Some(3.0f))))
+    after.parse("auto") shouldBe Some(level(4, HeadingLevelChange.SpaceAfter(None)))
+    List("-1", "8.5", "tall", "").foreach { text =>
+      withClue(text) {
+        before.parse(text) shouldBe None
+        after.parse(text) shouldBe None
+      }
+    }
+    before.defaultValue shouldBe Some("auto")
+    after.defaultValue shouldBe Some("auto")
   }
 
   "A custom size" should "parse a multiple of the body, or auto, and reject the rest" in {
@@ -212,7 +277,15 @@ class HeadingSettingsRowsSpec extends AnyFlatSpec with Matchers:
   "The option selections" should "carry every heading row's current choice" in {
     val selections = CommandRunnerOptionSelections.default(
       configured(
-        _.withLevel(5)(_.copy(size = Some(2.0f), bold = Some(true), italic = Some(false))).copy(damping = false)
+        _.withLevel(5)(
+          _.copy(
+            size = Some(2.0f),
+            bold = Some(true),
+            italic = Some(false),
+            spaceBefore = Some(1.0f),
+            spaceAfter = Some(0.75f)
+          )
+        ).copy(damping = false)
       )
     )
 
@@ -220,6 +293,8 @@ class HeadingSettingsRowsSpec extends AnyFlatSpec with Matchers:
     selections.get("heading-h5-bold") shouldBe Some(1)
     selections.get("heading-h5-italic") shouldBe Some(2)
     selections.get("heading-h5-align") shouldBe Some(0)
+    selections.get("heading-h5-space-before") shouldBe Some(4)
+    selections.get("heading-h5-space-after") shouldBe Some(3)
     selections.get("heading-h5-font") shouldBe Some(0)
     selections.get("headings-damping") shouldBe Some(1)
   }
@@ -229,7 +304,8 @@ class HeadingSettingsRowsSpec extends AnyFlatSpec with Matchers:
 
     allLevels.foreach { n =>
       group(tree, s"settings-heading-h$n").children.map(_.id) shouldBe
-        List("bold", "italic", "align").map(row => s"heading-h$n-$row")
+        List("bold", "italic", "align", "space-before", "space-before-custom", "space-after", "space-after-custom")
+          .map(row => s"heading-h$n-$row")
     }
     group(tree, "settings-headings").children.map(_.id).take(2) shouldBe
       List("settings-heading-h1", "settings-heading-h2")
@@ -242,11 +318,24 @@ class HeadingSettingsRowsSpec extends AnyFlatSpec with Matchers:
     val tree = treeOf(AppConfig.default, FrontendCapabilities.tui(), showAll = true)
 
     group(tree, "settings-heading-h1").children.map(_.id) shouldBe
-      List("size", "size-custom", "bold", "italic", "font", "align").map(row => s"heading-h1-$row")
+      List(
+        "size",
+        "size-custom",
+        "bold",
+        "italic",
+        "font",
+        "align",
+        "space-before",
+        "space-before-custom",
+        "space-after",
+        "space-after-custom"
+      ).map(row => s"heading-h1-$row")
     option(tree, "heading-h1-size").hint.getOrElse("") should startWith("Inert in TUI mode -- ")
     input(tree, "heading-h1-size-custom").hint should startWith("Inert in TUI mode -- ")
     group(tree, "heading-h1-font").hint.getOrElse("") should startWith("Inert in TUI mode -- ")
     option(tree, "heading-h1-bold").hint.getOrElse("") should not include "Inert in TUI mode"
+    option(tree, "heading-h1-space-before").hint.getOrElse("") should not include "Inert in TUI mode"
+    input(tree, "heading-h1-space-after-custom").hint should not include "Inert in TUI mode"
     group(tree, "settings-headings").children.map(_.id).take(2) shouldBe
       List("headings-damping", "headings-damping-threshold")
     option(tree, "headings-damping").hint.getOrElse("") should startWith("Inert in TUI mode -- ")

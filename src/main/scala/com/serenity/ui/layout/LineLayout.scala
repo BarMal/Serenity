@@ -3,6 +3,7 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.FontRenderContext
 
+import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.ParagraphRole
 import com.serenity.state.models.TextVisualLine
 import com.serenity.ui.layout.TextCaretMeasurement.{
@@ -65,10 +66,12 @@ private[layout] object LineLayout:
   ): Boolean =
     !forceCellLayout && (richText.requiresMeasuredLayout || TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc))
 
+  /** `headingLevel` is the level of the heading the line is, whether its paragraph says so or its Markdown does. */
   final case class LineLayoutInputs(
       resolver: LineFontResolver,
       paragraphRole: ParagraphRole,
-      glyphWidthPx: Float
+      glyphWidthPx: Float,
+      headingLevel: Option[Int]
   )
 
   /** Cell layout (TUI) never consults per-run fonts -- one glyph per cell, one row per line -- nor spans a drop cap
@@ -84,20 +87,28 @@ private[layout] object LineLayout:
     lineLength: Int,
     lineText: String
   ): LineLayoutInputs =
+    val markdownRuns =
+      if measuredLayout && richText.markdown.isActive then Some(richText.markdown.runsOn(lineIndex, lineText))
+      else None
     val resolver =
       if !measuredLayout then singleFontResolver(font, richText.tabSize)
-      else if richText.markdown.isActive then
-        markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText)
-      else resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale, richText.headings)
-    val paragraphRole = RichTextStyling.effectiveRole(
-      richText.document.flatMap(_.paragraphAt(lineIndex)).map(_.role).getOrElse(ParagraphRole.Body),
-      richText.dropCapsEnabled
-    )
+      else
+        markdownRuns.fold(
+          resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale, richText.headings)
+        )(markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText, _))
+    val ownRole       = richText.document.flatMap(_.paragraphAt(lineIndex)).map(_.role).getOrElse(ParagraphRole.Body)
+    val paragraphRole = RichTextStyling.effectiveRole(ownRole, richText.dropCapsEnabled)
     val glyphWidthPx =
       if measuredLayout then
         DropCapLayout.measuredGlyphWidthPx(font, frc, richText.document, lineIndex, paragraphRole, richText.proseScale)
       else 0.0f
-    LineLayoutInputs(resolver, paragraphRole, glyphWidthPx)
+    LineLayoutInputs(resolver, paragraphRole, glyphWidthPx, headingLevelOf(ownRole, markdownRuns))
+
+  private def headingLevelOf(role: ParagraphRole, markdownRuns: Option[Vector[MarkdownInlineSpans.Run]]): Option[Int] =
+    role match
+      case ParagraphRole.Heading(level) => Some(level)
+      case _ =>
+        markdownRuns.flatMap(_.collectFirst { case run if run.style.headingLevel > 0 => run.style.headingLevel })
 
   private def markdownAwareResolver(
     font: Font,
@@ -105,9 +116,9 @@ private[layout] object LineLayout:
     richText: RichTextContext,
     lineIndex: Int,
     lineLength: Int,
-    lineText: String
+    lineText: String,
+    runs: Vector[MarkdownInlineSpans.Run]
   ): LineFontResolver =
-    val runs = richText.markdown.runsOn(lineIndex, lineText)
     if runs.isEmpty then
       resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale, richText.headings)
     else

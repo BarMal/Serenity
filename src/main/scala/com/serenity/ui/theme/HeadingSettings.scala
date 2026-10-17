@@ -45,7 +45,12 @@ final case class HeadingSettings(
     colour(level).orElse(globalColour).getOrElse(if markdown then HeadingColour.Heading else HeadingColour.Text)
 
   def alignment(level: Int): Option[ParagraphAlignment] =
-    styles(math.max(1, math.min(level, HeadingStyle.LevelCount)) - 1).align
+    styles(indexOf(level)).align
+
+  /** The space above and below a `level` heading, in em of that heading's font size. */
+  def spacing(level: Int): (Float, Float) =
+    val style = styles(indexOf(level))
+    (style.spaceBeforeEm, style.spaceAfterEm)
 
 object HeadingSettings:
 

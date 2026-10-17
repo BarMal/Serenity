@@ -61,7 +61,7 @@ object TextLayoutSnapshotColumnMode:
       wrapCache
     ).drop(topVisualLine).take(totalRowsNeeded)
 
-    allVisualLines.grouped(visibleLines).toVector
+    allVisualLines.grouped(visibleLines).map(HeadingSpacingLayout.droppingLeadingSpace).toVector
 
   /** The snapshot for the ONE column currently showing -- `columnChunksForBuffer`'s first chunk (the viewport's own
     * `topLine`/`topVisualLine` is always already snapped to a page boundary by

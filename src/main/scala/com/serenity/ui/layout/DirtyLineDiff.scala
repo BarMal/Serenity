@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.richtext.RichTextParagraph
+import com.serenity.state.models.TextVisualLine
 
 /** Diffs two consecutive frames of one editor pane's text layout and reports which visible rows can no longer reuse the
   * pixels an earlier frame left on the surface.
@@ -28,7 +29,11 @@ object DirtyLineDiff:
       case Some(previousSnapshot) =>
         if !comparableShape(previousSnapshot, current) then allRows(current)
         else
-          val reflowFrom = richReflowStart(previousSnapshot, current)
+          val reflowFrom =
+            List(
+              richReflowStart(previousSnapshot, current),
+              extentReflowStart(previousSnapshot, current)
+            ).flatten.minOption
           val changed = current.visualLines.indices.filter { row =>
             reflowFrom.exists(row >= _) ||
             !previousSnapshot.visualLines.lift(row).contains(current.visualLines(row)) ||
@@ -117,6 +122,18 @@ object DirtyLineDiff:
           formattingDiffers(before.paragraphAt(line.bufferLine), after.paragraphAt(line.bufferLine))
         }
       case _ => None
+
+  /** The first visible row whose band is taller or shorter than the row it replaces -- a heading's space gained or
+    * lost, say. Rows below it keep their text but not their place, and are dirty with it however their own lines
+    * compare.
+    */
+  private def extentReflowStart(previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Option[Int] =
+    current.visualLines.indices.find { row =>
+      previous.visualLines.lift(row).exists(old => extentOf(old) != extentOf(current.visualLines(row)))
+    }
+
+  private def extentOf(line: TextVisualLine): Int =
+    line.spaceBeforePx + line.heightPx + line.reservedBelowPx + line.spaceAfterPx
 
   private def formattingDiffers(before: Option[RichTextParagraph], after: Option[RichTextParagraph]): Boolean =
     (before, after) match

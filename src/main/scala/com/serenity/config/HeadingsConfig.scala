@@ -10,7 +10,9 @@ final case class HeadingLevelConfig(
     italic: Option[Boolean] = None,
     family: Option[String] = None,
     colour: Option[HeadingColour] = None,
-    align: Option[ParagraphAlignment] = None
+    align: Option[ParagraphAlignment] = None,
+    spaceBefore: Option[Float] = None,
+    spaceAfter: Option[Float] = None
 ):
 
   def resolved(level: Int): HeadingStyle =
@@ -21,7 +23,9 @@ final case class HeadingLevelConfig(
       italic = italic.getOrElse(base.italic),
       family = family.orElse(base.family),
       colour = colour.orElse(base.colour),
-      align = align.orElse(base.align)
+      align = align.orElse(base.align),
+      spaceBeforeEm = spaceBefore.getOrElse(base.spaceBeforeEm),
+      spaceAfterEm = spaceAfter.getOrElse(base.spaceAfterEm)
     )
 
 /** The `headings.*` settings: per-level overrides, and the damping that stops a large body producing enormous headings.
@@ -57,4 +61,5 @@ final case class HeadingsConfig(
 
 object HeadingsConfig:
   val SizeRange: (Float, Float)      = (1.0f, 8.0f)
+  val SpaceRange: (Float, Float)     = (0.0f, 8.0f)
   val ThresholdRange: (Float, Float) = (8.0f, 144.0f)

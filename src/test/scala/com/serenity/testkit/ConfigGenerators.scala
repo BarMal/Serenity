@@ -154,7 +154,9 @@ object ConfigGenerators:
       family <- Gen.option(Gen.oneOf("Charter", "Serif", "Inter"))
       colour <- Gen.option(genHeadingColour)
       align  <- Gen.option(oneOfEnum(ParagraphAlignment.values))
-    yield HeadingLevelConfig(size, bold, italic, family, colour, align)
+      before <- Gen.option(Gen.choose(0, 16).map(_ / 4f))
+      after  <- Gen.option(Gen.choose(0, 16).map(_ / 4f))
+    yield HeadingLevelConfig(size, bold, italic, family, colour, align, before, after)
 
   val genHeadingsConfig: Gen[HeadingsConfig] =
     for
