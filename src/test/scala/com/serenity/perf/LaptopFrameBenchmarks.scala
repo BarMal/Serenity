@@ -230,7 +230,12 @@ private[perf] object LaptopFrameBenchmarks:
   private def scrolledToCursor(id: BufferId)(state: AppState): AppState =
     state.persisted.buffers.get(id).flatMap(buffer => buffer.editing.cursorPositions.headOption.map(buffer -> _)) match
       case Some((buffer, cursor)) =>
-        val placed = buffer.copy(viewport = CursorViewport.adjustForCursor(buffer, state, cursor))
+        val surface = state.persisted.config.surfaceConfig
+        val viewport =
+          if surface.columnModeEnabled && surface.wordWrapEnabled then
+            CursorViewport.adjustForCursorColumnMode(buffer, state, cursor)
+          else CursorViewport.adjustForCursor(buffer, state, cursor)
+        val placed = buffer.copy(viewport = viewport)
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(id, placed)))
       case None => state
 
