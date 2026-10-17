@@ -211,7 +211,7 @@ object ConfigFileFormat:
     blank,
     comment("Headings: each level's size is a multiple of the body size, and every setting is auto (the default look)"),
     comment("unless set. Bold and italic take auto, true or false; align takes auto, left, centre, right or justify."),
-    comment("Colour takes auto or heading (the theme's heading colour) or #RRGGBB."),
+    comment("Colour takes auto (follow headings.colour), text, heading (the theme's heading colour) or #RRGGBB."),
     comment("A paragraph's own alignment still wins."),
     field("headings.h1.size"),
     field("headings.h1.bold"),
@@ -249,6 +249,11 @@ object ConfigFileFormat:
     field("headings.h6.family"),
     field("headings.h6.colour"),
     field("headings.h6.align"),
+    comment(
+      "headings.colour is auto (rich-text headings in the text colour, Markdown headings in the heading colour),"
+    ),
+    comment("text or heading, for both kinds of document."),
+    field("headings.colour"),
     comment("Above a body of damping_threshold points (before any device scale) heading sizes grow more slowly"),
     field("headings.damping"),
     field("headings.damping_threshold"),

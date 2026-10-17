@@ -232,9 +232,8 @@ object RichTextStyling:
 
   private def roleColor(role: ParagraphRole, theme: Theme, headings: HeadingSettings): RenderColor =
     role match
-      case ParagraphRole.Heading(level) =>
-        headings.colour(level).getOrElse(theme.colorFor(SyntaxElement.Heading).foreground)
-      case _ => theme.foreground
+      case ParagraphRole.Heading(level) => headings.colourFor(level, markdown = false).resolve(theme)
+      case _                            => theme.foreground
 
   private def hexColor(value: String): Option[RenderColor] =
     val normalized = value.stripPrefix("#")

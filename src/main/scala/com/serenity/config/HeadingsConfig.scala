@@ -1,8 +1,7 @@
 package com.serenity.config
 
 import com.serenity.richtext.ParagraphAlignment
-import com.serenity.ui.color.RenderColor
-import com.serenity.ui.theme.{HeadingScale, HeadingSettings, HeadingStyle}
+import com.serenity.ui.theme.{HeadingColour, HeadingScale, HeadingSettings, HeadingStyle}
 
 /** One heading level's overrides under `headings.hN.*`; `None` is `auto`, the level's own default. */
 final case class HeadingLevelConfig(
@@ -10,7 +9,7 @@ final case class HeadingLevelConfig(
     bold: Option[Boolean] = None,
     italic: Option[Boolean] = None,
     family: Option[String] = None,
-    colour: Option[RenderColor] = None,
+    colour: Option[HeadingColour] = None,
     align: Option[ParagraphAlignment] = None
 ):
 
@@ -29,6 +28,7 @@ final case class HeadingLevelConfig(
   */
 final case class HeadingsConfig(
     levels: Vector[HeadingLevelConfig] = Vector.fill(HeadingStyle.LevelCount)(HeadingLevelConfig()),
+    colour: Option[HeadingColour] = None,
     damping: Boolean = true,
     dampingThresholdPt: Float = HeadingScale.DefaultDampingThresholdPt
 ):
@@ -44,13 +44,14 @@ final case class HeadingsConfig(
     val damps = damping && logicalBodyPt > dampingThresholdPt
     // Settings that damp nothing are spelled one way, so changing them does not look like a change to layout.
     val built =
-      if damps then HeadingSettings(styles, logicalBodyPt, dampingThresholdPt, dampingOn = true)
+      if damps then HeadingSettings(styles, logicalBodyPt, dampingThresholdPt, dampingOn = true, globalColour = colour)
       else
         HeadingSettings(
           styles,
           logicalBodyPt,
           HeadingScale.DefaultDampingThresholdPt,
-          dampingOn = logicalBodyPt <= HeadingScale.DefaultDampingThresholdPt
+          dampingOn = logicalBodyPt <= HeadingScale.DefaultDampingThresholdPt,
+          globalColour = colour
         )
     if built == HeadingSettings.default then HeadingSettings.default else built
 

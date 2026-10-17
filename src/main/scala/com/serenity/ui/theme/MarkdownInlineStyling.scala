@@ -72,14 +72,19 @@ object MarkdownInlineStyling:
         backgroundColor = if run.style.code then theme.panel.background else piece.backgroundColor
       )
 
-  /** A heading's configured colour replaces only the heading colour the highlighter painted, not a link's or a code
-    * span's inside it.
-    */
   private def foreground(piece: StyledText, run: Run, theme: Theme, headings: HeadingSettings): RenderColor =
     if run.style.muted then theme.muted
-    else if run.style.headingLevel > 0 && piece.foregroundColor == theme.colorFor(SyntaxElement.Heading).foreground
-    then headings.colour(run.style.headingLevel).getOrElse(piece.foregroundColor)
+    else if run.style.headingLevel > 0 then
+      headingForeground(piece.foregroundColor, run.style.headingLevel, theme, headings)
     else piece.foregroundColor
+
+  /** The colour a level-`level` Markdown heading's text is painted in, given the colour `painted` the highlighter gave
+    * it. Only the theme's heading colour is replaced, not a link's or a code span's inside the heading.
+    */
+  def headingForeground(painted: RenderColor, level: Int, theme: Theme, headings: HeadingSettings): RenderColor =
+    if painted == theme.colorFor(SyntaxElement.Heading).foreground then
+      headings.colourFor(level, markdown = true).resolve(theme)
+    else painted
 
   /** `segment` cut at the edges of the runs it overlaps, each piece with the run covering it, if any. */
   private def split(segment: StyledText, firstColumn: Int, runs: Vector[Run]): List[(StyledText, Option[Run])] =

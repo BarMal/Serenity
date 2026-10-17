@@ -1,7 +1,7 @@
 package com.serenity.config
 
 import com.serenity.richtext.ParagraphAlignment
-import com.serenity.ui.theme.{HeadingStyle, RichTextStyling}
+import com.serenity.ui.theme.{HeadingColour, HeadingStyle, RichTextStyling}
 import com.typesafe.config.ConfigFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -16,7 +16,7 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
       attribute <- List("size", "bold", "italic", "family", "colour", "align")
     yield s"headings.h$level.$attribute"
 
-  private val globalKeys = List("headings.damping", "headings.damping_threshold")
+  private val globalKeys = List("headings.colour", "headings.damping", "headings.damping_threshold")
 
   private def read(config: AppConfig, settings: (String, String)*): AppConfig =
     settings.foldLeft(config) {
@@ -64,17 +64,26 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
     configured.styles.drop(4) shouldBe HeadingStyle.defaults.drop(4)
   }
 
-  it should "read a colour as #RRGGBB, and auto or heading as the theme's heading colour" in {
-    val red = com.serenity.ui.color.RenderColor.fromRgba(0xcc, 0x33, 0x33)
+  it should "read a level's colour as auto, text, heading or #RRGGBB" in {
+    val red = HeadingColour.Fixed(com.serenity.ui.color.RenderColor.fromRgba(0xcc, 0x33, 0x33))
 
-    read(AppConfig.default, "headings.h1.colour" -> "#CC3333").headingsConfig.styles(0).colour shouldBe Some(red)
-    List("auto", "heading", "HEADING").foreach { text =>
-      withClue(text) {
-        read(AppConfig.default, "headings.h1.colour" -> "#CC3333", "headings.h1.colour" -> text).headingsConfig shouldBe
-          HeadingsConfig()
-      }
-    }
+    def colourOf(text: String) = read(AppConfig.default, "headings.h1.colour" -> text).headingsConfig.styles(0).colour
+
+    colourOf("#CC3333") shouldBe Some(red)
+    colourOf("text") shouldBe Some(HeadingColour.Text)
+    colourOf("HEADING") shouldBe Some(HeadingColour.Heading)
+    colourOf("auto") shouldBe None
     AppConfig.default.headingsConfig.styles.map(_.colour).distinct shouldBe List(None)
+  }
+
+  it should "read the global colour as auto, text or heading" in {
+    def globalOf(text: String) = read(AppConfig.default, "headings.colour" -> text).headingsConfig.colour
+
+    globalOf("text") shouldBe Some(HeadingColour.Text)
+    globalOf("heading") shouldBe Some(HeadingColour.Heading)
+    globalOf("auto") shouldBe None
+    AppConfig.default.headingsConfig.colour shouldBe None
+    ConfigRegistry.defaultFor("headings.colour").map(_.rendered) shouldBe Some("auto")
   }
 
   it should "read auto as the level's own default" in {
@@ -126,6 +135,8 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
       "headings.h1.colour"         -> "blue",
       "headings.h2.colour"         -> "#12345",
       "headings.h3.colour"         -> "#GGGGGG",
+      "headings.colour"            -> "#CC3333",
+      "headings.colour"            -> "blue",
       "headings.damping"           -> "sometimes",
       "headings.damping_threshold" -> "0",
       "headings.damping_threshold" -> "-3",
@@ -141,12 +152,13 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
           HeadingLevelConfig(italic = Some(true), align = Some(ParagraphAlignment.Right)),
           HeadingLevelConfig(
             family = Some("Charter"),
-            colour = Some(com.serenity.ui.color.RenderColor.fromRgba(1, 2, 3))
+            colour = Some(HeadingColour.Fixed(com.serenity.ui.color.RenderColor.fromRgba(1, 2, 3)))
           ),
           HeadingLevelConfig(),
           HeadingLevelConfig(align = Some(ParagraphAlignment.Justify)),
           HeadingLevelConfig(size = Some(1.5f))
         ),
+        colour = Some(HeadingColour.Heading),
         damping = false,
         dampingThresholdPt = 36.0f
       )

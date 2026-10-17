@@ -128,9 +128,43 @@ class MarkdownHeadingStylingSpec extends AnyFlatSpec with Matchers:
     sizeOf(restyled(HeadingSettings.default).style) shouldBe (sizeOf(previewStyle(1)) +- 0.001f)
   }
 
-  it should "take the theme's heading colour, or the level's own when configured" in {
-    val configured = HeadingsConfig().withLevel(1)(_.copy(colour = Some(headingRed))).settings(12.0f)
+  it should "default to the theme's heading colour, and follow the global and per-level keys" in {
+    def painted(headings: HeadingSettings) = restyled(headings).foregroundColor
 
-    restyled(HeadingSettings.default).foregroundColor shouldBe theme.colorFor(SyntaxElement.Heading).foreground
-    restyled(configured).foregroundColor shouldBe headingRed
+    val themeHeading = theme.colorFor(SyntaxElement.Heading).foreground
+
+    painted(HeadingSettings.default) shouldBe themeHeading
+    painted(HeadingsConfig(colour = Some(HeadingColour.Text)).settings(12.0f)) shouldBe theme.foreground
+    painted(HeadingsConfig(colour = Some(HeadingColour.Heading)).settings(12.0f)) shouldBe themeHeading
+    painted(HeadingsConfig().withLevel(1)(_.copy(colour = Some(HeadingColour.Text))).settings(12.0f)) shouldBe
+      theme.foreground
+    painted(
+      HeadingsConfig(colour = Some(HeadingColour.Text))
+        .withLevel(1)(_.copy(colour = Some(HeadingColour.Heading)))
+        .settings(12.0f)
+    ) shouldBe themeHeading
+    painted(
+      HeadingsConfig().withLevel(1)(_.copy(colour = Some(HeadingColour.Fixed(headingRed)))).settings(12.0f)
+    ) shouldBe headingRed
+    painted(
+      HeadingsConfig().withLevel(2)(_.copy(colour = Some(HeadingColour.Fixed(headingRed)))).settings(12.0f)
+    ) shouldBe
+      themeHeading
+  }
+
+  it should "leave the colour of a code span or link inside the heading alone" in {
+    val code     = theme.colorFor(SyntaxElement.String).foreground
+    val segments = List(StyledText("Title", TextStyle.bold, code, theme.background))
+    val pieces = MarkdownInlineStyling.restyle(
+      segments,
+      MarkdownBlockSpans.scan("Title", setext = com.serenity.markdown.MarkdownBlockLens.SetextRole.Text(1)),
+      0,
+      hideMarkers = true,
+      theme,
+      baseIsMonospaced = false,
+      baseFontSize = base,
+      HeadingsConfig(colour = Some(HeadingColour.Text)).settings(12.0f)
+    )
+
+    pieces.map(_.foregroundColor) shouldBe List(code)
   }

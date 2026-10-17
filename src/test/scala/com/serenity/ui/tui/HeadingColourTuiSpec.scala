@@ -13,7 +13,7 @@ import com.serenity.state.models.{AppState, Buffer, BufferId, EditorPane, Focus,
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
-import com.serenity.ui.theme.{SyntaxElement, TextStyle, Theme, ThemeColor}
+import com.serenity.ui.theme.{HeadingColour, SyntaxElement, TextStyle, Theme, ThemeColor}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -94,39 +94,96 @@ class HeadingColourTuiSpec extends AnyFlatSpec with Matchers:
 
   private def rgb(color: Color): Int = color.getRGB & 0xffffff
 
-  "A rich-text heading in the terminal" should "be painted in the theme's heading colour, and body text is not" in {
-    val screen = render(proseState(AppConfig.conventional))
+  private def withHeadings(headings: HeadingsConfig): AppConfig = AppConfig.conventional.withHeadingsConfig(headings)
 
-    rgb(foreground(screen, "Headline")) shouldBe rgb(teal.toAwt)
-    rgb(foreground(screen, "Subhead")) shouldBe rgb(teal.toAwt)
-    rgb(foreground(screen, "Plain body")) shouldBe rgb(theme.foreground.toAwt)
+  private def proseColours(config: AppConfig): (Color, Color, Color) =
+    val screen = render(proseState(config))
+    (foreground(screen, "Headline"), foreground(screen, "Subhead"), foreground(screen, "Plain body"))
+
+  "A rich-text heading in the terminal" should "be painted in the text colour by default, as body text is" in {
+    val (headline, subhead, body) = proseColours(AppConfig.conventional)
+
+    rgb(headline) shouldBe rgb(theme.foreground.toAwt)
+    rgb(subhead) shouldBe rgb(theme.foreground.toAwt)
+    rgb(body) shouldBe rgb(theme.foreground.toAwt)
   }
 
-  it should "be painted in its level's configured colour" in {
-    val config = AppConfig.conventional.withHeadingsConfig(
-      HeadingsConfig().withLevel(2)(_.copy(colour = Some(orange)))
-    )
-    val screen = render(proseState(config))
+  it should "follow the global heading colour" in {
+    val (headline, subhead, body) = proseColours(withHeadings(HeadingsConfig(colour = Some(HeadingColour.Heading))))
+    rgb(headline) shouldBe rgb(teal.toAwt)
+    rgb(subhead) shouldBe rgb(teal.toAwt)
+    rgb(body) shouldBe rgb(theme.foreground.toAwt)
 
-    rgb(foreground(screen, "Headline")) shouldBe rgb(teal.toAwt)
-    rgb(foreground(screen, "Subhead")) shouldBe rgb(orange.toAwt)
+    rgb(proseColours(withHeadings(HeadingsConfig(colour = Some(HeadingColour.Text))))._1) shouldBe
+      rgb(theme.foreground.toAwt)
+  }
+
+  it should "let a level override the global colour" in {
+    val config = withHeadings(
+      HeadingsConfig(colour = Some(HeadingColour.Heading))
+        .withLevel(2)(_.copy(colour = Some(HeadingColour.Fixed(orange))))
+    )
+    val (headline, subhead, _) = proseColours(config)
+
+    rgb(headline) shouldBe rgb(teal.toAwt)
+    rgb(subhead) shouldBe rgb(orange.toAwt)
+    rgb(
+      proseColours(withHeadings(HeadingsConfig().withLevel(1)(_.copy(colour = Some(HeadingColour.Heading)))))._1
+    ) shouldBe
+      rgb(teal.toAwt)
   }
 
   it should "show a colour changed between frames that share their render caches" in {
     val caches = RenderCaches.create()
-    val red    = AppConfig.conventional.withHeadingsConfig(HeadingsConfig().withLevel(1)(_.copy(colour = Some(orange))))
+    val orangeConfig =
+      withHeadings(HeadingsConfig().withLevel(1)(_.copy(colour = Some(HeadingColour.Fixed(orange)))))
+    val plain = rgb(theme.foreground.toAwt)
 
-    rgb(foreground(render(proseState(AppConfig.conventional), caches), "Headline")) shouldBe rgb(teal.toAwt)
-    rgb(foreground(render(proseState(red), caches), "Headline")) shouldBe rgb(orange.toAwt)
-    rgb(foreground(render(proseState(AppConfig.conventional), caches), "Headline")) shouldBe rgb(teal.toAwt)
+    rgb(foreground(render(proseState(AppConfig.conventional), caches), "Headline")) shouldBe plain
+    rgb(foreground(render(proseState(orangeConfig), caches), "Headline")) shouldBe rgb(orange.toAwt)
+    rgb(foreground(render(proseState(AppConfig.conventional), caches), "Headline")) shouldBe plain
   }
 
-  "A Markdown heading in the terminal" should "be painted in the theme's heading and heading-marker colours" in {
-    val base   = Buffer.fromString(bufferId, "# Chapter\nplain text")
+  private def markdownState(config: AppConfig, text: String = "# Chapter\n### Third\nplain text"): AppState =
+    val base   = Buffer.fromString(bufferId, text)
     val buffer = base.copy(document = base.document.copy(language = Some(LanguageId.Markdown)))
-    val screen = render(stateOf(buffer, AppConfig.conventional.withSyntaxHighlighting(true)))
+    stateOf(buffer, config.withSyntaxHighlighting(true))
 
-    rgb(foreground(screen, "Chapter")) shouldBe rgb(teal.toAwt)
-    rgb(foreground(screen, "#")) shouldBe rgb(purple.toAwt)
-    rgb(foreground(screen, "plain text")) shouldBe rgb(theme.foreground.toAwt)
+  private def markdownColours(config: AppConfig): (Color, Color, Color, Color) =
+    val screen = render(markdownState(config))
+    (
+      foreground(screen, "Chapter"),
+      foreground(screen, "Third"),
+      foreground(screen, "#"),
+      foreground(screen, "plain text")
+    )
+
+  "A Markdown heading in the terminal" should "be painted in the theme's heading and heading-marker colours by default" in {
+    val (chapter, third, marker, body) = markdownColours(AppConfig.conventional)
+
+    rgb(chapter) shouldBe rgb(teal.toAwt)
+    rgb(third) shouldBe rgb(teal.toAwt)
+    rgb(marker) shouldBe rgb(purple.toAwt)
+    rgb(body) shouldBe rgb(theme.foreground.toAwt)
+  }
+
+  it should "follow the global text colour, keeping its marker colour" in {
+    val (chapter, third, marker, _) = markdownColours(withHeadings(HeadingsConfig(colour = Some(HeadingColour.Text))))
+
+    rgb(chapter) shouldBe rgb(theme.foreground.toAwt)
+    rgb(third) shouldBe rgb(theme.foreground.toAwt)
+    rgb(marker) shouldBe rgb(purple.toAwt)
+  }
+
+  it should "follow the global heading colour, and a level's own over it" in {
+    val config = withHeadings(
+      HeadingsConfig(colour = Some(HeadingColour.Text))
+        .withLevel(1)(_.copy(colour = Some(HeadingColour.Heading)))
+        .withLevel(3)(_.copy(colour = Some(HeadingColour.Fixed(orange))))
+    )
+    val (chapter, third, _, _) = markdownColours(config)
+
+    rgb(chapter) shouldBe rgb(teal.toAwt)
+    rgb(third) shouldBe rgb(orange.toAwt)
+    rgb(markdownColours(withHeadings(HeadingsConfig(colour = Some(HeadingColour.Heading))))._1) shouldBe rgb(teal.toAwt)
   }
