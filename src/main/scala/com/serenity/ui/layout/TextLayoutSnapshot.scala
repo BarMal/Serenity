@@ -248,12 +248,10 @@ object TextLayoutSnapshot:
     // font's metrics -- otherwise a caller whose "pixel" is coarser or finer than the font's actual line height (TUI's
     // CellMetricsOne, 1 pixel == 1 terminal row) gets a snapshot describing rows in a scale nothing downstream uses.
     val lineHeightPx =
-      if measuredLayout then
-        math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getHeight.toDouble).toInt)
+      if measuredLayout then math.max(1, FontLineExtents.of(font, fontRenderContext).heightPx)
       else math.max(1, cellMetrics.lineHeight)
     val ascentPx =
-      if measuredLayout then
-        math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getAscent.toDouble).toInt)
+      if measuredLayout then math.max(1, FontLineExtents.of(font, fontRenderContext).ascentPx)
       else math.max(0, cellMetrics.ascent)
     val viewportTopVisualLine = if wordWrapEnabled then buffer.viewport.topVisualLine else 0
     val visualLineLimit       = viewportTopVisualLine + buffer.viewport.visibleLines
