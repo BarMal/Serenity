@@ -79,7 +79,7 @@ class ParagraphRoleResolverAgreementSpec extends AnyFlatSpec with Matchers:
     )
 
     inputs.paragraphRole shouldBe ParagraphRole.dropCap(3)
-    inputs.glyphWidthPx should be > 0.0f
+    inputs.dropCap.indentPx should be > 0.0f
   }
 
   it should "indent the rows the resolver's glyph spans" in {
@@ -122,9 +122,9 @@ class ParagraphRoleResolverAgreementSpec extends AnyFlatSpec with Matchers:
       baseFont = font,
       frc = Some(frc),
       theme = state.persisted.theme,
+      glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
-      lineTopPx = 0,
-      normalLineHeightPx = snapshot.lineHeightPx
+      lineTopPx = 0
     )
 
     surface.drawRunPxCalls should have size 1

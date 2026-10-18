@@ -276,8 +276,9 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
     val document = buffer.richText.richTextDocument
     buffer.document.content.linesIteratorFrom(0).toVector.flatMap { (lineIndex, line) =>
       val paragraph = document.flatMap(_.paragraphAt(lineIndex))
-      val role    = RichTextStyling.effectiveRole(paragraph.map(_.role).getOrElse(ParagraphRole.Body), dropCapsEnabled)
-      val glyphPx = DropCapLayout.measuredGlyphWidthPx(font, frc, document, lineIndex, role, proseScale)
+      val role = RichTextStyling.effectiveRole(paragraph.map(_.role).getOrElse(ParagraphRole.Body), dropCapsEnabled)
+      val glyphPx =
+        DropCapLayout.reserve(font, frc, document, lineIndex, role, proseScale, DropCapLayout.DefaultGapEm).indentPx
       val rows = LegacyLineMeasurement.wrap(
         line,
         lineIndex,
@@ -287,7 +288,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
         measuredLayout = true,
         CellMetrics.fromFont(font),
         paragraphRole = role,
-        dropCapGlyphWidthPx = glyphPx
+        dropCapIndentPx = glyphPx
       )
       rows.map(row => aligned(row, paragraph.map(_.alignment).getOrElse(ParagraphAlignment.Left), widthPx))
     }

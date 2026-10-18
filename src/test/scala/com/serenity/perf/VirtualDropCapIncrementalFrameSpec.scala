@@ -235,7 +235,7 @@ class VirtualDropCapIncrementalFrameSpec extends AnyFlatSpec with Matchers with 
       List(20, 100, 220, 330, 500).foreach { column =>
         val extra =
           rowsDrawnTyping(openingsOn, document, 1, column) - rowsDrawnTyping(openingsOff, document, 1, column)
-        withClue(s"typing at column $column: ")(extra should be <= 3L)
+        withClue(s"typing at column $column: ")(extra should be <= 2L)
       }
     }
 

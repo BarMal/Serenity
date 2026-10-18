@@ -106,7 +106,8 @@ object CursorViewport:
               wrapCache,
               tabSize = tabSize,
               headings = headings,
-              openings = openings
+              openings = openings,
+              dropCapGapEm = currentState.persisted.config.documentConfig.dropCapGapEm
             )
         )
 
@@ -125,7 +126,8 @@ object CursorViewport:
           markdownViewMode,
           tabSize,
           headings = headings,
-          openings = openings
+          openings = openings,
+          dropCapGapEm = currentState.persisted.config.documentConfig.dropCapGapEm
         )
 
     // Desired top: halfVisibleLines rows of context above the cursor's own visual row, counted in visual rows (not
@@ -257,7 +259,8 @@ object CursorViewport:
         markdownViewMode,
         tabSize,
         headings = headings,
-        openings = openings
+        openings = openings,
+        dropCapGapEm = currentState.persisted.config.documentConfig.dropCapGapEm
       )
 
     val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
@@ -283,7 +286,8 @@ object CursorViewport:
             wrapCache,
             tabSize = tabSize,
             headings = headings,
-            openings = openings
+            openings = openings,
+            dropCapGapEm = currentState.persisted.config.documentConfig.dropCapGapEm
           )
       )
 

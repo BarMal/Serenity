@@ -111,14 +111,15 @@ object VisualLineIndexStore:
     * restyles (mode, revealed lines, font kind) and by its block index, which is compared by how far two indexes are
     * known to agree rather than by value (see [[stampsRelate]]). A tab size other than the default stamps too: a tab
     * wraps by its width, so a new size leaves no row count standing. So do the opening settings, while openings are set
-    * as drop caps: they inset the rows beside the glyph.
+    * as drop caps, and a gap beside drop caps other than the default: they inset the rows beside the glyph.
     */
   final private[layout] case class ViewStamp(
       base: AnyRef,
       markdown: MarkdownInlineView,
       tabSize: Int = IndentationSettings.DefaultTabSize,
       headings: HeadingSettings = HeadingSettings.default,
-      virtualDropCaps: Option[(OpeningRules, Int)] = None
+      virtualDropCaps: Option[(OpeningRules, Int)] = None,
+      dropCapGapEm: Float = DropCapLayout.DefaultGapEm
   )
 
   /** How a stamp the index was built under relates to the one asked for. */
@@ -136,7 +137,7 @@ object VisualLineIndexStore:
       case _ if built eq asked => StampRelation.Same
       case (x: ViewStamp, y: ViewStamp)
           if x.base == y.base && x.tabSize == y.tabSize && x.headings == y.headings &&
-            x.virtualDropCaps == y.virtualDropCaps && sameRestyling(
+            x.virtualDropCaps == y.virtualDropCaps && x.dropCapGapEm == y.dropCapGapEm && sameRestyling(
               x.markdown,
               y.markdown
             ) =>
@@ -159,8 +160,9 @@ object VisualLineIndexStore:
     val base        = richText.document.getOrElse(Unstamped)
     val virtualCaps = richText.virtualDropCaps.map(_.signature)
     if richText.markdown.isActive || richText.tabSize != IndentationSettings.DefaultTabSize ||
-        richText.headings != HeadingSettings.default || virtualCaps.isDefined
-    then ViewStamp(base, richText.markdown, richText.tabSize, richText.headings, virtualCaps)
+        richText.headings != HeadingSettings.default || virtualCaps.isDefined ||
+        richText.dropCapGapEm != DropCapLayout.DefaultGapEm
+    then ViewStamp(base, richText.markdown, richText.tabSize, richText.headings, virtualCaps, richText.dropCapGapEm)
     else base
 
   val DefaultMaxEntries = 32

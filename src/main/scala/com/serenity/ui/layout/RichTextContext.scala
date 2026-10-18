@@ -14,7 +14,8 @@ import com.serenity.ui.theme.{HeadingSettings, RichTextStyling}
 /** The inputs a logical line's wrap depends on besides its text: the rich-text paragraph styles that choose each run's
   * font and a drop cap's role, the prose zoom that scales them, whether drop caps are enabled at all, the chapter
   * openings that are set as drop caps, and how the line's inline Markdown is restyled. `tabSize` is the width a tab
-  * takes on the cell grid, and `headings` the look its heading paragraphs resolve to.
+  * takes on the cell grid, `headings` the look its heading paragraphs resolve to and `dropCapGapEm` the room beside a
+  * drop cap's glyph.
   */
 final case class RichTextContext(
     document: Option[RichTextDocument],
@@ -24,6 +25,7 @@ final case class RichTextContext(
     tabSize: Int = IndentationSettings.DefaultTabSize,
     headings: HeadingSettings = HeadingSettings.default,
     virtualDropCaps: Option[VirtualDropCaps] = None,
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm,
     resolver: ChapterOpenings.Resolver = ChapterOpenings.standard
 ):
 
@@ -54,7 +56,8 @@ object RichTextContext:
     frc: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext(),
     tabSize: Int = IndentationSettings.DefaultTabSize,
     headings: HeadingSettings = HeadingSettings.default,
-    openings: OpeningSettings = OpeningSettings.default
+    openings: OpeningSettings = OpeningSettings.default,
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm
   ): RichTextContext =
     val content  = buffer.document.content
     val document = buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(content.lineCount, content.weight))
@@ -65,7 +68,8 @@ object RichTextContext:
       markdownViewFor(buffer, markdownViewMode, cellGrid, wrapCache, font, frc),
       tabSize,
       headings,
-      document.flatMap(wrapCache.virtualDropCaps(_, openings))
+      document.flatMap(wrapCache.virtualDropCaps(_, openings)),
+      dropCapGapEm
     )
 
   /** How `buffer`'s inline Markdown is restyled under `viewMode`. A buffer carrying a rich-text document styles its own

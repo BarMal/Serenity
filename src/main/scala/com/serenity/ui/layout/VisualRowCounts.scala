@@ -79,7 +79,8 @@ object VisualRowCounts:
     tabSize: Int = IndentationSettings.DefaultTabSize,
     known: Int => Option[Int] = _ => None,
     headings: HeadingSettings = HeadingSettings.default,
-    openings: OpeningSettings = OpeningSettings.default
+    openings: OpeningSettings = OpeningSettings.default,
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm
   ): VisualRowCounts =
     val content = buffer.document.content
     val frc     = TextLayoutSnapshot.defaultFontRenderContext()
@@ -94,7 +95,8 @@ object VisualRowCounts:
         frc,
         tabSize,
         headings,
-        openings
+        openings,
+        dropCapGapEm
       )
     def measure(line: Int): Int =
       known(line).getOrElse(wrap(line))

@@ -26,6 +26,7 @@ object TextLayoutSnapshotColumnMode:
     tabSize: Int,
     headings: HeadingSettings,
     openings: OpeningSettings,
+    dropCapGapEm: Float,
     wrapCache: WrappedLineCache
   ): RichTextContext =
     RichTextContext(
@@ -34,7 +35,8 @@ object TextLayoutSnapshotColumnMode:
       dropCapsEnabled,
       tabSize = tabSize,
       headings = headings,
-      virtualDropCaps = document.flatMap(wrapCache.virtualDropCaps(_, openings))
+      virtualDropCaps = document.flatMap(wrapCache.virtualDropCaps(_, openings)),
+      dropCapGapEm = dropCapGapEm
     )
 
   /** The same wrapped visual-line stream `fromBuffer` slices into one screenful, partitioned instead into `columnCount`
@@ -57,7 +59,8 @@ object TextLayoutSnapshotColumnMode:
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
     tabSize: Int = IndentationSettings.DefaultTabSize,
     headings: HeadingSettings = HeadingSettings.default,
-    openings: OpeningSettings = OpeningSettings.default
+    openings: OpeningSettings = OpeningSettings.default,
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm
   ): Vector[Vector[TextVisualLine]] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -77,7 +80,7 @@ object TextLayoutSnapshotColumnMode:
       measuredLayout,
       cellMetrics,
       visualLineLimit,
-      columnContext(richDocument, proseScale, dropCapsEnabled, tabSize, headings, openings, wrapCache),
+      columnContext(richDocument, proseScale, dropCapsEnabled, tabSize, headings, openings, dropCapGapEm, wrapCache),
       wordWrapEnabled = true,
       wrapCache
     ).drop(topVisualLine).take(totalRowsNeeded)
@@ -104,7 +107,8 @@ object TextLayoutSnapshotColumnMode:
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
     tabSize: Int = IndentationSettings.DefaultTabSize,
     headings: HeadingSettings = HeadingSettings.default,
-    openings: OpeningSettings = OpeningSettings.default
+    openings: OpeningSettings = OpeningSettings.default,
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm
   ): TextLayoutSnapshot =
     fromBufferColumns(
       buffer,
@@ -119,7 +123,8 @@ object TextLayoutSnapshotColumnMode:
       wrapCache,
       tabSize,
       headings,
-      openings
+      openings,
+      dropCapGapEm
     ).headOption.getOrElse(
       emptyColumnSnapshot(
         columnWidthPx,
@@ -153,7 +158,8 @@ object TextLayoutSnapshotColumnMode:
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
     tabSize: Int = IndentationSettings.DefaultTabSize,
     headings: HeadingSettings = HeadingSettings.default,
-    openings: OpeningSettings = OpeningSettings.default
+    openings: OpeningSettings = OpeningSettings.default,
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm
   ): Vector[TextLayoutSnapshot] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -166,7 +172,8 @@ object TextLayoutSnapshotColumnMode:
     val totalLines = buffer.document.content.lineCount
     val richDocument =
       buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.document.content.weight))
-    val laidOutWith = columnContext(richDocument, proseScale, dropCapsEnabled, tabSize, headings, openings, wrapCache)
+    val laidOutWith =
+      columnContext(richDocument, proseScale, dropCapsEnabled, tabSize, headings, openings, dropCapGapEm, wrapCache)
 
     columnChunksForBuffer(
       buffer,
@@ -181,7 +188,8 @@ object TextLayoutSnapshotColumnMode:
       wrapCache,
       tabSize,
       headings,
-      openings
+      openings,
+      dropCapGapEm
     ).map { chunk =>
       TextLayoutSnapshot(
         visualLines = chunk,

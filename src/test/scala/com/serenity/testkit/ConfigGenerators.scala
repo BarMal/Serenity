@@ -18,7 +18,7 @@ import com.serenity.ui.openings.{
   RaisedRowRule,
   SceneBreakRule
 }
-import com.serenity.ui.theme.{HeadingColour, HeadingStyle}
+import com.serenity.ui.theme.{DropCapColour, HeadingColour, HeadingStyle}
 import org.scalacheck.Gen
 
 /** Generators over [[AppConfig]], for properties about the config file format.
@@ -204,20 +204,30 @@ object ConfigGenerators:
       size <- Gen.option(for w <- Gen.choose(400, 4000); h <- Gen.choose(300, 4000) yield PreferredWindowSize(w, h))
     yield WindowConfig(chrome, size)
 
+  private val genDropCapColour: Gen[DropCapColour] =
+    Gen.oneOf(
+      Gen.const(DropCapColour.Text),
+      Gen.const(DropCapColour.Heading),
+      Gen.const(DropCapColour.Accent),
+      Gen.listOfN(3, Gen.choose(0, 255)).map(rgb => DropCapColour.Fixed(RenderColor.fromRgba(rgb(0), rgb(1), rgb(2))))
+    )
+
   val genDocumentConfig: Gen[DocumentConfig] =
     for
-      markdown <- oneOfEnum(MarkdownViewMode.values)
-      default  <- oneOfEnum(DefaultDocumentMode.values)
-      goal     <- Gen.option(Gen.choose(1, 100000))
-      dropCaps <- Gen.oneOf(true, false)
-      ghosts   <- Gen.oneOf(true, false)
-      analysis <- Gen.chooseNum(0L, 5000L)
-      outline  <- Gen.chooseNum(0L, 5000L)
+      markdown  <- oneOfEnum(MarkdownViewMode.values)
+      default   <- oneOfEnum(DefaultDocumentMode.values)
+      goal      <- Gen.option(Gen.choose(1, 100000))
+      dropCaps  <- Gen.oneOf(true, false)
+      ghosts    <- Gen.oneOf(true, false)
+      analysis  <- Gen.chooseNum(0L, 5000L)
+      outline   <- Gen.chooseNum(0L, 5000L)
+      gap       <- Gen.choose(0, 8).map(quarters => quarters * 0.25f)
+      capColour <- genDropCapColour
       // "auto" and "default" are how the file spells no author, so they cannot be one.
       author <- Gen.option(
         Gen.alphaNumStr.suchThat(name => name.nonEmpty && !Set("auto", "default").contains(name.toLowerCase))
       )
-    yield DocumentConfig(markdown, default, goal, dropCaps, author, ghosts, analysis, outline)
+    yield DocumentConfig(markdown, default, goal, dropCaps, author, ghosts, analysis, outline, gap, capColour)
 
   val genAutoSaveConfig: Gen[AutoSaveConfig] =
     for

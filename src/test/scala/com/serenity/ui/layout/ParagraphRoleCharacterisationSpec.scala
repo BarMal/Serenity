@@ -68,13 +68,13 @@ class ParagraphRoleCharacterisationSpec extends AnyFlatSpec with Matchers:
   "the line layout inputs" should "carry the cap's role and glyph width while enabled" in {
     val inputs = inputsFor(dropCapsEnabled = true)
     inputs.paragraphRole shouldBe dropCap
-    inputs.glyphWidthPx should be > 0.0f
+    inputs.dropCap.indentPx should be > 0.0f
   }
 
   it should "degrade to body text with no glyph width once the toggle is off" in {
     val inputs = inputsFor(dropCapsEnabled = false)
     inputs.paragraphRole shouldBe ParagraphRole.Body
-    inputs.glyphWidthPx shouldBe 0.0f
+    inputs.dropCap.indentPx shouldBe 0.0f
   }
 
   private def inputsFor(dropCapsEnabled: Boolean): LineLayout.LineLayoutInputs =
@@ -126,8 +126,8 @@ class ParagraphRoleCharacterisationSpec extends AnyFlatSpec with Matchers:
       baseFont = font,
       frc = Some(frc),
       theme = state.persisted.theme,
+      glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
-      lineTopPx = 0,
-      normalLineHeightPx = laidOut.lineHeightPx
+      lineTopPx = 0
     )
     surface.drawRunPxCalls.size

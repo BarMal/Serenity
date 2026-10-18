@@ -7,6 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.testkit.ConfigGenerators
 import com.serenity.ui.layout.{Layout, UiSceneSnapshot, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.theme.DropCapColour
 import org.scalacheck.Gen
 import org.scalacheck.rng.Seed
 import org.scalatest.flatspec.AnyFlatSpec
@@ -106,6 +107,25 @@ class ConfigLayoutKeySpec extends AnyFlatSpec with Matchers:
     )
 
     assertWarmMatchesFresh(original, changed)
+  }
+
+  "A drop cap gap change" should "change the layout key and rebuild the cached scene" in {
+    val original = proseState(lineNumbered.withDropCapGapEm(0.5f))
+    val changed  = withConfig(original, original.persisted.config.withDropCapGapEm(1.5f))
+
+    assertWarmMatchesFresh(original, changed)
+  }
+
+  "A drop cap colour change" should "leave the layout key and the scene as they were, since it only repaints" in {
+    val original = proseState(lineNumbered.withDropCapColour(DropCapColour.Accent))
+    val changed  = withConfig(original, original.persisted.config.withDropCapColour(DropCapColour.Text))
+    val warm     = AuthoritativeUiScene()
+
+    val before = MouseTargetCache.fromState(original, viewport, warm)
+    val after  = MouseTargetCache.fromState(changed, viewport, warm)
+
+    after.layoutKey shouldBe before.layoutKey
+    after.scene should be theSameInstanceAs before.scene
   }
 
   private val otherConfigs: List[AppConfig] =

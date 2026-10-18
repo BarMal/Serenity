@@ -34,7 +34,7 @@ class VirtualDropCapRoleSpec extends AnyFlatSpec with Matchers:
   "An opening paragraph" should "lay out as a three-line drop cap while openings are on" in {
     val role = roles(on)
 
-    List(1, 4).foreach(line => role(line) shouldBe ParagraphRole.dropCap(ParagraphRole.DefaultDropCapLines))
+    List(1, 4).foreach(line => role(line) shouldBe ParagraphRole.dropCap(VirtualDropCaps.OpeningLines))
   }
 
   it should "leave the document's own role untouched" in {
@@ -63,7 +63,7 @@ class VirtualDropCapRoleSpec extends AnyFlatSpec with Matchers:
     val scene                       = RichTextDocument(List(title, opening, RichTextParagraph.plain("***"), second))
     def after(rule: SceneBreakRule) = roles(on.copy(rules = OpeningRules(sceneBreak = rule)), scene)(3)
 
-    after(SceneBreakRule.FullOpening) shouldBe ParagraphRole.dropCap(ParagraphRole.DefaultDropCapLines)
+    after(SceneBreakRule.FullOpening) shouldBe ParagraphRole.dropCap(VirtualDropCaps.OpeningLines)
     after(SceneBreakRule.SmallCapsOnly) shouldBe ParagraphRole.Body
     after(SceneBreakRule.NoOpening) shouldBe ParagraphRole.Body
   }
@@ -83,7 +83,7 @@ class VirtualDropCapRoleSpec extends AnyFlatSpec with Matchers:
   it should "give way to the opening's drop cap under opening" in {
     val (handMade, settings) = withHand(HandDropCapRule.OpeningWins)
 
-    roles(settings, handMade)(1) shouldBe ParagraphRole.dropCap(ParagraphRole.DefaultDropCapLines)
+    roles(settings, handMade)(1) shouldBe ParagraphRole.dropCap(VirtualDropCaps.OpeningLines)
   }
 
   it should "be left on a paragraph that is not an opening whatever the rule" in {

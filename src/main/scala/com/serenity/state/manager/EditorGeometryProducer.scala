@@ -129,7 +129,8 @@ object EditorGeometryProducer:
         markdownViewMode,
         tabSize,
         headings = headings,
-        openings = openings
+        openings = openings,
+        dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
       )
     val cursorRowInWindow =
       if !wordWrapEnabled then cursor.line - windowTopLine
@@ -155,7 +156,8 @@ object EditorGeometryProducer:
                 wrapCache,
                 tabSize = tabSize,
                 headings = headings,
-                openings = openings
+                openings = openings,
+                dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
               )
           )
     val windowTopVisualLine = math.max(0, cursorRowInWindow - rowsAbove)
@@ -187,7 +189,8 @@ object EditorGeometryProducer:
         markdownViewMode = markdownViewMode,
         tabSize = tabSize,
         headings = headings,
-        openings = openings
+        openings = openings,
+        dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
       )
     EditorGeometry(snapshot.navigationGeometry, metrics.charWidth, panelWidthColumns)
 

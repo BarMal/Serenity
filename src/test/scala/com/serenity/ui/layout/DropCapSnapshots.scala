@@ -11,13 +11,15 @@ object DropCapSnapshots:
   val RowHeightPx = 16
 
   /** A paragraph of `rows` visual rows. `firstRow` skips that many leading rows, as a paragraph scrolled partly out of
-    * view does; `heightsPx` gives rows heights of their own.
+    * view does; `heightsPx` gives rows heights of their own. A drop cap's home row records the height of its glyph:
+    * `glyphHeightPx`, or the room of the cap's own lines when none is given.
     */
   final case class Paragraph(
       role: ParagraphRole,
       rows: Int,
       firstRow: Int = 0,
-      heightsPx: Map[Int, Int] = Map.empty
+      heightsPx: Map[Int, Int] = Map.empty,
+      glyphHeightPx: Option[Int] = None
   )
 
   def dropCap(lines: Int, rows: Int): Paragraph = Paragraph(ParagraphRole.dropCap(lines), rows)
@@ -48,7 +50,7 @@ object DropCapSnapshots:
 
   private def rowsOf(paragraph: Paragraph, bufferLine: Int): Vector[TextVisualLine] =
     (paragraph.firstRow until paragraph.firstRow + paragraph.rows).toVector.map { row =>
-      TextVisualLine(
+      val line = TextVisualLine(
         bufferLine = bufferLine,
         startColumn = row * 10,
         endColumn = row * 10 + 10,
@@ -58,4 +60,8 @@ object DropCapSnapshots:
         heightPx = paragraph.heightsPx.getOrElse(row, RowHeightPx),
         ascentPx = 13
       )
+      if row == 0 then line.copy(row = line.row.copy(dropCapHeightPx = homeGlyphHeightPx(paragraph))) else line
     }
+
+  private def homeGlyphHeightPx(paragraph: Paragraph): Int =
+    paragraph.glyphHeightPx.getOrElse(DropCapLayout.glyphHeightPx(paragraph.role, RowHeightPx))

@@ -7,8 +7,8 @@ import com.serenity.lsp.model.SemanticToken
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{AppState, Buffer, TextVisualLine}
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{DropCapLayout, TextLayoutSnapshot}
-import com.serenity.ui.theme.{RichTextStyling, StyledText, TextStyle, Theme}
+import com.serenity.ui.layout.{DropCapGlyph, DropCapLayout, TextLayoutSnapshot}
+import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 
 /** Draws a paragraph's drop cap glyph: the oversized first character a [[com.serenity.richtext.ParagraphRole.DropCap]]
   * paragraph singles out (see `RichTextStyling.dropCapSplitFontSpans`), spanning several of the paragraph's normal
@@ -24,18 +24,19 @@ import com.serenity.ui.theme.{RichTextStyling, StyledText, TextStyle, Theme}
   */
 object DropCapRenderer:
 
-  /** Draw the glyph as one oversized pixel run, top-aligned at the paragraph's first visual line and tall enough to
-    * reach the foot of its last spanned line.
+  /** Draw the glyph as one oversized pixel run starting at the paragraph's first visual line and tall enough to cover
+    * the whole glyph, whatever hangs below its last spanned line.
     *
     * @param xOriginPx
-    *   left edge of the paragraph's normal text origin (the glyph draws flush with it; callers add the glyph's own
-    *   measured width, via `DropCapLayout.leftInsetPx`, before drawing the body text that wraps in beside it)
+    *   left edge of the paragraph's normal text origin (the glyph draws flush with it; the body text wraps in beside it
+    *   at the indent `DropCapLayout.leftInsetPx` reserves)
     * @param yTopPx
     *   top of the paragraph's first visual line
     * @param glyphHeightPx
-    *   total pixel height the glyph should span (`DropCapLayout.glyphHeightPx`)
+    *   total pixel height the glyph covers (`DropCapGlyph.heightPx`)
     * @param glyphAscentPx
-    *   the glyph font's own ascent, so its baseline sits correctly within `glyphHeightPx`
+    *   how far below `yTopPx` the glyph's baseline sits (`DropCapGlyph.baselinePx`), which is the baseline of the last
+    *   line the glyph spans
     * @param clipBottomPx
     *   the lowest pixel row the pane draws rows on: a glyph that would reach past it is cut there, since nothing below
     *   it is a row to repaint the glyph's rest from
@@ -89,11 +90,11 @@ object DropCapRenderer:
       try surface.putString(x, y, glyphText)
       finally surface.disableStyle(boldStyle)
 
-  /** Measured (GUI) home-line hook: paints the paragraph's glyph spanning `dropCap.lines` of its own normal-height
-    * visual lines from `lineTopPx`, then returns the visual line and styled segments the caller's own ordinary
+  /** Measured (GUI) home-line hook: paints the paragraph's glyph, fitted to the `dropCap.lines` lines it spans from
+    * `lineTopPx` ([[DropCapGlyph]]), then returns the visual line and styled segments the caller's own ordinary
     * body-text draw call should paint instead of its originals -- both with the split-out first grapheme removed, so
     * the glyph is never drawn twice (see the type doc). Returns the inputs unchanged when the paragraph's first run is
-    * empty or carries no drop cap glyph style (`RichTextStyling.dropCapGlyphStyle`'s own `None` cases).
+    * empty or carries no drop cap glyph style.
     */
   def paintMeasuredHomeLine(
     surface: RenderSurface,
@@ -105,56 +106,56 @@ object DropCapRenderer:
     frc: FontRenderContext,
     proseScale: Float,
     theme: Theme,
+    glyphColour: RenderColor,
     xOriginPx: Float,
     lineTopPx: Int,
-    normalLineHeightPx: Int,
     clipBottomPx: Int = Int.MaxValue
   ): (TextVisualLine, Option[List[StyledText]]) =
-    val glyph = document
-      .paragraphAt(visualLine.bufferLine)
-      .flatMap(_.runs.headOption)
-      .filter(_.text.nonEmpty)
-      .flatMap { firstRun =>
-        val charCount = Character.charCount(firstRun.text.codePointAt(0))
-        val glyphText = firstRun.text.take(charCount)
-        RichTextStyling
-          .dropCapGlyphStyle(firstRun.style, dropCap, RichTextStyling.ProseZoomBaselinePx, proseScale)
-          .map(style => (charCount, glyphText, style))
-      }
-    glyph match
+    DropCapGlyph.forParagraph(baseFont, frc, Some(document), visualLine.bufferLine, dropCap, proseScale) match
       case None => (visualLine, styledSegments)
-      case Some((charCount, glyphText, glyphStyle)) =>
-        val glyphFont     = TextStyle.styledFont(baseFont, glyphStyle)
-        val glyphWidthPx  = DropCapLayout.glyphWidthPx(glyphFont, frc, glyphText)
-        val glyphHeightPx = DropCapLayout.glyphHeightPx(dropCap, normalLineHeightPx)
-        val glyphAscentPx = math.ceil(glyphFont.getLineMetrics(glyphText, frc).getAscent.toDouble).toInt
+      case Some(glyph) =>
         renderGlyphPx(
           surface,
           xOriginPx,
           lineTopPx,
-          glyphWidthPx,
-          glyphHeightPx,
-          glyphAscentPx,
-          glyphText,
-          glyphStyle,
-          theme.foreground,
+          glyph.widthPx,
+          glyph.heightPx,
+          glyph.baselinePx,
+          glyph.text,
+          glyph.style,
+          glyphColour,
           theme.background,
           clipBottomPx
         )
-        (dropFirstGrapheme(visualLine, charCount), styledSegments.map(dropLeadingChars(_, charCount)))
+        (dropFirstGrapheme(visualLine, glyph.charCount), styledSegments.map(dropLeadingChars(_, glyph.charCount)))
+
+  /** The colour the configured `document.drop_cap_colour` makes of the glyph, in the theme and heading settings `state`
+    * carries.
+    */
+  private def glyphColourOf(state: AppState): RenderColor =
+    val config = state.persisted.config
+    config.documentConfig.dropCapColour.resolve(state.persisted.theme, config.headingSettings)
 
   /** Cell-grid (TUI) home-line hook: re-styles the one cell the caller's own ordinary text draw call already painted --
     * see [[renderGlyphCell]]'s own doc comment for why the fixed grid never attempts multi-row spanning.
     */
-  def paintCellHomeLine(surface: RenderSurface, visualLine: TextVisualLine, x: Int, y: Int, theme: Theme): Unit =
+  def paintCellHomeLine(
+    surface: RenderSurface,
+    visualLine: TextVisualLine,
+    x: Int,
+    y: Int,
+    theme: Theme,
+    glyphColour: RenderColor
+  ): Unit =
     visualLine.text.headOption.foreach { firstChar =>
-      renderGlyphCell(surface, x, y, firstChar.toString, theme.highlighted.foreground, theme.background)
+      renderGlyphCell(surface, x, y, firstChar.toString, glyphColour, theme.background)
     }
 
   /** Drops the paragraph's split-out glyph character from a visual line's own drawable geometry: its text and the caret
     * stops at or past its new (shifted) start column -- the earlier stops belonged to the character the glyph itself
     * now paints. Keeping their `xPx` and the line's `xOffsetPx` rather than rebasing to 0 keeps the remaining text
-    * exactly where `TextLayoutSnapshot`'s own drop cap left-inset already placed it.
+    * exactly where `TextLayoutSnapshot` placed it: that layout takes the dropped character's width off the home row's
+    * offset, so the text that remains starts at the indent every other spanned row starts at.
     */
   private def dropFirstGrapheme(visualLine: TextVisualLine, charCount: Int): TextVisualLine =
     val newStartColumn = visualLine.startColumn + charCount
@@ -213,9 +214,9 @@ object DropCapRenderer:
     baseFont: Font,
     frc: Option[FontRenderContext],
     theme: Theme,
+    glyphColour: RenderColor,
     xOriginPx: Float,
     lineTopPx: Int,
-    normalLineHeightPx: Int,
     clipBottomPx: Int = Int.MaxValue
   ): (TextVisualLine, Option[List[StyledText]]) =
     (for
@@ -233,9 +234,9 @@ object DropCapRenderer:
       renderFrc,
       snapshot.proseScale,
       theme,
+      glyphColour,
       xOriginPx,
       lineTopPx,
-      normalLineHeightPx,
       clipBottomPx
     )).getOrElse((visualLine, styledSegments))
 
@@ -268,9 +269,9 @@ object DropCapRenderer:
       context.fontForBuffer(buffer),
       context.surface.text.fontRenderContext,
       theme,
+      glyphColourOf(state),
       xOriginPx,
       lineTopPx,
-      lineHeightPx,
       clipBottomPx
     )
     CharacterRenderer.renderMeasuredLine(
@@ -302,5 +303,5 @@ object DropCapRenderer:
     y: Int
   ): Unit =
     homeLineRoleFor(snapshot, visualLine).foreach(_ =>
-      paintCellHomeLine(surface, visualLine, x, y, state.persisted.theme)
+      paintCellHomeLine(surface, visualLine, x, y, state.persisted.theme, glyphColourOf(state))
     )

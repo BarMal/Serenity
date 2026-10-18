@@ -25,6 +25,11 @@ final case class VirtualDropCaps(openings: OpeningLines, handDropCap: HandDropCa
 
 object VirtualDropCaps:
 
+  /** How many lines a chapter opening's cap spans: two, which a letter fitted to its lines carries well; a hand-made
+    * cap keeps whatever its document gives it.
+    */
+  val OpeningLines: Int = 2
+
   /** Whether `settings` set openings as drop caps. */
   def drawn(settings: OpeningSettings): Boolean =
     settings.enabled && settings.letterMode == LetterMode.Drop
@@ -38,5 +43,5 @@ object VirtualDropCaps:
   /** The virtual drop caps `settings` give `document`, or none while they are off or set the letter another way. */
   def of(settings: OpeningSettings, document: RichTextDocument, scan: Scan = scanning): Option[VirtualDropCaps] =
     Option.when(drawn(settings)) {
-      VirtualDropCaps(scan(document, settings.rules), settings.rules.handDropCap, ParagraphRole.DefaultDropCapLines)
+      VirtualDropCaps(scan(document, settings.rules), settings.rules.handDropCap, OpeningLines)
     }

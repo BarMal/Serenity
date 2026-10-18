@@ -113,7 +113,8 @@ private[serenity] object UiSceneBuilder:
               wrapCache = wrappedLines,
               tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
               headings = state.persisted.config.headingSettings,
-              openings = buffer.effectiveOpenings(state.persisted.config.openingsConfig)
+              openings = buffer.effectiveOpenings(state.persisted.config.openingsConfig),
+              dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
             )
             // Only a genuinely multi-column page carries per-column placements. A single fitted column is fully
             // served by `textSnapshots` alone (identical to the pre-multi-column render path, including its
@@ -148,7 +149,8 @@ private[serenity] object UiSceneBuilder:
                   wrapCache = wrappedLines,
                   tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
                   headings = state.persisted.config.headingSettings,
-                  openings = buffer.effectiveOpenings(state.persisted.config.openingsConfig)
+                  openings = buffer.effectiveOpenings(state.persisted.config.openingsConfig),
+                  dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
                 )
               )
             paneId -> (activeSnapshot, placements, Option.empty[PaneScroll])
@@ -167,7 +169,8 @@ private[serenity] object UiSceneBuilder:
               markdownViewMode = state.persisted.config.inlineMarkdownViewMode,
               tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
               headings = state.persisted.config.headingSettings,
-              openings = buffer.effectiveOpenings(state.persisted.config.openingsConfig)
+              openings = buffer.effectiveOpenings(state.persisted.config.openingsConfig),
+              dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
             )
             val scroll = Option.when(ScrollbarLayout.hasBar(state, paneLayout))(
               paneScroll(state, buffer, viewport, single, width, font, fontMetrics, cellMetrics.isDefined, wrappedLines)
@@ -211,7 +214,8 @@ private[serenity] object UiSceneBuilder:
           buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
           known = wholeLines.get,
           headings = state.persisted.config.headingSettings,
-          openings = buffer.effectiveOpenings(state.persisted.config.openingsConfig)
+          openings = buffer.effectiveOpenings(state.persisted.config.openingsConfig),
+          dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
         )
     PaneScroll.of(rows, viewport.topLine, viewport.topVisualLine, viewport.visibleLines)
 

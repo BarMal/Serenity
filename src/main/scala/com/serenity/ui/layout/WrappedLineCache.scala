@@ -75,13 +75,13 @@ final private[layout] case class WrappedLineKey(
     cellMetrics: CellMetrics,
     baseColumn: Int,
     paragraphRole: ParagraphRole,
-    dropCapGlyphWidthPx: Float
+    dropCapIndentPx: Float
 ):
   // The text and fonts are hashed in full, and every map operation on a lookup rehashes the key.
   override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
 
   def shape: WrapShape =
-    WrapShape(panelWidthPx, resolver, frc, measuredLayout, cellMetrics, baseColumn, paragraphRole, dropCapGlyphWidthPx)
+    WrapShape(panelWidthPx, resolver, frc, measuredLayout, cellMetrics, baseColumn, paragraphRole, dropCapIndentPx)
 
 /** [[WrappedLineKey]] without its text: lines that share a shape wrap alike wherever their text agrees. */
 final private[layout] case class WrapShape(
@@ -92,7 +92,7 @@ final private[layout] case class WrapShape(
     cellMetrics: CellMetrics,
     baseColumn: Int,
     paragraphRole: ParagraphRole,
-    dropCapGlyphWidthPx: Float
+    dropCapIndentPx: Float
 )
 
 /** An earlier complete wrap of a line with the same [[WrapShape]], and what [[IncrementalWrap]] resumes from. */

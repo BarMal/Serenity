@@ -32,7 +32,10 @@ final case class MeasuredRow(
     // Height the row's paragraph reserves below the row's own text: a drop cap paragraph shorter than its glyph pads
     // its last row so the next paragraph starts under the glyph. Stacking rows adds it; the row's text and caret
     // keep `heightPx`.
-    reservedBelowPx: Int = 0
+    reservedBelowPx: Int = 0,
+    // A drop cap paragraph's home row records the height from its own top down to the foot of the glyph drawn from it,
+    // so what the glyph covers can be read off the layout.
+    dropCapHeightPx: Int = 0
 ):
 
   // Arrays compare by reference, so the generated equals would call two identical measurements different. Row
@@ -41,7 +44,7 @@ final case class MeasuredRow(
     case that: MeasuredRow =>
       (this eq that) || (startColumn == that.startColumn && endColumn == that.endColumn && text == that.text &&
         widthPx == that.widthPx && heightPx == that.heightPx && ascentPx == that.ascentPx &&
-        reservedBelowPx == that.reservedBelowPx &&
+        reservedBelowPx == that.reservedBelowPx && dropCapHeightPx == that.dropCapHeightPx &&
         caretXs.sameElements(that.caretXs) && caretOffsets.sameElements(that.caretOffsets) &&
         landingXs.sameElements(that.landingXs) && landingOffsets.sameElements(that.landingOffsets))
     case _ => false
@@ -149,7 +152,18 @@ final case class TextVisualLine(
     spaceBeforePx: Int,
     spaceAfterPx: Int
 ):
-  export row.{ascentPx, caretCount, caretColumn, endColumn, heightPx, reservedBelowPx, startColumn, text, widthPx}
+  export row.{
+    ascentPx,
+    caretCount,
+    caretColumn,
+    dropCapHeightPx,
+    endColumn,
+    heightPx,
+    reservedBelowPx,
+    startColumn,
+    text,
+    widthPx
+  }
 
   /** Caret x of stop `index` in the coordinates of the pane. */
   def caretX(index: Int): Float = row.caretXs(index) + xOffsetPx
