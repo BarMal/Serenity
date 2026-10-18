@@ -7,6 +7,7 @@ import scala.annotation.tailrec
 
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{MeasuredRow, TextVisualLine}
+import com.serenity.ui.openings.LetterShape
 import com.serenity.ui.renderer.FontFirstUse
 import com.serenity.ui.theme.DropCapGap
 
@@ -68,10 +69,19 @@ object DropCapLayout:
     val home     = isHomeRow(role, lineWithinParagraph, row.startColumn)
     TextVisualLine(
       bufferLine,
-      if home then row.copy(dropCapHeightPx = dropCap.heightPx) else row,
+      if home then homeRow(row, dropCap) else row,
       if home then (indentPx - replacedCharacterWidthPx(row)).max(0.0f) else indentPx,
       spaceBeforePx = 0,
       spaceAfterPx = 0
+    )
+
+  private def homeRow(row: MeasuredRow, dropCap: Reserve): MeasuredRow =
+    val grown = if row.heightPx > 0 then dropCap.growthPx else 0
+    row.copy(
+      heightPx = row.heightPx + grown,
+      ascentPx = row.ascentPx + grown,
+      dropCapHeightPx = dropCap.heightPx,
+      dropCapOverhangPx = dropCap.overhangPx
     )
 
   /** The glyph's measured advance width at `glyphFont` (already sized via
@@ -97,9 +107,11 @@ object DropCapLayout:
   val DefaultGapEm: Float = DropCapGap.Default
 
   /** What a drop cap paragraph reserves: the one x every line beside the glyph starts at, and the height from the top
-    * of the paragraph's first line down to the foot of the glyph, descenders included. Nothing for any other paragraph.
+    * of the paragraph's first row down to the foot of the glyph, descenders included. A letter that rises above its
+    * first line either makes that row `growthPx` taller, which `heightPx` then includes, or reaches `overhangPx` into
+    * the room above it. Nothing for any other paragraph.
     */
-  final case class Reserve(indentPx: Float, heightPx: Int)
+  final case class Reserve(indentPx: Float, heightPx: Int, growthPx: Int = 0, overhangPx: Int = 0)
 
   object Reserve:
     val none: Reserve = Reserve(0.0f, 0)
@@ -114,11 +126,14 @@ object DropCapLayout:
     lineIndex: Int,
     effectiveRole: ParagraphRole,
     proseScale: Float,
-    gapEm: Float
+    gapEm: Float,
+    shape: LetterShape = LetterShape.Drop
   ): Reserve =
     DropCapGlyph
-      .forParagraph(baseFont, frc, richDocument, lineIndex, effectiveRole, proseScale)
-      .fold(Reserve.none)(glyph => Reserve(glyph.indentPx(gapEm), glyph.heightPx))
+      .forParagraph(baseFont, frc, richDocument, lineIndex, effectiveRole, proseScale, shape)
+      .fold(Reserve.none)(glyph =>
+        Reserve(glyph.indentPx(gapEm), glyph.heightPx + glyph.growthPx, glyph.growthPx, glyph.overhangPx)
+      )
 
   /** The left margin, in pixels, every line a drop cap spans starts at: the glyph's width and the gap, the same on all
     * of them, zero elsewhere. Added to a line's ordinary left origin so its body text starts to the right of the glyph
@@ -154,7 +169,8 @@ object DropCapLayout:
 
   /** The rows each drop cap glyph of `snapshot` is painted over, keyed by the row it is painted from. A glyph is one
     * opaque box, so a pixel changed on any of these rows without repainting the others loses or leaves behind part of
-    * it. Empty when the layout is not measured (the cell grid never spans a glyph across rows).
+    * it. A letter that reaches above its row covers the rows above too. Empty when the layout is not measured (the cell
+    * grid never spans a glyph across rows).
     */
   def glyphRowSpan(snapshot: TextLayoutSnapshot): Map[Int, Range] =
     snapshot.richTextDocument.filter(_ => snapshot.usesMeasuredLayout).fold(Map.empty[Int, Range]) { document =>
@@ -172,7 +188,17 @@ object DropCapLayout:
     @tailrec def end(row: Int, topPx: Int): Int =
       if topPx >= glyphBottomPx || row >= lines.length || lines(row).bufferLine != lines(home).bufferLine then row
       else end(row + 1, topPx + heightOf(row))
-    home until end(home, 0)
+    firstRowCovered(snapshot, home) until end(home, 0)
+
+  /** The first row a glyph painted from `home` covers: the rows above it that its overhang reaches into. */
+  private def firstRowCovered(snapshot: TextLayoutSnapshot, home: Int): Int =
+    val lines = snapshot.visualLines
+    def extentOf(line: TextVisualLine): Int =
+      line.spaceBeforePx + (if line.heightPx > 0 then line.heightPx else snapshot.lineHeightPx) +
+        line.reservedBelowPx + line.spaceAfterPx
+    @tailrec def reach(row: Int, uncoveredPx: Int): Int =
+      if uncoveredPx <= 0 || row < 0 then row + 1 else reach(row - 1, uncoveredPx - extentOf(lines(row)))
+    reach(home - 1, lines(home).dropCapOverhangPx - lines(home).spaceBeforePx)
 
   /** `rows` with every row of each glyph span they touch. */
   def closedOverGlyphs(rows: Set[Int], snapshot: TextLayoutSnapshot): Set[Int] =

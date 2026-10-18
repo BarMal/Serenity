@@ -9,7 +9,7 @@ import com.serenity.markdown.{LazyBlockIndex, MarkdownInlineView}
 import com.serenity.rope.{Branch, ChangeSet, Leaf, LineSpan, Rope}
 import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.layout.VisualLineIndexStore.StampRelation
-import com.serenity.ui.openings.{OpeningInvalidation, OpeningRules}
+import com.serenity.ui.openings.{OpeningInvalidation, VirtualDropCaps}
 import com.serenity.ui.theme.HeadingSettings
 
 /** The [[VisualLineIndex]] last built for each key -- a buffer under one wrap setting -- together with the content it
@@ -118,7 +118,7 @@ object VisualLineIndexStore:
       markdown: MarkdownInlineView,
       tabSize: Int = IndentationSettings.DefaultTabSize,
       headings: HeadingSettings = HeadingSettings.default,
-      virtualDropCaps: Option[(OpeningRules, Int)] = None,
+      virtualDropCaps: Option[VirtualDropCaps.Signature] = None,
       dropCapGapEm: Float = DropCapLayout.DefaultGapEm
   )
 

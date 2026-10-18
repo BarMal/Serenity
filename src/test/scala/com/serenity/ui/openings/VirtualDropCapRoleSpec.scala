@@ -5,8 +5,9 @@ import com.serenity.ui.layout.RichTextContext
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** With openings on and `letter = drop`, the resolver declares each opening paragraph a drop cap without the document
-  * itself changing.
+/** With openings on, the resolver declares each opening paragraph an initial letter without the document itself
+  * changing: a drop cap under `letter = drop`, a one-line initial that rises under `raised`, and one over the lines it
+  * sinks that rises under `hybrid`.
   */
 class VirtualDropCapRoleSpec extends AnyFlatSpec with Matchers:
 
@@ -51,9 +52,13 @@ class VirtualDropCapRoleSpec extends AnyFlatSpec with Matchers:
   it should "lay out as body text while openings are off" in
     List(1, 4).foreach(line => roles(OpeningSettings.default)(line) shouldBe ParagraphRole.Body)
 
-  it should "lay out as body text under a raised letter" in
-    List(LetterMode.Raised, LetterMode.Hybrid).foreach { mode =>
-      List(1, 4).foreach(line => roles(on.copy(letterMode = mode))(line) shouldBe ParagraphRole.Body)
+  it should "lay out as a one-line initial under a raised letter" in
+    List(1, 4).foreach(line => roles(on.copy(letterMode = LetterMode.Raised))(line) shouldBe ParagraphRole.dropCap(1))
+
+  it should "lay out as an initial over the lines a hybrid letter sinks" in
+    (OpeningSettings.MinSinkLines to OpeningSettings.MaxSinkLines).foreach { sink =>
+      val hybrid = on.copy(letterMode = LetterMode.Hybrid, hybridSinkLines = sink)
+      List(1, 4).foreach(line => roles(hybrid)(line) shouldBe ParagraphRole.dropCap(sink))
     }
 
   it should "lay out as body text while drop caps are disabled" in

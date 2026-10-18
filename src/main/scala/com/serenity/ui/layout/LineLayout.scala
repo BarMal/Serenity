@@ -113,7 +113,8 @@ private[layout] object LineLayout:
           lineIndex,
           paragraphRole,
           richText.proseScale,
-          richText.dropCapGapEm
+          richText.dropCapGapEm,
+          richText.letterShape(lineIndex)
         )
       else DropCapLayout.Reserve.none
     LineLayoutInputs(resolver, paragraphRole, dropCap, headingLevelOf(paragraphRole, markdownRuns))

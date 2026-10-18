@@ -8,7 +8,14 @@ import com.serenity.markdown.{MarkdownBlockSpans, MarkdownInlineView, MarkerMode
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{Buffer, Cursor, IndentationSettings}
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.openings.{ChapterOpenings, OpeningContext, OpeningSettings, ParagraphRoles, VirtualDropCaps}
+import com.serenity.ui.openings.{
+  ChapterOpenings,
+  LetterShape,
+  OpeningContext,
+  OpeningSettings,
+  ParagraphRoles,
+  VirtualDropCaps
+}
 import com.serenity.ui.theme.{HeadingSettings, RichTextStyling}
 
 /** The inputs a logical line's wrap depends on besides its text: the rich-text paragraph styles that choose each run's
@@ -34,6 +41,10 @@ final case class RichTextContext(
   /** The role `line`'s paragraph lays out with; body text where there is no rich document. */
   def layoutRole(line: Int): ParagraphRole =
     document.fold(ParagraphRole.Body)(roles.layoutRole(_, line))
+
+  /** How `line`'s paragraph sets its first letter, when its role is a drop cap's. */
+  def letterShape(line: Int): LetterShape =
+    document.fold[LetterShape](LetterShape.Drop)(roles.shapeAt(_, line))
 
   /** Hiding a marker means measuring glyph by glyph, which a font laid out on the cell grid is not. */
   def requiresMeasuredLayout: Boolean = markdown.isActive

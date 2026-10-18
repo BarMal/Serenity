@@ -126,8 +126,22 @@ object DamageProducer:
             afterBuffer.document.changeFrom(beforeBuffer.document)
           )
           val lines = OpeningInvalidation.widenedParagraphs(was, now, edit).toSet
-          if lines.isEmpty then Damage.Nothing else Damage.BufferRows(bufferId, lines)
+          if VirtualDropCaps
+                .growsRows(settingsAfter) && (lines.nonEmpty || mayChangeFirstLetter(beforeBuffer, afterBuffer, edit))
+          then Damage.BufferAll(bufferId)
+          else if lines.isEmpty then Damage.Nothing
+          else Damage.BufferRows(bufferId, lines)
         case _ => Damage.Nothing
+
+  /** Whether an edit can change the first letter of a paragraph, or whether it has one at all: it spans lines, or
+    * starts within the first character. A first row that grows to hold its letter changes height with either, which
+    * moves every row below it without those rows being edited.
+    */
+  private def mayChangeFirstLetter(before: Buffer, after: Buffer, edit: LineEdit)(using Balance): Boolean =
+    edit.oldCount > 1 || edit.newCount > 1 ||
+      changedOffsetRange(before.document, after.document).forall((start, _) =>
+        after.document.content.offsetToLineColumn(start)._2 <= 1
+      )
 
   /** The range of `after`'s text that `before`'s edits replaced: taken from the change `after` recorded when it has
     * one, found by walking the two ropes otherwise (a reload, a restored session).

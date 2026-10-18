@@ -248,14 +248,13 @@ class VirtualDropCapIncrementalFrameSpec extends AnyFlatSpec with Matchers with 
   private def coldFrame(config: AppConfig, document: RichTextDocument): BufferedImage =
     Session(document, scale = 1.0, config).coldFrame()
 
-  "A cold frame with openings off, or with a raised or hybrid letter" should "be pixel-identical to one that never heard of openings" in {
+  "A cold frame with openings off" should "be pixel-identical to one that never heard of openings" in {
     val document = novel(60, chapters = 6)
     val before   = coldFrame(baseConfig, document)
 
     List(
       baseConfig.withOpeningsConfig(on.copy(enabled = false, letterMode = LetterMode.Raised)),
-      baseConfig.withOpeningsConfig(on.copy(letterMode = LetterMode.Raised)),
-      baseConfig.withOpeningsConfig(on.copy(letterMode = LetterMode.Hybrid, smallCapsFirstLine = true))
+      baseConfig.withOpeningsConfig(on.copy(enabled = false, letterMode = LetterMode.Hybrid, smallCapsFirstLine = true))
     ).foreach { config =>
       val frame = coldFrame(config, document)
       val differs = for
@@ -277,4 +276,20 @@ class VirtualDropCapIncrementalFrameSpec extends AnyFlatSpec with Matchers with 
       y <- 0 until before.getHeight
       if before.getRGB(x, y) != after.getRGB(x, y)
     yield (x, y)) should not be empty
+  }
+
+  "A cold frame with a raised or hybrid letter" should "differ from one without openings and from a drop cap's" in {
+    val document = novel(60, chapters = 6)
+    val frames = List(openingsOff, openingsOn).map(coldFrame(_, document)) ++
+      List(LetterMode.Raised, LetterMode.Hybrid).map(mode =>
+        coldFrame(baseConfig.withOpeningsConfig(on.copy(letterMode = mode)), document)
+      )
+    def differs(a: BufferedImage, b: BufferedImage): Boolean =
+      (for
+        x <- 0 until a.getWidth
+        y <- 0 until a.getHeight
+        if a.getRGB(x, y) != b.getRGB(x, y)
+      yield (x, y)).nonEmpty
+
+    frames.combinations(2).foreach(pair => differs(pair.head, pair(1)) shouldBe true)
   }
