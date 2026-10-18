@@ -7,6 +7,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.lsp.config.LspUserConfig
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.openings.OpeningSettings
 import com.serenity.ui.theme.HeadingSettings
 
 /** Global application configuration */
@@ -24,7 +25,8 @@ final case class AppConfig(
     statusLine: StatusLineConfig = StatusLineConfig.default,
     exportTypographyConfig: ExportTypographyConfig = ExportTypographyConfig(),
     autoSaveConfig: AutoSaveConfig = AutoSaveConfig(),
-    headingsConfig: HeadingsConfig = HeadingsConfig()
+    headingsConfig: HeadingsConfig = HeadingsConfig(),
+    openingsConfig: OpeningSettings = OpeningSettings.default
 ):
 
   /** Resolved once per config: the logical body is the prose size before any device scale, so a hi-DPI display never
@@ -35,6 +37,9 @@ final case class AppConfig(
 
   def withHeadingsConfig(config: HeadingsConfig): AppConfig =
     copy(headingsConfig = config)
+
+  def withOpeningsConfig(config: OpeningSettings): AppConfig =
+    copy(openingsConfig = config.normalized)
 
   def withEditorConfig(config: EditorConfig): AppConfig =
     copy(editorConfig = config.normalized)
