@@ -43,7 +43,10 @@ final case class TextLayoutSnapshot(
     // The heading look the rows were measured with, so the draw path paints the sizes this snapshot laid out.
     headings: HeadingSettings = HeadingSettings.default,
     // How the rows' paragraphs were resolved to roles, so paint and dirty tracking read the roles layout used.
-    roles: ParagraphRoles = ParagraphRoles.enabled
+    roles: ParagraphRoles = ParagraphRoles.enabled,
+    // For the rows of a multi-column page laid end to end: the row each column after the first starts at. Columns hold
+    // as many rows as fit their height, so moving a break moves rows between columns without changing any of them.
+    columnBreaks: Vector[Int] = Vector.empty
 ):
 
   def navigationGeometry: NavigationGeometry = NavigationGeometry(visualLines)
@@ -325,53 +328,44 @@ object TextLayoutSnapshot:
       else
         lines match
           case (lineIndex, rawLine) +: rest =>
-            val startColumn =
-              if wordWrapEnabled then 0
-              else math.min(buffer.viewport.leftColumn, rawLine.length)
-            val visibleSlice =
-              if wordWrapEnabled then rawLine.drop(startColumn)
-              else unwrappedVisibleSlice(rawLine, startColumn, buffer.viewport.visibleColumns)
             val remainingVisualLines = math.max(0, visualLineLimit - acc.length)
-            val inputs =
-              LineLayout.lineLayoutInputs(font, frc, measuredLayout, richText, lineIndex, rawLine.length, rawLine)
-            val resolver      = inputs.resolver
-            val paragraphRole = inputs.paragraphRole
-            val dropCap       = inputs.dropCap
-            val wrapped =
-              if remainingVisualLines <= 0 then Vector.empty
-              else if wordWrapEnabled then
-                wrapLogicalLine(
-                  visibleSlice,
+            val spaced =
+              if wordWrapEnabled then
+                LineLayout.placedWrappedLine(
                   lineIndex,
+                  rawLine,
                   panelWidthPx,
-                  resolver,
+                  font,
                   frc,
                   measuredLayout,
                   cellMetrics,
-                  startColumn,
                   remainingVisualLines,
-                  paragraphRole,
-                  dropCap,
+                  richText,
                   wrapCache
                 )
               else
+                val startColumn  = math.min(buffer.viewport.leftColumn, rawLine.length)
+                val visibleSlice = unwrappedVisibleSlice(rawLine, startColumn, buffer.viewport.visibleColumns)
+                val inputs =
+                  LineLayout.lineLayoutInputs(font, frc, measuredLayout, richText, lineIndex, rawLine.length, rawLine)
                 val row = measureSegment(
                   visibleSlice,
                   startColumn,
                   startColumn + visibleSlice.length,
-                  resolver,
+                  inputs.resolver,
                   frc,
                   measuredLayout,
                   cellMetrics
                 )
-                DropCapLayout.reservingGlyphHeight(
-                  Vector(DropCapLayout.placed(row, lineIndex, paragraphRole, lineWithinParagraph = 0, dropCap)),
-                  paragraphRole
+                val wrapped = DropCapLayout.reservingGlyphHeight(
+                  Vector(
+                    DropCapLayout.placed(row, lineIndex, inputs.paragraphRole, lineWithinParagraph = 0, inputs.dropCap)
+                  ),
+                  inputs.paragraphRole
                 )
-            val aligned  = ParagraphAlignmentLayout.apply(wrapped, lineIndex, panelWidthPx, richText)
-            val complete = !wordWrapEnabled || wrapped.length < remainingVisualLines
-            val spaced = HeadingSpacingLayout
-              .apply(aligned, inputs.headingLevel, complete, font, measuredLayout, cellMetrics, richText)
+                val aligned = ParagraphAlignmentLayout.apply(wrapped, lineIndex, panelWidthPx, richText)
+                HeadingSpacingLayout
+                  .apply(aligned, inputs.headingLevel, true, font, measuredLayout, cellMetrics, richText)
             loop(rest, acc ++ spaced)
           case _ => acc
 

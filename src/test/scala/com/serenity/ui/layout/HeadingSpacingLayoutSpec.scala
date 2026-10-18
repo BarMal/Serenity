@@ -178,7 +178,7 @@ class HeadingSpacingLayoutSpec extends AnyFlatSpec with Matchers:
 
   "A column page" should "drop the space above its first row in every column, as a page does" in {
     val settings = allSpaced(1.0f, 1.0f)
-    val buffer   = richBuffer().copy(viewport = richBuffer().viewport.copy(visibleLines = 3))
+    val buffer   = richBuffer().copy(viewport = richBuffer().viewport.copy(visibleLines = 8))
     val columns =
       TextLayoutSnapshot.fromBufferColumns(buffer, panelWidth, font, columnCount = 3, headings = settings)
 

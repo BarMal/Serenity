@@ -209,7 +209,31 @@ object TextVisualLine:
   */
 final case class EditorGeometry(navigation: NavigationGeometry, charWidthPx: Int, panelWidthColumns: Int)
 
-final case class NavigationGeometry(visualLines: Vector[TextVisualLine]):
+final case class NavigationGeometry(
+    visualLines: Vector[TextVisualLine],
+    // Indices into `visualLines` of the first row of each column, in column mode: columns hold as many rows as fit
+    // their height, so a column move cannot be a fixed number of rows. Empty outside column mode.
+    columnBreaks: Vector[Int] = Vector.empty
+):
+
+  /** Where a move of `direction` columns lands `cursor`: the same row within the adjacent column (or its last row if
+    * that is shorter), at the start of the row. `None` when the cursor's row or `columnBreaks` are unknown. Moving past
+    * the first or last column stays within the window's own first or last row, as a row-count move would.
+    */
+  def columnTarget(cursor: CursorPosition, direction: Int): Option[CursorPosition] =
+    for
+      row <- visualRowIndexFor(cursor)
+      if columnBreaks.nonEmpty
+      current      = math.max(0, columnBreaks.lastIndexWhere(_ <= row))
+      targetColumn = current + direction
+      target <-
+        if targetColumn < 0 then visualLines.headOption
+        else if targetColumn >= columnBreaks.length then visualLines.lastOption
+        else
+          val first = columnBreaks(targetColumn)
+          val last  = columnBreaks.lift(targetColumn + 1).getOrElse(visualLines.length) - 1
+          visualLines.lift(math.min(last, first + (row - columnBreaks(current))))
+    yield CursorPosition(target.bufferLine, target.startColumn)
 
   /** Index into [[visualLines]] of the visual (wrapped) row `cursor` sits on -- the single containment lookup every
     * cursor-to-row resolution shares ([[visualLineFor]], [[xPxForCursor]], [[moveVertical]]) and, crucially, the one

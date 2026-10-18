@@ -10,8 +10,9 @@ import com.serenity.ui.layout.{TextLayoutSnapshot, ViewportSize, WorkspaceNode, 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Space around headings is vertical room, not rows, so the rows a page holds -- and the page boundaries the viewport
-  * anchors to -- are the ones the same document has without it; and no column of a page starts with space above it.
+/** Space around headings is vertical room: a column holds the rows that fit its height with that room counted, so a
+  * page holds no more rows than the same document has without space, and no column of a page starts with space above it
+  * or overflows. The caret stays on the page it anchors.
   */
 class HeadingSpacingColumnPagingSpec extends AnyFlatSpec with Matchers:
 
@@ -76,19 +77,18 @@ class HeadingSpacingColumnPagingSpec extends AnyFlatSpec with Matchers:
     )
 
   for columns <- List(1, 2, 3) do
-    s"The page a cursor is anchored to in $columns column(s)" should "be the page it is anchored to without heading space" in {
+    s"The pages of $columns column(s) with heading space" should "never be fewer than the pages without it" in {
       val plain  = stateWith(HeadingsConfig(), columns)
       val spaced = stateWith(spacing, columns)
 
-      val lines = (0 until buffer.document.content.lineCount).toList
-      val anchors = lines.map { line =>
-        (
-          placed(plain, buffer, line).viewport.topLine  -> placed(plain, buffer, line).viewport.topVisualLine,
-          placed(spaced, buffer, line).viewport.topLine -> placed(spaced, buffer, line).viewport.topVisualLine
-        )
-      }
+      def pageCount(state: AppState): Int =
+        (0 until buffer.document.content.lineCount).toList
+          .map(line => placed(state, buffer, line).viewport)
+          .map(viewport => viewport.topLine -> viewport.topVisualLine)
+          .distinct
+          .size
 
-      anchors.foreach((without, withSpace) => withSpace shouldBe without)
+      pageCount(spaced) should be >= pageCount(plain)
     }
 
     it should s"keep the caret inside its page of $columns column(s) walking down and back up" in {
@@ -118,6 +118,7 @@ class HeadingSpacingColumnPagingSpec extends AnyFlatSpec with Matchers:
 
     columns.size shouldBe 3
     columns.foreach(column => column.visualLines.head.spaceBeforePx shouldBe 0)
-    columns.map(_.visualLines.size).distinct shouldBe Vector(buffer.viewport.visibleLines)
+    columns.foreach(_.visualLines.size should be <= buffer.viewport.visibleLines)
+    columns.map(_.visualLines.size).min should be < buffer.viewport.visibleLines
     columns.flatMap(_.visualLines).count(_.spaceBeforePx > 0) should be > 0
   }

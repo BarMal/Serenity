@@ -130,7 +130,8 @@ trait ColdFrameHarness:
 
   protected def summary(d: Seq[(Int, Int)]): String =
     val ys = d.map(_._2)
-    s"${d.size} px differ, y ${ys.minOption.getOrElse(0)}-${ys.maxOption.getOrElse(0)}"
+    val xs = d.map(_._1)
+    s"${d.size} px differ, x ${xs.minOption.getOrElse(0)}-${xs.maxOption.getOrElse(0)}, y ${ys.minOption.getOrElse(0)}-${ys.maxOption.getOrElse(0)}"
 
   final protected class Session(document: RichTextDocument, scale: Double, config: AppConfig = baseConfig):
     private val (stateManager, id) =

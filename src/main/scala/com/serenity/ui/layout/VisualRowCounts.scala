@@ -61,6 +61,9 @@ final private[layout] case class VisualRowKey(
     dropCapsEnabled: Boolean
 )
 
+/** What the pixels a line's rows stack to depend on besides [[VisualRowKey]]: the prose zoom scales every run. */
+final private[layout] case class BandHeightKey(rows: VisualRowKey, proseScale: Float)
+
 object VisualRowCounts:
 
   /** Counts `buffer`'s lines as [[TextLayoutSnapshot.boundedVisualLinesForText]] wraps them, through `wrapCache`'s
