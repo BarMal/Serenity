@@ -63,7 +63,7 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       baselinePx: Float,
       inkTopPx: Float,
       inkBottomPx: Float,
-      glyphWidthPx: Float,
+      inkRightPx: Float,
       glyphSizePx: Float,
       clipsGlyph: Boolean
   )
@@ -75,7 +75,7 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
     sizePx: Float,
     letter: String = "T",
     copies: Int = 3,
-    gapEm: Float = 0.5f,
+    gapEm: Float = 0.25f,
     role: ParagraphRole = ParagraphRole.Body,
     dropCapsEnabled: Boolean = true,
     forceCellLayout: Boolean = false
@@ -134,7 +134,7 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       baseline,
       baseline + ink.getMinY.toFloat,
       baseline + ink.getMaxY.toFloat,
-      call.bgWidthPx,
+      math.ceil(ink.getMaxX).toFloat,
       glyphFont.getSize2D,
       call.clipGlyphToRun
     )
@@ -199,7 +199,7 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       val shown = drawn(s)
       val home  = s.snapshot.visualLines(s.home)
 
-      home.xForColumn(1).get shouldBe shown.glyphWidthPx + 0.5f * sizePx +- 0.5f
+      home.xForColumn(1).get shouldBe shown.inkRightPx + 0.25f * sizePx +- tolerancePx
       s.snapshot.visualLines(s.home + 1).xOffsetPx shouldBe 0.0f
       startX(s.snapshot.visualLines(s.home + 1)) shouldBe 0.0f +- 0.5f
       startX(s.snapshot.visualLines(s.home + 2)) shouldBe 0.0f +- 0.5f
@@ -214,10 +214,10 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
     }
 
     it should "keep the gap the document sets between the letter and the text" in
-      List(0.0f, 1.0f, 2.0f).foreach { gapEm =>
+      List(0.0f, 0.25f, 1.0f, 2.0f).foreach { gapEm =>
         val s = laid(raised(rule), sizePx, gapEm = gapEm)
 
-        s.snapshot.visualLines(s.home).xForColumn(1).get shouldBe drawn(s).glyphWidthPx + gapEm * sizePx +- 0.5f
+        s.snapshot.visualLines(s.home).xForColumn(1).get shouldBe drawn(s).inkRightPx + gapEm * sizePx +- tolerancePx
       }
 
     for sink <- 2 to 4 do
@@ -249,11 +249,11 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       it should "start the first lines it spans at one indent and the next at the margin" in {
         val s      = laid(hybrid(rule, sink), sizePx)
         val shown  = drawn(s)
-        val indent = shown.glyphWidthPx + 0.5f * sizePx
+        val indent = shown.inkRightPx + 0.25f * sizePx
         val lines  = s.snapshot.visualLines
 
-        lines(s.home).xForColumn(1).get shouldBe indent +- 0.5f
-        (1 until sink).foreach(offset => startX(lines(s.home + offset)) shouldBe indent +- 0.5f)
+        lines(s.home).xForColumn(1).get shouldBe indent +- tolerancePx
+        (1 until sink).foreach(offset => startX(lines(s.home + offset)) shouldBe indent +- tolerancePx)
         startX(lines(s.home + sink)) shouldBe 0.0f +- 0.5f
         lines(s.home - 1).xOffsetPx shouldBe 0.0f
       }

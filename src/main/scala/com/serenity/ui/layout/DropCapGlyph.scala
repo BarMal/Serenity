@@ -25,6 +25,7 @@ final case class DropCapGlyph(
     style: TextStyle,
     font: Font,
     widthPx: Float,
+    inkRightPx: Int,
     baselinePx: Int,
     heightPx: Int,
     bodyFontSizePx: Float,
@@ -33,10 +34,10 @@ final case class DropCapGlyph(
 
   def fontSizePx: Float = font.getSize2D
 
-  /** The x, from the paragraph's origin, every line beside the glyph starts at: the glyph's advance plus `gapEm` body
-    * fonts.
+  /** The x, from the paragraph's origin, every line beside the glyph starts at: the right edge of the glyph's ink plus
+    * `gapEm` body fonts. The ink is measured from the draw origin, so a letter reaching left of it is still cleared.
     */
-  def indentPx(gapEm: Float): Float = widthPx + gapEm.max(0.0f) * bodyFontSizePx
+  def indentPx(gapEm: Float): Float = inkRightPx + gapEm.max(0.0f) * bodyFontSizePx
 
 object DropCapGlyph:
 
@@ -111,9 +112,10 @@ object DropCapGlyph:
       case LetterShape.Rising(true) => sizeFor(key.lines + 1)
       case LetterShape.Rising(false) =>
         shrunkToFit(sizeFor(key.lines + 1), sizeFor(1), baselinePx, fontAt, key)
-    val font   = fontAt(sizePx)
-    val ink    = font.createGlyphVector(key.frc, key.text).getVisualBounds
-    val hangPx = math.ceil(ink.getMaxY).toInt.max(0)
+    val font       = fontAt(sizePx)
+    val ink        = font.createGlyphVector(key.frc, key.text).getVisualBounds
+    val hangPx     = math.ceil(ink.getMaxY).toInt.max(0)
+    val inkRightPx = math.ceil(ink.getMaxX).toInt.max(0)
     val growthPx =
       if key.shape == LetterShape.Rising(growsRow = true) then riseAbove(baselinePx, font, key.text, key.frc) else 0
     DropCapGlyph(
@@ -122,6 +124,7 @@ object DropCapGlyph:
       styleAt(sizePx),
       font,
       DropCapLayout.glyphWidthPx(font, key.frc, key.text),
+      inkRightPx,
       baselinePx,
       DropCapLayout.glyphHeightPx(ParagraphRole.dropCap(key.lines), extent.heightPx).max(baselinePx + hangPx),
       bodyFont.getSize2D,

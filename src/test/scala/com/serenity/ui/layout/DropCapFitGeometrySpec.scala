@@ -3,6 +3,7 @@ package com.serenity.ui.layout
 import java.awt.Font
 
 import com.serenity.MockRenderSurface
+import com.serenity.config.AppConfig
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, RichTextState, TextVisualLine, Viewport}
@@ -32,7 +33,7 @@ class DropCapFitGeometrySpec extends AnyFlatSpec with Matchers:
     lines: Int,
     sizePx: Float,
     copies: Int = 3,
-    gapEm: Float = 0.5f
+    gapEm: Float = 0.25f
   ): Sample =
     val font     = BundledInterFont.plain(sizePx)
     val text     = letter + (prose * copies)
@@ -56,7 +57,7 @@ class DropCapFitGeometrySpec extends AnyFlatSpec with Matchers:
       baselinePx: Float,
       letterTopPx: Float,
       letterBottomPx: Float,
-      glyphWidthPx: Float,
+      inkRightPx: Float,
       line: TextVisualLine
   )
 
@@ -83,7 +84,13 @@ class DropCapFitGeometrySpec extends AnyFlatSpec with Matchers:
     val glyphFont  = TextStyle.styledFont(sample.font, glyphStyle)
     val ink        = glyphFont.createGlyphVector(frc, letter).getVisualBounds
     val baseline   = (call.yPx + call.ascentPx).toFloat
-    Drawn(baseline, baseline + ink.getMinY.toFloat, baseline + ink.getMaxY.toFloat, call.bgWidthPx, drawLine)
+    Drawn(
+      baseline,
+      baseline + ink.getMinY.toFloat,
+      baseline + ink.getMaxY.toFloat,
+      math.ceil(ink.getMaxX).toFloat,
+      drawLine
+    )
 
   private def capHeightOf(font: Font): Float =
     -font.createGlyphVector(frc, "H").getVisualBounds.getMinY.toFloat
@@ -136,15 +143,36 @@ class DropCapFitGeometrySpec extends AnyFlatSpec with Matchers:
 
   for
     (label, sizePx) <- List("1x" -> 14.0f, "2x" -> 28.0f)
-    gapEm           <- List(0.0f, 0.5f, 1.0f, 2.0f)
+    gapEm           <- List(0.0f, 0.25f, 0.5f, 1.0f, 2.0f)
   do
-    s"The gap beside a drop cap at $label" should s"be $gapEm em of the body font between the glyph and the text" in {
+    s"The gap beside a drop cap at $label" should s"be $gapEm em of the body font between the glyph's ink and the text" in {
       val s     = sample("T", 2, sizePx, gapEm = gapEm)
       val shown = drawn(s, "T")
       val start = s.snapshot.visualLines(1).xForColumn(s.snapshot.visualLines(1).startColumn).get
 
-      start shouldBe shown.glyphWidthPx + gapEm * sizePx +- 0.5f
+      start shouldBe shown.inkRightPx + gapEm * sizePx +- tolerancePx
     }
+
+  for
+    (label, sizePx) <- List("1x" -> 14.0f, "2x" -> 28.0f)
+    letter          <- List("I", "W", "T", "Q", "J")
+  do
+    s"The indent beside a drop cap $letter at $label" should
+      "be the ink's right edge rounded up plus the gap, on every spanned line" in {
+        val s        = sample(letter, 3, sizePx)
+        val shown    = drawn(s, letter)
+        val expected = shown.inkRightPx + AppConfig.default.documentConfig.dropCapGapEm * sizePx
+        val starts = shown.line.xForColumn(shown.line.startColumn).get +: s.snapshot.visualLines
+          .slice(1, 3)
+          .map(line => line.xForColumn(line.startColumn).get)
+
+        starts should have size 3L
+        starts.foreach(_ shouldBe expected +- tolerancePx)
+      }
+
+  "The default gap beside a drop cap" should "be a quarter em of the body font" in {
+    AppConfig.default.documentConfig.dropCapGapEm shouldBe 0.25f
+  }
 
   for letter <- List("Q", "J") do
     s"A drop cap $letter" should "be covered by the room its paragraph reserves when the paragraph is short" in {

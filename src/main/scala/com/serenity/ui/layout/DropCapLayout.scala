@@ -127,9 +127,9 @@ object DropCapLayout:
       .forParagraph(baseFont, frc, richDocument, lineIndex, effectiveRole, proseScale, shape)
       .fold(Reserve.none)(glyph => Reserve(glyph.indentPx(gapEm), glyph.heightPx + glyph.growthPx, glyph.growthPx))
 
-  /** The left margin, in pixels, every line a drop cap spans starts at: the glyph's width and the gap, the same on all
-    * of them, zero elsewhere. Added to a line's ordinary left origin so its body text starts to the right of the glyph
-    * instead of under it.
+  /** The left margin, in pixels, every line a drop cap spans starts at: the glyph's ink edge and the gap, the same on
+    * all of them, zero elsewhere. Added to a line's ordinary left origin so its body text starts to the right of the
+    * glyph instead of under it.
     */
   def leftInsetPx(role: ParagraphRole, lineWithinParagraph: Int, indentPx: Float): Float =
     if spansLine(role, lineWithinParagraph) then indentPx.max(0.0f) else 0.0f
