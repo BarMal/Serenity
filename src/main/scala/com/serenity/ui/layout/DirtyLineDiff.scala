@@ -2,6 +2,7 @@ package com.serenity.ui.layout
 
 import com.serenity.richtext.{ParagraphRole, RichTextParagraph}
 import com.serenity.state.models.TextVisualLine
+import com.serenity.ui.openings.OpeningInvalidation
 
 /** Diffs two consecutive frames of one editor pane's text layout and reports which visible rows can no longer reuse the
   * pixels an earlier frame left on the surface.
@@ -37,7 +38,8 @@ object DirtyLineDiff:
           val changed = current.visualLines.indices.filter { row =>
             reflowFrom.exists(row >= _) ||
             !previousSnapshot.visualLines.lift(row).contains(current.visualLines(row)) ||
-            richParagraphEdited(previousSnapshot, current, current.visualLines(row).bufferLine)
+            richParagraphEdited(previousSnapshot, current, current.visualLines(row).bufferLine) ||
+            openingGovernorEdited(previousSnapshot, current, current.visualLines(row).bufferLine)
           }.toSet
           closedOverGlyphs(changed, previousSnapshot, current)
 
@@ -107,6 +109,14 @@ object DirtyLineDiff:
           case (None, None)           => false
           case _                      => true
       case _ => false
+
+  /** A paragraph can gain or lose chapter-opening status when the title, scene break or epigraph above it is edited,
+    * without itself changing.
+    */
+  private def openingGovernorEdited(previous: TextLayoutSnapshot, current: TextLayoutSnapshot, line: Int): Boolean =
+    (previous.richTextDocument, current.richTextDocument) match
+      case (Some(before), Some(after)) if !(before eq after) => OpeningInvalidation.governorEdited(before, after, line)
+      case _                                                 => false
 
   /** The first visible row below which rows may have moved without their own text changing: a paragraph whose role or
     * alignment changed, or a row whose measured height or ascent did. Rows above it keep their position.

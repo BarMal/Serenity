@@ -1,5 +1,7 @@
 package com.serenity.ui.openings
 
+import com.serenity.config.MarkdownViewMode
+import com.serenity.document.MarkdownHeadingIndex
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 
 /** The settings a paragraph's effective role can depend on. */
@@ -24,6 +26,70 @@ object ChapterOpenings:
       case other                                        => other
 
   val standard: Resolver = roleFor
+
+  /** The predicate for [[EpigraphRule.ExplicitOnly]] while no document marks its epigraphs. */
+  val noExplicitEpigraphs: Int => Boolean = _ => false
+
+  /** The paragraphs of `document` that open a chapter or follow a scene break, under `rules`.
+    *
+    * `explicitEpigraph` says whether the paragraph at an index is marked as an epigraph, which only
+    * [[EpigraphRule.ExplicitOnly]] reads. It must answer the same for as long as the result is kept up to date with
+    * [[updatedOpeningLines]].
+    */
+  def openingLines(document: RichTextDocument, rules: OpeningRules, explicitEpigraph: Int => Boolean): OpeningLines =
+    OpeningScan.scan(document.paragraphCount, rules, RichTextOpenings.classify(document, rules, explicitEpigraph))
+
+  /** `previous`, the openings of the document before `edit`, brought up to date with `document`. Costs the lines the
+    * edit touched and the search pending at them, not the document.
+    */
+  def updatedOpeningLines(
+    previous: OpeningLines,
+    document: RichTextDocument,
+    edit: LineEdit,
+    rules: OpeningRules,
+    explicitEpigraph: Int => Boolean
+  ): OpeningLines =
+    OpeningScan.rescan(
+      previous,
+      edit,
+      document.paragraphCount,
+      rules,
+      RichTextOpenings.classify(document, rules, explicitEpigraph)
+    )
+
+  /** Markdown shows openings only where it is rendered: a source view has none. */
+  def rendersOpenings(mode: MarkdownViewMode): Boolean =
+    mode == MarkdownViewMode.LivePreview || mode == MarkdownViewMode.Read
+
+  def openingLines(
+    headings: MarkdownHeadingIndex,
+    mode: MarkdownViewMode,
+    rules: OpeningRules,
+    explicitEpigraph: Int => Boolean
+  ): OpeningLines =
+    val lineCount = headings.content.lineCount
+    if !rendersOpenings(mode) then OpeningLines.none(lineCount, rules)
+    else OpeningScan.scan(lineCount, rules, MarkdownOpenings.classify(headings, rules, explicitEpigraph))
+
+  /** As the rich-text [[updatedOpeningLines]], for the Markdown whose lines `headings` indexes. Reparses everything
+    * when `headings` itself had to, since an edit that reaches across blocks, a code fence say, can change lines far
+    * from it, and redoes every line the reparse of `headings` covered.
+    */
+  def updatedOpeningLines(
+    previous: OpeningLines,
+    headings: MarkdownHeadingIndex,
+    edit: LineEdit,
+    mode: MarkdownViewMode,
+    rules: OpeningRules,
+    explicitEpigraph: Int => Boolean
+  ): OpeningLines =
+    val lineCount = headings.content.lineCount
+    val classify  = MarkdownOpenings.classify(headings, rules, explicitEpigraph)
+    if !rendersOpenings(mode) then OpeningLines.none(lineCount, rules)
+    else if headings.parsedWholeText then OpeningScan.scan(lineCount, rules, classify)
+    else
+      val reparsed = edit.covering(headings.parsedFrom, headings.parsedFrom + headings.parsedLines)
+      OpeningScan.rescan(previous, reparsed, lineCount, rules, classify, MarkdownOpenings.startsBlock(headings))
 
 /** A resolver bound to the context it resolves under. Every site that reads a paragraph's role asks one of these. */
 final case class ParagraphRoles(context: OpeningContext, resolver: ChapterOpenings.Resolver):

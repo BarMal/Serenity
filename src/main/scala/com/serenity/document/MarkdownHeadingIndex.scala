@@ -8,7 +8,7 @@ import com.serenity.ui.layout.{Location, Symbol, SymbolKind}
 import org.commonmark.Extension
 import org.commonmark.ext.gfm.tables.TablesExtension
 import org.commonmark.ext.task.list.items.TaskListItemsExtension
-import org.commonmark.node.{FencedCodeBlock, Heading, Node}
+import org.commonmark.node.{Document, FencedCodeBlock, Heading, Node}
 import org.commonmark.parser.{IncludeSourceSpans, Parser}
 import org.commonmark.renderer.text.TextContentRenderer
 
@@ -27,16 +27,36 @@ import org.commonmark.renderer.text.TextContentRenderer
   * @param parsedLines
   *   how many lines the parse that produced this index covered: the whole text for [[MarkdownHeadingIndex.build]], the
   *   window for an incremental [[updatedTo]]
+  * @param parsedFrom
+  *   the first line that parse covered
+  * @param parsedWholeText
+  *   whether the parse covered the whole text, as [[MarkdownHeadingIndex.build]] does and [[updatedTo]] falls back to
+  *   when an edit reaches across blocks: lines far from the edit may then differ too
   */
 final class MarkdownHeadingIndex private (
     val content: Rope,
     private[document] val entries: Vector[MarkdownHeadingIndex.Entry],
     private[document] val fences: Vector[Range.Inclusive],
     private val spansBlankLines: Boolean,
-    val parsedLines: Int
+    val parsedLines: Int,
+    val parsedWholeText: Boolean = false,
+    val parsedFrom: Int = 0
 ):
 
   lazy val headings: Vector[Symbol] = entries.map(_.symbol)
+
+  /** The top-level heading written on `line`, including a setext heading's underline. */
+  def topLevelHeadingAt(line: Int): Option[MarkdownHeadingIndex.HeadingLines] =
+    val index = MarkdownHeadingIndex.lastStartingAtOrBefore(entries.length, line, entries(_).symbol.location.line)
+    index
+      .map(entries(_))
+      .filter(entry => entry.topLevel && line <= entry.lastLine)
+      .map(entry => MarkdownHeadingIndex.HeadingLines(entry.level, entry.symbol.location.line, entry.lastLine))
+
+  def isInFence(line: Int): Boolean =
+    MarkdownHeadingIndex
+      .lastStartingAtOrBefore(fences.length, line, fences(_).start)
+      .exists(index => fences(index).contains(line))
 
   /** The headings with the identity chapter notes are keyed by, each title normalised once when its block was parsed
     * rather than on every read.
@@ -88,7 +108,8 @@ final class MarkdownHeadingIndex private (
           fences.takeWhile(_.end < windowStart) ++ window.fences ++
             fences.dropWhile(_.start < oldEnd).map(fence => (fence.start + delta) to (fence.end + delta)),
           spansBlankLines = false,
-          parsedLines = windowEnd - windowStart
+          parsedLines = windowEnd - windowStart,
+          parsedFrom = windowStart
         )
       )
 
@@ -121,8 +142,9 @@ final class MarkdownHeadingIndex private (
     ranges.exists(_.contains(line))
 
   private def shifted(entry: MarkdownHeadingIndex.Entry, delta: Int): MarkdownHeadingIndex.Entry =
-    entry.copy(symbol =
-      entry.symbol.copy(location = entry.symbol.location.copy(line = entry.symbol.location.line + delta))
+    entry.copy(
+      symbol = entry.symbol.copy(location = entry.symbol.location.copy(line = entry.symbol.location.line + delta)),
+      lastLine = entry.lastLine + delta
     )
 
 object MarkdownHeadingIndex:
@@ -130,7 +152,27 @@ object MarkdownHeadingIndex:
   /** A heading with what readers would otherwise fetch from the text again for every one: the identity-ready title, and
     * the source line it was written on.
     */
-  final private[document] case class Entry(symbol: Symbol, normalizedTitle: String, sourceLine: String)
+  final private[document] case class Entry(
+      symbol: Symbol,
+      normalizedTitle: String,
+      sourceLine: String,
+      level: Int,
+      lastLine: Int,
+      topLevel: Boolean
+  )
+
+  /** The lines a heading occupies: one for an ATX heading, the title lines and underline for a setext one. */
+  final case class HeadingLines(level: Int, firstLine: Int, lastLine: Int)
+
+  /** The last index below `count` whose start, by `startOf`, is at or before `line`; the starts are ascending. */
+  private[document] def lastStartingAtOrBefore(count: Int, line: Int, startOf: Int => Int): Option[Int] =
+    @annotation.tailrec
+    def search(low: Int, high: Int, found: Option[Int]): Option[Int] =
+      if low > high then found
+      else
+        val middle = (low + high) >>> 1
+        if startOf(middle) <= line then search(middle + 1, high, Some(middle)) else search(low, middle - 1, found)
+    search(0, count - 1, None)
 
   final private case class Parsed(headings: Vector[Entry], fences: Vector[Range.Inclusive])
 
@@ -154,7 +196,8 @@ object MarkdownHeadingIndex:
       parsed.headings,
       parsed.fences,
       content.linesIteratorFrom(0).exists((_, line) => spansBlankLines(line)),
-      content.lineCount
+      content.lineCount,
+      parsedWholeText = true
     )
 
   private def parse(content: Rope, from: Int, until: Int): Parsed =
@@ -166,14 +209,27 @@ object MarkdownHeadingIndex:
       blocks.collect { case fence: FencedCodeBlock => fence }.flatMap(fenceLines(_, content, from, until)).toVector
     )
 
+  private def isTopLevel(heading: Heading): Boolean =
+    heading.getParent match
+      case _: Document => true
+      case _           => false
+
   private def headingEntry(heading: Heading, lines: Vector[String], firstLine: Int): Option[Entry] =
     val title = headingTextRenderer.render(heading).trim
-    heading.getSourceSpans.asScala.headOption
+    val spans = heading.getSourceSpans.asScala
+    spans.headOption
       .filter(_ => title.nonEmpty)
       .map { span =>
         val symbol =
           Symbol(name = title, kind = SymbolKind.Heading, location = Location(firstLine + span.getLineIndex, 0))
-        Entry(symbol, HeadingIdentity.normalizedTitle(title), lines.lift(span.getLineIndex).getOrElse(""))
+        Entry(
+          symbol,
+          HeadingIdentity.normalizedTitle(title),
+          lines.lift(span.getLineIndex).getOrElse(""),
+          heading.getLevel,
+          firstLine + spans.map(_.getLineIndex).foldLeft(0)(math.max),
+          isTopLevel(heading)
+        )
       }
 
   /** The lines of `fence`. A fence never closed runs to the end of the text, and the parse reports it ending at its
