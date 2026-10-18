@@ -209,6 +209,8 @@ private[layout] object TextCaretMeasurement:
       )
 
   @volatile var diagOn: Boolean = false
+  val diagLog = new java.util.concurrent.ConcurrentLinkedQueue[String]()
+  def diag(msg: String): Unit = { val _ = diagLog.add(msg) }
 
   private val textLayoutsBuilt: ThreadLocal[AtomicLong] = ThreadLocal.withInitial(() => AtomicLong(0))
 
@@ -228,8 +230,8 @@ private[layout] object TextCaretMeasurement:
       val sb = new StringBuilder
       var c = it.first()
       while c != java.text.CharacterIterator.DONE do { sb.append(c); c = it.next() }
-      println(s"DIAG textLayout len=${sb.length} text='${sb.toString.take(40)}' stack=\n" +
-        new Throwable().getStackTrace.slice(1, 14).mkString("\n  "))
+      TextCaretMeasurement.diag(s"DIAG textLayout len=${sb.length} text='${sb.toString.take(40)}' stack=\n" +
+        new Throwable().getStackTrace.slice(1, 14).mkString(" | "))
     TextLayout(text.getIterator, frc)
 
   /** Each character's leading caret plus the run's full advance, before [[normalizeCollapsedCarets]]: summed glyph

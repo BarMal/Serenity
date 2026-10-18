@@ -51,11 +51,12 @@ class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDriven
       wrap("warm up the font probes", 200, font)
       forAll(widths) { widthPx =>
         TextCaretMeasurement.diagOn = true
-        println(s"DIAG begin $font at $widthPx")
+        TextCaretMeasurement.diagLog.clear()
         val (rows, built) = constructedWhile(wrap(kernedProse, widthPx, font))
         TextCaretMeasurement.diagOn = false
-        println(s"DIAG end built=$built rows=${rows.map(r => (r.startColumn, r.endColumn, r.widthPx))}")
-        withClue(s"$font at $widthPx px, ${rows.length} rows: ") {
+        val diag = TextCaretMeasurement.diagLog.toArray.mkString("\n")
+        val rowDump = rows.map(r => (r.startColumn, r.endColumn, r.widthPx)).toString
+        withClue(s"$font at $widthPx px, ${rows.length} rows: [[DIAG built=$built rows=$rowDump\n$diag DIAG]] ") {
           rows.length should be > 2
           built should be <= MostLayoutsPerParagraph
         }
