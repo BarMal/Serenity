@@ -92,10 +92,32 @@ class FileMatchingSpec extends AnyFlatSpec with Matchers with ScalaCheckProperty
       case Edit.Backspace     => query.dropRight(1)
       case Edit.Replace(char) => query.dropRight(1) + char
 
+  private def windowsSafe(name: String): String =
+    name
+      .split("/", -1)
+      .map(segment => if segment.endsWith(" ") || segment.endsWith(".") then segment.dropRight(1) + "_" else segment)
+      .mkString("/")
+
   private val randomCorpus: Gen[Vector[Path]] =
     Gen
       .listOf(Gen.choose(1, 12).flatMap(length => Gen.stringOfN(length, alphabet)))
-      .map(_.filter(name => !name.startsWith("/") && !name.contains("//")).map(Path.of(_)).distinct.toVector)
+      .map(
+        _.map(windowsSafe)
+          .filter(name => !name.startsWith("/") && !name.contains("//"))
+          .map(Path.of(_))
+          .distinct
+          .toVector
+      )
+
+  it should "only be given names whose path segments Windows accepts" in
+    forAll(randomCorpus) { files =>
+      files.foreach { file =>
+        file.toString.split("/", -1).foreach { segment =>
+          segment should not endWith " "
+          segment should not endWith "."
+        }
+      }
+    }
 
   it should "match a fresh ranking of every file across typing, deleting and replacing" in
     forAll(randomCorpus, Gen.listOf(edits)) { (files, steps) =>
