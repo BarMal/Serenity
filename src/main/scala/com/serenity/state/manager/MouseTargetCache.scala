@@ -14,6 +14,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
+import com.serenity.ui.openings.OpeningSettings
 import com.serenity.ui.theme.HeadingSettings
 
 final private[manager] case class RopeIdentity private (value: Rope):
@@ -117,7 +118,10 @@ final private[manager] case class MouseTargetLayoutKey(
     dropCapsEnabled: Boolean,
     lineNumberLayout: LineNumberLayout,
     // Per pane, since a buffer can override the configured indentation; a tab's width sets where a row wraps.
-    paneTabSizes: List[(PaneId, Option[Int])]
+    paneTabSizes: List[(PaneId, Option[Int])],
+    // Per pane, like the tab size: a buffer can override the configured openings, and while they are off nothing else
+    // about them reaches layout (`OpeningSettings.layoutForm`).
+    paneOpenings: List[(PaneId, Option[OpeningSettings])]
 )
 
 private[manager] object MouseTargetLayoutKey:
@@ -246,6 +250,13 @@ private[manager] object MouseTargetLayoutKey:
           .flatMap(_.bufferId)
           .flatMap(state.persisted.buffers.get)
           .map(_.effectiveIndentation(state.persisted.config.indentation).tabSize)
+      },
+      paneOpenings = state.persisted.layout.orderedPaneIds.map { paneId =>
+        paneId -> state.persisted.layout.editorPanes
+          .get(paneId)
+          .flatMap(_.bufferId)
+          .flatMap(state.persisted.buffers.get)
+          .map(_.effectiveOpenings(state.persisted.config.openingsConfig).layoutForm)
       }
     )
 

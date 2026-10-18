@@ -9,6 +9,15 @@ import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfaceP
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.openings.{
+  EpigraphRule,
+  HandDropCapRule,
+  LetterMode,
+  OpeningRules,
+  OpeningSettings,
+  RaisedRowRule,
+  SceneBreakRule
+}
 import com.serenity.ui.theme.{HeadingColour, HeadingStyle}
 import org.scalacheck.Gen
 
@@ -165,6 +174,19 @@ object ConfigGenerators:
       damping   <- Gen.oneOf(true, false)
       threshold <- Gen.choose(HeadingsConfig.ThresholdRange._1.toInt, HeadingsConfig.ThresholdRange._2.toInt)
     yield HeadingsConfig(levels, colour, damping, threshold.toFloat)
+
+  val genOpeningSettings: Gen[OpeningSettings] =
+    for
+      enabled   <- Gen.oneOf(true, false)
+      letter    <- oneOfEnum(LetterMode.values)
+      raisedRow <- oneOfEnum(RaisedRowRule.values)
+      sink      <- Gen.choose(OpeningSettings.MinSinkLines, OpeningSettings.MaxSinkLines)
+      smallCaps <- Gen.oneOf(true, false)
+      marker    <- Gen.alphaNumStr.suchThat(_.nonEmpty)
+      epigraph  <- oneOfEnum(EpigraphRule.values)
+      scene     <- oneOfEnum(SceneBreakRule.values)
+      hand      <- oneOfEnum(HandDropCapRule.values)
+    yield OpeningSettings(enabled, letter, raisedRow, sink, smallCaps, marker, OpeningRules(epigraph, scene, hand))
 
   val genStatusLineConfig: Gen[StatusLineConfig] =
     for
@@ -401,6 +423,7 @@ object ConfigGenerators:
       status           <- genStatusLineConfig
       exportTypography <- genExportTypographyConfig
       headings         <- genHeadingsConfig
+      openings         <- genOpeningSettings
       autoSave         <- genAutoSaveConfig
     yield AppConfig(
       editorConfig = editor,
@@ -421,5 +444,6 @@ object ConfigGenerators:
       statusLine = status,
       exportTypographyConfig = exportTypography,
       headingsConfig = headings,
+      openingsConfig = openings,
       autoSaveConfig = autoSave
     )

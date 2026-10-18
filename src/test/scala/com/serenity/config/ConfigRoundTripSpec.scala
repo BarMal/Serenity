@@ -13,6 +13,15 @@ import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfaceP
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.openings.{
+  EpigraphRule,
+  HandDropCapRule,
+  LetterMode,
+  OpeningRules,
+  OpeningSettings,
+  RaisedRowRule,
+  SceneBreakRule
+}
 import com.serenity.ui.theme.HeadingColour
 import com.typesafe.config.ConfigFactory
 import org.scalatest.flatspec.AnyFlatSpec
@@ -216,6 +225,17 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
         colour = Some(HeadingColour.Text),
         damping = false,
         dampingThresholdPt = 36.0f
+      )
+    )
+    .withOpeningsConfig(
+      OpeningSettings(
+        enabled = true,
+        letterMode = LetterMode.Hybrid,
+        raisedRow = RaisedRowRule.Clamp,
+        hybridSinkLines = 5,
+        smallCapsFirstLine = true,
+        epigraphMarker = "motto",
+        rules = OpeningRules(EpigraphRule.ExplicitOnly, SceneBreakRule.SmallCapsOnly, HandDropCapRule.OpeningWins)
       )
     )
 

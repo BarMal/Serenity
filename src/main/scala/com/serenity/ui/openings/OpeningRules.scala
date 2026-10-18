@@ -1,28 +1,37 @@
 package com.serenity.ui.openings
 
 /** Which paragraphs between a chapter title and its opening are epigraphs, and so are skipped. */
-enum EpigraphRule:
+enum EpigraphRule(val configKey: String):
   /** A Markdown `>` blockquote, or a rich-text paragraph that is centred, right-aligned or entirely italic. */
-  case AutoDetect
+  case AutoDetect extends EpigraphRule("auto")
 
   /** Nothing is skipped: the first paragraph after the title is the candidate. */
-  case Never
+  case Never extends EpigraphRule("never")
 
   /** Only paragraphs the caller marks as epigraphs; see the `explicitEpigraph` predicate of [[ChapterOpenings]]. */
-  case ExplicitOnly
+  case ExplicitOnly extends EpigraphRule("marker")
+
+object EpigraphRule:
+  def fromConfigKey(key: String): Option[EpigraphRule] = values.find(_.configKey == key)
 
 /** What a scene break, a line such as `***`, does to the paragraph after it. */
-enum SceneBreakRule:
-  case NoOpening
-  case SmallCapsOnly
-  case FullOpening
+enum SceneBreakRule(val configKey: String):
+  case NoOpening     extends SceneBreakRule("none")
+  case SmallCapsOnly extends SceneBreakRule("small-caps")
+  case FullOpening   extends SceneBreakRule("full")
+
+object SceneBreakRule:
+  def fromConfigKey(key: String): Option[SceneBreakRule] = values.find(_.configKey == key)
 
 /** What happens when an opening is already a hand-made drop cap. Detection only reports it; the resolver applies this.
   */
-enum HandDropCapRule:
-  case HandWins
-  case HandPlusSmallCaps
-  case OpeningWins
+enum HandDropCapRule(val configKey: String):
+  case HandWins          extends HandDropCapRule("hand")
+  case HandPlusSmallCaps extends HandDropCapRule("hand-small-caps")
+  case OpeningWins       extends HandDropCapRule("opening")
+
+object HandDropCapRule:
+  def fromConfigKey(key: String): Option[HandDropCapRule] = values.find(_.configKey == key)
 
 final case class OpeningRules(
     epigraph: EpigraphRule = EpigraphRule.AutoDetect,
