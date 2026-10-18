@@ -2,18 +2,18 @@ package com.serenity
 
 import java.awt.Font
 
-import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextStyle}
+import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{
   BundledInterFont,
   CellMetrics,
+  DropCapGlyph,
   DropCapLayout,
   LayoutRect,
   TextLayoutSnapshot,
   TextRowMetrics
 }
-import com.serenity.ui.theme.{RichTextStyling, TextStyle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -25,7 +25,7 @@ class TextLayoutSnapshotDropCapSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "TextLayoutSnapshot drop cap layout" should
-    "reserve the glyph's own measured width as a left inset on a drop cap paragraph's first n visual lines" in {
+    "start every one of a drop cap paragraph's first n visual lines at the glyph's width plus the gap" in {
       val text     = "Hello there this wraps across several lines of body text"
       val document = RichTextDocument(List(RichTextParagraph.plain(text, role = ParagraphRole.dropCap(lines = 2))))
       val buffer = Buffer
@@ -40,20 +40,24 @@ class TextLayoutSnapshotDropCapSpec extends AnyFlatSpec with Matchers:
 
       val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 14, font)
 
-      val expectedGlyphStyle = RichTextStyling
-        .dropCapGlyphStyle(RichTextStyle.empty, ParagraphRole.DropCap(2), RichTextStyling.ProseZoomBaselinePx, 1.0f)
-        .getOrElse(fail("expected a drop cap glyph style"))
-      val expectedGlyphWidthPx =
-        DropCapLayout.glyphWidthPx(TextStyle.styledFont(font, expectedGlyphStyle), frc, text.take(1))
+      val glyph = DropCapGlyph
+        .forParagraph(font, frc, Some(document), 0, ParagraphRole.DropCap(2), proseScale = 1.0f)
+        .getOrElse(fail("expected a drop cap glyph"))
+      val expectedIndentPx = glyph.widthPx + DropCapLayout.DefaultGapEm * font.getSize2D
 
       snapshot.visualLines.length should be >= 3
-      snapshot.visualLines(0).xOffsetPx shouldBe expectedGlyphWidthPx +- 0.5f
-      snapshot.visualLines(1).xOffsetPx shouldBe expectedGlyphWidthPx +- 0.5f
+      // The second line has no small first character to make room for, so its offset is the indent itself.
+      snapshot.visualLines(1).xOffsetPx shouldBe expectedIndentPx +- 0.5f
+      // The first line keeps the width of the character the glyph replaces in its caret stops, and takes it off its
+      // offset, so its text starts at the same x as the second line's.
+      val home = snapshot.visualLines(0)
+      home.xForColumn(1).get shouldBe expectedIndentPx +- 0.5f
+      home.xOffsetPx should be < expectedIndentPx
       // The third visual line falls outside the drop cap's 2-line span, so it reserves no inset.
       snapshot.visualLines(2).xOffsetPx shouldBe 0.0f
 
-      // The reserved inset narrows the wrap width on the inset lines rather than merely shifting overflowing text:
-      // the drawn text plus its inset must still fit inside the panel.
+      // The reserved indent narrows the wrap width on the indented lines rather than merely shifting overflowing
+      // text: the drawn text plus its indent must still fit inside the panel.
       snapshot.visualLines.take(2).foreach { line =>
         (line.widthPx + line.xOffsetPx) should be <= (metrics.charWidth * 14).toFloat + 2.0f
       }

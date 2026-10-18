@@ -170,6 +170,8 @@ object DirtyLineDiff:
       previous.ascentPx == current.ascentPx &&
       previous.isProportional == current.isProportional &&
       previous.usesMeasuredLayout == current.usesMeasuredLayout &&
+      previous.roles.context.virtualDropCaps.map(_.signature) ==
+      current.roles.context.virtualDropCaps.map(_.signature) &&
       sameRichParagraphCount(previous, current) &&
       previous.markdownInline.mode == current.markdownInline.mode &&
       previous.markdownInline.padsAlike(current.markdownInline, current.visualLines.map(_.bufferLine).distinct)

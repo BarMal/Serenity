@@ -13,13 +13,13 @@ import com.serenity.ui.layout.TextCaretMeasurement.{
   singleFontResolver
 }
 
-/** The line-level inputs of a wrap -- per-run fonts, drop cap role and glyph width -- shared by the painted layout and
-  * every row count so the two cannot disagree.
+/** The line-level inputs of a wrap -- per-run fonts, drop cap role and the room its glyph reserves -- shared by the
+  * painted layout and every row count so the two cannot disagree.
   */
 private[layout] object LineLayout:
 
   /** The rows one logical line wraps into, exactly as the painted layout wraps it: per-run fonts, the paragraph's drop
-    * cap role and the glyph's reserved width. Everything that counts or locates rows -- centring, scrolling, the
+    * cap role and the room its glyph reserves. Everything that counts or locates rows -- centring, scrolling, the
     * cursor's own row -- goes through this, so what is counted is what is painted.
     */
   def wrappedLine(
@@ -50,7 +50,7 @@ private[layout] object LineLayout:
       baseColumn,
       maxVisualLines,
       inputs.paragraphRole,
-      inputs.glyphWidthPx,
+      inputs.dropCap,
       wrapCache
     )
 
@@ -69,7 +69,7 @@ private[layout] object LineLayout:
   final case class LineLayoutInputs(
       resolver: LineFontResolver,
       paragraphRole: ParagraphRole,
-      glyphWidthPx: Float,
+      dropCap: DropCapLayout.Reserve,
       headingLevel: Option[Int]
   )
 
@@ -104,11 +104,19 @@ private[layout] object LineLayout:
           )
         )(markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText, _))
     val paragraphRole = richText.layoutRole(lineIndex)
-    val glyphWidthPx =
+    val dropCap =
       if measuredLayout then
-        DropCapLayout.measuredGlyphWidthPx(font, frc, richText.document, lineIndex, paragraphRole, richText.proseScale)
-      else 0.0f
-    LineLayoutInputs(resolver, paragraphRole, glyphWidthPx, headingLevelOf(paragraphRole, markdownRuns))
+        DropCapLayout.reserve(
+          font,
+          frc,
+          richText.document,
+          lineIndex,
+          paragraphRole,
+          richText.proseScale,
+          richText.dropCapGapEm
+        )
+      else DropCapLayout.Reserve.none
+    LineLayoutInputs(resolver, paragraphRole, dropCap, headingLevelOf(paragraphRole, markdownRuns))
 
   private def headingLevelOf(role: ParagraphRole, markdownRuns: Option[Vector[MarkdownInlineSpans.Run]]): Option[Int] =
     role match

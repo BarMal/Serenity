@@ -2,6 +2,7 @@ package com.serenity.config
 
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
+import com.serenity.ui.theme.{DropCapColour, DropCapGap}
 
 import AppConfigOps.*
 
@@ -10,6 +11,9 @@ private[config] object ConfigFieldsDocumentsAndCommandRunner:
 
   import ConfigFieldSyntax.*
   import FieldCodec.*
+
+  private val dropCapGap: FieldCodec[Float] =
+    float.filtered(gap => gap >= DropCapGap.Range._1 && gap <= DropCapGap.Range._2)
 
   val fields: List[ConfigField[?]] = List(
     // -- Documents and editor --------------------------------------------------------------------------------------------
@@ -46,6 +50,14 @@ private[config] object ConfigFieldsDocumentsAndCommandRunner:
     field("document.drop_caps_enabled", "drop_caps_enabled")(boolean)(
       _.documentConfig.dropCapsEnabled,
       (config, value) => config.withDropCapsEnabled(value)
+    ),
+    field("document.drop_cap_gap")(dropCapGap)(
+      _.documentConfig.dropCapGapEm,
+      (config, value) => config.withDropCapGapEm(value)
+    ),
+    field("document.drop_cap_colour")(enumerated(DropCapColour.fromConfigKey, DropCapColour.configKey))(
+      _.documentConfig.dropCapColour,
+      (config, value) => config.withDropCapColour(value)
     ),
     field("document.chapter_ghosts")(boolean)(
       _.documentConfig.chapterGhosts,

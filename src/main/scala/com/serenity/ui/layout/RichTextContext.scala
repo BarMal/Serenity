@@ -8,13 +8,14 @@ import com.serenity.markdown.{MarkdownBlockSpans, MarkdownInlineView, MarkerMode
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{Buffer, Cursor, IndentationSettings}
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.openings.{ChapterOpenings, OpeningContext, ParagraphRoles}
+import com.serenity.ui.openings.{ChapterOpenings, OpeningContext, OpeningSettings, ParagraphRoles, VirtualDropCaps}
 import com.serenity.ui.theme.{HeadingSettings, RichTextStyling}
 
 /** The inputs a logical line's wrap depends on besides its text: the rich-text paragraph styles that choose each run's
-  * font and a drop cap's role, the prose zoom that scales them, whether drop caps are enabled at all, and how the
-  * line's inline Markdown is restyled. `tabSize` is the width a tab takes on the cell grid, and `headings` the look its
-  * heading paragraphs resolve to.
+  * font and a drop cap's role, the prose zoom that scales them, whether drop caps are enabled at all, the chapter
+  * openings that are set as drop caps, and how the line's inline Markdown is restyled. `tabSize` is the width a tab
+  * takes on the cell grid, `headings` the look its heading paragraphs resolve to and `dropCapGapEm` the room beside a
+  * drop cap's glyph.
   */
 final case class RichTextContext(
     document: Option[RichTextDocument],
@@ -23,10 +24,12 @@ final case class RichTextContext(
     markdown: MarkdownInlineView = MarkdownInlineView.Off,
     tabSize: Int = IndentationSettings.DefaultTabSize,
     headings: HeadingSettings = HeadingSettings.default,
+    virtualDropCaps: Option[VirtualDropCaps] = None,
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm,
     resolver: ChapterOpenings.Resolver = ChapterOpenings.standard
 ):
 
-  val roles: ParagraphRoles = ParagraphRoles(OpeningContext(dropCapsEnabled), resolver)
+  val roles: ParagraphRoles = ParagraphRoles(OpeningContext(dropCapsEnabled, virtualDropCaps), resolver)
 
   /** The role `line`'s paragraph lays out with; body text where there is no rich document. */
   def layoutRole(line: Int): ParagraphRole =
@@ -52,16 +55,21 @@ object RichTextContext:
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
     frc: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext(),
     tabSize: Int = IndentationSettings.DefaultTabSize,
-    headings: HeadingSettings = HeadingSettings.default
+    headings: HeadingSettings = HeadingSettings.default,
+    openings: OpeningSettings = OpeningSettings.default,
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm
   ): RichTextContext =
-    val content = buffer.document.content
+    val content  = buffer.document.content
+    val document = buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(content.lineCount, content.weight))
     RichTextContext(
-      buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(content.lineCount, content.weight)),
+      document,
       RichTextStyling.proseZoom(font.getSize2D),
       dropCapsEnabled,
       markdownViewFor(buffer, markdownViewMode, cellGrid, wrapCache, font, frc),
       tabSize,
-      headings
+      headings,
+      document.flatMap(wrapCache.virtualDropCaps(_, openings)),
+      dropCapGapEm
     )
 
   /** How `buffer`'s inline Markdown is restyled under `viewMode`. A buffer carrying a rich-text document styles its own

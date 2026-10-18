@@ -149,14 +149,17 @@ object RichTextStyling:
         // is set at the normal size around the oversized initial.
         TextStyle.normal
 
-  /** The font size, in the same units as [[ProseZoomBaselinePx]], a drop cap glyph spanning `lines` visual lines should
-    * render at -- so it visually occupies about that many lines of the paragraph's normal line height, the way a
-    * printed drop cap sits flush with the top and bottom of the lines it spans. `baseFontSizePx` is the paragraph's own
-    * (unscaled) body font size; `lines` is clamped to at least 1 (matching [[ParagraphRole.dropCap]]'s own clamp, so a
-    * corrupt/hand-edited session value can't shrink or invert the glyph).
+  /** The font size a drop cap glyph spanning `lines` visual lines is set at, so that the top of its capitals is level
+    * with the top of the body's capitals on the first line and its baseline sits on the baseline of the last: the
+    * glyph's capitals are then `(lines - 1)` line heights plus the body's own capital height tall. `glyphCapHeightEm`
+    * is the glyph font's capital height per unit of font size. `lines` is clamped to at least 1 (matching
+    * [[ParagraphRole.dropCap]]'s own clamp, so a corrupt/hand-edited session value can't shrink or invert the glyph).
     */
-  def dropCapGlyphFontSize(baseFontSizePx: Float, lines: Int): Float =
-    baseFontSizePx.max(1.0f) * lines.max(1).toFloat
+  def dropCapGlyphFontSize(bodyCapHeightPx: Float, lineHeightPx: Float, glyphCapHeightEm: Float, lines: Int): Float =
+    val spanPx = (lines.max(1) - 1) * lineHeightPx + bodyCapHeightPx
+    spanPx / glyphCapHeightEm.max(MinCapHeightEm)
+
+  private val MinCapHeightEm: Float = 0.01f
 
   /** The role rendering/layout should treat `role` as, honouring the `document.drop_caps_enabled` config toggle. When
     * the toggle is off, a [[ParagraphRole.DropCap]] degrades to [[ParagraphRole.Body]] for this purpose only -- the
@@ -167,27 +170,29 @@ object RichTextStyling:
   def effectiveRole(role: ParagraphRole, dropCapsEnabled: Boolean): ParagraphRole =
     ChapterOpenings.degraded(role, dropCapsEnabled)
 
-  /** The resolved, zoom-scaled style for a drop cap paragraph's singled-out first character: bold, sized to span
-    * `role.lines` visual lines at the paragraph's base body font size, with any inline styling on that character
-    * (family/colour/explicit marks) layered on top the same way [[textStyle]] layers inline style over role style.
-    * Returns `None` for a non-drop-cap role, since there is no glyph to size in that case.
+  /** The style a drop cap paragraph's own text is set in around the glyph: the ordinary body style of its first run. */
+  def dropCapBodyStyle(firstCharacterStyle: com.serenity.richtext.RichTextStyle, scale: Float): TextStyle =
+    scaledTextStyle(firstCharacterStyle, ParagraphRole.Body, scale, HeadingSettings.default)
+
+  /** The style for a drop cap paragraph's singled-out first character: bold, at `glyphFontSizePx` (see
+    * [[dropCapGlyphFontSize]]), with any inline styling on that character (family/marks) layered on top the same way
+    * [[textStyle]] layers inline style over role style. Returns `None` for a non-drop-cap role, since there is no glyph
+    * to style in that case.
     */
   def dropCapGlyphStyle(
     firstCharacterStyle: com.serenity.richtext.RichTextStyle,
     role: ParagraphRole,
-    baseFontSizePx: Float,
-    scale: Float = 1.0f
+    glyphFontSizePx: Float
   ): Option[TextStyle] =
     role match
-      case ParagraphRole.DropCap(lines) =>
-        val glyphSize = dropCapGlyphFontSize(baseFontSizePx, lines) * scale
+      case _: ParagraphRole.DropCap =>
         Some(
           TextStyle(
             isBold = true,
             isItalic = firstCharacterStyle.marks.contains(InlineMark.Italic),
             isUnderlined = firstCharacterStyle.marks.contains(InlineMark.Underline),
             fontFamily = firstCharacterStyle.fontFamily,
-            fontSize = Some(glyphSize)
+            fontSize = Some(glyphFontSizePx)
           )
         )
       case _ => None
@@ -203,7 +208,7 @@ object RichTextStyling:
     bufferLine: Int,
     startColumn: Int,
     endColumn: Int,
-    baseFontSizePx: Float,
+    glyphFontSizePx: Float,
     scale: Float = 1.0f,
     roles: ParagraphRoles = ParagraphRoles.enabled
   ): (Option[RichSpan], List[RichSpan]) =
@@ -221,7 +226,7 @@ object RichTextStyling:
         val glyphText = firstSpan.text.take(charCount)
         val remainder = firstSpan.text.drop(charCount)
         val glyphStyle =
-          dropCapGlyphStyle(firstCharacterStyle, dropCap, baseFontSizePx, scale).getOrElse(firstSpan.style)
+          dropCapGlyphStyle(firstCharacterStyle, dropCap, glyphFontSizePx).getOrElse(firstSpan.style)
         val remainderSpan = Option.when(remainder.nonEmpty)(RichSpan(remainder, firstSpan.style))
         (Some(RichSpan(glyphText, glyphStyle)), remainderSpan.toList ++ restOfFirstSpan)
       case _ => (None, spans)

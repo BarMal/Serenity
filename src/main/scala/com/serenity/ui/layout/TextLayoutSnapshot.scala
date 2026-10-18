@@ -23,7 +23,7 @@ import com.serenity.state.models.{
 }
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TextCaretMeasurement.*
-import com.serenity.ui.openings.ParagraphRoles
+import com.serenity.ui.openings.{OpeningSettings, ParagraphRoles}
 import com.serenity.ui.renderer.FontFirstUse
 import com.serenity.ui.theme.HeadingSettings
 
@@ -244,7 +244,10 @@ object TextLayoutSnapshot:
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     tabSize: Int = IndentationSettings.DefaultTabSize,
-    headings: HeadingSettings = HeadingSettings.default
+    headings: HeadingSettings = HeadingSettings.default,
+    openings: OpeningSettings = OpeningSettings.default,
+    // `document.drop_cap_gap`: the room beside a drop cap's glyph, in em of the body font.
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm
   ): TextLayoutSnapshot =
     val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val totalLines  = buffer.document.content.lineCount
@@ -252,7 +255,9 @@ object TextLayoutSnapshot:
       buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.document.content.weight))
     val markdownInline =
       RichTextContext.markdownViewFor(buffer, markdownViewMode, forceCellLayout, wrapCache, font, fontRenderContext)
-    val richText       = RichTextContext(richDocument, proseScale, dropCapsEnabled, markdownInline, tabSize, headings)
+    val caps = richDocument.flatMap(wrapCache.virtualDropCaps(_, openings))
+    val richText =
+      RichTextContext(richDocument, proseScale, dropCapsEnabled, markdownInline, tabSize, headings, caps, dropCapGapEm)
     val measuredLayout = LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText)
     // The non-measured (cell) path draws every row on `cellMetrics`' own grid (see `TextRowMetrics`'s non-measured
     // `lineTopPx`), so its line height/ascent must come from that same caller-supplied unit rather than the real
@@ -331,7 +336,7 @@ object TextLayoutSnapshot:
               LineLayout.lineLayoutInputs(font, frc, measuredLayout, richText, lineIndex, rawLine.length, rawLine)
             val resolver      = inputs.resolver
             val paragraphRole = inputs.paragraphRole
-            val glyphWidthPx  = inputs.glyphWidthPx
+            val dropCap       = inputs.dropCap
             val wrapped =
               if remainingVisualLines <= 0 then Vector.empty
               else if wordWrapEnabled then
@@ -346,7 +351,7 @@ object TextLayoutSnapshot:
                   startColumn,
                   remainingVisualLines,
                   paragraphRole,
-                  glyphWidthPx,
+                  dropCap,
                   wrapCache
                 )
               else
@@ -360,7 +365,7 @@ object TextLayoutSnapshot:
                   cellMetrics
                 )
                 DropCapLayout.reservingGlyphHeight(
-                  Vector(placed(row, lineIndex, paragraphRole, lineWithinParagraph = 0, glyphWidthPx)),
+                  Vector(DropCapLayout.placed(row, lineIndex, paragraphRole, lineWithinParagraph = 0, dropCap)),
                   paragraphRole
                 )
             val aligned  = ParagraphAlignmentLayout.apply(wrapped, lineIndex, panelWidthPx, richText)
@@ -391,10 +396,10 @@ object TextLayoutSnapshot:
     baseColumn: Int,
     maxVisualLines: Int,
     // A drop cap paragraph's first `paragraphRole.lines` visual lines (0-based `lineWithinParagraph`, tracked below via
-    // `acc.length`) reserve `dropCapGlyphWidthPx` of left margin so wrapping leaves room for the glyph beside them --
+    // `acc.length`) reserve `dropCap.indentPx` of left margin so wrapping leaves room for the glyph beside them --
     // `ParagraphRole.Body` (every non-drop-cap paragraph) makes both branches below exactly today's behaviour.
     paragraphRole: ParagraphRole,
-    dropCapGlyphWidthPx: Float,
+    dropCap: DropCapLayout.Reserve,
     wrapCache: WrappedLineCache
   ): Vector[TextVisualLine] =
     if maxVisualLines <= 0 then Vector.empty
@@ -408,7 +413,7 @@ object TextLayoutSnapshot:
         cellMetrics,
         baseColumn,
         paragraphRole,
-        dropCapGlyphWidthPx
+        dropCap.indentPx
       )
       // Measuring keeps the caller's context so the shaped-text cache is shared with whoever draws with it; only the
       // cache identity ignores the device transform.
@@ -418,25 +423,9 @@ object TextLayoutSnapshot:
       )
       val placedRows =
         Vector.tabulate(rows.length)(index =>
-          placed(rows(index), bufferLine, paragraphRole, index, dropCapGlyphWidthPx)
+          DropCapLayout.placed(rows(index), bufferLine, paragraphRole, index, dropCap)
         )
       if rows.length < maxVisualLines then DropCapLayout.reservingGlyphHeight(placedRows, paragraphRole) else placedRows
-
-  /** A cached row read onto `bufferLine`; the drop cap inset is the only offset the row carries until alignment. */
-  private def placed(
-    row: MeasuredRow,
-    bufferLine: Int,
-    role: ParagraphRole,
-    lineWithinParagraph: Int,
-    glyphWidthPx: Float
-  ): TextVisualLine =
-    TextVisualLine(
-      bufferLine,
-      row,
-      DropCapLayout.leftInsetPx(role, lineWithinParagraph, glyphWidthPx),
-      spaceBeforePx = 0,
-      spaceAfterPx = 0
-    )
 
   private[layout] def wrapRows(spec: WrappedLineKey, maxVisualLines: Int): RowWrap =
     import spec.{baseColumn, cellMetrics, frc, measuredLayout, resolver, text}
@@ -474,8 +463,8 @@ object TextLayoutSnapshot:
     startColumn: Int,
     lineWithinParagraph: Int
   ): WrappedRow =
-    import spec.{baseColumn, cellMetrics, dropCapGlyphWidthPx, frc, measuredLayout, paragraphRole, resolver, text}
-    val insetPx          = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx)
+    import spec.{baseColumn, cellMetrics, dropCapIndentPx, frc, measuredLayout, paragraphRole, resolver, text}
+    val insetPx          = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapIndentPx)
     val wrapWidthPx      = math.max(1, spec.panelWidthPx - math.round(insetPx))
     val segmentStart     = baseColumn + startColumn
     val fit              = fittingSegment(paragraph, text, startColumn, wrapWidthPx, segmentStart, spec)

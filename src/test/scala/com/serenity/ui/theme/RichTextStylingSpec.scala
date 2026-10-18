@@ -6,23 +6,40 @@ import org.scalatest.matchers.should.Matchers
 
 class RichTextStylingSpec extends AnyFlatSpec with Matchers:
 
-  "RichTextStyling.dropCapGlyphFontSize" should "scale the base font size by the drop cap's line span" in {
-    RichTextStyling.dropCapGlyphFontSize(12.0f, 3) shouldBe 36.0f
-    RichTextStyling.dropCapGlyphFontSize(12.0f, 1) shouldBe 12.0f
+  "RichTextStyling.dropCapGlyphFontSize" should
+    "size the glyph so its capitals span from the first line's cap top to the last spanned line's baseline" in {
+      // Two lines of 20px under capitals 9px tall: the glyph's capitals must be 20 + 9 = 29px tall, and a font whose
+      // capitals are 0.7em tall reaches that at 29 / 0.7 em.
+      RichTextStyling.dropCapGlyphFontSize(
+        bodyCapHeightPx = 9.0f,
+        lineHeightPx = 20.0f,
+        glyphCapHeightEm = 0.7f,
+        lines = 2
+      ) shouldBe (29.0f / 0.7f) +- 0.001f
+      RichTextStyling.dropCapGlyphFontSize(
+        bodyCapHeightPx = 9.0f,
+        lineHeightPx = 20.0f,
+        glyphCapHeightEm = 0.7f,
+        lines = 3
+      ) shouldBe (49.0f / 0.7f) +- 0.001f
+    }
+
+  it should "give a one-line span just the body's own capitals, scaled to the glyph font" in {
+    RichTextStyling.dropCapGlyphFontSize(9.0f, 20.0f, 0.7f, lines = 1) shouldBe (9.0f / 0.7f) +- 0.001f
   }
 
   it should "clamp a non-positive line span to one line" in {
-    RichTextStyling.dropCapGlyphFontSize(12.0f, 0) shouldBe 12.0f
-    RichTextStyling.dropCapGlyphFontSize(12.0f, -5) shouldBe 12.0f
+    RichTextStyling.dropCapGlyphFontSize(9.0f, 20.0f, 0.7f, lines = 0) shouldBe (9.0f / 0.7f) +- 0.001f
+    RichTextStyling.dropCapGlyphFontSize(9.0f, 20.0f, 0.7f, lines = -5) shouldBe (9.0f / 0.7f) +- 0.001f
   }
 
-  "RichTextStyling.dropCapGlyphStyle" should "return a bold glyph style sized to the drop cap's span, scaled by zoom" in {
-    val style = RichTextStyling.dropCapGlyphStyle(
-      RichTextStyle.empty,
-      ParagraphRole.DropCap(3),
-      baseFontSizePx = 12.0f,
-      scale = 2.0f
-    )
+  it should "never divide by a font with no capitals" in {
+    RichTextStyling.dropCapGlyphFontSize(9.0f, 20.0f, 0.0f, lines = 2) should be > 0.0f
+  }
+
+  "RichTextStyling.dropCapGlyphStyle" should "return a bold glyph style at the font size it is given" in {
+    val style =
+      RichTextStyling.dropCapGlyphStyle(RichTextStyle.empty, ParagraphRole.DropCap(3), glyphFontSizePx = 72.0f)
 
     style shouldBe Some(TextStyle(isBold = true, fontSize = Some(72.0f)))
   }
@@ -33,7 +50,7 @@ class RichTextStylingSpec extends AnyFlatSpec with Matchers:
       fontFamily = Some("Serif")
     )
 
-    val style = RichTextStyling.dropCapGlyphStyle(inline, ParagraphRole.DropCap(2), baseFontSizePx = 12.0f)
+    val style = RichTextStyling.dropCapGlyphStyle(inline, ParagraphRole.DropCap(2), glyphFontSizePx = 24.0f)
 
     style shouldBe Some(
       TextStyle(isBold = true, isItalic = true, isUnderlined = true, fontFamily = Some("Serif"), fontSize = Some(24.0f))
@@ -41,18 +58,26 @@ class RichTextStylingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "return None for a non-drop-cap role" in {
-    RichTextStyling.dropCapGlyphStyle(RichTextStyle.empty, ParagraphRole.Body, baseFontSizePx = 12.0f) shouldBe None
+    RichTextStyling.dropCapGlyphStyle(RichTextStyle.empty, ParagraphRole.Body, glyphFontSizePx = 12.0f) shouldBe None
     RichTextStyling.dropCapGlyphStyle(
       RichTextStyle.empty,
       ParagraphRole.Heading(1),
-      baseFontSizePx = 12.0f
+      glyphFontSizePx = 12.0f
     ) shouldBe None
+  }
+
+  "RichTextStyling.dropCapBodyStyle" should "set a drop cap paragraph's own text at its ordinary, zoom-scaled style" in {
+    val sized = RichTextStyle(fontFamily = Some("Serif"), fontSize = Some(10.0f))
+
+    RichTextStyling.dropCapBodyStyle(RichTextStyle.empty, scale = 2.0f) shouldBe TextStyle.normal
+    RichTextStyling.dropCapBodyStyle(sized, scale = 2.0f) shouldBe
+      TextStyle(fontFamily = Some("Serif"), fontSize = Some(20.0f))
   }
 
   "RichTextStyling.dropCapSplitFontSpans" should "split the first character of a drop cap paragraph's home line into its own glyph span" in {
     val document = RichTextDocument(List(RichTextParagraph.plain("Chapter One", role = ParagraphRole.DropCap(3))))
 
-    val (glyph, rest) = RichTextStyling.dropCapSplitFontSpans(document, 0, 0, 11, baseFontSizePx = 12.0f)
+    val (glyph, rest) = RichTextStyling.dropCapSplitFontSpans(document, 0, 0, 11, glyphFontSizePx = 36.0f)
 
     glyph.map(_.text) shouldBe Some("C")
     glyph.map(_.style.fontSize) shouldBe Some(Some(36.0f))
@@ -63,7 +88,7 @@ class RichTextStylingSpec extends AnyFlatSpec with Matchers:
   it should "not split a drop cap paragraph's continuation lines (non-zero start column)" in {
     val document = RichTextDocument(List(RichTextParagraph.plain("Chapter One", role = ParagraphRole.DropCap(3))))
 
-    val (glyph, rest) = RichTextStyling.dropCapSplitFontSpans(document, 0, 4, 11, baseFontSizePx = 12.0f)
+    val (glyph, rest) = RichTextStyling.dropCapSplitFontSpans(document, 0, 4, 11, glyphFontSizePx = 36.0f)
 
     glyph shouldBe None
     rest.map(_.text).mkString shouldBe "ter One"
@@ -72,7 +97,7 @@ class RichTextStylingSpec extends AnyFlatSpec with Matchers:
   it should "leave a non-drop-cap paragraph's spans unsplit" in {
     val document = RichTextDocument(List(RichTextParagraph.plain("Chapter One")))
 
-    val (glyph, rest) = RichTextStyling.dropCapSplitFontSpans(document, 0, 0, 11, baseFontSizePx = 12.0f)
+    val (glyph, rest) = RichTextStyling.dropCapSplitFontSpans(document, 0, 0, 11, glyphFontSizePx = 36.0f)
 
     glyph shouldBe None
     rest.map(_.text).mkString shouldBe "Chapter One"
@@ -94,7 +119,7 @@ class RichTextStylingSpec extends AnyFlatSpec with Matchers:
   it should "leave an empty line with no first character unsplit" in {
     val document = RichTextDocument(List(RichTextParagraph.plain("", role = ParagraphRole.DropCap(3))))
 
-    val (glyph, rest) = RichTextStyling.dropCapSplitFontSpans(document, 0, 0, 0, baseFontSizePx = 12.0f)
+    val (glyph, rest) = RichTextStyling.dropCapSplitFontSpans(document, 0, 0, 0, glyphFontSizePx = 36.0f)
 
     glyph shouldBe None
     rest shouldBe Nil

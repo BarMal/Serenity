@@ -116,6 +116,9 @@ final private[manager] case class MouseTargetLayoutKey(
     headings: HeadingSettings,
     // Like `headings`, each of these reaches layout through `persisted.config` without being a field of the key.
     dropCapsEnabled: Boolean,
+    // The room beside a drop cap's glyph moves every row that wraps beside it. The glyph's colour only repaints, so it
+    // is not part of the key.
+    dropCapGapEm: Float,
     lineNumberLayout: LineNumberLayout,
     // Per pane, since a buffer can override the configured indentation; a tab's width sets where a row wraps.
     paneTabSizes: List[(PaneId, Option[Int])],
@@ -243,6 +246,7 @@ private[manager] object MouseTargetLayoutKey:
         else Nil,
       headings = state.persisted.config.headingSettings,
       dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
+      dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
       lineNumberLayout = state.persisted.config.surfaceConfig.lineNumberLayout.normalized,
       paneTabSizes = state.persisted.layout.orderedPaneIds.map { paneId =>
         paneId -> state.persisted.layout.editorPanes

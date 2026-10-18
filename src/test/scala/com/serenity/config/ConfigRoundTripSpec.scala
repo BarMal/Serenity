@@ -22,7 +22,7 @@ import com.serenity.ui.openings.{
   RaisedRowRule,
   SceneBreakRule
 }
-import com.serenity.ui.theme.HeadingColour
+import com.serenity.ui.theme.{DropCapColour, HeadingColour}
 import com.typesafe.config.ConfigFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -125,6 +125,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withWordGoal(Some(50000))
     .withCommentAuthor(Some("Ada Lovelace"))
     .withDropCapsEnabled(false)
+    .withDropCapGapEm(1.25f)
+    .withDropCapColour(DropCapColour.Fixed(RenderColor.fromRgba(0x12, 0x34, 0x56)))
     .withAutoSaveMode(AutoSaveMode.OnFocusChange)
     .withAutoSaveDelayMillis(2500L)
     .withAppMode(AppMode.Prose)

@@ -8,7 +8,7 @@ import com.serenity.lsp.config.LspUserConfig
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.openings.OpeningSettings
-import com.serenity.ui.theme.HeadingSettings
+import com.serenity.ui.theme.{DropCapColour, DropCapGap, HeadingSettings}
 
 /** Global application configuration */
 final case class AppConfig(
@@ -370,6 +370,13 @@ final case class AppConfig(
   /** Create a new config with the multi-line drop cap paragraph role's rendering enabled or disabled. */
   def withDropCapsEnabled(enabled: Boolean): AppConfig =
     withDocumentConfig(documentConfig.copy(dropCapsEnabled = enabled))
+
+  /** The room beside a drop cap's glyph, in em of the body font, kept within what the config file accepts. */
+  def withDropCapGapEm(gapEm: Float): AppConfig =
+    withDocumentConfig(documentConfig.copy(dropCapGapEm = DropCapGap.clamped(gapEm)))
+
+  def withDropCapColour(colour: DropCapColour): AppConfig =
+    withDocumentConfig(documentConfig.copy(dropCapColour = colour))
 
   def withAutoSaveConfig(config: AutoSaveConfig): AppConfig =
     copy(autoSaveConfig = config)

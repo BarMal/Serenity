@@ -27,18 +27,18 @@ object LegacyLineMeasurement:
     baseColumn: Int = 0,
     maxVisualLines: Int = Int.MaxValue,
     paragraphRole: ParagraphRole = ParagraphRole.Body,
-    dropCapGlyphWidthPx: Float = 0.0f
+    dropCapIndentPx: Float = 0.0f
   ): Vector[TextVisualLine] =
     def shape(segment: String, start: Int, end: Int) =
       shapeSegment(segment, bufferLine, start, end, resolver, frc, measuredLayout, cellMetrics)
     if maxVisualLines <= 0 then Vector.empty
-    else if text.isEmpty then Vector(inset(shape("", baseColumn, baseColumn), paragraphRole, 0, dropCapGlyphWidthPx))
+    else if text.isEmpty then Vector(inset(shape("", baseColumn, baseColumn), paragraphRole, 0, dropCapIndentPx))
     else
       @annotation.tailrec
       def loop(startColumn: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
         if startColumn >= text.length || acc.length >= maxVisualLines then acc
         else
-          val insetPx      = DropCapLayout.leftInsetPx(paragraphRole, acc.length, dropCapGlyphWidthPx)
+          val insetPx      = DropCapLayout.leftInsetPx(paragraphRole, acc.length, dropCapIndentPx)
           val wrapWidthPx  = math.max(1, panelWidthPx - math.round(insetPx))
           val segmentStart = baseColumn + startColumn
           val fitted =
@@ -46,11 +46,19 @@ object LegacyLineMeasurement:
           val segmentLength = wordBoundarySegmentLength(text, startColumn, fitted)
           val end           = startColumn + segmentLength
           val row           = shape(text.substring(startColumn, end), segmentStart, baseColumn + end)
-          loop(end, acc :+ inset(row, paragraphRole, acc.length, dropCapGlyphWidthPx))
+          loop(end, acc :+ inset(row, paragraphRole, acc.length, dropCapIndentPx))
       loop(0, Vector.empty)
 
-  private def inset(row: TextVisualLine, role: ParagraphRole, lineWithinParagraph: Int, glyphWidthPx: Float) =
-    row.copy(xOffsetPx = row.xOffsetPx + DropCapLayout.leftInsetPx(role, lineWithinParagraph, glyphWidthPx))
+  /** The indent every spanned row starts at. The home row's first character is drawn as the glyph, so the row gives the
+    * width of that character back from its offset, and its own text then starts at the indent as well.
+    */
+  private def inset(row: TextVisualLine, role: ParagraphRole, lineWithinParagraph: Int, indentPx: Float) =
+    val indent = DropCapLayout.leftInsetPx(role, lineWithinParagraph, indentPx)
+    val dropped =
+      if DropCapLayout.isHomeRow(role, lineWithinParagraph, row.startColumn) && row.text.nonEmpty then
+        row.xForColumn(row.startColumn + Character.charCount(row.text.codePointAt(0))).getOrElse(0.0f)
+      else 0.0f
+    row.copy(xOffsetPx = row.xOffsetPx + (indent - dropped).max(0.0f))
 
   def shapeSegment(
     text: String,

@@ -25,18 +25,18 @@ class DropCapLayoutSpec extends AnyFlatSpec with Matchers:
     DropCapLayout.spansLine(ParagraphRole.DropCap(3), -1) shouldBe false
   }
 
-  "DropCapLayout.leftInsetPx" should "reserve the glyph's width on every spanned line" in {
+  "DropCapLayout.leftInsetPx" should "reserve the one shared indent on every spanned line" in {
     val role = ParagraphRole.DropCap(2)
-    DropCapLayout.leftInsetPx(role, 0, glyphWidthPx = 40.0f) shouldBe 40.0f
-    DropCapLayout.leftInsetPx(role, 1, glyphWidthPx = 40.0f) shouldBe 40.0f
+    DropCapLayout.leftInsetPx(role, 0, indentPx = 40.0f) shouldBe 40.0f
+    DropCapLayout.leftInsetPx(role, 1, indentPx = 40.0f) shouldBe 40.0f
   }
 
   it should "reserve no inset past the drop cap's span" in {
-    DropCapLayout.leftInsetPx(ParagraphRole.DropCap(2), 2, glyphWidthPx = 40.0f) shouldBe 0.0f
+    DropCapLayout.leftInsetPx(ParagraphRole.DropCap(2), 2, indentPx = 40.0f) shouldBe 0.0f
   }
 
   it should "reserve no inset for a non-drop-cap role" in {
-    DropCapLayout.leftInsetPx(ParagraphRole.Body, 0, glyphWidthPx = 40.0f) shouldBe 0.0f
+    DropCapLayout.leftInsetPx(ParagraphRole.Body, 0, indentPx = 40.0f) shouldBe 0.0f
   }
 
   "DropCapLayout.glyphWidthPx" should "measure a font's advance width for the glyph text" in {
@@ -54,7 +54,7 @@ class DropCapLayoutSpec extends AnyFlatSpec with Matchers:
     DropCapLayout.glyphWidthPx(font, frc, "") shouldBe 0.0f
   }
 
-  "DropCapLayout.glyphHeightPx" should "span the drop cap's line count at the paragraph's normal line height" in {
+  "DropCapLayout.glyphHeightPx" should "be the room of the drop cap's line count at the paragraph's normal line height" in {
     DropCapLayout.glyphHeightPx(ParagraphRole.DropCap(3), normalLineHeightPx = 16) shouldBe 48
   }
 
@@ -110,6 +110,12 @@ class DropCapLayoutSpec extends AnyFlatSpec with Matchers:
     DropCapLayout.glyphRowSpan(DropCapSnapshots.snapshot(tall)) shouldBe Map(0 -> (0 until 2))
   }
 
+  it should "reach the row a glyph's descender hangs into, which the cap's own lines do not cover" in {
+    val descending = DropCapSnapshots.Paragraph(ParagraphRole.dropCap(2), rows = 4, glyphHeightPx = Some(40))
+
+    DropCapLayout.glyphRowSpan(DropCapSnapshots.snapshot(descending)) shouldBe Map(0 -> (0 until 3))
+  }
+
   it should "find nothing in a cell layout, which never spans a glyph across rows" in {
     val snapshot = DropCapSnapshots.snapshot(DropCapSnapshots.dropCap(3, rows = 3)).copy(usesMeasuredLayout = false)
 
@@ -134,6 +140,14 @@ class DropCapLayoutSpec extends AnyFlatSpec with Matchers:
     val padded   = DropCapLayout.reservingGlyphHeight(snapshot.visualLines, ParagraphRole.dropCap(4))
 
     padded.map(_.reservedBelowPx) shouldBe Vector(0, 2 * DropCapSnapshots.RowHeightPx)
+  }
+
+  it should "pad a paragraph shorter than its glyph by as much as a descender adds to the glyph" in {
+    val descending = DropCapSnapshots.Paragraph(ParagraphRole.dropCap(2), rows = 2, glyphHeightPx = Some(44))
+    val snapshot   = DropCapSnapshots.snapshot(descending)
+
+    DropCapLayout.reservingGlyphHeight(snapshot.visualLines, ParagraphRole.dropCap(2)).map(_.reservedBelowPx) shouldBe
+      Vector(0, 12)
   }
 
   it should "leave a paragraph at least as tall as its glyph as it is" in {
