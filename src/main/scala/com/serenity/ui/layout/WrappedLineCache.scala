@@ -9,10 +9,11 @@ import scala.jdk.CollectionConverters.*
 
 import com.serenity.markdown.MarkdownBlockLens.BlockIndex
 import com.serenity.markdown.{LazyBlockIndex, TableColumns}
-import com.serenity.richtext.ParagraphRole
+import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.rope.{Balance, Rope, RopeDiff}
 import com.serenity.state.models.{BufferId, MeasuredRow}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
+import com.serenity.ui.openings.{OpeningLines, OpeningRules, OpeningSettings, VirtualDropCaps}
 
 /** Memoises [[TextLayoutSnapshot]]'s wrap-and-measure of one logical line -- the AWT `TextLayout` work that otherwise
   * dominates every keystroke on word-wrapped prose, and that the state-update path and the render path each repeat for
@@ -53,6 +54,12 @@ sealed abstract class WrappedLineCache:
   def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
     compute: => TableColumns
   ): TableColumns
+
+  /** The openings of `document` that `settings` set as drop caps. Finding them reads the whole document, so a cache
+    * keeps the openings of the documents it was last asked about: a layout asks about one document many times over
+    * before an edit makes the next.
+    */
+  def virtualDropCaps(document: RichTextDocument, settings: OpeningSettings): Option[VirtualDropCaps]
 
 /** Everything a line's wrap and caret measurement depends on. The rows it yields are position-independent -- no buffer
   * line, alignment or inset -- so a line keeps its entry when lines are inserted or deleted above it. `resolver`
@@ -95,6 +102,18 @@ final private[layout] case class Predecessor(
     trace: WrapTrace
 )
 
+/** A document by identity: a new version of it is a new key whatever it compares equal to. */
+final private[layout] class IdentityKey(val document: RichTextDocument):
+
+  override def equals(other: Any): Boolean =
+    other match
+      case that: IdentityKey => document eq that.document
+      case _                 => false
+
+  override def hashCode(): Int = System.identityHashCode(document)
+
+final private[layout] case class ScannedOpenings(document: IdentityKey, rules: OpeningRules)
+
 /** What the cache has had to compute: wraps from scratch, wraps resumed from a predecessor, and the visual rows and
   * measured characters they cost.
   */
@@ -106,6 +125,9 @@ object WrappedLineCache:
 
   /** How many buffers' fenced-block indexes are kept. */
   val MaxFenceIndexes = 16
+
+  /** How many documents' openings are kept. */
+  val MaxScannedDocuments = 8
 
   /** How many recent wraps per [[WrapShape]] a line may resume from. */
   val MaxRecentPerShape = 8
@@ -140,6 +162,9 @@ object WrappedLineCache:
     def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
       compute: => TableColumns
     ): TableColumns = compute
+
+    def virtualDropCaps(document: RichTextDocument, settings: OpeningSettings): Option[VirtualDropCaps] =
+      VirtualDropCaps.of(settings, document)
 
   def bounded(maxLines: Int = DefaultMaxLines, maxChars: Long = DefaultMaxChars): Bounded =
     new Bounded(math.max(1, maxLines), math.max(1L, maxChars))
@@ -194,6 +219,7 @@ object WrappedLineCache:
     private val visualRows       = new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries)
     private val fences           = new LinkedHashMap[BufferId, FenceEntry](16, 0.75f, true)
     private val columns          = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
+    private val openings         = new LinkedHashMap[ScannedOpenings, OpeningLines](16, 0.75f, true)
 
     def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
       compute: => TableColumns
@@ -229,6 +255,23 @@ object WrappedLineCache:
             trimFences()
           }
           index
+
+    def virtualDropCaps(document: RichTextDocument, settings: OpeningSettings): Option[VirtualDropCaps] =
+      VirtualDropCaps.of(settings, document, openingsOf)
+
+    private def openingsOf(document: RichTextDocument, rules: OpeningRules): OpeningLines =
+      val key = ScannedOpenings(IdentityKey(document), rules)
+      synchronized(Option(openings.get(key))).getOrElse {
+        val scanned = VirtualDropCaps.scanning(document, rules)
+        synchronized {
+          val _ = openings.put(key, scanned)
+          if openings.size() > WrappedLineCache.MaxScannedDocuments then
+            val eldest = openings.keySet().iterator()
+            val _      = eldest.next()
+            eldest.remove()
+        }
+        scanned
+      }
 
     private def sameRope(a: Rope, b: Rope): Boolean = (a: AnyRef) eq (b: AnyRef)
 

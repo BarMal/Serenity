@@ -23,7 +23,7 @@ import com.serenity.state.models.{
 }
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TextCaretMeasurement.*
-import com.serenity.ui.openings.ParagraphRoles
+import com.serenity.ui.openings.{OpeningSettings, ParagraphRoles}
 import com.serenity.ui.renderer.FontFirstUse
 import com.serenity.ui.theme.HeadingSettings
 
@@ -244,7 +244,8 @@ object TextLayoutSnapshot:
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     tabSize: Int = IndentationSettings.DefaultTabSize,
-    headings: HeadingSettings = HeadingSettings.default
+    headings: HeadingSettings = HeadingSettings.default,
+    openings: OpeningSettings = OpeningSettings.default
   ): TextLayoutSnapshot =
     val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val totalLines  = buffer.document.content.lineCount
@@ -252,7 +253,8 @@ object TextLayoutSnapshot:
       buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.document.content.weight))
     val markdownInline =
       RichTextContext.markdownViewFor(buffer, markdownViewMode, forceCellLayout, wrapCache, font, fontRenderContext)
-    val richText       = RichTextContext(richDocument, proseScale, dropCapsEnabled, markdownInline, tabSize, headings)
+    val caps     = richDocument.flatMap(wrapCache.virtualDropCaps(_, openings))
+    val richText = RichTextContext(richDocument, proseScale, dropCapsEnabled, markdownInline, tabSize, headings, caps)
     val measuredLayout = LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText)
     // The non-measured (cell) path draws every row on `cellMetrics`' own grid (see `TextRowMetrics`'s non-measured
     // `lineTopPx`), so its line height/ascent must come from that same caller-supplied unit rather than the real

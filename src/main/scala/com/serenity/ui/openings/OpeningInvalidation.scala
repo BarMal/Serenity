@@ -42,6 +42,30 @@ object OpeningInvalidation:
     (isCandidate(before.paragraphAt(line)) || isCandidate(after.paragraphAt(line))) &&
       Seq(before, after).exists(document => governorChanged(before, after, document, line))
 
+  /** The paragraphs outside `edit` that `after` and `before`, two versions of a document the edit sets apart, may have
+    * given or taken the status of an opening: the next candidate below the edit in each version, when something above
+    * it that governs it differs. A line count that changed shifts the paragraphs the versions are compared by, so every
+    * such candidate is named.
+    */
+  def widenedParagraphs(before: RichTextDocument, after: RichTextDocument, edit: LineEdit): Vector[Int] =
+    val candidates =
+      nextCandidate(after, edit.first + edit.newCount) ++
+        nextCandidate(before, edit.first + edit.oldCount).map(_ + edit.delta)
+    candidates.distinct.filter(line => edit.delta != 0 || governorEdited(before, after, line))
+
+  /** The first paragraph from `from` on that could be an opening, when no title or scene break comes first. */
+  private def nextCandidate(document: RichTextDocument, from: Int): Vector[Int] =
+    @tailrec
+    def down(line: Int, steps: Int): Vector[Int] =
+      document.paragraphAt(line) match
+        case None => Vector.empty
+        case Some(paragraph) =>
+          if steps > Reach then (line until document.paragraphCount).toVector
+          else if isAnchor(paragraph) then Vector.empty
+          else if isSkippable(paragraph) then down(line + 1, steps + 1)
+          else Vector(line)
+    down(from, 0)
+
   private def governorChanged(
     before: RichTextDocument,
     after: RichTextDocument,

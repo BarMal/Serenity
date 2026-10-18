@@ -9,7 +9,7 @@ import com.serenity.markdown.{LazyBlockIndex, MarkdownInlineView}
 import com.serenity.rope.{Branch, ChangeSet, Leaf, LineSpan, Rope}
 import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.layout.VisualLineIndexStore.StampRelation
-import com.serenity.ui.openings.OpeningInvalidation
+import com.serenity.ui.openings.{OpeningInvalidation, OpeningRules}
 import com.serenity.ui.theme.HeadingSettings
 
 /** The [[VisualLineIndex]] last built for each key -- a buffer under one wrap setting -- together with the content it
@@ -110,13 +110,15 @@ object VisualLineIndexStore:
   /** Rich-text styling is stamped by the identity of its document; a restyled Markdown view by what decides how it
     * restyles (mode, revealed lines, font kind) and by its block index, which is compared by how far two indexes are
     * known to agree rather than by value (see [[stampsRelate]]). A tab size other than the default stamps too: a tab
-    * wraps by its width, so a new size leaves no row count standing.
+    * wraps by its width, so a new size leaves no row count standing. So do the opening settings, while openings are set
+    * as drop caps: they inset the rows beside the glyph.
     */
   final private[layout] case class ViewStamp(
       base: AnyRef,
       markdown: MarkdownInlineView,
       tabSize: Int = IndentationSettings.DefaultTabSize,
-      headings: HeadingSettings = HeadingSettings.default
+      headings: HeadingSettings = HeadingSettings.default,
+      virtualDropCaps: Option[(OpeningRules, Int)] = None
   )
 
   /** How a stamp the index was built under relates to the one asked for. */
@@ -133,10 +135,11 @@ object VisualLineIndexStore:
     (built, asked) match
       case _ if built eq asked => StampRelation.Same
       case (x: ViewStamp, y: ViewStamp)
-          if x.base == y.base && x.tabSize == y.tabSize && x.headings == y.headings && sameRestyling(
-            x.markdown,
-            y.markdown
-          ) =>
+          if x.base == y.base && x.tabSize == y.tabSize && x.headings == y.headings &&
+            x.virtualDropCaps == y.virtualDropCaps && sameRestyling(
+              x.markdown,
+              y.markdown
+            ) =>
         (x.markdown.fences, y.markdown.fences) match
           case (a, b) if a eq b => StampRelation.Same
           case (a: LazyBlockIndex, b: LazyBlockIndex) if b.follows(a) =>
@@ -153,10 +156,11 @@ object VisualLineIndexStore:
     if remaining <= 0 then index else index.replacedLines(line, remaining, remaining)
 
   private[layout] def stampOf(richText: RichTextContext): AnyRef =
-    val base = richText.document.getOrElse(Unstamped)
+    val base        = richText.document.getOrElse(Unstamped)
+    val virtualCaps = richText.virtualDropCaps.map(_.signature)
     if richText.markdown.isActive || richText.tabSize != IndentationSettings.DefaultTabSize ||
-        richText.headings != HeadingSettings.default
-    then ViewStamp(base, richText.markdown, richText.tabSize, richText.headings)
+        richText.headings != HeadingSettings.default || virtualCaps.isDefined
+    then ViewStamp(base, richText.markdown, richText.tabSize, richText.headings, virtualCaps)
     else base
 
   val DefaultMaxEntries = 32

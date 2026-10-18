@@ -6,6 +6,7 @@ import com.serenity.lsp.model.Diagnostic
 import com.serenity.rope.{Balance, RopeDiff}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
+import com.serenity.ui.openings.{LineEdit, OpeningInvalidation, VirtualDropCaps}
 
 /** Computes what a transition between two `AppState`s damaged, so the render loop doesn't have to rediscover it by
   * diffing frames -- the wake-up decision this drives is wired in by `#998` (`AppRuntime.inputEventPhase`). `#999`
@@ -72,7 +73,8 @@ object DamageProducer:
     afterBuffer: Buffer,
     granularity: RenderDamageGranularity
   )(using Balance): Damage =
-    val content = contentDamage(bufferId, beforeBuffer, afterBuffer, granularity)
+    val content = contentDamage(bufferId, beforeBuffer, afterBuffer, granularity) |+|
+      openingsDamage(bufferId, before, after, beforeBuffer, afterBuffer)
     content |+|
       cursorDamage(bufferId, beforeBuffer, afterBuffer, Damage.damagedLines(bufferId, content)) |+|
       selectionDamage(bufferId, beforeBuffer, afterBuffer) |+|
@@ -96,6 +98,36 @@ object DamageProducer:
         case Some((start, end)) =>
           cellDamage(bufferId, after, start, end, granularity)
             .getOrElse(Damage.BufferRows(bufferId, rowsForOffsetRange(after, start, end)))
+
+  /** A virtual drop cap is the opening's alone, so an edit that is not to the opening can still give it one or take it
+    * away, and the frames alone cannot say so to a screen that shows the frame before last. The damage names the
+    * paragraphs such an edit may have turned into openings or out of them; a change to the settings a buffer is laid
+    * out with damages all of it. Nothing while no virtual drop caps are drawn.
+    */
+  private def openingsDamage(
+    bufferId: BufferId,
+    before: AppState,
+    after: AppState,
+    beforeBuffer: Buffer,
+    afterBuffer: Buffer
+  )(using Balance): Damage =
+    val settingsBefore = beforeBuffer.effectiveOpenings(before.persisted.config.openingsConfig).layoutForm
+    val settingsAfter  = afterBuffer.effectiveOpenings(after.persisted.config.openingsConfig).layoutForm
+    if settingsBefore != settingsAfter then Damage.BufferAll(bufferId)
+    else if !VirtualDropCaps
+          .drawn(settingsAfter) || isSameReference(beforeBuffer.document.content, afterBuffer.document.content)
+    then Damage.Nothing
+    else
+      (beforeBuffer.richText.richTextDocument, afterBuffer.richText.richTextDocument) match
+        case (Some(was), Some(now)) =>
+          val edit = LineEdit.between(
+            beforeBuffer.document.content,
+            afterBuffer.document.content,
+            afterBuffer.document.changeFrom(beforeBuffer.document)
+          )
+          val lines = OpeningInvalidation.widenedParagraphs(was, now, edit).toSet
+          if lines.isEmpty then Damage.Nothing else Damage.BufferRows(bufferId, lines)
+        case _ => Damage.Nothing
 
   /** The range of `after`'s text that `before`'s edits replaced: taken from the change `after` recorded when it has
     * one, found by walking the two ropes otherwise (a reload, a restored session).

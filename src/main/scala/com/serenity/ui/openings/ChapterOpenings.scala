@@ -5,7 +5,7 @@ import com.serenity.document.MarkdownHeadingIndex
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 
 /** The settings a paragraph's effective role can depend on. */
-final case class OpeningContext(dropCapsEnabled: Boolean)
+final case class OpeningContext(dropCapsEnabled: Boolean, virtualDropCaps: Option[VirtualDropCaps] = None)
 
 object ChapterOpenings:
 
@@ -15,9 +15,10 @@ object ChapterOpenings:
     * to body text while drop caps are disabled.
     */
   def roleFor(document: RichTextDocument, line: Int, context: OpeningContext): EffectiveRole =
-    EffectiveRole.Real(
-      degraded(document.paragraphAt(line).map(_.role).getOrElse(ParagraphRole.Body), context.dropCapsEnabled)
-    )
+    val stored = document.paragraphAt(line).map(_.role).getOrElse(ParagraphRole.Body)
+    context.virtualDropCaps
+      .fold[EffectiveRole](EffectiveRole.Real(stored))(_.roleAt(line, stored))
+      .mapRole(degraded(_, context.dropCapsEnabled))
 
   /** The document keeps the real role, so turning drop caps back on restores the glyph with nothing lost. */
   def degraded(role: ParagraphRole, dropCapsEnabled: Boolean): ParagraphRole =

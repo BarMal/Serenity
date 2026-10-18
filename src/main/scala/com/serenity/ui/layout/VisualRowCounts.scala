@@ -8,6 +8,7 @@ import scala.annotation.tailrec
 import com.serenity.config.MarkdownViewMode
 import com.serenity.rope.ChangeSet
 import com.serenity.state.models.{Buffer, BufferId, IndentationSettings}
+import com.serenity.ui.openings.OpeningSettings
 import com.serenity.ui.theme.HeadingSettings
 
 /** How many visual rows the logical lines of one buffer's content wrap into under one wrap setting -- the counts
@@ -77,7 +78,8 @@ object VisualRowCounts:
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     tabSize: Int = IndentationSettings.DefaultTabSize,
     known: Int => Option[Int] = _ => None,
-    headings: HeadingSettings = HeadingSettings.default
+    headings: HeadingSettings = HeadingSettings.default,
+    openings: OpeningSettings = OpeningSettings.default
   ): VisualRowCounts =
     val content = buffer.document.content
     val frc     = TextLayoutSnapshot.defaultFontRenderContext()
@@ -91,7 +93,8 @@ object VisualRowCounts:
         wrapCache,
         frc,
         tabSize,
-        headings
+        headings,
+        openings
       )
     def measure(line: Int): Int =
       known(line).getOrElse(wrap(line))

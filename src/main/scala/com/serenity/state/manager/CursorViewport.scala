@@ -81,6 +81,7 @@ object CursorViewport:
     val markdownViewMode    = currentState.persisted.config.inlineMarkdownViewMode
     val tabSize             = buffer.effectiveIndentation(currentState.persisted.config.indentation).tabSize
     val headings            = currentState.persisted.config.headingSettings
+    val openings            = buffer.effectiveOpenings(currentState.persisted.config.openingsConfig)
     val cursorVisualLine =
       if !wordWrapEnabled then 0
       else
@@ -104,7 +105,8 @@ object CursorViewport:
               isTui,
               wrapCache,
               tabSize = tabSize,
-              headings = headings
+              headings = headings,
+              openings = openings
             )
         )
 
@@ -122,7 +124,8 @@ object CursorViewport:
           dropCapsEnabled,
           markdownViewMode,
           tabSize,
-          headings = headings
+          headings = headings,
+          openings = openings
         )
 
     // Desired top: halfVisibleLines rows of context above the cursor's own visual row, counted in visual rows (not
@@ -241,6 +244,7 @@ object CursorViewport:
     val markdownViewMode = currentState.persisted.config.inlineMarkdownViewMode
     val tabSize          = buffer.effectiveIndentation(currentState.persisted.config.indentation).tabSize
     val headings         = currentState.persisted.config.headingSettings
+    val openings         = buffer.effectiveOpenings(currentState.persisted.config.openingsConfig)
     val visualRows =
       VisualRowCounts.forBuffer(
         buffer,
@@ -252,7 +256,8 @@ object CursorViewport:
         dropCapsEnabled,
         markdownViewMode,
         tabSize,
-        headings = headings
+        headings = headings,
+        openings = openings
       )
 
     val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
@@ -277,7 +282,8 @@ object CursorViewport:
             isTui,
             wrapCache,
             tabSize = tabSize,
-            headings = headings
+            headings = headings,
+            openings = openings
           )
       )
 
