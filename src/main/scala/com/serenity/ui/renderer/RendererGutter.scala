@@ -335,7 +335,10 @@ object RendererGutter:
             else
               MeasuredLineNumberRun(
                 context.cellMetrics.toPixelX(lineRect.x).toFloat,
-                lineRect.width * context.cellMetrics.charWidth.toFloat,
+                // The label's fill is shifted by the inset along with its text; shrinking it by the same amount keeps
+                // the right-hand end on the counter's edge, instead of painting into the spacer beyond it, which a
+                // frame that reuses scrolled rows would never repaint.
+                lineRect.width * context.cellMetrics.charWidth.toFloat - math.max(0.0, marginInsetPx).toFloat,
                 lineNumberText
               )
           surface.pixels.withPixelTranslation(marginInsetPx, 0.0) {
