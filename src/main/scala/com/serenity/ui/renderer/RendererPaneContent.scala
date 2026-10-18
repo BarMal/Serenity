@@ -308,8 +308,7 @@ object RendererPaneContent:
                 rowAscentPxFor(visualLine, snapshot),
                 contentRightXPx,
                 lineSemanticTokens,
-                rowsBottomPx,
-                rowMetrics.lineTopPx(0)
+                rowsBottomPx
               )
             else
               CharacterRenderer.renderStyledString(

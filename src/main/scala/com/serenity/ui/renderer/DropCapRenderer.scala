@@ -41,12 +41,6 @@ object DropCapRenderer:
     * @param clipBottomPx
     *   the lowest pixel row the pane draws rows on: a glyph that would reach past it is cut there, since nothing below
     *   it is a row to repaint the glyph's rest from
-    * @param overhangPx
-    *   how far the letter reaches above `yTopPx` into the row above: it is painted over whatever that row holds rather
-    *   than on a background of its own, which would wipe the row's text
-    * @param clipTopPx
-    *   the highest pixel row the pane draws rows on: a letter that would reach above it is cut there, and only then
-    *   does the glyph's own background extend above `yTopPx`
     */
   def renderGlyphPx(
     surface: RenderSurface,
@@ -59,14 +53,9 @@ object DropCapRenderer:
     glyphStyle: TextStyle,
     foreground: RenderColor,
     background: RenderColor,
-    clipBottomPx: Int = Int.MaxValue,
-    overhangPx: Int = 0,
-    clipTopPx: Int = 0
+    clipBottomPx: Int = Int.MaxValue
   ): Unit =
-    val cutAtTop      = overhangPx > 0 && yTopPx - overhangPx < clipTopPx
-    val boxTopPx      = if cutAtTop then clipTopPx.min(yTopPx) else yTopPx
-    val boxHeightPx   = glyphHeightPx + (yTopPx - boxTopPx)
-    val drawnHeightPx = boxHeightPx.min(clipBottomPx - boxTopPx)
+    val drawnHeightPx = glyphHeightPx.min(clipBottomPx - yTopPx)
     if glyphText.nonEmpty && glyphWidthPx > 0.0f && drawnHeightPx > 0 then
       surface.setForegroundColor(foreground)
       surface.setBackgroundColor(background)
@@ -74,12 +63,12 @@ object DropCapRenderer:
       try
         surface.text.drawRunPx(
           xOriginPx,
-          boxTopPx,
+          yTopPx,
           glyphWidthPx,
           drawnHeightPx,
-          glyphAscentPx + (yTopPx - boxTopPx),
+          glyphAscentPx,
           glyphText,
-          clipGlyphToRun = drawnHeightPx < boxHeightPx || cutAtTop
+          clipGlyphToRun = drawnHeightPx < glyphHeightPx
         )
       finally surface.disableStyle(glyphStyle)
 
@@ -122,8 +111,7 @@ object DropCapRenderer:
     xOriginPx: Float,
     lineTopPx: Int,
     clipBottomPx: Int = Int.MaxValue,
-    shape: LetterShape = LetterShape.Drop,
-    clipTopPx: Int = 0
+    shape: LetterShape = LetterShape.Drop
   ): (TextVisualLine, Option[List[StyledText]]) =
     DropCapGlyph.forParagraph(baseFont, frc, Some(document), visualLine.bufferLine, dropCap, proseScale, shape) match
       case None => (visualLine, styledSegments)
@@ -139,9 +127,7 @@ object DropCapRenderer:
           glyph.style,
           glyphColour,
           theme.background,
-          clipBottomPx,
-          glyph.overhangPx,
-          clipTopPx
+          clipBottomPx
         )
         (dropFirstGrapheme(visualLine, glyph.charCount), styledSegments.map(dropLeadingChars(_, glyph.charCount)))
 
@@ -233,8 +219,7 @@ object DropCapRenderer:
     glyphColour: RenderColor,
     xOriginPx: Float,
     lineTopPx: Int,
-    clipBottomPx: Int = Int.MaxValue,
-    clipTopPx: Int = 0
+    clipBottomPx: Int = Int.MaxValue
   ): (TextVisualLine, Option[List[StyledText]]) =
     (for
       _         <- Option.when(measured)(())
@@ -255,8 +240,7 @@ object DropCapRenderer:
       xOriginPx,
       lineTopPx,
       clipBottomPx,
-      snapshot.roles.shapeAt(document, visualLine.bufferLine),
-      clipTopPx
+      snapshot.roles.shapeAt(document, visualLine.bufferLine)
     )).getOrElse((visualLine, styledSegments))
 
   /** `RendererPaneContent`'s single call for the measured (GUI) path: computes the drop-cap-adjusted line/segments
@@ -276,8 +260,7 @@ object DropCapRenderer:
     ascentPx: Int,
     clipRightXPx: Float,
     semanticTokens: Option[List[SemanticToken]],
-    clipBottomPx: Int = Int.MaxValue,
-    clipTopPx: Int = 0
+    clipBottomPx: Int = Int.MaxValue
   ): Unit =
     val theme = state.persisted.theme
     val (drawLine, drawSegments) = adjustHomeLineDraw(
@@ -292,8 +275,7 @@ object DropCapRenderer:
       glyphColourOf(state),
       xOriginPx,
       lineTopPx,
-      clipBottomPx,
-      clipTopPx
+      clipBottomPx
     )
     CharacterRenderer.renderMeasuredLine(
       context.surface,

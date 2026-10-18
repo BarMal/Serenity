@@ -26,9 +26,9 @@ import com.serenity.ui.theme.DropCapColour
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** A raised or hybrid letter is painted by the path a drop cap is, but it can reach above its row: in `clamp` into the
-  * row before it, in `grow` into room its own row made. Every frame that changes a row it covers, or the row before it,
-  * or what the letter is, must draw what a cold frame draws.
+/** A raised or hybrid letter is painted by the path a drop cap is, in `clamp` within its own rows and in `grow` into
+  * room its own row made. Every frame that changes a row it covers, or the row before it, or what the letter is, must
+  * draw what a cold frame draws.
   */
 class RaisedLetterIncrementalFrameSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
 

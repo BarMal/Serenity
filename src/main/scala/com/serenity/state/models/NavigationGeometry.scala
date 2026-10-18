@@ -35,10 +35,7 @@ final case class MeasuredRow(
     reservedBelowPx: Int = 0,
     // A drop cap paragraph's home row records the height from its own top down to the foot of the glyph drawn from it,
     // so what the glyph covers can be read off the layout.
-    dropCapHeightPx: Int = 0,
-    // How far above its own top the glyph drawn from a drop cap paragraph's home row reaches, when the row does not
-    // grow to hold it, so what the glyph covers above the row can be read off the layout too.
-    dropCapOverhangPx: Int = 0
+    dropCapHeightPx: Int = 0
 ):
 
   // Arrays compare by reference, so the generated equals would call two identical measurements different. Row
@@ -48,7 +45,6 @@ final case class MeasuredRow(
       (this eq that) || (startColumn == that.startColumn && endColumn == that.endColumn && text == that.text &&
         widthPx == that.widthPx && heightPx == that.heightPx && ascentPx == that.ascentPx &&
         reservedBelowPx == that.reservedBelowPx && dropCapHeightPx == that.dropCapHeightPx &&
-        dropCapOverhangPx == that.dropCapOverhangPx &&
         caretXs.sameElements(that.caretXs) && caretOffsets.sameElements(that.caretOffsets) &&
         landingXs.sameElements(that.landingXs) && landingOffsets.sameElements(that.landingOffsets))
     case _ => false
@@ -161,7 +157,6 @@ final case class TextVisualLine(
     caretCount,
     caretColumn,
     dropCapHeightPx,
-    dropCapOverhangPx,
     endColumn,
     heightPx,
     reservedBelowPx,
