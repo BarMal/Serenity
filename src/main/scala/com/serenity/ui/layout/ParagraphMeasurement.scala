@@ -59,7 +59,9 @@ final private[layout] class ParagraphMeasurement private (
         case Some(measured) if from + limit <= end && measured.isMeasurable(from - start, from - start + limit) =>
           val raw  = measured.caretsFrom(from - start, limit)
           val last = raw(limit)
-          if math.abs(last - width) < DecisionGuardPx then None
+          if math.abs(last - width) < DecisionGuardPx then
+            if TextCaretMeasurement.diagOn then println(s"DIAG measuredFit None: near width from=$from limit=$limit last=$last width=$width")
+            None
           else if limit >= remaining || last > width then
             settledFit(
               raw,
@@ -70,7 +72,11 @@ final private[layout] class ParagraphMeasurement private (
               spec.baseColumn + from
             )
           else loop(math.min(remaining, math.max(limit + 1, limit * 2)))
-        case _ => None
+        case _ =>
+          if TextCaretMeasurement.diagOn then
+            val notMeasurable = advances.map(m => if from + limit <= end then (0 until limit).filterNot(i => m.isMeasurable(from - start + i, from - start + i + 1)).map(i => (from + i, spec.text(from + i))).take(8) else Vector("beyond-window")).getOrElse(Vector("no-advances"))
+            println(s"DIAG measuredFit None: not measurable from=$from limit=$limit end=$end bad=$notMeasurable")
+          None
     loop(math.min(remaining, initialCandidateLength(panelWidthPx, spec.cellMetrics)))
 
 private[layout] object ParagraphMeasurement:
@@ -133,4 +139,6 @@ private[layout] object ParagraphMeasurement:
     val maxFitting = if firstOver < 0 then limit else firstOver - 1
     val nearFit    = maxFitting >= 0 && width - carets(maxFitting) < DecisionGuardPx
     val nearOver   = firstOver >= 0 && carets(firstOver) - width < DecisionGuardPx
+    if TextCaretMeasurement.diagOn && (nearFit || nearOver) then
+      println(s"DIAG settledFit None: nearFit=$nearFit nearOver=$nearOver maxFitting=$maxFitting width=$width caretAtFit=${if maxFitting >= 0 then carets(maxFitting) else Float.NaN} caretAtOver=${if firstOver >= 0 then carets(firstOver) else Float.NaN}")
     Option.unless(nearFit || nearOver)(SegmentFit(math.max(1, maxFitting), Some(raw), kerning))

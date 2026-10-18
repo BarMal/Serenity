@@ -7,7 +7,7 @@ import java.awt.image.BufferedImage
 
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.layout.{BundledInterFont, CellMetrics, TextLayoutSnapshot}
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -20,7 +20,7 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
   private val theme   = Theme.light
   private val metrics = CellMetrics(charWidth = 8, lineHeight = 24, ascent = 18)
 
-  private val font = new Font(Font.SERIF, Font.PLAIN, 14).deriveFont(
+  private def kerned(face: Font): Font = face.deriveFont(
     java.util.Map.of[TextAttribute, Object](
       TextAttribute.LIGATURES,
       TextAttribute.LIGATURES_ON,
@@ -28,6 +28,8 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
       TextAttribute.KERNING_ON
     )
   )
+
+  private val font = kerned(new Font(Font.SERIF, Font.PLAIN, 14))
 
   private val frc         = TextLayoutSnapshot.defaultFontRenderContext()
   private val widthPx     = 600
@@ -244,17 +246,29 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
         }
     }
 
-  "A shaped stretch" should "place each glyph at the caret stop the line measures for its character" in {
-    val text    = "Hello, wide world: iiii WWWW"
-    val stretch = ShapedTextCache().stretchOf(text, font, frc)
-    val carets  = TextLayoutSnapshot.caretXsForText(text, font, frc)
+  /** `TextLayout` puts the leading caret of a kerned character half way between the glyph's kerned position and where
+    * it would sit unkerned, so a caret and the glyph drawn there differ by half the pair's kerning (a quarter pixel for
+    * a space before `W` in Times New Roman) wherever the font kerns that pair, and agree wherever it does not.
+    */
+  "A shaped stretch" should "place each glyph where the line measures its character, half a kerning from its caret" in
+    List("platform serif" -> font, "bundled Inter" -> kerned(BundledInterFont.plain(14f))).foreach {
+      case (name, face) =>
+        val text      = "Hello, wide world: iiii WWWW"
+        val stretch   = ShapedTextCache().stretchOf(text, face, frc)
+        val carets    = TextLayoutSnapshot.caretXsForText(text, face, frc)
+        val unkerned  = face.createGlyphVector(frc, text)
+        def glyphX(column: Int) = stretch.leftEdgeOf(column).getOrElse(Float.NaN)
 
-    graphemeStarts(text).foreach { column =>
-      withClue(s"column $column: ") {
-        stretch.leftEdgeOf(column).getOrElse(Float.NaN) shouldBe carets(column) +- 0.01f
-      }
+        stretch.glyphCount shouldBe text.length
+        graphemeStarts(text).foreach { column =>
+          val kerning =
+            if column == 0 then 0.0f
+            else glyphX(column) - glyphX(column - 1) - unkerned.getGlyphMetrics(column - 1).getAdvance
+          withClue(s"$name, column $column: ") {
+            carets(column) shouldBe glyphX(column) - kerning / 2.0f +- 0.01f
+          }
+        }
     }
-  }
 
   "A plain font over simple text" should "draw with drawString, which shapes nothing there, and leave the cache alone" in {
     val plain = new Font(Font.SERIF, Font.PLAIN, 14)

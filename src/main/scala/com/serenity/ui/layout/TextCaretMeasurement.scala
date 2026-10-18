@@ -208,6 +208,8 @@ private[layout] object TextCaretMeasurement:
         absoluteStartColumn
       )
 
+  @volatile var diagOn: Boolean = false
+
   private val textLayoutsBuilt: ThreadLocal[AtomicLong] = ThreadLocal.withInitial(() => AtomicLong(0))
 
   /** How many `TextLayout`s caret and fit measurement has built on the calling thread: the cost wrapping pays when
@@ -221,6 +223,13 @@ private[layout] object TextCaretMeasurement:
 
   private def textLayoutOf(text: AttributedString, frc: FontRenderContext): TextLayout =
     val _ = textLayoutsBuilt.get().incrementAndGet()
+    if TextCaretMeasurement.diagOn then
+      val it = text.getIterator
+      val sb = new StringBuilder
+      var c = it.first()
+      while c != java.text.CharacterIterator.DONE do { sb.append(c); c = it.next() }
+      println(s"DIAG textLayout len=${sb.length} text='${sb.toString.take(40)}' stack=\n" +
+        new Throwable().getStackTrace.slice(1, 14).mkString("\n  "))
     TextLayout(text.getIterator, frc)
 
   /** Each character's leading caret plus the run's full advance, before [[normalizeCollapsedCarets]]: summed glyph
