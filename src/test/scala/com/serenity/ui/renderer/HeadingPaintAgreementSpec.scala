@@ -5,7 +5,7 @@ import java.awt.Font
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, RichTextState, Viewport}
-import com.serenity.ui.layout.TextLayoutSnapshot
+import com.serenity.ui.layout.{FontLineExtents, TextLayoutSnapshot}
 import com.serenity.ui.theme.{HeadingSettings, HeadingStyle, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -62,7 +62,7 @@ class HeadingPaintAgreementSpec extends AnyFlatSpec with Matchers:
 
     painted.fontSize shouldBe Some(3.0f * 12.0f * snapshot.proseScale)
     val paintedFont = TextStyle.styledFont(font, painted)
-    row.heightPx shouldBe math.ceil(paintedFont.getLineMetrics("Mg", frc).getHeight.toDouble).toInt
+    row.heightPx shouldBe FontLineExtents.of(paintedFont, frc).heightPx
   }
 
   it should "still use today's 22pt at the default settings" in {
