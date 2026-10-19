@@ -12,7 +12,9 @@ final case class HeadingLevelConfig(
     colour: Option[HeadingColour] = None,
     align: Option[ParagraphAlignment] = None,
     spaceBefore: Option[Float] = None,
-    spaceAfter: Option[Float] = None
+    spaceAfter: Option[Float] = None,
+    underline: Option[Boolean] = None,
+    rule: Option[Boolean] = None
 ):
 
   def resolved(level: Int): HeadingStyle =

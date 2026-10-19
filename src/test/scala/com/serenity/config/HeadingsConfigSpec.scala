@@ -13,7 +13,7 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
   private val levelKeys =
     for
       level     <- levels.toList
-      attribute <- List("size", "bold", "italic", "family", "colour", "align", "space_before", "space_after")
+      attribute <- List("size", "bold", "italic", "family", "colour", "align", "space_before", "space_after", "underline", "rule")
     yield s"headings.h$level.$attribute"
 
   private val globalKeys = List("headings.colour", "headings.damping", "headings.damping_threshold")
@@ -75,6 +75,51 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
     configured.styles(0) shouldBe HeadingStyle.default(1).copy(spaceBeforeEm = 1.5f, spaceAfterEm = 0.25f)
     configured.styles(2) shouldBe HeadingStyle.default(3).copy(spaceAfterEm = 2.0f)
     configured.styles(1) shouldBe HeadingStyle.default(2)
+  }
+
+  it should "read underline and rule as auto, true or false" in {
+    val configured = read(
+      AppConfig.default,
+      "headings.h1.underline" -> "true",
+      "headings.h2.underline" -> "false",
+      "headings.h1.rule"      -> "true",
+      "headings.h3.rule"      -> "false",
+      "headings.h4.underline" -> "true",
+      "headings.h4.underline" -> "auto"
+    ).headingsConfig
+
+    configured.levels(0).underline shouldBe Some(true)
+    configured.levels(1).underline shouldBe Some(false)
+    configured.levels(3).underline shouldBe None
+    configured.levels(0).rule shouldBe Some(true)
+    configured.levels(2).rule shouldBe Some(false)
+    configured.levels(4) shouldBe HeadingLevelConfig()
+    AppConfig.default.headingsConfig.levels.map(level => (level.underline, level.rule)).distinct shouldBe
+      List((None, None))
+  }
+
+  it should "underline a heading everywhere once the level says so, and leave the look alone while it is auto" in {
+    val configured = read(AppConfig.default, "headings.h2.underline" -> "true").headingsConfig
+
+    configured.styles(1) shouldBe HeadingStyle.default(2).copy(underline = true)
+    configured.settings(12.0f).textStyle(2).isUnderlined shouldBe true
+    configured.settings(12.0f).textStyle(1).isUnderlined shouldBe false
+    AppConfig.default.headingsConfig.styles.map(_.underline).distinct shouldBe List(false)
+  }
+
+  it should "leave a graphical session's heading settings unmoved by a rule, which only a terminal draws" in {
+    val configured = read(AppConfig.default, "headings.h1.rule" -> "true").headingsConfig
+
+    configured.styles shouldBe HeadingStyle.defaults
+    configured.settings(12.0f) shouldBe HeadingSettings.default
+  }
+
+  it should "name the colours the terminal's ladder uses, accent and muted" in {
+    def colourOf(text: String) = read(AppConfig.default, "headings.h1.colour" -> text).headingsConfig.styles(0).colour
+
+    colourOf("accent").map(_.toString) shouldBe Some("Accent")
+    colourOf("muted").map(_.toString) shouldBe Some("Muted")
+    read(AppConfig.default, "headings.colour" -> "accent").headingsConfig.colour.map(_.toString) shouldBe Some("Accent")
   }
 
   it should "read auto and zero as no space, leaving the look it has today" in {
@@ -167,6 +212,8 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
       "headings.h1.size"           -> "huge",
       "headings.h2.bold"           -> "maybe",
       "headings.h3.italic"         -> "2",
+      "headings.h1.underline"      -> "sometimes",
+      "headings.h2.rule"           -> "double",
       "headings.h4.align"          -> "diagonal",
       "headings.h1.space_before"   -> "-0.5",
       "headings.h1.space_before"   -> "9",

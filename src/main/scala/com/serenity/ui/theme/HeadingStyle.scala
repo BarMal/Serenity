@@ -11,7 +11,9 @@ final case class HeadingStyle(
     colour: Option[HeadingColour] = None,
     align: Option[ParagraphAlignment] = None,
     spaceBeforeEm: Float = 0.0f,
-    spaceAfterEm: Float = 0.0f
+    spaceAfterEm: Float = 0.0f,
+    underline: Boolean = false,
+    rule: Boolean = false
 )
 
 object HeadingStyle:
