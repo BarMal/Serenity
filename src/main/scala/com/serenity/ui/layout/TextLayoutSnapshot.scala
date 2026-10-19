@@ -22,6 +22,7 @@ import com.serenity.state.models.{
   TypographyRole
 }
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
+import com.serenity.ui.layout.SegmentMeasurement.measureSegment
 import com.serenity.ui.layout.TextCaretMeasurement.*
 import com.serenity.ui.renderer.FontFirstUse
 
@@ -79,34 +80,9 @@ object TextLayoutSnapshot:
   ): Vector[Float] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
-    val resolver       = plainLineResolver(text, 0, font, fontRenderContext, measuredLayout)
+    val resolver       = LineLayout.plainResolver(text, 0, font, fontRenderContext, measuredLayout)
     val xs             = caretXs(text, 0, resolver, fontRenderContext, measuredLayout, cellMetrics)
     Vector.tabulate(xs.length)(xs(_))
-
-  /** The resolver a line of `text` with no rich-text styling measures with, whose first character is at `startColumn`:
-    * the one the wrapped layout derives for it, so measuring a row's text alone gives the row the wrap produced.
-    */
-  private def plainLineResolver(
-    text: String,
-    startColumn: Int,
-    font: Font,
-    fontRenderContext: FontRenderContext,
-    measuredLayout: Boolean,
-    tabSize: Int = IndentationSettings.DefaultTabSize
-  ): LineFontResolver =
-    LineLayout
-      .lineLayoutInputs(
-        font,
-        fontRenderContext,
-        measuredLayout,
-        RichTextContext.plain.copy(tabSize = tabSize),
-        0,
-        text.length,
-        "",
-        fallbackText = text,
-        fallbackFirstColumn = startColumn
-      )
-      .resolver
 
   def visualLineForText(
     text: String,
@@ -124,7 +100,7 @@ object TextLayoutSnapshot:
         text,
         startColumn,
         startColumn + text.length,
-        plainLineResolver(text, startColumn, font, fontRenderContext, measuredLayout),
+        LineLayout.plainResolver(text, startColumn, font, fontRenderContext, measuredLayout),
         fontRenderContext,
         measuredLayout,
         cellMetrics
@@ -153,7 +129,7 @@ object TextLayoutSnapshot:
         val visibleColumns = math.max(1, visibleWidthPx / math.max(1, cellMetrics.charWidth))
         math.max(0, safeColumn - visibleColumns + 1)
       else
-        val resolver      = plainLineResolver(lineText, 0, font, fontRenderContext, measuredLayout, tabSize)
+        val resolver      = LineLayout.plainResolver(lineText, 0, font, fontRenderContext, measuredLayout, tabSize)
         val xs            = caretXs(lineText, 0, resolver, fontRenderContext, measuredLayout, cellMetrics)
         val cursorXPx     = xs(math.min(safeColumn, xs.length - 1))
         val targetLeftXPx = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
@@ -524,41 +500,6 @@ object TextLayoutSnapshot:
       boundary.setText(StringCharacterIterator(line, from, line.length, from))
       val candidate = boundary.preceding(from + fittingLength + 1) - from
       if candidate > 0 then candidate else fittingLength
-
-  private[layout] def measureSegment(
-    text: String,
-    startColumn: Int,
-    endColumn: Int,
-    resolver: LineFontResolver,
-    frc: FontRenderContext,
-    measuredLayout: Boolean,
-    cellMetrics: CellMetrics,
-    measuredXs: Option[IArray[Float]] = None,
-    graphemeOffsets: Option[IArray[Int]] = None
-  ): MeasuredRow =
-    val xs      = measuredXs.getOrElse(caretXs(text, startColumn, resolver, frc, measuredLayout, cellMetrics))
-    val offsets = graphemeOffsets.getOrElse(ParagraphMeasurement.graphemeBoundaryOffsets(text))
-    val stopXs  = IArray.tabulate(offsets.length)(index => xs(math.min(offsets(index), xs.length - 1)))
-    val (landingXs, landingOffsets) =
-      if resolver.hasHidden then landableStops(stopXs, offsets, startColumn, resolver)
-      else MeasuredRow.orderedByX(stopXs, offsets)
-    val (heightPx, ascentPx) =
-      if measuredLayout then resolver.lineMetrics(frc, startColumn, endColumn) else (0, 0)
-    val fontRuns = RowFontRuns.of(resolver, text, startColumn, endColumn)
-    MeasuredRow(
-      startColumn = startColumn,
-      endColumn = endColumn,
-      text = text,
-      widthPx = xs(xs.length - 1),
-      caretXs = stopXs,
-      caretOffsets = offsets,
-      landingXs = landingXs,
-      landingOffsets = landingOffsets,
-      heightPx = heightPx,
-      ascentPx = ascentPx,
-      fontRuns = fontRuns,
-      fallbackFamilies = if fontRuns.isEmpty then Vector.empty else resolver.fallbackFamilies
-    )
 
   private def applyParagraphAlignment(
     lines: Vector[TextVisualLine],

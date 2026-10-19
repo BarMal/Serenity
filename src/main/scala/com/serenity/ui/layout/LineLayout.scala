@@ -4,7 +4,7 @@ import java.awt.Font
 import java.awt.font.FontRenderContext
 
 import com.serenity.richtext.ParagraphRole
-import com.serenity.state.models.TextVisualLine
+import com.serenity.state.models.{IndentationSettings, TextVisualLine}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TextCaretMeasurement.{
   LineFontResolver,
@@ -66,6 +66,29 @@ private[layout] object LineLayout:
       inputs.glyphWidthPx,
       wrapCache
     )
+
+  /** The resolver a line of `text` with no rich-text styling measures with, whose first character is at `startColumn`:
+    * the one the wrapped layout derives for it, so measuring a row's text alone gives the row the wrap produced.
+    */
+  def plainResolver(
+    text: String,
+    startColumn: Int,
+    font: Font,
+    fontRenderContext: FontRenderContext,
+    measuredLayout: Boolean,
+    tabSize: Int = IndentationSettings.DefaultTabSize
+  ): LineFontResolver =
+    lineLayoutInputs(
+      font,
+      fontRenderContext,
+      measuredLayout,
+      RichTextContext.plain.copy(tabSize = tabSize),
+      0,
+      text.length,
+      "",
+      fallbackText = text,
+      fallbackFirstColumn = startColumn
+    ).resolver
 
   /** A cell grid is forced only when the caller has no glyph metrics at all; otherwise a font is measured glyph by
     * glyph when it needs to be, or when hiding Markdown markers needs it to be.
