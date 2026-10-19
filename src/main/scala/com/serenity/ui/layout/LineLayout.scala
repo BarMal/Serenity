@@ -5,6 +5,7 @@ import java.awt.font.FontRenderContext
 
 import com.serenity.richtext.ParagraphRole
 import com.serenity.state.models.TextVisualLine
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TextCaretMeasurement.{
   LineFontResolver,
   markdownResolver,
@@ -38,7 +39,19 @@ private[layout] object LineLayout:
   ): Vector[TextVisualLine] =
     // A slice of a line cannot be scanned for the markup that opened before it.
     val lineText = if baseColumn == 0 then text else ""
-    val inputs   = lineLayoutInputs(font, frc, measuredLayout, richText, bufferLine, lineLength, lineText)
+    val inputs =
+      lineLayoutInputs(
+        font,
+        frc,
+        measuredLayout,
+        richText,
+        bufferLine,
+        lineLength,
+        lineText,
+        fallbackText = text,
+        fallbackFirstColumn = baseColumn,
+        wrapCache = wrapCache
+      )
     TextLayoutSnapshot.wrapLogicalLine(
       text,
       bufferLine,
@@ -82,13 +95,19 @@ private[layout] object LineLayout:
     richText: RichTextContext,
     lineIndex: Int,
     lineLength: Int,
-    lineText: String
+    lineText: String,
+    fallbackText: String = "",
+    fallbackFirstColumn: Int = 0,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): LineLayoutInputs =
-    val resolver =
+    val styled =
       if !measuredLayout then singleFontResolver(font, richText.tabSize)
       else if richText.markdown.isActive then
         markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText)
       else resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale)
+    val resolver =
+      if !measuredLayout then styled
+      else withFallback(styled, font, richText, lineText, fallbackText, fallbackFirstColumn, wrapCache)
     val paragraphRole = RichTextStyling.effectiveRole(
       richText.document.flatMap(_.paragraphAt(lineIndex)).map(_.role).getOrElse(ParagraphRole.Body),
       richText.dropCapsEnabled
@@ -98,6 +117,32 @@ private[layout] object LineLayout:
         DropCapLayout.measuredGlyphWidthPx(font, frc, richText.document, lineIndex, paragraphRole, richText.proseScale)
       else 0.0f
     LineLayoutInputs(resolver, paragraphRole, glyphWidthPx)
+
+  /** `styled` with the runs the line needs in fallback fonts. The whole logical line is itemised when it is at hand, a
+    * wrapped slice (which cannot see what precedes it) otherwise. Code rows keep their pitch whatever glyphs the fallback
+    * fonts add.
+    */
+  private def withFallback(
+    styled: LineFontResolver,
+    font: Font,
+    richText: RichTextContext,
+    lineText: String,
+    sliceText: String,
+    sliceFirstColumn: Int,
+    wrapCache: WrappedLineCache
+  ): LineFontResolver =
+    val (text, firstColumn) = if lineText.nonEmpty then (lineText, 0) else (sliceText, sliceFirstColumn)
+    if text.isEmpty then styled
+    else
+      val itemised = FallbackResolution(
+        styled,
+        text,
+        firstColumn,
+        wrapCache.fallbackCoverage(font, richText.fallback),
+        richText.fallback
+      )
+      if itemised eq styled then styled
+      else itemised.copy(fixedLinePitch = FontLoader.isMonospacedFont(font))
 
   private def markdownAwareResolver(
     font: Font,

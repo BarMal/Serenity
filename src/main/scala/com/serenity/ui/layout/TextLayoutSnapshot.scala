@@ -312,7 +312,16 @@ object TextLayoutSnapshot:
               else unwrappedVisibleSlice(rawLine, startColumn, buffer.viewport.visibleColumns)
             val remainingVisualLines = math.max(0, visualLineLimit - acc.length)
             val inputs =
-              LineLayout.lineLayoutInputs(font, frc, measuredLayout, richText, lineIndex, rawLine.length, rawLine)
+              LineLayout.lineLayoutInputs(
+                font,
+                frc,
+                measuredLayout,
+                richText,
+                lineIndex,
+                rawLine.length,
+                rawLine,
+                wrapCache = wrapCache
+              )
             val resolver      = inputs.resolver
             val paragraphRole = inputs.paragraphRole
             val glyphWidthPx  = inputs.glyphWidthPx

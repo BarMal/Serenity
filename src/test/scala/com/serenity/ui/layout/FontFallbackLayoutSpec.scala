@@ -4,22 +4,25 @@ import java.awt.{Font, GraphicsEnvironment}
 import java.nio.file.Paths
 
 import com.serenity.state.models.TextVisualLine
-import com.serenity.ui.fonts.FontFallback
+import com.serenity.ui.fonts.{FontFallback, FontLoader}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** #1866: text the primary font has no glyph for is measured in a fallback font, so carets sit where the fallback
-  * glyphs are drawn. The fallback is a test subset font (中 and 文 one em wide, → 0.8 em, ascent 1.4 em and descent
-  * 0.4 em), so nothing depends on what the machine's `Dialog` font reaches.
+  * glyphs are drawn. The fallback is a test subset font (中 and 文 one em wide, ★ 0.8 em, ascent 1.4 em and descent
+  * 0.4 em), and the proportional prose font is a physical test font too: a logical font such as Serif already falls back
+  * on its own, so it would never reach this chain, so nothing depends on what the machine's `Dialog` font reaches.
   */
 class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
 
   private val frc = TextLayoutSnapshot.defaultFontRenderContext()
 
-  private val subset: Font =
-    val font = Font.createFont(Font.TRUETYPE_FONT, Paths.get(getClass.getResource("/fonts/SerenityFallbackTest.ttf").toURI).toFile)
+  private def registered(resource: String): Font =
+    val font = Font.createFont(Font.TRUETYPE_FONT, Paths.get(getClass.getResource(resource).toURI).toFile)
     val _    = GraphicsEnvironment.getLocalGraphicsEnvironment.registerFont(font)
     font
+
+  private val subset = registered("/fonts/SerenityFallbackTest.ttf")
 
   private val fallback = FontFallback(Vector(subset.getFamily))
 
@@ -31,7 +34,7 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
       .deriveFont(Font.PLAIN, sizePx)
 
   private val codeFont  = bundled("/fonts/MonaspaceNeon-Regular.otf")
-  private val proseFont = Font(Font.SERIF, Font.PLAIN, 14)
+  private val proseFont = registered("/fonts/SerenityProseTest.ttf").deriveFont(Font.PLAIN, sizePx)
 
   private def context(chain: FontFallback = fallback) =
     RichTextContext(None, 1.0f, dropCapsEnabled = true, fallback = chain)
@@ -63,11 +66,12 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "measure each fallback in its own advance" in {
-    val row = rowOf("→中", codeFont)
+    val row = rowOf("★中", codeFont)
     row.row.caretXs(1) shouldBe 0.8f * sizePx +- 0.01f
   }
 
   it should "grow the row to fit the taller fallback glyphs in a proportional font" in {
+    FontLoader.isMonospacedFont(proseFont) shouldBe false
     val plain  = rowOf("ab", proseFont)
     val mixed  = rowOf("a中b", proseFont)
     val tallPx = math.ceil(1.8 * sizePx).toInt

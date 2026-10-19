@@ -12,6 +12,7 @@ import com.serenity.markdown.{LazyBlockIndex, TableColumns}
 import com.serenity.richtext.ParagraphRole
 import com.serenity.rope.{Balance, Rope, RopeDiff}
 import com.serenity.state.models.{BufferId, MeasuredRow}
+import com.serenity.ui.fonts.{FallbackCoverages, FontFallback, Java2DGlyphCoverage}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 
 /** Memoises [[TextLayoutSnapshot]]'s wrap-and-measure of one logical line -- the AWT `TextLayout` work that otherwise
@@ -53,6 +54,12 @@ sealed abstract class WrappedLineCache:
   def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
     compute: => TableColumns
   ): TableColumns
+
+  /** What `primary` and the chain `fallback` describes cover. A cache keeps the answer, and the coverage memo inside it,
+    * for the next line that asks; without one every call starts a fresh memo.
+    */
+  def fallbackCoverage(primary: Font, fallback: FontFallback): Java2DGlyphCoverage =
+    Java2DGlyphCoverage.of(primary, fallback)
 
 /** Everything a line's wrap and caret measurement depends on. The rows it yields are position-independent -- no buffer
   * line, alignment or inset -- so a line keeps its entry when lines are inserted or deleted above it. `resolver`
@@ -194,6 +201,10 @@ object WrappedLineCache:
     private val visualRows       = new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries)
     private val fences           = new LinkedHashMap[BufferId, FenceEntry](16, 0.75f, true)
     private val columns          = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
+    private val coverages        = FallbackCoverages(FallbackCoverages.DefaultCapacity)
+
+    override def fallbackCoverage(primary: Font, fallback: FontFallback): Java2DGlyphCoverage =
+      coverages.coverage(primary, fallback)
 
     def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
       compute: => TableColumns
