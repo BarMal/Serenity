@@ -70,16 +70,16 @@ final private[layout] class GlyphAdvances private (
   def kerningsFrom(from: Int, count: Int): IArray[Float] =
     IArray.unsafeFromArray(java.util.Arrays.copyOfRange(kernAfter, from, from + count))
 
-  /** Each character's leading caret in `[from, from + count)`, plus the trailing edge, with `from` at 0. `TextLayout`
-    * puts a kerned character's leading caret half way between where the kerning moved it and where it would have been
-    * without, so the carets between characters read half the kerning of the one before; the trailing edge is the sum of
-    * the advances, a last character feeling no kerning from a successor the row does not hold.
+  /** Each character's caret in `[from, from + count)`, plus the trailing edge, with `from` at 0. A caret sits where the
+    * glyph of its character is drawn, so a kerned pair's kerning is already in the caret of the second character; the
+    * trailing edge is the sum of the advances, a last character feeling no kerning from a successor the row does not
+    * hold.
     */
   def caretsFrom(from: Int, count: Int): IArray[Float] =
     val carets = new Array[Float](count + 1)
     @annotation.tailrec
     def sum(index: Int, xPx: Float): Unit =
-      carets(index) = if index > 0 && index < count then xPx - kernAfter(from + index - 1) / 2.0f else xPx
+      carets(index) = xPx
       if index < count then
         val kerning = if index + 1 < count then kernAfter(from + index) else 0.0f
         sum(index + 1, xPx + advances(from + index) + kerning)
