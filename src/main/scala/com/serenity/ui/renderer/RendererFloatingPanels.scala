@@ -192,10 +192,16 @@ object RendererFloatingPanels:
       val textRect     = markdownPreviewTextRect(rect, contentRect, context)
       val previewState = readingState(state)
       val previewBuffer =
-        buffer.clearSelections.copy(viewport = buffer.viewport.copy(topVisualLine = 0, leftColumn = 0))
+        buffer.clearSelections.copy(viewport = markdownPreviewViewport(buffer.viewport))
       val previewSnapshot = RendererPaneSetup.snapshotForBuffer(previewBuffer, textRect, previewState, context)
       RendererPaneContent.renderReadOnlyText(previewBuffer, textRect, previewState, context, previewSnapshot)
     }
+
+  /** One-way, line-snapped sync: the preview wraps at its own width, so the editor's visual row inside a wrapped line
+    * has no counterpart here and the preview starts at the top of the editor's source line.
+    */
+  private[renderer] def markdownPreviewViewport(editor: Viewport): Viewport =
+    editor.copy(topVisualLine = 0, leftColumn = 0)
 
   private def readingState(state: AppState): AppState =
     val config = state.persisted.config
