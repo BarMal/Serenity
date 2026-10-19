@@ -23,6 +23,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
+  // Quitting drains queued persistence on real file I/O before `awaitQuit` returns (up to its own 5s grace), so this
+  // only guards against a hang; a tight bound measured the machine's load instead.
+  private val QuitHangGuard = 30.seconds
+
   private def testFileDialog(saveSelection: Option[java.nio.file.Path]): FileDialog =
     FileDialog(
       chooseOpenFile = _ => IO.pure(None),
@@ -477,6 +481,6 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.topModal shouldBe None
     updatedState.persisted.buffers should not contain key(bufferId)
-    stateManager.runtimeLifecycle.awaitQuit.timeout(1.second).unsafeRunSync()
+    stateManager.runtimeLifecycle.awaitQuit.timeout(QuitHangGuard).unsafeRunSync()
   }
 end CloseWorkflowStateManagerSpec
