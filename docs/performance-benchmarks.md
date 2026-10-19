@@ -372,3 +372,46 @@ the `StateManager` keystroke family (down 12 to 37%, now sampled for longer afte
 times (two base, two head), so +2.4 min per perf job once the base commit has this harness (+1.2 min on the PR that
 introduces it, whose base still runs the old one). The job's timeout is 30 minutes.
 
+
+## Paired-ratio gate -- issue #1731
+
+**Problem.** The gate failed a benchmark only when the head's *fastest* p50 exceeded 2.0x the base's *slowest* p50 over
+two runs a side. A benchmark whose p50 swings between runs of one commit (the issue saw 5 to 30 ms) therefore hid any
+slowdown that landed inside the swing, and the 2.0x bar was also the size of the regression to be caught. On ten
+recorded runs of this commit (below) the old rule flagged 45% of the benchmarks that a real, injected 2x slowdown
+slowed.
+
+**Gate now.** The base and head commits run in three back-to-back pairs that alternate which side goes first (B H, H B,
+B H). For each benchmark the verdict is the **median of the three head/base p50 ratios**; it fails when that exceeds
+**1.75x** and the median head p50 is more than 50 us above the base's (the existing delta floor). Retained-heap and
+allocation checks run on the per-benchmark medians as before. `scripts/compare_perf_runs.py` is the gate;
+`scripts/study_perf_gate.py` scores it against recorded runs.
+
+**Injecting a slowdown.** `-Dserenity.bench.slowdown=2` makes every timed call take twice as long (it spins for the
+extra time), so a gate can be shown a regression it must catch. `scripts/test_compare_perf_runs.py` carries the same
+case as a red test: the old rule passes base `[5, 30, 6]` ms against head `[10, 60, 12]`, the new one fails it.
+
+**Measurement.** Ten full `PerformanceBenchmarks` runs of one commit and four with `-Dserenity.bench.slowdown=2`, on a
+4-core Linux container under Xvfb at 1x (the CI perf job's configuration), one JVM per run, run back to back. Trials
+draw 3 runs as the base side and 3 others as the head side, 2,000 times (seeded); 56 benchmarks are slow enough for a 2x
+slowdown to clear the 50 us delta floor.
+
+| rule | A/A: builds failing (false positive) | injected real 2x: benchmarks caught | synthetic 1.5x: benchmarks caught |
+| --- | ---: | ---: | ---: |
+| old (fastest head vs slowest base, 2.0x, 2 runs) | 0.0% | 45% | 0.3% |
+| paired median, 1.3x | 40.5% | 97% | 85% |
+| paired median, 1.5x | 6.7% | 96% | 45% |
+| **paired median, 1.75x** | **0.0%** | **95%** | 3.7% |
+| paired median, 2.0x | 0.0% | 76% | 1.1% |
+
+With 2 pairs the 1.5x rule fails 11.7% of A/A builds and 1.75x fails 0.7%; with 4 pairs neither fails any.
+
+**What this does and does not show.**
+
+- The 2,000 trials resample 10 runs, so they are far from independent: "0.0%" means none in this sample, not none. A
+  CI runner is noisier than this container (the issue's 5 to 30 ms swing was not seen here: the worst max/min over three
+  runs of a benchmark was 1.8x), and the false-positive rate there is unmeasured until the job has run on it.
+- The injected slowdown is uniform. A regression confined to one benchmark is caught with that benchmark's own rate in
+  the last column of `study_perf_gate.py`'s output (95% at 2x for 1.75x).
+- A 1.5x regression is mostly missed by any rule that keeps false positives near zero; the gate is for the 2x class.
+- Cost: six benchmark runs instead of four, about 50% more perf-job time.
