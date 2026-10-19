@@ -121,6 +121,14 @@ entry means deleting it:
 sbt writeArchitectureBaseline   # after removing a violation, to bank the win
 ```
 
+`architectureCheck` also enforces purity (`project/PurityChecks.scala`, #1677), at the level of declarations, so a local
+`var` or mutable collection inside a method is fine. A top-level `object` may not declare a `val`/`lazy val`/`var` that
+holds `AtomicReference/Integer/Long/Boolean`, `synchronized`, `ThreadLocal`, `ConcurrentHashMap`, `mutable.`, or a
+`java.util` `HashMap`/`LinkedHashMap`/`ArrayDeque`/`ArrayList`/`WeakHashMap`/`IdentityHashMap` (only where the file
+imports it), and may not hold an instance of a class that has such a member (`new Cache`, `Cache.bounded()`).
+Declarations that cannot move are named in `ArchitectureChecks.PurityAllowlist` with a reason, apart from the baseline;
+`docs/allowlist-review.md` argues each one's redesign.
+
 The baseline may shrink, never grow. If you must add to it, explain the entry in review: CI's
 `architecture` job fails a PR whose baseline entry count or total measured lines/hits grows unless the
 diff also adds a `# paydown: <why, issue link>` comment line to `project/architecture-baseline.tsv`.
