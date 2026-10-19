@@ -18,9 +18,10 @@ private[layout] object FallbackResolution:
     text: String,
     firstColumn: Int,
     coverage: Java2DGlyphCoverage,
-    fallback: FontFallback
+    fallback: FontFallback,
+    stickyNeutrals: Boolean
   ): LineFontResolver =
-    val itemised = FallbackItemiser.itemise(text, 0, text.length, coverage)
+    val itemised = FallbackItemiser.itemise(text, 0, text.length, coverage, stickyNeutrals)
     if itemised.forall(_.slot == FontSlot.Primary) then resolver
     else resolver.copy(runs = cut(resolver, itemised, firstColumn, fallback), fallbackFamilies = fallback.slotFamilies)
 

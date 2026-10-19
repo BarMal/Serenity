@@ -166,7 +166,8 @@ private[layout] object LineLayout:
         text,
         firstColumn,
         wrapCache.fallbackCoverage(font, richText.fallback),
-        richText.fallback
+        richText.fallback,
+        stickyNeutrals = !FontLoader.isMonospacedFont(font)
       )
       if !FontLoader.isMonospacedFont(font) then itemised
       else

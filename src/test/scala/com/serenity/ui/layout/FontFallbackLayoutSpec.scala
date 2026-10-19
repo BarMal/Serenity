@@ -130,7 +130,7 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
     val cell = advanceOf("a", codeFont)
     val row  = rowOf("中 a", codeFont)
     row.row.caretXs.toVector.map(_ / cell) shouldBe Vector(0.0f, 2.0f, 3.0f, 4.0f).map(identity)
-    row.row.fontRuns.toVector shouldBe Vector(0, 1, 0)
+    row.row.fontRuns.toVector shouldBe Vector(0, 1, 1)
   }
 
   it should "keep a fixed line pitch however tall the fallback glyphs are" in {
