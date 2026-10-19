@@ -34,13 +34,30 @@ class HeadingSpacingColumnPagingSpec extends AnyFlatSpec with Matchers:
     }
   )
 
-  private val buffer =
+  private def bufferOf(document: RichTextDocument): Buffer =
     Buffer
       .fromString(bufferId, document.plainText)
       .copy(
         richText = RichTextState(richTextDocument = Some(document)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 30, visibleLines = 12)
       )
+
+  private val buffer = bufferOf(document)
+
+  // A one-row paragraph after each level-1 heading puts every level-2 heading a fixed few rows below the top of its
+  // column, whatever the font wraps the long paragraphs to; the wrapped-body document above cannot promise that.
+  private val headingBelowColumnTop = bufferOf(
+    RichTextDocument(
+      (1 to 14).toList.flatMap { chapter =>
+        List(
+          RichTextParagraph.plain(s"Chapter $chapter", role = ParagraphRole.Heading(1)),
+          RichTextParagraph.plain(s"Chapter $chapter."),
+          RichTextParagraph.plain(s"Section $chapter.1", role = ParagraphRole.Heading(2)),
+          RichTextParagraph.plain(s"Section text $chapter. " + "and some more words here " * 7)
+        )
+      }
+    )
+  )
 
   private val spacing = HeadingsConfig()
     .withLevel(1)(_.copy(spaceBefore = Some(1.5f), spaceAfter = Some(1.0f)))
@@ -106,10 +123,10 @@ class HeadingSpacingColumnPagingSpec extends AnyFlatSpec with Matchers:
 
   "A column page" should "start every column below the top of its column, with no heading space above its first row" in {
     val state = stateWith(spacing, 3)
-    val font  = FontLoader.previewFontForRole(fontConfig, buffer.typographyRole)
+    val font  = FontLoader.previewFontForRole(fontConfig, headingBelowColumnTop.typographyRole)
 
     val columns = TextLayoutSnapshot.fromBufferColumns(
-      buffer,
+      headingBelowColumnTop,
       columnWidthPx = 260,
       font = font,
       columnCount = 3,
@@ -118,7 +135,7 @@ class HeadingSpacingColumnPagingSpec extends AnyFlatSpec with Matchers:
 
     columns.size shouldBe 3
     columns.foreach(column => column.visualLines.head.spaceBeforePx shouldBe 0)
-    columns.foreach(_.visualLines.size should be <= buffer.viewport.visibleLines)
-    columns.map(_.visualLines.size).min should be < buffer.viewport.visibleLines
+    columns.foreach(_.visualLines.size should be <= headingBelowColumnTop.viewport.visibleLines)
+    columns.map(_.visualLines.size).min should be < headingBelowColumnTop.viewport.visibleLines
     columns.flatMap(_.visualLines).count(_.spaceBeforePx > 0) should be > 0
   }

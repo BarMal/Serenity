@@ -44,13 +44,15 @@ class ColumnPagingFramesSpec extends AnyFlatSpec with Matchers with ColdFrameHar
         session.mismatches shouldBe empty
       }
 
-    s"Splitting a paragraph twice in a two-column pane at ${scale}x" should
+    s"Splitting a paragraph twice and joining it back in a two-column pane at ${scale}x" should
       "draw what a cold frame draws at every step" in {
         val session = Session(ColumnPagingFixture.document, scale, columnConfig)
         session.markModified()
         session.placeCursor(bodyLine, 40)
         session(Enter, "split the paragraph")
         session(Enter, "split it again")
+        session(DeleteBackward, "join the second split")
+        session(DeleteBackward, "join the first split")
         session.mismatches shouldBe empty
       }
 
