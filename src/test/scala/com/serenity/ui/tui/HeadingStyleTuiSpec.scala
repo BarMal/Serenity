@@ -284,7 +284,8 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
   it should "leave the # marker bold in the marker colour, unstyled by the ladder" in {
     val theme  = Theme.dark
     val screen = render(markdown(theme = theme))
-    val marker = screen.cellAt(0, 0)
+    val (markerCol, markerRow) = screen.find("#").getOrElse(fail(screen.render))
+    val marker                 = screen.cellAt(markerCol, markerRow)
 
     marker.text shouldBe "#"
     marker.style.isBold shouldBe true
@@ -406,14 +407,14 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "follow a heading that wraps onto several rows, below the last of them" in {
-    val long = "A very long headline that must wrap onto a second row of the text area"
+    val long = "HEADWORD " + "lorem ipsum dolor " * 6 + "TAILWORD"
     val doc = RichTextDocument(
       List(RichTextParagraph.plain(long, role = ParagraphRole.Heading(1)), RichTextParagraph.plain("Body."))
     )
     val state  = prose(withHeadings(ruled).withWordWrap(true), document = doc)
     val screen = render(state)
-    val last   = screen.rowsContaining("row of the text area").head
-    val first  = screen.rowsContaining("A very long").head
+    val last   = screen.rowsContaining("TAILWORD").head
+    val first  = screen.rowsContaining("HEADWORD").head
 
     last should be > first
     isRule(screen, last + 1, '━') shouldBe true
