@@ -206,6 +206,7 @@ private[layout] object GlyphAdvances:
           contextFree
         )
     }
+    WideCells.snapAdvances(chars, advances, resolver.wideCellPx)
     resolver.extraAdvances.foreach {
       case (column, extraPx) =>
         if column >= origin && column < origin + chars.length then advances(column - origin) += extraPx

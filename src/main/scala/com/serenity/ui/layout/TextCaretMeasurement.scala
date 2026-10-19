@@ -23,7 +23,8 @@ private[layout] object TextCaretMeasurement:
     * resolver's `extraAdvances` are the dual: a column that is wider than its glyph by that many pixels, which a table
     * uses to pad a cell out to its column. A run with a non-primary `slot` is drawn in a fallback font because the
     * line's own font has no glyph for it; `fixedLinePitch` keeps such runs out of a row's height, as a code buffer's
-    * rows do not grow for them.
+    * rows do not grow for them. A positive `wideCellPx` is the cell a code line is laid out on: each character the
+    * terminal counts as two cells ([[CharWidth]]) takes exactly two of them, whatever font draws it.
     */
   final private[layout] case class ColumnFontRun(
       startColumn: Int,
@@ -45,7 +46,8 @@ private[layout] object TextCaretMeasurement:
       runs: Vector[ColumnFontRun],
       extraAdvances: Map[Int, Float] = Map.empty,
       tabSize: Int = IndentationSettings.DefaultTabSize,
-      fixedLinePitch: Boolean = false
+      fixedLinePitch: Boolean = false,
+      wideCellPx: Float = 0.0f
   ):
     val hasHidden: Boolean = runs.exists(_.hidden)
 
@@ -275,12 +277,10 @@ private[layout] object TextCaretMeasurement:
     resolver: LineFontResolver,
     frc: FontRenderContext
   ): IArray[Float] =
-    withExtraAdvances(
+    val laidOut =
       if resolver.hasHidden then visibleLayoutCaretXs(text, absoluteStartColumn, resolver, frc)
-      else plainLayoutCaretXs(text, absoluteStartColumn, resolver, frc),
-      absoluteStartColumn,
-      resolver
-    )
+      else plainLayoutCaretXs(text, absoluteStartColumn, resolver, frc)
+    withExtraAdvances(WideCells.snapped(laidOut, text, resolver.wideCellPx), absoluteStartColumn, resolver)
 
   /** `carets` with each column's extra advance added to every caret after it. */
   private def withExtraAdvances(

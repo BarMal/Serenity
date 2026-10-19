@@ -107,7 +107,7 @@ private[layout] object LineLayout:
       else resolverForLine(font, richText.document, lineIndex, lineLength, richText.proseScale)
     val resolver =
       if !measuredLayout then styled
-      else withFallback(styled, font, richText, lineText, fallbackText, fallbackFirstColumn, wrapCache)
+      else withFallback(styled, font, richText, lineText, fallbackText, fallbackFirstColumn, wrapCache, frc)
     val paragraphRole = RichTextStyling.effectiveRole(
       richText.document.flatMap(_.paragraphAt(lineIndex)).map(_.role).getOrElse(ParagraphRole.Body),
       richText.dropCapsEnabled
@@ -129,7 +129,8 @@ private[layout] object LineLayout:
     lineText: String,
     sliceText: String,
     sliceFirstColumn: Int,
-    wrapCache: WrappedLineCache
+    wrapCache: WrappedLineCache,
+    frc: FontRenderContext
   ): LineFontResolver =
     val (text, firstColumn) = if lineText.nonEmpty then (lineText, 0) else (sliceText, sliceFirstColumn)
     if text.isEmpty then styled
@@ -141,8 +142,10 @@ private[layout] object LineLayout:
         wrapCache.fallbackCoverage(font, richText.fallback),
         richText.fallback
       )
-      if itemised eq styled then styled
-      else itemised.copy(fixedLinePitch = FontLoader.isMonospacedFont(font))
+      if !FontLoader.isMonospacedFont(font) then itemised
+      else
+        val coded = if itemised eq styled then styled else itemised.copy(fixedLinePitch = true)
+        if WideCells.hasWide(text) then coded.copy(wideCellPx = WideCells.cellAdvancePx(font, frc)) else coded
 
   private def markdownAwareResolver(
     font: Font,
