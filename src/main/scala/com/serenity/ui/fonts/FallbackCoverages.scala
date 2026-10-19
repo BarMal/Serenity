@@ -9,6 +9,11 @@ import java.util.LinkedHashMap
   */
 final class FallbackCoverages(maxEntries: Int):
 
+  private val asked = java.util.concurrent.atomic.AtomicLong(0L)
+
+  /** How many times a coverage was asked for: what a hot layout path must not do for a line the primary font covers. */
+  def lookups: Long = asked.get()
+
   final private case class Key(primary: Font, fallback: FontFallback)
 
   private val entries = new LinkedHashMap[Key, Java2DGlyphCoverage](16, 0.75f, true):
@@ -16,6 +21,7 @@ final class FallbackCoverages(maxEntries: Int):
       size() > maxEntries
 
   def coverage(primary: Font, fallback: FontFallback): Java2DGlyphCoverage =
+    val _   = asked.incrementAndGet()
     val key = Key(primary, fallback)
     synchronized {
       Option(entries.get(key)).getOrElse {

@@ -153,3 +153,17 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
     )
     rows.map(_.text) shouldBe Vector("中文", "中文")
   }
+
+  "The fallback itemisation on the hot path" should "not be consulted for a line of plain ASCII" in {
+    val cache = WrappedLineCache.bounded()
+    val _     = LineLayout.lineLayoutInputs(codeFont, frc, true, context(), 0, 12, "hello, world", wrapCache = cache)
+    cache.fallbackCoverageLookups shouldBe 0L
+  }
+
+  it should "be done once for a line that needs it, however often the line is laid out" in {
+    val cache = WrappedLineCache.bounded()
+    (1 to 5).foreach { _ =>
+      val _ = LineLayout.lineLayoutInputs(codeFont, frc, true, context(), 0, 3, "a中b", wrapCache = cache)
+    }
+    cache.fallbackCoverageLookups shouldBe 1L
+  }

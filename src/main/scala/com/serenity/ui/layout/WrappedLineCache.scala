@@ -253,6 +253,9 @@ object WrappedLineCache:
     override def fallbackCoverage(primary: Font, fallback: FontFallback): Java2DGlyphCoverage =
       coverages.coverage(primary, fallback)
 
+    /** How many times a layout has asked this cache for a fallback coverage. */
+    def fallbackCoverageLookups: Long = coverages.lookups
+
     def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
       compute: => TableColumns
     ): TableColumns =
