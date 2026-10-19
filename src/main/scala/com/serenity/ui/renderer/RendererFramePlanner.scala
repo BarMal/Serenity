@@ -393,14 +393,6 @@ object RendererFramePlanner:
           dirtyRowsByPane,
           geometryChanged
         )
-        val redrawn = panes.toList.flatMap {
-          case (paneId, record) =>
-            val dirty = dirtyRowsByPane.getOrElse(paneId, record.rowRects.indices.toSet)
-            record.rowRects.indices
-              .filter(dirty.contains)
-              .map(record.rowRects)
-              .map(RendererChromePlan.withBleed(context))
-        }
         val preserved = panes.toList.flatMap {
           case (paneId, record) =>
             val dirty = dirtyRowsByPane.getOrElse(paneId, record.rowRects.indices.toSet)
@@ -408,7 +400,7 @@ object RendererFramePlanner:
               .filterNot(dirty.contains)
               .map(record.rowRects)
               .map(RendererChromePlan.withBleed(context))
-        } ++ RendererChromePlan.preservedRects(state, context, renderPlan, panes, chrome, redrawn)
+        } ++ RendererChromePlan.preservedRects(state, context, renderPlan, panes, chrome)
 
         val blits = redraws.values.flatMap(_.blits).toList
         val keptPanels =

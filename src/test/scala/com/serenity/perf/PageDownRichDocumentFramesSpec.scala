@@ -61,7 +61,13 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       }
     )
 
-  final private class Pooled(window: Window, pool: Int, scale: Double, persists: Boolean = true):
+  final private class Pooled(
+      window: Window,
+      pool: Int,
+      scale: Double,
+      persists: Boolean = true,
+      fringe: Boolean = false
+  ):
 
     /** The vertical spans, in logical pixels, of the runs the last frame drew. */
     val drawnSpans = new AtomicReference[Vector[(Int, Int)]](Vector.empty)
@@ -82,6 +88,14 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     private val screen      = ScreenIdentity(this)
     private val drawn       = AtomicInteger(0)
     private val lastPlan    = new AtomicReference[Option[com.serenity.ui.renderer.EditorPaneRenderPlan]](None)
+
+    /** A faint pixel pair one device pixel left of a run, as the serif of a wrapped row's first glyph leaves. */
+    private def leaveFringe(image: BufferedImage, xPx: Float, yPx: Int): Unit =
+      val x = math.floor(xPx * scale).toInt - 1
+      (0 until (2 * scale).toInt).foreach { dy =>
+        val y = (yPx * scale).toInt + scale.toInt + dy
+        if x >= 0 && y < image.getHeight then image.setRGB(x, y, 0x181c23)
+      }
 
     def contentLeftPx: Option[Int] =
       lastPlan.get().flatMap(_.paneLayouts.values.headOption).map(layout => cellMetrics.toPixelX(layout.contentRect.x))
@@ -117,6 +131,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         ): Unit =
           record(yPx, lineHeightPx)
           super.drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, s, clipGlyphToRun)
+          if fringe && s.nonEmpty then leaveFringe(image, xPx, yPx)
         override def drawShapedRunPx(
           xPx: Float,
           yPx: Int,
@@ -129,6 +144,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         ): Unit =
           record(yPx, lineHeightPx)
           super.drawShapedRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, stretch, from, until)
+          if fringe && from < until then leaveFringe(image, xPx, yPx)
       val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
       lastPlan.set(
         RendererFramePlanner.renderFrame(
@@ -177,9 +193,10 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     window: Window,
     drawn: BufferedImage,
     state: AppState,
-    scale: Double
+    scale: Double,
+    fringe: Boolean = false
   ): Seq[(Int, Int)] =
-    val cold = Pooled(window, 1, scale, persists = false).render(state, Damage.Everything)
+    val cold = Pooled(window, 1, scale, persists = false, fringe).render(state, Damage.Everything)
     val differing =
       for
         x <- 0 until drawn.getWidth
@@ -203,7 +220,8 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     scale: Double,
     document: RichTextDocument,
     pageDowns: Int = 12,
-    perFrame: Int = 1
+    perFrame: Int = 1,
+    fringe: Boolean = false
   ): List[String] =
     val (stateManager, id) =
       LaptopFrameBenchmarks.stateManagerHolding(document.plainText, config, grid = window.viewport)
@@ -218,7 +236,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    val frames = Pooled(window, pool, scale)
+    val frames = Pooled(window, pool, scale, fringe = fringe)
     val first  = stateManager.getCurrentState.unsafeRunSync()
     val _      = frames.render(first, Damage.Everything)
     val steps = (1 to pageDowns).foldLeft((first, List.empty[String])) {
@@ -226,7 +244,13 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         (1 to perFrame).foreach(_ => stateManager.applyEvent(PageDown).unsafeRunSync())
         val after = stateManager.getCurrentState.unsafeRunSync()
         val diff =
-          differing(window, frames.render(after, DamageProducer.forTransition(before, after)), after, scale)
+          differing(
+            window,
+            frames.render(after, DamageProducer.forTransition(before, after)),
+            after,
+            scale,
+            fringe
+          )
         val top = after.persisted.buffers.get(id).map(_.viewport.topLine)
         (after, if diff.isEmpty then found else s"step $step top=$top: ${summary(diff)}" :: found)
     }
@@ -421,6 +445,20 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     }
     survivors.take(3) shouldBe empty
   }
+
+  for
+    scale <- List(1.0, 2.0)
+    (windowName, window) <- List(
+      "1500x1000" -> Window(1500, 1000),
+      "1920x1080" -> fullHd,
+      "800x600"   -> Window(800, 600)
+    )
+    (documentName, document) <- List("two short chapters" -> novel(2, 4), "six chapters" -> novel(6, 6))
+  do
+    s"PageDown through $documentName with typewriter scrolling and dimming at ${scale}x in a $windowName window, a serif fringe beside the column" should
+      "draw what a cold frame draws at every step" in {
+        pagedThrough(writingConfig, window, 2, scale, document, pageDowns = 8, fringe = true) shouldBe empty
+      }
 
   private def endingInAnEmptyChapter(chapterCount: Int, bodies: Int): RichTextDocument =
     RichTextDocument(
