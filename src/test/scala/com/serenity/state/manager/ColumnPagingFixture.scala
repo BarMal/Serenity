@@ -21,7 +21,12 @@ import com.serenity.ui.theme.RichTextStyling
   * around them, drop caps both taller and shorter than the rows beside them. `scale` multiplies the fonts, as a 2x
   * display would.
   */
-final class ColumnPagingFixture(val scale: Int, val columnCount: Int, val gridRows: Int = 14):
+final class ColumnPagingFixture(
+    val scale: Int,
+    val columnCount: Int,
+    val gridRows: Int = 14,
+    val source: RichTextDocument = ColumnPagingFixture.document
+):
 
   given Balance = Balance.default
 
@@ -38,7 +43,7 @@ final class ColumnPagingFixture(val scale: Int, val columnCount: Int, val gridRo
       .withHeadingsConfig(spacing)
     val base = AppState.initial
     val fresh =
-      Buffer.fromString(bufferId, document.plainText).copy(richText = RichTextState(richTextDocument = Some(document)))
+      Buffer.fromString(bufferId, source.plainText).copy(richText = RichTextState(richTextDocument = Some(source)))
     val unsynced = base.copy(
       persisted = base.persisted.copy(
         buffers = Map(fresh.id -> fresh),
@@ -153,6 +158,39 @@ object ColumnPagingFixture:
       )
     }
   )
+
+  /** A paragraph that wraps to several rows, so the row that follows a heading is only its first. */
+  val bodyFollower: RichTextParagraph = paragraph("Following text. " + "words that fill the column up " * 8)
+
+  val dropCapFollower: RichTextParagraph =
+    paragraph("The opening words. " + "words that fill the column up " * 8, ParagraphRole.dropCap(3))
+
+  def heading(level: Int, text: String): RichTextParagraph = paragraph(text, ParagraphRole.Heading(level))
+
+  /** `fillers` one-row paragraphs, then `lead`, then `follower`, then enough body to run on into further columns. */
+  def leadAfterFillers(
+    fillers: Int,
+    lead: List[RichTextParagraph],
+    follower: RichTextParagraph
+  ): RichTextDocument =
+    RichTextDocument(
+      (0 until fillers).toList.map(n => paragraph(s"f$n")) ++ lead ++ List(follower) ++
+        (0 until 40).toList.map(n => paragraph(s"tail $n"))
+    )
+
+  /** Every distance a heading run can sit from the bottom of a column: `fillers` runs from 0 to 20 rows before each
+    * pair of headings, whichever the height of a row.
+    */
+  val sweptHeadings: RichTextDocument =
+    RichTextDocument(
+      (0 to 20).toList.flatMap { fillers =>
+        (0 until fillers).toList.map(n => paragraph(s"filler $fillers.$n")) ++ List(
+          heading(1, s"Part $fillers"),
+          heading(2, s"Chapter $fillers"),
+          if fillers % 2 == 0 then bodyFollower else dropCapFollower
+        )
+      }
+    )
 
   def sameTop(a: Viewport, b: Viewport): Boolean = a.topLine == b.topLine && a.topVisualLine == b.topVisualLine
 

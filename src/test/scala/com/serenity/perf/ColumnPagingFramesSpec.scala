@@ -2,6 +2,7 @@ package com.serenity.perf
 
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{ColumnLeft, ColumnRight, DeleteBackward, Enter, InsertChar}
+import com.serenity.richtext.RichTextDocument
 import com.serenity.state.manager.ColumnPagingFixture
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -61,5 +62,27 @@ class ColumnPagingFramesSpec extends AnyFlatSpec with Matchers with ColdFrameHar
         val session = Session(ColumnPagingFixture.document, scale, columnConfig)
         (1 to 8).foreach(n => session(ColumnRight, s"column right $n"))
         (1 to 8).foreach(n => session(ColumnLeft, s"column left $n"))
+        session.mismatches shouldBe empty
+      }
+
+  private val headingRuns: List[(String, RichTextDocument)] =
+    import ColumnPagingFixture.{bodyFollower, dropCapFollower, heading, leadAfterFillers}
+    List(
+      "a heading" -> leadAfterFillers(14, List(heading(2, "Chapter")), bodyFollower),
+      "a run of two headings" -> leadAfterFillers(14, List(heading(1, "Part"), heading(2, "Chapter")), bodyFollower),
+      "a heading before a drop cap" -> leadAfterFillers(14, List(heading(2, "Chapter")), dropCapFollower)
+    )
+
+  for
+    scale                <- List(1.0, 2.0)
+    (label, withHeading) <- headingRuns
+  do
+    s"Splitting paragraphs above $label across a column boundary at ${scale}x" should
+      "draw what a cold frame draws at every step" in {
+        val session = Session(withHeading, scale, columnConfig)
+        session.markModified()
+        session.placeCursor(0, 2)
+        (1 to 36).foreach(n => session(Enter, s"split $n above the headings"))
+        (1 to 36).foreach(n => session(DeleteBackward, s"join $n above the headings"))
         session.mismatches shouldBe empty
       }

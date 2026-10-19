@@ -36,11 +36,12 @@ class ColumnPagingNavigationSpec extends AnyFlatSpec with Matchers:
       .flatMap(fixture.columnOrdinal)
 
   for
-    scale   <- List(1, 2)
-    columns <- List(1, 2, 3)
+    (documentLabel, source) <- List("" -> ColumnPagingFixture.document, " over swept headings" -> ColumnPagingFixture.sweptHeadings)
+    scale                   <- List(1, 2)
+    columns                 <- List(1, 2, 3)
   do
-    val label        = s"at ${scale}x with $columns column(s)"
-    lazy val fixture = ColumnPagingFixture(scale, columns)
+    val label        = s"at ${scale}x with $columns column(s)$documentLabel"
+    lazy val fixture = ColumnPagingFixture(scale, columns, source = source)
 
     s"Column right $label" should "advance one column at a time through the whole document, showing the cursor" in {
       val columnCount = fixture.pages.flatMap(_.columns).size
