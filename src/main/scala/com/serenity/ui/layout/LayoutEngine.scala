@@ -119,6 +119,15 @@ object LayoutEngine:
 
   private[serenity] val chromeMemo = new ChromeLayoutMemo()
 
+  /** The wraps measured while locating a caret: the layout is a function of state alone, so it keeps its own cache
+    * rather than the scene's.
+    */
+  private val anchorWrappedLines = WrappedLineCache.bounded()
+
+  /** The panes of `calculatedLayout` with the text each lays out to, from which a floating surface finds its caret. */
+  def laidOutPanes(state: AppState, calculatedLayout: CalculatedLayout): LaidOutPanes =
+    LaidOutPanes(state, calculateEditorPaneLayouts(state, calculatedLayout), anchorWrappedLines)
+
   def calculateLayoutWithUI(
     state: AppState,
     viewportSize: ViewportSize,
@@ -314,21 +323,21 @@ object LayoutEngine:
       tabBarRect = tabBarRect
     )
 
-    val paneLayouts = calculateEditorPaneLayouts(state, baseLayout)
+    val panes = laidOutPanes(state, baseLayout)
 
     val aboveSurfaces = OverlayStackLayout.orderedAboveCursorSurfaces(state)
     val belowSurfaces = OverlayStackLayout.orderedBelowCursorSurfaces(state)
     val aboveLayout =
-      OverlayStackLayout.calculateAboveCursorOverlayStack(aboveSurfaces, state, paneLayouts)
+      OverlayStackLayout.calculateAboveCursorOverlayStack(aboveSurfaces, state, panes)
     val aboveCursorOverlayStack = aboveLayout.stack
-    val belowLayout             = OverlayStackLayout.calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
+    val belowLayout             = OverlayStackLayout.calculateBelowCursorOverlayStack(belowSurfaces, state, panes)
     val floatingOffsets = OverlayStackLayout.floatingOverlayOffsets(
       aboveSurfaces,
       aboveCursorOverlayStack,
       belowSurfaces,
       belowLayout.stack,
       state,
-      paneLayouts
+      panes
     )
 
     baseLayout.copy(
