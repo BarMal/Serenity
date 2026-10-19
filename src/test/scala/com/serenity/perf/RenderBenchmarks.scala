@@ -218,7 +218,8 @@ private[perf] object RenderBenchmarks:
       logicalWidthPx = frameWidthPx,
       logicalHeightPx = frameHeightPx,
       deviceScaleX = deviceScale,
-      deviceScaleY = deviceScale
+      deviceScaleY = deviceScale,
+      textCaches = caches.surfaceText
     )
     RendererEntryPoints.render(
       state,
@@ -245,7 +246,8 @@ private[perf] object RenderBenchmarks:
       textFont,
       _ => (),
       logicalWidthPx = frameWidthPx,
-      logicalHeightPx = frameHeightPx
+      logicalHeightPx = frameHeightPx,
+      textCaches = renderCaches.surfaceText
     )
     surface.setFont(FontSpec.fromAwt(textFont))
     surface.clearViewport(Theme.light.background)
