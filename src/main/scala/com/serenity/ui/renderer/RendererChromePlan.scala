@@ -145,7 +145,7 @@ private[renderer] object RendererChromePlan:
   /** How far, in logical pixels, a row's glyphs can reach past the left and right of its band: antialiasing of a glyph
     * with a negative side bearing. A row is kept with that margin, or the clear would take it.
     */
-  val BleedPx: Int = 1
+  val BleedPx: Int = 2
 
   def withBleed(context: RenderContext)(band: PixelRect): PixelRect =
     if context.surface.addressesPixels then band.copy(xPx = band.xPx - BleedPx, widthPx = band.widthPx + 2 * BleedPx)
