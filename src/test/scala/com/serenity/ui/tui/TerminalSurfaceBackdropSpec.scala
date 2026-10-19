@@ -35,11 +35,14 @@ import com.serenity.ui.renderer.{
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.{MeasuredTextAdvances, ShapedTextCache}
 
 /** Panels are opaque: even under a theme whose background is the terminal's own (alpha 0, SGR 49), a floating surface
   * or pinned panel paints its own panel colour, and its frame, text, selection highlight and tones keep their colours.
   */
 class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
+
+  private val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache())
 
   given Balance = Balance.default
 
@@ -67,7 +70,7 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
     config: AppConfig = AppConfig.default
   ): TerminalEmulator =
     val (rs, writer) = surface(20, 9)
-    TextOverlayRenderer.render(rs, overlay, theme, config, cursorVisible = false, font, cellMetrics)
+    TextOverlayRenderer.render(rs, overlay, theme, config, cursorVisible = false, font, cellMetrics, advances)
     screenOf(rs, writer, 20, 9)
 
   private def rowCells(rect: LayoutRect, y: Int): List[(Int, Int)] = (rect.x until rect.right).toList.map(x => (x, y))

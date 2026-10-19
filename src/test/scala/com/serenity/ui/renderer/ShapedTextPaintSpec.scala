@@ -101,7 +101,7 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
     CharacterRenderer.computeGraphemeSpans(text).map(_.startLocalIndex)
 
   private def lineOf(text: String): TextVisualLine =
-    val carets = TextLayoutSnapshot.caretXsForText(text, font, frc)
+    val carets = TextLayoutSnapshot.caretXsForText(text, font, ShapedTextCache(), frc)
     val stops =
       (graphemeStarts(text) :+ text.length).map(column => TextCaretStop(column, carets.lift(column).getOrElse(0.0f)))
     TextVisualLine(0, 0, text.length, text, carets.lastOption.getOrElse(0.0f), stops)
@@ -250,7 +250,7 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
   private val ligaturedInter = kerned(BundledInterFont.ligatured(14f))
 
   private def stretchAndCarets(text: String, face: Font) =
-    (ShapedTextCache().stretchOf(text, face, frc), TextLayoutSnapshot.caretXsForText(text, face, frc))
+    (ShapedTextCache().stretchOf(text, face, frc), TextLayoutSnapshot.caretXsForText(text, face, ShapedTextCache(), frc))
 
   "A caret stop" should "sit at the x of the glyph the line draws for its character, kerned or not" in
     List("platform serif" -> font, "bundled Inter" -> kernedInter).foreach {

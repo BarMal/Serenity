@@ -4,6 +4,7 @@ import java.awt.font.TextAttribute
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** The terminal's carets are cells, so a kerned font must not move them: only the measured, pixel layout follows
   * glyphs.
@@ -17,7 +18,14 @@ class CaretStopsTuiSpec extends AnyFlatSpec with Matchers:
   "A forced cell layout" should "place every caret stop on its cell, whatever the font kerns" in {
     val text = "AVAWAY To WWWW"
     val stops =
-      TextLayoutSnapshot.caretXsForText(text, kernedInter, frc, Some(CellMetrics.cellUnit), forceCellLayout = true)
+      TextLayoutSnapshot.caretXsForText(
+        text,
+        kernedInter,
+        ShapedTextCache(),
+        frc,
+        Some(CellMetrics.cellUnit),
+        forceCellLayout = true
+      )
 
     stops shouldBe Vector.tabulate(text.length + 1)(_.toFloat)
   }

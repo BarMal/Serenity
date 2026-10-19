@@ -6,6 +6,7 @@ import java.text.AttributedString
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** A caret stop used to be what `TextLayout` reports, which puts a kerned character half way between its kerned and
   * unkerned positions. Stops now sit at the glyph, so against `TextLayout` they differ by exactly half the pair's
@@ -34,7 +35,7 @@ class GlyphCaretCrossCheckSpec extends AnyFlatSpec with Matchers:
     faces.foreach {
       case (name, face) =>
         val text    = "Hello, wide world: AVAWAY To WWWW Ty Yo iiii"
-        val stops   = TextLayoutSnapshot.caretXsForText(text, face, frc)
+        val stops   = TextLayoutSnapshot.caretXsForText(text, face, ShapedTextCache(), frc)
         val layout  = textLayoutLeadingCarets(text, face)
         val nominal = face.createGlyphVector(frc, text)
         val shaped  = face.layoutGlyphVector(frc, text.toCharArray, 0, text.length, Font.LAYOUT_LEFT_TO_RIGHT)

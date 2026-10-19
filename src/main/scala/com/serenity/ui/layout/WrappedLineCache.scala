@@ -14,6 +14,7 @@ import com.serenity.rope.{Balance, Rope, RopeDiff}
 import com.serenity.state.models.{BufferId, MeasuredRow}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 import com.serenity.ui.openings.{OpeningLines, OpeningRules, OpeningSettings, VirtualDropCaps}
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** Memoises [[TextLayoutSnapshot]]'s wrap-and-measure of one logical line -- the AWT `TextLayout` work that otherwise
   * dominates every keystroke on word-wrapped prose, and that the state-update path and the render path each repeat for
@@ -24,6 +25,12 @@ import com.serenity.ui.openings.{OpeningLines, OpeningRules, OpeningSettings, Vi
   * of what a wrap depends on and so belongs with it.
   */
 sealed abstract class WrappedLineCache:
+
+  /** The cache a wrap measures its glyphs through. A wrap shapes the runs it measures so that painting the row finds
+    * them shaped; the painter and this cache must therefore be handed the same instance, which is why it lives here,
+    * with the layout state the renderer's owner already threads to every wrap.
+    */
+  private[serenity] def shapedText: ShapedTextCache
 
   /** `cold(limit)` wraps the line into at most `limit` rows from scratch. `incremental` may instead resume from a
     * recently wrapped edit of the same line, and answers `None` whenever it cannot reproduce `cold` exactly.
@@ -153,6 +160,9 @@ object WrappedLineCache:
   /** Measures on every call; the default for callers that own no cache. */
   object Uncached extends WrappedLineCache:
 
+    /** Nothing is remembered, so each wrap shapes into a cache of its own and keeps none of it. */
+    private[serenity] def shapedText: ShapedTextCache = ShapedTextCache()
+
     private[layout] def wrapped(key: WrappedLineKey, maxVisualLines: Int)(
       cold: Int => RowWrap,
       incremental: Seq[Predecessor] => Option[RowWrap]
@@ -186,8 +196,12 @@ object WrappedLineCache:
     def virtualDropCaps(document: RichTextDocument, settings: OpeningSettings): Option[VirtualDropCaps] =
       VirtualDropCaps.of(settings, document)
 
-  def bounded(maxLines: Int = DefaultMaxLines, maxChars: Long = DefaultMaxChars): Bounded =
-    new Bounded(math.max(1, maxLines), math.max(1L, maxChars))
+  def bounded(
+    maxLines: Int = DefaultMaxLines,
+    maxChars: Long = DefaultMaxChars,
+    shapedText: ShapedTextCache = ShapedTextCache()
+  ): Bounded =
+    new Bounded(math.max(1, maxLines), math.max(1L, maxChars), shapedText)
 
   final private case class TableColumnsEntry(
       content: Rope,
@@ -228,7 +242,11 @@ object WrappedLineCache:
   /** An access-ordered LRU. Rendering and the state dispatcher may run on different threads, so every map access holds
     * this instance's monitor; wrapping a missed line happens outside it.
     */
-  final class Bounded private[WrappedLineCache] (maxLines: Int, maxChars: Long) extends WrappedLineCache:
+  final class Bounded private[WrappedLineCache] (
+      maxLines: Int,
+      maxChars: Long,
+      private[serenity] val shapedText: ShapedTextCache
+  ) extends WrappedLineCache:
     private val entries          = new LinkedHashMap[WrappedLineKey, Entry](256, 0.75f, true)
     private val recent           = new HashMap[WrapShape, ArrayDeque[(WrappedLineKey, Entry)]]
     private val retainedChar     = new AtomicLong(0L)

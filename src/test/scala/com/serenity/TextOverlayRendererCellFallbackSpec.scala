@@ -16,6 +16,9 @@ import org.scalatest.matchers.should.Matchers
   */
 class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
 
+  private val shapedText = ShapedTextCache()
+  private val advances   = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText)
+
   given Balance = Balance.default
 
   "TextOverlayRenderer" should "render a proportional-font overlay row via putString when the surface has no FontRenderContext" in {
@@ -33,7 +36,7 @@ class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics, advances)
 
     surface.drawRunPxCalls shouldBe empty
     surface.getRow(1).slice(1, 1 + rowText.length) shouldBe rowText
@@ -54,7 +57,7 @@ class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics, advances)
 
     surface.fillPixelRectCalls shouldBe empty
     val cursorX = 1 + rowText.length
@@ -76,7 +79,7 @@ class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics, advances)
 
     surface.drawRunPxCalls.exists(_.s == rowText) shouldBe true
     surface.fillPixelRectCalls should not be empty

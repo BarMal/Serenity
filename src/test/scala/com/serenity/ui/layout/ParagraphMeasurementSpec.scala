@@ -20,6 +20,7 @@ import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** Measuring a paragraph once and slicing rows out of it must wrap exactly where measuring every row with its own
   * `TextLayout` did ([[LegacyLineMeasurement]]), with caret positions equal up to float rounding.
@@ -133,13 +134,13 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
   it should "measure single segments as per-row measurement did" in
     forAll(measuredFonts) { font =>
       forAll(corpus) { line =>
-        val xs = TextLayoutSnapshot.caretXsForText(line, font, frc)
+        val xs = TextLayoutSnapshot.caretXsForText(line, font, ShapedTextCache(), frc)
         val legacy =
           LegacyLineMeasurement.caretXs(line, 0, singleFontResolver(font), frc, true, CellMetrics.fromFont(font))
         xs.length shouldBe legacy.length
         xs.zip(legacy).foreach((x, expected) => x shouldBe expected +- tolerance)
         assertSameRows(
-          Vector(TextLayoutSnapshot.visualLineForText(line, 2, font, frc, startColumn = 5)),
+          Vector(TextLayoutSnapshot.visualLineForText(line, 2, font, ShapedTextCache(), frc, startColumn = 5)),
           Vector(
             LegacyLineMeasurement.shapeSegment(
               line,
@@ -175,7 +176,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
           )
         }
       }
-      val xs = TextLayoutSnapshot.caretXsForText(line, font, frc)
+      val xs = TextLayoutSnapshot.caretXsForText(line, font, ShapedTextCache(), frc)
       val legacy =
         LegacyLineMeasurement.caretXs(line, 0, singleFontResolver(font), frc, true, CellMetrics.fromFont(font))
       xs.length shouldBe legacy.length
@@ -335,7 +336,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
     }
 
   private def contextFree(text: String, font: Font): Vector[Boolean] =
-    val advances = GlyphAdvances.measure(text, 0, text.length, 0, singleFontResolver(font), frc)
+    val advances = GlyphAdvances.measure(text, 0, text.length, 0, singleFontResolver(font), frc, ShapedTextCache())
     text.indices.toVector.map(index => advances.isContextFree(index, index + 1))
 
   "Glyph advances" should "treat plain text and tabs as context-free" in {

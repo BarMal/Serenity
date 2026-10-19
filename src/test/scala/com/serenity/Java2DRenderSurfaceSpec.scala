@@ -10,7 +10,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoints, SurfaceTextCaches}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -162,7 +162,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     val metrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 12)
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = Java2DRenderSurface.forFrame(metrics, font, canvas, _ => ())
+    val surface = Java2DRenderSurface.forFrame(metrics, font, canvas, _ => (), SurfaceTextCaches.fresh())
 
     surface.viewportWidth shouldBe 80
     surface.viewportHeight shouldBe 30
@@ -179,10 +179,12 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       font,
       canvas,
       _ => (),
-      (width, height, imageType) =>
+      (width, height, imageType) => {
         val image = new BufferedImage(width, height, imageType)
         provided.set(Some(image))
         image
+      },
+      SurfaceTextCaches.fresh()
     )
 
     surface.viewportWidth shouldBe 80

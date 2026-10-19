@@ -43,7 +43,8 @@ object RendererFloatingPanels:
           state.persisted.config,
           layerContext.cursorVisible,
           layerContext.uiFont,
-          layerContext.cellMetrics
+          layerContext.cellMetrics,
+          layerContext.caches.measuredAdvances
         )
       overlay.surfaceId.flatMap(panels.sites.get) match
         case Some(site) =>
@@ -107,7 +108,8 @@ object RendererFloatingPanels:
         state.persisted.config,
         context.cursorVisible,
         context.uiFont,
-        context.cellMetrics
+        context.cellMetrics,
+        context.caches.measuredAdvances
       )
     }
 

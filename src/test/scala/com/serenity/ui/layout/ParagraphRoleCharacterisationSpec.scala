@@ -11,6 +11,7 @@ import com.serenity.ui.renderer.DropCapRenderer
 import com.serenity.ui.theme.RichTextStyling
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** Pins what a drop cap paragraph does to layout, paint and dirty tracking with the drop-caps toggle on and off. */
 class ParagraphRoleCharacterisationSpec extends AnyFlatSpec with Matchers:
@@ -85,7 +86,8 @@ class ParagraphRoleCharacterisationSpec extends AnyFlatSpec with Matchers:
       RichTextContext(Some(document(dropCap)), 1.0f, dropCapsEnabled),
       lineIndex = 0,
       lineLength = prose.length,
-      lineText = prose
+      lineText = prose,
+      shapedText = ShapedTextCache()
     )
 
   "dropCapSplitFontSpans" should "single the first character out at the paragraph's start" in {

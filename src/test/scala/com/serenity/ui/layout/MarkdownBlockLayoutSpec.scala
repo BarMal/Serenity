@@ -11,6 +11,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.theme.{HeadingScale, HeadingSettings, HeadingStyle, TextStyle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** Headings, list markers and rules in the layout: a heading is set in a larger face, its hashes take no width unless
   * revealed, and a rule has no width of its own.
@@ -30,7 +31,7 @@ class MarkdownBlockLayoutSpec extends AnyFlatSpec with Matchers:
       TextStyle(isBold = true, fontSize = Some(serif.getSize2D * HeadingStyle.default(level).sizeScale))
     )
 
-  private def advance(text: String, font: Font): Float = TextLayoutSnapshot.caretXsForText(text, font, frc).last
+  private def advance(text: String, font: Font): Float = TextLayoutSnapshot.caretXsForText(text, font, ShapedTextCache(), frc).last
 
   private def view(
     mode: MarkerMode,

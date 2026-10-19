@@ -26,6 +26,9 @@ import org.scalatest.matchers.should.Matchers
 
 class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
 
+  private val shapedText = ShapedTextCache()
+  private val advances   = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText)
+
   given Balance = Balance.default
 
   "TextOverlayRenderer" should "highlight selected segments in plain breadcrumb rows" in {
@@ -46,7 +49,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics, advances)
 
     surface.getRow(1) should include("UI Presets > Edit Preset: Writing > Fonts")
     surface.getBg(1, 1) shouldBe Theme.light.highlighted.background
@@ -83,7 +86,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics, advances)
 
     val firstRow  = surface.getRow(1)
     val secondRow = surface.getRow(2)
@@ -102,7 +105,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       rows = List(OverlayRow(plainText = "ABCD"))
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics, advances)
 
     surface.getRow(2).slice(3, 7) shouldBe "ABCD"
     surface.getRow(1) should not include "ABCD"
@@ -148,7 +151,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics, advances)
 
     surface.getRow(2).slice(3, 7) shouldBe "L  V"
     surface.getRow(2).charAt(7) shouldBe ' '
@@ -170,7 +173,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics, advances)
 
     surface.getRow(2).slice(3, 6) shouldBe "L H"
     surface.getRow(2).charAt(6) shouldBe ' '
@@ -196,7 +199,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics, advances)
 
     val contentWidth = overlay.rect.width - 2
     val valueWidth   = math.min(18, math.max(8, contentWidth / 4))
@@ -218,7 +221,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       footer = Some(OverlayRow("1/1"))
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics, advances)
 
     surface.getRow(1) should include("header")
     surface.getRow(2) should include("one item")
@@ -238,7 +241,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       footer = Some(OverlayRow("1/1"))
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics, advances)
 
     surface.getRow(1) should include("header")
     surface.getRow(2) should include("one item")
@@ -268,7 +271,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics, advances)
 
     val renderedRow = surface.getRow(1)
     renderedRow should include("Extre")
@@ -293,7 +296,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics, advances)
 
     surface.setFontCalls.map(_.getFamily) should contain(Font.SERIF)
     surface.setFontCalls.last.getFamily shouldBe font.getFamily
@@ -321,7 +324,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics, advances)
 
     surface.putStringCalls.map(_.s) should contain("\ue238")
     surface.putStringCalls.map(_.s) should contain("Bold")
@@ -353,7 +356,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     )
     val overlay = TextOverlayView(rect = LayoutRect(0, 0, 20, 4), composition = Some(composition))
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics, advances)
 
     val row = surface.getRow(1)
     row.slice(1, 3) shouldBe "Ax"
@@ -376,7 +379,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       rows = List(OverlayRow(plainText = "plain row"))
     )
 
-    TextOverlayRenderer.render(surface, overlay, theme, AppConfig.default, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, theme, AppConfig.default, cursorVisible = false, font, metrics, advances)
 
     surface.getFg(1, 1) shouldBe theme.panel.foreground
     surface.getBg(1, 1) shouldBe theme.panel.background
@@ -393,7 +396,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       surfaceId = Some(com.serenity.state.models.UiSurface.StatusLineSurfaceId)
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics, advances)
 
     val bg = surface.getBg(1, 1)
     bg.red shouldBe Theme.light.panel.background.red
@@ -412,7 +415,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       surfaceId = Some(com.serenity.state.models.UiSurface.StatusLineSurfaceId)
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics, advances)
 
     surface.getBg(1, 1) shouldBe Theme.light.panel.background
   }
@@ -428,7 +431,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       surfaceId = Some(com.serenity.state.models.SurfaceId("some-other-surface"))
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics, advances)
 
     surface.getBg(1, 1) shouldBe Theme.light.panel.background
   }
@@ -449,7 +452,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       surfaceId = Some(com.serenity.state.models.UiSurface.StatusLineSurfaceId)
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics, advances)
 
     surface.getFg(1, 1) shouldBe RenderColor.fromAwt(foreground)
     surface.getBg(1, 1) shouldBe RenderColor.fromAwt(background)
@@ -465,7 +468,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       surfaceId = Some(com.serenity.state.models.UiSurface.StatusLineSurfaceId)
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics, advances)
 
     surface.getFg(1, 1) shouldBe Theme.light.panel.foreground
     surface.getBg(1, 1) shouldBe Theme.light.panel.background
@@ -484,7 +487,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       surfaceId = Some(com.serenity.state.models.SurfaceId("some-other-surface"))
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics, advances)
 
     surface.getFg(1, 1) shouldBe Theme.light.panel.foreground
     surface.getBg(1, 1) shouldBe Theme.light.panel.background
@@ -507,7 +510,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     )
     val overlay = TextOverlayView(rect = LayoutRect(0, 0, 20, 3), composition = Some(composition))
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics, advances)
 
     // Tab 0 ("one") is centered in its 8-column cell at [0,8): (8-3)/2 = 2 columns of left padding, so "one" lands
     // at [2,5). The separator glyph sits at column 8 (the end of that cell), then tab 1's cell starts at column 10

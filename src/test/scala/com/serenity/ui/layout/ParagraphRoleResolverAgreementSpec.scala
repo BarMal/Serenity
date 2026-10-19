@@ -11,6 +11,7 @@ import com.serenity.ui.renderer.DropCapRenderer
 import com.serenity.ui.theme.RichTextStyling
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** Every site that reads a paragraph's role asks the one resolver, so a role only the resolver knows about (here, body
   * text that it declares a drop cap) is laid out, painted, spanned and dirty-tracked as that role everywhere.
@@ -75,7 +76,8 @@ class ParagraphRoleResolverAgreementSpec extends AnyFlatSpec with Matchers:
       context(bodyAsCap),
       lineIndex = 0,
       lineLength = prose.length,
-      lineText = prose
+      lineText = prose,
+      shapedText = ShapedTextCache()
     )
 
     inputs.paragraphRole shouldBe ParagraphRole.dropCap(3)

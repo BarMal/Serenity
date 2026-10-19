@@ -56,7 +56,8 @@ private[perf] object RenderBenchmarks:
     val longMeasuredLine = TextLayoutSnapshot.visualLineForText(
       "Wi" * 8_000,
       bufferLine = 0,
-      textFont
+      textFont,
+      renderCaches.shapedText
     )
     val richState        = editorStateForRichDocument(largeRichTextDocument(lines = 6_000))
     val multilineState   = editorState(largeMultilineDocument(lines = 15_000), None)

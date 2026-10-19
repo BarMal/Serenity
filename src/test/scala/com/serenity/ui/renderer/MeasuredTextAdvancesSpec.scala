@@ -12,16 +12,16 @@ class MeasuredTextAdvancesSpec extends AnyFlatSpec with Matchers:
   private val frc  = TextLayoutSnapshot.defaultFontRenderContext()
 
   "MeasuredTextAdvances.advanceOf" should "match the last caret stop of the text" in {
-    val advances = MeasuredTextAdvances(16)
+    val advances = MeasuredTextAdvances(16, ShapedTextCache())
 
     List("", "a", "Open file...", "wide  gaps\tand tabs").foreach { text =>
       advances.advanceOf(text, font, frc) shouldBe
-        TextLayoutSnapshot.caretXsForText(text, font, frc).lastOption.getOrElse(0.0f)
+        TextLayoutSnapshot.caretXsForText(text, font, ShapedTextCache(), frc).lastOption.getOrElse(0.0f)
     }
   }
 
   it should "measure a repeated text only once" in {
-    val advances = MeasuredTextAdvances(16)
+    val advances = MeasuredTextAdvances(16, ShapedTextCache())
 
     val first = advances.advanceOf("Open file...", font, frc)
     val again = advances.advanceOf("Open file...", font, frc)
@@ -31,7 +31,7 @@ class MeasuredTextAdvancesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "measure again for a different text or font" in {
-    val advances = MeasuredTextAdvances(16)
+    val advances = MeasuredTextAdvances(16, ShapedTextCache())
     val _        = advances.advanceOf("Open file...", font, frc)
 
     advances.advanceOf("Open files...", font, frc)
@@ -41,7 +41,7 @@ class MeasuredTextAdvancesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "forget the oldest advances beyond its capacity" in {
-    val advances = MeasuredTextAdvances(2)
+    val advances = MeasuredTextAdvances(2, ShapedTextCache())
 
     List("one", "two", "three").foreach(advances.advanceOf(_, font, frc))
     advances.advanceOf("three", font, frc)

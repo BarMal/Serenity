@@ -59,8 +59,3 @@ object LabelSprites:
   final case class Sprite(image: BufferedImage, originX: Int, baseline: Int)
 
   val DefaultCapacity: Int = 256
-
-  /** Shared by every surface that is not handed its own: a sprite is a pure function of its key, so surfaces can reuse
-    * one another's.
-    */
-  val shared: LabelSprites = new LabelSprites(DefaultCapacity)

@@ -15,6 +15,9 @@ import org.scalatest.matchers.should.Matchers
   */
 class TextOverlayRendererTextInsetSpec extends AnyFlatSpec with Matchers:
 
+  private val shapedText = ShapedTextCache()
+  private val advances   = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText)
+
   private val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val metrics = CellMetrics(charWidth = 8, lineHeight = 20, ascent = 15)
 
@@ -23,7 +26,7 @@ class TextOverlayRendererTextInsetSpec extends AnyFlatSpec with Matchers:
 
   private def renderRowOverlay(config: AppConfig, surface: MockRenderSurface): Unit =
     val overlay = TextOverlayView(rect = LayoutRect(0, 0, 12, 3), rows = List(OverlayRow("row")))
-    TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics, advances)
 
   "An overlay row" should "inset its glyphs from the surface border by a sub-cell amount" in {
     val surface = new MockRenderSurface(40, 8)
@@ -57,7 +60,7 @@ class TextOverlayRendererTextInsetSpec extends AnyFlatSpec with Matchers:
       rows = List(OverlayRow("row", selected = true)),
       itemGapRows = 1.0
     )
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics, advances)
 
     val contentLeftPx = metrics.toPixelX(1)
     withClue("a selection fill starting right of the content rect would leave an unpainted notch: ") {

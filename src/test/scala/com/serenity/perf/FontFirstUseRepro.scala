@@ -17,6 +17,9 @@ import com.serenity.ui.renderer.{ShapedStretch, ShapedTextCache, StyledFontCache
   */
 object FontFirstUseRepro:
 
+  private val shapedText  = ShapedTextCache()
+  private val styledFonts = StyledFontCache()
+
   private val Texts = Vector(
     "Hoxi AVATAR To Wa Yo",
     "office fi fl ffi affluent waffle",
@@ -55,14 +58,14 @@ object FontFirstUseRepro:
 
   private def cachedValues(font: Font, frc: FontRenderContext): Unit =
     Texts.foreach { text =>
-      val _ = ShapedTextCache.shared.stretchOf(text, font, frc)
+      val _ = shapedText.stretchOf(text, font, frc)
     }
     val _ = FontLineExtents.shared(FontLineExtents.Key(font, frc))
-    val _ = StyledFontCache.shared.underlineOf(font)
+    val _ = styledFonts.underlineOf(font)
     val _ = DropCapLayout.glyphWidthPx(font, frc, "A")
     val _ = GlyphAdvances.layoutAdvanceMatchesSum(font, frc)
     val _ = GlyphAdvances.advancesAreUniform(font, frc)
-    Texts.foreach(text => measure(text, font, frc, ShapedTextCache.shared))
+    Texts.foreach(text => measure(text, font, frc, shapedText))
 
   private def measure(text: String, font: Font, frc: FontRenderContext, shaped: ShapedTextCache): GlyphAdvances =
     GlyphAdvances.measure(text, 0, text.length, 0, LineFontResolver(font, Vector.empty), frc, shaped)
@@ -80,10 +83,10 @@ object FontFirstUseRepro:
     */
   private def settledDigest(font: Font, frc: FontRenderContext): String =
     val beliefs = Texts.map { text =>
-      stretchDigest(ShapedTextCache.shared.stretchOf(text, font, frc)) +
-        advancesDigest(measure(text, font, frc, ShapedTextCache.shared))
+      stretchDigest(shapedText.stretchOf(text, font, frc)) +
+        advancesDigest(measure(text, font, frc, shapedText))
     } :+ FontLineExtents.shared(FontLineExtents.Key(font, frc)).toString :+
-      StyledFontCache.shared.underlineOf(font).toString :+
+      styledFonts.underlineOf(font).toString :+
       DropCapLayout.glyphWidthPx(font, frc, "A").toString :+
       GlyphAdvances.layoutAdvanceMatchesSum(font, frc).toString :+ GlyphAdvances.advancesAreUniform(font, frc).toString
     Integer.toHexString(beliefs.mkString("\n").hashCode)
@@ -91,7 +94,7 @@ object FontFirstUseRepro:
   private def disagreements(font: Font, frc: FontRenderContext): Vector[String] =
     val shapes = Texts
       .filter { text =>
-        stretchDigest(ShapedTextCache.shared.stretchOf(text, font, frc)) != stretchDigest(
+        stretchDigest(shapedText.stretchOf(text, font, frc)) != stretchDigest(
           ShapedStretch.shape(text, font, frc)
         )
       }
@@ -106,14 +109,14 @@ object FontFirstUseRepro:
       Option.when(FontLineExtents.shared(FontLineExtents.Key(font, frc)) != settled)("line-extents")
     val underline =
       val metrics = font.getLineMetrics("", FontRenderContext(AffineTransform(), true, true))
-      Option.when(StyledFontCache.shared.underlineOf(font) != StyledFontCache.Underline.of(metrics))("underline")
+      Option.when(styledFonts.underlineOf(font) != StyledFontCache.Underline.of(metrics))("underline")
     val dropCap =
       Option.when(DropCapLayout.glyphWidthPx(font, frc, "A") != font.getStringBounds("A", frc).getWidth.toFloat)(
         "drop-cap-width"
       )
     val advances = Texts
       .filter { text =>
-        advancesDigest(measure(text, font, frc, ShapedTextCache.shared)) !=
+        advancesDigest(measure(text, font, frc, shapedText)) !=
           advancesDigest(measure(text, font, frc, new ShapedTextCache()))
       }
       .map(_ => "advances")

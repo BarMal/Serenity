@@ -10,7 +10,7 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
-import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoints, SurfaceTextCaches}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -90,7 +90,7 @@ class Java2DFrameImageTypeSpec extends AnyFlatSpec with Matchers:
 
   "Java2DRenderSurface.forFrame" should "draw into an RGB image" in {
     val flushed = new AtomicReference[Option[BufferedImage]](None)
-    Java2DRenderSurface.forFrame(metrics, font, canvas, image => flushed.set(Some(image))).flush()
+    Java2DRenderSurface.forFrame(metrics, font, canvas, image => flushed.set(Some(image)), SurfaceTextCaches.fresh()).flush()
     flushed.get().map(_.getType) shouldBe Some(BufferedImage.TYPE_INT_RGB)
   }
 

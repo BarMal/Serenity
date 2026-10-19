@@ -31,9 +31,9 @@ class Java2DRenderSurface(
     contentPersists: Boolean = false,
     layerCacheOwnerOverride: Option[ScreenIdentity] = None,
     imageOriginPx: DeviceOrigin = DeviceOrigin.Zero,
-    labelSprites: LabelSprites = LabelSprites.shared,
-    styledFonts: StyledFontCache = StyledFontCache.shared,
-    shapedText: ShapedTextCache = ShapedTextCache.shared,
+    labelSprites: LabelSprites = LabelSprites(LabelSprites.DefaultCapacity),
+    styledFonts: StyledFontCache = StyledFontCache(),
+    shapedText: ShapedTextCache = ShapedTextCache(),
     override val activity: SurfaceActivity = SurfaceActivity()
 ) extends RenderSurface
     with TextDrawing
@@ -86,6 +86,7 @@ class Java2DRenderSurface(
       deviceScaleX,
       deviceScaleY,
       image => onFlush(RenderImage.fromAwt(image)),
+      SurfaceTextCaches(labelSprites, styledFonts, shapedText),
       recycled = recycled.map(_.toAwt),
       activity = activity,
       bounds = bounds
@@ -479,7 +480,8 @@ object Java2DRenderSurface:
     metrics: CellMetrics,
     font: Font,
     canvas: javax.swing.JPanel,
-    onFlush: BufferedImage => Unit
+    onFlush: BufferedImage => Unit,
+    textCaches: SurfaceTextCaches
   ): Java2DRenderSurface =
     forFrame(
       metrics,
@@ -487,6 +489,7 @@ object Java2DRenderSurface:
       canvas,
       onFlush,
       (width, height, imageType) => new BufferedImage(width, height, imageType),
+      textCaches,
       contentPersists = false
     )
 
@@ -507,6 +510,7 @@ object Java2DRenderSurface:
     canvas: javax.swing.JPanel,
     onFlush: BufferedImage => Unit,
     acquireImage: (Int, Int, Int) => BufferedImage,
+    textCaches: SurfaceTextCaches,
     contentPersists: Boolean = true
   ): Java2DRenderSurface =
     val logicalWidth  = logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
@@ -527,7 +531,10 @@ object Java2DRenderSurface:
       deviceScaleX = scale.x,
       deviceScaleY = scale.y,
       contentPersists = contentPersists,
-      layerCacheOwnerOverride = Some(ScreenIdentity(canvas))
+      layerCacheOwnerOverride = Some(ScreenIdentity(canvas)),
+      labelSprites = textCaches.labelSprites,
+      styledFonts = textCaches.styledFonts,
+      shapedText = textCaches.shapedText
     )
 
   def forImage(
@@ -535,7 +542,8 @@ object Java2DRenderSurface:
     metrics: CellMetrics,
     font: Font,
     canvas: javax.swing.JPanel,
-    onFlush: BufferedImage => Unit
+    onFlush: BufferedImage => Unit,
+    textCaches: SurfaceTextCaches
   ): Java2DRenderSurface =
     val logicalWidth  = logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
     val logicalHeight = logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
@@ -548,7 +556,10 @@ object Java2DRenderSurface:
       logicalWidthPx = logicalWidth,
       logicalHeightPx = logicalHeight,
       deviceScaleX = scale.x,
-      deviceScaleY = scale.y
+      deviceScaleY = scale.y,
+      labelSprites = textCaches.labelSprites,
+      styledFonts = textCaches.styledFonts,
+      shapedText = textCaches.shapedText
     )
 
   /** Build a layer surface from numbers alone -- no `JPanel` required, unlike [[forFrame]]/[[forImage]]. Stage 1 of
@@ -566,6 +577,7 @@ object Java2DRenderSurface:
     deviceScaleX: Double,
     deviceScaleY: Double,
     onFlush: BufferedImage => Unit,
+    textCaches: SurfaceTextCaches,
     recycled: Option[BufferedImage] = None,
     activity: SurfaceActivity = SurfaceActivity(),
     bounds: Option[PixelRect] = None
@@ -578,6 +590,7 @@ object Java2DRenderSurface:
       deviceScaleX,
       deviceScaleY,
       onFlush,
+      textCaches,
       recycled,
       activity,
       bounds

@@ -9,6 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** How a buffer's markdown view mode and caret reach the layout: which lines hide their markers, and that every row
   * count and snapshot of the buffer agrees on it.
@@ -21,7 +22,7 @@ class MarkdownInlineBufferLayoutSpec extends AnyFlatSpec with Matchers:
   private val serif     = Font(Font.SERIF, Font.PLAIN, 16)
   private val boldSerif = serif.deriveFont(Font.BOLD)
 
-  private def advance(text: String, font: Font): Float = TextLayoutSnapshot.caretXsForText(text, font, frc).last
+  private def advance(text: String, font: Font): Float = TextLayoutSnapshot.caretXsForText(text, font, ShapedTextCache(), frc).last
 
   private val wrapsOnlyWithMarkers =
     (advance("aaaa ", serif) + advance("bbbb", boldSerif) + 3.0f).toInt

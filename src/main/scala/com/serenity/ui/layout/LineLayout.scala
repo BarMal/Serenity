@@ -6,6 +6,7 @@ import java.awt.font.FontRenderContext
 import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.ParagraphRole
 import com.serenity.state.models.TextVisualLine
+import com.serenity.ui.renderer.ShapedTextCache
 import com.serenity.ui.layout.TextCaretMeasurement.{
   LineFontResolver,
   markdownResolver,
@@ -38,7 +39,8 @@ private[layout] object LineLayout:
   ): Vector[TextVisualLine] =
     // A slice of a line cannot be scanned for the markup that opened before it.
     val lineText = if baseColumn == 0 then text else ""
-    val inputs   = lineLayoutInputs(font, frc, measuredLayout, richText, bufferLine, lineLength, lineText)
+    val inputs =
+      lineLayoutInputs(font, frc, measuredLayout, richText, bufferLine, lineLength, lineText, wrapCache.shapedText)
     TextLayoutSnapshot.wrapLogicalLine(
       text,
       bufferLine,
@@ -73,7 +75,16 @@ private[layout] object LineLayout:
     if maxVisualLines <= 0 then Vector.empty
     else
       val inputs =
-        LineLayout.lineLayoutInputs(font, frc, measuredLayout, richText, lineIndex, rawLine.length, rawLine)
+        LineLayout.lineLayoutInputs(
+          font,
+          frc,
+          measuredLayout,
+          richText,
+          lineIndex,
+          rawLine.length,
+          rawLine,
+          wrapCache.shapedText
+        )
       val wrapped = TextLayoutSnapshot.wrapLogicalLine(
         rawLine,
         lineIndex,
@@ -122,7 +133,8 @@ private[layout] object LineLayout:
     richText: RichTextContext,
     lineIndex: Int,
     lineLength: Int,
-    lineText: String
+    lineText: String,
+    shapedText: ShapedTextCache
   ): LineLayoutInputs =
     val markdownRuns =
       if measuredLayout && richText.markdown.isActive then Some(richText.markdown.runsOn(lineIndex, lineText))
@@ -140,7 +152,7 @@ private[layout] object LineLayout:
             richText.headings,
             richText.roles
           )
-        )(markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText, _))
+        )(markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText, shapedText, _))
     val paragraphRole = richText.layoutRole(lineIndex)
     val dropCap =
       if measuredLayout then
@@ -170,6 +182,7 @@ private[layout] object LineLayout:
     lineIndex: Int,
     lineLength: Int,
     lineText: String,
+    shapedText: ShapedTextCache,
     runs: Vector[MarkdownInlineSpans.Run]
   ): LineFontResolver =
     if runs.isEmpty then
@@ -191,4 +204,6 @@ private[layout] object LineLayout:
         richText.markdown.baseIsMonospaced,
         richText.headings
       )
-      richText.markdown.columnsOn(lineIndex).fold(resolver)(MarkdownTableMetrics.padded(lineText, resolver, _, frc))
+      richText.markdown
+        .columnsOn(lineIndex)
+        .fold(resolver)(MarkdownTableMetrics.padded(lineText, resolver, _, frc, shapedText))

@@ -7,6 +7,7 @@ import com.serenity.state.models.TextVisualLine
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** A slanted face whose `TextLayout` advance includes the slant overhang (a synthesised italic, as macOS draws for a
   * family with no italic face) must be measured like the per-row `TextLayout` oracle ([[LegacyLineMeasurement]]): the
@@ -35,15 +36,15 @@ class SlantedFontMeasurementSpec extends AnyFlatSpec with Matchers:
     )
 
   "A slanted font" should "have no context-free characters, since its layout advance differs from summed advances" in {
-    val advances = GlyphAdvances.measure(prose, 0, prose.length, 0, singleFontResolver(slanted), frc)
+    val advances = GlyphAdvances.measure(prose, 0, prose.length, 0, singleFontResolver(slanted), frc, ShapedTextCache())
     advances.isContextFree(0, 1) shouldBe false
-    val plain = GlyphAdvances.measure(prose, 0, prose.length, 0, singleFontResolver(upright), frc)
+    val plain = GlyphAdvances.measure(prose, 0, prose.length, 0, singleFontResolver(upright), frc, ShapedTextCache())
     plain.isContextFree(0, prose.length) shouldBe true
   }
 
   it should "not be treated as cutting cleanly at any space" in {
-    ShapingBarriers.cutsCleanly(upright, frc, 'T') shouldBe true
-    ShapingBarriers.cutsCleanly(slanted, frc, 'T') shouldBe false
+    ShapingBarriers.cutsCleanly(upright, frc, 'T', ShapedTextCache()) shouldBe true
+    ShapingBarriers.cutsCleanly(slanted, frc, 'T', ShapedTextCache()) shouldBe false
   }
 
   it should "wrap exactly where per-row measurement did, with the same widths and carets" in
@@ -66,7 +67,7 @@ class SlantedFontMeasurementSpec extends AnyFlatSpec with Matchers:
     }
 
   it should "measure caret positions as per-row measurement did" in {
-    val xs = TextLayoutSnapshot.caretXsForText(prose, slanted, frc)
+    val xs = TextLayoutSnapshot.caretXsForText(prose, slanted, ShapedTextCache(), frc)
     val legacy =
       LegacyLineMeasurement.caretXs(prose, 0, singleFontResolver(slanted), frc, true, CellMetrics.fromFont(slanted))
     xs.length shouldBe legacy.length
