@@ -1,5 +1,6 @@
 package com.serenity.io
 
+import java.io.File
 import java.nio.charset.StandardCharsets.ISO_8859_1
 import java.nio.file.{Files, Path}
 
@@ -10,7 +11,9 @@ import scala.util.Try
   * The JDK's GTK file dialog creates a `GtkFileChooserDialog`, and GTK then reads that schema. GLib has no recoverable
   * error for a missing one: `g_settings_new` aborts the whole process (`GLib-GIO-ERROR`, SIGABRT), so the JVM cannot
   * catch it and has to know beforehand. GLib looks in `GSETTINGS_SCHEMA_DIR`, then `$XDG_DATA_HOME` and
-  * `$XDG_DATA_DIRS`, each under `glib-2.0/schemas/gschemas.compiled`.
+  * `$XDG_DATA_DIRS`, each under `glib-2.0/schemas/gschemas.compiled`. The variables are search paths, split on the
+  * platform's separator as GLib does: a colon on Linux, a semicolon on Windows, where a colon belongs to a drive
+  * letter.
   *
   * The probe errs towards "not installed": a false negative costs a Swing dialog, a false positive costs the process.
   * It looks for the schema id's text in the compiled file rather than parsing GVDB, and does not know of directories
@@ -27,12 +30,16 @@ object GtkFileChooserSchema:
   lazy val installedForThisProcess: Boolean =
     isInstalled(sys.env, Path.of(System.getProperty("user.home", "")))
 
-  def isInstalled(env: Map[String, String], userHome: Path): Boolean =
-    searchDirectories(env, userHome).exists(directory => declaresSchema(directory.resolve(CompiledFileName)))
+  def isInstalled(env: Map[String, String], userHome: Path, separator: Char = File.pathSeparatorChar): Boolean =
+    searchDirectories(env, userHome, separator).exists(directory => declaresSchema(directory.resolve(CompiledFileName)))
 
-  def searchDirectories(env: Map[String, String], userHome: Path): List[Path] =
+  def searchDirectories(
+    env: Map[String, String],
+    userHome: Path,
+    separator: Char = File.pathSeparatorChar
+  ): List[Path] =
     def value(name: String): Option[String] = env.get(name).map(_.trim).filter(_.nonEmpty)
-    def entries(text: String): List[Path]   = text.split(':').toList.filter(_.nonEmpty).map(Path.of(_))
+    def entries(text: String): List[Path]   = text.split(separator).toList.filter(_.nonEmpty).map(Path.of(_))
 
     val explicit = value("GSETTINGS_SCHEMA_DIR").toList.flatMap(entries)
     val userData = value("XDG_DATA_HOME").map(Path.of(_)).getOrElse(userHome.resolve(".local").resolve("share"))

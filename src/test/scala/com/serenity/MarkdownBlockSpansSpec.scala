@@ -13,21 +13,22 @@ class MarkdownBlockSpansSpec extends AnyFlatSpec with Matchers:
   private val quoted = plain.copy(italic = true)
   private val dimmed = plain.copy(muted = true)
 
-  private def heading(level: Int) = plain.copy(bold = true, scale = MarkdownBlockSpans.headingScale(level))
+  private def heading(level: Int) = plain.copy(headingLevel = level)
 
   private def marker(start: Int, end: Int): Run                = Run(start, end, plain, isMarker = true)
   private def content(start: Int, end: Int, style: Style): Run = Run(start, end, style, isMarker = false)
 
-  "A heading" should "hide its hashes and set the text in a larger bold face" in {
+  "A heading" should "hide its hashes and mark the text with its level" in {
     MarkdownBlockSpans.scan("# Title") shouldBe Vector(marker(0, 2), content(2, 7, heading(1)))
     MarkdownBlockSpans.scan("### Third") shouldBe Vector(marker(0, 4), content(4, 9, heading(3)))
   }
 
-  it should "scale by level, largest first" in {
-    val scales = (1 to 5).map(MarkdownBlockSpans.headingScale)
-    scales shouldBe scales.sorted.reverse
-    MarkdownBlockSpans.headingScale(1) should be > 1.0f
-  }
+  it should "carry the level of every ATX heading, one to six, and no style of its own" in
+    (1 to 6).foreach { level =>
+      val runs = MarkdownBlockSpans.scan(s"${"#" * level} Title")
+      runs.map(_.style.headingLevel) shouldBe Vector(0, level)
+      runs.last.style.bold shouldBe false
+    }
 
   it should "hide a closing run of hashes too" in {
     MarkdownBlockSpans.scan("## Two ##") shouldBe Vector(marker(0, 3), content(3, 6, heading(2)), marker(6, 9))

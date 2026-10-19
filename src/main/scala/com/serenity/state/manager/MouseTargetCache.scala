@@ -5,7 +5,7 @@ import java.util.LinkedHashMap
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 
 import com.serenity.config.AppConfigOps.*
-import com.serenity.config.{InterfaceDensity, StatusLineConfig, TextAreaInsets}
+import com.serenity.config.{InterfaceDensity, LineNumberLayout, StatusLineConfig, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkerMode
 import com.serenity.richtext.RichTextDocument
@@ -14,6 +14,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
+import com.serenity.ui.openings.OpeningSettings
+import com.serenity.ui.theme.HeadingSettings
 
 final private[manager] case class RopeIdentity private (value: Rope):
 
@@ -108,7 +110,21 @@ final private[manager] case class MouseTargetLayoutKey(
     modalStack: List[ModalDialog],
     derivedStatusLineSurface: Option[UiSurface],
     pinnedPanels: List[(SurfaceId, PanelPosition, Int)],
-    lineNumberContent: List[(BufferId, RopeIdentity)]
+    lineNumberContent: List[(BufferId, RopeIdentity)],
+    // Heading sizes set a heading row's height and its alignment its offset; the config reference alone is not a field
+    // of the key, so without this a heading change would be served the old scene.
+    headings: HeadingSettings,
+    // Like `headings`, each of these reaches layout through `persisted.config` without being a field of the key.
+    dropCapsEnabled: Boolean,
+    // The room beside a drop cap's glyph moves every row that wraps beside it. The glyph's colour only repaints, so it
+    // is not part of the key.
+    dropCapGapEm: Float,
+    lineNumberLayout: LineNumberLayout,
+    // Per pane, since a buffer can override the configured indentation; a tab's width sets where a row wraps.
+    paneTabSizes: List[(PaneId, Option[Int])],
+    // Per pane, like the tab size: a buffer can override the configured openings, and while they are off nothing else
+    // about them reaches layout (`OpeningSettings.layoutForm`).
+    paneOpenings: List[(PaneId, Option[OpeningSettings])]
 )
 
 private[manager] object MouseTargetLayoutKey:
@@ -139,6 +155,9 @@ private[manager] object MouseTargetLayoutKey:
       runtime.modalStack,
       // Read by `effectiveUiElementGap`, and by the status line text through `editingContext`.
       runtime.capabilities,
+      // `compute` reads `state.chrome`, which is the config overlaid with these. `chrome` is a lazy val rebuilt per state,
+      // so it cannot stand in as a reference.
+      runtime.summons,
       // `pinnedPanels` sizes docked panels from the state's own viewport, not the one passed in.
       runtime.viewportSize,
       // `floatingStatusLineSurface` is hidden while typing.
@@ -224,7 +243,25 @@ private[manager] object MouseTargetLayoutKey:
           state.persisted.buffers.toList
             .sortBy(_._1.value)
             .map((bufferId, buffer) => bufferId -> RopeIdentity(buffer.document.content))
-        else Nil
+        else Nil,
+      headings = state.effectiveHeadingSettings,
+      dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
+      dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+      lineNumberLayout = state.persisted.config.surfaceConfig.lineNumberLayout.normalized,
+      paneTabSizes = state.persisted.layout.orderedPaneIds.map { paneId =>
+        paneId -> state.persisted.layout.editorPanes
+          .get(paneId)
+          .flatMap(_.bufferId)
+          .flatMap(state.persisted.buffers.get)
+          .map(_.effectiveIndentation(state.persisted.config.indentation).tabSize)
+      },
+      paneOpenings = state.persisted.layout.orderedPaneIds.map { paneId =>
+        paneId -> state.persisted.layout.editorPanes
+          .get(paneId)
+          .flatMap(_.bufferId)
+          .flatMap(state.persisted.buffers.get)
+          .map(_.effectiveOpenings(state.persisted.config.openingsConfig).layoutForm)
+      }
     )
 
 /** Instance-scoped (issue #1677) single-slot memo of the last [[MouseTargetLayoutKey]] computed, held as a

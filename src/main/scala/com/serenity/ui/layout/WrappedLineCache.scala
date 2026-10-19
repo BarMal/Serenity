@@ -9,11 +9,12 @@ import scala.jdk.CollectionConverters.*
 
 import com.serenity.markdown.MarkdownBlockLens.BlockIndex
 import com.serenity.markdown.{LazyBlockIndex, TableColumns}
-import com.serenity.richtext.ParagraphRole
+import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.rope.{Balance, Rope, RopeDiff}
 import com.serenity.state.models.{BufferId, MeasuredRow}
 import com.serenity.ui.fonts.{FallbackCoverages, FontFallback, Java2DGlyphCoverage}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
+import com.serenity.ui.openings.{OpeningLines, OpeningRules, OpeningSettings, VirtualDropCaps}
 
 /** Memoises [[TextLayoutSnapshot]]'s wrap-and-measure of one logical line -- the AWT `TextLayout` work that otherwise
   * dominates every keystroke on word-wrapped prose, and that the state-update path and the render path each repeat for
@@ -41,6 +42,17 @@ sealed abstract class WrappedLineCache:
     revision: Option[ContentRevision] = None
   ): VisualRowCounts
 
+  /** How many pixels the rows of each logical line stack to, in the same edit-following index as [[visualRowCounts]]:
+    * what column paging fills a column by.
+    */
+  private[layout] def bandHeights(
+    key: BandHeightKey,
+    content: Rope,
+    measure: Int => Int,
+    stamp: AnyRef,
+    revision: Option[ContentRevision] = None
+  ): VisualRowCounts
+
   /** The fenced code blocks, tables and setext headings of `content`, which a live Markdown preview restyles or leaves
     * unstyled. It reads the document only as far as it is asked about, and a cache keeps it for as long as the buffer's
     * content is the same rope; for an edited rope it resumes from the line the edit reached, found from `revision`'s
@@ -54,6 +66,12 @@ sealed abstract class WrappedLineCache:
   def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
     compute: => TableColumns
   ): TableColumns
+
+  /** The openings of `document` that `settings` set as drop caps. Finding them reads the whole document, so a cache
+    * keeps the openings of the documents it was last asked about: a layout asks about one document many times over
+    * before an edit makes the next.
+    */
+  def virtualDropCaps(document: RichTextDocument, settings: OpeningSettings): Option[VirtualDropCaps]
 
   /** What `primary` and the chain `fallback` describes cover. A cache keeps the answer, and the coverage memo inside
     * it, for the next line that asks; without one every call starts a fresh memo.
@@ -75,13 +93,13 @@ final private[layout] case class WrappedLineKey(
     cellMetrics: CellMetrics,
     baseColumn: Int,
     paragraphRole: ParagraphRole,
-    dropCapGlyphWidthPx: Float
+    dropCapIndentPx: Float
 ):
   // The text and fonts are hashed in full, and every map operation on a lookup rehashes the key.
   override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
 
   def shape: WrapShape =
-    WrapShape(panelWidthPx, resolver, frc, measuredLayout, cellMetrics, baseColumn, paragraphRole, dropCapGlyphWidthPx)
+    WrapShape(panelWidthPx, resolver, frc, measuredLayout, cellMetrics, baseColumn, paragraphRole, dropCapIndentPx)
 
 /** [[WrappedLineKey]] without its text: lines that share a shape wrap alike wherever their text agrees. */
 final private[layout] case class WrapShape(
@@ -92,7 +110,7 @@ final private[layout] case class WrapShape(
     cellMetrics: CellMetrics,
     baseColumn: Int,
     paragraphRole: ParagraphRole,
-    dropCapGlyphWidthPx: Float
+    dropCapIndentPx: Float
 )
 
 /** An earlier complete wrap of a line with the same [[WrapShape]], and what [[IncrementalWrap]] resumes from. */
@@ -101,6 +119,18 @@ final private[layout] case class Predecessor(
     rows: Vector[MeasuredRow],
     trace: WrapTrace
 )
+
+/** A document by identity: a new version of it is a new key whatever it compares equal to. */
+final private[layout] class IdentityKey(val document: RichTextDocument):
+
+  override def equals(other: Any): Boolean =
+    other match
+      case that: IdentityKey => document eq that.document
+      case _                 => false
+
+  override def hashCode(): Int = System.identityHashCode(document)
+
+final private[layout] case class ScannedOpenings(document: IdentityKey, rules: OpeningRules)
 
 /** What the cache has had to compute: wraps from scratch, wraps resumed from a predecessor, and the visual rows and
   * measured characters they cost.
@@ -113,6 +143,9 @@ object WrappedLineCache:
 
   /** How many buffers' fenced-block indexes are kept. */
   val MaxFenceIndexes = 16
+
+  /** How many documents' openings are kept. */
+  val MaxScannedDocuments = 8
 
   /** How many recent wraps per [[WrapShape]] a line may resume from. */
   val MaxRecentPerShape = 8
@@ -141,12 +174,24 @@ object WrappedLineCache:
     ): VisualRowCounts =
       VisualRowCounts.walking(content.lineCount, measure)
 
+    private[layout] def bandHeights(
+      key: BandHeightKey,
+      content: Rope,
+      measure: Int => Int,
+      stamp: AnyRef,
+      revision: Option[ContentRevision]
+    ): VisualRowCounts =
+      VisualRowCounts.walking(content.lineCount, measure)
+
     def fenceIndex(bufferId: BufferId, content: Rope, revision: Option[ContentRevision]): BlockIndex =
       LazyBlockIndex.of(content)
 
     def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
       compute: => TableColumns
     ): TableColumns = compute
+
+    def virtualDropCaps(document: RichTextDocument, settings: OpeningSettings): Option[VirtualDropCaps] =
+      VirtualDropCaps.of(settings, document)
 
   def bounded(maxLines: Int = DefaultMaxLines, maxChars: Long = DefaultMaxChars): Bounded =
     new Bounded(math.max(1, maxLines), math.max(1L, maxChars))
@@ -199,8 +244,10 @@ object WrappedLineCache:
     private val rowCount         = new AtomicLong(0L)
     private val measuredCount    = new AtomicLong(0L)
     private val visualRows       = new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries)
+    private val bandRows         = new VisualLineIndexStore[BandHeightKey](VisualLineIndexStore.DefaultMaxEntries)
     private val fences           = new LinkedHashMap[BufferId, FenceEntry](16, 0.75f, true)
     private val columns          = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
+    private val openings         = new LinkedHashMap[ScannedOpenings, OpeningLines](16, 0.75f, true)
     private val coverages        = FallbackCoverages(FallbackCoverages.DefaultCapacity)
 
     override def fallbackCoverage(primary: Font, fallback: FontFallback): Java2DGlyphCoverage =
@@ -241,6 +288,23 @@ object WrappedLineCache:
           }
           index
 
+    def virtualDropCaps(document: RichTextDocument, settings: OpeningSettings): Option[VirtualDropCaps] =
+      VirtualDropCaps.of(settings, document, openingsOf)
+
+    private def openingsOf(document: RichTextDocument, rules: OpeningRules): OpeningLines =
+      val key = ScannedOpenings(IdentityKey(document), rules)
+      synchronized(Option(openings.get(key))).getOrElse {
+        val scanned = VirtualDropCaps.scanning(document, rules)
+        synchronized {
+          val _ = openings.put(key, scanned)
+          if openings.size() > WrappedLineCache.MaxScannedDocuments then
+            val eldest = openings.keySet().iterator()
+            val _      = eldest.next()
+            eldest.remove()
+        }
+        scanned
+      }
+
     private def sameRope(a: Rope, b: Rope): Boolean = (a: AnyRef) eq (b: AnyRef)
 
     @annotation.tailrec
@@ -268,6 +332,15 @@ object WrappedLineCache:
       revision: Option[ContentRevision]
     ): VisualRowCounts =
       visualRows.counts(key, content, measure, stamp, revision)
+
+    private[layout] def bandHeights(
+      key: BandHeightKey,
+      content: Rope,
+      measure: Int => Int,
+      stamp: AnyRef,
+      revision: Option[ContentRevision]
+    ): VisualRowCounts =
+      bandRows.counts(key, content, measure, stamp, revision)
 
     private[layout] def wrapped(key: WrappedLineKey, maxVisualLines: Int)(
       cold: Int => RowWrap,

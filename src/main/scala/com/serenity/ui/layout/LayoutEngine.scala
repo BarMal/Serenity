@@ -119,6 +119,15 @@ object LayoutEngine:
 
   private[serenity] val chromeMemo = new ChromeLayoutMemo()
 
+  /** The wraps measured while locating a caret: the layout is a function of state alone, so it keeps its own cache
+    * rather than the scene's.
+    */
+  private val anchorWrappedLines = WrappedLineCache.bounded()
+
+  /** The panes of `calculatedLayout` with the text each lays out to, from which a floating surface finds its caret. */
+  def laidOutPanes(state: AppState, calculatedLayout: CalculatedLayout): LaidOutPanes =
+    LaidOutPanes(state, calculateEditorPaneLayouts(state, calculatedLayout), anchorWrappedLines)
+
   def calculateLayoutWithUI(
     state: AppState,
     viewportSize: ViewportSize,
@@ -314,21 +323,21 @@ object LayoutEngine:
       tabBarRect = tabBarRect
     )
 
-    val paneLayouts = calculateEditorPaneLayouts(state, baseLayout)
+    val panes = laidOutPanes(state, baseLayout)
 
     val aboveSurfaces = OverlayStackLayout.orderedAboveCursorSurfaces(state)
     val belowSurfaces = OverlayStackLayout.orderedBelowCursorSurfaces(state)
     val aboveLayout =
-      OverlayStackLayout.calculateAboveCursorOverlayStack(aboveSurfaces, state, paneLayouts)
+      OverlayStackLayout.calculateAboveCursorOverlayStack(aboveSurfaces, state, panes)
     val aboveCursorOverlayStack = aboveLayout.stack
-    val belowLayout             = OverlayStackLayout.calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
+    val belowLayout             = OverlayStackLayout.calculateBelowCursorOverlayStack(belowSurfaces, state, panes)
     val floatingOffsets = OverlayStackLayout.floatingOverlayOffsets(
       aboveSurfaces,
       aboveCursorOverlayStack,
       belowSurfaces,
       belowLayout.stack,
       state,
-      paneLayouts
+      panes
     )
 
     baseLayout.copy(
@@ -343,13 +352,10 @@ object LayoutEngine:
 
   /** Center a blocking dialog in the editor workspace without changing workspace allocation. */
   def calculateModalRect(dialog: ModalDialog, state: AppState, layout: CalculatedLayout): LayoutRect =
-    val bounds = layout.editorPanelRect
-    val width  = math.max(3, math.min(72, bounds.width))
-    val rawHeight = ModalSurfaceComposition.frameHeight(
-      dialog.modal,
-      SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
-    )
-    val height = math.max(3, math.min(bounds.height, rawHeight))
+    val bounds    = layout.editorPanelRect
+    val width     = math.max(3, math.min(72, bounds.width))
+    val rawHeight = ModalSurfaceComposition.frameHeightFor(dialog.modal, width, state)
+    val height    = math.max(3, math.min(bounds.height, rawHeight))
     LayoutRect(
       x = bounds.x + math.max(0, (bounds.width - width) / 2),
       y = bounds.y + math.max(0, (bounds.height - height) / 2),

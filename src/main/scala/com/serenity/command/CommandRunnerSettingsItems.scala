@@ -369,7 +369,7 @@ object CommandRunnerSettingsItems:
       hint = Some(hint)
     )
 
-  private def fontFamilyGroupItem(
+  private[command] def fontFamilyGroupItem(
     id: String,
     label: String,
     selectedIndex: Int,

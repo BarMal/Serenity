@@ -25,6 +25,12 @@ Scenarios cover:
 - `command_runner.*`: one keystroke and one arrow press in the command palette and the settings view, each measured as
   the reducer step plus the renderer's read of the result, against a 720-family font catalogue
 - visible animation tick advancement
+- `render.modal_wrap.*`: the frame height plus the composition of three representative dialogs (the layout-override
+  prompt, a long Confirm, a Save As file workflow) in a 72-cell frame, wrapped by cells against by the GUI font's pixels,
+  with a `nowrap` baseline and `cold_*` variants whose text the pixel measurements have not seen. Run alone with
+  `xvfb-run -a sbt "Test/runMain com.serenity.perf.ModalWrapBenchmarks"`. Wrapping by cells costs the same as not
+  wrapping; by pixels adds a few microseconds warm and about 1.7 ms on the first frame of a changed prompt, so the GUI
+  wraps by cells (`TextMeasure.forState`).
 - `laptop.*`: the editor at a real laptop's size (1500x1000 logical at 2x, word-wrapped lorem ipsum, default config):
   full frames with and without a Frosted pinned panel, keystrokes applied through a live `StateManager`, and Swing
   presenting into a 1500x1000 window. The window needs a screen at least that large, so run it with
@@ -47,7 +53,7 @@ Pass name prefixes to run only some scenarios, e.g. `sbt "Test/runMain com.seren
 
 The CSV ends with a `retained_bytes` column (header: `...,allocation_p50_bytes,allocation_p95_bytes,retained_bytes`). Older ten-column files still parse; a missing value is treated as absent.
 
-**Footprint (`footprint.*`)** is heap the app keeps resident. `FootprintBenchmarks` builds a real `AppState`, drops everything else, runs `System.gc()` until three consecutive used-heap readings agree (within 64 KiB), and records the growth over a baseline settled before the build, holding the state strongly reachable across the reading. One build is discarded to pay for static caches, and the median of three trials is reported. Scenarios: `empty_editor`, `plain_document_15k_lines`, `rich_document`, `after_1000_edits` (undo history), `ten_buffers`. Their timing columns are zero, so the latency gate ignores them. Run only these with `sbt "Test / runMain com.serenity.perf.FootprintBenchmarks"` or pass the `footprint.` prefix to `PerformanceBenchmarks`.
+**Footprint (`footprint.*`)** is heap the app keeps resident. `FootprintBenchmarks` builds a real `AppState`, drops everything else, runs `System.gc()` until three consecutive used-heap readings agree (within 64 KiB), and records the growth over a baseline settled before the build, holding the state strongly reachable across the reading. One build is discarded to pay for static caches, and the median of three trials is reported. Because of that discard, process-wide caches never show up in a `footprint.*` figure; see [Footprint rows and static caches](#footprint-rows-and-static-caches). Scenarios: `empty_editor`, `plain_document_15k_lines`, `rich_document`, `after_1000_edits` (undo history), `ten_buffers`, and the `prose_frame.*` rows that draw a frame so the caches have something to hold. Their timing columns are zero, so the latency gate ignores them. Run only these with `sbt "Test / runMain com.serenity.perf.FootprintBenchmarks"` or pass the `footprint.` prefix to `PerformanceBenchmarks`.
 
 **Allocation** (`allocation_p50_bytes`, `allocation_p95_bytes`) is bytes allocated per invocation, measured in a separate pass with `ThreadMXBean.getThreadAllocatedBytes`. Every benchmark whose name starts with `laptop.`, `render.` or `command_runner.` is tracked by prefix; others opt in through `AllocationTracked` in `BenchmarkRunner`.
 
@@ -59,6 +65,69 @@ The CSV ends with a `retained_bytes` column (header: `...,allocation_p50_bytes,a
 | `allocation_p50_bytes` | current > 1.5x baseline AND delta > 64 KiB | `::warning::` only; `--gate-allocation` makes it fail |
 
 Thresholds are `--retained-threshold`, `--min-retained-delta-bytes`, `--allocation-threshold` and `--min-allocation-delta-bytes`. A baseline without the columns is skipped with a `::notice::` instead of failing. `combine_perf_runs.py` carries the columns through and keeps the largest retained value for a baseline (`--pick slowest`) and the smallest for a head.
+
+## Cache-ownership scenarios
+
+These rows exist so a change that moves a process-wide cache into state a runtime owns can be measured before and after. Run them with `sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks layout.anchor_wrap. layout.cold_font. laptop.input.state_manager.two_runtimes. footprint."`.
+
+| Row | What it times | What a cache move should change |
+| --- | --- | --- |
+| `layout.anchor_wrap.warm_caret_lookup` | `LayoutEngine.laidOutPanes(...).screenPosition` for one unchanged state, which `LayoutEngine.anchorWrappedLines` answers after the first call | a lookup that no longer finds the cache a previous frame filled gets slower |
+| `layout.anchor_wrap.after_edit.caret_lookup` / `.reduce_only` | the same lookup after a typed letter, so the edited line's wrap misses; `reduce_only` is the typing alone, to subtract | the difference is the anchor wrap's miss cost |
+| `layout.cold_font.glyph_advances` / `shaping_barriers` / `font_line_extents` / `measured_layout_memo.{proportional,monospaced}` / `prose_column` | the first use of a font: each call gets a font (or `FontConfig`) whose size no earlier call used, so the probe behind `GlyphAdvances`, `ShapingBarriers`, `FontLineExtents`, `TextLayoutSnapshot.shouldUseMeasuredLayout` and `ProseColumn` runs cold | a cache a runtime owns is cold for every new runtime, so this is what each one pays on its first frame |
+| `layout.cold_font.text_layout_snapshot` | `TextLayoutSnapshot.fromBuffer` over a three-paragraph document in a font nothing has seen: every probe above at once | the end-to-end first-use cost |
+| `laptop.input.state_manager.two_runtimes.same_text` / `.different_text` | two live `StateManager`s in one process, each typing a letter per iteration. `same_text` types the same letter into both, so the second runtime's edited line is one the first just wrapped; `different_text` types a different letter, so nobody has wrapped it | `different_text - same_text` is what the runtimes save each other by sharing caches; owned caches shrink it to zero |
+
+Every `layout.anchor_wrap.*`, `layout.cold_font.*` and `laptop.*` row has allocation columns.
+
+One run of these rows on the cloud container that wrote them (shared CPU, Xvfb, so compare ratios, not absolute times):
+
+| Row | p50 ms | allocation p50 |
+| --- | ---: | ---: |
+| `layout.anchor_wrap.warm_caret_lookup` | 1.19 | 131 KiB |
+| `layout.anchor_wrap.after_edit.caret_lookup` / `.reduce_only` | 1.30 / 0.019 | 579 KiB / 9 KiB |
+| `layout.cold_font.glyph_advances` | 1.16 | 47 KiB |
+| `layout.cold_font.shaping_barriers` | 1.33 | 31 KiB |
+| `layout.cold_font.font_line_extents` | 0.40 | 14 KiB |
+| `layout.cold_font.measured_layout_memo.proportional` / `.monospaced` | 0.21 / 1.54 | 5 KiB / 53 KiB |
+| `layout.cold_font.prose_column` | 8.19 | 5.2 MiB |
+| `layout.cold_font.text_layout_snapshot` | 1.86 | 330 KiB |
+| `laptop.input.state_manager.two_runtimes.same_text` | 4.17 | 2.3 KiB |
+| `laptop.input.state_manager.two_runtimes.different_text` | 7.08 | 2.3 KiB |
+
+The last two rows show the sharing directly: when the second runtime types what the first just typed, the pair of keystrokes costs 2.9 ms less than when it types something of its own. The 2.3 KiB allocation is probably only the calling thread's share (the `StateManager`s do their work on other threads); that is inferred, not checked, so do not read it as the rows' total allocation.
+
+### Footprint rows and static caches
+
+`FootprintBenchmarks` discards its first build "to pay for static caches" and settles its baseline after it, so **a process-wide cache is invisible to every `footprint.*` row**. Moving a cache into owned state makes it reachable from the measured value, so `retained_bytes` rises by what the cache holds, with nothing else having changed. Three rows make that visible:
+
+* `footprint.prose_frame.stable_text`: a `RenderCaches` and an `AppState` after one laptop-sized frame of the prose fixture. Every build draws the same text, so process-wide caches hit and add nothing: any rise after a cache move is the moved cache's size.
+* `footprint.two_runtimes.prose_frame.stable_text`: two such runtimes over one document. Today they share the process-wide caches; once owned each holds its own copy, so this row should rise by about twice the cache's size where the single-runtime row rises by once.
+* `footprint.prose_frame.fresh_text`: the same frame over text no earlier build drew. Process-wide caches grow during the build, and that growth is counted whether the cache is static or owned, so this is the row to compare across a move: it should stay roughly level while `stable_text` rises. A bounded cache that is full evicts as it grows, so its fresh-text figure caps out at its bound.
+
+Measured on the build before any cache moves (three runs agree to within 1 KiB): `stable_text` 29.99 MB, `fresh_text` 30.02 MB and `two_runtimes` 59.97 MB. The process-wide caches therefore hold about 30 KB after this frame, 0.1% of the row, and the two runtimes already cost twice one because `RenderCaches` and the state are per runtime. What a move raises is small beside the state; what it changes is that the figure now depends on the move, which is why the rows are worth recording.
+
+An expected rise in the `stable_text` rows is not a regression to fix; record it in the PR. The footprint threshold below still applies to any row that is not explained that way.
+
+## ABBA protocol
+
+Use it for any change that moves a cache, a lock or an allocation off the hot path, where the CI gate (a 2x ratio) is too coarse to see the effect. A is the baseline build and B the candidate; build both with `bench-artifacts.yml` (`serenity-perf.jar`) from the merge base and the candidate head.
+
+```text
+bench/abba.sh <A serenity-perf.jar> <B serenity-perf.jar> <out-dir> [name-prefix...]
+```
+
+The script runs `PerformanceBenchmarks` eight times in the order **A B B A A B B A** (so drift falls on both builds alike), writes `a-1..4.csv` and `b-1..4.csv`, then runs `scripts/abba_compare.py`. Pass the prefixes of the rows the change touches plus `footprint.`; with none the whole suite runs, which takes much longer. `ABBA_JAVA_OPTS` adds JVM flags (for example `-Dsun.java2d.uiScale=2`). Keep the machine otherwise idle.
+
+A benchmark **blocks** the change when B is worse than A by:
+
+| Metric | Blocks when |
+| --- | --- |
+| time (`p50_ms`) | the four-run p50 ranges do not overlap (B's fastest run is slower than A's slowest), B's median is at least 5% slower, **and** at least 0.03 ms slower |
+| allocation (`allocation_p50_bytes`) | B's median is at least 5% **and** at least 8 KiB above A's |
+| footprint (`retained_bytes`) | B's median is more than 10% above A's |
+
+The 5% and 0.03 ms floors are separate guards on purpose, as in the CI gate: the ratio alone over-fires on microsecond rows and the delta alone on multi-millisecond ones. Overlapping ranges never block however far the medians are, because the eight runs could not tell the builds apart. A blocked benchmark needs either a fix or a note in the PR that explains it (the `stable_text` footprint rows above are the expected case); `abba_compare.py` exits 1 and prints one `::error::` line per blocking metric.
 
 ## Profiling the keystroke path
 

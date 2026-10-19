@@ -25,7 +25,9 @@ object ConfigRegistry:
       ConfigFieldsDisplay.fields ++
       ConfigFieldsTheme.fields ++
       ConfigFieldsSurface.fields ++
-      ConfigFieldsExport.fields
+      ConfigFieldsExport.fields ++
+      ConfigFieldsHeadings.fields ++
+      ConfigFieldsOpenings.fields
 
   private val byKey: Map[String, ConfigField[?]] =
     fields.flatMap(configField => configField.spellings.map(_ -> configField)).toMap

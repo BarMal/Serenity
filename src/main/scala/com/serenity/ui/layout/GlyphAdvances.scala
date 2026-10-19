@@ -70,21 +70,30 @@ final private[layout] class GlyphAdvances private (
   def kerningsFrom(from: Int, count: Int): IArray[Float] =
     IArray.unsafeFromArray(java.util.Arrays.copyOfRange(kernAfter, from, from + count))
 
-  /** Each character's leading caret in `[from, from + count)`, plus the trailing edge, with `from` at 0. `TextLayout`
-    * puts a kerned character's leading caret half way between where the kerning moved it and where it would have been
-    * without, so the carets between characters read half the kerning of the one before; the trailing edge is the sum of
-    * the advances, a last character feeling no kerning from a successor the row does not hold.
+  /** Each character's caret in `[from, from + count)`, plus the trailing edge, with `from` at 0. A caret sits where the
+    * glyph of its character is drawn, so a kerned pair's kerning is already in the caret of the second character; the
+    * trailing edge is the sum of the advances, a last character feeling no kerning from a successor the row does not
+    * hold.
     */
   def caretsFrom(from: Int, count: Int): IArray[Float] =
     val carets = new Array[Float](count + 1)
     @annotation.tailrec
     def sum(index: Int, xPx: Float): Unit =
-      carets(index) = if index > 0 && index < count then xPx - kernAfter(from + index - 1) / 2.0f else xPx
+      carets(index) = xPx
       if index < count then
         val kerning = if index + 1 < count then kernAfter(from + index) else 0.0f
         sum(index + 1, xPx + advances(from + index) + kerning)
     sum(0, 0.0f)
     IArray.unsafeFromArray(carets)
+
+  /** Where each of `count` characters from `from` ends were the row to stop there: the carets without the kerning each
+    * character's successor pulls, which a row that ends at the character does not feel.
+    */
+  def trailingEdgesFrom(from: Int, count: Int): IArray[Float] =
+    val carets = caretsFrom(from, count)
+    IArray.tabulate(count + 1)(index =>
+      if index > 0 && index < count then carets(index) - kernAfter(from + index - 1) else carets(index)
+    )
 
 private[layout] object GlyphAdvances:
 
@@ -119,6 +128,29 @@ private[layout] object GlyphAdvances:
     val text   = AttributedString(AgreementProbeText)
     text.addAttribute(TextAttribute.FONT, font)
     math.abs(TextLayout(text.getIterator, frc).getAdvance - summed) <= ShapingTolerancePx
+
+  private val substitutions = ConcurrentHashMap[Probe, java.lang.Boolean]()
+
+  private val SubstitutionProbeText = "-> => ->> =>> ffl fi fl "
+
+  /** Whether `TextLayout` can give a character a glyph, or an advance, other than the one `createGlyphVector` maps it
+    * to: either the font asks for ligatures or kerning, or its own tables substitute glyphs (an arrow ligature, a
+    * contextual alternate) however the font was requested, as Inter's do.
+    */
+  def shapingMaySubstitute(font: Font, frc: FontRenderContext): Boolean =
+    font.hasLayoutAttributes || substitutions.computeIfAbsent(
+      Probe(font, frc),
+      probe => SettledProbe(probeSubstitution(probe.font, probe.frc)): java.lang.Boolean
+    )
+
+  private def probeSubstitution(font: Font, frc: FontRenderContext): Boolean =
+    FontFirstUse.settle(font, frc)
+    val chars   = SubstitutionProbeText.toCharArray
+    val nominal = font.createGlyphVector(frc, chars)
+    val shaped  = font.layoutGlyphVector(frc, chars, 0, chars.length, Font.LAYOUT_LEFT_TO_RIGHT)
+    val count   = nominal.getNumGlyphs
+    count != shaped.getNumGlyphs || nominal.getGlyphCodes(0, count, new Array[Int](count)).toSeq !=
+      shaped.getGlyphCodes(0, count, new Array[Int](count)).toSeq
 
   private val uniformAdvances = ConcurrentHashMap[Probe, java.lang.Boolean]()
 
@@ -240,17 +272,17 @@ private[layout] object GlyphAdvances:
           !Font.textRequiresLayout(runChars, index, index + 1) &&
           (advance == 0.0f || advance >= SmallestDistinctAdvancePx)
       }
-      if font.hasLayoutAttributes && (start until end).exists(contextFree(_)) then
+      if shapingMaySubstitute(font, frc) && (start until end).exists(contextFree(_)) then
         clearShapedCharacters(runChars, start, font, frc, shapedText, codes, advances, kernAfter, contextFree)
       java.lang.System.arraycopy(contextFree, start, measurable, start, end - start)
       (start until end).foreach(char => if kernAfter(char) != 0.0f then contextFree(char) = false)
 
-  /** With kerning or ligatures requested, AWT shapes the run; any character whose shaped glyph is not its own nominal
-    * glyph at its nominal advance (a ligature, a kerning pair, a contextual substitution) needs per-row measurement. In
-    * a uniform-advance font a substitution is not a reason, nor is a ligature that spans several characters: the glyphs
-    * of a cluster of characters need only add up to those characters' own advances, and any row cut inside the cluster
-    * then measures the characters alone at the same advances. The run is shaped through `shapedText`, so drawing the
-    * same text finds it shaped.
+  /** With kerning or ligatures requested, or a font that substitutes glyphs of its own, AWT shapes the run; any
+    * character whose shaped glyph is not its own nominal glyph at its nominal advance (a ligature, a kerning pair, a
+    * contextual substitution) needs per-row measurement. In a uniform-advance font a substitution is not a reason, nor
+    * is a ligature that spans several characters: the glyphs of a cluster of characters need only add up to those
+    * characters' own advances, and any row cut inside the cluster then measures the characters alone at the same
+    * advances. The run is shaped through `shapedText`, so drawing the same text finds it shaped.
     */
   private def clearShapedCharacters(
     runChars: Array[Char],

@@ -99,7 +99,10 @@ object FontFirstUseRepro:
     val extents =
       val metrics = font.getLineMetrics("Mg", frc)
       val settled =
-        FontLineExtents.Extent(math.ceil(metrics.getHeight.toDouble).toInt, math.ceil(metrics.getAscent.toDouble).toInt)
+        FontLineExtents.Extent(
+          math.ceil(metrics.getAscent.toDouble).toInt,
+          math.ceil((metrics.getDescent + metrics.getLeading).toDouble).toInt
+        )
       Option.when(FontLineExtents.shared(FontLineExtents.Key(font, frc)) != settled)("line-extents")
     val underline =
       val metrics = font.getLineMetrics("", FontRenderContext(AffineTransform(), true, true))

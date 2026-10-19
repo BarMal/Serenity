@@ -105,7 +105,7 @@ object RendererGutter:
             snapshot.ascentPx,
             text
           )
-        else surface.putString(railRect.x, railRect.y + rowIndex, text)
+        else surface.putString(railRect.x, rowMetrics.screenRow(rowIndex), text)
       case _ => ()
     }
 
@@ -216,15 +216,21 @@ object RendererGutter:
     snapshot: TextLayoutSnapshot,
     lineRect: LayoutRect
   ): Vector[PixelRect] =
-    val metrics = context.cellMetrics
+    val metrics    = context.cellMetrics
+    val rowMetrics = RendererPaneContent.textRowMetrics(lineRect, context, snapshot)
     val cellRows = SurfaceFrameLayout
       .contentRowSlotsFor(lineRect, snapshot.visualLines.length, hasHeader = false, hasFooter = false)
       .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), rowY) => index -> rowY }
       .toMap
     snapshot.visualLines.indices.toVector.map { index =>
-      val rowY   = cellRows.getOrElse(index, lineRect.bottom)
-      val height = if cellRows.contains(index) then metrics.lineHeight else 0
-      PixelRect(metrics.toPixelX(lineRect.x), metrics.toPixelY(rowY), lineRect.width * metrics.charWidth, height)
+      val rowY   = cellRows.get(index).map(_ + rowMetrics.blankRowsAbove(index)).filter(_ < lineRect.bottom)
+      val height = if rowY.isDefined then metrics.lineHeight else 0
+      PixelRect(
+        metrics.toPixelX(lineRect.x),
+        metrics.toPixelY(rowY.getOrElse(lineRect.bottom)),
+        lineRect.width * metrics.charWidth,
+        height
+      )
     }
 
   private def fillPixelRect(surface: RenderSurface, rect: PixelRect): Unit =
@@ -274,7 +280,7 @@ object RendererGutter:
                   snapshot,
                   rowMetrics.lineTopPx(index),
                   visualLine,
-                  rowY,
+                  rowY + rowMetrics.blankRowsAbove(index),
                   dividerOnLeft,
                   paintsNumber = rows.includes(index)
                 )
@@ -329,7 +335,10 @@ object RendererGutter:
             else
               MeasuredLineNumberRun(
                 context.cellMetrics.toPixelX(lineRect.x).toFloat,
-                lineRect.width * context.cellMetrics.charWidth.toFloat,
+                // The label's fill is shifted by the inset along with its text; shrinking it by the same amount keeps
+                // the right-hand end on the counter's edge, instead of painting into the spacer beyond it, which a
+                // frame that reuses scrolled rows would never repaint.
+                lineRect.width * context.cellMetrics.charWidth.toFloat - math.max(0.0, marginInsetPx).toFloat,
                 lineNumberText
               )
           surface.pixels.withPixelTranslation(marginInsetPx, 0.0) {

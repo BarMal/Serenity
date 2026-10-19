@@ -3,7 +3,7 @@ package com.serenity.ui.layout
 import java.text.StringCharacterIterator
 
 import com.ibm.icu.text.BreakIterator
-import com.serenity.ui.layout.TextCaretMeasurement.{LineFontResolver, SegmentFit, normalizeCollapsedCarets}
+import com.serenity.ui.layout.TextCaretMeasurement.SegmentFit
 
 /** What wrapping a logical line needs measured, computed once over a window of it rather than once per row: grapheme
   * boundaries from a single sweep and, for a measured layout, every character's glyph advance. Rows are then fitted and
@@ -57,17 +57,17 @@ final private[layout] class ParagraphMeasurement private (
     def loop(limit: Int): Option[SegmentFit] =
       advances match
         case Some(measured) if from + limit <= end && measured.isMeasurable(from - start, from - start + limit) =>
-          val raw  = measured.caretsFrom(from - start, limit)
-          val last = raw(limit)
+          val raw   = measured.caretsFrom(from - start, limit)
+          val edges = measured.trailingEdgesFrom(from - start, limit)
+          val last  = raw(limit)
           if math.abs(last - width) < DecisionGuardPx then None
-          else if limit >= remaining || last > width then
+          else if limit >= remaining || edges.exists(_ > width) then
             settledFit(
               raw,
+              edges,
               measured.kerningsFrom(from - start, limit),
               limit,
-              width,
-              spec.resolver,
-              spec.baseColumn + from
+              width
             )
           else loop(math.min(remaining, math.max(limit + 1, limit * 2)))
         case _ => None
@@ -75,7 +75,7 @@ final private[layout] class ParagraphMeasurement private (
 
 private[layout] object ParagraphMeasurement:
 
-  /** Comfortably above the largest gap seen between summed glyph advances and `TextLayout` carets (under 0.01px). */
+  /** Comfortably above the largest gap seen between summed glyph advances and shaped glyph positions (under 0.01px). */
   private val DecisionGuardPx = 0.05f
 
   private[layout] val MaxWindowChars = 16384
@@ -119,18 +119,16 @@ private[layout] object ParagraphMeasurement:
         collect(count + 1, breaks.next())
     java.util.Arrays.copyOf(found, collect(0, breaks.first()))
 
-  /** Mirrors the per-row search's stopping rule over the candidate's normalized carets. */
+  /** Mirrors the per-row search's stopping rule over the candidate's trailing edges. */
   private def settledFit(
     raw: IArray[Float],
+    edges: IArray[Float],
     kerning: IArray[Float],
     limit: Int,
-    width: Float,
-    resolver: LineFontResolver,
-    absoluteStartColumn: Int
+    width: Float
   ): Option[SegmentFit] =
-    val carets     = normalizeCollapsedCarets(raw, resolver, absoluteStartColumn)
-    val firstOver  = carets.indexWhere(_ > width)
+    val firstOver  = edges.indexWhere(_ > width)
     val maxFitting = if firstOver < 0 then limit else firstOver - 1
-    val nearFit    = maxFitting >= 0 && width - carets(maxFitting) < DecisionGuardPx
-    val nearOver   = firstOver >= 0 && carets(firstOver) - width < DecisionGuardPx
+    val nearFit    = maxFitting >= 0 && width - edges(maxFitting) < DecisionGuardPx
+    val nearOver   = firstOver >= 0 && edges(firstOver) - width < DecisionGuardPx
     Option.unless(nearFit || nearOver)(SegmentFit(math.max(1, maxFitting), Some(raw), kerning))

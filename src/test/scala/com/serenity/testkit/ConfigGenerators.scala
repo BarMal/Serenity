@@ -4,9 +4,21 @@ import java.awt.Color
 
 import com.serenity.config.*
 import com.serenity.keystroke.Modifier
+import com.serenity.richtext.ParagraphAlignment
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.openings.{
+  EpigraphRule,
+  HandDropCapRule,
+  LetterMode,
+  OpeningRules,
+  OpeningSettings,
+  RaisedRowRule,
+  SceneBreakRule
+}
+import com.serenity.ui.theme.{DropCapColour, HeadingColour, HeadingStyle}
 import org.scalacheck.Gen
 
 /** Generators over [[AppConfig]], for properties about the config file format.
@@ -138,6 +150,46 @@ object ConfigGenerators:
       firstLineIndent = firstLineIndent
     )
 
+  private val genHeadingColour: Gen[HeadingColour] =
+    Gen.oneOf(
+      Gen.const(HeadingColour.Text),
+      Gen.const(HeadingColour.Heading),
+      genColor.map(color => HeadingColour.Fixed(RenderColor.fromAwt(color)))
+    )
+
+  private val genHeadingLevelConfig: Gen[HeadingLevelConfig] =
+    for
+      size   <- Gen.option(Gen.choose(2, 16).map(_ / 2f))
+      bold   <- Gen.option(Gen.oneOf(true, false))
+      italic <- Gen.option(Gen.oneOf(true, false))
+      family <- Gen.option(Gen.oneOf("Charter", "Serif", "Inter"))
+      colour <- Gen.option(genHeadingColour)
+      align  <- Gen.option(oneOfEnum(ParagraphAlignment.values))
+      before <- Gen.option(Gen.choose(0, 16).map(_ / 4f))
+      after  <- Gen.option(Gen.choose(0, 16).map(_ / 4f))
+    yield HeadingLevelConfig(size, bold, italic, family, colour, align, before, after)
+
+  val genHeadingsConfig: Gen[HeadingsConfig] =
+    for
+      levels    <- Gen.listOfN(HeadingStyle.LevelCount, genHeadingLevelConfig).map(_.toVector)
+      colour    <- Gen.option(Gen.oneOf(HeadingColour.Text, HeadingColour.Heading))
+      damping   <- Gen.oneOf(true, false)
+      threshold <- Gen.choose(HeadingsConfig.ThresholdRange._1.toInt, HeadingsConfig.ThresholdRange._2.toInt)
+    yield HeadingsConfig(levels, colour, damping, threshold.toFloat)
+
+  val genOpeningSettings: Gen[OpeningSettings] =
+    for
+      enabled   <- Gen.oneOf(true, false)
+      letter    <- oneOfEnum(LetterMode.values)
+      raisedRow <- oneOfEnum(RaisedRowRule.values)
+      sink      <- Gen.choose(OpeningSettings.MinSinkLines, OpeningSettings.MaxSinkLines)
+      smallCaps <- Gen.oneOf(true, false)
+      marker    <- Gen.alphaNumStr.suchThat(_.nonEmpty)
+      epigraph  <- oneOfEnum(EpigraphRule.values)
+      scene     <- oneOfEnum(SceneBreakRule.values)
+      hand      <- oneOfEnum(HandDropCapRule.values)
+    yield OpeningSettings(enabled, letter, raisedRow, sink, smallCaps, marker, OpeningRules(epigraph, scene, hand))
+
   val genStatusLineConfig: Gen[StatusLineConfig] =
     for
       segments   <- Gen.someOf(StatusSegment.values.toIndexedSeq).map(_.toList)
@@ -154,20 +206,30 @@ object ConfigGenerators:
       size <- Gen.option(for w <- Gen.choose(400, 4000); h <- Gen.choose(300, 4000) yield PreferredWindowSize(w, h))
     yield WindowConfig(chrome, size)
 
+  private val genDropCapColour: Gen[DropCapColour] =
+    Gen.oneOf(
+      Gen.const(DropCapColour.Text),
+      Gen.const(DropCapColour.Heading),
+      Gen.const(DropCapColour.Accent),
+      Gen.listOfN(3, Gen.choose(0, 255)).map(rgb => DropCapColour.Fixed(RenderColor.fromRgba(rgb(0), rgb(1), rgb(2))))
+    )
+
   val genDocumentConfig: Gen[DocumentConfig] =
     for
-      markdown <- oneOfEnum(MarkdownViewMode.values)
-      default  <- oneOfEnum(DefaultDocumentMode.values)
-      goal     <- Gen.option(Gen.choose(1, 100000))
-      dropCaps <- Gen.oneOf(true, false)
-      ghosts   <- Gen.oneOf(true, false)
-      analysis <- Gen.chooseNum(0L, 5000L)
-      outline  <- Gen.chooseNum(0L, 5000L)
+      markdown  <- oneOfEnum(MarkdownViewMode.values)
+      default   <- oneOfEnum(DefaultDocumentMode.values)
+      goal      <- Gen.option(Gen.choose(1, 100000))
+      dropCaps  <- Gen.oneOf(true, false)
+      ghosts    <- Gen.oneOf(true, false)
+      analysis  <- Gen.chooseNum(0L, 5000L)
+      outline   <- Gen.chooseNum(0L, 5000L)
+      gap       <- Gen.choose(0, 8).map(quarters => quarters * 0.25f)
+      capColour <- genDropCapColour
       // "auto" and "default" are how the file spells no author, so they cannot be one.
       author <- Gen.option(
         Gen.alphaNumStr.suchThat(name => name.nonEmpty && !Set("auto", "default").contains(name.toLowerCase))
       )
-    yield DocumentConfig(markdown, default, goal, dropCaps, author, ghosts, analysis, outline)
+    yield DocumentConfig(markdown, default, goal, dropCaps, author, ghosts, analysis, outline, gap, capColour)
 
   val genAutoSaveConfig: Gen[AutoSaveConfig] =
     for
@@ -372,6 +434,8 @@ object ConfigGenerators:
       appMode          <- genAppModeConfig
       status           <- genStatusLineConfig
       exportTypography <- genExportTypographyConfig
+      headings         <- genHeadingsConfig
+      openings         <- genOpeningSettings
       autoSave         <- genAutoSaveConfig
     yield AppConfig(
       editorConfig = editor,
@@ -391,5 +455,7 @@ object ConfigGenerators:
       appModeConfig = appMode,
       statusLine = status,
       exportTypographyConfig = exportTypography,
+      headingsConfig = headings,
+      openingsConfig = openings,
       autoSaveConfig = autoSave
     )

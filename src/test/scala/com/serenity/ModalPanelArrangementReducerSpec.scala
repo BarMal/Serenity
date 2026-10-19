@@ -138,7 +138,7 @@ class ModalPanelArrangementReducerSpec extends AnyFlatSpec with Matchers:
       .panelsIn(ArrangementSection.Hidden)
       .toList
       .map(id => s"  ${PanelRegistry.registrationFor(id).label}")
-    texts.dropRight(1) shouldBe List(
+    val listRows = List(
       "Arrange Panels",
       "Top",
       "  (none)",
@@ -151,7 +151,8 @@ class ModalPanelArrangementReducerSpec extends AnyFlatSpec with Matchers:
       "  (none)",
       "Hidden"
     ) ++ hiddenLabels
-    texts.lastOption shouldBe Some("alt+up/alt+down move · enter show/hide · esc close")
+    texts.take(listRows.size) shouldBe listRows
+    texts.drop(listRows.size).mkString(" ") shouldBe "alt+up/alt+down move · enter show/hide · esc close"
     composition.paintBoxes.filter(_.selected).flatMap(_.text) shouldBe List("  Outline")
     composition.hitRegions.flatMap(_.actionId).map(_.value) should contain(
       PanelArrangementComposition.rowActionId(PanelId.Comments).value

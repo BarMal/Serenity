@@ -24,7 +24,9 @@ class AboveCursorOverlayStackSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail(s"Expected ${surfaceId.value} in the above-cursor stack"))
 
   private def cursorScreenY(state: AppState, layout: CalculatedLayout, line: Int): Int =
-    CursorLayout.contentRectForPane(LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))).y + line
+    MeasuredRows
+      .caretRow(state, layout, PaneId(0), AboveCursorStackFixtures.cursorAt(line))
+      .getOrElse(fail(s"Expected line $line to be painted"))
 
   private def contentTopY(state: AppState, layout: CalculatedLayout): Int =
     CursorLayout.contentRectForPane(LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))).y

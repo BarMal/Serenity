@@ -21,6 +21,7 @@ import com.serenity.richtext.{
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
+import com.serenity.testkit.FrameMismatchDump
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -60,7 +61,19 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       }
     )
 
-  final private class Pooled(window: Window, pool: Int, scale: Double, persists: Boolean = true):
+  final private class Pooled(
+      window: Window,
+      pool: Int,
+      scale: Double,
+      persists: Boolean = true,
+      fringe: Boolean = false
+  ):
+
+    /** The vertical spans, in logical pixels, of the runs the last frame drew. */
+    val drawnSpans = new AtomicReference[Vector[(Int, Int)]](Vector.empty)
+
+    private def record(yPx: Int, heightPx: Int): Unit =
+      val _ = drawnSpans.updateAndGet(_ :+ (yPx -> heightPx))
 
     private val images = Vector.fill(pool)(
       new BufferedImage(
@@ -74,9 +87,27 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     private val caches      = RenderCaches.create()
     private val screen      = ScreenIdentity(this)
     private val drawn       = AtomicInteger(0)
+    private val lastPlan    = new AtomicReference[Option[com.serenity.ui.renderer.EditorPaneRenderPlan]](None)
+
+    /** A faint pixel pair one device pixel left of a run, as the serif of a wrapped row's first glyph leaves. */
+    private def leaveFringe(image: BufferedImage, xPx: Float, yPx: Int): Unit =
+      val x = math.floor(xPx * scale).toInt - 1
+      (0 until (2 * scale).toInt).foreach { dy =>
+        val y = (yPx * scale).toInt + scale.toInt + dy
+        if x >= 0 && y < image.getHeight then image.setRGB(x, y, 0x181c23)
+      }
+
+    def contentLeftPx: Option[Int] =
+      lastPlan.get().flatMap(_.paneLayouts.values.headOption).map(layout => cellMetrics.toPixelX(layout.contentRect.x))
+
+    def stampPooled(x: Int, ys: List[Int]): Unit =
+      ys.foreach(y => images.head.setRGB(x, y, 0xff00ff))
+
+    def pooledIsStamped(x: Int, y: Int): Boolean = (images.head.getRGB(x, y) & 0xffffff) == 0xff00ff
 
     def render(state: AppState, damage: Damage): BufferedImage =
       val image = images(drawn.getAndIncrement() % pool)
+      drawnSpans.set(Vector.empty)
       val surface = new Java2DRenderSurface(
         image,
         cellMetrics,
@@ -88,23 +119,51 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         deviceScaleY = scale,
         contentPersists = persists,
         layerCacheOwnerOverride = Some(screen)
-      )
+      ):
+        override def drawRunPx(
+          xPx: Float,
+          yPx: Int,
+          bgWidthPx: Float,
+          lineHeightPx: Int,
+          ascentPx: Int,
+          s: String,
+          clipGlyphToRun: Boolean
+        ): Unit =
+          record(yPx, lineHeightPx)
+          super.drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, s, clipGlyphToRun)
+          if fringe && s.nonEmpty then leaveFringe(image, xPx, yPx)
+        override def drawShapedRunPx(
+          xPx: Float,
+          yPx: Int,
+          bgWidthPx: Float,
+          lineHeightPx: Int,
+          ascentPx: Int,
+          stretch: String,
+          from: Int,
+          until: Int,
+          clipGlyphToRun: Boolean
+        ): Unit =
+          record(yPx, lineHeightPx)
+          super.drawShapedRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, stretch, from, until, clipGlyphToRun)
+          if fringe && from < until then leaveFringe(image, xPx, yPx)
       val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
-      val _ = RendererFramePlanner.renderFrame(
-        state,
-        cursorVisible = false,
-        surface,
-        window.viewport,
-        caches.authoritativeScene.forState(state, window.viewport, codeFont, textFont),
-        codeFont,
-        textFont,
-        uiFont,
-        cellMetrics,
-        uiMetrics,
-        None,
-        Some(FrameOutput(screen, repaintRegion)),
-        damage,
-        caches = caches
+      lastPlan.set(
+        RendererFramePlanner.renderFrame(
+          state,
+          cursorVisible = false,
+          surface,
+          window.viewport,
+          caches.authoritativeScene.forState(state, window.viewport, codeFont, textFont),
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics,
+          None,
+          Some(FrameOutput(screen, repaintRegion)),
+          damage,
+          caches = caches
+        )
       )
       present(image, repaintRegion.get())
       screenImage
@@ -135,14 +194,21 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     window: Window,
     drawn: BufferedImage,
     state: AppState,
-    scale: Double
+    scale: Double,
+    fringe: Boolean = false
   ): Seq[(Int, Int)] =
-    val cold = Pooled(window, 1, scale, persists = false).render(state, Damage.Everything)
-    for
-      x <- 0 until drawn.getWidth
-      y <- 0 until drawn.getHeight
-      if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
-    yield (x, y)
+    val cold = Pooled(window, 1, scale, persists = false, fringe).render(state, Damage.Everything)
+    val differing =
+      for
+        x <- 0 until drawn.getWidth
+        y <- 0 until drawn.getHeight
+        if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
+      yield (x, y)
+    if differing.nonEmpty then
+      System.err.println(
+        FrameMismatchDump.write(s"PageDown-${window.width}x${window.height}-x$scale", drawn, cold, differing)
+      )
+    differing
 
   private def summary(d: Seq[(Int, Int)]): String =
     val ys = d.map(_._2)
@@ -155,7 +221,8 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     scale: Double,
     document: RichTextDocument,
     pageDowns: Int = 12,
-    perFrame: Int = 1
+    perFrame: Int = 1,
+    fringe: Boolean = false
   ): List[String] =
     val (stateManager, id) =
       LaptopFrameBenchmarks.stateManagerHolding(document.plainText, config, grid = window.viewport)
@@ -170,15 +237,22 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    val frames = Pooled(window, pool, scale)
+    val frames = Pooled(window, pool, scale, fringe = fringe)
     val first  = stateManager.getCurrentState.unsafeRunSync()
     val _      = frames.render(first, Damage.Everything)
     val steps = (1 to pageDowns).foldLeft((first, List.empty[String])) {
       case ((before, found), step) =>
         (1 to perFrame).foreach(_ => stateManager.applyEvent(PageDown).unsafeRunSync())
         val after = stateManager.getCurrentState.unsafeRunSync()
-        val diff  = differing(window, frames.render(after, DamageProducer.forTransition(before, after)), after, scale)
-        val top   = after.persisted.buffers.get(id).map(_.viewport.topLine)
+        val diff =
+          differing(
+            window,
+            frames.render(after, DamageProducer.forTransition(before, after)),
+            after,
+            scale,
+            fringe
+          )
+        val top = after.persisted.buffers.get(id).map(_.viewport.topLine)
         (after, if diff.isEmpty then found else s"step $step top=$top: ${summary(diff)}" :: found)
     }
     steps._2.reverse.take(3)
@@ -199,7 +273,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     (layoutName, config)     <- List("minimal" -> AppConfig.default, "conventional" -> AppConfig.conventional)
     scale                    <- List(1.0, 2.0)
     (documentName, document) <- documents
-    if (scale == 1.0 || documentName.startsWith("six")) && (layoutName == "minimal" || !documentName.startsWith("Word"))
+    if scale == 1.0 || documentName.startsWith("six") || documentName.startsWith("Word")
   do
     s"PageDown through $documentName in the $layoutName layout at ${scale}x" should
       "draw what a cold frame draws at every step" in {
@@ -329,6 +403,62 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     s"PageDown through $documentName with typewriter scrolling and dimming at ${scale}x in a $windowName window" should
       "draw what a cold frame draws at every step" in {
         pagedThrough(writingConfig, window, 2, scale, document, pageDowns = 8) shouldBe empty
+      }
+
+  for
+    scale  <- List(1.0, 2.0)
+    height <- List(560, 575, 593, 608, 623)
+  do
+    s"PageDown to the end of a spell-checked document in a window ${height}px tall at ${scale}x" should
+      "stop a misspelling's squiggle at the pane's bottom edge, as the row's text stops" in {
+        pagedThrough(AppConfig.default, Window(1920, height), 2, scale, chapters(6, 12)) shouldBe empty
+      }
+
+  "PageDown through a dimmed typewriter document" should "clear the pixel beside the text column of every row it draws again" in {
+    val document = novel(2, 4)
+    val window   = Window(800, 600)
+    val (stateManager, id) =
+      LaptopFrameBenchmarks.stateManagerHolding(document.plainText, writingConfig, grid = window.viewport)
+    stateManager
+      .updateState(state =>
+        state.copy(persisted =
+          state.persisted.copy(buffers =
+            state.persisted.buffers.updatedWith(id)(
+              _.map(b => b.copy(richText = b.richText.withSyncedDocument(Some(document), b.document.contentVersion)))
+            )
+          )
+        )
+      )
+      .unsafeRunSync()
+    val frames = Pooled(window, 1, 1.0)
+    val first  = stateManager.getCurrentState.unsafeRunSync()
+    val _      = frames.render(first, Damage.Everything)
+    val (_, survivors) = (1 to 3).foldLeft((first, List.empty[String])) {
+      case ((before, found), step) =>
+        stateManager.applyEvent(PageDown).unsafeRunSync()
+        val after = stateManager.getCurrentState.unsafeRunSync()
+        val left  = frames.contentLeftPx.getOrElse(0) - 1
+        val ys    = (60 until 540 by 4).toList
+        frames.stampPooled(left, ys)
+        val _          = frames.render(after, DamageProducer.forTransition(before, after))
+        val drawnAgain = ys.filter(y => frames.drawnSpans.get().exists((top, height) => y >= top && y < top + height))
+        (after, found ++ drawnAgain.filter(y => frames.pooledIsStamped(left, y)).map(y => s"step $step: ($left, $y)"))
+    }
+    survivors.take(3) shouldBe empty
+  }
+
+  for
+    scale <- List(1.0, 2.0)
+    (windowName, window) <- List(
+      "1500x1000" -> Window(1500, 1000),
+      "1920x1080" -> fullHd,
+      "800x600"   -> Window(800, 600)
+    )
+    (documentName, document) <- List("two short chapters" -> novel(2, 4), "six chapters" -> novel(6, 6))
+  do
+    s"PageDown through $documentName with typewriter scrolling and dimming at ${scale}x in a $windowName window, a serif fringe beside the column" should
+      "draw what a cold frame draws at every step" in {
+        pagedThrough(writingConfig, window, 2, scale, document, pageDowns = 8, fringe = true) shouldBe empty
       }
 
   private def endingInAnEmptyChapter(chapterCount: Int, bodies: Int): RichTextDocument =

@@ -8,9 +8,21 @@ import com.serenity.TestTemp
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment, ThemeFollowConfig}
 import com.serenity.keystroke.{InputKey, Modifier}
+import com.serenity.richtext.ParagraphAlignment
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.openings.{
+  EpigraphRule,
+  HandDropCapRule,
+  LetterMode,
+  OpeningRules,
+  OpeningSettings,
+  RaisedRowRule,
+  SceneBreakRule
+}
+import com.serenity.ui.theme.{DropCapColour, HeadingColour}
 import com.typesafe.config.ConfigFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -113,6 +125,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withWordGoal(Some(50000))
     .withCommentAuthor(Some("Ada Lovelace"))
     .withDropCapsEnabled(false)
+    .withDropCapGapEm(1.25f)
+    .withDropCapColour(DropCapColour.Fixed(RenderColor.fromRgba(0x12, 0x34, 0x56)))
     .withAutoSaveMode(AutoSaveMode.OnFocusChange)
     .withAutoSaveDelayMillis(2500L)
     .withAppMode(AppMode.Prose)
@@ -196,6 +210,46 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
         lineSpacing = Some(1.5),
         margin = Some(54f),
         firstLineIndent = Some(18f)
+      )
+    )
+    .withHeadingsConfig(
+      HeadingsConfig(
+        levels = Vector(
+          HeadingLevelConfig(size = Some(2.5f), bold = Some(false)),
+          HeadingLevelConfig(italic = Some(true), align = Some(ParagraphAlignment.Center)),
+          HeadingLevelConfig(
+            family = Some("Charter"),
+            colour = Some(HeadingColour.Fixed(RenderColor.fromRgba(0x12, 0x34, 0x56, 0x78)))
+          ),
+          HeadingLevelConfig(align = Some(ParagraphAlignment.Right), spaceAfter = Some(0.5f), rule = Some(true)),
+          HeadingLevelConfig(
+            size = Some(1.25f),
+            italic = Some(true),
+            spaceBefore = Some(1.5f),
+            underline = Some(true),
+            colour = Some(HeadingColour.Muted)
+          ),
+          HeadingLevelConfig(
+            bold = Some(false),
+            align = Some(ParagraphAlignment.Justify),
+            underline = Some(false),
+            rule = Some(false)
+          )
+        ),
+        colour = Some(HeadingColour.Text),
+        damping = false,
+        dampingThresholdPt = 36.0f
+      )
+    )
+    .withOpeningsConfig(
+      OpeningSettings(
+        enabled = true,
+        letterMode = LetterMode.Hybrid,
+        raisedRow = RaisedRowRule.Clamp,
+        hybridSinkLines = 5,
+        smallCapsFirstLine = true,
+        epigraphMarker = "motto",
+        rules = OpeningRules(EpigraphRule.ExplicitOnly, SceneBreakRule.SmallCapsOnly, HandDropCapRule.OpeningWins)
       )
     )
 

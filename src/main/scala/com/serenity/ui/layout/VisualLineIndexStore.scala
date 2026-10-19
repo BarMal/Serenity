@@ -6,9 +6,11 @@ import scala.annotation.tailrec
 
 import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
 import com.serenity.markdown.{LazyBlockIndex, MarkdownInlineView}
-import com.serenity.rope.{Branch, ChangeSet, Leaf, Rope}
+import com.serenity.rope.{Branch, ChangeSet, Leaf, LineSpan, Rope}
 import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.layout.VisualLineIndexStore.StampRelation
+import com.serenity.ui.openings.{OpeningInvalidation, VirtualDropCaps}
+import com.serenity.ui.theme.HeadingSettings
 
 /** The [[VisualLineIndex]] last built for each key -- a buffer under one wrap setting -- together with the content it
   * describes. A key's index follows edits to its buffer: only the lines an edit touched lose their measurements, and
@@ -108,12 +110,16 @@ object VisualLineIndexStore:
   /** Rich-text styling is stamped by the identity of its document; a restyled Markdown view by what decides how it
     * restyles (mode, revealed lines, font kind) and by its block index, which is compared by how far two indexes are
     * known to agree rather than by value (see [[stampsRelate]]). A tab size other than the default stamps too: a tab
-    * wraps by its width, so a new size leaves no row count standing.
+    * wraps by its width, so a new size leaves no row count standing. So do the opening settings, while openings are set
+    * as drop caps, and a gap beside drop caps other than the default: they inset the rows beside the glyph.
     */
   final private[layout] case class ViewStamp(
       base: AnyRef,
       markdown: MarkdownInlineView,
-      tabSize: Int = IndentationSettings.DefaultTabSize
+      tabSize: Int = IndentationSettings.DefaultTabSize,
+      headings: HeadingSettings = HeadingSettings.default,
+      virtualDropCaps: Option[VirtualDropCaps.Signature] = None,
+      dropCapGapEm: Float = DropCapLayout.DefaultGapEm
   )
 
   /** How a stamp the index was built under relates to the one asked for. */
@@ -130,7 +136,11 @@ object VisualLineIndexStore:
     (built, asked) match
       case _ if built eq asked => StampRelation.Same
       case (x: ViewStamp, y: ViewStamp)
-          if x.base == y.base && x.tabSize == y.tabSize && sameRestyling(x.markdown, y.markdown) =>
+          if x.base == y.base && x.tabSize == y.tabSize && x.headings == y.headings &&
+            x.virtualDropCaps == y.virtualDropCaps && x.dropCapGapEm == y.dropCapGapEm && sameRestyling(
+              x.markdown,
+              y.markdown
+            ) =>
         (x.markdown.fences, y.markdown.fences) match
           case (a, b) if a eq b => StampRelation.Same
           case (a: LazyBlockIndex, b: LazyBlockIndex) if b.follows(a) =>
@@ -147,9 +157,12 @@ object VisualLineIndexStore:
     if remaining <= 0 then index else index.replacedLines(line, remaining, remaining)
 
   private[layout] def stampOf(richText: RichTextContext): AnyRef =
-    val base = richText.document.getOrElse(Unstamped)
-    if richText.markdown.isActive || richText.tabSize != IndentationSettings.DefaultTabSize then
-      ViewStamp(base, richText.markdown, richText.tabSize)
+    val base        = richText.document.getOrElse(Unstamped)
+    val virtualCaps = richText.virtualDropCaps.map(_.signature)
+    if richText.markdown.isActive || richText.tabSize != IndentationSettings.DefaultTabSize ||
+        richText.headings != HeadingSettings.default || virtualCaps.isDefined ||
+        richText.dropCapGapEm != DropCapLayout.DefaultGapEm
+    then ViewStamp(base, richText.markdown, richText.tabSize, richText.headings, virtualCaps, richText.dropCapGapEm)
     else base
 
   val DefaultMaxEntries = 32
@@ -163,10 +176,12 @@ object VisualLineIndexStore:
   def followChange(index: VisualLineIndex, before: Rope, after: Rope, change: ChangeSet): VisualLineIndex =
     if index.lineCount != before.lineCount then VisualLineIndex.unmeasured(after.lineCount)
     else
-      val followed = change.lineSpans(before).foldLeft(index) { (current, span) =>
+      val spans = change.lineSpans(before)
+      val followed = spans.foldLeft(index) { (current, span) =>
         current.replacedLines(span.newFirst, span.oldLast - span.oldFirst + 1, span.newLast - span.newFirst + 1)
       }
-      if followed.lineCount == after.lineCount then followed else VisualLineIndex.unmeasured(after.lineCount)
+      if followed.lineCount == after.lineCount then unmeasuredBeyond(followed, before, after, spans)
+      else VisualLineIndex.unmeasured(after.lineCount)
 
   /** `index`, which describes `before`, carried over to `after`: the lines an edit may have changed become unmeasured,
     * and every line outside them -- identical text, so an identical row count -- keeps its measurement.
@@ -183,7 +198,24 @@ object VisualLineIndexStore:
         val lastBefore = before.newlineCount - suffix.newlines
         val lastAfter  = after.newlineCount - suffix.newlines
         val followed   = index.replacedLines(firstLine, lastBefore - firstLine + 1, lastAfter - firstLine + 1)
-        if followed.lineCount == after.lineCount then followed else VisualLineIndex.unmeasured(after.lineCount)
+        if followed.lineCount == after.lineCount then
+          unmeasuredBeyond(followed, before, after, Vector(LineSpan(firstLine, lastBefore, firstLine, lastAfter)))
+        else VisualLineIndex.unmeasured(after.lineCount)
+
+  /** `index`, which describes `after`, with the lines unmeasured that an edit can change the chapter-opening status of
+    * without touching them (see [[OpeningInvalidation]]).
+    */
+  private def unmeasuredBeyond(
+    index: VisualLineIndex,
+    before: Rope,
+    after: Rope,
+    spans: Vector[LineSpan]
+  ): VisualLineIndex =
+    spans
+      .flatMap(OpeningInvalidation.widenedLines(before, after, _))
+      .distinct
+      .filter(_ < index.lineCount)
+      .foldLeft(index)((current, line) => current.replacedLines(line, 1, 1))
 
   final private case class Run(length: Int, newlines: Int):
     def plus(more: Run): Run = Run(length + more.length, newlines + more.newlines)
