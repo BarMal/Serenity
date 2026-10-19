@@ -162,7 +162,7 @@ object ConfigFileFormat:
     field("document.comment_author"),
     comment("Multi-line drop caps: render a drop-cap paragraph's first character as a large, multi-line glyph"),
     field("document.drop_caps_enabled"),
-    comment("Room between a drop cap's glyph and the text beside it, in em of the body font (0-2)"),
+    comment("Room between the ink of a drop cap's glyph and the text beside it, in em of the body font (0-2)"),
     field("document.drop_cap_gap"),
     comment("Drop cap colour: text, heading (what headings.colour gives a level 1 heading), accent or #RRGGBB"),
     field("document.drop_cap_colour"),

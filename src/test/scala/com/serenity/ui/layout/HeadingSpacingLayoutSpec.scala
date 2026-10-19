@@ -178,7 +178,16 @@ class HeadingSpacingLayoutSpec extends AnyFlatSpec with Matchers:
 
   "A column page" should "drop the space above its first row in every column, as a page does" in {
     val settings = allSpaced(1.0f, 1.0f)
-    val buffer   = richBuffer().copy(viewport = richBuffer().viewport.copy(visibleLines = 3))
+    // A heading is kept with the paragraph after it, so it keeps its space only where it sits clear of a column's foot:
+    // two body rows above it and columns of fourteen lines leave it room in any font.
+    val sparse = RichTextDocument(
+      List(
+        RichTextParagraph.plain(body),
+        RichTextParagraph.plain(body),
+        RichTextParagraph.plain("Chapter", role = ParagraphRole.Heading(2))
+      ) ++ List.fill(60)(RichTextParagraph.plain(body))
+    )
+    val buffer = richBuffer(sparse).copy(viewport = richBuffer().viewport.copy(visibleLines = 14))
     val columns =
       TextLayoutSnapshot.fromBufferColumns(buffer, panelWidth, font, columnCount = 3, headings = settings)
 

@@ -6,6 +6,7 @@ import java.awt.font.FontRenderContext
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.{Buffer, IndentationSettings, TextVisualLine}
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.ColumnPaging.{ColumnStart, Frame}
 import com.serenity.ui.openings.OpeningSettings
 import com.serenity.ui.theme.HeadingSettings
 
@@ -17,7 +18,7 @@ import com.serenity.ui.theme.HeadingSettings
   */
 object TextLayoutSnapshotColumnMode:
 
-  import TextLayoutSnapshot.{collectVisualLines, defaultFontRenderContext, shouldUseMeasuredLayout}
+  import TextLayoutSnapshot.{defaultFontRenderContext, shouldUseMeasuredLayout}
 
   private def columnContext(
     document: Option[RichTextDocument],
@@ -39,11 +40,66 @@ object TextLayoutSnapshotColumnMode:
       dropCapGapEm = dropCapGapEm
     )
 
-  /** The same wrapped visual-line stream `fromBuffer` slices into one screenful, partitioned instead into `columnCount`
-    * groups of `buffer.viewport.visibleLines` rows each -- one per column -- starting from the viewport's own
-    * `topLine`/`topVisualLine` (already snapped to a column boundary by `CursorViewport.adjustForCursorColumnMode`).
-    * Reuses the same wrap logic (`collectVisualLines`) unchanged; a document that runs out of lines before filling
-    * every column simply yields a shorter final chunk.
+  /** The pager for `buffer` at one layout: the one place the painter and the viewport anchoring read column breaks
+    * from. A column is `visibleLines` base lines tall; `proseScale`, the font and the cell metrics decide how tall each
+    * row is, so callers must pass what they paint with.
+    */
+  def pagerFor(
+    buffer: Buffer,
+    columnWidthPx: Int,
+    font: Font,
+    visibleLines: Int,
+    fontRenderContext: FontRenderContext = defaultFontRenderContext(),
+    cellMetricsOverride: Option[CellMetrics] = None,
+    forceCellLayout: Boolean = false,
+    proseScale: Float = 1.0f,
+    dropCapsEnabled: Boolean = true,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    headings: HeadingSettings = HeadingSettings.default,
+    openings: OpeningSettings = OpeningSettings.default,
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm
+  ): ColumnPager =
+    val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
+    val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
+    val lineHeightPx =
+      if measuredLayout then math.max(1, FontLineExtents.of(font, fontRenderContext).heightPx)
+      else math.max(1, cellMetrics.lineHeight)
+    val width   = math.max(1, columnWidthPx)
+    val content = buffer.document.content
+    val richDocument =
+      buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(content.lineCount, content.weight))
+    val richText =
+      columnContext(richDocument, proseScale, dropCapsEnabled, tabSize, headings, openings, dropCapGapEm, wrapCache)
+    val key = BandHeightKey(
+      VisualRowKey(buffer.id, width, font, fontRenderContext, cellMetricsOverride, forceCellLayout, dropCapsEnabled),
+      proseScale
+    )
+    val revision = ContentRevision(buffer.document.contentVersion, buffer.document.changesSince)
+    ColumnPager(
+      richText,
+      content.lineCount,
+      Frame(math.max(1, visibleLines) * math.max(lineHeightPx, cellMetrics.lineHeight), lineHeightPx, measuredLayout),
+      measure => wrapCache.bandHeights(key, content, measure, VisualLineIndexStore.stampOf(richText), Some(revision)),
+      (line, maxRows) =>
+        LineLayout.placedWrappedLine(
+          line,
+          content.getLine(line).getOrElse(""),
+          width,
+          font,
+          fontRenderContext,
+          measuredLayout,
+          cellMetrics,
+          maxRows,
+          richText,
+          wrapCache
+        )
+    )
+
+  /** The rows of each of `columnCount` columns of the page anchored at the viewport's own `topLine`/`topVisualLine`
+    * (already snapped to a column boundary by `CursorViewport.adjustForCursorColumnMode`): columns are filled by pixel
+    * height, so one holds fewer rows when its rows are tall. A document that runs out of lines before filling every
+    * column simply yields a shorter final chunk.
     */
   def columnChunksForBuffer(
     buffer: Buffer,
@@ -62,30 +118,22 @@ object TextLayoutSnapshotColumnMode:
     openings: OpeningSettings = OpeningSettings.default,
     dropCapGapEm: Float = DropCapLayout.DefaultGapEm
   ): Vector[Vector[TextVisualLine]] =
-    val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-    val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
-    val totalLines     = buffer.document.content.lineCount
-    val richDocument =
-      buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.document.content.weight))
-    val visibleLines    = math.max(1, buffer.viewport.visibleLines)
-    val topVisualLine   = buffer.viewport.topVisualLine
-    val totalRowsNeeded = visibleLines * math.max(1, columnCount)
-    val visualLineLimit = topVisualLine + totalRowsNeeded
-    val allVisualLines = collectVisualLines(
+    pagerFor(
       buffer,
-      totalLines,
-      math.max(1, columnWidthPx),
+      columnWidthPx,
       font,
+      buffer.viewport.visibleLines,
       fontRenderContext,
-      measuredLayout,
-      cellMetrics,
-      visualLineLimit,
-      columnContext(richDocument, proseScale, dropCapsEnabled, tabSize, headings, openings, dropCapGapEm, wrapCache),
-      wordWrapEnabled = true,
-      wrapCache
-    ).drop(topVisualLine).take(totalRowsNeeded)
-
-    allVisualLines.grouped(visibleLines).map(HeadingSpacingLayout.droppingLeadingSpace).toVector
+      cellMetricsOverride,
+      forceCellLayout,
+      proseScale,
+      dropCapsEnabled,
+      wrapCache,
+      tabSize,
+      headings,
+      openings,
+      dropCapGapEm
+    ).fill(ColumnStart(buffer.viewport.topLine, buffer.viewport.topVisualLine), columnCount)
 
   /** The snapshot for the ONE column currently showing -- `columnChunksForBuffer`'s first chunk (the viewport's own
     * `topLine`/`topVisualLine` is always already snapped to a page boundary by

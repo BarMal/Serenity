@@ -25,7 +25,7 @@ class TextLayoutSnapshotDropCapSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "TextLayoutSnapshot drop cap layout" should
-    "start every one of a drop cap paragraph's first n visual lines at the glyph's width plus the gap" in {
+    "start every one of a drop cap paragraph's first n visual lines at the glyph's ink edge plus the gap" in {
       val text     = "Hello there this wraps across several lines of body text"
       val document = RichTextDocument(List(RichTextParagraph.plain(text, role = ParagraphRole.dropCap(lines = 2))))
       val buffer = Buffer
@@ -43,7 +43,8 @@ class TextLayoutSnapshotDropCapSpec extends AnyFlatSpec with Matchers:
       val glyph = DropCapGlyph
         .forParagraph(font, frc, Some(document), 0, ParagraphRole.DropCap(2), proseScale = 1.0f)
         .getOrElse(fail("expected a drop cap glyph"))
-      val expectedIndentPx = glyph.widthPx + DropCapLayout.DefaultGapEm * font.getSize2D
+      val inkRightPx       = math.ceil(glyph.font.createGlyphVector(frc, glyph.text).getVisualBounds.getMaxX).toFloat
+      val expectedIndentPx = inkRightPx + DropCapLayout.DefaultGapEm * font.getSize2D
 
       snapshot.visualLines.length should be >= 3
       // The second line has no small first character to make room for, so its offset is the indent itself.

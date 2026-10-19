@@ -324,12 +324,14 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
       }
     }
 
-  it should "split rich text into the same columns as before" in
+  it should "split rich text into columns of the same rows as before, as many as fit each column's height" in
     Seq(sans, ligatured).foreach { font =>
       val buffer = richBuffer(visibleLines = 4)
       val chunks = TextLayoutSnapshot.columnChunksForBuffer(buffer, 160, font, frc, columnCount = 3)
-      chunks.map(_.length).sum shouldBe 12
-      assertSameRows(chunks.flatten, legacyBufferRows(buffer, 160, font, 1.0f, dropCapsEnabled = true).take(12))
+      val rows   = chunks.flatten
+      rows.length should (be > 0 and be <= 12)
+      chunks.foreach(_.length should be <= 4)
+      assertSameRows(rows, legacyBufferRows(buffer, 160, font, 1.0f, dropCapsEnabled = true).take(rows.length))
     }
 
   private def contextFree(text: String, font: Font): Vector[Boolean] =

@@ -24,7 +24,7 @@ private[terminal] trait SwingWindowImageSupport:
     * for the paint to finish; only a paint stuck past [[MaxLeaseWaitNanos]] makes it allocate, so a hung event thread
     * can never stall rendering.
     */
-  final private[serenity] class ReusableImagePool:
+  final private[serenity] class ReusableImagePool(maxLeaseWaitNanos: Long = MaxLeaseWaitNanos):
 
     final private case class Slots(
         published: Option[BufferedImage],
@@ -55,7 +55,7 @@ private[terminal] trait SwingWindowImageSupport:
         if !interrupted then awaitSpareRelease(deadlineNanos)
 
     def acquire(width: Int, height: Int, imageType: Int): BufferedImage =
-      awaitSpareRelease(System.nanoTime() + MaxLeaseWaitNanos)
+      awaitSpareRelease(System.nanoTime() + maxLeaseWaitNanos)
       val before = slots.getAndUpdate(current => if current.spareIsLeased then current else current.copy(spare = None))
       before.spare
         .filterNot(_ => before.spareIsLeased)
@@ -77,6 +77,7 @@ private[terminal] trait SwingWindowImageSupport:
       leaseLock.synchronized(leaseLock.notifyAll())
 
   /** A paint takes a few milliseconds; this is generous for one and short enough that a stuck one costs a single frame.
+    * A pool takes its own wait so a test can make it long enough to be immune to scheduling pauses.
     */
   private val MaxLeaseWaitNanos = 50_000_000L
 

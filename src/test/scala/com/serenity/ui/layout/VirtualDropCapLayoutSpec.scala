@@ -112,14 +112,14 @@ class VirtualDropCapLayoutSpec extends AnyFlatSpec with Matchers:
     snapshot(document(), on).richTextDocument.map(_.plainText) shouldBe Some(text)
   }
 
-  "With openings off, or a raised or hybrid letter, layout" should "be exactly what it was" in {
+  "With openings off, layout" should "be exactly what it was" in {
     val before = snapshot(document(), OpeningSettings.default)
 
     List(
       on.copy(enabled = false),
-      on.copy(letterMode = LetterMode.Raised),
-      on.copy(letterMode = LetterMode.Hybrid),
-      on.copy(smallCapsFirstLine = true, letterMode = LetterMode.Raised)
+      on.copy(enabled = false, letterMode = LetterMode.Raised),
+      on.copy(enabled = false, letterMode = LetterMode.Hybrid),
+      on.copy(enabled = false, smallCapsFirstLine = true, letterMode = LetterMode.Raised)
     ).foreach(settings => snapshot(document(), settings).visualLines shouldBe before.visualLines)
     DropCapLayout.glyphRowSpan(before) shouldBe empty
   }

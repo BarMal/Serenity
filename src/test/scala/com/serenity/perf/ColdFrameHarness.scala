@@ -130,7 +130,8 @@ trait ColdFrameHarness:
 
   protected def summary(d: Seq[(Int, Int)]): String =
     val ys = d.map(_._2)
-    s"${d.size} px differ, y ${ys.minOption.getOrElse(0)}-${ys.maxOption.getOrElse(0)}"
+    val xs = d.map(_._1)
+    s"${d.size} px differ, x ${xs.minOption.getOrElse(0)}-${xs.maxOption.getOrElse(0)}, y ${ys.minOption.getOrElse(0)}-${ys.maxOption.getOrElse(0)}"
 
   final protected class Session(document: RichTextDocument, scale: Double, config: AppConfig = baseConfig):
     private val (stateManager, id) =
@@ -151,7 +152,7 @@ trait ColdFrameHarness:
     private val shown     = AtomicReference(stateManager.getCurrentState.unsafeRunSync())
     private val failures  = AtomicReference(Vector.empty[String])
     private val stepCount = AtomicInteger(0)
-    frames.render(shown.get, Damage.Everything)
+    private val onScreen  = AtomicReference(frames.render(shown.get, Damage.Everything))
 
     def placeCursor(line: Int, column: Int): Unit =
       val before = shown.get
@@ -183,12 +184,19 @@ trait ColdFrameHarness:
       act
       val after = stateManager.getCurrentState.unsafeRunSync()
       shown.set(after)
-      val diff = differing(frames.render(after, DamageProducer.forTransition(before, after)), after, scale)
+      val drawn = frames.render(after, DamageProducer.forTransition(before, after))
+      onScreen.set(drawn)
+      val diff = differing(drawn, after, scale)
       val n    = stepCount.incrementAndGet()
       if diff.nonEmpty then failures.updateAndGet(_ :+ s"step $n ($label): ${summary(diff)}")
 
     /** What a cold frame draws for the state as it now stands. */
     def coldFrame(): BufferedImage = Pooled(scale, persists = false).render(shown.get, Damage.Everything)
+
+    def currentState: AppState = shown.get
+
+    /** What the window shows after the latest step. */
+    def screen: BufferedImage = onScreen.get
 
     def mismatches: List[String] = failures.get.take(4).toList
 

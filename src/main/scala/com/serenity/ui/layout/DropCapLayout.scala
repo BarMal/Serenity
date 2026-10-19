@@ -7,6 +7,7 @@ import scala.annotation.tailrec
 
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{MeasuredRow, TextVisualLine}
+import com.serenity.ui.openings.LetterShape
 import com.serenity.ui.renderer.FontFirstUse
 import com.serenity.ui.theme.DropCapGap
 
@@ -68,11 +69,15 @@ object DropCapLayout:
     val home     = isHomeRow(role, lineWithinParagraph, row.startColumn)
     TextVisualLine(
       bufferLine,
-      if home then row.copy(dropCapHeightPx = dropCap.heightPx) else row,
+      if home then homeRow(row, dropCap) else row,
       if home then (indentPx - replacedCharacterWidthPx(row)).max(0.0f) else indentPx,
       spaceBeforePx = 0,
       spaceAfterPx = 0
     )
+
+  private def homeRow(row: MeasuredRow, dropCap: Reserve): MeasuredRow =
+    val grown = if row.heightPx > 0 then dropCap.growthPx else 0
+    row.copy(heightPx = row.heightPx + grown, ascentPx = row.ascentPx + grown, dropCapHeightPx = dropCap.heightPx)
 
   /** The glyph's measured advance width at `glyphFont` (already sized via
     * `RichTextStyling.dropCapGlyphStyle`/`TextStyle.styledFont`), for a single character/grapheme of `glyphText`.
@@ -97,9 +102,10 @@ object DropCapLayout:
   val DefaultGapEm: Float = DropCapGap.Default
 
   /** What a drop cap paragraph reserves: the one x every line beside the glyph starts at, and the height from the top
-    * of the paragraph's first line down to the foot of the glyph, descenders included. Nothing for any other paragraph.
+    * of the paragraph's first row down to the foot of the glyph, descenders included. A letter that rises above its
+    * first line makes that row `growthPx` taller, which `heightPx` then includes. Nothing for any other paragraph.
     */
-  final case class Reserve(indentPx: Float, heightPx: Int)
+  final case class Reserve(indentPx: Float, heightPx: Int, growthPx: Int = 0)
 
   object Reserve:
     val none: Reserve = Reserve(0.0f, 0)
@@ -114,15 +120,16 @@ object DropCapLayout:
     lineIndex: Int,
     effectiveRole: ParagraphRole,
     proseScale: Float,
-    gapEm: Float
+    gapEm: Float,
+    shape: LetterShape = LetterShape.Drop
   ): Reserve =
     DropCapGlyph
-      .forParagraph(baseFont, frc, richDocument, lineIndex, effectiveRole, proseScale)
-      .fold(Reserve.none)(glyph => Reserve(glyph.indentPx(gapEm), glyph.heightPx))
+      .forParagraph(baseFont, frc, richDocument, lineIndex, effectiveRole, proseScale, shape)
+      .fold(Reserve.none)(glyph => Reserve(glyph.indentPx(gapEm), glyph.heightPx + glyph.growthPx, glyph.growthPx))
 
-  /** The left margin, in pixels, every line a drop cap spans starts at: the glyph's width and the gap, the same on all
-    * of them, zero elsewhere. Added to a line's ordinary left origin so its body text starts to the right of the glyph
-    * instead of under it.
+  /** The left margin, in pixels, every line a drop cap spans starts at: the glyph's ink edge and the gap, the same on
+    * all of them, zero elsewhere. Added to a line's ordinary left origin so its body text starts to the right of the
+    * glyph instead of under it.
     */
   def leftInsetPx(role: ParagraphRole, lineWithinParagraph: Int, indentPx: Float): Float =
     if spansLine(role, lineWithinParagraph) then indentPx.max(0.0f) else 0.0f
