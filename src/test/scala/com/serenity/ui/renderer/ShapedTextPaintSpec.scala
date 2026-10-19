@@ -7,7 +7,7 @@ import java.awt.image.BufferedImage
 
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.layout.{BundledInterFont, CellMetrics, TextLayoutSnapshot}
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -20,7 +20,7 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
   private val theme   = Theme.light
   private val metrics = CellMetrics(charWidth = 8, lineHeight = 24, ascent = 18)
 
-  private val font = new Font(Font.SERIF, Font.PLAIN, 14).deriveFont(
+  private def kerned(face: Font): Font = face.deriveFont(
     java.util.Map.of[TextAttribute, Object](
       TextAttribute.LIGATURES,
       TextAttribute.LIGATURES_ON,
@@ -28,6 +28,8 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
       TextAttribute.KERNING_ON
     )
   )
+
+  private val font = kerned(new Font(Font.SERIF, Font.PLAIN, 14))
 
   private val frc         = TextLayoutSnapshot.defaultFontRenderContext()
   private val widthPx     = 600
@@ -244,16 +246,84 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
         }
     }
 
-  "A shaped stretch" should "place each glyph at the caret stop the line measures for its character" in {
-    val text    = "Hello, wide world: iiii WWWW"
-    val stretch = ShapedTextCache().stretchOf(text, font, frc)
-    val carets  = TextLayoutSnapshot.caretXsForText(text, font, frc)
+  private val kernedInter    = kerned(BundledInterFont.plain(14f))
+  private val ligaturedInter = kerned(BundledInterFont.ligatured(14f))
 
-    graphemeStarts(text).foreach { column =>
-      withClue(s"column $column: ") {
-        stretch.leftEdgeOf(column).getOrElse(Float.NaN) shouldBe carets(column) +- 0.01f
-      }
+  private def stretchAndCarets(text: String, face: Font) =
+    (ShapedTextCache().stretchOf(text, face, frc), TextLayoutSnapshot.caretXsForText(text, face, frc))
+
+  "A caret stop" should "sit at the x of the glyph the line draws for its character, kerned or not" in
+    List("platform serif" -> font, "bundled Inter" -> kernedInter).foreach {
+      case (name, face) =>
+        val text                = "Hello, wide world: AVAWAY To iiii WWWW"
+        val (stretch, carets)   = stretchAndCarets(text, face)
+        def glyphX(column: Int) = stretch.leftEdgeOf(column).getOrElse(Float.NaN)
+
+        stretch.glyphCount shouldBe text.length
+        graphemeStarts(text).foreach { column =>
+          withClue(s"$name, column $column: ")(carets(column) shouldBe glyphX(column) +- 0.01f)
+        }
     }
+
+  it should "start the line at zero and end it at the shaped advance, which no neighbour pulls" in
+    List(font, kernedInter, ligaturedInter).foreach { face =>
+      val text              = "AVAWAY To WWWW"
+      val (stretch, carets) = stretchAndCarets(text, face)
+
+      carets.head shouldBe 0.0f +- 0.01f
+      carets.last shouldBe stretch.advance +- 0.01f
+    }
+
+  it should "divide a ligature's span evenly between the characters it stands for" in
+    List("platform serif" -> font, "ligatured Inter" -> ligaturedInter).foreach {
+      case (name, face) =>
+        val text              = "office waffle ffl fi -> => AV"
+        val (stretch, carets) = stretchAndCarets(text, face)
+        val glyphStarts       = (0 until stretch.glyphCount).map(stretch.charIndexAt)
+        val ligatures = glyphStarts.zip(glyphStarts.drop(1) :+ text.length).filter((from, until) => until - from > 1)
+
+        withClue(s"$name: ")(ligatures should not be empty)
+        ligatures.foreach { (from, until) =>
+          val startX = stretch.leftEdgeOf(from).getOrElse(Float.NaN)
+          val endX   = stretch.leftEdgeOf(until).getOrElse(stretch.advance)
+          (from to until).foreach { column =>
+            withClue(s"$name, ligature $from-$until, column $column: ") {
+              carets(column) shouldBe startX + (endX - startX) * (column - from) / (until - from) +- 0.01f
+            }
+          }
+        }
+    }
+
+  it should "leave a colour boundary's second run where one shaping puts it, even between a kerned pair" in {
+    val text    = "AVAWAY To the office"
+    val split   = 1
+    val cache   = ShapedTextCache()
+    val stretch = cache.stretchOf(text, font, surfaceFrc(cache))
+    val glyphX  = stretch.leftEdgeOf(split).getOrElse(Float.NaN)
+    val colours = List(
+      StyledText("A", TextStyle.normal, red, white),
+      StyledText("VAWAY To the office", TextStyle.normal, blue, white)
+    )
+    val expected = paintedWith(cache) { surface =>
+      surface.setForegroundColor(red)
+      surface.drawShapedRunPx(4.0f, 4, glyphX, metrics.lineHeight, metrics.ascent, text, 0, split)
+      surface.setForegroundColor(blue)
+      surface.drawShapedRunPx(
+        4.0f + glyphX,
+        4,
+        stretch.advance - glyphX,
+        metrics.lineHeight,
+        metrics.ascent,
+        text,
+        split,
+        text.length
+      )
+    }
+    val actual = paintedWith(ShapedTextCache())(paintLine(_, text, colours))
+
+    glyphX should not be 0.0f
+    inkOf(expected) should be > 0
+    differingPixels(actual, expected).take(6) shouldBe Nil
   }
 
   "A plain font over simple text" should "draw with drawString, which shapes nothing there, and leave the cache alone" in {

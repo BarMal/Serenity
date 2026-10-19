@@ -9,6 +9,7 @@ import com.serenity.richtext.ParagraphRole
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
+import com.serenity.ui.renderer.FontFirstUse
 
 /** The wrap-and-measure algorithm as it stood before per-paragraph measurement: every row fitted by laying out a
   * candidate prefix with `TextLayout`, and every row's carets read back from a `TextLayout` of that row alone. Kept as
@@ -109,6 +110,10 @@ object LegacyLineMeasurement:
       else uniformCaretXs(text, charWidth, resolver.tabSize)
     else normalizeCollapsedCarets(layoutCaretXs(text, absoluteStartColumn, resolver, frc))
 
+  /** Each character's caret read per row, the way the draw path places glyphs: at the x of the glyph its character
+    * starts, a ligature's characters sharing its span evenly. Text `TextLayout` orders (right-to-left runs) or measures
+    * apart from its glyph advances (a slanted face) is read from `TextLayout`, as before.
+    */
   def layoutCaretXs(
     text: String,
     absoluteStartColumn: Int,
@@ -117,22 +122,69 @@ object LegacyLineMeasurement:
   ): Vector[Float] =
     if text.isEmpty then Vector(0.0f)
     else
-      val attributed = AttributedString(text)
-      @annotation.tailrec
-      def applyRuns(index: Int): Unit =
-        if index < text.length then
-          val runFont = resolver.fontAt(absoluteStartColumn + index)
-          @annotation.tailrec
-          def runEnd(cursor: Int): Int =
-            if cursor < text.length && resolver.fontAt(absoluteStartColumn + cursor) == runFont then runEnd(cursor + 1)
-            else cursor
-          val end = runEnd(index + 1)
-          attributed.addAttribute(TextAttribute.FONT, runFont, index, end)
-          applyRuns(end)
-      applyRuns(0)
-      val layout = TextLayout(attributed.getIterator, frc)
-      (0 until text.length).toVector.map(index => layout.getCaretInfo(TextHitInfo.leading(index))(0)) :+
-        layout.getAdvance
+      val fonts = (0 until text.length).map(index => resolver.fontAt(absoluteStartColumn + index)).distinct
+      if java.text.Bidi.requiresBidi(text.toCharArray, 0, text.length) ||
+          !fonts.forall(GlyphAdvances.layoutAdvanceMatchesSum(_, frc))
+      then textLayoutCaretXs(text, absoluteStartColumn, resolver, frc)
+      else glyphCaretXs(text, absoluteStartColumn, resolver, frc)
+
+  private def glyphCaretXs(
+    text: String,
+    absoluteStartColumn: Int,
+    resolver: LineFontResolver,
+    frc: FontRenderContext
+  ): Vector[Float] =
+    @annotation.tailrec
+    def runsFrom(index: Int, acc: Vector[(Int, Int, java.awt.Font)]): Vector[(Int, Int, java.awt.Font)] =
+      if index >= text.length then acc
+      else
+        val runFont = resolver.fontAt(absoluteStartColumn + index)
+        @annotation.tailrec
+        def runEnd(cursor: Int): Int =
+          if cursor < text.length && resolver.fontAt(absoluteStartColumn + cursor) == runFont then runEnd(cursor + 1)
+          else cursor
+        val end = runEnd(index + 1)
+        runsFrom(end, acc :+ ((index, end, runFont)))
+    val (stops, advance) = runsFrom(0, Vector.empty).foldLeft((Vector.empty[Float], 0.0f)) {
+      case ((acc, offset), (start, end, runFont)) =>
+        FontFirstUse.settle(runFont, frc)
+        val chars      = text.substring(start, end).toCharArray
+        val glyphs     = runFont.layoutGlyphVector(frc, chars, 0, chars.length, java.awt.Font.LAYOUT_LEFT_TO_RIGHT)
+        val count      = glyphs.getNumGlyphs
+        val starts     = glyphs.getGlyphCharIndices(0, count, new Array[Int](count))
+        val xs         = glyphs.getGlyphPositions(0, count + 1, new Array[Float](2 * (count + 1)))
+        val runAdvance = xs(2 * count)
+        val atChar =
+          chars.indices.map(char => starts.indices.filter(starts(_) == char).map(glyph => xs(2 * glyph)).minOption)
+        val resolved = atChar.zipWithIndex.map { (own, char) =>
+          own.getOrElse(atChar.drop(char + 1).flatten.headOption.getOrElse(runAdvance))
+        }
+        (acc ++ resolved.map(_ + offset), offset + runAdvance)
+    }
+    stops :+ advance
+
+  private def textLayoutCaretXs(
+    text: String,
+    absoluteStartColumn: Int,
+    resolver: LineFontResolver,
+    frc: FontRenderContext
+  ): Vector[Float] =
+    val attributed = AttributedString(text)
+    @annotation.tailrec
+    def applyRuns(index: Int): Unit =
+      if index < text.length then
+        val runFont = resolver.fontAt(absoluteStartColumn + index)
+        @annotation.tailrec
+        def runEnd(cursor: Int): Int =
+          if cursor < text.length && resolver.fontAt(absoluteStartColumn + cursor) == runFont then runEnd(cursor + 1)
+          else cursor
+        val end = runEnd(index + 1)
+        attributed.addAttribute(TextAttribute.FONT, runFont, index, end)
+        applyRuns(end)
+    applyRuns(0)
+    val layout = TextLayout(attributed.getIterator, frc)
+    (0 until text.length).toVector.map(index => layout.getCaretInfo(TextHitInfo.leading(index))(0)) :+
+      layout.getAdvance
 
   private def fittingLength(
     line: String,
