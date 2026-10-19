@@ -1,5 +1,7 @@
 package com.serenity.perf
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.perf.BenchmarkFixtures.{
   editorState,
@@ -9,6 +11,7 @@ import com.serenity.perf.BenchmarkFixtures.{
   largeRichTextDocument
 }
 import com.serenity.rope.Balance
+import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, PaneId}
 import com.serenity.state.reducers.EditorEventReducer
 
@@ -44,8 +47,37 @@ private[perf] object FootprintBenchmarks:
       Scenario(
         "footprint.ten_buffers",
         () => editorStateWithBuffers(OpenBuffers, largeMultilineDocument(DocumentLines))
-      )
+      ),
+      Scenario("footprint.prose_frame.stable_text", () => proseFrames(runtimes = 1, uniqueText = false)),
+      Scenario("footprint.prose_frame.fresh_text", () => proseFrames(runtimes = 1, uniqueText = true)),
+      Scenario("footprint.two_runtimes.prose_frame.stable_text", () => proseFrames(runtimes = 2, uniqueText = false))
     )
+
+  /** The `prose_frame.*` rows draw one laptop-sized frame of word-wrapped prose per runtime and keep each runtime's
+    * state and `RenderCaches`, which is what a drawn document leaves resident.
+    *
+    * `measure` discards its first build "to pay for static caches", so a process-wide cache is filled before the
+    * baseline reading and never shows up in a retained figure: moving such a cache into state a runtime owns raises
+    * `stable_text` and `two_runtimes.*` by what the cache holds (twice that for two runtimes, which stop sharing it).
+    * `fresh_text` draws a document no earlier build drew, so a process-wide cache grows during the build and that
+    * growth is counted as it would be once the cache is owned: the figure to compare across the move, where
+    * `stable_text` shows the shift.
+    */
+  private def proseFrames(runtimes: Int, uniqueText: Boolean): AnyRef =
+    val text = BenchmarkFixtures.loremIpsumProse(paragraphs = 300)
+    val salted =
+      if uniqueText then
+        val salt = FreshTextSalt.incrementAndGet()
+        text.linesIterator.map(line => if line.isEmpty then line else s"$line [$salt]").mkString("\n")
+      else text
+    List.fill(runtimes) {
+      val state  = LaptopFrameBenchmarks.proseStateOf(salted)
+      val caches = RenderCaches.create()
+      val _      = LaptopFrameBenchmarks.renderedFrame(state, caches, LaptopFrameBenchmarks.frameImage())
+      (state, caches)
+    }
+
+  private val FreshTextSalt = AtomicInteger(0)
 
   private def afterEdits(edits: Int): AppState =
     (1 to edits).foldLeft(editorState(largeMultilineDocument(DocumentLines), None))((state, _) =>

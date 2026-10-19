@@ -82,8 +82,9 @@ Local mutation that genuinely earns its place is scoped with `// scalafix:off Di
 | `AsInstanceOf`, `IsInstanceOf` | Pattern matching over casting |
 
 `Null`, `Throw`, `OptionPartial` and `IterableOps` are reported as **warnings only** — each needs its
-own migration. Java/AWT interop (`ui/terminal`, `ui/accessibility`), the LSP framer and the richtext
-codecs are excluded, since they sit at the outermost boundary where those constructs are legitimate.
+own migration. Java/AWT interop (`ui/terminal`, `ui/accessibility`) and the LSP framer are excluded, since they
+sit at the outermost boundary where those constructs are legitimate. The richtext codecs are checked like everything
+else; the JAXP callbacks that must throw carry a `@SuppressWarnings` saying why.
 Tests are exempt entirely.
 
 To take a deliberate exception, annotate the declaration and say why:
