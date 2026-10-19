@@ -55,8 +55,8 @@ sealed abstract class WrappedLineCache:
     compute: => TableColumns
   ): TableColumns
 
-  /** What `primary` and the chain `fallback` describes cover. A cache keeps the answer, and the coverage memo inside it,
-    * for the next line that asks; without one every call starts a fresh memo.
+  /** What `primary` and the chain `fallback` describes cover. A cache keeps the answer, and the coverage memo inside
+    * it, for the next line that asks; without one every call starts a fresh memo.
     */
   def fallbackCoverage(primary: Font, fallback: FontFallback): Java2DGlyphCoverage =
     Java2DGlyphCoverage.of(primary, fallback)

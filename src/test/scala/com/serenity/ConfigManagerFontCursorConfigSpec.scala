@@ -66,7 +66,9 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
 
     config.editorConfig.fontConfig.fallbackFamilies shouldBe List("Noto Sans CJK JP", "Symbola")
     config.editorConfig.fontConfig.fallback.slotFamilies shouldBe Vector("Noto Sans CJK JP", "Symbola", "Dialog")
-    ConfigManager.configToString(config) should include("""typography.fallback.families = ["Noto Sans CJK JP", "Symbola"]""")
+    ConfigManager.configToString(config) should include(
+      """typography.fallback.families = ["Noto Sans CJK JP", "Symbola"]"""
+    )
   }
 
   it should "default to no configured fallback families, leaving only the system's resolver" in {

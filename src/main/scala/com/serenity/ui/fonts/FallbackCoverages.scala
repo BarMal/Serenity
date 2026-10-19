@@ -4,8 +4,8 @@ import java.awt.Font
 import java.util.LinkedHashMap
 
 /** The [[Java2DGlyphCoverage]] of each primary font and fallback chain recently laid out, so a chain's coverage memo
-  * outlives the line that asked about it. Bounded and owned by whoever creates it (one per render cache owner); there is
-  * no shared instance.
+  * outlives the line that asked about it. Bounded and owned by whoever creates it (one per render cache owner); there
+  * is no shared instance.
   */
 final class FallbackCoverages(maxEntries: Int):
 

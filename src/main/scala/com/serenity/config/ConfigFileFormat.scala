@@ -194,6 +194,11 @@ object ConfigFileFormat:
     field("typography.prose.ligatures"),
     field("typography.code.ligatures"),
     field("typography.ui.ligatures"),
+    comment(
+      "Fonts tried, in order, for characters the code, prose or UI font has no glyph for (CJK, Arabic, symbols); " +
+        "the system's own fonts follow. Family names, e.g. [\"Noto Sans CJK JP\"]"
+    ),
+    field("typography.fallback.families"),
     comment("Prose line length in characters (e.g. 66ch) while the workspace is in prose mode, or off"),
     field("typography.prose.measure"),
     comment("How all text adapts to the display: auto, manual (uses the factor below), off"),

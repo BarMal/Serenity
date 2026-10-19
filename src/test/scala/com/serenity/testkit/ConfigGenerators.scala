@@ -64,9 +64,10 @@ object ConfigGenerators:
       // never holds.
       chosenMultiplier <- double(0.5, 3.0)
       multiplier = if scaleMode == FontLoader.TextScaleMode.Manual then chosenMultiplier else 1.0
-      codeLigs <- Gen.oneOf(true, false)
-      textLigs <- Gen.oneOf(true, false)
-      uiLigs   <- Gen.oneOf(true, false)
+      codeLigs         <- Gen.oneOf(true, false)
+      textLigs         <- Gen.oneOf(true, false)
+      uiLigs           <- Gen.oneOf(true, false)
+      fallbackFamilies <- Gen.listOfN(2, genFontFamily).map(_.distinct)
     yield FontConfig(
       codeFontFamily = codeFamily,
       textFontFamily = textFamily,
@@ -78,7 +79,8 @@ object ConfigGenerators:
       textScaleMultiplier = multiplier,
       enableLigatures = codeLigs,
       textLigatures = textLigs,
-      uiLigatures = uiLigs
+      uiLigatures = uiLigs,
+      fallbackFamilies = fallbackFamilies
     )
 
   val genEditorConfig: Gen[EditorConfig] =

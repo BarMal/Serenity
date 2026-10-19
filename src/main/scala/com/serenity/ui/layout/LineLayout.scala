@@ -119,8 +119,8 @@ private[layout] object LineLayout:
     LineLayoutInputs(resolver, paragraphRole, glyphWidthPx)
 
   /** `styled` with the runs the line needs in fallback fonts. The whole logical line is itemised when it is at hand, a
-    * wrapped slice (which cannot see what precedes it) otherwise. Code rows keep their pitch whatever glyphs the fallback
-    * fonts add.
+    * wrapped slice (which cannot see what precedes it) otherwise. Code rows keep their pitch whatever glyphs the
+    * fallback fonts add.
     */
   private def withFallback(
     styled: LineFontResolver,

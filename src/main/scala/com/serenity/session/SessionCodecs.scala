@@ -50,19 +50,20 @@ given Encoder[FontConfig] = deriveEncoder
 
 given Decoder[FontConfig] = Decoder.instance { cursor =>
   for
-    codeFontFamily  <- cursor.getOrElse[String]("codeFontFamily")(FontConfig().codeFontFamily)
-    textFontFamily  <- cursor.getOrElse[String]("textFontFamily")(FontConfig().textFontFamily)
-    uiFontFamily    <- cursor.getOrElse[String]("uiFontFamily")(Font.SANS_SERIF)
-    legacyFontSize  <- cursor.getOrElse[Float]("fontSize")(FontConfig().fontSize)
-    codeFontSize    <- cursor.getOrElse[Float]("codeFontSize")(legacyFontSize)
-    textFontSize    <- cursor.getOrElse[Float]("textFontSize")(legacyFontSize)
-    uiFontSize      <- cursor.getOrElse[Float]("uiFontSize")(FontConfig().uiFontSize)
-    textScaleMode   <- cursor.getOrElse[TextScaleMode]("textScaleMode")(FontConfig().textScaleMode)
-    textScale       <- cursor.getOrElse[Double]("textScaleMultiplier")(FontConfig().textScaleMultiplier)
-    legacyLigatures <- cursor.getOrElse[Boolean]("enableLigatures")(FontConfig().enableLigatures)
-    codeLigatures   <- cursor.getOrElse[Boolean]("codeLigatures")(legacyLigatures)
-    textLigatures   <- cursor.getOrElse[Boolean]("textLigatures")(legacyLigatures)
-    uiLigatures     <- cursor.getOrElse[Boolean]("uiLigatures")(FontConfig().uiLigatures)
+    codeFontFamily   <- cursor.getOrElse[String]("codeFontFamily")(FontConfig().codeFontFamily)
+    textFontFamily   <- cursor.getOrElse[String]("textFontFamily")(FontConfig().textFontFamily)
+    uiFontFamily     <- cursor.getOrElse[String]("uiFontFamily")(Font.SANS_SERIF)
+    legacyFontSize   <- cursor.getOrElse[Float]("fontSize")(FontConfig().fontSize)
+    codeFontSize     <- cursor.getOrElse[Float]("codeFontSize")(legacyFontSize)
+    textFontSize     <- cursor.getOrElse[Float]("textFontSize")(legacyFontSize)
+    uiFontSize       <- cursor.getOrElse[Float]("uiFontSize")(FontConfig().uiFontSize)
+    textScaleMode    <- cursor.getOrElse[TextScaleMode]("textScaleMode")(FontConfig().textScaleMode)
+    textScale        <- cursor.getOrElse[Double]("textScaleMultiplier")(FontConfig().textScaleMultiplier)
+    legacyLigatures  <- cursor.getOrElse[Boolean]("enableLigatures")(FontConfig().enableLigatures)
+    codeLigatures    <- cursor.getOrElse[Boolean]("codeLigatures")(legacyLigatures)
+    textLigatures    <- cursor.getOrElse[Boolean]("textLigatures")(legacyLigatures)
+    uiLigatures      <- cursor.getOrElse[Boolean]("uiLigatures")(FontConfig().uiLigatures)
+    fallbackFamilies <- cursor.getOrElse[List[String]]("fallbackFamilies")(FontConfig().fallbackFamilies)
   yield FontConfig(
     codeFontFamily = codeFontFamily,
     textFontFamily = textFontFamily,
@@ -74,7 +75,8 @@ given Decoder[FontConfig] = Decoder.instance { cursor =>
     textScaleMultiplier = FontConfig.clampTextScale(textScale),
     enableLigatures = codeLigatures,
     textLigatures = textLigatures,
-    uiLigatures = uiLigatures
+    uiLigatures = uiLigatures,
+    fallbackFamilies = fallbackFamilies
   )
 }
 

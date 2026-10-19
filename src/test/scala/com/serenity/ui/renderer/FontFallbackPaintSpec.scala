@@ -18,11 +18,11 @@ import org.scalatest.matchers.should.Matchers
   */
 class FontFallbackPaintSpec extends AnyFlatSpec with Matchers:
 
-  private val frc     = TextLayoutSnapshot.defaultFontRenderContext()
-  private val sizePx  = 14.0f
-  private val originX = 4.0f
-  private val white   = RenderColor.fromRgba(255, 255, 255)
-  private val black   = RenderColor.fromRgba(0, 0, 0)
+  private val frc       = TextLayoutSnapshot.defaultFontRenderContext()
+  private val sizePx    = 14.0f
+  private val originX   = 4.0f
+  private val white     = RenderColor.fromRgba(255, 255, 255)
+  private val black     = RenderColor.fromRgba(0, 0, 0)
   private val whiteArgb = 0xffffffff
 
   private def registered(resource: String): Font =
@@ -32,6 +32,7 @@ class FontFallbackPaintSpec extends AnyFlatSpec with Matchers:
 
   private val fallback  = FontFallback(Vector(registered("/fonts/SerenityFallbackTest.ttf").getFamily))
   private val proseFont = registered("/fonts/SerenityProseTest.ttf").deriveFont(Font.PLAIN, sizePx)
+
   private val codeFont =
     Font
       .createFont(Font.TRUETYPE_FONT, Paths.get(getClass.getResource("/fonts/MonaspaceNeon-Regular.otf").toURI).toFile)
@@ -72,8 +73,8 @@ class FontFallbackPaintSpec extends AnyFlatSpec with Matchers:
   private def inkColumns(image: BufferedImage, fromX: Int, untilX: Int): Vector[Int] =
     (fromX until untilX).filter(x => (0 until image.getHeight).exists(y => image.getRGB(x, y) != whiteArgb)).toVector
 
-  /** The share of the ink's bounding box in `[fromX, untilX)` that is inked: the subset 中 is a solid rectangle, which no
-    * real CJK glyph is, so a full box says the subset font drew it and not whatever the system has installed.
+  /** The share of the ink's bounding box in `[fromX, untilX)` that is inked: the subset 中 is a solid rectangle, which
+    * no real CJK glyph is, so a full box says the subset font drew it and not whatever the system has installed.
     */
   private def fillRatio(image: BufferedImage, fromX: Int, untilX: Int): Double =
     val inked = for

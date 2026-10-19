@@ -9,9 +9,9 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** #1866: text the primary font has no glyph for is measured in a fallback font, so carets sit where the fallback
-  * glyphs are drawn. The fallback is a test subset font (中 and 文 one em wide, ★ 0.8 em, ascent 1.4 em and descent
-  * 0.4 em), and the proportional prose font is a physical test font too: a logical font such as Serif already falls back
-  * on its own, so it would never reach this chain, so nothing depends on what the machine's `Dialog` font reaches.
+  * glyphs are drawn. The fallback is a test subset font (中 and 文 one em wide, ★ 0.8 em, ascent 1.4 em and descent 0.4
+  * em), and the proportional prose font is a physical test font too: a logical font such as Serif already falls back on
+  * its own, so it would never reach this chain, so nothing depends on what the machine's `Dialog` font reaches.
   */
 class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
 

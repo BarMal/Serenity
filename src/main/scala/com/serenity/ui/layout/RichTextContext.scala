@@ -12,8 +12,8 @@ import com.serenity.ui.theme.RichTextStyling
 
 /** The inputs a logical line's wrap depends on besides its text: the rich-text paragraph styles that choose each run's
   * font and a drop cap's role, the prose zoom that scales them, whether drop caps are enabled at all, and how the
-  * line's inline Markdown is restyled. `tabSize` is the width a tab takes on the cell grid, and `fallback` the fonts that
-  * draw what the line's own font has no glyph for.
+  * line's inline Markdown is restyled. `tabSize` is the width a tab takes on the cell grid, and `fallback` the fonts
+  * that draw what the line's own font has no glyph for.
   */
 final case class RichTextContext(
     document: Option[RichTextDocument],

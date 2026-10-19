@@ -29,8 +29,8 @@ private[layout] object WideCells:
         if !Character.isSurrogate(chars(index)) && isWide(chars(index).toInt) then advances(index) = 2 * cellPx
       }
 
-  /** `carets` (a leading stop per character plus the trailing edge) with each wide character widened or narrowed to
-    * two cells and every stop after it moved to match.
+  /** `carets` (a leading stop per character plus the trailing edge) with each wide character widened or narrowed to two
+    * cells and every stop after it moved to match.
     */
   def snapped(carets: IArray[Float], text: String, cellPx: Float): IArray[Float] =
     if cellPx <= 0.0f || !hasWide(text) then carets

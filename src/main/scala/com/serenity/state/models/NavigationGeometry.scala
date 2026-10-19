@@ -143,7 +143,18 @@ object MeasuredRow:
   * inset. Placing a cached row allocates only this wrapper: the measured geometry is shared, never copied.
   */
 final case class TextVisualLine(bufferLine: Int, row: MeasuredRow, xOffsetPx: Float):
-  export row.{ascentPx, caretCount, caretColumn, endColumn, fallbackFamilies, fontRuns, heightPx, startColumn, text, widthPx}
+  export row.{
+    ascentPx,
+    caretCount,
+    caretColumn,
+    endColumn,
+    fallbackFamilies,
+    fontRuns,
+    heightPx,
+    startColumn,
+    text,
+    widthPx
+  }
 
   /** Caret x of stop `index` in the coordinates of the pane. */
   def caretX(index: Int): Float = row.caretXs(index) + xOffsetPx

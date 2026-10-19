@@ -41,7 +41,8 @@ private[layout] object FallbackResolution:
       resolver.runs.find(run => column >= run.startColumn && column < run.endColumn)
 
     def slotAt(column: Int): FontSlot =
-      fallbackRuns.collectFirst { case (from, until, slot) if column >= from && column < until => slot }
+      fallbackRuns
+        .collectFirst { case (from, until, slot) if column >= from && column < until => slot }
         .getOrElse(FontSlot.Primary)
 
     cuts.zip(cuts.drop(1)).flatMap { (from, until) =>

@@ -30,7 +30,9 @@ final private[fonts] class GlyphCoveragePages(maxPages: Int):
     val word   = offset >> 6
     val bit    = 1L << (offset & 63)
     val known = synchronized {
-      Option(pages.get(key)).filter(page => (page.asked(word) & bit) != 0L).map(page => (page.covered(word) & bit) != 0L)
+      Option(pages.get(key))
+        .filter(page => (page.asked(word) & bit) != 0L)
+        .map(page => (page.covered(word) & bit) != 0L)
     }
     known.getOrElse {
       val answer = probe

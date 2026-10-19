@@ -150,7 +150,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
         textLigatures = false,
         uiLigatures = true,
         textScaleMode = FontLoader.TextScaleMode.Manual,
-        textScaleMultiplier = 1.25
+        textScaleMultiplier = 1.25,
+        fallbackFamilies = List("Noto Sans CJK JP", "Symbola")
       )
     )
     .withCursorColors(
