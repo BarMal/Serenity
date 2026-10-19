@@ -10,20 +10,41 @@ import com.serenity.state.undo.EditGrouping
   */
 object WorkspaceEditReducer:
 
+  /** What [[applyToOpenBuffers]] did: `editedBuffers` counts buffers that took at least one edit, `heldBack` the edits
+    * left unapplied (e.g. beside a read-only block), and `unopenedUris` the uris no open buffer matched.
+    */
+  final case class Outcome(
+      result: ReducerResult,
+      appliedCount: Int,
+      editedBuffers: Int,
+      heldBack: Int,
+      unopenedUris: Set[String]
+  )
+
   def apply(edits: Map[String, List[LspTextEdit]], state: AppState): ReducerResult =
-    state.persisted.buffers.values.foldLeft(ReducerResult.noEffects(state)) { (result, buffer) =>
+    applyToOpenBuffers(edits, state).result
+
+  def applyToOpenBuffers(edits: Map[String, List[LspTextEdit]], state: AppState): Outcome =
+    val openUris = state.persisted.buffers.values.flatMap(_.document.filePath.map(_.toUri.toString)).toSet
+    val initial  = Outcome(ReducerResult.noEffects(state), 0, 0, 0, edits.keySet -- openUris)
+    state.persisted.buffers.values.foldLeft(initial) { (outcome, buffer) =>
       val bufferEdits = buffer.document.filePath.flatMap(path => edits.get(path.toUri.toString)).getOrElse(Nil)
-      if bufferEdits.isEmpty then result
+      if bufferEdits.isEmpty then outcome
       else
-        val (editedState, undoEffects) = applyToBuffer(result.state, buffer, bufferEdits)
-        ReducerResult(editedState, result.effects ++ undoEffects)
+        val (editedState, undoEffects, applied) = applyToBuffer(outcome.result.state, buffer, bufferEdits)
+        outcome.copy(
+          result = ReducerResult(editedState, outcome.result.effects ++ undoEffects),
+          appliedCount = outcome.appliedCount + applied,
+          editedBuffers = outcome.editedBuffers + (if applied > 0 then 1 else 0),
+          heldBack = outcome.heldBack + bufferEdits.length - applied
+        )
     }
 
   private def applyToBuffer(
     state: AppState,
     buffer: Buffer,
     edits: List[LspTextEdit]
-  ): (AppState, List[AppEffect]) =
+  ): (AppState, List[AppEffect], Int) =
     val content = buffer.document.content
     val multiCursorEdits = edits.map { edit =>
       val start = content.lineColumnToOffset(edit.range.start.line, edit.range.start.character)
@@ -40,4 +61,4 @@ object WorkspaceEditReducer:
         EditorEditSupport
           .undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, grouping = EditGrouping.Standalone)
       )
-    (Focused.replaceBuffer(state, updatedBuffer), undoEffects)
+    (Focused.replaceBuffer(state, updatedBuffer), undoEffects, appliedEdits.length)

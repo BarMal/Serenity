@@ -2,64 +2,30 @@ package com.serenity.state.reducers
 
 import com.serenity.lsp.model.LspTextEdit
 import com.serenity.state.models.*
-import com.serenity.state.undo.EditGrouping
 import com.serenity.ui.layout.PeekContent
 
-/** Applies a `textDocument/rename` response's `WorkspaceEdit` (#1467) to the buffer open in the currently focused
-  * editor pane -- the common case this client supports today. A `WorkspaceEdit` can in principle touch files that
-  * aren't open in any buffer; this client has no path yet to open, edit and persist a document it never focuses, so
-  * edits for any uri other than the focused buffer's are dropped rather than applied. The peek message shown afterward
-  * always reports how many locations were actually edited versus left untouched, so a multi-file rename is never
-  * silently partial.
+/** Applies a `textDocument/rename` response's `WorkspaceEdit` (#1467, #1965) to every open buffer whose document it
+  * names, each as its own undo step. This client has no path yet to open, edit and persist a document that no buffer
+  * holds, so edits for those uris are dropped; the peek message shown afterward always reports how many locations were
+  * edited and how many files were left untouched, so a multi-file rename is never silently partial.
   */
 object RenameEditReducer:
 
   def apply(edits: Map[String, List[LspTextEdit]], anchor: CursorPosition, state: AppState): ReducerResult =
-    Focused.bufferOf(state) match
-      case None =>
-        summaryPeek(state, anchor, appliedCount = 0, skippedUris = edits.keySet)
-      case Some(buffer) =>
-        val currentUri   = buffer.document.filePath.map(_.toUri.toString)
-        val currentEdits = currentUri.flatMap(edits.get).getOrElse(Nil)
-        val skippedUris  = edits.keySet -- currentUri.toSet
-        if currentEdits.isEmpty then summaryPeek(state, anchor, appliedCount = 0, skippedUris)
-        else
-          val content = buffer.document.content
-          val multiCursorEdits = currentEdits.map { edit =>
-            val start = content.lineColumnToOffset(edit.range.start.line, edit.range.start.character)
-            val end   = content.lineColumnToOffset(edit.range.end.line, edit.range.end.character)
-            EditorEditSupport.MultiCursorEdit(0, start, end, edit.newText)
-          }
-          val initialOffsets =
-            buffer.editing.cursorPositions.map(cursor => content.lineColumnToOffset(cursor.line, cursor.column))
-          val (updatedBuffer, appliedEdits) =
-            EditorEditSupport.applyTrackedEdits(buffer, initialOffsets, multiCursorEdits)
-          val stateWithEdit = Focused.replaceBuffer(state, updatedBuffer)
-          val undoEffects = state.persisted.layout.activeEditorPaneId
-            .map(paneId =>
-              EditorEditSupport
-                .undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, grouping = EditGrouping.Standalone)
-            )
-            .getOrElse(Nil)
-          val summary = summaryPeek(
-            stateWithEdit,
-            anchor,
-            appliedCount = appliedEdits.length,
-            skippedUris,
-            heldBack = currentEdits.length - appliedEdits.length
-          )
-          ReducerResult(summary.state, undoEffects ++ summary.effects)
+    val outcome = WorkspaceEditReducer.applyToOpenBuffers(edits, state)
+    val summary = summaryPeek(outcome.result.state, anchor, outcome)
+    ReducerResult(summary.state, outcome.result.effects ++ summary.effects)
 
   private def summaryPeek(
     state: AppState,
     anchor: CursorPosition,
-    appliedCount: Int,
-    skippedUris: Set[String],
-    heldBack: Int = 0
+    outcome: WorkspaceEditReducer.Outcome
   ): ReducerResult =
-    val appliedPart = s"Renamed $appliedCount location(s) in this file." +
-      (if heldBack == 0 then "" else s" $heldBack beside a read-only block were left as they were.")
+    val where =
+      if outcome.editedBuffers > 1 then s"in ${outcome.editedBuffers} open file(s)" else "in this file"
+    val appliedPart = s"Renamed ${outcome.appliedCount} location(s) $where." +
+      (if outcome.heldBack == 0 then "" else s" ${outcome.heldBack} beside a read-only block were left as they were.")
     val skippedPart =
-      if skippedUris.isEmpty then ""
-      else s" ${skippedUris.size} other file(s) were not updated -- rename currently applies to the open file only."
+      if outcome.unopenedUris.isEmpty then ""
+      else s" ${outcome.unopenedUris.size} file(s) not open in any buffer were not updated."
     PeekStateReducer.show(PeekContent.QuickInfo(appliedPart + skippedPart), anchor, state)
