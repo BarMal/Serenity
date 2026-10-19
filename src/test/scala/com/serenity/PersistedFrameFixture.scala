@@ -197,5 +197,6 @@ trait PersistedFrameFixture:
         y <- 0 until a.getHeight
         if (a.getRGB(x, y) & 0xffffff) != (b.getRGB(x, y) & 0xffffff)
       yield (x, y)
-    if differing.nonEmpty then System.err.println(FrameMismatchDump.write(getClass.getSimpleName, a, b, differing))
+    if differing.nonEmpty then
+      val _ = FrameMismatchDump.write(getClass.getSimpleName, a, b, differing)
     differing
