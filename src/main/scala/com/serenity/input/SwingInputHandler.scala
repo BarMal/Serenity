@@ -25,7 +25,8 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     metrics: () => CellMetrics,
     uiMetrics: () => CellMetrics,
     wheelScrollLines: Int = InputConfig().wheelScrollLines,
-    frameTimings: FrameTimings = FrameTimings()
+    frameTimings: FrameTimings = FrameTimings(),
+    imeDiagnostics: Option[ImeDiagnostics.Sink] = None
 ) extends InputHandler[F]:
 
   def this(component: java.awt.Component, inputRouter: InputRouter[F, E], metrics: () => CellMetrics) =
@@ -160,6 +161,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
 
   component.addKeyListener(new KeyAdapter:
     override def keyTyped(e: KeyEvent): Unit =
+      imeDiagnostics.foreach(_(ImeDiagnostics.describe(e, System.currentTimeMillis())))
       if !swallowedForSummon() then translateTyped(e).foreach(enqueueKey(_, e))
     override def keyPressed(e: KeyEvent): Unit =
       lastKeyPress.set(Some((KeyStroke.getKeyStrokeForEvent(e), System.currentTimeMillis)))
@@ -179,6 +181,14 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       applySummon(SummonChordTracker.released(_, inputRouter.summonConfig, SummonKeys.rawKey(e), e.getWhen))
       translateModifierReleased(e)
       modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierReleased(modifier, e.getWhen))))
+
+  // Installed only when diagnostics are on, so the default component carries no input-method hooks (#2008).
+  imeDiagnostics.foreach { sink =>
+    component.addInputMethodListener(ImeDiagnostics.listener(sink))
+    component match
+      case host: ImeRequestsHost => host.installInputMethodRequests(ImeDiagnostics.requests(component, sink))
+      case _                     => ()
+  }
 
   // A summon chord is held, so a window that loses focus (Alt+Tab, say) never sees the release.
   component.addFocusListener(
