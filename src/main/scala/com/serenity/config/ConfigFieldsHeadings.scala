@@ -44,18 +44,22 @@ private[config] object ConfigFieldsHeadings:
     text.trim.toLowerCase(Locale.ROOT) match
       case "text"    => Some(HeadingColour.Text)
       case "heading" => Some(HeadingColour.Heading)
+      case "accent"  => Some(HeadingColour.Accent)
+      case "muted"   => Some(HeadingColour.Muted)
       case other     => colorFromHex(other).map(color => HeadingColour.Fixed(RenderColor.fromAwt(color)))
 
   private def colourKey(colour: HeadingColour): String =
     colour match
       case HeadingColour.Text         => "text"
       case HeadingColour.Heading      => "heading"
+      case HeadingColour.Accent       => "accent"
+      case HeadingColour.Muted        => "muted"
       case HeadingColour.Fixed(color) => colorToHex(color.toAwt)
 
-  /** `auto` follows the global colour; `text`, `heading` or `#RRGGBB` say what this level is. */
+  /** `auto` follows the global colour; `text`, `heading`, `accent`, `muted` or `#RRGGBB` say what this level is. */
   private val levelColour: FieldCodec[Option[HeadingColour]] = enumerated(parseColour, colourKey).orAuto
 
-  /** `auto` keeps each kind of document's own look; `text` or `heading` applies to both. */
+  /** `auto` keeps each kind of document's own look; `text`, `heading`, `accent` or `muted` applies to both. */
   private val globalColour: FieldCodec[Option[HeadingColour]] =
     enumerated[HeadingColour](
       text =>
@@ -91,7 +95,9 @@ private[config] object ConfigFieldsHeadings:
         _.spaceBefore,
         (current, value) => current.copy(spaceBefore = value)
       ),
-      levelField(level, "space_after", space)(_.spaceAfter, (current, value) => current.copy(spaceAfter = value))
+      levelField(level, "space_after", space)(_.spaceAfter, (current, value) => current.copy(spaceAfter = value)),
+      levelField(level, "underline", flag)(_.underline, (current, value) => current.copy(underline = value)),
+      levelField(level, "rule", flag)(_.rule, (current, value) => current.copy(rule = value))
     )
 
   val fields: List[ConfigField[?]] =

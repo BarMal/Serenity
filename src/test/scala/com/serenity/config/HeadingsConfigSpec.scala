@@ -117,9 +117,64 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
   it should "name the colours the terminal's ladder uses, accent and muted" in {
     def colourOf(text: String) = read(AppConfig.default, "headings.h1.colour" -> text).headingsConfig.styles(0).colour
 
-    colourOf("accent").map(_.toString) shouldBe Some("Accent")
-    colourOf("muted").map(_.toString) shouldBe Some("Muted")
-    read(AppConfig.default, "headings.colour" -> "accent").headingsConfig.colour.map(_.toString) shouldBe Some("Accent")
+    colourOf("accent") shouldBe Some(HeadingColour.Accent)
+    colourOf("muted") shouldBe Some(HeadingColour.Muted)
+    read(AppConfig.default, "headings.colour" -> "accent").headingsConfig.colour shouldBe Some(HeadingColour.Accent)
+  }
+
+  it should "give a terminal the ladder on auto, and a pixel surface today's look" in {
+    val terminal = AppConfig.default.headingsConfig.stylesFor(terminal = true)
+
+    terminal.map(style => (style.bold, style.italic, style.underline)) shouldBe Vector(
+      (true, false, true),
+      (true, false, false),
+      (true, true, false),
+      (true, false, false),
+      (true, false, false),
+      (true, false, false)
+    )
+    terminal.map(_.ladderColour) shouldBe Vector(
+      None,
+      None,
+      None,
+      Some(HeadingColour.Accent),
+      Some(HeadingColour.Heading),
+      Some(HeadingColour.Muted)
+    )
+    terminal.map(_.sizeScale) shouldBe HeadingStyle.defaults.map(_.sizeScale)
+    AppConfig.default.headingsConfig.styles shouldBe HeadingStyle.defaults
+    AppConfig.default.headingSettings shouldBe HeadingSettings.default
+  }
+
+  it should "let a terminal level's settings take it off the ladder" in {
+    val configured = read(
+      AppConfig.default,
+      "headings.h1.underline" -> "false",
+      "headings.h3.italic"    -> "false",
+      "headings.h4.colour"    -> "text"
+    ).headingsConfig.stylesFor(terminal = true)
+
+    configured(0).underline shouldBe false
+    configured(2).italic shouldBe false
+    configured(3).colour shouldBe Some(HeadingColour.Text)
+  }
+
+  it should "give a terminal rule the row of space below it that auto leaves, unless space_after says otherwise" in {
+    val configured = read(
+      AppConfig.default,
+      "headings.h1.rule"        -> "true",
+      "headings.h2.rule"        -> "true",
+      "headings.h2.space_after" -> "0",
+      "headings.h3.rule"        -> "true",
+      "headings.h3.space_after" -> "2"
+    ).headingsConfig
+
+    val terminal = configured.stylesFor(terminal = true)
+    terminal.take(3).map(_.rule) shouldBe Vector(true, true, true)
+    terminal.take(3).map(_.spaceAfterEm) shouldBe Vector(1.0f, 0.0f, 2.0f)
+    terminal.drop(3).map(style => (style.rule, style.spaceAfterEm)).distinct shouldBe Vector((false, 0.0f))
+    configured.settings(12.0f, terminal = true).rule(1) shouldBe true
+    configured.settings(12.0f).rule(1) shouldBe false
   }
 
   it should "read auto and zero as no space, leaving the look it has today" in {
@@ -239,7 +294,10 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
           HeadingLevelConfig(
             italic = Some(true),
             align = Some(ParagraphAlignment.Right),
-            spaceBefore = Some(2.0f)
+            spaceBefore = Some(2.0f),
+            colour = Some(HeadingColour.Accent),
+            underline = Some(true),
+            rule = Some(true)
           ),
           HeadingLevelConfig(
             family = Some("Charter"),

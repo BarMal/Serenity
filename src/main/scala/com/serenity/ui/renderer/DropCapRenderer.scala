@@ -135,8 +135,7 @@ object DropCapRenderer:
     * carries.
     */
   private def glyphColourOf(state: AppState): RenderColor =
-    val config = state.persisted.config
-    config.documentConfig.dropCapColour.resolve(state.persisted.theme, config.headingSettings)
+    state.persisted.config.documentConfig.dropCapColour.resolve(state.persisted.theme, state.effectiveHeadingSettings)
 
   /** Cell-grid (TUI) home-line hook: re-styles the one cell the caller's own ordinary text draw call already painted --
     * see [[renderGlyphCell]]'s own doc comment for why the fixed grid never attempts multi-row spanning.

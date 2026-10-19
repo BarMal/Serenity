@@ -5,7 +5,7 @@ import com.serenity.lsp.client.DocumentUri
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.text.TextStatistics
 import com.serenity.ui.layout.{Layout, SpacingScale, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
-import com.serenity.ui.theme.Theme
+import com.serenity.ui.theme.{HeadingSettings, Theme}
 
 final case class AppState(
     persisted: Persisted,
@@ -81,6 +81,13 @@ final case class AppState(
     persisted.config.uiElementGap.getOrElse(
       if runtime.capabilities.isCellGrid then 0.0 else effectiveUiElementGapDefaultCells
     )
+
+  /** The heading settings for this state's surface. A level left on auto is today's look on a pixel surface and the
+    * terminal's ladder of weight, slant, underline and colour on a cell grid, where size cannot tell the levels apart.
+    */
+  def effectiveHeadingSettings: HeadingSettings =
+    if runtime.capabilities.isCellGrid then persisted.config.terminalHeadingSettings
+    else persisted.config.headingSettings
 
   /** [[LineNumberLayout.marginLeft]], resolved the same way as [[effectiveUiElementGap]]. */
   def effectiveLineNumberMarginLeft: Int =

@@ -65,6 +65,8 @@ class HeadingStylePaintSpec extends AnyFlatSpec with Matchers with PersistedFram
 
   "A graphical session's headings" should "resolve to the settings they always have while nothing is set" in {
     AppConfig.conventional.headingSettings shouldBe HeadingSettings.default
+    richState(AppConfig.conventional).effectiveHeadingSettings shouldBe HeadingSettings.default
+    markdownState(AppConfig.conventional).effectiveHeadingSettings shouldBe HeadingSettings.default
   }
 
   it should "paint rich text exactly as when every level spells out today's look, rule included" in {

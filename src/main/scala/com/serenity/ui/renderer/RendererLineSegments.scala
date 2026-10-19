@@ -4,7 +4,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.SemanticToken
 import com.serenity.state.models.{AppState, Buffer, TextVisualLine}
 import com.serenity.ui.layout.TextLayoutSnapshot
-import com.serenity.ui.theme.{HeadingColour, MarkdownInlineStyling, RichTextStyling, StyledText, TextStyle, Theme}
+import com.serenity.ui.theme.{MarkdownInlineStyling, RichTextStyling, StyledText, TextStyle, Theme}
 
 /** The styled segments one visual line is painted with when its styling is not simply the syntax highlighter's: rich
   * text runs, text outside the focused body dimmed, and inline Markdown restyled with its markers hidden. `None` leaves
@@ -45,8 +45,10 @@ private[renderer] object RendererLineSegments:
           )
         )
 
-  /** A Markdown heading in source view is highlighted in the theme's heading colour; this repaints its text where the
-    * heading settings ask for another, leaving the `#` marker as the theme has it.
+  /** A Markdown heading in source view is highlighted bold in the theme's heading colour; this repaints its text in the
+    * weight, slant, underline and colour the heading settings give its level, leaving the `#` marker as the theme has
+    * it. Only the row the heading opens on: the highlighter does not know the rows a wrapped heading continues onto
+    * are one.
     */
   private def markdownSourceHeading(
     visualLine: TextVisualLine,
@@ -57,17 +59,27 @@ private[renderer] object RendererLineSegments:
     context: RenderContext
   ): Option[List[StyledText]] =
     Option
-      .when(state.syntaxHighlightingEnabled && buffer.document.language.contains(LanguageId.Markdown)) {
+      .when(
+        visualLine.startColumn == 0 && state.syntaxHighlightingEnabled &&
+          buffer.document.language.contains(LanguageId.Markdown)
+      ) {
         val line = buffer.document.content.getLine(visualLine.bufferLine).getOrElse("")
-        headingLevel(line).filter(snapshot.headings.colourFor(_, markdown = true) != HeadingColour.Heading)
+        headingLevel(line)
       }
       .flatten
       .map { level =>
+        val headingStyle = snapshot.headings.textStyle(level)
         highlighted(visualLine, theme, buffer, state, context, None).map { segment =>
           if segment.content.forall(char => char == '#' || char.isWhitespace) then segment
           else
-            segment.copy(foregroundColor =
-              MarkdownInlineStyling.headingForeground(segment.foregroundColor, level, theme, snapshot.headings)
+            segment.copy(
+              style = segment.style.copy(
+                isBold = headingStyle.isBold,
+                isItalic = segment.style.isItalic || headingStyle.isItalic,
+                isUnderlined = segment.style.isUnderlined || headingStyle.isUnderlined
+              ),
+              foregroundColor =
+                MarkdownInlineStyling.headingForeground(segment.foregroundColor, level, theme, snapshot.headings)
             )
         }
       }

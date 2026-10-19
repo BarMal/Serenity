@@ -9,10 +9,18 @@ enum HeadingColour:
 
   /** The theme's heading colour, which is its keyword colour unless the theme sets one. */
   case Heading
+
+  /** The theme's accent, which is its caret colour. */
+  case Accent
+
+  /** The theme's quiet text colour. */
+  case Muted
   case Fixed(colour: RenderColor)
 
   def resolve(theme: Theme): RenderColor =
     this match
       case Text         => theme.foreground
       case Heading      => theme.colorFor(SyntaxElement.Heading).foreground
+      case Accent       => theme.accent
+      case Muted        => theme.muted
       case Fixed(color) => color

@@ -326,6 +326,15 @@ object RendererPaneContent:
                 tabWidth = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
               )
               DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, context.surface, screenX, screenY)
+              RendererHeadingRules.paintCells(
+                context.surface,
+                snapshot,
+                visualLine,
+                lineTheme,
+                rect,
+                screenY,
+                dimmed = !activeBodyLines(visualLine.bufferLine)
+              )
 
             RendererMarkdownRules.paint(
               context.surface,
