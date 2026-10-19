@@ -105,6 +105,6 @@ class GtkFileChooserSchemaSpec extends AnyFlatSpec with Matchers:
 
   it should "put GSETTINGS_SCHEMA_DIR entries first, unchanged" in {
     GtkFileChooserSchema
-      .searchDirectories(Map("GSETTINGS_SCHEMA_DIR" -> "/a:/b", "XDG_DATA_DIRS" -> "/c"), home)
+      .searchDirectories(Map("GSETTINGS_SCHEMA_DIR" -> s"/a$Separator/b", "XDG_DATA_DIRS" -> "/c"), home)
       .take(3) shouldBe List(Path.of("/a"), Path.of("/b"), home.resolve(".local/share/glib-2.0/schemas"))
   }
