@@ -30,9 +30,13 @@ class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDriven
     ("Tales of AVAST waves: Ty and Yo went To Wayne, Va. for War and Peace, while Tom's Tyrannosaurus yawned. " +
       "Wavering voices sang Away, away, over Typhoon Tracks. ") * 6
 
-  /** A row whose width lands within float rounding of the panel's is measured exactly, which costs a pair of layouts.
+  /** A row whose width lands within float rounding of the panel's is measured exactly: the search lays out a candidate
+    * and doubles it until the row overflows (two layouts when the row is longer than the first candidate, as prose in a
+    * narrow-averaged face is), then the chosen row's carets are one more. Which rows land that close depends on the
+    * font's metrics, so a platform's face can have one where another has none; a row per paragraph is the cost, a
+    * layout per row would be the regression.
     */
-  private val MostLayoutsPerParagraph = 2L
+  private val MostLayoutsPerParagraph = 3L
 
   private val kernedFonts = Table("font", kernedSerif, kernedSans)
   private val widths      = Table("width", 97, 233, 480, 900)
@@ -55,6 +59,18 @@ class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDriven
           rows.length should be > 2
           built should be <= MostLayoutsPerParagraph
         }
+      }
+    }
+
+  private val kernedInter = withAttribute(BundledInterFont.plain(13f), TextAttribute.KERNING, TextAttribute.KERNING_ON)
+
+  it should "pay for the one row that lands on the panel's width, not for every row" in
+    forAll(Table("width", 454, 551)) { widthPx =>
+      wrap("warm up the font probes", 200, kernedInter)
+      val (rows, built) = constructedWhile(wrap(kernedProse, widthPx, kernedInter))
+      withClue(s"Inter 13 at $widthPx px, ${rows.length} rows: ") {
+        rows.length should be > 10
+        built should be <= MostLayoutsPerParagraph
       }
     }
 
