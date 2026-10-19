@@ -22,7 +22,7 @@ import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.testkit.FrameMismatchDump
-import com.serenity.ui.layout.{CellMetrics, PixelRect, TextRowMetrics, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -63,9 +63,11 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
 
   final private class Pooled(window: Window, pool: Int, scale: Double, persists: Boolean = true):
 
-    val calls = new AtomicReference[Vector[String]](Vector.empty)
-    private def record(call: String): Unit =
-      val _ = calls.updateAndGet(_ :+ call)
+    /** The vertical spans, in logical pixels, of the runs the last frame drew. */
+    val drawnSpans = new AtomicReference[Vector[(Int, Int)]](Vector.empty)
+
+    private def record(yPx: Int, heightPx: Int): Unit =
+      val _ = drawnSpans.updateAndGet(_ :+ (yPx -> heightPx))
 
     private val images = Vector.fill(pool)(
       new BufferedImage(
@@ -91,7 +93,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
 
     def render(state: AppState, damage: Damage): BufferedImage =
       val image = images(drawn.getAndIncrement() % pool)
-      calls.set(Vector.empty)
+      drawnSpans.set(Vector.empty)
       val surface = new Java2DRenderSurface(
         image,
         cellMetrics,
@@ -113,7 +115,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
           s: String,
           clipGlyphToRun: Boolean
         ): Unit =
-          record(s"run x=$xPx y=$yPx w=$bgWidthPx h=$lineHeightPx '${s.take(12)}'")
+          record(yPx, lineHeightPx)
           super.drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, s, clipGlyphToRun)
         override def drawShapedRunPx(
           xPx: Float,
@@ -125,7 +127,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
           from: Int,
           until: Int
         ): Unit =
-          record(s"shaped x=$xPx y=$yPx w=$bgWidthPx h=$lineHeightPx '${stretch.slice(from, until).take(12)}'")
+          record(yPx, lineHeightPx)
           super.drawShapedRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, stretch, from, until)
       val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
       lastPlan.set(
@@ -148,25 +150,6 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       )
       present(image, repaintRegion.get())
       screenImage
-
-    /** The rows around the pixel at (x, y): their text, bands and where the pane's columns sit. */
-    def rowsAround(x: Int, y: Int): String =
-      lastPlan.get().fold("no plan") { plan =>
-        val layout   = plan.paneLayouts.values.head
-        val snapshot = plan.snapshots.values.head
-        val metrics  = TextRowMetrics.forSnapshot(layout.contentRect, cellMetrics, snapshot, measured = true)
-        val logicalY = (y / scale).toInt
-        val row =
-          snapshot.visualLines.indices.find(r => logicalY >= metrics.bandTopPx(r) && logicalY < metrics.bandBottomPx(r))
-        val columns =
-          s"content columns ${cellMetrics.toPixelX(layout.contentRect.x)}-${cellMetrics.toPixelX(layout.contentRect.right)}"
-        val rows =
-          row.toList.flatMap(r => List(r - 1, r, r + 1)).filter(snapshot.visualLines.indices.contains).map { r =>
-            val line = snapshot.visualLines(r)
-            s"row $r line ${line.bufferLine} col ${line.startColumn} band ${metrics.bandTopPx(r)}-${metrics.bandBottomPx(r)} text '${line.text.take(26)}'"
-          }
-        (columns :: s"mark logical (${x / scale}, $logicalY)" :: rows).mkString("; ")
-      }
 
     /** What the window shows after the frame is published: only the rects the frame names change on screen. */
     private def present(image: BufferedImage, region: Option[List[PixelRect]]): Unit =
@@ -194,8 +177,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     window: Window,
     drawn: BufferedImage,
     state: AppState,
-    scale: Double,
-    frames: Pooled
+    scale: Double
   ): Seq[(Int, Int)] =
     val cold = Pooled(window, 1, scale, persists = false).render(state, Damage.Everything)
     val differing =
@@ -208,7 +190,6 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       System.err.println(
         FrameMismatchDump.write(s"PageDown-${window.width}x${window.height}-x$scale", drawn, cold, differing)
       )
-      System.err.println("ROWS " + differing.take(1).map((x, y) => frames.rowsAround(x, y)).mkString)
     differing
 
   private def summary(d: Seq[(Int, Int)]): String =
@@ -245,7 +226,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         (1 to perFrame).foreach(_ => stateManager.applyEvent(PageDown).unsafeRunSync())
         val after = stateManager.getCurrentState.unsafeRunSync()
         val diff =
-          differing(window, frames.render(after, DamageProducer.forTransition(before, after)), after, scale, frames)
+          differing(window, frames.render(after, DamageProducer.forTransition(before, after)), after, scale)
         val top = after.persisted.buffers.get(id).map(_.viewport.topLine)
         (after, if diff.isEmpty then found else s"step $step top=$top: ${summary(diff)}" :: found)
     }
@@ -434,8 +415,9 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         val left  = frames.contentLeftPx.getOrElse(0) - 1
         val ys    = (60 until 540 by 4).toList
         frames.stampPooled(left, ys)
-        val _ = frames.render(after, DamageProducer.forTransition(before, after))
-        (after, found ++ ys.filter(y => frames.pooledIsStamped(left, y)).map(y => s"step $step: ($left, $y)"))
+        val _          = frames.render(after, DamageProducer.forTransition(before, after))
+        val drawnAgain = ys.filter(y => frames.drawnSpans.get().exists((top, height) => y >= top && y < top + height))
+        (after, found ++ drawnAgain.filter(y => frames.pooledIsStamped(left, y)).map(y => s"step $step: ($left, $y)"))
     }
     survivors.take(3) shouldBe empty
   }

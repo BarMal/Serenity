@@ -220,13 +220,19 @@ private[renderer] object RendererChromePlan:
     RendererGutter.renderLineNumbers(state, context, renderPlan, repaint.lineNumberRows, repaint.railRows)
     if repaint.statusRow then RendererGutter.renderGutter(state, context, renderPlan.layoutContract)
 
-  /** The pixel bands `repaint` leaves alone, to be handed to `clearViewportExcept` so they survive the clear. */
+  /** The pixel bands `repaint` leaves alone, to be handed to `clearViewportExcept` so they survive the clear.
+    *
+    * `redrawn` are the bands (with [[BleedPx]]) of the rows the frame draws again. A spacer beside them is kept except
+    * there: a glyph's antialiasing can land a pixel in the spacer, and the row's own redraw is the only thing that
+    * clears it, so a kept spacer would hold the last frame's fringe and add this frame's to it.
+    */
   def preservedRects(
     state: AppState,
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
     panes: Map[PaneId, PaneFrameRecord],
-    repaint: ChromeRepaint
+    repaint: ChromeRepaint,
+    redrawn: List[PixelRect]
   ): List[PixelRect] =
     val contract = renderPlan.layoutContract
     val editorPaneLayouts =
@@ -238,12 +244,13 @@ private[renderer] object RendererChromePlan:
       else
         List(contract.leftSpacerRect, contract.rightSpacerRect) ++
           editorPaneLayouts.flatMap((_, layout) => List(layout.topSpacerRect, layout.bottomSpacerRect))
-    val statusRow = contract.gutterRect.filter(_ => !repaint.statusRow).toList
+    val keptSpacers = spacers.map(pixelRectOf(context.cellMetrics)).flatMap(PixelRect.uncoveredWithin(_, redrawn))
+    val statusRow   = contract.gutterRect.filter(_ => !repaint.statusRow).toList
     val headers = editorPaneLayouts.collect {
       case (paneId, layout) if !repaint.headers.includes(paneId) =>
         contract.paneHeaderRect(paneId).getOrElse(layout.headerRect)
     }
-    (spacers ++ statusRow ++ headers).map(pixelRectOf(context.cellMetrics)) ++
+    keptSpacers ++ (statusRow ++ headers).map(pixelRectOf(context.cellMetrics)) ++
       keptLineNumberBands(state, context, renderPlan, panes, repaint.lineNumberRows) ++
       keptColumnRailBands(state, context, renderPlan, repaint)
 
