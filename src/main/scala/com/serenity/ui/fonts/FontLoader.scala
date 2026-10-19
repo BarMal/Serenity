@@ -29,8 +29,14 @@ object FontLoader:
       textScaleMultiplier: Double = 1.0,
       enableLigatures: Boolean = true,
       textLigatures: Boolean = true,
-      uiLigatures: Boolean = false
+      uiLigatures: Boolean = false,
+      fallbackFamilies: List[String] = Nil
   ):
+    /** The fonts that draw what the code, prose or UI font has no glyph for: these families in order, then the system's
+      * own resolver.
+      */
+    def fallback: FontFallback = FontFallback(fallbackFamilies.toVector)
+
     def codeFontSize: Float =
       fontSize
 

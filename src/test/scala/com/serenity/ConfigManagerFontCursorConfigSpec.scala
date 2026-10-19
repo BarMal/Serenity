@@ -54,6 +54,25 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
     ConfigManager.configToString(config) should include(s"config.version = ${ConfigVersion.Current.value}")
   }
 
+  it should "load the font fallback families in order and write them back (#1866)" in {
+    val configFile = TestTemp.file("serenity-font-fallback-config", ".conf")
+    Files.writeString(
+      configFile,
+      """typography.fallback.families = ["Noto Sans CJK JP", "Symbola"]
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.editorConfig.fontConfig.fallbackFamilies shouldBe List("Noto Sans CJK JP", "Symbola")
+    config.editorConfig.fontConfig.fallback.slotFamilies shouldBe Vector("Noto Sans CJK JP", "Symbola", "Dialog")
+    ConfigManager.configToString(config) should include("""typography.fallback.families = ["Noto Sans CJK JP", "Symbola"]""")
+  }
+
+  it should "default to no configured fallback families, leaving only the system's resolver" in {
+    AppConfig.default.editorConfig.fontConfig.fallbackFamilies shouldBe Nil
+  }
+
   it should "clamp out-of-range font sizes when loading via the registry" in {
     val configFile = TestTemp.file("serenity-font-clamp-config", ".conf")
     Files.writeString(
