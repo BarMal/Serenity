@@ -2,6 +2,7 @@ package com.serenity
 
 import java.awt.image.BufferedImage
 import java.awt.{Color, Graphics2D, Rectangle}
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.{JPanel, JRootPane}
 
 import com.serenity.ui.terminal.SwingWindow
@@ -144,20 +145,24 @@ class SwingWindowPresentSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "wait for a paint in progress and reuse its image rather than allocate a third" in {
-    val pool    = new SwingWindow.ReusableImagePool
+    val pool    = new SwingWindow.ReusableImagePool(maxLeaseWaitNanos = 60_000_000_000L)
     val initial = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
     pool.publish(initial)
     pool.leasePublished() shouldBe Some(initial)
     pool.publish(pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB))
 
+    val acquiring = Thread.currentThread()
+    val acquired  = new AtomicBoolean(false)
     val paint = new Thread(() =>
-      Thread.sleep(30)
+      awaitParked(acquiring, acquired)
       pool.releaseLease()
     )
     paint.start()
 
-    pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB) should be theSameInstanceAs initial
+    val reused = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    acquired.set(true)
     paint.join()
+    reused should be theSameInstanceAs initial
   }
 
   it should "not wait forever on a paint that never finishes" in {
@@ -188,6 +193,12 @@ class SwingWindowPresentSpec extends AnyFlatSpec with Matchers:
   it should "lease nothing before a frame has been published" in {
     new SwingWindow.ReusableImagePool().leasePublished() shouldBe None
   }
+
+  @annotation.tailrec
+  private def awaitParked(thread: Thread, gaveUp: AtomicBoolean): Unit =
+    if !gaveUp.get() && thread.getState != Thread.State.TIMED_WAITING then
+      Thread.onSpinWait()
+      awaitParked(thread, gaveUp)
 
   private def filled(width: Int, height: Int, color: Color): BufferedImage =
     val image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)

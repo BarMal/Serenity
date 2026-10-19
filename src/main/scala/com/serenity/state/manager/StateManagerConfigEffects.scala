@@ -471,7 +471,10 @@ final private[manager] class StateManagerConfigEffects(
         file.noteSeen(stamp) >> showConfigNotice(List(ConfigNotice.unparseableOnReload(file.path, error)))
       case ConfigFileChange.Edited(loaded, stamp) =>
         (deviceTextScaleProvider, file.onDisk, currentState.map(_.persisted.config)).flatMapN { (scale, disk, live) =>
-          val config   = loaded.config.withFontConfig(loaded.config.editorConfig.fontConfig.resolveAutoTextScale(scale))
+          val config = HotkeyOverrides.likeRunning(
+            live,
+            loaded.config.withFontConfig(loaded.config.editorConfig.fontConfig.resolveAutoTextScale(scale))
+          )
           val unseen   = !disk.flatMap(_.stamp).contains(stamp)
           val problems = Option.when(unseen)(ConfigNotice.forLoad(file.path, loaded.report)).flatten.toList
           if disk.exists(_.encoded == ConfigManager.configToString(config)) then
