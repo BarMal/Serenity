@@ -326,6 +326,26 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
     differingPixels(actual, expected).take(6) shouldBe Nil
   }
 
+  it should "sit at the leading edge of the glyph in a right-to-left run, and at the glyph's x in a left-to-right one" in {
+    val text = "AVAWAY To \u05e9\u05dc\u05d5\u05dd \u05e2\u05d5\u05dc\u05dd WWWW \u0645\u0631\u062d\u0628\u0627 Ty"
+    val (stretch, carets) = stretchAndCarets(text, font)
+    val glyphs            = stretch.glyphsOf(0, text.length).getOrElse(fail("no glyphs"))
+    val bidi              = java.text.Bidi(text, java.text.Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT)
+
+    bidi.isMixed shouldBe true
+    graphemeStarts(text).foreach { column =>
+      val own = (0 until stretch.glyphCount).filter(stretch.charIndexAt(_) == column)
+      withClue(s"column $column: ") {
+        own should not be empty
+        val expected =
+          if bidi.getLevelAt(column) % 2 == 1 then
+            own.map(glyph => stretch.xAt(glyph) + glyphs.getGlyphMetrics(glyph).getAdvance).max
+          else own.map(stretch.xAt).min
+        carets(column) shouldBe expected +- 0.01f
+      }
+    }
+  }
+
   "A plain font over simple text" should "draw with drawString, which shapes nothing there, and leave the cache alone" in {
     val plain = new Font(Font.SERIF, Font.PLAIN, 14)
     val cache = ShapedTextCache()

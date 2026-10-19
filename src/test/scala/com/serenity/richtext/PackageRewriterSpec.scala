@@ -4,10 +4,11 @@ import java.nio.charset.StandardCharsets
 import java.util.zip.ZipEntry
 
 import com.serenity.richtext.RichTextTestPackages.{entries, entry, names}
+import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class PackageRewriterSpec extends AnyFlatSpec with Matchers:
+class PackageRewriterSpec extends AnyFlatSpec with Matchers with EitherValues:
   private def utf8(text: String): Array[Byte] = text.getBytes(StandardCharsets.UTF_8)
 
   private val original = GoldenFixtures.zip(
@@ -16,7 +17,7 @@ class PackageRewriterSpec extends AnyFlatSpec with Matchers:
   )
 
   "PackageRewriter" should "replace a part in place and copy the rest with their order and methods" in {
-    val rewritten = PackageRewriter.rewrite(original, "TEST", Map("a.xml" -> utf8("<a changed='1'/>")), Nil)
+    val rewritten = PackageRewriter.rewrite(original, "TEST", Map("a.xml" -> utf8("<a changed='1'/>")), Nil).value
 
     names(rewritten) shouldBe List("mimetype", "a.xml", "dir/b.bin")
     entry(rewritten, "a.xml").text shouldBe "<a changed='1'/>"
@@ -26,13 +27,13 @@ class PackageRewriterSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "append added parts after the existing ones" in {
-    val rewritten = PackageRewriter.rewrite(original, "TEST", Map.empty, List("new.xml" -> utf8("<n/>")))
+    val rewritten = PackageRewriter.rewrite(original, "TEST", Map.empty, List("new.xml" -> utf8("<n/>"))).value
 
     names(rewritten) shouldBe List("mimetype", "a.xml", "dir/b.bin", "new.xml")
   }
 
   it should "leave a part alone when an addition names one that exists" in {
-    val rewritten = PackageRewriter.rewrite(original, "TEST", Map.empty, List("a.xml" -> utf8("<other/>")))
+    val rewritten = PackageRewriter.rewrite(original, "TEST", Map.empty, List("a.xml" -> utf8("<other/>"))).value
 
     entries(rewritten).map(entry => entry.name -> entry.bytes) shouldBe
       entries(original).map(entry => entry.name -> entry.bytes)
