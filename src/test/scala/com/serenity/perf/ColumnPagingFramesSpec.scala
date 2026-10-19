@@ -68,7 +68,7 @@ class ColumnPagingFramesSpec extends AnyFlatSpec with Matchers with ColdFrameHar
   private val headingRuns: List[(String, RichTextDocument)] =
     import ColumnPagingFixture.{bodyFollower, dropCapFollower, heading, leadAfterFillers}
     List(
-      "a heading" -> leadAfterFillers(14, List(heading(2, "Chapter")), bodyFollower),
+      "a heading"             -> leadAfterFillers(14, List(heading(2, "Chapter")), bodyFollower),
       "a run of two headings" -> leadAfterFillers(14, List(heading(1, "Part"), heading(2, "Chapter")), bodyFollower),
       "a heading before a drop cap" -> leadAfterFillers(14, List(heading(2, "Chapter")), dropCapFollower)
     )

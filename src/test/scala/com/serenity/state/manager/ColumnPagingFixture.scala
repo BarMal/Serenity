@@ -156,7 +156,12 @@ object ColumnPagingFixture:
         paragraph(s"Sub $chapter.1.1", ParagraphRole.Heading(3)),
         paragraph(s"Closing words of $chapter. " + "the end of the part " * 5)
       )
-    }
+    } ++ List(
+      // Every chapter's headings are kept with the paragraph after them, which can leave all of them at a column's top;
+      // this one follows the short last column of the document, so a heading with room above it is always drawn.
+      paragraph("Coda", ParagraphRole.Heading(2)),
+      paragraph("The end.")
+    )
   )
 
   /** A paragraph that wraps to several rows, so the row that follows a heading is only its first. */

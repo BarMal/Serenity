@@ -12,9 +12,12 @@ import org.scalatest.matchers.should.Matchers
 class ColumnPixelPagingSpec extends AnyFlatSpec with Matchers:
 
   for
-    (documentLabel, source) <- List("" -> ColumnPagingFixture.document, " over swept headings" -> ColumnPagingFixture.sweptHeadings)
-    scale                   <- List(1, 2)
-    columns                 <- List(1, 2, 3)
+    (documentLabel, source) <- List(
+      ""                     -> ColumnPagingFixture.document,
+      " over swept headings" -> ColumnPagingFixture.sweptHeadings
+    )
+    scale   <- List(1, 2)
+    columns <- List(1, 2, 3)
   do
     val label        = s"at ${scale}x with $columns column(s)$documentLabel"
     lazy val fixture = ColumnPagingFixture(scale, columns, source = source)

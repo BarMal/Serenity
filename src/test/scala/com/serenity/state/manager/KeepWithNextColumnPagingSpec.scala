@@ -21,13 +21,13 @@ import org.scalatest.matchers.should.Matchers
   */
 class KeepWithNextColumnPagingSpec extends AnyFlatSpec with Matchers:
 
-  private val oneHeading   = List(heading(2, "Chapter"))
-  private val twoHeadings  = List(heading(1, "Part"), heading(2, "Chapter"))
+  private val oneHeading  = List(heading(2, "Chapter"))
+  private val twoHeadings = List(heading(1, "Part"), heading(2, "Chapter"))
   private val sweptFixture = (scale: Int, columns: Int) =>
     ColumnPagingFixture(scale, columns, source = ColumnPagingFixture.sweptHeadings)
 
   /** A document laid out as one endless column, and what each of its paragraphs stacks to in a column. */
-  private final case class Measured(rows: Vector[TextVisualLine], lineHeightPx: Int):
+  final private case class Measured(rows: Vector[TextVisualLine], lineHeightPx: Int):
 
     def bandPx(row: TextVisualLine): Int =
       row.spaceBeforePx + math.max(lineHeightPx, row.heightPx) + row.reservedBelowPx + row.spaceAfterPx
@@ -49,7 +49,7 @@ class KeepWithNextColumnPagingSpec extends AnyFlatSpec with Matchers:
 
     /** The rows of `line` its drop cap's glyph covers; its first row alone when it has none. */
     def glyphSpan(line: Int): Vector[TextVisualLine] =
-      val own = rowsOf(line)
+      val own           = rowsOf(line)
       val glyphBottomPx = own.head.dropCapHeightPx
       if glyphBottomPx <= 0 then Vector(own.head)
       else
@@ -66,7 +66,7 @@ class KeepWithNextColumnPagingSpec extends AnyFlatSpec with Matchers:
   /** Where the headings of a document with `fillers` paragraphs before them landed, and what the measured heights say
     * about whether they fit.
     */
-  private final case class Outcome(
+  final private case class Outcome(
       fillers: Int,
       headingColumn: Int,
       runFitsWithFollower: Boolean,
@@ -75,13 +75,13 @@ class KeepWithNextColumnPagingSpec extends AnyFlatSpec with Matchers:
       runWhole: Boolean,
       followerBesideRun: Boolean
   ):
-    def kept: Boolean = headingColumn == 0 && followerBesideRun
-    def moved: Boolean = headingColumn == 1 && runWhole
+    def kept: Boolean       = headingColumn == 0 && followerBesideRun
+    def moved: Boolean      = headingColumn == 1 && runWhole
     def asMeasured: Boolean = if runFitsWithFollower then kept else moved
 
   private def sweep(scale: Int, lead: List[RichTextParagraph], follower: RichTextParagraph): Vector[Outcome] =
     val oneFiller = measure(ColumnPagingFixture(scale, 2, source = leadAfterFillers(1, lead, follower))).stackPx(0, 1)
-    val fitting   = ColumnPagingFixture(scale, 2, source = leadAfterFillers(1, lead, follower)).columnHeightPx / oneFiller
+    val fitting = ColumnPagingFixture(scale, 2, source = leadAfterFillers(1, lead, follower)).columnHeightPx / oneFiller
     (0 to fitting).toVector.map { fillers =>
       val fixture      = ColumnPagingFixture(scale, 2, source = leadAfterFillers(fillers, lead, follower))
       val measured     = measure(fixture)
@@ -146,9 +146,9 @@ class KeepWithNextColumnPagingSpec extends AnyFlatSpec with Matchers:
           gridRows <- 2 to 30
           fillers  <- 0 to 2
         yield
-          val fixture  = ColumnPagingFixture(scale, 2, gridRows, leadAfterFillers(fillers, twoHeadings, dropCapFollower))
-          val measured = measure(fixture)
-          val run      = measured.stackPx(fillers, twoHeadings.size)
+          val fixture = ColumnPagingFixture(scale, 2, gridRows, leadAfterFillers(fillers, twoHeadings, dropCapFollower))
+          val measured  = measure(fixture)
+          val run       = measured.stackPx(fillers, twoHeadings.size)
           val oversized = run + measured.placePx(fillers + twoHeadings.size) > fixture.columnHeightPx
           val aloneFits = measured.stackPx(0, fillers) + run <= fixture.columnHeightPx
           (fixture, fillers, oversized, aloneFits)
@@ -175,9 +175,11 @@ class KeepWithNextColumnPagingSpec extends AnyFlatSpec with Matchers:
       val stranded = for
         scale   <- List(1, 2)
         columns <- List(1, 2, 3)
-        fixture  = sweptFixture(scale, columns)
+        fixture = sweptFixture(scale, columns)
         headingLines =
-          fixture.source.paragraphs.zipWithIndex.collect { case (paragraph, line) if isHeading(paragraph) => line }.toSet
+          fixture.source.paragraphs.zipWithIndex.collect {
+            case (paragraph, line) if isHeading(paragraph) => line
+          }.toSet
         all = fixture.pages.flatMap(_.columns).map(_.visualLines)
         column <- all.dropRight(1)
         last   <- column.lastOption
