@@ -169,6 +169,7 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
     val screen     = render(prose())
     val (col, row) = screen.find("Alpha").getOrElse(fail(screen.render))
 
+    lookOf(screen, "Alpha")._3 shouldBe true
     screen.cellAt(col + "Alpha".length, row).style.isUnderlined shouldBe false
     if col > 0 then screen.cellAt(col - 1, row).style.isUnderlined shouldBe false
   }
