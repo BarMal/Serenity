@@ -187,7 +187,8 @@ object ColumnPagingFixture:
         (0 until fillers).toList.map(n => paragraph(s"filler $fillers.$n")) ++ List(
           heading(1, s"Part $fillers"),
           heading(2, s"Chapter $fillers"),
-          if fillers % 2 == 0 then bodyFollower else dropCapFollower
+          if fillers % 2 == 0 then bodyFollower else dropCapFollower,
+          paragraph("Brief.", ParagraphRole.dropCap(4))
         )
       }
     )

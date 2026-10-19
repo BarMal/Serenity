@@ -2,6 +2,7 @@ package com.serenity.ui.layout
 
 import scala.annotation.tailrec
 
+import com.serenity.richtext.ParagraphRole
 import com.serenity.state.models.TextVisualLine
 
 /** Column-mode paging by pixels. A column is as tall as `visibleLines` base lines, but its rows are not all one line
@@ -11,8 +12,9 @@ import com.serenity.state.models.TextVisualLine
   *
   * Where a pixel rule would otherwise leave a choice: a column always takes at least one row (a row taller than the
   * whole column stands alone and is clipped, rather than leaving a column empty); a column opens and closes flush, so
-  * the room above its first row and below its last is dropped; and a drop cap's glyph is not split between columns
-  * unless it alone is taller than one.
+  * the room above its first row and below its last is dropped; a drop cap's glyph is not split between columns unless
+  * it alone is taller than one; and a heading is kept with what follows it: when a column closes right after a run of
+  * headings, the run moves to the next column, unless the run is all the column holds.
   */
 object ColumnPaging:
 
@@ -65,6 +67,14 @@ object ColumnPaging:
 
   private[layout] def taken(row: TextVisualLine, usedPx: Int, frame: Frame): Int =
     if usedPx == 0 then frame.bandPx(row) - row.spaceBeforePx else frame.bandPx(row)
+
+  /** Where a column that must close is cut: before the run of heading rows that ends it, so the run goes on to the next
+    * column. A column that does not end on a heading is cut at its end, and so is one of nothing but headings, since
+    * moving those would only put them at the top of the next column to be cut again.
+    */
+  private[layout] def closingCut(column: Vector[TextVisualLine], isHeading: TextVisualLine => Boolean): Int =
+    val runStart = column.lastIndexWhere(row => !isHeading(row)) + 1
+    if runStart == 0 then column.length else runStart
 
   private[layout] def flush(column: Vector[TextVisualLine]): Vector[TextVisualLine] =
     val opened = HeadingSpacingLayout.droppingLeadingSpace(column)
@@ -125,8 +135,10 @@ final class ColumnPager(
     @tailrec def consume(rows: Vector[TextVisualLine], index: Int, state: Fill): Fill =
       if state.full || index >= rows.length then state
       else if closesBefore(rows, index, state.usedPx, frame) then
-        val done = state.done :+ flush(state.current)
-        consume(rows, index, Fill(done, Vector.empty, 0, state.placed, done.size >= wanted))
+        val (kept, carried) = state.current.splitAt(closingCut(state.current, isHeading))
+        val done            = state.done :+ flush(kept)
+        val carriedPx       = carried.foldLeft(0)((usedPx, row) => usedPx + taken(row, usedPx, frame))
+        consume(rows, index, Fill(done, carried, carriedPx, state.placed, done.size >= wanted))
       else
         val row = rows(index)
         consume(
@@ -150,6 +162,29 @@ final class ColumnPager(
       lines(math.max(0, start.line), math.max(0, start.row), Fill(Vector.empty, Vector.empty, 0, 0, full = false))
     if end.full || end.current.isEmpty then end.done else end.done :+ flush(end.current)
 
+  private def isHeadingLine(line: Int): Boolean =
+    richText.layoutRole(line) match
+      case ParagraphRole.Heading(_) => true
+      case _                        => false
+
+  private def isHeading(row: TextVisualLine): Boolean = isHeadingLine(row.bufferLine)
+
+  /** Where the run of headings that ends just before `closing` begins, never reaching back to `columnStart`: `closing`
+    * itself when no heading precedes it in the column.
+    */
+  private def headingRunStart(columnStart: ColumnStart, closing: ColumnStart): ColumnStart =
+    @tailrec def back(current: ColumnStart): ColumnStart =
+      val earlier =
+        if current.row > 0 && isHeadingLine(current.line) then Some(ColumnStart(current.line, 0))
+        else if current.row == 0 && current.line > 0 && isHeadingLine(current.line - 1) then
+          Some(ColumnStart(current.line - 1, 0))
+        else None
+      earlier match
+        case Some(start) if start.isAfter(columnStart) => back(start)
+        case Some(_)                                   => columnStart
+        case None                                      => current
+    back(closing)
+
   /** `start` with a row past its line's last carried into the lines after it. */
   @tailrec private def open(start: ColumnStart): Open =
     val line = math.max(0, math.min(start.line, lineCount - 1))
@@ -165,7 +200,11 @@ final class ColumnPager(
 
     @tailrec def scan(line: Int, rows: Vector[TextVisualLine], row: Int, usedPx: Int): Option[Open] =
       closeIndex(rows, row, usedPx) match
-        case Left(at) => Some(Open(line, at, rows))
+        case Left(at) =>
+          val closing = ColumnStart(line, at)
+          val moved   = headingRunStart(from.start, closing)
+          if moved == closing || moved == from.start then Some(Open(line, at, rows))
+          else Some(Open(moved.line, moved.row, place(moved.line, Int.MaxValue)))
         case Right(usedAfter) =>
           val next = line + 1
           if next >= lineCount then None

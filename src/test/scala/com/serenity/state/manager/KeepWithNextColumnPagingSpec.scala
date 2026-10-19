@@ -143,8 +143,8 @@ class KeepWithNextColumnPagingSpec extends AnyFlatSpec with Matchers:
     s"A run of headings that cannot fit with its follower in an empty column at ${scale}x" should
       "stand at the top of a column instead of being pushed on" in {
         val cases = for
-          gridRows <- 2 to 9
-          fillers  <- 0 to 3
+          gridRows <- 2 to 30
+          fillers  <- 0 to 2
         yield
           val fixture  = ColumnPagingFixture(scale, 2, gridRows, leadAfterFillers(fillers, twoHeadings, dropCapFollower))
           val measured = measure(fixture)
