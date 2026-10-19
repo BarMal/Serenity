@@ -24,7 +24,7 @@ import com.serenity.ui.theme.RichTextStyling
 final class ColumnPagingFixture(
     val scale: Int,
     val columnCount: Int,
-    val gridRows: Int = 14,
+    val gridRows: Int = ColumnPagingFixture.DefaultGridRows,
     val source: RichTextDocument = ColumnPagingFixture.document
 ):
 
@@ -124,6 +124,8 @@ final class ColumnPagingFixture(
     shown.headOption
 
 object ColumnPagingFixture:
+
+  val DefaultGridRows: Int = 14
 
   type RowId = (Int, Int)
 
