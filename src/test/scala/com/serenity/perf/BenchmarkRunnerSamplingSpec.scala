@@ -60,7 +60,9 @@ class BenchmarkRunnerSamplingSpec extends AnyFlatSpec with Matchers:
       "laptop.render.new_frame",
       "laptop.input.anything",
       "render.markdown.live_preview",
-      "command_runner.palette.keystroke"
+      "command_runner.palette.keystroke",
+      "layout.anchor_wrap.warm_caret_lookup",
+      "layout.cold_font.glyph_advances"
     ).foreach(name => withClue(name)(BenchmarkRunner.tracksAllocation(name) shouldBe true))
 
   it should "keep the explicitly listed benchmarks and skip the rest" in {
