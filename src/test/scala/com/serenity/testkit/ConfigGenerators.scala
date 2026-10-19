@@ -279,11 +279,16 @@ object ConfigGenerators:
         case (config, (element, (letter, keep))) => config.withLetter(element, Option.when(keep)(letter))
       }
 
-  /** Chords no default hotkey or keymap takes, one letter to an element, so that loading the config file back settles
-    * nothing and the round trip is the identity.
+  /** Chords no default hotkey or keymap takes on any platform, one letter to an element, so that loading the config
+    * file back settles nothing wherever the test runs and the round trip is the identity. Cmd+Shift+Z is redo on macOS
+    * and nothing on Linux, so settling against one platform lets a chord through that another would drop.
     */
   val genSummonConfig: Gen[SummonConfig] =
-    genChords.suchThat(_.settled(HotkeyConfig.forOs("linux"), FocusedKeymapConfig())._2.isEmpty)
+    genChords.suchThat { summon =>
+      List("linux", "Mac OS X", "Windows 11").forall(osName =>
+        summon.settled(HotkeyConfig.forOs(osName), FocusedKeymapConfig())._2.isEmpty
+      )
+    }
 
   val genInputConfig: Gen[InputConfig] =
     for
