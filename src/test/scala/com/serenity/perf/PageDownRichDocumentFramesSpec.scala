@@ -75,6 +75,15 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     private val caches      = RenderCaches.create()
     private val screen      = ScreenIdentity(this)
     private val drawn       = AtomicInteger(0)
+    private val lastPlan    = new AtomicReference[Option[com.serenity.ui.renderer.EditorPaneRenderPlan]](None)
+
+    def contentColumns: String =
+      lastPlan
+        .get()
+        .flatMap(_.paneLayouts.values.headOption)
+        .fold("unknown")(layout =>
+          s"content columns ${cellMetrics.toPixelX(layout.contentRect.x)}-${cellMetrics.toPixelX(layout.contentRect.right)}"
+        )
 
     def render(state: AppState, damage: Damage): BufferedImage =
       val image = images(drawn.getAndIncrement() % pool)
@@ -91,21 +100,23 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         layerCacheOwnerOverride = Some(screen)
       )
       val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
-      val _ = RendererFramePlanner.renderFrame(
-        state,
-        cursorVisible = false,
-        surface,
-        window.viewport,
-        caches.authoritativeScene.forState(state, window.viewport, codeFont, textFont),
-        codeFont,
-        textFont,
-        uiFont,
-        cellMetrics,
-        uiMetrics,
-        None,
-        Some(FrameOutput(screen, repaintRegion)),
-        damage,
-        caches = caches
+      lastPlan.set(
+        RendererFramePlanner.renderFrame(
+          state,
+          cursorVisible = false,
+          surface,
+          window.viewport,
+          caches.authoritativeScene.forState(state, window.viewport, codeFont, textFont),
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics,
+          None,
+          Some(FrameOutput(screen, repaintRegion)),
+          damage,
+          caches = caches
+        )
       )
       present(image, repaintRegion.get())
       screenImage
@@ -138,7 +149,8 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     state: AppState,
     scale: Double
   ): (Seq[(Int, Int)], String) =
-    val cold = Pooled(window, 1, scale, persists = false).render(state, Damage.Everything)
+    val coldFrames = Pooled(window, 1, scale, persists = false)
+    val cold       = coldFrames.render(state, Damage.Everything)
     val differing =
       for
         x <- 0 until drawn.getWidth
@@ -149,7 +161,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       System.err.println(
         FrameMismatchDump.write(s"PageDown-${window.width}x${window.height}-x$scale", drawn, cold, differing)
       )
-    (differing, FrameMismatchDump.art(drawn, cold, differing))
+    (differing, s"\n${coldFrames.contentColumns}" + FrameMismatchDump.art(drawn, cold, differing))
 
   private def summary(d: Seq[(Int, Int)]): String =
     val ys = d.map(_._2)
