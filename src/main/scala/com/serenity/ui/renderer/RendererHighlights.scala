@@ -145,7 +145,8 @@ object RendererHighlights:
     snapshot: TextLayoutSnapshot,
     styledSegments: Option[List[StyledText]] = None,
     dimmed: Boolean = false,
-    blendWeight: Double = DefaultDiagnosticHighlightBlendWeight
+    blendWeight: Double = DefaultDiagnosticHighlightBlendWeight,
+    clipBottomPx: Int = Int.MaxValue
   ): Unit =
     lineDiagnostics.foreach { diagnostic =>
       val start        = CursorPosition(diagnostic.range.start.line, diagnostic.range.start.character)
@@ -153,7 +154,19 @@ object RendererHighlights:
       val severityCode = diagnostic.severity.map(_.code)
       columnsForRange(start, end, visualLine, markPoint = false).foreach {
         case (diagStart, diagEnd) if diagnostic.source.contains(SpellChecker.Source) =>
-          renderMisspelling(surface, visualLine, rect, screenY, lineTopPx, theme, context, snapshot, diagStart, diagEnd)
+          renderMisspelling(
+            surface,
+            visualLine,
+            rect,
+            screenY,
+            lineTopPx,
+            theme,
+            context,
+            snapshot,
+            diagStart,
+            diagEnd,
+            clipBottomPx
+          )
         case (diagStart, diagEnd) =>
           renderTextRangeBackground(
             surface,
@@ -177,6 +190,9 @@ object RendererHighlights:
     * stays readable and the mark reads as an error rather than as the warning or search highlight the shared diagnostic
     * background used to resemble. A cell surface has no sub-cell pixels, so there the word is underlined in the error
     * colour instead.
+    *
+    * The squiggle stops at `clipBottomPx`, the pane's bottom edge, as the row's text does: below it the pixels belong
+    * to no row's band, so a frame that keeps the row would clear them and one that draws it again would not.
     */
   private def renderMisspelling(
     surface: RenderSurface,
@@ -188,7 +204,8 @@ object RendererHighlights:
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
     rangeStart: Int,
-    rangeEnd: Int
+    rangeEnd: Int,
+    clipBottomPx: Int
   ): Unit =
     val colour = theme.error.foreground
     if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
@@ -203,7 +220,7 @@ object RendererHighlights:
         val gap       = if rowBottom - baselinePx - 1 - amplitude >= 1 then 1 else 0
         val topPx     = math.max(lineTopPx, math.min(baselinePx + gap, rowBottom - 1 - amplitude))
         forEachSquiggleSegment(startXPx.round, widthPx.round, topPx, amplitude) { (xPx, yPx, segmentWidthPx) =>
-          surface.pixels.fillPixelRect(xPx, yPx, segmentWidthPx, 1, colour)
+          if yPx < clipBottomPx then surface.pixels.fillPixelRect(xPx, yPx, segmentWidthPx, 1, colour)
         }
       }
     else
