@@ -149,7 +149,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       System.err.println(
         FrameMismatchDump.write(s"PageDown-${window.width}x${window.height}-x$scale", drawn, cold, differing)
       )
-    differing
+    (differing, FrameMismatchDump.art(drawn, cold, differing))
 
   private def summary(d: Seq[(Int, Int)]): String =
     val ys = d.map(_._2)
