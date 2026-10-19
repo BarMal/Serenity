@@ -8,6 +8,7 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{AppState, Buffer, TextVisualLine}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{DropCapGlyph, DropCapLayout, TextLayoutSnapshot}
+import com.serenity.ui.openings.LetterShape
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 
 /** Draws a paragraph's drop cap glyph: the oversized first character a [[com.serenity.richtext.ParagraphRole.DropCap]]
@@ -109,9 +110,10 @@ object DropCapRenderer:
     glyphColour: RenderColor,
     xOriginPx: Float,
     lineTopPx: Int,
-    clipBottomPx: Int = Int.MaxValue
+    clipBottomPx: Int = Int.MaxValue,
+    shape: LetterShape = LetterShape.Drop
   ): (TextVisualLine, Option[List[StyledText]]) =
-    DropCapGlyph.forParagraph(baseFont, frc, Some(document), visualLine.bufferLine, dropCap, proseScale) match
+    DropCapGlyph.forParagraph(baseFont, frc, Some(document), visualLine.bufferLine, dropCap, proseScale, shape) match
       case None => (visualLine, styledSegments)
       case Some(glyph) =>
         renderGlyphPx(
@@ -119,8 +121,8 @@ object DropCapRenderer:
           xOriginPx,
           lineTopPx,
           glyph.widthPx,
-          glyph.heightPx,
-          glyph.baselinePx,
+          glyph.heightPx + glyph.growthPx,
+          glyph.baselinePx + glyph.growthPx,
           glyph.text,
           glyph.style,
           glyphColour,
@@ -237,7 +239,8 @@ object DropCapRenderer:
       glyphColour,
       xOriginPx,
       lineTopPx,
-      clipBottomPx
+      clipBottomPx,
+      snapshot.roles.shapeAt(document, visualLine.bufferLine)
     )).getOrElse((visualLine, styledSegments))
 
   /** `RendererPaneContent`'s single call for the measured (GUI) path: computes the drop-cap-adjusted line/segments

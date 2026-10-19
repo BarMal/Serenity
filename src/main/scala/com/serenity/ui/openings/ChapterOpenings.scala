@@ -99,6 +99,8 @@ final case class ParagraphRoles(context: OpeningContext, resolver: ChapterOpenin
 
   def layoutRole(document: RichTextDocument, line: Int): ParagraphRole = roleFor(document, line).layoutRole
 
+  def shapeAt(document: RichTextDocument, line: Int): LetterShape = roleFor(document, line).letterShape
+
 object ParagraphRoles:
 
   def standard(dropCapsEnabled: Boolean): ParagraphRoles =

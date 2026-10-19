@@ -1,9 +1,11 @@
 package com.serenity.ui.theme
 
-/** The room between a drop cap's glyph and the text beside it, in em of the body font (`document.drop_cap_gap`). */
+/** The room between the ink of a drop cap's glyph and the text beside it, in em of the body font
+  * (`document.drop_cap_gap`).
+  */
 object DropCapGap:
 
-  val Default: Float = 0.5f
+  val Default: Float = 0.25f
 
   val Range: (Float, Float) = (0.0f, 2.0f)
 
