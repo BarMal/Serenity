@@ -25,8 +25,10 @@ import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, Layout, LayoutRect, OverlayRow, OverlaySegment, OverlayTone, ViewportSize}
 import com.serenity.ui.renderer.{
   FontSpec,
+  MeasuredTextAdvances,
   PinnedPanelRenderer,
   RendererEntryPoints,
+  ShapedTextCache,
   TextOverlayRenderer,
   TextOverlayView,
   TextPanelRow,
@@ -35,7 +37,6 @@ import com.serenity.ui.renderer.{
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.{MeasuredTextAdvances, ShapedTextCache}
 
 /** Panels are opaque: even under a theme whose background is the terminal's own (alpha 0, SGR 49), a floating surface
   * or pinned panel paints its own panel colour, and its frame, text, selection highlight and tones keep their colours.

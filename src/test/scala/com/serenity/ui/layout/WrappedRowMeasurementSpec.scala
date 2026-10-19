@@ -3,10 +3,10 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.TextAttribute
 
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** Wrapping reuses the carets it measured while finding a row's break point instead of measuring the row again, so each
   * wrapped row must still carry exactly the geometry that measuring its text alone gives.
@@ -46,7 +46,14 @@ class WrappedRowMeasurementSpec extends AnyFlatSpec with Matchers with TableDriv
           val rows = TextLayoutSnapshot.boundedVisualLinesForText(line, 4, widthPx, font, frc)
           rows.map(_.text).mkString shouldBe line
           rows.foreach { row =>
-            row shouldBe TextLayoutSnapshot.visualLineForText(row.text, 4, font, ShapedTextCache(), frc, startColumn = row.startColumn)
+            row shouldBe TextLayoutSnapshot.visualLineForText(
+              row.text,
+              4,
+              font,
+              ShapedTextCache(),
+              frc,
+              startColumn = row.startColumn
+            )
           }
         }
       }

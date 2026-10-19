@@ -31,9 +31,7 @@ class Java2DRenderSurface(
     contentPersists: Boolean = false,
     layerCacheOwnerOverride: Option[ScreenIdentity] = None,
     imageOriginPx: DeviceOrigin = DeviceOrigin.Zero,
-    labelSprites: LabelSprites = LabelSprites(LabelSprites.DefaultCapacity),
-    styledFonts: StyledFontCache = StyledFontCache(),
-    shapedText: ShapedTextCache = ShapedTextCache(),
+    textCaches: SurfaceTextCaches = SurfaceTextCaches.fresh(),
     override val activity: SurfaceActivity = SurfaceActivity()
 ) extends RenderSurface
     with TextDrawing
@@ -42,6 +40,8 @@ class Java2DRenderSurface(
     with PanelOutlineDrawing
     with LayerBufferSupport
     with PixelCopying:
+  import textCaches.{labelSprites, shapedText, styledFonts}
+
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
   override def effects: Option[Effects]                   = Some(this)
@@ -86,7 +86,7 @@ class Java2DRenderSurface(
       deviceScaleX,
       deviceScaleY,
       image => onFlush(RenderImage.fromAwt(image)),
-      SurfaceTextCaches(labelSprites, styledFonts, shapedText),
+      textCaches,
       recycled = recycled.map(_.toAwt),
       activity = activity,
       bounds = bounds
@@ -476,23 +476,6 @@ object Java2DRenderSurface:
   private def awtColor(color: RenderColor, current: Color): Color =
     if current.getRGB == color.argb then current else color.toAwt
 
-  def forFrame(
-    metrics: CellMetrics,
-    font: Font,
-    canvas: javax.swing.JPanel,
-    onFlush: BufferedImage => Unit,
-    textCaches: SurfaceTextCaches
-  ): Java2DRenderSurface =
-    forFrame(
-      metrics,
-      font,
-      canvas,
-      onFlush,
-      (width, height, imageType) => new BufferedImage(width, height, imageType),
-      textCaches,
-      contentPersists = false
-    )
-
   /** Build a frame surface over an image supplied by `acquireImage`.
     *
     * `contentPersists` says the acquired image is recycled rather than freshly allocated, so whatever was drawn into
@@ -532,9 +515,7 @@ object Java2DRenderSurface:
       deviceScaleY = scale.y,
       contentPersists = contentPersists,
       layerCacheOwnerOverride = Some(ScreenIdentity(canvas)),
-      labelSprites = textCaches.labelSprites,
-      styledFonts = textCaches.styledFonts,
-      shapedText = textCaches.shapedText
+      textCaches = textCaches
     )
 
   def forImage(
@@ -557,9 +538,7 @@ object Java2DRenderSurface:
       logicalHeightPx = logicalHeight,
       deviceScaleX = scale.x,
       deviceScaleY = scale.y,
-      labelSprites = textCaches.labelSprites,
-      styledFonts = textCaches.styledFonts,
-      shapedText = textCaches.shapedText
+      textCaches = textCaches
     )
 
   /** Build a layer surface from numbers alone -- no `JPanel` required, unlike [[forFrame]]/[[forImage]]. Stage 1 of

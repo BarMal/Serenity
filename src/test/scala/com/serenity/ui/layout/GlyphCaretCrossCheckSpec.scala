@@ -4,9 +4,9 @@ import java.awt.Font
 import java.awt.font.{TextAttribute, TextHitInfo, TextLayout}
 import java.text.AttributedString
 
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** A caret stop used to be what `TextLayout` reports, which puts a kerned character half way between its kerned and
   * unkerned positions. Stops now sit at the glyph, so against `TextLayout` they differ by exactly half the pair's

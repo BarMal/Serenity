@@ -36,7 +36,7 @@ class LigatureFontShapingSpec extends AnyFlatSpec with Matchers:
       heightPx,
       deviceScale,
       deviceScale,
-      shapedText = caches.shapedText
+      textCaches = caches.surfaceText
     )
 
   "Laying out a line of the ligature code font" should "leave it shaped for the painter, under the key it paints with" in {
@@ -46,7 +46,8 @@ class LigatureFontShapingSpec extends AnyFlatSpec with Matchers:
     val frc     = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
     caches.shapedText.holds(line, font, frc) shouldBe false
 
-    val rows = TextLayoutSnapshot.boundedVisualLinesForText(line, 0, widthPx, font, frc, wrapCache = caches.wrappedLines)
+    val rows =
+      TextLayoutSnapshot.boundedVisualLinesForText(line, 0, widthPx, font, frc, wrapCache = caches.wrappedLines)
 
     rows.map(_.text) shouldBe Vector(line)
     caches.shapedText.holds(line, font, frc) shouldBe true

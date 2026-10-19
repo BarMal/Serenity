@@ -4,9 +4,9 @@ import java.awt.Font
 
 import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** On a cell grid a tab spans to the next tab stop, and caret placement, the wrap and horizontal scrolling all measure
   * it with the one width the renderer paints it at.

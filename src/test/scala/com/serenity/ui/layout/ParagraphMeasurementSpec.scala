@@ -15,12 +15,12 @@ import com.serenity.richtext.{
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.TextCaretMeasurement.{resolverForLine, singleFontResolver}
+import com.serenity.ui.renderer.ShapedTextCache
 import com.serenity.ui.theme.RichTextStyling
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** Measuring a paragraph once and slicing rows out of it must wrap exactly where measuring every row with its own
   * `TextLayout` did ([[LegacyLineMeasurement]]), with caret positions equal up to float rounding.

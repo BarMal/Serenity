@@ -7,11 +7,10 @@ import com.serenity.config.AppConfig
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextPosition, RichTextRange}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, RichTextState, Viewport}
-import com.serenity.ui.renderer.DropCapRenderer
+import com.serenity.ui.renderer.{DropCapRenderer, ShapedTextCache}
 import com.serenity.ui.theme.RichTextStyling
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** Pins what a drop cap paragraph does to layout, paint and dirty tracking with the drop-caps toggle on and off. */
 class ParagraphRoleCharacterisationSpec extends AnyFlatSpec with Matchers:

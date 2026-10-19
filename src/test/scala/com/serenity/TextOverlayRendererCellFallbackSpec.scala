@@ -19,6 +19,16 @@ class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
   private val shapedText = ShapedTextCache()
   private val advances   = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText)
 
+  private def renderOverlay(
+    surface: RenderSurface,
+    overlay: TextOverlayView,
+    theme: Theme,
+    config: AppConfig,
+    cursorVisible: Boolean,
+    font: Font,
+    metrics: CellMetrics
+  ): Unit = TextOverlayRenderer.render(surface, overlay, theme, config, cursorVisible, font, metrics, advances)
+
   given Balance = Balance.default
 
   "TextOverlayRenderer" should "render a proportional-font overlay row via putString when the surface has no FontRenderContext" in {
@@ -36,7 +46,7 @@ class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics, advances)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     surface.drawRunPxCalls shouldBe empty
     surface.getRow(1).slice(1, 1 + rowText.length) shouldBe rowText
@@ -57,7 +67,7 @@ class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics, advances)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     surface.fillPixelRectCalls shouldBe empty
     val cursorX = 1 + rowText.length
@@ -79,7 +89,7 @@ class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics, advances)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     surface.drawRunPxCalls.exists(_.s == rowText) shouldBe true
     surface.fillPixelRectCalls should not be empty

@@ -71,7 +71,10 @@ class WordWrapRenderingSpec extends AnyFlatSpec with Matchers:
     contentRuns.map(_.s).mkString shouldBe content
     contentRows.length should be >= 2
     contentRows.foreach { (_, runs) =>
-      val rowWidthPx = TextLayoutSnapshot.caretXsForText(runs.map(_.s).mkString, textFont, ShapedTextCache()).lastOption.getOrElse(0.0f)
+      val rowWidthPx = TextLayoutSnapshot
+        .caretXsForText(runs.map(_.s).mkString, textFont, ShapedTextCache())
+        .lastOption
+        .getOrElse(0.0f)
       rowWidthPx should be <= panelWidthPx
     }
     cursorRects should have size 1

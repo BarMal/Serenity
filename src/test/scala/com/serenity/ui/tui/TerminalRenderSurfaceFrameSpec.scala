@@ -7,11 +7,18 @@ import com.serenity.config.AppConfig
 import com.serenity.state.models.UiSurface
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, LayoutRect, OverlayRow}
-import com.serenity.ui.renderer.{PinnedPanelRenderer, TextOverlayRenderer, TextOverlayView, TextPanelRow, TextPanelView}
+import com.serenity.ui.renderer.{
+  MeasuredTextAdvances,
+  PinnedPanelRenderer,
+  ShapedTextCache,
+  TextOverlayRenderer,
+  TextOverlayView,
+  TextPanelRow,
+  TextPanelView
+}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.{MeasuredTextAdvances, ShapedTextCache}
 
 /** The rounded box-drawing frame `TerminalRenderSurface.strokeRect` draws in the border cell `SurfaceFrameLayout`
   * reserves around every framed floating surface and pinned panel.
@@ -103,7 +110,16 @@ class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
     val rect         = LayoutRect(2, 1, 12, 5)
     val overlay      = TextOverlayView(rect = rect, rows = List(OverlayRow("alpha"), OverlayRow("beta")))
 
-    TextOverlayRenderer.render(rs, overlay, theme, AppConfig.default, cursorVisible = false, font, cellMetrics, advances)
+    TextOverlayRenderer.render(
+      rs,
+      overlay,
+      theme,
+      AppConfig.default,
+      cursorVisible = false,
+      font,
+      cellMetrics,
+      advances
+    )
 
     val screen = screenOf(rs, writer, 20, 8)
     screen.rowText(rect.y).substring(rect.x, rect.right) shouldBe "╭──────────╮"
@@ -130,7 +146,16 @@ class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
       surfaceId = Some(UiSurface.StatusLineSurfaceId)
     )
 
-    TextOverlayRenderer.render(rs, overlay, theme, AppConfig.default, cursorVisible = false, font, cellMetrics, advances)
+    TextOverlayRenderer.render(
+      rs,
+      overlay,
+      theme,
+      AppConfig.default,
+      cursorVisible = false,
+      font,
+      cellMetrics,
+      advances
+    )
 
     val screen = screenOf(rs, writer, 20, 4)
     screen.rowText(1) should startWith("NORMAL main.scala")
@@ -148,7 +173,16 @@ class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
       surfaceId = Some(UiSurface.TabBarSurfaceId)
     )
 
-    TextOverlayRenderer.render(rs, overlay, theme, AppConfig.default, cursorVisible = false, font, cellMetrics, advances)
+    TextOverlayRenderer.render(
+      rs,
+      overlay,
+      theme,
+      AppConfig.default,
+      cursorVisible = false,
+      font,
+      cellMetrics,
+      advances
+    )
 
     val screen = screenOf(rs, writer, 20, 3)
     screen.rows.mkString should not include "╭"

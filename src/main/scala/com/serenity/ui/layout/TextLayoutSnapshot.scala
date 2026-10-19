@@ -67,7 +67,6 @@ final case class TextLayoutSnapshot(
     navigationGeometry.moveVertical(cursor, direction, preferredXPx)
 
 object TextLayoutSnapshot:
-  private val UnwrappedOverscanColumns = 2
   final private case class MeasuredLayoutKey(font: Font, fontRenderContext: FontRenderContext)
   private val measuredLayoutCache = java.util.concurrent.ConcurrentHashMap[MeasuredLayoutKey, java.lang.Boolean]()
 
@@ -348,38 +347,18 @@ object TextLayoutSnapshot:
                   wrapCache
                 )
               else
-                val startColumn  = math.min(buffer.viewport.leftColumn, rawLine.length)
-                val visibleSlice = unwrappedVisibleSlice(rawLine, startColumn, buffer.viewport.visibleColumns)
-                val inputs =
-                  LineLayout.lineLayoutInputs(
-                    font,
-                    frc,
-                    measuredLayout,
-                    richText,
-                    lineIndex,
-                    rawLine.length,
-                    rawLine,
-                    wrapCache.shapedText
-                  )
-                val row = measureSegment(
-                  visibleSlice,
-                  startColumn,
-                  startColumn + visibleSlice.length,
-                  inputs.resolver,
+                LineLayout.unwrappedLine(
+                  lineIndex,
+                  rawLine,
+                  buffer.viewport,
+                  panelWidthPx,
+                  font,
                   frc,
                   measuredLayout,
                   cellMetrics,
+                  richText,
                   wrapCache.shapedText
                 )
-                val wrapped = DropCapLayout.reservingGlyphHeight(
-                  Vector(
-                    DropCapLayout.placed(row, lineIndex, inputs.paragraphRole, lineWithinParagraph = 0, inputs.dropCap)
-                  ),
-                  inputs.paragraphRole
-                )
-                val aligned = ParagraphAlignmentLayout.apply(wrapped, lineIndex, panelWidthPx, richText)
-                HeadingSpacingLayout
-                  .apply(aligned, inputs.headingLevel, true, font, measuredLayout, cellMetrics, richText)
             loop(rest, acc ++ spaced)
           case _ => acc
 
@@ -388,10 +367,6 @@ object TextLayoutSnapshot:
       buffer.document.content.linesIteratorFrom(buffer.viewport.topLine).take(maxLogicalLines).toVector,
       Vector.empty
     )
-
-  private def unwrappedVisibleSlice(rawLine: String, startColumn: Int, visibleColumns: Int): String =
-    val visibleEndColumn = startColumn + math.max(1, visibleColumns) + UnwrappedOverscanColumns
-    rawLine.slice(startColumn, math.min(rawLine.length, visibleEndColumn))
 
   private[layout] def wrapLogicalLine(
     line: String,
@@ -574,15 +549,8 @@ object TextLayoutSnapshot:
       // size, not a caller override (which would otherwise make every font look like it drifts under TUI's
       // CellMetricsOne).
       val fontCellMetrics = CellMetrics.fromFont(font)
-      val measuredXs = caretXs(
-        sampleText,
-        0,
-        singleFontResolver(font),
-        frc,
-        measuredLayout = true,
-        fontCellMetrics,
-        ShapedTextCache()
-      )
+      val resolver        = singleFontResolver(font)
+      val measuredXs = caretXs(sampleText, 0, resolver, frc, measuredLayout = true, fontCellMetrics, ShapedTextCache())
       val measuredAdvance = measuredXs(measuredXs.length - 1)
       val cellAdvance     = fontCellMetrics.charWidth.toFloat * sampleText.length
       math.abs(measuredAdvance - cellAdvance) > 0.5f

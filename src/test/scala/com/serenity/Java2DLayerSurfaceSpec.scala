@@ -142,9 +142,9 @@ class Java2DLayerSurfaceSpec extends AnyFlatSpec with Matchers:
     val metrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 12)
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
 
-    val first  = Java2DRenderSurface.forFrame(metrics, font, canvas, _ => (), SurfaceTextCaches.fresh())
-    val second = Java2DRenderSurface.forFrame(metrics, font, canvas, _ => (), SurfaceTextCaches.fresh())
-    val other  = Java2DRenderSurface.forFrame(metrics, font, new JPanel(), _ => (), SurfaceTextCaches.fresh())
+    val first  = SingleUseFrameSurface(metrics, font, canvas, _ => ())
+    val second = SingleUseFrameSurface(metrics, font, canvas, _ => ())
+    val other  = SingleUseFrameSurface(metrics, font, new JPanel(), _ => ())
 
     first.layerCacheOwner shouldBe second.layerCacheOwner
     first.layerCacheOwner should not be other.layerCacheOwner

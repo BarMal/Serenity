@@ -48,9 +48,7 @@ object OffscreenWarmUpFrames:
           deviceScaleY = scale.y,
           contentPersists = true,
           layerCacheOwnerOverride = Some(screen),
-          labelSprites = caches.labelSprites,
-          styledFonts = caches.styledFonts,
-          shapedText = caches.shapedText
+          textCaches = caches.surfaceText
         )
 
       FrontendRuntime.OffscreenFrames(

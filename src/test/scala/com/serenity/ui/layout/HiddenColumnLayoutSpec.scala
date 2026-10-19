@@ -5,9 +5,9 @@ import java.awt.Font
 import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
 import com.serenity.markdown.{MarkdownInlineView, MarkerMode}
 import com.serenity.state.models.TextVisualLine
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** Markdown markers hidden by the inline view take no width: the line lays out, wraps and answers caret and hit queries
   * exactly as the same text without them would, while the columns stay in the buffer text.

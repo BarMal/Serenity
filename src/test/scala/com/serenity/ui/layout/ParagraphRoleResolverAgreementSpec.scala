@@ -7,11 +7,10 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, RichTextState, Viewport}
 import com.serenity.ui.openings.{ChapterOpenings, EffectiveRole, OpeningContext, ParagraphRoles}
-import com.serenity.ui.renderer.DropCapRenderer
+import com.serenity.ui.renderer.{DropCapRenderer, ShapedTextCache}
 import com.serenity.ui.theme.RichTextStyling
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** Every site that reads a paragraph's role asks the one resolver, so a role only the resolver knows about (here, body
   * text that it declares a drop cap) is laid out, painted, spanned and dirty-tracked as that role everywhere.

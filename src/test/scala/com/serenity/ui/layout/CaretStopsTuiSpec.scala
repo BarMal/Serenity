@@ -2,9 +2,9 @@ package com.serenity.ui.layout
 
 import java.awt.font.TextAttribute
 
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** The terminal's carets are cells, so a kerned font must not move them: only the measured, pixel layout follows
   * glyphs.

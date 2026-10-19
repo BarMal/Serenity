@@ -71,7 +71,7 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
       heightPx,
       deviceScale,
       deviceScale,
-      shapedText = cache
+      textCaches = SurfaceTextCaches.fresh().copy(shapedText = cache)
     )
     surface.setForegroundColor(black)
     surface.setBackgroundColor(white)
@@ -250,7 +250,10 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
   private val ligaturedInter = kerned(BundledInterFont.ligatured(14f))
 
   private def stretchAndCarets(text: String, face: Font) =
-    (ShapedTextCache().stretchOf(text, face, frc), TextLayoutSnapshot.caretXsForText(text, face, ShapedTextCache(), frc))
+    (
+      ShapedTextCache().stretchOf(text, face, frc),
+      TextLayoutSnapshot.caretXsForText(text, face, ShapedTextCache(), frc)
+    )
 
   "A caret stop" should "sit at the x of the glyph the line draws for its character, kerned or not" in
     List("platform serif" -> font, "bundled Inter" -> kernedInter).foreach {
@@ -359,7 +362,7 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
       heightPx,
       deviceScale,
       deviceScale,
-      shapedText = cache
+      textCaches = SurfaceTextCaches.fresh().copy(shapedText = cache)
     )
     surface.setForegroundColor(black)
     surface.setBackgroundColor(white)

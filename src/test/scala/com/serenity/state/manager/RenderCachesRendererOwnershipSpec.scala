@@ -13,8 +13,8 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
-/** The renderer's text caches belong to the [[RenderCaches]] that renders, not to the JVM: laying a line out through one
-  * owner leaves it shaped for that owner's painter and for nobody else's.
+/** The renderer's text caches belong to the [[RenderCaches]] that renders, not to the JVM: laying a line out through
+  * one owner leaves it shaped for that owner's painter and for nobody else's.
   */
 class RenderCachesRendererOwnershipSpec extends AnyFlatSpec with Matchers:
 
@@ -36,9 +36,7 @@ class RenderCachesRendererOwnershipSpec extends AnyFlatSpec with Matchers:
       heightPx,
       1.0,
       1.0,
-      labelSprites = caches.labelSprites,
-      styledFonts = caches.styledFonts,
-      shapedText = caches.shapedText
+      textCaches = caches.surfaceText
     )
 
   "Two RenderCaches" should "own distinct renderer text caches" in {
@@ -65,8 +63,8 @@ class RenderCachesRendererOwnershipSpec extends AnyFlatSpec with Matchers:
     val owner   = RenderCaches.create()
     val surface = surfaceOver(owner)
     val frc     = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
-    val _       = TextLayoutSnapshot.boundedVisualLinesForText(line, 0, widthPx, font, frc, wrapCache = owner.wrappedLines)
-    val shaped  = owner.shapedText.shapings
+    val _ = TextLayoutSnapshot.boundedVisualLinesForText(line, 0, widthPx, font, frc, wrapCache = owner.wrappedLines)
+    val shaped = owner.shapedText.shapings
 
     surface.drawShapedRunPx(0.0f, 0, widthPx.toFloat, metrics.lineHeight, metrics.ascent, line, 0, line.length)
 

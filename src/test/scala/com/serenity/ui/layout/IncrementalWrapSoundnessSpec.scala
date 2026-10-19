@@ -8,9 +8,9 @@ import scala.util.Random
 import com.serenity.state.models.MeasuredRow
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
 import com.serenity.ui.layout.WrapFixtures.*
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** The assumptions [[IncrementalWrap]]'s exactness rests on, each checked against the thing it assumes about. */
 class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
@@ -70,8 +70,12 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
   it should "be unclean where the font kerns against a space" in {
     assume(liberationSerifKerned.isDefined, "Liberation Serif is not installed")
     val font = liberationSerifKerned.get
-    "ATVWY".foreach(char => withClue(s"'$char': ")(ShapingBarriers.cutsCleanly(font, frc, char, ShapedTextCache()) shouldBe false))
-    "abcdefghij".foreach(char => withClue(s"'$char': ")(ShapingBarriers.cutsCleanly(font, frc, char, ShapedTextCache()) shouldBe true))
+    "ATVWY".foreach(char =>
+      withClue(s"'$char': ")(ShapingBarriers.cutsCleanly(font, frc, char, ShapedTextCache()) shouldBe false)
+    )
+    "abcdefghij".foreach(char =>
+      withClue(s"'$char': ")(ShapingBarriers.cutsCleanly(font, frc, char, ShapedTextCache()) shouldBe true)
+    )
   }
 
   it should "have been worth probing: cutting at every space changes advances in such a font" in {
@@ -148,12 +152,16 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
         val newKey = keyFor(after, layout, width)
         val old    = TextLayoutSnapshot.wrapRows(oldKey, Int.MaxValue, ShapedTextCache())
         val resumed =
-          old.trace.flatMap(trace => IncrementalWrap.rewrap(newKey, Seq(Predecessor(oldKey, old.rows, trace)), ShapedTextCache()))
+          old.trace.flatMap(trace =>
+            IncrementalWrap.rewrap(newKey, Seq(Predecessor(oldKey, old.rows, trace)), ShapedTextCache())
+          )
         withClue(s"${layout.name} $change: ") {
           resumed.isDefined shouldBe true
           val whole = GlyphAdvances.measure(after, 0, after.length, 0, newKey.resolver, frc, ShapedTextCache())
           resumed.flatMap(_.trace).flatMap(_.advances).exists(sameAdvances(_, whole, after.length)) shouldBe true
-          bitwiseRows(resumed.get.rows) shouldBe bitwiseRows(TextLayoutSnapshot.wrapRows(newKey, Int.MaxValue, ShapedTextCache()).rows)
+          bitwiseRows(resumed.get.rows) shouldBe bitwiseRows(
+            TextLayoutSnapshot.wrapRows(newKey, Int.MaxValue, ShapedTextCache()).rows
+          )
         }
       }
     }

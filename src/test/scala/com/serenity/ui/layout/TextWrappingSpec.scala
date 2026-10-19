@@ -3,7 +3,6 @@ package com.serenity.ui.layout
 import java.awt.Font
 
 import com.serenity.ui.renderer.{MeasuredTextAdvances, ShapedTextCache}
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

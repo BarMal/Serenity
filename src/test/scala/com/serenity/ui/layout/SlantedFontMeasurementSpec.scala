@@ -5,9 +5,9 @@ import java.awt.geom.AffineTransform
 
 import com.serenity.state.models.TextVisualLine
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** A slanted face whose `TextLayout` advance includes the slant overhang (a synthesised italic, as macOS draws for a
   * family with no italic face) must be measured like the per-row `TextLayout` oracle ([[LegacyLineMeasurement]]): the

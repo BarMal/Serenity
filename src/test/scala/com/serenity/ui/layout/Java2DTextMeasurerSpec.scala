@@ -7,9 +7,8 @@ import java.awt.{Font, RenderingHints}
 import com.serenity.richtext.ParagraphRole
 import com.serenity.ui.layout.TextCaretMeasurement.{ColumnFontRun, LineFontResolver}
 import com.serenity.ui.layout.TextMeasurer.{FontRun, LineFonts, LineMetrics, MetricsKey, ParagraphDirection}
-import com.serenity.ui.renderer.FontSpec
+import com.serenity.ui.renderer.{FontSpec, ShapedTextCache}
 import org.scalacheck.Gen
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** [[Java2DTextMeasurer]] keeps the measurer contract and answers every measurement bit for bit as the Java2D functions
   * it stands in for, at 1x and 2x.
@@ -77,14 +76,21 @@ class Java2DTextMeasurerSpec extends TextMeasurerContract:
 
   property("raw caret positions equal TextCaretMeasurement.rawMeasuredCaretXs") {
     forAll(genJava2DLine) { (line, frc) =>
-      val expected = TextCaretMeasurement.rawMeasuredCaretXs(line.text, line.startColumn, resolverFor(line.fonts), frc, ShapedTextCache())
+      val expected = TextCaretMeasurement.rawMeasuredCaretXs(
+        line.text,
+        line.startColumn,
+        resolverFor(line.fonts),
+        frc,
+        ShapedTextCache()
+      )
       bits(line.measurer.rawCaretXs(line.text, line.startColumn, line.fonts)) shouldBe bits(expected)
     }
   }
 
   property("glyph advances over any span equal GlyphAdvances.measure") {
     forAll(genJava2DSpan) { (line, frc, from, until) =>
-      val expected = GlyphAdvances.measure(line.text, from, until, line.startColumn, resolverFor(line.fonts), frc, ShapedTextCache())
+      val expected =
+        GlyphAdvances.measure(line.text, from, until, line.startColumn, resolverFor(line.fonts), frc, ShapedTextCache())
       observed(line.measurer.advances(line.text, from, until, line.startColumn, line.fonts)) shouldBe observed(expected)
     }
   }
@@ -224,7 +230,15 @@ class Java2DTextMeasurerSpec extends TextMeasurerContract:
     forAll(genJava2DLine) { (line, frc) =>
       whenever(!GlyphAdvances.hasContextFreeCharacters(line.text)) {
         bits(line.measurer.exactCaretXs(line.text, line.startColumn, line.fonts)) shouldBe
-          bits(TextCaretMeasurement.rawMeasuredCaretXs(line.text, line.startColumn, resolverFor(line.fonts), frc, ShapedTextCache()))
+          bits(
+            TextCaretMeasurement.rawMeasuredCaretXs(
+              line.text,
+              line.startColumn,
+              resolverFor(line.fonts),
+              frc,
+              ShapedTextCache()
+            )
+          )
       }
     }
   }
@@ -236,7 +250,14 @@ class Java2DTextMeasurerSpec extends TextMeasurerContract:
         val from = line.text.length / 2
         val key  = keyFor(line, frc, measured = true, cell, width)
         val expected = TextCaretMeasurement
-          .fittingSegment(ParagraphMeasurement.assembled(key, None, ShapedTextCache()), line.text, from, width, line.startColumn, key)
+          .fittingSegment(
+            ParagraphMeasurement.assembled(key, None, ShapedTextCache()),
+            line.text,
+            from,
+            width,
+            line.startColumn,
+            key
+          )
           .length
         line.measurer.exactFit(line.text, from, width, line.startColumn, line.fonts, cell) shouldBe expected
       }

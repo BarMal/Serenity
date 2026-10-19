@@ -46,9 +46,7 @@ private[renderer] object LayerSurfaces:
       deviceScaleY = deviceScaleY,
       contentPersists = false,
       imageOriginPx = origin,
-      labelSprites = textCaches.labelSprites,
-      styledFonts = textCaches.styledFonts,
-      shapedText = textCaches.shapedText,
+      textCaches = textCaches,
       activity = activity
     )
 

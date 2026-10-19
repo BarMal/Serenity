@@ -128,7 +128,9 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     searchRun.yPx shouldBe cellMetrics.toPixelY(commandContentRect.y)
 
     val searchCursorXPx = cellMetrics.toPixelX(commandContentRect.x) +
-      math.round(TextLayoutSnapshot.caretXsForText(searchText, uiFont, ShapedTextCache(), surface.fontRenderContext.get).last)
+      math.round(
+        TextLayoutSnapshot.caretXsForText(searchText, uiFont, ShapedTextCache(), surface.fontRenderContext.get).last
+      )
     val searchCursorYPx = cellMetrics.toPixelY(commandContentRect.y)
     surface.fillPixelRectCalls.exists(call =>
       call.xPx == searchCursorXPx &&

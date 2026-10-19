@@ -7,10 +7,9 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
-import com.serenity.ui.renderer.{FontFirstUse, FontSpec, ShapedStretch, StyledFontCache}
+import com.serenity.ui.renderer.{FontFirstUse, FontSpec, ShapedStretch, ShapedTextCache, StyledFontCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.ShapedTextCache
 
 class FontFirstUseSpec extends AnyFlatSpec with Matchers:
 

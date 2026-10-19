@@ -242,23 +242,21 @@ object WrappedLineCache:
   /** An access-ordered LRU. Rendering and the state dispatcher may run on different threads, so every map access holds
     * this instance's monitor; wrapping a missed line happens outside it.
     */
-  final class Bounded private[WrappedLineCache] (
-      maxLines: Int,
-      maxChars: Long,
-      private[serenity] val shapedText: ShapedTextCache
-  ) extends WrappedLineCache:
-    private val entries          = new LinkedHashMap[WrappedLineKey, Entry](256, 0.75f, true)
-    private val recent           = new HashMap[WrapShape, ArrayDeque[(WrappedLineKey, Entry)]]
-    private val retainedChar     = new AtomicLong(0L)
-    private val coldCount        = new AtomicLong(0L)
-    private val incrementalCount = new AtomicLong(0L)
-    private val rowCount         = new AtomicLong(0L)
-    private val measuredCount    = new AtomicLong(0L)
-    private val visualRows       = new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries)
-    private val bandRows         = new VisualLineIndexStore[BandHeightKey](VisualLineIndexStore.DefaultMaxEntries)
-    private val fences           = new LinkedHashMap[BufferId, FenceEntry](16, 0.75f, true)
-    private val columns          = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
-    private val openings         = new LinkedHashMap[ScannedOpenings, OpeningLines](16, 0.75f, true)
+  final class Bounded private[WrappedLineCache] (maxLines: Int, maxChars: Long, shaper: ShapedTextCache)
+      extends WrappedLineCache:
+    private[serenity] def shapedText: ShapedTextCache = shaper
+    private val entries                               = new LinkedHashMap[WrappedLineKey, Entry](256, 0.75f, true)
+    private val recent                                = new HashMap[WrapShape, ArrayDeque[(WrappedLineKey, Entry)]]
+    private val retainedChar                          = new AtomicLong(0L)
+    private val coldCount                             = new AtomicLong(0L)
+    private val incrementalCount                      = new AtomicLong(0L)
+    private val rowCount                              = new AtomicLong(0L)
+    private val measuredCount                         = new AtomicLong(0L)
+    private val visualRows = new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries)
+    private val bandRows   = new VisualLineIndexStore[BandHeightKey](VisualLineIndexStore.DefaultMaxEntries)
+    private val fences     = new LinkedHashMap[BufferId, FenceEntry](16, 0.75f, true)
+    private val columns    = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
+    private val openings   = new LinkedHashMap[ScannedOpenings, OpeningLines](16, 0.75f, true)
 
     def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
       compute: => TableColumns

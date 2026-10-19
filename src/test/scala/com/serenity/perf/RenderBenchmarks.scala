@@ -52,13 +52,10 @@ private[perf] object RenderBenchmarks:
   // Shared across the frame and markdown benchmarks, mirroring StateManager's cache reuse across renders (#1677).
   private val renderCaches = RenderCaches.create()
 
+  private lazy val longMeasuredLine =
+    TextLayoutSnapshot.visualLineForText("Wi" * 8_000, bufferLine = 0, textFont, renderCaches.shapedText)
+
   def frameBenchmarks(cursorWindow: SwingWindow): List[BenchmarkRunner.Benchmark] =
-    val longMeasuredLine = TextLayoutSnapshot.visualLineForText(
-      "Wi" * 8_000,
-      bufferLine = 0,
-      textFont,
-      renderCaches.shapedText
-    )
     val richState        = editorStateForRichDocument(largeRichTextDocument(lines = 6_000))
     val multilineState   = editorState(largeMultilineDocument(lines = 15_000), None)
     val commentsState    = withDocumentComments(multilineState)

@@ -17,7 +17,8 @@ private[serenity] object ColdFontProbes:
   private val shapedText = ShapedTextCache()
 
   def glyphAdvances(font: Font, frc: FontRenderContext): (Boolean, Boolean, Boolean, Int) =
-    val measured = GlyphAdvances.measure(AdvanceText, 0, AdvanceText.length, 0, singleFontResolver(font), frc, shapedText)
+    val measured =
+      GlyphAdvances.measure(AdvanceText, 0, AdvanceText.length, 0, singleFontResolver(font), frc, shapedText)
     (
       GlyphAdvances.layoutAdvanceMatchesSum(font, frc),
       GlyphAdvances.shapingMaySubstitute(font, frc),
