@@ -35,11 +35,24 @@ object LegacyLineMeasurement:
     if maxVisualLines <= 0 then Vector.empty
     else if text.isEmpty then Vector(inset(shape("", baseColumn, baseColumn), paragraphRole, 0, dropCapIndentPx))
     else
+      /** The home row's wrap gives back the width of the character the glyph is drawn in place of, as its placement
+        * does.
+        */
+      def replacedCharacterWidthPx(startColumn: Int): Float =
+        val first = text.substring(startColumn, startColumn + Character.charCount(text.codePointAt(startColumn)))
+        shape(first, baseColumn + startColumn, baseColumn + startColumn + first.length)
+          .xForColumn(baseColumn + startColumn + first.length)
+          .getOrElse(0.0f)
+
       @annotation.tailrec
       def loop(startColumn: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
         if startColumn >= text.length || acc.length >= maxVisualLines then acc
         else
-          val insetPx      = DropCapLayout.leftInsetPx(paragraphRole, acc.length, dropCapIndentPx)
+          val spanInsetPx = DropCapLayout.leftInsetPx(paragraphRole, acc.length, dropCapIndentPx)
+          val insetPx =
+            if DropCapLayout.isHomeRow(paragraphRole, acc.length, baseColumn + startColumn) then
+              (spanInsetPx - replacedCharacterWidthPx(startColumn)).max(0.0f)
+            else spanInsetPx
           val wrapWidthPx  = math.max(1, panelWidthPx - math.round(insetPx))
           val segmentStart = baseColumn + startColumn
           val fitted =
