@@ -29,6 +29,10 @@ object ConfigManagerTestSupport:
   val linuxPlan: ConfigMigrations.Plan =
     ConfigMigrations.Plan(List(ConfigMigrations.droppingDefaultHotkeys("linux")), ConfigVersion.Current, "linux")
 
+  /** The plan of a build running on macOS, whatever the machine really is. */
+  val macPlan: ConfigMigrations.Plan =
+    ConfigMigrations.Plan(List(ConfigMigrations.droppingDefaultHotkeys("Mac OS X")), ConfigVersion.Current, "Mac OS X")
+
   /** Load configuration from file with migration/deprecation report or return defaults. */
   def loadConfigResult(
     configPath: Option[String] = None,
