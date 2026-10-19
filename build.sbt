@@ -160,8 +160,7 @@ lazy val root = (project in file("."))
     wartremoverExcluded ++= Seq(
       baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "ui" / "terminal",
       baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "ui" / "accessibility",
-      baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "lsp" / "client",
-      baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "richtext"
+      baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "lsp" / "client"
     ),
     architectureBaselineFile := baseDirectory.value / "project" / "architecture-baseline.tsv",
     architectureChecksSelfTest := {
