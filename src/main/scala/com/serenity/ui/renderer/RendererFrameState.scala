@@ -314,6 +314,8 @@ final class RendererFrameState(initialCapacity: Int):
   def rememberSnapshots(surface: RenderSurface, snapshots: Map[PaneId, TextLayoutSnapshot]): Unit =
     surface.persistentContentKey.foreach(key => previousSnapshots.put(key, snapshots))
 
+  private[renderer] val screenSnapshots = new ScreenSnapshots(cacheCapacity)
+
   /** Each pane's [[PaneFrameRecord.rowGhosts]] as of the previous frame planned for a surface, to find the rows whose
     * ghost changed without any buffer damage saying so.
     */
@@ -482,6 +484,7 @@ final class RendererFrameState(initialCapacity: Int):
     screenDamage.remove(screenToken)
     screenPaneIds.remove(screenToken)
     screenScrollbars.remove(screenToken)
+    screenSnapshots.forget(screenToken)
 
   /** Folds `damage` into every buffer identity already being tracked for `output`'s screen (every identity, if there is
     * no output to scope by), via [[DamageAccumulator.accumulateBuffers]] -- called unconditionally on every frame,

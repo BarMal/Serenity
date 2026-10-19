@@ -10,7 +10,7 @@ import com.serenity.ui.renderer.FontFirstUse
   * Both are constants of the font, yet every row of every snapshot build used to allocate a fresh `LineMetrics` for
   * each font covering it.
   */
-private[layout] object FontLineExtents:
+private[serenity] object FontLineExtents:
 
   final case class Key(font: Font, frc: FontRenderContext)
 
