@@ -150,6 +150,16 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
   private def rgb(color: RenderColor): Int = rgb(color.toAwt)
 
   private def headingColour(theme: Theme): Int = rgb(theme.colorFor(SyntaxElement.Heading).foreground)
+  private def stringColour(theme: Theme): Int  = rgb(theme.colorFor(SyntaxElement.String).foreground)
+
+  private def distance(a: Int, b: Int): Double =
+    val channels = List(16, 8, 0).map(shift => ((a >> shift) & 0xff) - ((b >> shift) & 0xff))
+    math.sqrt(channels.map(delta => (delta * delta).toDouble).sum)
+
+  /** Euclidean RGB distance. 90 is about a third of the 255 range on one channel: the two blues of the light theme's
+    * accent and heading colour, which read as one hue, are 51 apart; the colours below are at least 97 from each other.
+    */
+  private val MinimumColourDistance = 90.0
 
   private val plain = (false, false, false)
 
@@ -183,7 +193,7 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
           foregroundOf(screen, text) shouldBe rgb(theme.foreground)
         )
         foregroundOf(screen, "Delta") shouldBe rgb(theme.accent)
-        foregroundOf(screen, "Echo") shouldBe headingColour(theme)
+        foregroundOf(screen, "Echo") shouldBe stringColour(theme)
         foregroundOf(screen, "Foxtrot") shouldBe rgb(theme.muted)
         levelTexts.foreach(text =>
           cellsOf(screen, text).map(cell => rgb(cell.bg)).distinct shouldBe List(rgb(theme.background))
@@ -204,6 +214,24 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
             theme.background
           ) should be >= 3.0
         )
+      }
+    }
+
+  it should "set level 5 clearly apart from level 4 and levels 1 to 3 in both themes, rich text and Markdown" in
+    List(Theme.dark, Theme.light).foreach { theme =>
+      val richScreen     = render(prose(theme = theme))
+      val markdownScreen = render(markdown(theme = theme))
+      val level5         = foregroundOf(richScreen, "Echo")
+
+      foregroundOf(markdownScreen, "Echo") shouldBe level5
+      val others = List(
+        "level 4"          -> foregroundOf(richScreen, "Delta"),
+        "rich levels 1-3"  -> foregroundOf(richScreen, "Alpha"),
+        "Markdown 1-3"     -> foregroundOf(markdownScreen, "Alpha"),
+        "Markdown level 4" -> foregroundOf(markdownScreen, "Delta")
+      )
+      others.foreach { (name, colour) =>
+        withClue(s"${theme.name}, level 5 against $name: ")(distance(level5, colour) should be >= MinimumColourDistance)
       }
     }
 
@@ -305,7 +333,7 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
 
         List("Alpha", "Bravo", "Charlie").foreach(text => foregroundOf(screen, text) shouldBe headingColour(theme))
         foregroundOf(screen, "Delta") shouldBe rgb(theme.accent)
-        foregroundOf(screen, "Echo") shouldBe headingColour(theme)
+        foregroundOf(screen, "Echo") shouldBe stringColour(theme)
         foregroundOf(screen, "Foxtrot") shouldBe rgb(theme.muted)
         foregroundOf(screen, "plain text") shouldBe rgb(theme.foreground)
       }

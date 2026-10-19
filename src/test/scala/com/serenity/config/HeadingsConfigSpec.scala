@@ -129,6 +129,7 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
     def colourOf(text: String) = read(AppConfig.default, "headings.h1.colour" -> text).headingsConfig.styles(0).colour
 
     colourOf("accent") shouldBe Some(HeadingColour.Accent)
+    colourOf("secondary") shouldBe Some(HeadingColour.Secondary)
     colourOf("muted") shouldBe Some(HeadingColour.Muted)
     read(AppConfig.default, "headings.colour" -> "accent").headingsConfig.colour shouldBe Some(HeadingColour.Accent)
   }
@@ -149,7 +150,7 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
       None,
       None,
       Some(HeadingColour.Accent),
-      Some(HeadingColour.Heading),
+      Some(HeadingColour.Secondary),
       Some(HeadingColour.Muted)
     )
     terminal.map(_.sizeScale) shouldBe HeadingStyle.defaults.map(_.sizeScale)

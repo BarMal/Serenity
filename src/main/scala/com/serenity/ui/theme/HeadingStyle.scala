@@ -36,7 +36,7 @@ object HeadingStyle:
   val defaults: Vector[HeadingStyle] = Vector.tabulate(LevelCount)(index => default(index + 1))
 
   /** What the terminal makes of a level left on auto. A terminal has no sizes, so the levels climb a ladder of weight,
-    * slant and underline, and the three smallest take a theme colour each: the accent, the heading colour and the quiet
+    * slant and underline, and the three smallest take a theme colour each: the accent, the string colour and the quiet
     * text colour, all of which a theme already keeps readable on its background.
     */
   def terminalDefault(level: Int): HeadingStyle =
@@ -45,6 +45,6 @@ object HeadingStyle:
       case 1 => base.copy(underline = true)
       case 3 => base.copy(italic = true)
       case 4 => base.copy(ladderColour = Some(HeadingColour.Accent))
-      case 5 => base.copy(ladderColour = Some(HeadingColour.Heading))
+      case 5 => base.copy(ladderColour = Some(HeadingColour.Secondary))
       case 6 => base.copy(ladderColour = Some(HeadingColour.Muted))
       case _ => base

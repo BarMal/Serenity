@@ -227,10 +227,10 @@ object ConfigFileFormat:
       "Underline takes auto, true or false. A terminal has no sizes, so auto there climbs a ladder: level 1 bold and"
     ),
     comment(
-      "underlined, 2 bold, 3 bold italic, and levels 4 to 6 bold in the accent, heading and muted colours. Set a key"
+      "underlined, 2 bold, 3 bold italic, and levels 4 to 6 bold in the accent, string and muted colours. Set a key"
     ),
     comment(
-      "to take a level off it. Colour also takes accent or muted. Rule takes auto, true or false; a terminal with"
+      "to take a level off it. Colour also takes accent, secondary or muted. Rule takes auto, true or false; a terminal with"
     ),
     comment("it on draws a line of box-drawing cells in the row below the heading, which space_after auto reserves."),
     field("headings.h1.size"),
@@ -296,7 +296,7 @@ object ConfigFileFormat:
     comment(
       "headings.colour is auto (rich-text headings in the text colour, Markdown headings in the heading colour),"
     ),
-    comment("text, heading, accent or muted, for both kinds of document."),
+    comment("text, heading, accent, secondary or muted, for both kinds of document."),
     field("headings.colour"),
     comment("Above a body of damping_threshold points (before any device scale) heading sizes grow more slowly"),
     field("headings.damping"),
