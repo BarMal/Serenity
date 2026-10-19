@@ -1,8 +1,8 @@
 package com.serenity.ui.renderer
 
-import java.awt.{Font, Graphics2D}
 import java.awt.font.{FontRenderContext, LineMetrics}
 import java.awt.geom.AffineTransform
+import java.awt.{Font, Graphics2D}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
