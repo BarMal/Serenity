@@ -1,15 +1,12 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.{FontRenderContext, TextAttribute, TextHitInfo, TextLayout}
-import java.text.AttributedString
-import java.util.concurrent.atomic.AtomicLong
+import java.awt.font.FontRenderContext
 
 import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.{IndentationSettings, MeasuredRow}
 import com.serenity.ui.openings.ParagraphRoles
-import com.serenity.ui.renderer.FontFirstUse
 import com.serenity.ui.theme.{HeadingSettings, MarkdownInlineStyling, RichTextStyling, TextStyle}
 
 /** Caret-stop measurement for one logical line: which AWT font each column measures with, and the x position of every
@@ -208,23 +205,9 @@ private[layout] object TextCaretMeasurement:
         absoluteStartColumn
       )
 
-  private val textLayoutsBuilt: ThreadLocal[AtomicLong] = ThreadLocal.withInitial(() => AtomicLong(0))
-
-  /** How many `TextLayout`s caret and fit measurement has built on the calling thread: the cost wrapping pays when
-    * summed glyph advances cannot answer, which the wrap specs bound per paragraph. Counted per thread so specs running
-    * side by side do not see each other's layouts.
-    */
-  private[layout] def textLayoutsConstructed: Long = textLayoutsBuilt.get().get()
-
-  private def settleFonts(resolver: LineFontResolver, frc: FontRenderContext): Unit =
-    FontFirstUse.settleAll(resolver.baseFont +: resolver.runs.map(_.font), frc)
-
-  private def textLayoutOf(text: AttributedString, frc: FontRenderContext): TextLayout =
-    val _ = textLayoutsBuilt.get().incrementAndGet()
-    TextLayout(text.getIterator, frc)
-
-  /** Each character's leading caret plus the run's full advance, before [[normalizeCollapsedCarets]]: summed glyph
-    * advances when every character is context-free (see [[GlyphAdvances]]), a `TextLayout` otherwise.
+  /** Each character's caret plus the run's full advance, before [[normalizeCollapsedCarets]]: summed glyph advances
+    * when every character is context-free (see [[GlyphAdvances]]), the glyphs of a shaped stretch otherwise (see
+    * [[ShapedCaretStops]]).
     */
   private[layout] def rawMeasuredCaretXs(
     text: String,
@@ -240,96 +223,12 @@ private[layout] object TextCaretMeasurement:
         else None
       advances.filter(_.isContextFree(0, text.length)) match
         case Some(measured) => measured.caretsFrom(0, text.length)
-        case None           => layoutCaretXs(text, absoluteStartColumn, resolver, frc)
-
-  /** Carets read back from one `TextLayout` of `text`: exact for any text, but a caret query per character. */
-  private def layoutCaretXs(
-    text: String,
-    absoluteStartColumn: Int,
-    resolver: LineFontResolver,
-    frc: FontRenderContext
-  ): IArray[Float] =
-    withExtraAdvances(
-      if resolver.hasHidden then visibleLayoutCaretXs(text, absoluteStartColumn, resolver, frc)
-      else plainLayoutCaretXs(text, absoluteStartColumn, resolver, frc),
-      absoluteStartColumn,
-      resolver
-    )
-
-  /** `carets` with each column's extra advance added to every caret after it. */
-  private def withExtraAdvances(
-    carets: IArray[Float],
-    absoluteStartColumn: Int,
-    resolver: LineFontResolver
-  ): IArray[Float] =
-    if resolver.extraAdvances.isEmpty then carets
-    else
-      val shifts = (0 until carets.length).scanLeft(0.0f) { (sum, index) =>
-        sum + resolver.extraAdvances.getOrElse(absoluteStartColumn + index, 0.0f)
-      }
-      IArray.tabulate(carets.length)(index => carets(index) + shifts(index))
-
-  private def plainLayoutCaretXs(
-    text: String,
-    absoluteStartColumn: Int,
-    resolver: LineFontResolver,
-    frc: FontRenderContext
-  ): IArray[Float] =
-    settleFonts(resolver, frc)
-    val attributed = AttributedString(text)
-    // One FONT attribute per contiguous run of equal per-column fonts, so a mixed-size rich line's caret advances
-    // (and thus wrap points and widths) match the per-run glyphs the draw path paints.
-    resolver.fontRuns(absoluteStartColumn, absoluteStartColumn + text.length).foreach { span =>
-      attributed.addAttribute(
-        TextAttribute.FONT,
-        span.font,
-        span.startColumn - absoluteStartColumn,
-        span.endColumn - absoluteStartColumn
-      )
-    }
-    val layout = textLayoutOf(attributed, frc)
-    val carets = new Array[Float](text.length + 1)
-    (0 until text.length).foreach(index => carets(index) = layout.getCaretInfo(TextHitInfo.leading(index))(0))
-    carets(text.length) = layout.getAdvance
-    IArray.unsafeFromArray(carets)
-
-  /** [[layoutCaretXs]] for a line with hidden columns: the visible characters are laid out as if the hidden ones were
-    * not in the text, and each hidden column takes the caret of the next visible one.
-    */
-  private def visibleLayoutCaretXs(
-    text: String,
-    absoluteStartColumn: Int,
-    resolver: LineFontResolver,
-    frc: FontRenderContext
-  ): IArray[Float] =
-    settleFonts(resolver, frc)
-    val hidden        = resolver.hiddenMask(absoluteStartColumn, text.length)
-    val visibleBefore = hidden.scanLeft(0)((count, isHidden) => if isHidden then count else count + 1)
-    val visibleText   = text.indices.filterNot(hidden(_)).map(text.charAt(_)).mkString
-    val carets        = new Array[Float](text.length + 1)
-    if visibleText.nonEmpty then
-      val attributed = AttributedString(visibleText)
-      resolver.fontRuns(absoluteStartColumn, absoluteStartColumn + text.length).filterNot(_.hidden).foreach { span =>
-        attributed.addAttribute(
-          TextAttribute.FONT,
-          span.font,
-          visibleBefore(span.startColumn - absoluteStartColumn),
-          visibleBefore(span.endColumn - absoluteStartColumn)
-        )
-      }
-      val layout = textLayoutOf(attributed, frc)
-      carets(text.length) = layout.getAdvance
-      (text.length - 1 to 0 by -1).foreach { index =>
-        carets(index) =
-          if hidden(index) then carets(index + 1)
-          else layout.getCaretInfo(TextHitInfo.leading(visibleBefore(index)))(0)
-      }
-    IArray.unsafeFromArray(carets)
+        case None           => ExactCaretXs.layoutCaretXs(text, absoluteStartColumn, resolver, frc)
 
   /** How many characters of a row fit, plus -- when they came from summed advances -- the candidate's raw carets, so
-    * the chosen row reuses them instead of being measured a second time. A kerned character's leading caret already
-    * holds half the kerning of the one before it, which a row ending there does not feel, so `kerningAfter` holds the
-    * pull of each candidate character on its successor, for a row cut short of the candidate.
+    * the chosen row reuses them instead of being measured a second time. A kerned character's caret already holds the
+    * kerning of the one before it, which a row ending there does not feel, so `kerningAfter` holds the pull of each
+    * candidate character on its successor, for a row cut short of the candidate.
     */
   final private[layout] case class SegmentFit(
       length: Int,
@@ -349,7 +248,7 @@ private[layout] object TextCaretMeasurement:
           val kerning =
             if prefixLength > 0 && prefixLength < raw.length - 1 then kerningAfter(prefixLength - 1) else 0.0f
           normalizeCollapsedCarets(
-            if kerning == 0.0f then prefix else prefix.updated(prefixLength, prefix(prefixLength) - kerning / 2.0f),
+            if kerning == 0.0f then prefix else prefix.updated(prefixLength, prefix(prefixLength) - kerning),
             resolver,
             absoluteStartColumn
           )
@@ -392,7 +291,7 @@ private[layout] object TextCaretMeasurement:
     @annotation.tailrec
     def loop(limit: Int): SegmentFit =
       val carets = normalizeCollapsedCarets(
-        layoutCaretXs(line.substring(from, from + limit), absoluteStartColumn, resolver, frc),
+        ExactCaretXs.layoutCaretXs(line.substring(from, from + limit), absoluteStartColumn, resolver, frc),
         resolver,
         absoluteStartColumn
       )

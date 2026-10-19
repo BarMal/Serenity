@@ -33,7 +33,8 @@ trait TextMeasurer:
   /** Height and ascent of a visual line covering `[startColumn, endColumn)`, from the tallest font over it. */
   def lineMetrics(fonts: TextMeasurer.LineFonts, startColumn: Int, endColumn: Int): TextMeasurer.LineMetrics
 
-  /** Each character's leading caret plus the trailing edge, before collapsed carets are spread apart. */
+  /** Each character's caret, at the x of its glyph, plus the trailing edge, before collapsed carets are spread apart.
+    */
   def rawCaretXs(text: String, startColumn: Int, fonts: TextMeasurer.LineFonts): IArray[Float]
 
   def glyphWidthPx(font: FontSpec, text: String): Float
@@ -44,11 +45,11 @@ trait TextMeasurer:
     */
   def shape(text: String, startColumn: Int, run: TextMeasurer.FontRun, level: Byte): TextMeasurer.ShapedRun
 
-  /** Carets read from a full layout of `text`, however context-free it is: exact, but a caret query per character. */
+  /** Carets read from a full shaping of `text`, however context-free it is: exact, but a shaping of the whole row. */
   def exactCaretXs(text: String, startColumn: Int, fonts: TextMeasurer.LineFonts): IArray[Float]
 
-  /** Each character's leading caret plus the trailing edge as wrapping places it: the fixed cell grid when
-    * `measuredLayout` is false, otherwise [[rawCaretXs]] with collapsed carets spread apart.
+  /** Each character's caret plus the trailing edge as wrapping places it: the fixed cell grid when `measuredLayout` is
+    * false, otherwise [[rawCaretXs]] with collapsed carets spread apart.
     */
   def caretXs(
     text: String,
