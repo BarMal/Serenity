@@ -389,9 +389,11 @@ object RendererPaneSetup:
     columns: Vector[ColumnSnapshotPlacement],
     pageSnapshot: TextLayoutSnapshot
   ): PaneFrameRecord =
-    val records = columns.map(column =>
-      paneFrameRecord(bufferId, RendererPaneContent.columnRect(contentRect, column), context, column.snapshot)
-    )
+    val records = columns.map { column =>
+      val columnRect = RendererPaneContent.columnRect(contentRect, column)
+      val record     = paneFrameRecord(bufferId, columnRect, context, column.snapshot)
+      record.copy(rowRects = withLastRowToColumnBottom(record.rowRects, columnRect, context, column.snapshot))
+    }
     PaneFrameRecord(
       bufferId = bufferId,
       rowBufferLines = records.flatMap(_.rowBufferLines),
@@ -402,6 +404,20 @@ object RendererPaneSetup:
         .toSet,
       snapshot = pageSnapshot
     )
+
+  /** A column holds the rows that fit its height, so what lies below its last row is blank room that rows used to fill
+    * when the column broke later. The last row owns it, and so repaints it, when the column changes.
+    */
+  private def withLastRowToColumnBottom(
+    rowRects: Vector[PixelRect],
+    columnRect: LayoutRect,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
+  ): Vector[PixelRect] =
+    val bottomPx = RendererPaneContent.textRowMetrics(columnRect, context, snapshot).contentBottomPx
+    rowRects.lastOption.fold(rowRects) { last =>
+      rowRects.updated(rowRects.length - 1, last.copy(heightPx = math.max(last.heightPx, bottomPx - last.yPx)))
+    }
 
   private def paneFrameRecord(
     bufferId: BufferId,

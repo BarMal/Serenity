@@ -146,25 +146,22 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   it should "place cursors using the pane content rectangle owned by editor pane layout" in {
     val buffer =
       Buffer.fromString(BufferId(0), "abc\ndef").copy(editing = EditingState(List(CursorPosition(1, 2))))
-    val state = ChromeOn.initial.copy(persisted =
-      ChromeOn.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
         layout = ChromeOn.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0))
         )
-      )
+      ),
+      runtime = ChromeOn.initial.runtime.copy(capabilities = com.serenity.frontend.FrontendCapabilities.tui())
     )
     val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val paneLayout       = LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0))
 
-    val cursorPosition = CursorLayout.calculateScreenPositionInContent(
-      CursorPosition(1, 2),
-      buffer.document.content,
-      paneLayout.contentRect,
-      buffer.viewport
-    )
+    val cursorPosition =
+      LayoutEngine.laidOutPanes(state, calculatedLayout).screenPosition(PaneId(0), CursorPosition(1, 2))
 
     cursorPosition shouldBe Some(ScreenPosition(paneLayout.contentRect.x + 2, paneLayout.contentRect.y + 1))
   }

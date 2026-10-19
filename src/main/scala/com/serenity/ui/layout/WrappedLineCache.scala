@@ -41,6 +41,17 @@ sealed abstract class WrappedLineCache:
     revision: Option[ContentRevision] = None
   ): VisualRowCounts
 
+  /** How many pixels the rows of each logical line stack to, in the same edit-following index as [[visualRowCounts]]:
+    * what column paging fills a column by.
+    */
+  private[layout] def bandHeights(
+    key: BandHeightKey,
+    content: Rope,
+    measure: Int => Int,
+    stamp: AnyRef,
+    revision: Option[ContentRevision] = None
+  ): VisualRowCounts
+
   /** The fenced code blocks, tables and setext headings of `content`, which a live Markdown preview restyles or leaves
     * unstyled. It reads the document only as far as it is asked about, and a cache keeps it for as long as the buffer's
     * content is the same rope; for an edited rope it resumes from the line the edit reached, found from `revision`'s
@@ -156,6 +167,15 @@ object WrappedLineCache:
     ): VisualRowCounts =
       VisualRowCounts.walking(content.lineCount, measure)
 
+    private[layout] def bandHeights(
+      key: BandHeightKey,
+      content: Rope,
+      measure: Int => Int,
+      stamp: AnyRef,
+      revision: Option[ContentRevision]
+    ): VisualRowCounts =
+      VisualRowCounts.walking(content.lineCount, measure)
+
     def fenceIndex(bufferId: BufferId, content: Rope, revision: Option[ContentRevision]): BlockIndex =
       LazyBlockIndex.of(content)
 
@@ -217,6 +237,7 @@ object WrappedLineCache:
     private val rowCount         = new AtomicLong(0L)
     private val measuredCount    = new AtomicLong(0L)
     private val visualRows       = new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries)
+    private val bandRows         = new VisualLineIndexStore[BandHeightKey](VisualLineIndexStore.DefaultMaxEntries)
     private val fences           = new LinkedHashMap[BufferId, FenceEntry](16, 0.75f, true)
     private val columns          = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
     private val openings         = new LinkedHashMap[ScannedOpenings, OpeningLines](16, 0.75f, true)
@@ -300,6 +321,15 @@ object WrappedLineCache:
       revision: Option[ContentRevision]
     ): VisualRowCounts =
       visualRows.counts(key, content, measure, stamp, revision)
+
+    private[layout] def bandHeights(
+      key: BandHeightKey,
+      content: Rope,
+      measure: Int => Int,
+      stamp: AnyRef,
+      revision: Option[ContentRevision]
+    ): VisualRowCounts =
+      bandRows.counts(key, content, measure, stamp, revision)
 
     private[layout] def wrapped(key: WrappedLineKey, maxVisualLines: Int)(
       cold: Int => RowWrap,

@@ -33,7 +33,8 @@ object DirtyLineDiff:
           val reflowFrom =
             List(
               richReflowStart(previousSnapshot, current),
-              extentReflowStart(previousSnapshot, current)
+              extentReflowStart(previousSnapshot, current),
+              columnReflowStart(previousSnapshot, current)
             ).flatten.minOption
           val changed = current.visualLines.indices.filter { row =>
             reflowFrom.exists(row >= _) ||
@@ -140,6 +141,16 @@ object DirtyLineDiff:
   private def extentReflowStart(previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Option[Int] =
     current.visualLines.indices.find { row =>
       previous.visualLines.lift(row).exists(old => extentOf(old) != extentOf(current.visualLines(row)))
+    }
+
+  /** The first row from which a multi-column page's columns break differently: rows from there on sit in another column
+    * or at another height, whatever their own lines say.
+    */
+  private def columnReflowStart(previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Option[Int] =
+    val size = math.max(previous.columnBreaks.length, current.columnBreaks.length)
+    (0 until size).collectFirst {
+      case index if previous.columnBreaks.lift(index) != current.columnBreaks.lift(index) =>
+        List(previous.columnBreaks.lift(index), current.columnBreaks.lift(index)).flatten.minOption.getOrElse(0)
     }
 
   private def extentOf(line: TextVisualLine): Int =

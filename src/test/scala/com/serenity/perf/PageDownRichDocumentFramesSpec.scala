@@ -21,6 +21,7 @@ import com.serenity.richtext.{
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
+import com.serenity.testkit.FrameMismatchDump
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -138,11 +139,17 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     scale: Double
   ): Seq[(Int, Int)] =
     val cold = Pooled(window, 1, scale, persists = false).render(state, Damage.Everything)
-    for
-      x <- 0 until drawn.getWidth
-      y <- 0 until drawn.getHeight
-      if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
-    yield (x, y)
+    val differing =
+      for
+        x <- 0 until drawn.getWidth
+        y <- 0 until drawn.getHeight
+        if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
+      yield (x, y)
+    if differing.nonEmpty then
+      System.err.println(
+        FrameMismatchDump.write(s"PageDown-${window.width}x${window.height}-x$scale", drawn, cold, differing)
+      )
+    differing
 
   private def summary(d: Seq[(Int, Int)]): String =
     val ys = d.map(_._2)
@@ -329,6 +336,15 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     s"PageDown through $documentName with typewriter scrolling and dimming at ${scale}x in a $windowName window" should
       "draw what a cold frame draws at every step" in {
         pagedThrough(writingConfig, window, 2, scale, document, pageDowns = 8) shouldBe empty
+      }
+
+  for
+    scale  <- List(1.0, 2.0)
+    height <- List(560, 575, 593, 608, 623)
+  do
+    s"PageDown to the end of a spell-checked document in a window ${height}px tall at ${scale}x" should
+      "stop a misspelling's squiggle at the pane's bottom edge, as the row's text stops" in {
+        pagedThrough(AppConfig.default, Window(1920, height), 2, scale, chapters(6, 12)) shouldBe empty
       }
 
   private def endingInAnEmptyChapter(chapterCount: Int, bodies: Int): RichTextDocument =
