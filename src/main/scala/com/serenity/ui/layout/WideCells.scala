@@ -48,4 +48,4 @@ private[layout] object WideCells:
       walk(0, 0.0f)
       IArray.unsafeFromArray(shifted)
 
-  private def isWide(codePoint: Int): Boolean = codePoint >= FirstWide && CharWidth.of(codePoint) == 2
+  def isWide(codePoint: Int): Boolean = codePoint >= FirstWide && CharWidth.of(codePoint) == 2

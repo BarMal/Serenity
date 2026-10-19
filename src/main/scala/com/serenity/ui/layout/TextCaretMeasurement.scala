@@ -24,7 +24,8 @@ private[layout] object TextCaretMeasurement:
     * uses to pad a cell out to its column. A run with a non-primary `slot` is drawn in a fallback font because the
     * line's own font has no glyph for it; `fixedLinePitch` keeps such runs out of a row's height, as a code buffer's
     * rows do not grow for them. A positive `wideCellPx` is the cell a code line is laid out on: each character the
-    * terminal counts as two cells ([[CharWidth]]) takes exactly two of them, whatever font draws it.
+    * terminal counts as two cells ([[CharWidth]]) takes exactly two of them, whatever font draws it. A run's slot `n`
+    * names `fallbackFamilies(n - 1)`.
     */
   final private[layout] case class ColumnFontRun(
       startColumn: Int,
@@ -47,7 +48,8 @@ private[layout] object TextCaretMeasurement:
       extraAdvances: Map[Int, Float] = Map.empty,
       tabSize: Int = IndentationSettings.DefaultTabSize,
       fixedLinePitch: Boolean = false,
-      wideCellPx: Float = 0.0f
+      wideCellPx: Float = 0.0f,
+      fallbackFamilies: Vector[String] = Vector.empty
   ):
     val hasHidden: Boolean = runs.exists(_.hidden)
 

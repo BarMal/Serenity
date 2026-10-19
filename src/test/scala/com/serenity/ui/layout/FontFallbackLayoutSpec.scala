@@ -3,7 +3,7 @@ package com.serenity.ui.layout
 import java.awt.{Font, GraphicsEnvironment}
 import java.nio.file.Paths
 
-import com.serenity.state.models.TextVisualLine
+import com.serenity.state.models.{MeasuredRow, TextVisualLine}
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -80,9 +80,21 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
     mixed.ascentPx should be >= math.ceil(1.4 * sizePx).toInt
   }
 
+  it should "record the stretch in the fallback font on its row, relative to the row's start" in {
+    val row = rowOf("a中文b", proseFont)
+    row.fontRuns.toVector shouldBe Vector(1, 3, 1)
+    row.fallbackFamilies.lift(0) shouldBe Some(subset.getFamily)
+  }
+
   "A line the primary font covers" should "keep a resolver with no fallback runs" in {
     val inputs = LineLayout.lineLayoutInputs(codeFont, frc, measuredLayout = true, context(), 0, 5, "hello")
     inputs.resolver.runs shouldBe empty
+  }
+
+  it should "record no font runs on its rows, sharing the one empty array" in {
+    val runs = rowOf("abi ab", proseFont).fontRuns
+    runs.length shouldBe 0
+    System.identityHashCode(runs) shouldBe System.identityHashCode(MeasuredRow.NoFontRuns)
   }
 
   it should "measure exactly as it did without a fallback chain" in {

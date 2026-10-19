@@ -517,6 +517,7 @@ object TextLayoutSnapshot:
       else MeasuredRow.orderedByX(stopXs, offsets)
     val (heightPx, ascentPx) =
       if measuredLayout then resolver.lineMetrics(frc, startColumn, endColumn) else (0, 0)
+    val fontRuns = RowFontRuns.of(resolver, text, startColumn, endColumn)
     MeasuredRow(
       startColumn = startColumn,
       endColumn = endColumn,
@@ -527,7 +528,9 @@ object TextLayoutSnapshot:
       landingXs = landingXs,
       landingOffsets = landingOffsets,
       heightPx = heightPx,
-      ascentPx = ascentPx
+      ascentPx = ascentPx,
+      fontRuns = fontRuns,
+      fallbackFamilies = if fontRuns.isEmpty then Vector.empty else resolver.fallbackFamilies
     )
 
   private def applyParagraphAlignment(

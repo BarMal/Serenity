@@ -28,7 +28,13 @@ final case class MeasuredRow(
     // Per-line measured metrics (measured/proportional layout only): the tallest run on this visual line. 0 means
     // "unset" -- callers fall back to the snapshot's uniform lineHeightPx/ascentPx (cell layout, or non-rich buffers).
     heightPx: Int = 0,
-    ascentPx: Int = 0
+    ascentPx: Int = 0,
+    // Stretches drawn on their own, from their own caret stop, as (startOffset, endOffset, slot) triples ascending by
+    // offset from `startColumn`: a stretch in a fallback font (slot n draws in `fallbackFamilies(n - 1)`) or a wide
+    // character snapped to its two cells. Everything between them is drawn in the row's own font. Empty, and the one
+    // shared array, when the row has none.
+    fontRuns: IArray[Int] = MeasuredRow.NoFontRuns,
+    fallbackFamilies: Vector[String] = Vector.empty
 ):
 
   // Arrays compare by reference, so the generated equals would call two identical measurements different. Row
@@ -38,7 +44,8 @@ final case class MeasuredRow(
       (this eq that) || (startColumn == that.startColumn && endColumn == that.endColumn && text == that.text &&
         widthPx == that.widthPx && heightPx == that.heightPx && ascentPx == that.ascentPx &&
         caretXs.sameElements(that.caretXs) && caretOffsets.sameElements(that.caretOffsets) &&
-        landingXs.sameElements(that.landingXs) && landingOffsets.sameElements(that.landingOffsets))
+        landingXs.sameElements(that.landingXs) && landingOffsets.sameElements(that.landingOffsets) &&
+        fontRuns.sameElements(that.fontRuns) && fallbackFamilies == that.fallbackFamilies)
     case _ => false
 
   override def hashCode: Int =
@@ -94,6 +101,8 @@ final case class MeasuredRow(
 
 object MeasuredRow:
 
+  val NoFontRuns: IArray[Int] = IArray.empty[Int]
+
   /** A row built from stop objects. `xSorted` empty means "order `stops` by x". */
   def fromStops(
     startColumn: Int,
@@ -134,7 +143,7 @@ object MeasuredRow:
   * inset. Placing a cached row allocates only this wrapper: the measured geometry is shared, never copied.
   */
 final case class TextVisualLine(bufferLine: Int, row: MeasuredRow, xOffsetPx: Float):
-  export row.{ascentPx, caretCount, caretColumn, endColumn, heightPx, startColumn, text, widthPx}
+  export row.{ascentPx, caretCount, caretColumn, endColumn, fallbackFamilies, fontRuns, heightPx, startColumn, text, widthPx}
 
   /** Caret x of stop `index` in the coordinates of the pane. */
   def caretX(index: Int): Float = row.caretXs(index) + xOffsetPx

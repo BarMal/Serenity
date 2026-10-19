@@ -15,6 +15,9 @@ final case class FontFallback(families: Vector[String] = Vector.empty):
 
   def slotCount: Int = families.length + 2
 
+  /** The family of slots 1 and up, in order. */
+  def slotFamilies: Vector[String] = families :+ Font.DIALOG
+
   private def familyAt(slot: FontSlot): String =
     families.lift(slot.index - 1).getOrElse(Font.DIALOG)
 
@@ -34,7 +37,7 @@ object FontFallback:
   /** No configured families: only the system's own resolver stands behind the primary. */
   val Default: FontFallback = FontFallback()
 
-  private[fonts] def matching(primary: Font, fallback: Font): Font =
+  def matching(primary: Font, fallback: Font): Font =
     val sized = fallback.deriveFont(primary.getStyle, primary.getSize2D)
     primary.getAttributes.get(TextAttribute.LIGATURES) match
       case ligatures: Integer =>

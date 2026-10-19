@@ -6,6 +6,7 @@ import java.awt.geom.AffineTransform
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
+import com.serenity.ui.fonts.FontFallback
 import com.serenity.ui.theme.TextStyle
 
 /** The AWT font each `(base font, style)` pair paints with, derived once and handed back by identity afterwards, and
@@ -37,6 +38,13 @@ final class StyledFontCache(maxBaseFonts: Int = 16, maxStylesPerBaseFont: Int = 
           val _ = derived.incrementAndGet()
           TextStyle.styledFont(base, style)
       )
+
+  private val fallbacks = new ConcurrentHashMap[(Font, String), Font]()
+
+  /** `family` at `styled`'s style, size and ligature setting. */
+  def fallbackFontFor(styled: Font, family: String): Font =
+    if fallbacks.size >= maxBaseFonts * maxStylesPerBaseFont then fallbacks.clear()
+    fallbacks.computeIfAbsent((styled, family), _ => FontFallback.matching(styled, Font(family, styled.getStyle, 1)))
 
   def underlineOf(font: Font): Underline =
     if underlines.size >= maxBaseFonts * maxStylesPerBaseFont then underlines.clear()

@@ -22,7 +22,7 @@ private[layout] object FallbackResolution:
   ): LineFontResolver =
     val itemised = FallbackItemiser.itemise(text, 0, text.length, coverage)
     if itemised.forall(_.slot == FontSlot.Primary) then resolver
-    else resolver.copy(runs = cut(resolver, itemised, firstColumn, fallback))
+    else resolver.copy(runs = cut(resolver, itemised, firstColumn, fallback), fallbackFamilies = fallback.slotFamilies)
 
   private def cut(
     resolver: LineFontResolver,

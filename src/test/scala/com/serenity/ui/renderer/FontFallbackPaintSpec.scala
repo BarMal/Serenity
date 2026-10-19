@@ -8,7 +8,7 @@ import com.serenity.state.models.TextVisualLine
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontFallback
 import com.serenity.ui.layout.{CellMetrics, RichTextContext, TextLayoutSnapshot}
-import com.serenity.ui.theme.Theme
+import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -63,7 +63,8 @@ class FontFallbackPaintSpec extends AnyFlatSpec with Matchers:
       line.heightPx,
       line.ascentPx,
       line,
-      Theme.light
+      Theme.light,
+      styledSegments = Some(List(StyledText(line.text, TextStyle.normal, black, white)))
     )
     image
 
@@ -71,16 +72,32 @@ class FontFallbackPaintSpec extends AnyFlatSpec with Matchers:
   private def inkColumns(image: BufferedImage, fromX: Int, untilX: Int): Vector[Int] =
     (fromX until untilX).filter(x => (0 until image.getHeight).exists(y => image.getRGB(x, y) != whiteArgb)).toVector
 
+  /** The share of the ink's bounding box in `[fromX, untilX)` that is inked: the subset 中 is a solid rectangle, which no
+    * real CJK glyph is, so a full box says the subset font drew it and not whatever the system has installed.
+    */
+  private def fillRatio(image: BufferedImage, fromX: Int, untilX: Int): Double =
+    val inked = for
+      y <- 0 until image.getHeight
+      x <- fromX until untilX
+      if image.getRGB(x, y) != whiteArgb
+    yield (x, y)
+    if inked.isEmpty then 0.0
+    else
+      val width  = inked.map(_._1).max - inked.map(_._1).min + 1
+      val height = inked.map(_._2).max - inked.map(_._2).min + 1
+      inked.size.toDouble / (width * height)
+
   "A fallback glyph in a prose row" should "be drawn in the fallback font where its caret stops say" in {
     val line  = rowOf("a中b", proseFont)
     val image = paint(line, proseFont)
-    val from  = (originX + line.row.caretXs(1)).toInt
+    val from  = math.ceil((originX + line.row.caretXs(1)).toDouble).toInt
     val until = math.ceil((originX + line.row.caretXs(2)).toDouble).toInt
     val ink   = inkColumns(image, from, until)
     ink should not be empty
     // The subset 中 is a box from 0.05 em to 0.95 em of its one-em cell.
     (ink.head - (originX + line.row.caretXs(1))) shouldBe (0.05f * sizePx) +- 1.0f
     (ink.last + 1 - (originX + line.row.caretXs(1))) shouldBe (0.95f * sizePx) +- 1.0f
+    fillRatio(image, from, until) should be > 0.95
   }
 
   "A wide character in a code row" should "be drawn at its snapped caret, leaving the rest of its two cells empty" in {
