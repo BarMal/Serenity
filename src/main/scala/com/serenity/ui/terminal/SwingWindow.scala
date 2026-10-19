@@ -2,6 +2,7 @@ package com.serenity.ui.terminal
 
 import java.awt.*
 import java.awt.event.*
+import java.awt.im.InputMethodRequests
 import java.awt.image.BufferedImage
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
@@ -13,6 +14,7 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
 import com.serenity.diagnostics.FrameTimings
+import com.serenity.input.ImeRequestsHost
 import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
@@ -82,7 +84,11 @@ class SwingWindow(
   /** Register a callback fired with `true` when the window gains keyboard focus and `false` when it loses it. */
   def setOnFocusChange(cb: Boolean => Unit): Unit = onFocusCallbackRef.set(Some(cb))
 
-  val canvas: JPanel = new JPanel:
+  val canvas: JPanel = new JPanel with ImeRequestsHost:
+    private val inputMethodRequestsRef = new AtomicReference[Option[InputMethodRequests]](None)
+    override def installInputMethodRequests(requests: InputMethodRequests): Unit =
+      inputMethodRequestsRef.set(Some(requests))
+    override def getInputMethodRequests: InputMethodRequests = inputMethodRequestsRef.get().orNull
     setBackground(Color.BLACK)
     setPreferredSize(initialCanvasPixelSize)
     setFocusable(true)
