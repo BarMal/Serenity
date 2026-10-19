@@ -2,17 +2,18 @@ package com.serenity.ui.tui
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import scala.concurrent.duration.*
 
-import cats.effect.unsafe.implicits.global
+import cats.effect.unsafe.IORuntime
 import cats.effect.{IO, Ref}
 import com.serenity.config.AppConfig
 import com.serenity.input.{InProcessClipboard, InputRouter}
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import com.serenity.testkit.OwnedRuntime
 import com.serenity.testkit.VirtualTime.runVirtual
 import org.jline.terminal.Size
 import org.jline.terminal.impl.DumbTerminal
@@ -31,6 +32,15 @@ class TerminalInputHandlerEscLivenessSpec extends AnyFlatSpec with Matchers:
   private val translator = new TextEntryTranslator(
     AppConfig.default.withHotkeyConfig(AppConfig.default.inputConfig.hotkeyConfig.forTerminalUse)
   )
+
+  /** The two specs that wait on real threads run on a runtime of their own: the global one is shared with every spec
+    * the suite runs beside this one, and a compute pool they hold busy would be read here as a reader that never
+    * returned.
+    */
+  private def onOwnRuntime[A](body: IORuntime => A): A =
+    val runtime = OwnedRuntime.build()
+    try body(runtime)
+    finally runtime.shutdown()
 
   private def bytes(s: String): Array[Byte] = s.getBytes(StandardCharsets.UTF_8)
   private def csi(s: String): Array[Byte]   = esc +: bytes(s"[$s")
@@ -144,5 +154,44 @@ class TerminalInputHandlerEscLivenessSpec extends AnyFlatSpec with Matchers:
       _         <- IO.interruptible(returned.await())
     yield ()
 
-    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("reader still parked in read after shutdown"))
+    onOwnRuntime(runtime => program.unsafeRunTimed(StreamTimeout)(using runtime)).getOrElse(
+      fail("reader still parked in read after shutdown")
+    )
+  }
+
+  /** The same, with the shutdown landing as soon as the pump is up: it can reach the handler before the fiber that
+    * supervises the pump has taken over its clean-up, and must still stop the pump.
+    */
+  "shutting down handlers the instant their pumps are reading" should "release every reader" in {
+    val handlers = 400
+
+    def oneHandler: IO[Boolean] =
+      val entered  = new CountDownLatch(1)
+      val returned = new CountDownLatch(1)
+      val inner    = new FakeTerminalReader
+      val reader = new NonBlockingReader:
+        override def read(timeout: Long, isPeek: Boolean): Int =
+          entered.countDown()
+          try inner.read(timeout, isPeek)
+          finally returned.countDown()
+        override def readBuffered(b: Array[Char], off: Int, len: Int, timeout: Long): Int =
+          throw new UnsupportedOperationException("not used by the handler's read loop")
+      for
+        clipboard <- InProcessClipboard[IO]
+        router    <- InputRouter.create[IO, Event](translator)
+        handler   <- TerminalInputHandler.create(structuralTerminal(), router, clipboard, readerOverride = Some(reader))
+        _         <- IO.interruptible(entered.await())
+        _         <- handler.shutdown
+        released  <- IO.interruptible(returned.await(StreamTimeout.toMillis, TimeUnit.MILLISECONDS))
+      yield released
+
+    val parked = fs2.Stream
+      .range(0, handlers)
+      .covary[IO]
+      .parEvalMapUnordered(8)(_ => oneHandler)
+      .filterNot(identity)
+      .compile
+      .count
+
+    onOwnRuntime(runtime => parked.unsafeRunSync()(using runtime)) shouldBe 0L
   }

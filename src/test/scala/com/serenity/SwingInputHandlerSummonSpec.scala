@@ -1,6 +1,7 @@
 package com.serenity
 
 import java.awt.event.{FocusEvent, InputEvent, KeyEvent}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import javax.swing.JPanel
 
 import scala.concurrent.duration.*
@@ -8,7 +9,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{ChromeElement, SummonConfig}
-import com.serenity.input.{InputRouter, SwingInputHandler}
+import com.serenity.input.{InputRouter, SummonReleaseTimer, SwingInputHandler}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -25,6 +26,14 @@ class SwingInputHandlerSummonSpec extends AnyFlatSpec with Matchers:
   private val chord   = InputEvent.ALT_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK
   private val Start   = 1_000L
 
+  /** The timer that settles a release, run by the test instead of by the clock: a real one lapses whenever the machine
+    * lets it, which can land between a repeat's release and its press.
+    */
+  final private class ManualReleaseTimer(onLapse: () => Unit) extends SummonReleaseTimer:
+    private val armed   = new AtomicBoolean(false)
+    def restart(): Unit = armed.set(true)
+    def lapse(): Unit   = if armed.getAndSet(false) then onLapse()
+
   final private class Harness(config: SummonConfig = SummonConfig()):
     val component = new JPanel()
 
@@ -33,7 +42,19 @@ class SwingInputHandlerSummonSpec extends AnyFlatSpec with Matchers:
       .flatTap(_.setSummonConfig(config))
       .unsafeRunSync()
 
-    val handler          = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    private val releaseTimer = new AtomicReference[Option[ManualReleaseTimer]](None)
+
+    val handler = new SwingInputHandler[IO, Event](
+      component,
+      router,
+      () => CellMetrics(8, 16, 13),
+      () => CellMetrics(8, 16, 13),
+      summonReleaseTimer = onLapse =>
+        val timer = new ManualReleaseTimer(onLapse)
+        releaseTimer.set(Some(timer))
+        timer
+    )
+
     private val listener = component.getKeyListeners.head
 
     def press(code: Int, char: Char, mods: Int = chord, at: Long = Start): Harness =
@@ -44,6 +65,9 @@ class SwingInputHandlerSummonSpec extends AnyFlatSpec with Matchers:
 
     def typed(char: Char, mods: Int = 0): Harness =
       listener.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, Start, mods, KeyEvent.VK_UNDEFINED, char)); this
+
+    def lapseReleaseTimer(): Harness =
+      releaseTimer.get.foreach(_.lapse()); this
 
     def loseFocus(): Harness =
       component.getFocusListeners.foreach(_.focusLost(new FocusEvent(component, FocusEvent.FOCUS_LOST))); this
@@ -89,7 +113,7 @@ class SwingInputHandlerSummonSpec extends AnyFlatSpec with Matchers:
   }
 
   "Releasing the letter" should "end the summon once the auto-repeat window has passed" in {
-    val harness = new Harness().press(KeyEvent.VK_L, 'L').release(KeyEvent.VK_L, at = Start + 500)
+    val harness = new Harness().press(KeyEvent.VK_L, 'L').release(KeyEvent.VK_L, at = Start + 500).lapseReleaseTimer()
 
     harness.events(2) shouldBe Some(List(lineNumbers, released))
   }
@@ -100,9 +124,9 @@ class SwingInputHandlerSummonSpec extends AnyFlatSpec with Matchers:
       val when = Start + tick * 33L
       harness.release(KeyEvent.VK_L, at = when).press(KeyEvent.VK_L, 'L', at = when).typed('L')
 
-    harness.events(1) shouldBe Some(List(lineNumbers))
-    harness.events(1, within = 1.second) shouldBe None
-    harness.release(KeyEvent.VK_L, at = Start + 300)
+    harness.lapseReleaseTimer().sentinel()
+    harness.events(2) shouldBe Some(List(lineNumbers, InsertChar('~')))
+    harness.release(KeyEvent.VK_L, at = Start + 300).lapseReleaseTimer()
     harness.events(1) shouldBe Some(List(released))
   }
 
