@@ -1,7 +1,7 @@
 package com.serenity.ui.layout
 
-import com.serenity.text.fallback.{FallbackItemiser, FallbackRun, FontSlot}
-import com.serenity.ui.fonts.{FontFallback, Java2DGlyphCoverage}
+import com.serenity.text.fallback.{FallbackRun, FontSlot}
+import com.serenity.ui.fonts.FontFallback
 import com.serenity.ui.layout.TextCaretMeasurement.{ColumnFontRun, LineFontResolver}
 
 /** Cuts a line's [[LineFontResolver]] where its own fonts have no glyph, so the missing glyphs are measured, and by the
@@ -10,18 +10,27 @@ import com.serenity.ui.layout.TextCaretMeasurement.{ColumnFontRun, LineFontResol
   */
 private[layout] object FallbackResolution:
 
+  /** Whether `text` is printable ASCII and tabs, which every font a line is set in has glyphs for: such a line is never
+    * itemised. Deciding this from the text alone keeps the common line off the coverage lookups entirely.
+    */
+  def isPlainAscii(text: String): Boolean =
+    @annotation.tailrec
+    def plain(index: Int): Boolean =
+      index >= text.length || {
+        val char = text.charAt(index)
+        (char >= ' ' && char <= '~' || char == '\t') && plain(index + 1)
+      }
+    plain(0)
+
   /** `resolver` with fallback runs for `text`, whose first character is at `firstColumn`. A line the primary font
     * covers throughout returns `resolver` itself, so it keeps its identity and its cache entries.
     */
   def apply(
     resolver: LineFontResolver,
-    text: String,
+    itemised: Vector[FallbackRun],
     firstColumn: Int,
-    coverage: Java2DGlyphCoverage,
-    fallback: FontFallback,
-    stickyNeutrals: Boolean
+    fallback: FontFallback
   ): LineFontResolver =
-    val itemised = FallbackItemiser.itemise(text, 0, text.length, coverage, stickyNeutrals)
     if itemised.forall(_.slot == FontSlot.Primary) then resolver
     else resolver.copy(runs = cut(resolver, itemised, firstColumn, fallback), fallbackFamilies = fallback.slotFamilies)
 

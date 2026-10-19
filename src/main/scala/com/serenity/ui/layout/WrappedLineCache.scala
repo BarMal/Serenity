@@ -12,7 +12,8 @@ import com.serenity.markdown.{LazyBlockIndex, TableColumns}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.rope.{Balance, Rope, RopeDiff}
 import com.serenity.state.models.{BufferId, MeasuredRow}
-import com.serenity.ui.fonts.{FallbackCoverages, FontFallback, Java2DGlyphCoverage}
+import com.serenity.text.fallback.{FallbackItemiser, FallbackRun}
+import com.serenity.ui.fonts.{FallbackCoverages, FallbackItemisations, FontFallback, Java2DGlyphCoverage}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 import com.serenity.ui.openings.{OpeningLines, OpeningRules, OpeningSettings, VirtualDropCaps}
 
@@ -73,11 +74,12 @@ sealed abstract class WrappedLineCache:
     */
   def virtualDropCaps(document: RichTextDocument, settings: OpeningSettings): Option[VirtualDropCaps]
 
-  /** What `primary` and the chain `fallback` describes cover. A cache keeps the answer, and the coverage memo inside
-    * it, for the next line that asks; without one every call starts a fresh memo.
+  /** The runs `text` is drawn in when `primary` and the chain `fallback` describes are asked in turn, `stickyNeutrals`
+    * letting spaces and punctuation follow the cluster before them. A cache keeps the answer, and the coverage memo
+    * behind it, for the next layout of the same line; without one every call itemises afresh.
     */
-  def fallbackCoverage(primary: Font, fallback: FontFallback): Java2DGlyphCoverage =
-    Java2DGlyphCoverage.of(primary, fallback)
+  def fallbackRuns(primary: Font, fallback: FontFallback, text: String, stickyNeutrals: Boolean): Vector[FallbackRun] =
+    FallbackItemiser.itemise(text, 0, text.length, Java2DGlyphCoverage.of(primary, fallback), stickyNeutrals)
 
 /** Everything a line's wrap and caret measurement depends on. The rows it yields are position-independent -- no buffer
   * line, alignment or inset -- so a line keeps its entry when lines are inserted or deleted above it. `resolver`
@@ -250,8 +252,15 @@ object WrappedLineCache:
     private val openings         = new LinkedHashMap[ScannedOpenings, OpeningLines](16, 0.75f, true)
     private val coverages        = FallbackCoverages(FallbackCoverages.DefaultCapacity)
 
-    override def fallbackCoverage(primary: Font, fallback: FontFallback): Java2DGlyphCoverage =
-      coverages.coverage(primary, fallback)
+    private val itemisations = FallbackItemisations(coverages, FallbackItemisations.DefaultEntries)
+
+    override def fallbackRuns(
+      primary: Font,
+      fallback: FontFallback,
+      text: String,
+      stickyNeutrals: Boolean
+    ): Vector[FallbackRun] =
+      itemisations.runs(primary, fallback, text, stickyNeutrals)
 
     /** How many times a layout has asked this cache for a fallback coverage. */
     def fallbackCoverageLookups: Long = coverages.lookups

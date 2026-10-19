@@ -19,7 +19,7 @@ final class Java2DGlyphCoverage private (fonts: Vector[Font], override val emoji
 
   override def covers(slot: FontSlot, codePoint: Int): Boolean =
     val index = slot.index
-    index >= 0 && index < fonts.length && pages.covers(index, codePoint)(fonts(index).canDisplay(codePoint))
+    index >= 0 && index < fonts.length && pages.covers(index, codePoint, fonts(index))
 
   def fontFor(slot: FontSlot): Option[Font] = fonts.lift(slot.index)
 

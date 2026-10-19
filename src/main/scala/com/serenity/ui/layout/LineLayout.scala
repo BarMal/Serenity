@@ -232,17 +232,12 @@ private[layout] object LineLayout:
     frc: FontRenderContext
   ): LineFontResolver =
     val (text, firstColumn) = if lineText.nonEmpty then (lineText, 0) else (sliceText, sliceFirstColumn)
-    if text.isEmpty then styled
+    if text.isEmpty || FallbackResolution.isPlainAscii(text) then styled
     else
-      val itemised = FallbackResolution(
-        styled,
-        text,
-        firstColumn,
-        wrapCache.fallbackCoverage(font, richText.fallback),
-        richText.fallback,
-        stickyNeutrals = !FontLoader.isMonospacedFont(font)
-      )
-      if !FontLoader.isMonospacedFont(font) then itemised
+      val monospaced = FontLoader.isMonospacedFont(font)
+      val runs       = wrapCache.fallbackRuns(font, richText.fallback, text, stickyNeutrals = !monospaced)
+      val itemised   = FallbackResolution(styled, runs, firstColumn, richText.fallback)
+      if !monospaced then itemised
       else
         val coded = if itemised eq styled then styled else itemised.copy(fixedLinePitch = true)
         if WideCells.hasWide(text) then coded.copy(wideCellPx = WideCells.cellAdvancePx(font, frc)) else coded
