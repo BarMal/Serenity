@@ -17,8 +17,26 @@ class FootprintBenchmarksSpec extends AnyFlatSpec with Matchers:
       "footprint.plain_document_15k_lines",
       "footprint.rich_document",
       "footprint.after_1000_edits",
-      "footprint.ten_buffers"
+      "footprint.ten_buffers",
+      "footprint.prose_frame.stable_text",
+      "footprint.prose_frame.fresh_text",
+      "footprint.two_runtimes.prose_frame.stable_text"
     )
+  }
+
+  "a rendered prose frame" should "retain more heap than the state it drew, through the caches it filled" taggedAs HeapMeasurementTest in {
+    retained("footprint.prose_frame.stable_text") should be > retained("footprint.empty_editor")
+  }
+
+  it should "be dominated by the state and per-runtime caches, so process-wide cache growth stays small beside it" taggedAs HeapMeasurementTest in {
+    val stable = retained("footprint.prose_frame.stable_text")
+    retained("footprint.prose_frame.fresh_text") should (be > stable * 9 / 10 and be < stable * 11 / 10)
+  }
+
+  "two runtimes drawing one document" should "retain close to twice the heap of one" taggedAs HeapMeasurementTest in {
+    retained("footprint.two_runtimes.prose_frame.stable_text") should be > retained(
+      "footprint.prose_frame.stable_text"
+    ) * 18 / 10
   }
 
   "a 15,000-line document" should "retain more heap than the empty editor" taggedAs HeapMeasurementTest in {
