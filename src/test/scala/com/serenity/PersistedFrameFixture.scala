@@ -9,6 +9,7 @@ import com.serenity.diagnostics.FrameCounts
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.FrameMismatchDump
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{
   EditorPaneRenderPlan,
@@ -190,8 +191,12 @@ trait PersistedFrameFixture:
     image
 
   protected def differingPixels(a: BufferedImage, b: BufferedImage): Seq[(Int, Int)] =
-    for
-      x <- 0 until a.getWidth
-      y <- 0 until a.getHeight
-      if (a.getRGB(x, y) & 0xffffff) != (b.getRGB(x, y) & 0xffffff)
-    yield (x, y)
+    val differing =
+      for
+        x <- 0 until a.getWidth
+        y <- 0 until a.getHeight
+        if (a.getRGB(x, y) & 0xffffff) != (b.getRGB(x, y) & 0xffffff)
+      yield (x, y)
+    if differing.nonEmpty then
+      val _ = FrameMismatchDump.write(getClass.getSimpleName, a, b, differing)
+    differing
