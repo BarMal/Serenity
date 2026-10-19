@@ -130,7 +130,7 @@ private[richtext] object RtfHeader:
     val (finished, current) = nodes.foldLeft((Vector.empty[Vector[RtfNode]], Vector.empty[RtfNode])) {
       case ((entries, open), RtfNode.Text(value)) if value.contains(';') =>
         val parts = value.split(";", -1).toVector
-        val closed = parts.init.foldLeft((entries, open)) {
+        val closed = parts.dropRight(1).foldLeft((entries, open)) {
           case ((done, partial), part) =>
             (done :+ (partial ++ textNode(part)), Vector.empty[RtfNode])
         }
