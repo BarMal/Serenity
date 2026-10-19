@@ -348,7 +348,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
   do
     s"PageDown through $documentName with the focused text body dimmed at ${scale}x in a $windowName window" should
       "draw what a cold frame draws at every step" in {
-        pagedThrough(ownersConfig.withFocusedTextBody(true), window, 2, scale, document, pageDowns = 6) shouldBe empty
+        pagedThrough(ownersConfig.withFocusedTextBody(true), window, 1, scale, document, pageDowns = 6) shouldBe empty
       }
 
   private val writingConfig: AppConfig =
@@ -374,7 +374,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
   do
     s"PageDown through $documentName with typewriter scrolling and dimming at ${scale}x in a $windowName window" should
       "draw what a cold frame draws at every step" in {
-        pagedThrough(writingConfig, window, 2, scale, document, pageDowns = 8) shouldBe empty
+        pagedThrough(writingConfig, window, 1, scale, document, pageDowns = 8) shouldBe empty
       }
 
   for
