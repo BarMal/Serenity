@@ -63,22 +63,34 @@ class DropCapGlyphSpec extends AnyFlatSpec with Matchers:
     glyph.heightPx.toDouble should be >= glyph.baselinePx + tail
   }
 
-  it should "keep the indent at the glyph's width plus the gap in em of the body font" in {
-    val glyph = glyphOf("Tale", 2).getOrElse(fail("expected a glyph"))
+  private def inkRightOf(glyph: DropCapGlyph): Double =
+    math.ceil(glyph.font.createGlyphVector(frc, glyph.text).getVisualBounds.getMaxX)
 
-    glyph.indentPx(0.0f) shouldBe glyph.widthPx
-    glyph.indentPx(0.5f) shouldBe (glyph.widthPx + 7.0f) +- 0.01f
-    glyph.indentPx(2.0f) shouldBe (glyph.widthPx + 28.0f) +- 0.01f
+  it should "keep the indent at the glyph's ink right edge plus the gap in em of the body font" in
+    List("I", "W", "T", "Q", "J").foreach { letter =>
+      val glyph = glyphOf(letter + "ale", 2).getOrElse(fail("expected a glyph"))
+      val inkPx = inkRightOf(glyph).toFloat
+
+      glyph.indentPx(0.0f) shouldBe inkPx +- 0.01f
+      glyph.indentPx(0.25f) shouldBe (inkPx + 3.5f) +- 0.01f
+      glyph.indentPx(2.0f) shouldBe (inkPx + 28.0f) +- 0.01f
+    }
+
+  it should "clear the ink of a letter that reaches left of the draw origin" in {
+    val glyph = glyphOf("J", 3).getOrElse(fail("expected a glyph"))
+    val ink   = glyph.font.createGlyphVector(frc, "J").getVisualBounds
+
+    glyph.indentPx(0.0f).toDouble should be >= ink.getMaxX
   }
 
-  "DropCapLayout.reserve" should "be the glyph's width plus the gap and its height for a drop cap, and nothing otherwise" in {
+  "DropCapLayout.reserve" should "be the glyph's ink edge plus the gap and its height for a drop cap, and nothing otherwise" in {
     val document = RichTextDocument(List(RichTextParagraph.plain("Tale", role = ParagraphRole.dropCap(2))))
     val glyph    = glyphOf("Tale", 2).getOrElse(fail("expected a glyph"))
 
     val reserved =
       DropCapLayout.reserve(font, frc, Some(document), 0, ParagraphRole.dropCap(2), 1.0f, gapEm = 1.0f)
 
-    reserved.indentPx shouldBe (glyph.widthPx + 14.0f) +- 0.01f
+    reserved.indentPx shouldBe (inkRightOf(glyph).toFloat + 14.0f) +- 0.01f
     reserved.heightPx shouldBe glyph.heightPx
     DropCapLayout.reserve(font, frc, Some(document), 0, ParagraphRole.Body, 1.0f, gapEm = 1.0f) shouldBe
       DropCapLayout.Reserve.none

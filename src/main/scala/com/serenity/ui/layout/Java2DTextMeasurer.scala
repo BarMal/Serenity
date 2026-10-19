@@ -1,8 +1,7 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.{FontRenderContext, TextAttribute, TextHitInfo, TextLayout}
-import java.text.AttributedString
+import java.awt.font.FontRenderContext
 
 import com.serenity.ui.layout.TextCaretMeasurement.{ColumnFontRun, LineFontResolver}
 import com.serenity.ui.layout.TextMeasurer.{FontRun, LineFonts, LineMetrics, MetricsKey, ShapedRun}
@@ -52,22 +51,7 @@ final case class Java2DTextMeasurer(frc: FontRenderContext) extends TextMeasurer
 
   def exactCaretXs(text: String, startColumn: Int, fonts: LineFonts): IArray[Float] =
     if text.isEmpty then IArray(0.0f)
-    else
-      val attributed = AttributedString(text)
-      itemise(text, 0, text.length, startColumn, fonts).foreach { run =>
-        FontFirstUse.settle(run.font.toAwt, frc)
-        attributed.addAttribute(
-          TextAttribute.FONT,
-          run.font.toAwt,
-          run.startColumn - startColumn,
-          run.endColumn - startColumn
-        )
-      }
-      val layout = TextLayout(attributed.getIterator, frc)
-      val carets = new Array[Float](text.length + 1)
-      (0 until text.length).foreach(index => carets(index) = layout.getCaretInfo(TextHitInfo.leading(index))(0))
-      carets(text.length) = layout.getAdvance
-      IArray.unsafeFromArray(carets)
+    else ExactCaretXs.layoutCaretXs(text, startColumn, resolverFor(fonts), frc)
 
   def shapingCutAtOrAfter(text: String, from: Int, font: FontSpec): Int =
     ShapingBarriers.cutAtOrAfter(text, from, font.toAwt, frc)

@@ -1,13 +1,13 @@
 package com.serenity.state.manager
 
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CursorLayout, LayoutEngine, ScreenPosition}
+import com.serenity.ui.layout.{LayoutEngine, ScreenPosition}
 
 /** Resolves the experimental cursor-peek prototype's frozen `CursorPosition`
   * (`AppState.runtime.pointerGesture.cursorPeekAnchor`) to an actual on-screen `ScreenPosition`, exactly once per peek
   * session, and caches the result in `AppState.runtime.pointerGesture.cursorPeekResolvedAnchor`.
   *
-  * Lives in `state.manager`, not a reducer: resolving a position requires `LayoutEngine`/`CursorLayout`, which
+  * Lives in `state.manager`, not a reducer: resolving a position requires `LayoutEngine`/`LaidOutPanes`, which
   * `ArchitectureChecks.ForbiddenImports` forbids `state.reducers` from touching (reducers must stay pure geometry- free
   * state transitions). This is the render-time counterpart `AppEventReducer`'s `PeekBegin` handling defers to.
   *
@@ -15,7 +15,7 @@ import com.serenity.ui.layout.{CursorLayout, LayoutEngine, ScreenPosition}
   * no-op even if the underlying buffer reflows underneath it (a reformat) -- that is the entire point of caching the
   * resolved `ScreenPosition` rather than re-deriving it from the frozen `CursorPosition` on every call, which
   * `LayoutEngine.calculateFrozenCursorPeekRect` then consumes verbatim instead of ever calling
-  * `CursorLayout.calculateScreenPositionInContent` itself.
+  * `LaidOutPanes.screenPosition` itself.
   */
 private[manager] object CursorPeekAnchorResolution:
 
@@ -36,16 +36,7 @@ private[manager] object CursorPeekAnchorResolution:
       cursorPos    <- state.runtime.pointerGesture.cursorPeekAnchor
       viewportSize <- state.runtime.viewportSize
       paneId       <- state.persisted.layout.activeEditorPaneId
-      pane         <- state.persisted.layout.editorPanes.get(paneId)
-      bufferId     <- pane.bufferId
-      buffer       <- state.persisted.buffers.get(bufferId)
       layout = LayoutEngine.calculateLayout(state, viewportSize)
-      paneLayout <- LayoutEngine.calculateEditorPaneLayouts(state, layout).get(paneId)
-      screenPosition <- CursorLayout.calculateScreenPositionInContent(
-        cursorPos,
-        buffer.document.content,
-        paneLayout.contentRect,
-        buffer.viewport,
-        state.persisted.config.surfaceConfig.wordWrapEnabled
-      )
+      panes  = LayoutEngine.laidOutPanes(state, layout)
+      screenPosition <- panes.screenPosition(paneId, cursorPos)
     yield screenPosition

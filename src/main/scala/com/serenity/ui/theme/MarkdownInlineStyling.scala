@@ -20,6 +20,7 @@ object MarkdownInlineStyling:
     TextStyle(
       isBold = style.bold || heading.exists(_.isBold),
       isItalic = style.italic || heading.exists(_.isItalic),
+      isUnderlined = heading.exists(_.isUnderlined),
       isStrikethrough = style.strike,
       fontFamily = Option.when(style.code && !baseIsMonospaced)(Font.MONOSPACED).orElse(heading.flatMap(_.fontFamily)),
       fontSize = Option.when(style.headingLevel > 0)(baseFontSize * headings.sizeMultiple(style.headingLevel))

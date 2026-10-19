@@ -1,8 +1,8 @@
 package com.serenity.ui.renderer
 
+import com.serenity.PersistedFrameFixture
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
-import com.serenity.PersistedFrameFixture
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

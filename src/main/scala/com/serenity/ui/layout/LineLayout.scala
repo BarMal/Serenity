@@ -54,6 +54,44 @@ private[layout] object LineLayout:
       wrapCache
     )
 
+  /** The rows of one whole-line wrap (at most `maxVisualLines` of them), placed as the painted layout places them:
+    * alignment, drop cap inset and heading space applied. A heading's space below its last row is left off when the
+    * limit cut the paragraph short, since that row is not the paragraph's last.
+    */
+  def placedWrappedLine(
+    lineIndex: Int,
+    rawLine: String,
+    panelWidthPx: Int,
+    font: Font,
+    frc: FontRenderContext,
+    measuredLayout: Boolean,
+    cellMetrics: CellMetrics,
+    maxVisualLines: Int,
+    richText: RichTextContext,
+    wrapCache: WrappedLineCache
+  ): Vector[TextVisualLine] =
+    if maxVisualLines <= 0 then Vector.empty
+    else
+      val inputs =
+        LineLayout.lineLayoutInputs(font, frc, measuredLayout, richText, lineIndex, rawLine.length, rawLine)
+      val wrapped = TextLayoutSnapshot.wrapLogicalLine(
+        rawLine,
+        lineIndex,
+        panelWidthPx,
+        inputs.resolver,
+        frc,
+        measuredLayout,
+        cellMetrics,
+        0,
+        maxVisualLines,
+        inputs.paragraphRole,
+        inputs.dropCap,
+        wrapCache
+      )
+      val aligned  = ParagraphAlignmentLayout.apply(wrapped, lineIndex, panelWidthPx, richText)
+      val complete = wrapped.length < maxVisualLines
+      HeadingSpacingLayout.apply(aligned, inputs.headingLevel, complete, font, measuredLayout, cellMetrics, richText)
+
   /** A cell grid is forced only when the caller has no glyph metrics at all; otherwise a font is measured glyph by
     * glyph when it needs to be, or when hiding Markdown markers needs it to be.
     */
@@ -113,7 +151,8 @@ private[layout] object LineLayout:
           lineIndex,
           paragraphRole,
           richText.proseScale,
-          richText.dropCapGapEm
+          richText.dropCapGapEm,
+          richText.letterShape(lineIndex)
         )
       else DropCapLayout.Reserve.none
     LineLayoutInputs(resolver, paragraphRole, dropCap, headingLevelOf(paragraphRole, markdownRuns))

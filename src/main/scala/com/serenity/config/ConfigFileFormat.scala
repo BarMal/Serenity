@@ -162,7 +162,7 @@ object ConfigFileFormat:
     field("document.comment_author"),
     comment("Multi-line drop caps: render a drop-cap paragraph's first character as a large, multi-line glyph"),
     field("document.drop_caps_enabled"),
-    comment("Room between a drop cap's glyph and the text beside it, in em of the body font (0-2)"),
+    comment("Room between the ink of a drop cap's glyph and the text beside it, in em of the body font (0-2)"),
     field("document.drop_cap_gap"),
     comment("Drop cap colour: text, heading (what headings.colour gives a level 1 heading), accent or #RRGGBB"),
     field("document.drop_cap_colour"),
@@ -223,6 +223,16 @@ object ConfigFileFormat:
       "below the last line of a heading, in em of its own font size (0-8, auto is none); a terminal rounds them to"
     ),
     comment("whole rows. No space is added above the first line of a document or a page."),
+    comment(
+      "Underline takes auto, true or false. A terminal has no sizes, so auto there climbs a ladder: level 1 bold and"
+    ),
+    comment(
+      "underlined, 2 bold, 3 bold italic, and levels 4 to 6 bold in the accent, string and muted colours. Set a key"
+    ),
+    comment(
+      "to take a level off it. Colour also takes accent, secondary or muted. Rule takes auto, true or false; a terminal with"
+    ),
+    comment("it on draws a line of box-drawing cells in the row below the heading, which space_after auto reserves."),
     field("headings.h1.size"),
     field("headings.h1.bold"),
     field("headings.h1.italic"),
@@ -231,6 +241,8 @@ object ConfigFileFormat:
     field("headings.h1.align"),
     field("headings.h1.space_before"),
     field("headings.h1.space_after"),
+    field("headings.h1.underline"),
+    field("headings.h1.rule"),
     field("headings.h2.size"),
     field("headings.h2.bold"),
     field("headings.h2.italic"),
@@ -239,6 +251,8 @@ object ConfigFileFormat:
     field("headings.h2.align"),
     field("headings.h2.space_before"),
     field("headings.h2.space_after"),
+    field("headings.h2.underline"),
+    field("headings.h2.rule"),
     field("headings.h3.size"),
     field("headings.h3.bold"),
     field("headings.h3.italic"),
@@ -247,6 +261,8 @@ object ConfigFileFormat:
     field("headings.h3.align"),
     field("headings.h3.space_before"),
     field("headings.h3.space_after"),
+    field("headings.h3.underline"),
+    field("headings.h3.rule"),
     field("headings.h4.size"),
     field("headings.h4.bold"),
     field("headings.h4.italic"),
@@ -255,6 +271,8 @@ object ConfigFileFormat:
     field("headings.h4.align"),
     field("headings.h4.space_before"),
     field("headings.h4.space_after"),
+    field("headings.h4.underline"),
+    field("headings.h4.rule"),
     field("headings.h5.size"),
     field("headings.h5.bold"),
     field("headings.h5.italic"),
@@ -263,6 +281,8 @@ object ConfigFileFormat:
     field("headings.h5.align"),
     field("headings.h5.space_before"),
     field("headings.h5.space_after"),
+    field("headings.h5.underline"),
+    field("headings.h5.rule"),
     field("headings.h6.size"),
     field("headings.h6.bold"),
     field("headings.h6.italic"),
@@ -271,10 +291,12 @@ object ConfigFileFormat:
     field("headings.h6.align"),
     field("headings.h6.space_before"),
     field("headings.h6.space_after"),
+    field("headings.h6.underline"),
+    field("headings.h6.rule"),
     comment(
       "headings.colour is auto (rich-text headings in the text colour, Markdown headings in the heading colour),"
     ),
-    comment("text or heading, for both kinds of document."),
+    comment("text, heading, accent, secondary or muted, for both kinds of document."),
     field("headings.colour"),
     comment("Above a body of damping_threshold points (before any device scale) heading sizes grow more slowly"),
     field("headings.damping"),

@@ -21,6 +21,7 @@ final case class HeadingSettings(
       TextStyle(
         isBold = style.bold,
         isItalic = style.italic,
+        isUnderlined = style.underline,
         fontFamily = style.family,
         fontSize = Some(multiple * RichTextStyling.ProseZoomBaselinePx)
       )
@@ -38,11 +39,17 @@ final case class HeadingSettings(
   /** The colour `level` is set to on its own; none follows the global setting. */
   def colour(level: Int): Option[HeadingColour] = styles(indexOf(level)).colour
 
-  /** What `level` is painted in: its own colour, else the global one, else what a document of that kind has always had
-    * -- the theme's heading colour in Markdown, the text colour in rich text.
+  /** What `level` is painted in: its own colour, else the global one, else the level's ladder colour, else what a
+    * document of that kind has always had -- the theme's heading colour in Markdown, the text colour in rich text.
     */
   def colourFor(level: Int, markdown: Boolean): HeadingColour =
-    colour(level).orElse(globalColour).getOrElse(if markdown then HeadingColour.Heading else HeadingColour.Text)
+    colour(level)
+      .orElse(globalColour)
+      .orElse(styles(indexOf(level)).ladderColour)
+      .getOrElse(if markdown then HeadingColour.Heading else HeadingColour.Text)
+
+  /** Whether a rule is drawn under a `level` heading, in the row its space below gives it. */
+  def rule(level: Int): Boolean = styles(indexOf(level)).rule
 
   def alignment(level: Int): Option[ParagraphAlignment] =
     styles(indexOf(level)).align

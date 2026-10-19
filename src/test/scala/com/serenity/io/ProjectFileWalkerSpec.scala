@@ -72,7 +72,7 @@ class ProjectFileWalkerSpec extends AnyFlatSpec with Matchers:
     Files.writeString(file, content)
 
   private def listed(root: Path): Vector[String] =
-    ProjectFileWalker.list(root, limit = 100000).unsafeRunSync().files.map(_.toString)
+    ProjectFileWalker.list(root, limit = 100000).unsafeRunSync().files.map(ProjectFileWalker.slashed)
 
   it should "leave out files and directories the root .gitignore matches" in {
     val root = tree("kept.txt", "debug.log", "out/App.txt", "src/trace.log", "src/Main.scala")

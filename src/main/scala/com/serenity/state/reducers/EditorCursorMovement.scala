@@ -177,9 +177,9 @@ private[reducers] object EditorCursorMovement:
       case None      => logicalTarget
 
   /** Column-based document layout (issue #1338, Phase 1): where one cursor lands after a `ColumnLeft`/`ColumnRight`
-    * move of `direction` -- fixed/discrete jumps of exactly `visibleLines` visual rows, identical to `pageTarget`'s own
-    * distance. Kept as its own named entry point (reusing `pageTarget`'s visual-row-walk branch rather than duplicating
-    * it) so the two can diverge later without one masquerading as the other.
+    * move of `direction` -- the same row of the adjacent column, columns being as many rows as fit their height
+    * (`NavigationGeometry.columnBreaks`). Without column breaks (no geometry for the pane) it falls back to
+    * `pageTarget`'s `visibleLines`-row jump.
     */
   def columnTarget(
     buffer: Buffer,
@@ -187,7 +187,14 @@ private[reducers] object EditorCursorMovement:
     geometry: Option[EditorGeometry],
     direction: Int
   ): CursorPosition => CursorPosition =
-    pageTarget(buffer, currentState, geometry, direction)
+    val rowJump = pageTarget(buffer, currentState, geometry, direction)
+    val columns =
+      if EditorCursorSupport.useVisualLineNavigation(currentState) then
+        geometry.map(_.navigation).filter(_.columnBreaks.nonEmpty)
+      else None
+    columns match
+      case Some(navigation) => cursor => navigation.columnTarget(cursor, direction).getOrElse(rowJump(cursor))
+      case None             => rowJump
 
   def activeSelections(buffer: Buffer): List[Selection] =
     buffer.allSelections.distinct

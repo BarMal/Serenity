@@ -10,8 +10,9 @@ import com.serenity.ui.layout.{TextLayoutSnapshot, ViewportSize, WorkspaceNode, 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Space around headings is vertical room, not rows, so the rows a page holds -- and the page boundaries the viewport
-  * anchors to -- are the ones the same document has without it; and no column of a page starts with space above it.
+/** Space around headings is vertical room: a column holds the rows that fit its height with that room counted, so a
+  * page holds no more rows than the same document has without space, and no column of a page starts with space above it
+  * or overflows. The caret stays on the page it anchors.
   */
 class HeadingSpacingColumnPagingSpec extends AnyFlatSpec with Matchers:
 
@@ -33,13 +34,30 @@ class HeadingSpacingColumnPagingSpec extends AnyFlatSpec with Matchers:
     }
   )
 
-  private val buffer =
+  private def bufferOf(document: RichTextDocument): Buffer =
     Buffer
       .fromString(bufferId, document.plainText)
       .copy(
         richText = RichTextState(richTextDocument = Some(document)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 30, visibleLines = 12)
       )
+
+  private val buffer = bufferOf(document)
+
+  // A one-row paragraph after each level-1 heading puts every level-2 heading a fixed few rows below the top of its
+  // column, whatever the font wraps the long paragraphs to; the wrapped-body document above cannot promise that.
+  private val headingBelowColumnTop = bufferOf(
+    RichTextDocument(
+      (1 to 14).toList.flatMap { chapter =>
+        List(
+          RichTextParagraph.plain(s"Chapter $chapter", role = ParagraphRole.Heading(1)),
+          RichTextParagraph.plain(s"Chapter $chapter."),
+          RichTextParagraph.plain(s"Section $chapter.1", role = ParagraphRole.Heading(2)),
+          RichTextParagraph.plain(s"Section text $chapter. " + "and some more words here " * 7)
+        )
+      }
+    )
+  )
 
   private val spacing = HeadingsConfig()
     .withLevel(1)(_.copy(spaceBefore = Some(1.5f), spaceAfter = Some(1.0f)))
@@ -76,19 +94,18 @@ class HeadingSpacingColumnPagingSpec extends AnyFlatSpec with Matchers:
     )
 
   for columns <- List(1, 2, 3) do
-    s"The page a cursor is anchored to in $columns column(s)" should "be the page it is anchored to without heading space" in {
+    s"The pages of $columns column(s) with heading space" should "never be fewer than the pages without it" in {
       val plain  = stateWith(HeadingsConfig(), columns)
       val spaced = stateWith(spacing, columns)
 
-      val lines = (0 until buffer.document.content.lineCount).toList
-      val anchors = lines.map { line =>
-        (
-          placed(plain, buffer, line).viewport.topLine  -> placed(plain, buffer, line).viewport.topVisualLine,
-          placed(spaced, buffer, line).viewport.topLine -> placed(spaced, buffer, line).viewport.topVisualLine
-        )
-      }
+      def pageCount(state: AppState): Int =
+        (0 until buffer.document.content.lineCount).toList
+          .map(line => placed(state, buffer, line).viewport)
+          .map(viewport => viewport.topLine -> viewport.topVisualLine)
+          .distinct
+          .size
 
-      anchors.foreach((without, withSpace) => withSpace shouldBe without)
+      pageCount(spaced) should be >= pageCount(plain)
     }
 
     it should s"keep the caret inside its page of $columns column(s) walking down and back up" in {
@@ -106,10 +123,10 @@ class HeadingSpacingColumnPagingSpec extends AnyFlatSpec with Matchers:
 
   "A column page" should "start every column below the top of its column, with no heading space above its first row" in {
     val state = stateWith(spacing, 3)
-    val font  = FontLoader.previewFontForRole(fontConfig, buffer.typographyRole)
+    val font  = FontLoader.previewFontForRole(fontConfig, headingBelowColumnTop.typographyRole)
 
     val columns = TextLayoutSnapshot.fromBufferColumns(
-      buffer,
+      headingBelowColumnTop,
       columnWidthPx = 260,
       font = font,
       columnCount = 3,
@@ -118,6 +135,7 @@ class HeadingSpacingColumnPagingSpec extends AnyFlatSpec with Matchers:
 
     columns.size shouldBe 3
     columns.foreach(column => column.visualLines.head.spaceBeforePx shouldBe 0)
-    columns.map(_.visualLines.size).distinct shouldBe Vector(buffer.viewport.visibleLines)
+    columns.foreach(_.visualLines.size should be <= headingBelowColumnTop.viewport.visibleLines)
+    columns.map(_.visualLines.size).min should be < headingBelowColumnTop.viewport.visibleLines
     columns.flatMap(_.visualLines).count(_.spaceBeforePx > 0) should be > 0
   }

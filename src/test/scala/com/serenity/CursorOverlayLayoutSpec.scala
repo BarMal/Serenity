@@ -291,6 +291,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val initial = AppState.initial(AppConfig.conventional)
     val state = initial.copy(
       persisted = initial.persisted.copy(
+        config = initial.persisted.config.withUiElementGap(Some(1)),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -300,8 +301,11 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.Surface(SurfaceId("command-runner"))
       ),
-      runtime = initial.runtime.copy(uiSurfaces =
-        List(
+      runtime = initial.runtime.copy(
+        // Rows are counted in cells: the viewport's `topVisualLine` below is the wrapped row of a cell grid, whose gap
+        // is set to the cell the windowed editor leaves by default.
+        capabilities = com.serenity.frontend.FrontendCapabilities.tui(),
+        uiSurfaces = List(
           UiSurface(
             SurfaceId("command-runner"),
             SurfaceContent.CommandPalette(

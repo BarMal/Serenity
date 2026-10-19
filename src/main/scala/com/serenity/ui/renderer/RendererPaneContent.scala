@@ -208,7 +208,7 @@ object RendererPaneContent:
     * column's own cell offset, past its line-number rail (`gutterWidthCells`, slice 2), and narrowed to the remaining
     * band -- so a column's text never paints over its own rail or past its neighbour.
     */
-  private[renderer] def columnRect(contentRect: LayoutRect, placement: ColumnSnapshotPlacement): LayoutRect =
+  def columnRect(contentRect: LayoutRect, placement: ColumnSnapshotPlacement): LayoutRect =
     val leftX     = contentRect.x + placement.xOffsetCells + placement.gutterWidthCells
     val bandWidth = math.max(0, placement.columnWidthCells - placement.gutterWidthCells)
     val width     = math.min(bandWidth, math.max(0, contentRect.right - leftX))
@@ -326,6 +326,15 @@ object RendererPaneContent:
                 tabWidth = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
               )
               DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, context.surface, screenX, screenY)
+              RendererHeadingRules.paintCells(
+                context.surface,
+                snapshot,
+                visualLine,
+                lineTheme,
+                rect,
+                screenY,
+                dimmed = !activeBodyLines(visualLine.bufferLine)
+              )
 
             RendererMarkdownRules.paint(
               context.surface,

@@ -29,10 +29,10 @@ class DropCapConfigSpec extends AnyFlatSpec with Matchers:
     ConfigFileFormat.missingFromLayout shouldBe Nil
   }
 
-  it should "ship with a half-em gap and the accent colour" in {
-    ConfigRegistry.defaultFor("document.drop_cap_gap").map(_.rendered) shouldBe Some("0.5")
+  it should "ship with a quarter-em gap and the accent colour" in {
+    ConfigRegistry.defaultFor("document.drop_cap_gap").map(_.rendered) shouldBe Some("0.25")
     ConfigRegistry.defaultFor("document.drop_cap_colour").map(_.rendered) shouldBe Some("accent")
-    AppConfig.default.documentConfig.dropCapGapEm shouldBe 0.5f
+    AppConfig.default.documentConfig.dropCapGapEm shouldBe 0.25f
     AppConfig.default.documentConfig.dropCapColour shouldBe DropCapColour.Accent
   }
 
