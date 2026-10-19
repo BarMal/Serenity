@@ -21,7 +21,7 @@ import com.serenity.state.models.{
   TextVisualLine,
   TypographyRole
 }
-import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.{FontFallback, FontLoader}
 import com.serenity.ui.layout.TextCaretMeasurement.*
 import com.serenity.ui.renderer.FontFirstUse
 
@@ -229,7 +229,8 @@ object TextLayoutSnapshot:
     dropCapsEnabled: Boolean = true,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    fallback: FontFallback = FontFallback.Default
   ): TextLayoutSnapshot =
     val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val totalLines  = buffer.document.content.lineCount
@@ -237,7 +238,7 @@ object TextLayoutSnapshot:
       buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.document.content.weight))
     val markdownInline =
       RichTextContext.markdownViewFor(buffer, markdownViewMode, forceCellLayout, wrapCache, font, fontRenderContext)
-    val richText       = RichTextContext(richDocument, proseScale, dropCapsEnabled, markdownInline, tabSize)
+    val richText       = RichTextContext(richDocument, proseScale, dropCapsEnabled, markdownInline, tabSize, fallback)
     val measuredLayout = LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText)
     // The non-measured (cell) path draws every row on `cellMetrics`' own grid (see `TextRowMetrics`'s non-measured
     // `lineTopPx`), so its line height/ascent must come from that same caller-supplied unit rather than the real

@@ -7,6 +7,7 @@ import scala.annotation.tailrec
 
 import com.serenity.config.MarkdownViewMode
 import com.serenity.rope.ChangeSet
+import com.serenity.ui.fonts.FontFallback
 import com.serenity.state.models.{Buffer, BufferId, IndentationSettings}
 
 /** How many visual rows the logical lines of one buffer's content wrap into under one wrap setting -- the counts
@@ -56,7 +57,8 @@ final private[layout] case class VisualRowKey(
     frc: FontRenderContext,
     cellMetricsOverride: Option[CellMetrics],
     forceCellLayout: Boolean,
-    dropCapsEnabled: Boolean
+    dropCapsEnabled: Boolean,
+    fallback: FontFallback
 )
 
 object VisualRowCounts:
@@ -75,7 +77,8 @@ object VisualRowCounts:
     dropCapsEnabled: Boolean = true,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     tabSize: Int = IndentationSettings.DefaultTabSize,
-    known: Int => Option[Int] = _ => None
+    known: Int => Option[Int] = _ => None,
+    fallback: FontFallback = FontFallback.Default
   ): VisualRowCounts =
     val content = buffer.document.content
     val frc     = TextLayoutSnapshot.defaultFontRenderContext()
@@ -88,7 +91,8 @@ object VisualRowCounts:
         forceCellLayout,
         wrapCache,
         frc,
-        tabSize
+        tabSize,
+        fallback
       )
     def measure(line: Int): Int =
       known(line).getOrElse(wrap(line))
@@ -107,7 +111,8 @@ object VisualRowCounts:
         )
         .length
         .max(1)
-    val key = VisualRowKey(buffer.id, panelWidthPx, font, frc, cellMetricsOverride, forceCellLayout, dropCapsEnabled)
+    val key =
+      VisualRowKey(buffer.id, panelWidthPx, font, frc, cellMetricsOverride, forceCellLayout, dropCapsEnabled, fallback)
     val revision = ContentRevision(buffer.document.contentVersion, buffer.document.changesSince)
     wrapCache.visualRowCounts(key, content, measure, VisualLineIndexStore.stampOf(richText), Some(revision))
 

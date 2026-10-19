@@ -43,7 +43,8 @@ object RichTextContext:
     cellGrid: Boolean = false,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
     frc: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext(),
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    fallback: FontFallback = FontFallback.Default
   ): RichTextContext =
     val content = buffer.document.content
     RichTextContext(
@@ -51,7 +52,8 @@ object RichTextContext:
       RichTextStyling.proseZoom(font.getSize2D),
       dropCapsEnabled,
       markdownViewFor(buffer, markdownViewMode, cellGrid, wrapCache, font, frc),
-      tabSize
+      tabSize,
+      fallback
     )
 
   /** How `buffer`'s inline Markdown is restyled under `viewMode`. A buffer carrying a rich-text document styles its own

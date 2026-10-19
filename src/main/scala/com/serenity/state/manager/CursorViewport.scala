@@ -80,6 +80,7 @@ object CursorViewport:
     val dropCapsEnabled     = currentState.persisted.config.documentConfig.dropCapsEnabled
     val markdownViewMode    = currentState.persisted.config.inlineMarkdownViewMode
     val tabSize             = buffer.effectiveIndentation(currentState.persisted.config.indentation).tabSize
+    val fontFallback        = currentState.persisted.config.editorConfig.fontConfig.fallback
     val cursorVisualLine =
       if !wordWrapEnabled then 0
       else
@@ -95,7 +96,16 @@ object CursorViewport:
           wrapCache = wrapCache,
           bufferLine = cursor.line,
           richText = RichTextContext
-            .forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, isTui, wrapCache, tabSize = tabSize)
+            .forBuffer(
+              buffer,
+              font,
+              dropCapsEnabled,
+              markdownViewMode,
+              isTui,
+              wrapCache,
+              tabSize = tabSize,
+              fallback = fontFallback
+            )
         )
 
     // Counted the same way `cursorVisualLine` above was measured, or the two disagree.
@@ -111,7 +121,8 @@ object CursorViewport:
           wrapCache,
           dropCapsEnabled,
           markdownViewMode,
-          tabSize
+          tabSize,
+          fallback = fontFallback
         )
 
     // Desired top: halfVisibleLines rows of context above the cursor's own visual row, counted in visual rows (not
@@ -229,6 +240,7 @@ object CursorViewport:
     val dropCapsEnabled  = currentState.persisted.config.documentConfig.dropCapsEnabled
     val markdownViewMode = currentState.persisted.config.inlineMarkdownViewMode
     val tabSize          = buffer.effectiveIndentation(currentState.persisted.config.indentation).tabSize
+    val fontFallback     = currentState.persisted.config.editorConfig.fontConfig.fallback
     val visualRows =
       VisualRowCounts.forBuffer(
         buffer,
@@ -239,7 +251,8 @@ object CursorViewport:
         wrapCache,
         dropCapsEnabled,
         markdownViewMode,
-        tabSize
+        tabSize,
+        fallback = fontFallback
       )
 
     val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
@@ -256,7 +269,16 @@ object CursorViewport:
         wrapCache = wrapCache,
         bufferLine = cursor.line,
         richText = RichTextContext
-          .forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, isTui, wrapCache, tabSize = tabSize)
+          .forBuffer(
+            buffer,
+            font,
+            dropCapsEnabled,
+            markdownViewMode,
+            isTui,
+            wrapCache,
+            tabSize = tabSize,
+            fallback = fontFallback
+          )
       )
 
     // Multi-column page anchoring (issue #1338, Phase 2 / slice 1): a "page" shows `columnCount` columns side by side,

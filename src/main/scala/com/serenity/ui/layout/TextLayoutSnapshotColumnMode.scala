@@ -4,7 +4,7 @@ import java.awt.Font
 import java.awt.font.FontRenderContext
 
 import com.serenity.state.models.{Buffer, IndentationSettings, TextVisualLine}
-import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.{FontFallback, FontLoader}
 
 /** Column-based document layout (issue #1338, Phase 1): the two entry points column-mode rendering needs on top of
   * [[TextLayoutSnapshot.fromBuffer]]'s ordinary single-window slice. Split out of `TextLayoutSnapshot` itself once
@@ -34,7 +34,8 @@ object TextLayoutSnapshotColumnMode:
     // `document.drop_caps_enabled` config toggle -- see `TextLayoutSnapshot.fromBuffer`'s own parameter.
     dropCapsEnabled: Boolean = true,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    fallback: FontFallback = FontFallback.Default
   ): Vector[Vector[TextVisualLine]] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -54,7 +55,7 @@ object TextLayoutSnapshotColumnMode:
       measuredLayout,
       cellMetrics,
       visualLineLimit,
-      RichTextContext(richDocument, proseScale, dropCapsEnabled, tabSize = tabSize),
+      RichTextContext(richDocument, proseScale, dropCapsEnabled, tabSize = tabSize, fallback = fallback),
       wordWrapEnabled = true,
       wrapCache
     ).drop(topVisualLine).take(totalRowsNeeded)
@@ -79,7 +80,8 @@ object TextLayoutSnapshotColumnMode:
     proseScale: Float = 1.0f,
     dropCapsEnabled: Boolean = true,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    fallback: FontFallback = FontFallback.Default
   ): TextLayoutSnapshot =
     fromBufferColumns(
       buffer,
@@ -92,7 +94,8 @@ object TextLayoutSnapshotColumnMode:
       columnCount = 1,
       dropCapsEnabled,
       wrapCache,
-      tabSize
+      tabSize,
+      fallback
     ).headOption.getOrElse(
       emptyColumnSnapshot(columnWidthPx, font, fontRenderContext, cellMetricsOverride, forceCellLayout, proseScale)
     )
@@ -116,7 +119,8 @@ object TextLayoutSnapshotColumnMode:
     columnCount: Int = 1,
     dropCapsEnabled: Boolean = true,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    fallback: FontFallback = FontFallback.Default
   ): Vector[TextLayoutSnapshot] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -143,7 +147,8 @@ object TextLayoutSnapshotColumnMode:
       columnCount,
       dropCapsEnabled,
       wrapCache,
-      tabSize
+      tabSize,
+      fallback
     ).map { chunk =>
       TextLayoutSnapshot(
         visualLines = chunk,

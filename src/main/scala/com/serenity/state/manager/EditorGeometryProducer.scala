@@ -115,6 +115,7 @@ object EditorGeometryProducer:
     val dropCapsEnabled     = state.persisted.config.documentConfig.dropCapsEnabled
     val markdownViewMode    = state.persisted.config.inlineMarkdownViewMode
     val tabSize             = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
+    val fontFallback        = state.persisted.config.editorConfig.fontConfig.fallback
     val visualRows =
       VisualRowCounts.forBuffer(
         buffer,
@@ -125,7 +126,8 @@ object EditorGeometryProducer:
         wrapCache,
         dropCapsEnabled,
         markdownViewMode,
-        tabSize
+        tabSize,
+        fallback = fontFallback
       )
     val cursorRowInWindow =
       if !wordWrapEnabled then cursor.line - windowTopLine
@@ -142,7 +144,16 @@ object EditorGeometryProducer:
             wrapCache = wrapCache,
             bufferLine = cursor.line,
             richText = RichTextContext
-              .forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, isTui, wrapCache, tabSize = tabSize)
+              .forBuffer(
+                buffer,
+                font,
+                dropCapsEnabled,
+                markdownViewMode,
+                isTui,
+                wrapCache,
+                tabSize = tabSize,
+                fallback = fontFallback
+              )
           )
     val windowTopVisualLine = math.max(0, cursorRowInWindow - rowsAbove)
     // Without rich text a snapshot folds each line into exactly the rows `visualRows` counts, so the window can start
@@ -171,7 +182,8 @@ object EditorGeometryProducer:
         dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
         wrapCache = wrapCache,
         markdownViewMode = markdownViewMode,
-        tabSize = tabSize
+        tabSize = tabSize,
+        fallback = fontFallback
       )
     EditorGeometry(snapshot.navigationGeometry, metrics.charWidth, panelWidthColumns)
 

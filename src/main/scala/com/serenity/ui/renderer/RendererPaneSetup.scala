@@ -292,7 +292,8 @@ object RendererPaneSetup:
           proseScale = proseScale,
           dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
           wrapCache = context.caches.wrappedLines,
-          tabSize = renderBuffer.effectiveIndentation(state.persisted.config.indentation).tabSize
+          tabSize = renderBuffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
+          fallback = state.persisted.config.editorConfig.fontConfig.fallback
         )
       else
         TextLayoutSnapshot.fromBuffer(
@@ -311,7 +312,8 @@ object RendererPaneSetup:
           dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
           wrapCache = context.caches.wrappedLines,
           markdownViewMode = state.persisted.config.inlineMarkdownViewMode,
-          tabSize = renderBuffer.effectiveIndentation(state.persisted.config.indentation).tabSize
+          tabSize = renderBuffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
+          fallback = state.persisted.config.editorConfig.fontConfig.fallback
         )
     if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
 
