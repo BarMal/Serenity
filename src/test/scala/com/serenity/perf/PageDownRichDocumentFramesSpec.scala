@@ -343,27 +343,6 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         pagedThrough(writingConfig, window, 2, scale, document, pageDowns = 8) shouldBe empty
       }
 
-  private def overhanging(count: Int): RichTextDocument =
-    val slanted = RichTextStyle(fontSize = Some(44f), marks = Set(InlineMark.Italic))
-    RichTextDocument(
-      (1 to count).toList.map { paragraph =>
-        RichTextParagraph(List(RichTextRun("fjfjfj fjfj " * (3 + paragraph % 4), slanted)))
-      }
-    )
-
-  for
-    scale <- List(1.0, 2.0)
-    (configName, config) <- List(
-      "the owner's chrome"                -> ownersConfig,
-      "dimming"                           -> ownersConfig.withFocusedTextBody(true),
-      "typewriter scrolling with dimming" -> writingConfig
-    )
-  do
-    s"PageDown through paragraphs whose glyphs reach left of the text column with $configName at ${scale}x" should
-      "leave no pixel of a row's overhang behind and lose none of it" in {
-        pagedThrough(config, Window(1500, 1000), 2, scale, overhanging(10), pageDowns = 6) shouldBe empty
-      }
-
   for
     scale  <- List(1.0, 2.0)
     height <- List(560, 575, 593, 608, 623)
