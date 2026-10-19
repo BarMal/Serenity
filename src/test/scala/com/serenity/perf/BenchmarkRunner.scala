@@ -10,7 +10,8 @@ object BenchmarkRunner:
   /** Every frame benchmark is tracked by prefix, so a new `laptop.*`, `render.*` or `command_runner.*` benchmark is
     * covered without being listed. The set below adds the individually chosen ones from other families.
     */
-  private val AllocationTrackedPrefixes = List("laptop.", "render.", "command_runner.")
+  private val AllocationTrackedPrefixes =
+    List("laptop.", "render.", "command_runner.", "layout.anchor_wrap.", "layout.cold_font.")
 
   private[perf] def tracksAllocation(name: String): Boolean =
     AllocationTracked.contains(name) || AllocationTrackedPrefixes.exists(name.startsWith)

@@ -47,6 +47,26 @@ class ScrollReusePixelsSpec extends AnyFlatSpec with Matchers with PersistedFram
     val (image, _) = session.draw(after, DamageProducer.forTransition(before, after))
     stamped(image, column)
 
+  /** A scroll copies the rows it keeps and draws the rows it exposes, the rows beside them, and the top row. What it
+    * may draw is therefore a number of rows, and a row is as tall as the font makes it (17 px on Linux, 19 on Windows)
+    * in a pane whose height is whole cells (555 px on Linux, 544 on Windows). The share left copied is bounded by the
+    * rows drawn at most, measured in those: 0.858 and 0.838 for one row, 0.735 and 0.698 for five, against the same
+    * bound of five rows and ten rows on both.
+    */
+  private def copiedAllButRows(before: AppState, after: AppState, drawnRowsAtMost: Int, scale: Double = 2.0): Unit =
+    val session    = Session(scale)
+    val plan       = session.settle(before)
+    val column     = stampColumn(session.pendingImage, plan, scale)
+    val rowPx      = plan.snapshots.getOrElse(paneId, fail("expected the pane's snapshot")).lineHeightPx
+    val paneHeight = (column.toY - column.fromY) / scale
+    val (image, _) = session.draw(after, DamageProducer.forTransition(before, after))
+    val share      = stamped(image, column)
+    val leastShare = 1.0 - drawnRowsAtMost * rowPx / paneHeight
+
+    withClue(s"share of the pane copied, with rows of ${rowPx}px in a pane ${paneHeight}px tall: ")(
+      share should be >= leastShare
+    )
+
   private def drawnFrom(before: AppState, after: AppState): BufferedImage =
     val session = Session()
     val _       = session.settle(before)
@@ -79,7 +99,7 @@ class ScrollReusePixelsSpec extends AnyFlatSpec with Matchers with PersistedFram
     val before = stateOf(codeLines.mkString("\n"), CursorPosition(30, 0), topLine = 10)
     val after  = scrolledTo(before, 11)
 
-    withClue("share of the pane copied: ")(copiedShare(before, after) should be >= 0.85)
+    copiedAllButRows(before, after, drawnRowsAtMost = 5)
   }
 
   it should "equal a frame drawn from scratch to the last device pixel" in {
@@ -93,7 +113,7 @@ class ScrollReusePixelsSpec extends AnyFlatSpec with Matchers with PersistedFram
     val before = stateOf(codeLines.mkString("\n"), CursorPosition(30, 0), topLine = 10)
     val after  = scrolledTo(before, 15)
 
-    withClue("share of the pane copied: ")(copiedShare(before, after) should be >= 0.7)
+    copiedAllButRows(before, after, drawnRowsAtMost = 10)
     differingPixels(drawnFrom(before, after), cold(after)) shouldBe empty
   }
 

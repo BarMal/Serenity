@@ -140,6 +140,12 @@ final case class FidelityReport(items: List[FidelityItem]):
       .map(found => s"${FidelityReport.listed(found)} $words")
 
 object FidelityReport:
+
+  private def isHeading(role: ParagraphRole): Boolean =
+    role match
+      case _: ParagraphRole.Heading => true
+      case _                        => false
+
   val empty: FidelityReport = FidelityReport(Nil)
 
   /** What an RTF import left out, which a save over the same file would drop: RTF keeps no source package to copy from.
@@ -201,7 +207,7 @@ object FidelityReport:
     )
     val convertedEntries =
       Option
-        .when(target == SaveTarget.Rtf)(paragraphs.filter(_.role.isInstanceOf[ParagraphRole.Heading]))
+        .when(target == SaveTarget.Rtf)(paragraphs.filter(paragraph => isHeading(paragraph.role)))
         .toList
         .flatten
         .map(_ => DocumentFeature.Headings -> Treatment.Converted)
