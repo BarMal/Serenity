@@ -80,8 +80,7 @@ object TextLayoutSnapshot:
   ): Vector[Float] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
-    val resolver       = LineLayout.plainResolver(text, 0, font, fontRenderContext, measuredLayout)
-    val xs             = caretXs(text, 0, resolver, fontRenderContext, measuredLayout, cellMetrics)
+    val xs             = caretXs(text, 0, singleFontResolver(font), fontRenderContext, measuredLayout, cellMetrics)
     Vector.tabulate(xs.length)(xs(_))
 
   def visualLineForText(
@@ -90,7 +89,8 @@ object TextLayoutSnapshot:
     font: Font,
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     startColumn: Int = 0,
-    cellMetricsOverride: Option[CellMetrics] = None
+    cellMetricsOverride: Option[CellMetrics] = None,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): TextVisualLine =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
@@ -100,7 +100,7 @@ object TextLayoutSnapshot:
         text,
         startColumn,
         startColumn + text.length,
-        LineLayout.plainResolver(text, startColumn, font, fontRenderContext, measuredLayout),
+        LineLayout.plainResolver(text, startColumn, font, fontRenderContext, measuredLayout, wrapCache = wrapCache),
         fontRenderContext,
         measuredLayout,
         cellMetrics
@@ -116,7 +116,9 @@ object TextLayoutSnapshot:
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
+    fallback: FontFallback = FontFallback.Default
   ): Int =
     if lineText.isEmpty || visibleWidthPx <= 0 then 0
     else
@@ -129,7 +131,8 @@ object TextLayoutSnapshot:
         val visibleColumns = math.max(1, visibleWidthPx / math.max(1, cellMetrics.charWidth))
         math.max(0, safeColumn - visibleColumns + 1)
       else
-        val resolver      = LineLayout.plainResolver(lineText, 0, font, fontRenderContext, measuredLayout, tabSize)
+        val resolver =
+          LineLayout.plainResolver(lineText, 0, font, fontRenderContext, measuredLayout, tabSize, wrapCache, fallback)
         val xs            = caretXs(lineText, 0, resolver, fontRenderContext, measuredLayout, cellMetrics)
         val cursorXPx     = xs(math.min(safeColumn, xs.length - 1))
         val targetLeftXPx = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)

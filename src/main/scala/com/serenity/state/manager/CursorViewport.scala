@@ -165,7 +165,9 @@ object CursorViewport:
             font,
             cellMetricsOverride = cellMetricsOverride,
             forceCellLayout = forceCellLayout,
-            tabSize = tabSize
+            tabSize = tabSize,
+            wrapCache = wrapCache,
+            fallback = fontFallback
           )
         val minimumVisibleColumn = math.max(0, cursor.column - viewport.visibleColumns + 1)
         math.max(minimumVisibleColumn, measuredLeftColumn)

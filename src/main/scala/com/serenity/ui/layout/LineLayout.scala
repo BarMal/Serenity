@@ -5,7 +5,7 @@ import java.awt.font.FontRenderContext
 
 import com.serenity.richtext.ParagraphRole
 import com.serenity.state.models.{IndentationSettings, TextVisualLine}
-import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.{FontFallback, FontLoader}
 import com.serenity.ui.layout.TextCaretMeasurement.{
   LineFontResolver,
   markdownResolver,
@@ -76,18 +76,21 @@ private[layout] object LineLayout:
     font: Font,
     fontRenderContext: FontRenderContext,
     measuredLayout: Boolean,
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
+    fallback: FontFallback = FontFallback.Default
   ): LineFontResolver =
     lineLayoutInputs(
       font,
       fontRenderContext,
       measuredLayout,
-      RichTextContext.plain.copy(tabSize = tabSize),
+      RichTextContext.plain.copy(tabSize = tabSize, fallback = fallback),
       0,
       text.length,
       "",
       fallbackText = text,
-      fallbackFirstColumn = startColumn
+      fallbackFirstColumn = startColumn,
+      wrapCache = wrapCache
     ).resolver
 
   /** A cell grid is forced only when the caller has no glyph metrics at all; otherwise a font is measured glyph by
