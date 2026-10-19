@@ -244,7 +244,7 @@ private[manager] object MouseTargetLayoutKey:
             .sortBy(_._1.value)
             .map((bufferId, buffer) => bufferId -> RopeIdentity(buffer.document.content))
         else Nil,
-      headings = state.persisted.config.headingSettings,
+      headings = state.effectiveHeadingSettings,
       dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
       dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
       lineNumberLayout = state.persisted.config.surfaceConfig.lineNumberLayout.normalized,

@@ -162,7 +162,7 @@ object EditorGeometryProducer:
     val dropCapsEnabled     = state.persisted.config.documentConfig.dropCapsEnabled
     val markdownViewMode    = state.persisted.config.inlineMarkdownViewMode
     val tabSize             = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
-    val headings            = state.persisted.config.headingSettings
+    val headings            = state.effectiveHeadingSettings
     val openings            = buffer.effectiveOpenings(state.persisted.config.openingsConfig)
     val visualRows =
       VisualRowCounts.forBuffer(

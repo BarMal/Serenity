@@ -104,7 +104,7 @@ object PaneTextLayout:
         dropCapsEnabled = config.documentConfig.dropCapsEnabled,
         wrapCache = wrappedLines,
         tabSize = buffer.effectiveIndentation(config.indentation).tabSize,
-        headings = config.headingSettings,
+        headings = state.effectiveHeadingSettings,
         openings = buffer.effectiveOpenings(config.openingsConfig),
         dropCapGapEm = config.documentConfig.dropCapGapEm
       )
@@ -140,7 +140,7 @@ object PaneTextLayout:
             dropCapsEnabled = config.documentConfig.dropCapsEnabled,
             wrapCache = wrappedLines,
             tabSize = buffer.effectiveIndentation(config.indentation).tabSize,
-            headings = config.headingSettings,
+            headings = state.effectiveHeadingSettings,
             openings = buffer.effectiveOpenings(config.openingsConfig),
             dropCapGapEm = config.documentConfig.dropCapGapEm
           )
@@ -160,7 +160,7 @@ object PaneTextLayout:
         wrapCache = wrappedLines,
         markdownViewMode = config.inlineMarkdownViewMode,
         tabSize = buffer.effectiveIndentation(config.indentation).tabSize,
-        headings = config.headingSettings,
+        headings = state.effectiveHeadingSettings,
         openings = buffer.effectiveOpenings(config.openingsConfig),
         dropCapGapEm = config.documentConfig.dropCapGapEm
       )

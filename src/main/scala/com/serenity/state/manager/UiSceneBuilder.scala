@@ -98,7 +98,7 @@ private[serenity] object UiSceneBuilder:
           state.persisted.config.inlineMarkdownViewMode,
           buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
           known = wholeLines.get,
-          headings = state.persisted.config.headingSettings,
+          headings = state.effectiveHeadingSettings,
           openings = buffer.effectiveOpenings(state.persisted.config.openingsConfig),
           dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
         )

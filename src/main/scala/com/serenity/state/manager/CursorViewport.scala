@@ -84,7 +84,7 @@ object CursorViewport:
     val dropCapsEnabled     = currentState.persisted.config.documentConfig.dropCapsEnabled
     val markdownViewMode    = currentState.persisted.config.inlineMarkdownViewMode
     val tabSize             = buffer.effectiveIndentation(currentState.persisted.config.indentation).tabSize
-    val headings            = currentState.persisted.config.headingSettings
+    val headings            = currentState.effectiveHeadingSettings
     val openings            = buffer.effectiveOpenings(currentState.persisted.config.openingsConfig)
     val cursorVisualLine =
       if !wordWrapEnabled then 0
@@ -297,7 +297,7 @@ object CursorViewport:
       dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
       wrapCache = wrapCache,
       tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
-      headings = state.persisted.config.headingSettings,
+      headings = state.effectiveHeadingSettings,
       openings = buffer.effectiveOpenings(state.persisted.config.openingsConfig),
       dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
     )

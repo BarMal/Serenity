@@ -35,6 +35,10 @@ final case class AppConfig(
   lazy val headingSettings: HeadingSettings =
     headingsConfig.settings(editorConfig.fontConfig.logicalTextFontSize)
 
+  /** The same settings for a terminal, where a level left on auto climbs the ladder and a rule can be drawn. */
+  lazy val terminalHeadingSettings: HeadingSettings =
+    headingsConfig.settings(editorConfig.fontConfig.logicalTextFontSize, terminal = true)
+
   def withHeadingsConfig(config: HeadingsConfig): AppConfig =
     copy(headingsConfig = config)
 
