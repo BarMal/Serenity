@@ -33,32 +33,6 @@ object FrameMismatchDump:
     catch case _: java.io.IOException => ()
     line
 
-  /** The first differing pixel's surroundings drawn as text, actual beside expected: ' ' is background, '.', '+' and
-    * '#' rising ink, and '!' a pixel that differs.
-    */
-  def art(actual: BufferedImage, expected: BufferedImage, differing: Seq[(Int, Int)]): String =
-    differing.headOption.fold("") { (cx, cy) =>
-      val background = expected.getRGB(0, 0) & 0xffffff
-      def level(image: BufferedImage, x: Int, y: Int): Int =
-        val rgb                 = image.getRGB(x, y) & 0xffffff
-        def channel(shift: Int) = math.abs(((rgb >> shift) & 0xff) - ((background >> shift) & 0xff))
-        channel(16) + channel(8) + channel(0)
-      def mark(image: BufferedImage, other: BufferedImage, x: Int, y: Int): Char =
-        if (image.getRGB(x, y) & 0xffffff) != (other.getRGB(x, y) & 0xffffff) then '!'
-        else
-          level(image, x, y) match
-            case 0            => ' '
-            case n if n < 60  => '.'
-            case n if n < 300 => '+'
-            case _            => '#'
-      val xs = math.max(0, cx - 10) until math.min(actual.getWidth, cx + 38)
-      val ys = math.max(0, cy - 14) until math.min(actual.getHeight, cy + 15)
-      val rows = ys.map { y =>
-        f"$y%5d ${xs.map(mark(actual, expected, _, y)).mkString}|${xs.map(mark(expected, actual, _, y)).mkString}"
-      }
-      s"\nfirst difference at ($cx,$cy), x from ${xs.start}; actual | expected\n${rows.mkString("\n")}"
-    }
-
   private def clusters(differing: Seq[(Int, Int)]): Seq[(Int, Int)] =
     differing.foldLeft(Vector.empty[(Int, Int)]) { (found, pixel) =>
       if found.exists((x, y) => math.abs(x - pixel._1) <= 8 && math.abs(y - pixel._2) <= 5) then found
