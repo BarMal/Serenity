@@ -27,10 +27,29 @@ object FrameMismatchDump:
     val samples = differing
       .take(8)
       .map((x, y) => f"($x,$y) actual=${rgb(actual, x, y)}%06x expected=${rgb(expected, x, y)}%06x")
-    val line = s"$stem: ${differing.size} px differ; ${samples.mkString("; ")}"
+    val neighbourhoods = clusters(differing).take(3).map((x, y) => neighbourhood(actual, expected, x, y))
+    val line = (s"$stem: ${differing.size} px differ; ${samples.mkString("; ")}" +: neighbourhoods).mkString("\n")
     try Files.writeString(directory.resolve(s"$stem.txt"), line + "\n")
     catch case _: java.io.IOException => ()
     line
+
+  private def clusters(differing: Seq[(Int, Int)]): Seq[(Int, Int)] =
+    differing.foldLeft(Vector.empty[(Int, Int)]) { (found, pixel) =>
+      if found.exists((x, y) => math.abs(x - pixel._1) <= 8 && math.abs(y - pixel._2) <= 5) then found
+      else found :+ pixel
+    }
+
+  /** The green channel of a 17 by 11 window around (x, y), actual beside expected, '..' marking the same value in both.
+    */
+  private def neighbourhood(actual: BufferedImage, expected: BufferedImage, x: Int, y: Int): String =
+    val rows = (y - 5 to y + 5).filter(row => row >= 0 && row < actual.getHeight).map { row =>
+      val cols = (x - 8 to x + 8).filter(col => col >= 0 && col < actual.getWidth)
+      def cell(image: BufferedImage, col: Int): String = f"${(image.getRGB(col, row) >> 8) & 0xff}%02x"
+      val left                                         = cols.map(col => cell(actual, col)).mkString(" ")
+      val right                                        = cols.map(col => cell(expected, col)).mkString(" ")
+      f"y=$row%5d  $left  |  $right"
+    }
+    s"around ($x,$y), x from ${x - 8}, actual | expected:\n${rows.mkString("\n")}"
 
   private def rgb(image: BufferedImage, x: Int, y: Int): Int = image.getRGB(x, y) & 0xffffff
 
