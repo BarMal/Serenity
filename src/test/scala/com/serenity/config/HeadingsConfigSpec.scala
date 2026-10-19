@@ -12,8 +12,19 @@ class HeadingsConfigSpec extends AnyFlatSpec with Matchers:
 
   private val levelKeys =
     for
-      level     <- levels.toList
-      attribute <- List("size", "bold", "italic", "family", "colour", "align", "space_before", "space_after", "underline", "rule")
+      level <- levels.toList
+      attribute <- List(
+        "size",
+        "bold",
+        "italic",
+        "family",
+        "colour",
+        "align",
+        "space_before",
+        "space_after",
+        "underline",
+        "rule"
+      )
     yield s"headings.h$level.$attribute"
 
   private val globalKeys = List("headings.colour", "headings.damping", "headings.damping_threshold")

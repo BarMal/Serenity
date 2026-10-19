@@ -47,8 +47,8 @@ private[renderer] object RendererLineSegments:
 
   /** A Markdown heading in source view is highlighted bold in the theme's heading colour; this repaints its text in the
     * weight, slant, underline and colour the heading settings give its level, leaving the `#` marker as the theme has
-    * it. Only the row the heading opens on: the highlighter does not know the rows a wrapped heading continues onto
-    * are one.
+    * it. Only the row the heading opens on: the highlighter does not know the rows a wrapped heading continues onto are
+    * one.
     */
   private def markdownSourceHeading(
     visualLine: TextVisualLine,

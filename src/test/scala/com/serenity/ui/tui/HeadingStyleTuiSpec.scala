@@ -174,7 +174,7 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
     if col > 0 then screen.cellAt(col - 1, row).style.isUnderlined shouldBe false
   }
 
-  it should "tell levels 4 to 6 apart by theme colour, leaving levels 1 to 3 in the text colour" in {
+  it should "tell levels 4 to 6 apart by theme colour, leaving levels 1 to 3 in the text colour" in
     List(Theme.dark, Theme.light).foreach { theme =>
       withClue(s"${theme.name}: ") {
         val screen = render(prose(theme = theme))
@@ -185,12 +185,13 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
         foregroundOf(screen, "Delta") shouldBe rgb(theme.accent)
         foregroundOf(screen, "Echo") shouldBe headingColour(theme)
         foregroundOf(screen, "Foxtrot") shouldBe rgb(theme.muted)
-        levelTexts.foreach(text => cellsOf(screen, text).map(cell => rgb(cell.bg)).distinct shouldBe List(rgb(theme.background)))
+        levelTexts.foreach(text =>
+          cellsOf(screen, text).map(cell => rgb(cell.bg)).distinct shouldBe List(rgb(theme.background))
+        )
       }
     }
-  }
 
-  it should "keep the level colours distinct and readable against the background in light and dark themes" in {
+  it should "keep the level colours distinct and readable against the background in light and dark themes" in
     List(Theme.dark, Theme.light).foreach { theme =>
       val screen  = render(prose(theme = theme))
       val colours = List("Delta", "Echo", "Foxtrot").map(foregroundOf(screen, _))
@@ -198,11 +199,13 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
       withClue(s"${theme.name}: ")(colours.distinct.size shouldBe 3)
       colours.foreach { colour =>
         withClue(s"${theme.name} #${Integer.toHexString(colour)}: ")(
-          Theme.contrastRatio(RenderColor.fromRgba((colour >> 16) & 0xff, (colour >> 8) & 0xff, colour & 0xff), theme.background) should be >= 3.0
+          Theme.contrastRatio(
+            RenderColor.fromRgba((colour >> 16) & 0xff, (colour >> 8) & 0xff, colour & 0xff),
+            theme.background
+          ) should be >= 3.0
         )
       }
     }
-  }
 
   it should "let each level's own settings win over the ladder" in {
     val headings = HeadingsConfig()
@@ -221,9 +224,10 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "let the global heading colour win over the ladder's colours, and a level's own over both" in {
-    val theme    = Theme.dark
-    val headings = HeadingsConfig(colour = Some(HeadingColour.Heading)).withLevel(5)(_.copy(colour = Some(HeadingColour.Text)))
-    val screen   = render(prose(withHeadings(headings), theme))
+    val theme = Theme.dark
+    val headings =
+      HeadingsConfig(colour = Some(HeadingColour.Heading)).withLevel(5)(_.copy(colour = Some(HeadingColour.Text)))
+    val screen = render(prose(withHeadings(headings), theme))
 
     foregroundOf(screen, "Alpha") shouldBe headingColour(theme)
     foregroundOf(screen, "Delta") shouldBe headingColour(theme)
@@ -232,7 +236,7 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "take colours by name from the config" in {
-    val theme  = Theme.dark
+    val theme = Theme.dark
     val config = com.serenity.config.ConfigRegistry
       .read(AppConfig.conventional, "headings.h1.colour", "accent")
       .flatMap(com.serenity.config.ConfigRegistry.read(_, "headings.h2.colour", "muted"))
@@ -282,8 +286,8 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave the # marker bold in the marker colour, unstyled by the ladder" in {
-    val theme  = Theme.dark
-    val screen = render(markdown(theme = theme))
+    val theme                  = Theme.dark
+    val screen                 = render(markdown(theme = theme))
     val (markerCol, markerRow) = screen.find("#").getOrElse(fail(screen.render))
     val marker                 = screen.cellAt(markerCol, markerRow)
 
@@ -294,7 +298,7 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
     rgb(marker.fg) shouldBe rgb(theme.colorFor(SyntaxElement.HeadingMarker).foreground)
   }
 
-  it should "tell levels 4 to 6 apart by colour, with levels 1 to 3 in the heading colour as before" in {
+  it should "tell levels 4 to 6 apart by colour, with levels 1 to 3 in the heading colour as before" in
     List(Theme.dark, Theme.light).foreach { theme =>
       withClue(s"${theme.name}: ") {
         val screen = render(markdown(theme = theme))
@@ -306,7 +310,6 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
         foregroundOf(screen, "plain text") shouldBe rgb(theme.foreground)
       }
     }
-  }
 
   it should "follow a level's own colour over the ladder" in {
     val headings = HeadingsConfig().withLevel(4)(_.copy(colour = Some(HeadingColour.Fixed(orange))))
@@ -441,7 +444,11 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
     val caches = RenderCaches.create()
     val spaced = HeadingsConfig().withLevel(1)(_.copy(spaceAfter = Some(1.0f)))
 
-    isRule(render(ruledState(ruled), caches), rowOf(render(ruledState(ruled), caches), "Headline") + 1, '━') shouldBe true
+    isRule(
+      render(ruledState(ruled), caches),
+      rowOf(render(ruledState(ruled), caches), "Headline") + 1,
+      '━'
+    ) shouldBe true
     val without = render(ruledState(spaced), caches)
     without.rowText(rowOf(without, "Headline") + 1).trim shouldBe empty
     val again = render(ruledState(ruled), caches)

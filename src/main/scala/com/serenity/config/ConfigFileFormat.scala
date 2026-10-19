@@ -223,9 +223,15 @@ object ConfigFileFormat:
       "below the last line of a heading, in em of its own font size (0-8, auto is none); a terminal rounds them to"
     ),
     comment("whole rows. No space is added above the first line of a document or a page."),
-    comment("Underline takes auto, true or false. A terminal has no sizes, so auto there climbs a ladder: level 1 bold and"),
-    comment("underlined, 2 bold, 3 bold italic, and levels 4 to 6 bold in the accent, heading and muted colours. Set a key"),
-    comment("to take a level off it. Colour also takes accent or muted. Rule takes auto, true or false; a terminal with"),
+    comment(
+      "Underline takes auto, true or false. A terminal has no sizes, so auto there climbs a ladder: level 1 bold and"
+    ),
+    comment(
+      "underlined, 2 bold, 3 bold italic, and levels 4 to 6 bold in the accent, heading and muted colours. Set a key"
+    ),
+    comment(
+      "to take a level off it. Colour also takes accent or muted. Rule takes auto, true or false; a terminal with"
+    ),
     comment("it on draws a line of box-drawing cells in the row below the heading, which space_after auto reserves."),
     field("headings.h1.size"),
     field("headings.h1.bold"),

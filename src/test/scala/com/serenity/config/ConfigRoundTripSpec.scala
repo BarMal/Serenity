@@ -228,7 +228,12 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
             underline = Some(true),
             colour = Some(HeadingColour.Muted)
           ),
-          HeadingLevelConfig(bold = Some(false), align = Some(ParagraphAlignment.Justify), underline = Some(false), rule = Some(false))
+          HeadingLevelConfig(
+            bold = Some(false),
+            align = Some(ParagraphAlignment.Justify),
+            underline = Some(false),
+            rule = Some(false)
+          )
         ),
         colour = Some(HeadingColour.Text),
         damping = false,

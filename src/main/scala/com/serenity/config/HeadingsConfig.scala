@@ -17,8 +17,8 @@ final case class HeadingLevelConfig(
     rule: Option[Boolean] = None
 ):
 
-  /** The level's style. A terminal's auto is its ladder, a pixel surface's is today's look; a rule is only ever drawn in
-    * cells, and is given the row of space below the heading it needs unless `space_after` says otherwise.
+  /** The level's style. A terminal's auto is its ladder, a pixel surface's is today's look; a rule is only ever drawn
+    * in cells, and is given the row of space below the heading it needs unless `space_after` says otherwise.
     */
   def resolved(level: Int, terminal: Boolean = false): HeadingStyle =
     val base      = if terminal then HeadingStyle.terminalDefault(level) else HeadingStyle.default(level)
@@ -57,7 +57,7 @@ final case class HeadingsConfig(
 
   def settings(logicalBodyPt: Float, terminal: Boolean = false): HeadingSettings =
     val styles = stylesFor(terminal)
-    val damps = damping && logicalBodyPt > dampingThresholdPt
+    val damps  = damping && logicalBodyPt > dampingThresholdPt
     // Settings that damp nothing are spelled one way, so changing them does not look like a change to layout.
     val built =
       if damps then HeadingSettings(styles, logicalBodyPt, dampingThresholdPt, dampingOn = true, globalColour = colour)

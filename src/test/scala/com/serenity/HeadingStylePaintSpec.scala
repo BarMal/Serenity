@@ -50,7 +50,8 @@ class HeadingStylePaintSpec extends AnyFlatSpec with Matchers with PersistedFram
       base.persisted.copy(config = withMargins(config.withoutStatusLine.withSyntaxHighlighting(true)))
     )
 
-  /** Every level set to what it is when left auto in a graphical session; a terminal's ladder would differ from this. */
+  /** Every level set to what it is when left auto in a graphical session; a terminal's ladder would differ from this.
+    */
   private val spelledOut = (1 to 6).foldLeft(HeadingsConfig()) { (headings, level) =>
     headings.withLevel(level)(
       _.copy(bold = Some(true), italic = Some(false), underline = Some(false), rule = Some(true))
@@ -69,13 +70,11 @@ class HeadingStylePaintSpec extends AnyFlatSpec with Matchers with PersistedFram
     markdownState(AppConfig.conventional).effectiveHeadingSettings shouldBe HeadingSettings.default
   }
 
-  it should "paint rich text exactly as when every level spells out today's look, rule included" in {
+  it should "paint rich text exactly as when every level spells out today's look, rule included" in
     identical(cold(richState(AppConfig.conventional)), cold(richState(configWith(spelledOut))))
-  }
 
-  it should "paint Markdown source exactly as when every level spells out today's look" in {
+  it should "paint Markdown source exactly as when every level spells out today's look" in
     identical(cold(markdownState(AppConfig.conventional)), cold(markdownState(configWith(spelledOut))))
-  }
 
   it should "paint a live Markdown preview exactly as when every level spells out today's look" in {
     val live = (config: AppConfig) => markdownState(config.withMarkdownViewMode(MarkdownViewMode.LivePreview))
