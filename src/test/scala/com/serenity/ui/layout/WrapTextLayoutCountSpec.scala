@@ -50,13 +50,8 @@ class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDriven
       TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc) shouldBe true
       wrap("warm up the font probes", 200, font)
       forAll(widths) { widthPx =>
-        TextCaretMeasurement.diagOn = true
-        TextCaretMeasurement.diagLog.clear()
         val (rows, built) = constructedWhile(wrap(kernedProse, widthPx, font))
-        TextCaretMeasurement.diagOn = false
-        val diag = TextCaretMeasurement.diagLog.toArray.mkString("\n")
-        val rowDump = rows.map(r => (r.startColumn, r.endColumn, r.widthPx)).toString
-        withClue(s"$font at $widthPx px, ${rows.length} rows: [[DIAG built=$built rows=$rowDump\n$diag DIAG]] ") {
+        withClue(s"$font at $widthPx px, ${rows.length} rows: ") {
           rows.length should be > 2
           built should be <= MostLayoutsPerParagraph
         }

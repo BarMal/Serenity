@@ -253,10 +253,10 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
   "A shaped stretch" should "place each glyph where the line measures its character, half a kerning from its caret" in
     List("platform serif" -> font, "bundled Inter" -> kerned(BundledInterFont.plain(14f))).foreach {
       case (name, face) =>
-        val text      = "Hello, wide world: iiii WWWW"
-        val stretch   = ShapedTextCache().stretchOf(text, face, frc)
-        val carets    = TextLayoutSnapshot.caretXsForText(text, face, frc)
-        val unkerned  = face.createGlyphVector(frc, text)
+        val text                = "Hello, wide world: iiii WWWW"
+        val stretch             = ShapedTextCache().stretchOf(text, face, frc)
+        val carets              = TextLayoutSnapshot.caretXsForText(text, face, frc)
+        val unkerned            = face.createGlyphVector(frc, text)
         def glyphX(column: Int) = stretch.leftEdgeOf(column).getOrElse(Float.NaN)
 
         stretch.glyphCount shouldBe text.length
