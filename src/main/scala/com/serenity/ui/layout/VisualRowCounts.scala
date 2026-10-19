@@ -7,8 +7,8 @@ import scala.annotation.tailrec
 
 import com.serenity.config.MarkdownViewMode
 import com.serenity.rope.ChangeSet
-import com.serenity.ui.fonts.FontFallback
 import com.serenity.state.models.{Buffer, BufferId, IndentationSettings}
+import com.serenity.ui.fonts.FontFallback
 
 /** How many visual rows the logical lines of one buffer's content wrap into under one wrap setting -- the counts
   * scrolling, centring, page moves and jumps place the viewport with. Every answer is exact: it measures each line it
