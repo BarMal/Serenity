@@ -137,7 +137,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     drawn: BufferedImage,
     state: AppState,
     scale: Double
-  ): Seq[(Int, Int)] =
+  ): (Seq[(Int, Int)], String) =
     val cold = Pooled(window, 1, scale, persists = false).render(state, Damage.Everything)
     val differing =
       for
@@ -184,9 +184,14 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       case ((before, found), step) =>
         (1 to perFrame).foreach(_ => stateManager.applyEvent(PageDown).unsafeRunSync())
         val after = stateManager.getCurrentState.unsafeRunSync()
-        val diff  = differing(window, frames.render(after, DamageProducer.forTransition(before, after)), after, scale)
-        val top   = after.persisted.buffers.get(id).map(_.viewport.topLine)
-        (after, if diff.isEmpty then found else s"step $step top=$top: ${summary(diff)}" :: found)
+        val (diff, art) =
+          differing(window, frames.render(after, DamageProducer.forTransition(before, after)), after, scale)
+        val top = after.persisted.buffers.get(id).map(_.viewport.topLine)
+        (
+          after,
+          if diff.isEmpty then found
+          else s"step $step top=$top: ${summary(diff)}${if found.isEmpty then art else ""}" :: found
+        )
     }
     steps._2.reverse.take(3)
 
@@ -336,6 +341,27 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     s"PageDown through $documentName with typewriter scrolling and dimming at ${scale}x in a $windowName window" should
       "draw what a cold frame draws at every step" in {
         pagedThrough(writingConfig, window, 2, scale, document, pageDowns = 8) shouldBe empty
+      }
+
+  private def overhanging(count: Int): RichTextDocument =
+    val slanted = RichTextStyle(fontSize = Some(44f), marks = Set(InlineMark.Italic))
+    RichTextDocument(
+      (1 to count).toList.map { paragraph =>
+        RichTextParagraph(List(RichTextRun("fjfjfj fjfj " * (3 + paragraph % 4), slanted)))
+      }
+    )
+
+  for
+    scale <- List(1.0, 2.0)
+    (configName, config) <- List(
+      "the owner's chrome"                -> ownersConfig,
+      "dimming"                           -> ownersConfig.withFocusedTextBody(true),
+      "typewriter scrolling with dimming" -> writingConfig
+    )
+  do
+    s"PageDown through paragraphs whose glyphs reach left of the text column with $configName at ${scale}x" should
+      "leave no pixel of a row's overhang behind and lose none of it" in {
+        pagedThrough(config, Window(1500, 1000), 2, scale, overhanging(10), pageDowns = 6) shouldBe empty
       }
 
   private def endingInAnEmptyChapter(chapterCount: Int, bodies: Int): RichTextDocument =
