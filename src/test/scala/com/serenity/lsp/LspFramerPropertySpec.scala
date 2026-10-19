@@ -116,10 +116,12 @@ class LspFramerPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wi
         Gen.const(bytes),
         Gen.choose(0, 8).map(n => bytes.dropRight(n)),
         Gen.listOfN(3, Gen.choose(0, 255)).map(junk => bytes ++ junk.map(_.toByte)),
-        for
-          at   <- Gen.choose(0, math.max(0, bytes.length - 1))
-          byte <- Gen.choose(0, 255)
-        yield bytes.updated(at, byte.toByte)
+        if bytes.isEmpty then Gen.const(bytes)
+        else
+          for
+            at   <- Gen.choose(0, bytes.length - 1)
+            byte <- Gen.choose(0, 255)
+          yield bytes.updated(at, byte.toByte)
       )
       chunks <- cuts.map(split(damage, _))
     yield chunks
