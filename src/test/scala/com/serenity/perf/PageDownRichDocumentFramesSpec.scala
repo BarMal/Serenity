@@ -63,6 +63,10 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
 
   final private class Pooled(window: Window, pool: Int, scale: Double, persists: Boolean = true):
 
+    val calls = new AtomicReference[Vector[String]](Vector.empty)
+    private def record(call: String): Unit =
+      val _ = calls.updateAndGet(_ :+ call)
+
     private val images = Vector.fill(pool)(
       new BufferedImage(
         math.ceil(window.width * scale).toInt,
@@ -77,8 +81,17 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     private val drawn       = AtomicInteger(0)
     private val lastPlan    = new AtomicReference[Option[com.serenity.ui.renderer.EditorPaneRenderPlan]](None)
 
+    def contentLeftPx: Option[Int] =
+      lastPlan.get().flatMap(_.paneLayouts.values.headOption).map(layout => cellMetrics.toPixelX(layout.contentRect.x))
+
+    def stampPooled(x: Int, ys: List[Int]): Unit =
+      ys.foreach(y => images.head.setRGB(x, y, 0xff00ff))
+
+    def pooledIsStamped(x: Int, y: Int): Boolean = (images.head.getRGB(x, y) & 0xffffff) == 0xff00ff
+
     def render(state: AppState, damage: Damage): BufferedImage =
       val image = images(drawn.getAndIncrement() % pool)
+      calls.set(Vector.empty)
       val surface = new Java2DRenderSurface(
         image,
         cellMetrics,
@@ -90,7 +103,30 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         deviceScaleY = scale,
         contentPersists = persists,
         layerCacheOwnerOverride = Some(screen)
-      )
+      ):
+        override def drawRunPx(
+          xPx: Float,
+          yPx: Int,
+          bgWidthPx: Float,
+          lineHeightPx: Int,
+          ascentPx: Int,
+          s: String,
+          clipGlyphToRun: Boolean
+        ): Unit =
+          record(s"run x=$xPx y=$yPx w=$bgWidthPx h=$lineHeightPx '${s.take(12)}'")
+          super.drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, s, clipGlyphToRun)
+        override def drawShapedRunPx(
+          xPx: Float,
+          yPx: Int,
+          bgWidthPx: Float,
+          lineHeightPx: Int,
+          ascentPx: Int,
+          stretch: String,
+          from: Int,
+          until: Int
+        ): Unit =
+          record(s"shaped x=$xPx y=$yPx w=$bgWidthPx h=$lineHeightPx '${stretch.slice(from, until).take(12)}'")
+          super.drawShapedRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, stretch, from, until)
       val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
       lastPlan.set(
         RendererFramePlanner.renderFrame(
@@ -371,6 +407,38 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       "stop a misspelling's squiggle at the pane's bottom edge, as the row's text stops" in {
         pagedThrough(AppConfig.default, Window(1920, height), 2, scale, chapters(6, 12)) shouldBe empty
       }
+
+  "PageDown through a dimmed typewriter document" should "clear the pixel beside the text column of every row it draws again" in {
+    val document = novel(2, 4)
+    val window   = Window(800, 600)
+    val (stateManager, id) =
+      LaptopFrameBenchmarks.stateManagerHolding(document.plainText, writingConfig, grid = window.viewport)
+    stateManager
+      .updateState(state =>
+        state.copy(persisted =
+          state.persisted.copy(buffers =
+            state.persisted.buffers.updatedWith(id)(
+              _.map(b => b.copy(richText = b.richText.withSyncedDocument(Some(document), b.document.contentVersion)))
+            )
+          )
+        )
+      )
+      .unsafeRunSync()
+    val frames = Pooled(window, 1, 1.0)
+    val first  = stateManager.getCurrentState.unsafeRunSync()
+    val _      = frames.render(first, Damage.Everything)
+    val (_, survivors) = (1 to 3).foldLeft((first, List.empty[String])) {
+      case ((before, found), step) =>
+        stateManager.applyEvent(PageDown).unsafeRunSync()
+        val after = stateManager.getCurrentState.unsafeRunSync()
+        val left  = frames.contentLeftPx.getOrElse(0) - 1
+        val ys    = (60 until 540 by 4).toList
+        frames.stampPooled(left, ys)
+        val _ = frames.render(after, DamageProducer.forTransition(before, after))
+        (after, found ++ ys.filter(y => frames.pooledIsStamped(left, y)).map(y => s"step $step: ($left, $y)"))
+    }
+    survivors.take(3) shouldBe empty
+  }
 
   private def endingInAnEmptyChapter(chapterCount: Int, bodies: Int): RichTextDocument =
     RichTextDocument(
