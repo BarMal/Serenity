@@ -290,15 +290,13 @@ private[layout] object TextCaretMeasurement:
 
     @annotation.tailrec
     def loop(limit: Int): SegmentFit =
-      val carets = normalizeCollapsedCarets(
-        ExactCaretXs.layoutCaretXs(line.substring(from, from + limit), absoluteStartColumn, resolver, frc),
-        resolver,
-        absoluteStartColumn
-      )
-      val firstOver  = carets.indexWhere(_ > width)
+      val stops = ExactCaretXs.layoutStops(line.substring(from, from + limit), absoluteStartColumn, resolver, frc)
+      // A row fits when its own trailing edge does; where that edge is not known (right-to-left text) the stops decide.
+      val edges =
+        stops.trailing.getOrElse(normalizeCollapsedCarets(stops.carets, resolver, absoluteStartColumn))
+      val firstOver  = edges.indexWhere(_ > width)
       val maxFitting = if firstOver < 0 then limit else math.max(0, firstOver - 1)
-      if limit >= remainingLength || carets(limit) > width || maxFitting < limit then
-        SegmentFit(math.max(1, maxFitting))
+      if limit >= remainingLength || edges(limit) > width || maxFitting < limit then SegmentFit(math.max(1, maxFitting))
       else loop(math.min(remainingLength, math.max(limit + 1, limit * 2)))
 
     loop(math.min(remainingLength, ParagraphMeasurement.initialCandidateLength(panelWidthPx, cellMetrics)))

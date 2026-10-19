@@ -86,6 +86,15 @@ final private[layout] class GlyphAdvances private (
     sum(0, 0.0f)
     IArray.unsafeFromArray(carets)
 
+  /** Where each of `count` characters from `from` ends were the row to stop there: the carets without the kerning each
+    * character's successor pulls, which a row that ends at the character does not feel.
+    */
+  def trailingEdgesFrom(from: Int, count: Int): IArray[Float] =
+    val carets = caretsFrom(from, count)
+    IArray.tabulate(count + 1)(index =>
+      if index > 0 && index < count then carets(index) - kernAfter(from + index - 1) else carets(index)
+    )
+
 private[layout] object GlyphAdvances:
 
   /** Shaped and nominal advances closer than this are the same advance read through different arithmetic. */
