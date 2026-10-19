@@ -49,9 +49,10 @@ trait TextDrawing:
     ascentPx: Int,
     stretch: String,
     from: Int,
-    until: Int
+    until: Int,
+    clipGlyphToRun: Boolean = false
   ): Unit =
-    drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, stretch.substring(from, until))
+    drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, stretch.substring(from, until), clipGlyphToRun)
 
   /** Runs `draw` with the surface font swapped for `family` at the current font's style, size and ligature setting, for
     * glyphs the current font has none of. A surface with one font for all text, such as a terminal, draws as it would

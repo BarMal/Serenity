@@ -156,10 +156,23 @@ object CharacterRenderer:
           surface.setForegroundColor(run.foreground)
           surface.setBackgroundColor(run.background)
           withStyle(surface, run.style) {
+            // A fallback glyph can stand taller than the row it sits in, and ink outside the row is not ink a repaint
+            // of the rows beside it would put back, so it is cut to the row.
+            val clipToRow = family.isDefined
             def draw(): Unit =
               if shaped then
-                surface.text.drawShapedRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, stretch, from, until)
-              else surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text)
+                surface.text.drawShapedRunPx(
+                  startXPx,
+                  yPx,
+                  widthPx,
+                  lineHeightPx,
+                  ascentPx,
+                  stretch,
+                  from,
+                  until,
+                  clipToRow
+                )
+              else surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text, clipToRow)
             family.fold(draw())(surface.text.withFallbackFamily(_)(draw()))
           }
 

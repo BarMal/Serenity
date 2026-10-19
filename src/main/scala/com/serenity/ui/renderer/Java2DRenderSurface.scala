@@ -147,9 +147,10 @@ class Java2DRenderSurface(
     ascentPx: Int,
     stretch: String,
     from: Int,
-    until: Int
+    until: Int,
+    clipGlyphToRun: Boolean
   ): Unit =
-    paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun = false) {
+    paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun) {
       val shapedBefore = shapedText.shapings
       val shaped       = shapedText.stretchOf(stretch, g.getFont, renderContext)
       activity.shaped(shapedText.shapings - shapedBefore)

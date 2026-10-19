@@ -79,8 +79,34 @@ object TextLayoutSnapshot:
   ): Vector[Float] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
-    val xs             = caretXs(text, 0, singleFontResolver(font), fontRenderContext, measuredLayout, cellMetrics)
+    val resolver       = plainLineResolver(text, 0, font, fontRenderContext, measuredLayout)
+    val xs             = caretXs(text, 0, resolver, fontRenderContext, measuredLayout, cellMetrics)
     Vector.tabulate(xs.length)(xs(_))
+
+  /** The resolver a line of `text` with no rich-text styling measures with, whose first character is at `startColumn`:
+    * the one the wrapped layout derives for it, so measuring a row's text alone gives the row the wrap produced.
+    */
+  private def plainLineResolver(
+    text: String,
+    startColumn: Int,
+    font: Font,
+    fontRenderContext: FontRenderContext,
+    measuredLayout: Boolean,
+    tabSize: Int = IndentationSettings.DefaultTabSize
+  ): LineFontResolver =
+    LineLayout
+      .lineLayoutInputs(
+        font,
+        fontRenderContext,
+        measuredLayout,
+        RichTextContext.plain.copy(tabSize = tabSize),
+        0,
+        text.length,
+        "",
+        fallbackText = text,
+        fallbackFirstColumn = startColumn
+      )
+      .resolver
 
   def visualLineForText(
     text: String,
@@ -98,7 +124,7 @@ object TextLayoutSnapshot:
         text,
         startColumn,
         startColumn + text.length,
-        singleFontResolver(font),
+        plainLineResolver(text, startColumn, font, fontRenderContext, measuredLayout),
         fontRenderContext,
         measuredLayout,
         cellMetrics
@@ -127,7 +153,7 @@ object TextLayoutSnapshot:
         val visibleColumns = math.max(1, visibleWidthPx / math.max(1, cellMetrics.charWidth))
         math.max(0, safeColumn - visibleColumns + 1)
       else
-        val resolver      = singleFontResolver(font, tabSize)
+        val resolver      = plainLineResolver(lineText, 0, font, fontRenderContext, measuredLayout, tabSize)
         val xs            = caretXs(lineText, 0, resolver, fontRenderContext, measuredLayout, cellMetrics)
         val cursorXPx     = xs(math.min(safeColumn, xs.length - 1))
         val targetLeftXPx = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
