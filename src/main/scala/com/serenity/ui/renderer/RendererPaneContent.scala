@@ -363,7 +363,8 @@ object RendererPaneContent:
               snapshot,
               styledSegments,
               dimmed = !activeBodyLines(visualLine.bufferLine),
-              blendWeight = state.persisted.config.surfaceConfig.diagnosticHighlightBlendWeight
+              blendWeight = state.persisted.config.surfaceConfig.diagnosticHighlightBlendWeight,
+              clipBottomPx = rowsBottomPx
             )
 
             RendererHighlights.renderFindMatchHighlights(

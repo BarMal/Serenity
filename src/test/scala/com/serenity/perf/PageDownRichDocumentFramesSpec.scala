@@ -364,6 +364,15 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         pagedThrough(config, Window(1500, 1000), 2, scale, overhanging(10), pageDowns = 6) shouldBe empty
       }
 
+  for
+    scale  <- List(1.0, 2.0)
+    height <- List(560, 575, 593, 608, 623)
+  do
+    s"PageDown to the end of a spell-checked document in a window ${height}px tall at ${scale}x" should
+      "stop a misspelling's squiggle at the pane's bottom edge, as the row's text stops" in {
+        pagedThrough(AppConfig.default, Window(1920, height), 2, scale, chapters(6, 12)) shouldBe empty
+      }
+
   private def endingInAnEmptyChapter(chapterCount: Int, bodies: Int): RichTextDocument =
     RichTextDocument(
       chapters(chapterCount, bodies).paragraphs ++ List(
