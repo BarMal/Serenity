@@ -56,17 +56,17 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
     rowOf(text, font).widthPx
 
   "A prose line with a codepoint its font lacks" should "put the next caret one fallback advance later" in {
-    val row = rowOf("a中b", codeFont)
+    val row = rowOf("a中b", proseFont)
     row.row.caretXs(2) - row.row.caretXs(1) shouldBe sizePx +- 0.01f
   }
 
   it should "end the row where the fallback glyphs end" in {
-    val row = rowOf("a中文b", codeFont)
-    row.widthPx shouldBe (advanceOf("a", codeFont) + 2 * sizePx + advanceOf("b", codeFont)) +- 0.01f
+    val row = rowOf("a中文b", proseFont)
+    row.widthPx shouldBe (advanceOf("a", proseFont) + 2 * sizePx + advanceOf("b", proseFont)) +- 0.01f
   }
 
   it should "measure each fallback in its own advance" in {
-    val row = rowOf("★中", codeFont)
+    val row = rowOf("★中", proseFont)
     row.row.caretXs(1) shouldBe 0.8f * sizePx +- 0.01f
   }
 
@@ -91,4 +91,46 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
       .boundedVisualLinesForText("hello world", 0, 10_000, proseFont, frc, richText = RichTextContext.plain)
       .head
       .row
+  }
+
+  "A code line (monospaced font)" should "snap a wide character to exactly two cells of the primary's float advance" in {
+    val cell = advanceOf("a", codeFont)
+    val row  = rowOf("a中b", codeFont)
+    row.row.caretXs(1) shouldBe cell +- 0.001f
+    row.row.caretXs(2) shouldBe 3 * cell +- 0.001f
+    row.widthPx shouldBe 4 * cell +- 0.001f
+  }
+
+  it should "snap each character of a run of wide characters" in {
+    val cell = advanceOf("a", codeFont)
+    val row  = rowOf("中文a", codeFont)
+    row.row.caretXs.toVector.map(_ / cell) shouldBe Vector(0.0f, 2.0f, 4.0f, 5.0f).map(identity)
+  }
+
+  it should "give a narrow fallback symbol its own advance" in {
+    val cell = advanceOf("a", codeFont)
+    val row  = rowOf("a★b", codeFont)
+    row.row.caretXs(2) - row.row.caretXs(1) shouldBe 0.8f * sizePx +- 0.01f
+    row.widthPx shouldBe (2 * cell + 0.8f * sizePx) +- 0.01f
+  }
+
+  it should "keep a fixed line pitch however tall the fallback glyphs are" in {
+    FontLoader.isMonospacedFont(codeFont) shouldBe true
+    val plain = rowOf("ab", codeFont)
+    val mixed = rowOf("a中b", codeFont)
+    mixed.heightPx shouldBe plain.heightPx
+    mixed.ascentPx shouldBe plain.ascentPx
+  }
+
+  it should "wrap on the snapped width" in {
+    val cell = advanceOf("a", codeFont)
+    val rows = TextLayoutSnapshot.boundedVisualLinesForText(
+      "中文中文",
+      0,
+      math.round(5 * cell),
+      codeFont,
+      frc,
+      richText = context()
+    )
+    rows.map(_.text) shouldBe Vector("中文", "中文")
   }
