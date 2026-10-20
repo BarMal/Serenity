@@ -16,6 +16,9 @@ object LegacyStatusLineKeys:
   private val PlacementKeys = Set("cursor.info_bar.placement", "cursor.info.bar.placement", "cursor_info_bar_placement")
   private val GutterKeys    = Set("display.gutter", "display_gutter")
   private val WordCountKeys = Set("display.word_count", "display.word.count", "display_word_count")
+
+  /** Every key that sets the status line from before `status.*`. */
+  val Keys: Set[String]      = SegmentKeys ++ PlacementKeys ++ GutterKeys ++ WordCountKeys
   private val ModeCornerKeys = Set("widget.mode_tab_corner", "widget_mode_tab_corner")
 
   val replacements: Map[String, String] =

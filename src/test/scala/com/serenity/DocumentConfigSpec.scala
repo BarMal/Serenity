@@ -22,12 +22,12 @@ class DocumentConfigSpec extends AnyFlatSpec with Matchers:
 
   it should "group markdown view and default document mode under AppConfig" in {
     val config = AppConfig.default
-      .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      .withMarkdownViewMode(MarkdownViewMode.LivePreview)
       .withDefaultDocumentMode(DefaultDocumentMode.RichText)
 
     config.documentConfig.shouldBe(
       DocumentConfig(
-        markdownViewMode = MarkdownViewMode.InlineLens,
+        markdownViewMode = MarkdownViewMode.LivePreview,
         defaultMode = DefaultDocumentMode.RichText
       )
     )

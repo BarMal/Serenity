@@ -192,6 +192,13 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
   it should "center on the bounding box of a same-line selection" in {
     val stateManager = createProseStateManager("ContextualToolbarSpec-inline-selection-center")
 
+    // The selection's centre is a cell count only on a cell grid; in the windowed editor the prose font's glyph widths
+    // set it, and `GuiPopupAnchorSpec` covers that placement.
+    stateManager
+      .updateState(state =>
+        state.copy(runtime = state.runtime.copy(capabilities = com.serenity.frontend.FrontendCapabilities.tui()))
+      )
+      .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 30))).unsafeRunSync()
     stateManager
       .updateState { state =>

@@ -1,5 +1,6 @@
 package com.serenity.ui.renderer
 
+import com.serenity.config.CursorMode
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -17,4 +18,9 @@ class HardwareCursorSpec extends AnyFlatSpec with Matchers:
     HardwareCursorStyle(HardwareCursorShape.Underline, blinking = false).decscusrParam shouldBe 4
     HardwareCursorStyle(HardwareCursorShape.Bar, blinking = true).decscusrParam shouldBe 5
     HardwareCursorStyle(HardwareCursorShape.Bar, blinking = false).decscusrParam shouldBe 6
+  }
+
+  "HardwareCursorStyle.forMode" should "ask the terminal to blink its block cursor only in blink mode (#1886)" in {
+    HardwareCursorStyle.forMode(CursorMode.Blink).decscusrParam shouldBe 1
+    HardwareCursorStyle.forMode(CursorMode.Steady).decscusrParam shouldBe 2
   }

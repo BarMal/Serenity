@@ -97,6 +97,7 @@ object TextEditing:
   def previousGraphemeBoundary(source: CharacterSource, cursor: Int): Int =
     val idx = clamp(cursor, source.length)
     if idx <= 0 then 0
+    else if isPlainBoundary(source, idx - 1) then idx - 1
     else graphemeBreakIterator(source).preceding(idx)
 
   def nextGraphemeBoundary(text: String, cursor: Int): Int =
@@ -105,6 +106,7 @@ object TextEditing:
   def nextGraphemeBoundary(source: CharacterSource, cursor: Int): Int =
     val idx = clamp(cursor, source.length)
     if idx >= source.length then source.length
+    else if isPlainBoundary(source, idx + 1) then idx + 1
     else graphemeBreakIterator(source).following(idx)
 
   def graphemeBoundaryBeforeOrAt(text: String, cursor: Int): Int =
@@ -113,6 +115,7 @@ object TextEditing:
   def graphemeBoundaryBeforeOrAt(source: CharacterSource, cursor: Int): Int =
     val idx = clamp(cursor, source.length)
     if idx <= 0 then 0
+    else if isPlainBoundary(source, idx) then idx
     else
       val previous = previousGraphemeBoundary(source, idx)
       if nextGraphemeBoundary(source, previous) == idx then idx
@@ -124,10 +127,24 @@ object TextEditing:
   def graphemeBoundaryAfterOrAt(source: CharacterSource, cursor: Int): Int =
     val idx = clamp(cursor, source.length)
     if idx >= source.length then source.length
+    else if isPlainBoundary(source, idx) then idx
     else
       val next = nextGraphemeBoundary(source, idx)
       if previousGraphemeBoundary(source, next) == idx then idx
       else next
+
+  /** Below U+0300 no character extends, joins or prepends to a neighbour, so a position between two of them is a
+    * grapheme boundary except inside CR LF -- decided from two characters, without entering UAX #29. The ends of the
+    * text are boundaries. `false` means "not known to be one", not "is inside a cluster".
+    */
+  private def isPlainBoundary(source: CharacterSource, index: Int): Boolean =
+    index <= 0 || index >= source.length || {
+      val before = source.charAt(index - 1)
+      val after  = source.charAt(index)
+      before < FirstCombiningMark && after < FirstCombiningMark && !(before == '\r' && after == '\n')
+    }
+
+  private val FirstCombiningMark = '\u0300'
 
   def isWholeGraphemeRange(text: String, start: Int, end: Int): Boolean =
     isWholeGraphemeRange(StringCharacterSource(text), start, end)

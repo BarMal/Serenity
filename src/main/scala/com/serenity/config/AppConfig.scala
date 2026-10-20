@@ -5,8 +5,10 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.config.LspUserConfig
-import com.serenity.state.models.SurfacePlacement
+import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.openings.OpeningSettings
+import com.serenity.ui.theme.{DropCapColour, DropCapGap, HeadingSettings}
 
 /** Global application configuration */
 final case class AppConfig(
@@ -22,8 +24,26 @@ final case class AppConfig(
     appModeConfig: AppModeConfig = AppModeConfig(),
     statusLine: StatusLineConfig = StatusLineConfig.default,
     exportTypographyConfig: ExportTypographyConfig = ExportTypographyConfig(),
-    autoSaveConfig: AutoSaveConfig = AutoSaveConfig()
+    autoSaveConfig: AutoSaveConfig = AutoSaveConfig(),
+    headingsConfig: HeadingsConfig = HeadingsConfig(),
+    openingsConfig: OpeningSettings = OpeningSettings.default
 ):
+
+  /** Resolved once per config: the logical body is the prose size before any device scale, so a hi-DPI display never
+    * tightens the headings.
+    */
+  lazy val headingSettings: HeadingSettings =
+    headingsConfig.settings(editorConfig.fontConfig.logicalTextFontSize)
+
+  /** The same settings for a terminal, where a level left on auto climbs the ladder and a rule can be drawn. */
+  lazy val terminalHeadingSettings: HeadingSettings =
+    headingsConfig.settings(editorConfig.fontConfig.logicalTextFontSize, terminal = true)
+
+  def withHeadingsConfig(config: HeadingsConfig): AppConfig =
+    copy(headingsConfig = config)
+
+  def withOpeningsConfig(config: OpeningSettings): AppConfig =
+    copy(openingsConfig = config.normalized)
 
   def withEditorConfig(config: EditorConfig): AppConfig =
     copy(editorConfig = config.normalized)
@@ -49,6 +69,13 @@ final case class AppConfig(
   def markdownViewMode: MarkdownViewMode =
     documentConfig.markdownViewMode
 
+  /** The view mode layout restyles inline Markdown by. Multi-column pages lay out their own window of rows, which hides
+    * no markers, so a page layout is laid out as source whatever the mode says.
+    */
+  def inlineMarkdownViewMode: MarkdownViewMode =
+    if surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled then MarkdownViewMode.Source
+    else markdownViewMode
+
   def defaultDocumentMode: DefaultDocumentMode =
     documentConfig.defaultMode
 
@@ -65,11 +92,26 @@ final case class AppConfig(
   def interfaceDensity: InterfaceDensity =
     interfaceConfig.density
 
+  def fileDialogMode: FileDialogMode =
+    interfaceConfig.fileDialog
+
   def uiElementGap: Option[Double] =
     interfaceConfig.elementGap
 
   def uiOutlineThicknessPx: Int =
     interfaceConfig.outlineThicknessPx
+
+  def menuBarMode: MenuBarMode =
+    interfaceConfig.menuBar
+
+  def summon: SummonConfig =
+    inputConfig.summon
+
+  def uiLayout: UiLayout =
+    interfaceConfig.layout
+
+  def tabStripMode: TabStripMode =
+    surfaceConfig.tabStrip
 
   def uiChromeScale: Double =
     editorConfig.fontConfig.uiChromeScale
@@ -87,6 +129,11 @@ final case class AppConfig(
   /** Create a new config with as-you-type smart punctuation (curly quotes, em dashes, ellipses) toggled */
   def withSmartPunctuation(enabled: Boolean): AppConfig =
     withLanguageToolsConfig(languageToolsConfig.copy(smartPunctuationEnabled = enabled))
+
+  def withLargeFilePolicy(policy: LargeFilePolicy): AppConfig =
+    withLanguageToolsConfig(languageToolsConfig.copy(largeFile = policy))
+
+  def largeFiles: LargeFilePolicy = languageToolsConfig.largeFile
 
   def withHotkeyConfig(config: HotkeyConfig): AppConfig =
     withInputConfig(inputConfig.copy(hotkeyConfig = config))
@@ -134,6 +181,11 @@ final case class AppConfig(
   def withMinimumPaneWidth(width: Int): AppConfig =
     withEditorConfig(editorConfig.copy(minimumPaneWidth = width))
 
+  def withIndentation(settings: IndentationSettings): AppConfig =
+    withEditorConfig(editorConfig.copy(indentation = settings))
+
+  def indentation: IndentationSettings = editorConfig.indentation
+
   /** Create a new config with line numbers toggled */
   def withLineNumbers(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(showLineNumbers = enabled))
@@ -152,6 +204,12 @@ final case class AppConfig(
   /** Selects how document comments become visible: floating on-demand lens or persistent margin (#1222). */
   def withCommentDisplayMode(mode: CommentDisplayMode): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(commentDisplayMode = mode))
+
+  def withScrollbar(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(scrollbarEnabled = enabled))
+
+  def withTabStrip(mode: TabStripMode): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(tabStrip = mode))
 
   /** Create a new config with word wrapping toggled */
   def withWordWrap(enabled: Boolean): AppConfig =
@@ -222,6 +280,9 @@ final case class AppConfig(
 
   def withStartupWarmUp(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(startupWarmUpEnabled = enabled))
+
+  def withMemoryCompaction(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(memoryCompactionEnabled = enabled))
 
   def withDiagnosticHighlightBlendWeight(weight: Double): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(diagnosticHighlightBlendWeight = weight))
@@ -295,9 +356,31 @@ final case class AppConfig(
   def commentAuthor: String =
     documentConfig.commentAuthor.getOrElse(CommentAuthor.osUserName)
 
+  def withChapterGhosts(enabled: Boolean): AppConfig =
+    withDocumentConfig(documentConfig.copy(chapterGhosts = enabled))
+
+  def analysisDebounce: FiniteDuration =
+    FiniteDuration(documentConfig.analysisDebounceMillis, MILLISECONDS)
+
+  def withAnalysisDebounceMillis(millis: Long): AppConfig =
+    withDocumentConfig(documentConfig.copy(analysisDebounceMillis = millis.max(0L)))
+
+  def outlineDebounce: FiniteDuration =
+    FiniteDuration(documentConfig.outlineDebounceMillis, MILLISECONDS)
+
+  def withOutlineDebounceMillis(millis: Long): AppConfig =
+    withDocumentConfig(documentConfig.copy(outlineDebounceMillis = millis.max(0L)))
+
   /** Create a new config with the multi-line drop cap paragraph role's rendering enabled or disabled. */
   def withDropCapsEnabled(enabled: Boolean): AppConfig =
     withDocumentConfig(documentConfig.copy(dropCapsEnabled = enabled))
+
+  /** The room beside a drop cap's glyph, in em of the body font, kept within what the config file accepts. */
+  def withDropCapGapEm(gapEm: Float): AppConfig =
+    withDocumentConfig(documentConfig.copy(dropCapGapEm = DropCapGap.clamped(gapEm)))
+
+  def withDropCapColour(colour: DropCapColour): AppConfig =
+    withDocumentConfig(documentConfig.copy(dropCapColour = colour))
 
   def withAutoSaveConfig(config: AutoSaveConfig): AppConfig =
     copy(autoSaveConfig = config)
@@ -326,8 +409,23 @@ final case class AppConfig(
   def withInterfaceDensity(density: InterfaceDensity): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(density = density))
 
+  def withFileDialogMode(mode: FileDialogMode): AppConfig =
+    withInterfaceConfig(interfaceConfig.copy(fileDialog = mode))
+
   def withUiElementGap(gap: Option[Double]): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(elementGap = gap))
+
+  /** Records which layout the config sits on without moving any chrome. [[LayoutPreset.rebase]] is what changes the
+    * layout of a running config; the config file reader needs this plain setter, since it has chosen the base itself.
+    */
+  def withUiLayout(layout: UiLayout): AppConfig =
+    withInterfaceConfig(interfaceConfig.copy(layout = layout))
+
+  def withSummon(summon: SummonConfig): AppConfig =
+    withInputConfig(inputConfig.copy(summon = summon))
+
+  def withMenuBarMode(mode: MenuBarMode): AppConfig =
+    withInterfaceConfig(interfaceConfig.copy(menuBar = mode))
 
   def withUiOutlineThicknessPx(thickness: Int): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(outlineThicknessPx = thickness))
@@ -421,10 +519,16 @@ object AppConfig:
     if weight.isFinite then weight.max(MinDiagnosticHighlightBlendWeight).min(MaxDiagnosticHighlightBlendWeight)
     else MinDiagnosticHighlightBlendWeight
 
-  /** What the app ships with.
+  /** What the app ships with: the minimal layout.
     *
-    * Only the settings that differ from their own field's default belong here. Restating one that already matches hides
-    * which of the two is the real answer -- four of these used to, and telling them apart meant reading both.
-    * `ConfigRegistry.defaults` lists every setting's default, and `docs/default-config.conf` is generated from it.
+    * Only the settings that differ from their own field's default belong anywhere but [[LayoutPreset]]. Restating one
+    * that already matches hides which of the two is the real answer -- four of these used to, and telling them apart
+    * meant reading both. `ConfigRegistry.defaults` lists every setting's default, and `docs/default-config.conf` is
+    * generated from it.
     */
-  val default: AppConfig = AppConfig()
+  val default: AppConfig = LayoutPreset.base(UiLayout.Minimal)
+
+  /** The chrome earlier builds showed: line numbers, pane headers, a pinned status bar, the tab strip and a scrollbar.
+    * Specs that need chrome on, and the built-in workspace presets, start from this.
+    */
+  val conventional: AppConfig = LayoutPreset.base(UiLayout.Conventional)

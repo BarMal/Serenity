@@ -89,7 +89,7 @@ class LspDocumentSyncViewportSpec extends AnyFlatSpec with Matchers:
     val effects = effectsOf(before, after)
 
     effects.collect {
-      case AppEffect.LspQueue(LspQueueEffect.DocumentChanged(changed, _, text)) =>
+      case AppEffect.LspQueue(LspQueueEffect.DocumentChanged(changed, _, text, _)) =>
         (changed, text.collect())
     } shouldBe List((uri, document + "\nc"))
     effects.drop(1) shouldBe List(

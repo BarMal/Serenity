@@ -7,9 +7,20 @@ final case class PixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int):
 
   def bottomPx: Int = yPx + heightPx
 
+  def contains(pixelX: Int, pixelY: Int): Boolean =
+    pixelX >= xPx && pixelX < rightPx && pixelY >= yPx && pixelY < bottomPx
+
   /** Whether this rectangle shares any pixels with `other`. Touching edges (zero-area overlap) do not count. */
   def intersects(other: PixelRect): Boolean =
     xPx < other.rightPx && other.xPx < rightPx && yPx < other.bottomPx && other.yPx < bottomPx
+
+  /** The pixels both rectangles cover, if any. */
+  def intersection(other: PixelRect): Option[PixelRect] =
+    val left   = xPx.max(other.xPx)
+    val top    = yPx.max(other.yPx)
+    val right  = rightPx.min(other.rightPx)
+    val bottom = bottomPx.min(other.bottomPx)
+    Option.when(left < right && top < bottom)(PixelRect(left, top, right - left, bottom - top))
 
   /** The smallest rectangle covering both, used to fold a set of dirty rows into one repaint region. */
   def union(other: PixelRect): PixelRect =

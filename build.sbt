@@ -7,6 +7,9 @@ ThisBuild / scalaVersion := "3.9.0"
 ThisBuild / licenses := Seq("GPL-3.0-or-later" -> url("https://www.gnu.org/licenses/gpl-3.0.txt"))
 ThisBuild / homepage := Some(url("https://github.com/BarMal/Serenity"))
 
+// sbt-sbom reads these through its makeBom command, which the unused-key lint cannot see.
+Global / excludeLintKeys ++= Set(bomFileName, projectType)
+
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 
@@ -100,6 +103,12 @@ lazy val root = (project in file("."))
       out
     },
     name := "Serenity",
+    // The CycloneDX SBOM shipped with each release (#2017). The project has no Runtime-only dependencies, so the
+    // default Compile scope is exactly the runtime classpath that ends up in the assembled jar. Serial number and
+    // timestamp stay off (the plugin default) so the same dependency graph always yields byte-identical output.
+    organization := "io.github.barmal",
+    bomFileName := "Serenity.cdx.json",
+    projectType := "application",
     // WartRemover encodes rules docs/coding-standards.md and CLAUDE.md already state in prose.
     // Main sources only: tests legitimately use throw/null/partial access to build failure fixtures,
     // mirroring how Test / scalacOptions already relaxes the -W flags above.
@@ -151,8 +160,7 @@ lazy val root = (project in file("."))
     wartremoverExcluded ++= Seq(
       baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "ui" / "terminal",
       baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "ui" / "accessibility",
-      baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "lsp" / "client",
-      baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "richtext"
+      baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "lsp" / "client"
     ),
     architectureBaselineFile := baseDirectory.value / "project" / "architecture-baseline.tsv",
     architectureChecksSelfTest := {
@@ -191,11 +199,12 @@ lazy val root = (project in file("."))
     Compile / sourceGenerators += Def.task {
       val generated  = (Compile / sourceManaged).value / "com" / "serenity" / "BuildInfo.scala"
       val root       = baseDirectory.value
+      val log        = streams.value.log
       val commit     = gitOutput(root, "rev-parse", "HEAD").getOrElse("unknown")
       val commitTime = gitOutput(root, "log", "-1", "--format=%cI").getOrElse("unknown")
       val resolved = packageVersion.value.fold(
         problem => {
-          streams.value.log.warn(s"BuildInfo falls back to ${PackageVersion.FirstVersion}/dev: $problem")
+          log.warn(s"BuildInfo falls back to ${PackageVersion.FirstVersion}/dev: $problem")
           PackageVersion.Result(PackageVersion.FirstVersion, PackageVersion.Channel.Dev)
         },
         identity
@@ -245,6 +254,12 @@ lazy val root = (project in file("."))
         file,
         ThirdPartyNotices.runtimeModulesOf((Runtime / managedClasspath).value).map(_.key).distinct.sorted.mkString("\n")
       )
+      Seq(file)
+    }.taskValue,
+    // The SBOM the release ships, handed to SbomSpec so it can check it against the notices' module list.
+    Test / resourceGenerators += Def.task {
+      val file = (Test / resourceManaged).value / "sbom" / "Serenity.cdx.json"
+      IO.copyFile(makeBom.value, file)
       Seq(file)
     }.taskValue,
     // The classpath the kill-recovery spec launches its child JVM with: sbt runs specs in its own JVM, whose
@@ -316,7 +331,8 @@ lazy val root = (project in file("."))
     // one level more specific than the plain `Test / testOptions` above that `testOnly` still falls back to
     // unfiltered, so `realBoundaryTest` below can name these specs directly and still run them.
     Test / test / testOptions := (Test / testOptions).value ++ Seq(
-      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.RealBoundaryTest")
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.RealBoundaryTest"),
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeapMeasurementTest")
     )
   )
 
@@ -330,6 +346,14 @@ realBoundaryTest := (Test / testOnly)
   .toTask(
     " com.serenity.lsp.LspConnectionRealSocketIntegrationSpec com.serenity.ui.tui.TerminalShellRealSignalIntegrationSpec"
   )
+  .value
+
+// Runs the specs that read the whole JVM heap (see HeapMeasurementTest) on their own, so no other suite allocates or
+// stalls on their forced collections while they measure.
+lazy val heapMeasurementTest = taskKey[Unit]("Run the heap-measurement specs excluded from `sbt test`")
+
+heapMeasurementTest := (Test / testOnly)
+  .toTask(" com.serenity.perf.FootprintBenchmarksSpec")
   .value
 
 libraryDependencies ++= Seq(

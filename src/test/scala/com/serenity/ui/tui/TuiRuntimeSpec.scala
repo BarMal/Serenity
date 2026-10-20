@@ -80,6 +80,10 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     def send(bytes: Array[Byte]): Unit = reader.feed(bytes)
 
+    def sendThenPause(bytes: Array[Byte]): Unit =
+      reader.feed(bytes)
+      reader.feedPause()
+
   private def liveInputTerminal(): LiveHarness =
     val out                = new ByteArrayOutputStream()
     val (terminal, reader) = FakeTerminalReader.dumbTerminal(new org.jline.terminal.Size(80, 24), out)
@@ -93,7 +97,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       openPath = Some(file),
       configPersistencePath = None,
       hasDisplay = false,
@@ -124,11 +128,12 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       openPath = Some(file),
       configPersistencePath = None,
       hasDisplay = false,
-      sessionRootOverride = Some(sessionRoot)
+      sessionRootOverride = Some(sessionRoot),
+      escDeadline = TuiEnvironment.PausesOnlyEscDeadline
     )
 
     val fiber = program.start.unsafeRunSync()
@@ -136,8 +141,9 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     // Losing then regaining focus (terminal focus reporting, CSI O / CSI I) should be silently absorbed -- parking
     // and resuming the idle cursor tick internally -- rather than being decoded as ordinary keystrokes or otherwise
     // disrupting the input stream.
-    harness.send(esc.getBytes(StandardCharsets.UTF_8) ++ "[O".getBytes(StandardCharsets.UTF_8))
-    harness.send(esc.getBytes(StandardCharsets.UTF_8) ++ "[I".getBytes(StandardCharsets.UTF_8))
+    // Each report is followed by an explicit pause, so no wall-clock deadline decides where a sequence ends.
+    harness.sendThenPause(esc.getBytes(StandardCharsets.UTF_8) ++ "[O".getBytes(StandardCharsets.UTF_8))
+    harness.sendThenPause(esc.getBytes(StandardCharsets.UTF_8) ++ "[I".getBytes(StandardCharsets.UTF_8))
     harness.send(Array('h'.toByte, 'i'.toByte))
     harness.send(Array(ctrl('s')))
 
@@ -160,7 +166,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       openPath = Some(file),
       configPersistencePath = None,
       hasDisplay = false,
@@ -178,7 +184,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       // A path inside a directory that does not exist: StateManager.openFile fails opening it, which should still
       // leave the terminal properly restored via TerminalShell's Resource release.
       openPath = Some(java.nio.file.Path.of("/nonexistent-tui-runtime-failure-dir/does-not-exist.md")),
@@ -210,7 +216,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       openPath = Some(file),
       configPersistencePath = None,
       hasDisplay = false,
@@ -239,7 +245,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       openPath = Some(file),
       configPersistencePath = None,
       hasDisplay = false,
@@ -282,7 +288,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       openPath = Some(file),
       configPersistencePath = None,
       hasDisplay = false,

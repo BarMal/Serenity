@@ -7,6 +7,7 @@ import com.serenity.lsp.model.Diagnostic
 import com.serenity.rope.{Balance, RopeDiff}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
+import com.serenity.ui.openings.{LineEdit, OpeningInvalidation, VirtualDropCaps}
 
 /** Computes what a transition between two `AppState`s damaged, so the render loop doesn't have to rediscover it by
   * diffing frames -- the wake-up decision this drives is wired in by `#998` (`AppRuntime.inputEventPhase`). `#999`
@@ -52,8 +53,12 @@ object DamageProducer:
               granularity
             )
     }
-    bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+|
+    val damage = bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+|
       paneChromeDamage(before, after) |+| statusLineDamage(before, after) |+| tabBarDamage(before, after)
+    // Every combine regroups all the facts it holds, so a transition that grabs no thumb does not pay for one.
+    scrollbarDamage(before, after) match
+      case Damage.Nothing => damage
+      case grabbed        => damage |+| grabbed
 
   /** Everything about one buffer's own state that can dirty its visible rows without necessarily touching its rope
     * content -- cursor and selection movement, comment/diagnostic annotation changes, and a language reclassification
@@ -69,7 +74,8 @@ object DamageProducer:
     afterBuffer: Buffer,
     granularity: RenderDamageGranularity
   )(using Balance): Damage =
-    val content = contentDamage(bufferId, beforeBuffer, afterBuffer, granularity)
+    val content = contentDamage(bufferId, beforeBuffer, afterBuffer, granularity) |+|
+      openingsDamage(bufferId, before, after, beforeBuffer, afterBuffer)
     content |+|
       cursorDamage(bufferId, beforeBuffer, afterBuffer, Damage.damagedLines(bufferId, content)) |+|
       selectionDamage(bufferId, beforeBuffer, afterBuffer) |+|
@@ -89,11 +95,63 @@ object DamageProducer:
   )(using Balance): Damage =
     if isSameReference(before.document.content, after.document.content) then Damage.Nothing
     else
-      RopeDiff.changedOffsetRange(before.document.content, after.document.content) match
+      changedOffsetRange(before.document, after.document) match
         case None => Damage.Nothing
         case Some((start, end)) =>
           cellDamage(bufferId, after, start, end, granularity)
             .getOrElse(Damage.BufferRows(bufferId, rowsForOffsetRange(after, start, end)))
+
+  /** A virtual drop cap is the opening's alone, so an edit that is not to the opening can still give it one or take it
+    * away, and the frames alone cannot say so to a screen that shows the frame before last. The damage names the
+    * paragraphs such an edit may have turned into openings or out of them; a change to the settings a buffer is laid
+    * out with damages all of it. Nothing while no virtual drop caps are drawn.
+    */
+  private def openingsDamage(
+    bufferId: BufferId,
+    before: AppState,
+    after: AppState,
+    beforeBuffer: Buffer,
+    afterBuffer: Buffer
+  )(using Balance): Damage =
+    val settingsBefore = beforeBuffer.effectiveOpenings(before.persisted.config.openingsConfig).layoutForm
+    val settingsAfter  = afterBuffer.effectiveOpenings(after.persisted.config.openingsConfig).layoutForm
+    if settingsBefore != settingsAfter then Damage.BufferAll(bufferId)
+    else if !VirtualDropCaps
+          .drawn(settingsAfter) || isSameReference(beforeBuffer.document.content, afterBuffer.document.content)
+    then Damage.Nothing
+    else
+      (beforeBuffer.richText.richTextDocument, afterBuffer.richText.richTextDocument) match
+        case (Some(was), Some(now)) =>
+          val edit = LineEdit.between(
+            beforeBuffer.document.content,
+            afterBuffer.document.content,
+            afterBuffer.document.changeFrom(beforeBuffer.document)
+          )
+          val lines = OpeningInvalidation.widenedParagraphs(was, now, edit).toSet
+          if VirtualDropCaps
+                .growsRows(settingsAfter) && (lines.nonEmpty || mayChangeFirstLetter(beforeBuffer, afterBuffer, edit))
+          then Damage.BufferAll(bufferId)
+          else if lines.isEmpty then Damage.Nothing
+          else Damage.BufferRows(bufferId, lines)
+        case _ => Damage.Nothing
+
+  /** Whether an edit can change the first letter of a paragraph, or whether it has one at all: it spans lines, or
+    * starts within the first character. A first row that grows to hold its letter changes height with either, which
+    * moves every row below it without those rows being edited.
+    */
+  private def mayChangeFirstLetter(before: Buffer, after: Buffer, edit: LineEdit)(using Balance): Boolean =
+    edit.oldCount > 1 || edit.newCount > 1 ||
+      changedOffsetRange(before.document, after.document).forall((start, _) =>
+        after.document.content.offsetToLineColumn(start)._2 <= 1
+      )
+
+  /** The range of `after`'s text that `before`'s edits replaced: taken from the change `after` recorded when it has
+    * one, found by walking the two ropes otherwise (a reload, a restored session).
+    */
+  private def changedOffsetRange(before: Document, after: Document)(using Balance): Option[(Int, Int)] =
+    after.changeFrom(before) match
+      case Some(change) => change.newEnvelope
+      case None         => RopeDiff.changedOffsetRange(before.content, after.content)
 
   /** Column-precise damage for an edit confined to one row of a monospaced buffer under `Cells` granularity. `None`
     * whenever that doesn't hold, so the caller falls back to row-level damage -- multi-row edits (including a merged
@@ -205,11 +263,19 @@ object DamageProducer:
         SpellChecker.diagnosticsUri(beforeBuffer),
         Nil
       )
+    val afterUri = SpellChecker.diagnosticsUri(afterBuffer)
     val afterDiagnostics =
-      after.runtime.languageService.diagnosticsState.diagnostics
-        .getOrElse(SpellChecker.diagnosticsUri(afterBuffer), Nil)
-    if beforeDiagnostics == afterDiagnostics then Damage.Nothing
-    else Damage.BufferRows(bufferId, diagnosticLines(beforeDiagnostics) ++ diagnosticLines(afterDiagnostics))
+      after.runtime.languageService.diagnosticsState.diagnostics.getOrElse(afterUri, Nil)
+    // Edits carry diagnostics along with the text, so most are the same on both sides; only the changed ones need
+    // their rows repainted.
+    val lines = AnnotationLineIndex
+      .changedLines(
+        beforeDiagnostics,
+        afterDiagnostics,
+        after.runtime.languageService.diagnosticsState.lastMoves.get(afterUri)
+      )
+      .getOrElse(diagnosticLines(beforeDiagnostics) ++ diagnosticLines(afterDiagnostics))
+    if lines.isEmpty then Damage.Nothing else Damage.BufferRows(bufferId, lines)
 
   private def diagnosticLines(diagnostics: List[Diagnostic]): Set[Int] =
     diagnostics.iterator.flatMap(diagnostic => diagnostic.range.start.line to diagnostic.range.end.line).toSet
@@ -221,16 +287,19 @@ object DamageProducer:
     if before.document.language == after.document.language then Damage.Nothing
     else Damage.BufferAll(bufferId)
 
-  /** Scrolling shifts which buffer line each visual row shows, so every visible row's content changes even though
-    * nothing about the buffer's own data did -- this producer has no layout knowledge of which rows are actually on
-    * screen, so it reports every row, the same coarse-but-safe bias [[languageDamage]] uses. `Renderer`'s retired
-    * row-by-row structural diff already redrew close to every visible row on a scroll in practice (a shifted row rarely
-    * matches what the previous frame had at the same row index), so this is not a regression from the pixels it
-    * replaces.
+  /** Scrolling shifts which buffer line each visual row shows without changing any row's own pixels, so a renderer that
+    * matches rows by identity can move them instead of redrawing them: [[Damage.BufferScrolled]], one fact whatever the
+    * buffer's size. Any other viewport change (a resize, a horizontal scroll) re-lays every row out, which is
+    * [[Damage.BufferAll]]. `placement` says only whether a typed key's caret still has to place the viewport, which
+    * nothing painted depends on.
     */
   private def viewportDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
-    if before.viewport == after.viewport then Damage.Nothing
-    else Damage.BufferAll(bufferId)
+    val (was, now) = (before.viewport, after.viewport)
+    if was == now then Damage.Nothing
+    else if was.copy(topLine = now.topLine, topVisualLine = now.topVisualLine, placement = now.placement) != now then
+      Damage.BufferAll(bufferId)
+    else if was.topLine == now.topLine && was.topVisualLine == now.topVisualLine then Damage.Nothing
+    else Damage.BufferScrolled(bufferId)
 
   /** `RendererPaneContent.focusedTextBodyLines` dims every row outside the active paragraph/markdown-block around the
     * cursor. Moving the cursor within the same block changes nothing this needs to report beyond what [[cursorDamage]]
@@ -269,7 +338,7 @@ object DamageProducer:
     * having to enumerate what every field does to a rendered frame.
     */
   private def chromeDamage(before: AppState, after: AppState): Damage =
-    if before.persisted.theme != after.persisted.theme ||
+    if before.persisted.theme != after.persisted.theme || before.runtime.summons != after.runtime.summons ||
         !(before.persisted.config == after.persisted.config || statusRowOnly(
           before.persisted.config,
           after.persisted.config
@@ -362,15 +431,24 @@ object DamageProducer:
     else Damage.Surface(UiSurface.StatusLineSurfaceId)
 
   /** The tab strip is derived too (`AppState.tabBarSurface`), and shows each buffer's title and dirty glyph -- the same
-    * facts a pane header shows, so it changes on the keystroke that raises [[Damage.PaneChrome]], which no longer
-    * repaints the whole canvas by itself. Only a strip shown on both sides is compared: one appearing or going away is
-    * left to whatever reported it before.
+    * facts a pane header shows, so it changes on the keystroke that raises [[Damage.PaneChrome]]. A strip shown on both
+    * sides stays inside its own rect, so its change is scoped to the strip. Only a strip shown on both sides is
+    * compared: one appearing or going away is left to whatever reported it before.
     */
   private def tabBarDamage(before: AppState, after: AppState): Damage =
     (before.tabBarSurface, after.tabBarSurface) match
       case (Some(beforeStrip), Some(afterStrip)) if beforeStrip != afterStrip =>
         Damage.Surface(UiSurface.TabBarSurfaceId)
       case _ => Damage.Nothing
+
+  /** A held thumb is painted differently, and nothing in the buffer says so. The thumb's position needs no fact here:
+    * scrolling and editing already report their damage, and the renderer finds the bar moved from its own geometry.
+    */
+  private def scrollbarDamage(before: AppState, after: AppState): Damage =
+    val (was, now) = (before.runtime.pointerGesture.scrollbarGrab, after.runtime.pointerGesture.scrollbarGrab)
+    if was == now then Damage.Nothing
+    else
+      (was.toList ++ now.toList).foldLeft(Damage.Nothing: Damage)((acc, grab) => acc |+| Damage.Scrollbar(grab.paneId))
 
   /** Whether `before`/`after` present the same *kind* of [[SurfacePresentation]] (ignoring the fields a non-marker kind
     * carries, e.g. a `Floating` surface's anchor/placement) -- the presentation-stability half of
@@ -442,6 +520,6 @@ object DamageProducer:
     if statusRowInputs(before) == statusRowInputs(after) then Damage.Nothing else Damage.Chrome
 
   private def statusRowInputs(state: AppState): Option[(Option[String], Boolean)] =
-    Option.when(state.persisted.config.statusLine.isPinned)((state.statusLineText, state.activeBuffer.isDefined))
+    Option.when(state.chrome.statusLine.isPinned)((state.statusLineText, state.activeBuffer.isDefined))
 
   private def isSameReference(a: AnyRef, b: AnyRef): Boolean = a eq b

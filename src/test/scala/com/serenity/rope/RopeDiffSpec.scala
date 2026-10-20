@@ -63,35 +63,35 @@ class RopeDiffSpec extends AnyFlatSpec with Matchers:
     RopeDiff.changedOffsetRange(before, after) shouldBe Some((0, 0))
   }
 
-  it should "still cover the edit when it triggers a leaf rebuild" in {
-    // Balance.default.leafChunkSize is 1000: growing a leaf past that forces Leaf.rebalance to rebuild via Rope.apply,
-    // constructing fresh Leaf objects for the whole subtree even though only one character actually changed.
-    val before = Rope("a" * 999)
+  it should "still cover the edit when it splits a leaf" in {
+    // Growing a full leaf past Balance.default.leafChunkSize splits it in two, constructing fresh Leaf objects even
+    // though only one character actually changed.
+    val before = Rope("a" * Balance.default.leafChunkSize)
     val after  = before.insert(500, "X").getOrElse(fail("expected insert to succeed"))
 
-    after.weight shouldBe 1000
+    after.weight shouldBe Balance.default.leafChunkSize + 1
     val range = RopeDiff.changedOffsetRange(before, after)
     range shouldBe defined
     val Some((start, end)) = range: @unchecked
-    // The walk may over-report once a rebuild replaces leaf identities, but it must never under-report: position 500
+    // The walk may over-report once a split replaces leaf identities, but it must never under-report: position 500
     // (where the actual edit landed) has to fall inside the reported range.
     start should be <= 500
     end should be >= 501
   }
 
-  it should "cover a delete that spans a rebalance-triggering edit" in {
-    val beforeText = "x" * 1250
-    val before = (1 to 50).foldLeft(Rope(""))((rope, _) =>
+  it should "cover a delete that spans several leaves and merges the ones left behind" in {
+    val beforeText = "x" * 10000
+    val before = (1 to 400).foldLeft(Rope(""))((rope, _) =>
       rope.insert(rope.weight, "x" * 25).getOrElse(fail("expected insert to succeed"))
     )
-    val after     = before.delete(100, 900).getOrElse(fail("expected delete to succeed"))
-    val afterText = beforeText.take(100) + beforeText.drop(900)
+    val after     = before.delete(100, 9000).getOrElse(fail("expected delete to succeed"))
+    val afterText = beforeText.take(100) + beforeText.drop(9000)
 
     val range = RopeDiff.changedOffsetRange(before, after)
     range shouldBe defined
     val Some((start, end)) = range: @unchecked
     val suffixLen          = after.weight - end
-    // The rebuilds triggered along the way may widen the reported range beyond the literal [100, 900) delete, but
+    // Merging the leaves either side of the cut may widen the reported range beyond the literal [100, 9000) delete, but
     // whatever it reports must still leave everything outside it provably unchanged.
     beforeText.take(start) shouldBe afterText.take(start)
     beforeText.takeRight(suffixLen) shouldBe afterText.takeRight(suffixLen)

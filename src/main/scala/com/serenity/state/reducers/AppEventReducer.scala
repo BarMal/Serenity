@@ -112,6 +112,18 @@ object AppEventReducer:
       case FocusInDirection(direction) =>
         ReducerResult.noEffects(DirectionalFocus.moved(state, direction))
 
+      case ChromeSummonPressed(element) =>
+        ReducerResult.noEffects(summoned(state, _.pressed(element)))
+
+      case ChromeSummonReleased(element) =>
+        ReducerResult.noEffects(summoned(state, _.released(element)))
+
+      case ChromeSummonLocked =>
+        ReducerResult.noEffects(summoned(state, _.lockHeld))
+
+      case ChromeSummonToggled(element) =>
+        ReducerResult.noEffects(summoned(state, _.toggled(element)))
+
       case CursorPeekModifierPressed(modifier, atMillis) =>
         ReducerResult.noEffects(handleCursorPeekModifierPressed(state, registry, modifier, atMillis))
 
@@ -124,6 +136,9 @@ object AppEventReducer:
       case TogglePanel(id) =>
         if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
         else ReducerResult.noEffects(togglePanel(state, panelRegistry, id))
+
+  private def summoned(state: AppState, change: ChromeSummons => ChromeSummons): AppState =
+    state.copy(runtime = state.runtime.copy(summons = change(state.runtime.summons)))
 
   def rebalancePanes(state: AppState, focusedBufferId: Option[BufferId] = None): AppState =
     EditorState.rebalancePanes(state, focusedBufferId)

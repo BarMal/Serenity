@@ -5,7 +5,8 @@ import java.nio.{ByteBuffer, CharBuffer}
 
 import scala.util.Try
 
-import com.serenity.text.TextEncoding
+import com.serenity.rope.{Balance, Rope, RopeChunks}
+import com.serenity.text.{LineEnding, TextEncoding}
 
 /** A text file's content with the BOM stripped, plus what saving needs to reproduce its bytes. */
 final case class DecodedText(content: String, encoding: TextEncoding, hasBom: Boolean)
@@ -63,6 +64,65 @@ object TextFileCodec:
       val body = Array.tabulate(buffer.remaining())(index => buffer.get(buffer.position() + index))
       (if hasBom then encoding.byteOrderMark.toArray else Array.emptyByteArray) ++ body
     }
+
+  /** [[decode]], straight into a rope with the terminators counted on the way, so the content is never a `String`. */
+  def decodeRope(bytes: Array[Byte])(using Balance): Option[DecodedRope] =
+    decodeRopeWithByteOrderMark(bytes).orElse(
+      if looksBinary(bytes) then None else decodeRopeWithoutByteOrderMark(bytes)
+    )
+
+  /** [[decodeAs]], straight into a rope. */
+  def decodeRopeAs(bytes: Array[Byte], encoding: TextEncoding)(using Balance): Option[DecodedRope] =
+    val hasBom = encoding.byteOrderMark.nonEmpty && bytes.startsWith(encoding.byteOrderMark.toArray)
+    ropeAs(bytes, encoding, hasBom)
+
+  /** [[encodeOrFallBackToUtf8]] for editor content held as a rope, written with `lineEnding` for each `\n`. The text is
+    * passed through the encoder a leaf at a time rather than joined, replaced and converted as whole strings.
+    */
+  def encodeRopeOrFallBackToUtf8(
+    content: Rope,
+    lineEnding: LineEnding,
+    encoding: TextEncoding,
+    hasBom: Boolean
+  ): EncodedText =
+    encodeRope(content, lineEnding, encoding, hasBom)
+      .map(EncodedText(_, encoding, hasBom))
+      .getOrElse(
+        EncodedText(
+          encodeRope(content, lineEnding, TextEncoding.Utf8, hasBom = false)
+            .getOrElse(lineEnding.applyTo(content.collect()).getBytes(StandardCharsets.UTF_8)),
+          TextEncoding.Utf8,
+          hasBom = false
+        )
+      )
+
+  private def encodeRope(
+    content: Rope,
+    lineEnding: LineEnding,
+    encoding: TextEncoding,
+    hasBom: Boolean
+  ): Option[Array[Byte]] =
+    ChunkedTextCodec.encode(
+      RopeChunks.of(content),
+      lineEnding.sequence,
+      encoding,
+      if hasBom then encoding.byteOrderMark.toArray else Array.emptyByteArray
+    )
+
+  private def ropeAs(bytes: Array[Byte], encoding: TextEncoding, hasBom: Boolean)(using Balance): Option[DecodedRope] =
+    ChunkedTextCodec
+      .decode(bytes, if hasBom then encoding.byteOrderMark.length else 0, encoding)
+      .map((content, endings) => DecodedRope(content, endings, encoding, hasBom))
+
+  private def decodeRopeWithByteOrderMark(bytes: Array[Byte])(using Balance): Option[DecodedRope] =
+    TextEncoding.values
+      .find(encoding => encoding.byteOrderMark.nonEmpty && bytes.startsWith(encoding.byteOrderMark.toArray))
+      .flatMap(encoding => ropeAs(bytes, encoding, hasBom = true))
+
+  private def decodeRopeWithoutByteOrderMark(bytes: Array[Byte])(using Balance): Option[DecodedRope] =
+    (FallbackOrder :+ LastResortEncoding).iterator
+      .flatMap(encoding => ropeAs(bytes, encoding, hasBom = false))
+      .nextOption()
 
   private def decodeWithByteOrderMark(bytes: Array[Byte]): Option[DecodedText] =
     TextEncoding.values

@@ -270,13 +270,27 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
     restored.persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
   }
 
+  it should "decode a retired inline-lens markdown view mode as live preview" in {
+    val currentJson = SessionState.fromAppState(AppState.initial).asJson
+    val configObject =
+      currentJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+
+    List("inline-lens", "InlineLens").foreach { retiredSpelling =>
+      val retiredJson = currentJson.mapObject(
+        _.add("config", Json.fromJsonObject(configObject.add("markdownViewMode", Json.fromString(retiredSpelling))))
+      )
+
+      retiredJson.as[SessionState].map(_.config.markdownViewMode) shouldBe Right(MarkdownViewMode.LivePreview)
+    }
+  }
+
   it should "decode a session file written by the current release using old toString enum spellings" in {
     val config = AppConfig.default
       .withCursorMode(CursorMode.Blink)
       .withStatusLineSegments(List(StatusSegment.Position, StatusSegment.Title))
       .withStatusLinePlacement(StatusLinePlacement.Pinned)
       .withWindowChromeMode(WindowChromeMode.NativeThemed)
-      .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      .withMarkdownViewMode(MarkdownViewMode.LivePreview)
       .withDefaultDocumentMode(DefaultDocumentMode.RichText)
       .withInterfaceDensity(InterfaceDensity.Spacious)
 
@@ -311,7 +325,7 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
       List(StatusSegment.Position, StatusSegment.Title, StatusSegment.Mode)
     decoded.toOption.get.config.statusLine.placement shouldBe StatusLinePlacement.Pinned
     decoded.toOption.get.config.windowChromeMode shouldBe WindowChromeMode.NativeThemed
-    decoded.toOption.get.config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
+    decoded.toOption.get.config.markdownViewMode shouldBe MarkdownViewMode.LivePreview
     decoded.toOption.get.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
     decoded.toOption.get.config.interfaceDensity shouldBe InterfaceDensity.Spacious
 
@@ -327,7 +341,7 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
     )
     rewrittenConfigObject("statusPlacement") shouldBe Some(Json.fromString("pinned"))
     rewrittenConfigObject("windowChromeMode") shouldBe Some(Json.fromString("native-themed"))
-    rewrittenConfigObject("markdownViewMode") shouldBe Some(Json.fromString("inline-lens"))
+    rewrittenConfigObject("markdownViewMode") shouldBe Some(Json.fromString("live-preview"))
     rewrittenConfigObject("defaultDocumentMode") shouldBe Some(Json.fromString("rich-text"))
     rewrittenConfigObject("interfaceDensity") shouldBe Some(Json.fromString("spacious"))
     rewrittenConfigObject("materialPreset") shouldBe None

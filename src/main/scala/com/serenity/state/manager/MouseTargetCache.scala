@@ -2,16 +2,20 @@ package com.serenity.state.manager
 
 import java.awt.Font
 import java.util.LinkedHashMap
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 
 import com.serenity.config.AppConfigOps.*
-import com.serenity.config.{InterfaceDensity, StatusLineConfig, TextAreaInsets}
+import com.serenity.config.{InterfaceDensity, LineNumberLayout, StatusLineConfig, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
+import com.serenity.markdown.MarkerMode
 import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
+import com.serenity.ui.openings.OpeningSettings
+import com.serenity.ui.theme.HeadingSettings
 
 final private[manager] case class RopeIdentity private (value: Rope):
 
@@ -80,6 +84,8 @@ final private[manager] case class MouseTargetLayoutKey(
     uiElementGap: Double,
     showPaneHeaders: Boolean,
     statusLine: StatusLineConfig,
+    scrollbarShown: Boolean,
+    tabStripShown: Boolean,
     commandRunnerVisibleRows: Int,
     commandRunnerItemGapRows: Double,
     commandRunnerCursorGapRows: Double,
@@ -94,6 +100,9 @@ final private[manager] case class MouseTargetLayoutKey(
         Option[(RopeIdentity, Viewport, TypographyRole, Option[LanguageId], Option[RichTextDocument])]
       )
     ],
+    // Hidden Markdown markers change how a line wraps and where its carets sit, and which lines are revealed follows the
+    // caret, so neither the text nor the viewport alone says what a pane's snapshot looks like.
+    inlineMarkdown: List[(PaneId, MarkerMode, Vector[Range.Inclusive])],
     uiSurfaces: List[SurfaceGeometryKey],
     // The blocking modal layer (#814) lives outside `uiSurfaces`, so without it here two states that differ only in
     // which dialog is open share a scene key -- reopening a dialog after dismissing one returns the first's cached
@@ -101,7 +110,21 @@ final private[manager] case class MouseTargetLayoutKey(
     modalStack: List[ModalDialog],
     derivedStatusLineSurface: Option[UiSurface],
     pinnedPanels: List[(SurfaceId, PanelPosition, Int)],
-    lineNumberContent: List[(BufferId, RopeIdentity)]
+    lineNumberContent: List[(BufferId, RopeIdentity)],
+    // Heading sizes set a heading row's height and its alignment its offset; the config reference alone is not a field
+    // of the key, so without this a heading change would be served the old scene.
+    headings: HeadingSettings,
+    // Like `headings`, each of these reaches layout through `persisted.config` without being a field of the key.
+    dropCapsEnabled: Boolean,
+    // The room beside a drop cap's glyph moves every row that wraps beside it. The glyph's colour only repaints, so it
+    // is not part of the key.
+    dropCapGapEm: Float,
+    lineNumberLayout: LineNumberLayout,
+    // Per pane, since a buffer can override the configured indentation; a tab's width sets where a row wraps.
+    paneTabSizes: List[(PaneId, Option[Int])],
+    // Per pane, like the tab size: a buffer can override the configured openings, and while they are off nothing else
+    // about them reaches layout (`OpeningSettings.layoutForm`).
+    paneOpenings: List[(PaneId, Option[OpeningSettings])]
 )
 
 private[manager] object MouseTargetLayoutKey:
@@ -132,17 +155,36 @@ private[manager] object MouseTargetLayoutKey:
       runtime.modalStack,
       // Read by `effectiveUiElementGap`, and by the status line text through `editingContext`.
       runtime.capabilities,
+      // `compute` reads `state.chrome`, which is the config overlaid with these. `chrome` is a lazy val rebuilt per state,
+      // so it cannot stand in as a reference.
+      runtime.summons,
       // `pinnedPanels` sizes docked panels from the state's own viewport, not the one passed in.
       runtime.viewportSize,
       // `floatingStatusLineSurface` is hidden while typing.
       runtime.typingActivity
     )
 
+  private def inlineMarkdownOf(state: AppState): List[(PaneId, MarkerMode, Vector[Range.Inclusive])] =
+    state.persisted.layout.orderedPaneIds.flatMap { paneId =>
+      for
+        buffer <- state.persisted.layout.editorPanes
+          .get(paneId)
+          .flatMap(_.bufferId)
+          .flatMap(state.persisted.buffers.get)
+        mode = MarkerMode.of(
+          state.persisted.config.inlineMarkdownViewMode,
+          buffer.document.language,
+          state.runtime.capabilities.isCellGrid
+        )
+        if mode != MarkerMode.Off
+      yield (paneId, mode, if mode == MarkerMode.Live then RichTextContext.revealedLines(buffer) else Vector.empty)
+    }
+
   private[manager] def compute(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
     MouseTargetLayoutKey(
       viewportSize = viewportSize,
       fontConfig = state.persisted.config.editorConfig.fontConfig,
-      showLineNumbers = state.persisted.config.surfaceConfig.showLineNumbers,
+      showLineNumbers = state.chrome.lineNumbers,
       wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled,
       columnModeEnabled = state.persisted.config.surfaceConfig.columnModeEnabled,
       columnTargetWidthCells = state.persisted.config.surfaceConfig.columnTargetWidthCells,
@@ -153,8 +195,10 @@ private[manager] object MouseTargetLayoutKey:
       proseColumnCells = ProseColumn.widthCells(state),
       interfaceDensity = state.persisted.config.interfaceDensity,
       uiElementGap = state.effectiveUiElementGap,
-      showPaneHeaders = state.persisted.config.surfaceConfig.showPaneHeaders,
-      statusLine = state.persisted.config.statusLine,
+      showPaneHeaders = state.chrome.paneHeaders,
+      statusLine = state.chrome.statusLine,
+      scrollbarShown = state.chrome.scrollbar,
+      tabStripShown = state.showsTabStrip,
       commandRunnerVisibleRows = state.persisted.config.effectiveCommandRunnerVisibleRows,
       commandRunnerItemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
       commandRunnerCursorGapRows = state.persisted.config.effectiveCommandRunnerCursorGapRows,
@@ -182,6 +226,7 @@ private[manager] object MouseTargetLayoutKey:
             )
           )
       },
+      inlineMarkdown = inlineMarkdownOf(state),
       uiSurfaces = state.runtime.uiSurfaces.map(SurfaceGeometryKey.from),
       modalStack = state.runtime.modalStack,
       derivedStatusLineSurface = state.floatingStatusLineSurface,
@@ -194,11 +239,29 @@ private[manager] object MouseTargetLayoutKey:
         }
       },
       lineNumberContent =
-        if state.persisted.config.surfaceConfig.showLineNumbers then
+        if state.chrome.lineNumbers then
           state.persisted.buffers.toList
             .sortBy(_._1.value)
             .map((bufferId, buffer) => bufferId -> RopeIdentity(buffer.document.content))
-        else Nil
+        else Nil,
+      headings = state.effectiveHeadingSettings,
+      dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
+      dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+      lineNumberLayout = state.persisted.config.surfaceConfig.lineNumberLayout.normalized,
+      paneTabSizes = state.persisted.layout.orderedPaneIds.map { paneId =>
+        paneId -> state.persisted.layout.editorPanes
+          .get(paneId)
+          .flatMap(_.bufferId)
+          .flatMap(state.persisted.buffers.get)
+          .map(_.effectiveIndentation(state.persisted.config.indentation).tabSize)
+      },
+      paneOpenings = state.persisted.layout.orderedPaneIds.map { paneId =>
+        paneId -> state.persisted.layout.editorPanes
+          .get(paneId)
+          .flatMap(_.bufferId)
+          .flatMap(state.persisted.buffers.get)
+          .map(_.effectiveOpenings(state.persisted.config.openingsConfig).layoutForm)
+      }
     )
 
 /** Instance-scoped (issue #1677) single-slot memo of the last [[MouseTargetLayoutKey]] computed, held as a
@@ -234,7 +297,10 @@ final private[manager] class MouseTargetLayoutKeyCache:
   * can render and hit-test concurrently in one JVM without one's prepared scenes leaking into, or being evicted by, the
   * other's.
   */
-final private[serenity] class AuthoritativeUiScene(val wrappedLines: WrappedLineCache):
+final private[serenity] class AuthoritativeUiScene(
+    val wrappedLines: WrappedLineCache,
+    buildScene: UiSceneBuilder.Build
+):
   import AuthoritativeUiScene.{SceneFontKey, SceneKey}
 
   private val layoutKeyCache = new MouseTargetLayoutKeyCache
@@ -246,32 +312,21 @@ final private[serenity] class AuthoritativeUiScene(val wrappedLines: WrappedLine
   def layoutKeyFor(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
     layoutKeyCache.from(state, viewportSize)
 
-  /** Bounded, `LinkedHashMap`(access-order) + `synchronized`-backed cache of the prepared scene, shared by rendering
-    * and mouse targeting. `forState` below is called synchronously from the render entry points (`RendererEntryPoints`,
-    * `RendererCursorOverlay`) and from every mouse-hit-testing call site (see [[forState]]'s doc comment) -- none of
-    * them run inside an IO fiber, so this follows the same `Ref[IO, ...]`-was-tried-and-reverted reasoning as
-    * [[com.serenity.ui.renderer.RendererFrameState.BoundedRefCache]] (#1431/#1434) and `ThemeManager`'s highlight/lex
-    * caches (#1412/#1431/#1434): a synchronous API here would just force any `Ref[IO, ...]` back out via
-    * `unsafeRunSync` at every call site, hiding a plain mutable map behind an effect type nothing here ever suspends
-    * on. `synchronized` (rather than a lock-free CAS loop) is fine here because unlike those two modules this cache's
-    * whole value -- a `LinkedHashMap` in access-order mode -- is itself mutable and non-swappable-by-reference, so
-    * there is no immutable snapshot to CAS between; the critical sections are short (a `get` or a `put`), so contention
-    * is not a concern in the paint/hit-testing hot path this serves. The monitor synchronized on is this instance's own
-    * -- scoped to whichever owner constructed it, not shared JVM-wide -- so two owners' `forState` calls never block
-    * each other.
+  /** Bounded access-order cache of the published scenes. The monitor on it guards only a `get` or a `put`: a scene is
+    * built outside it, so a lookup never waits on a build, and each scene is immutable once published. Callers are
+    * synchronous (render entry points and mouse hit-testing run outside any IO fiber), so this stays a plain map rather
+    * than a `Ref[IO, ...]`, as in [[com.serenity.ui.renderer.RendererFrameState.BoundedRefCache]].
     *
-    * 64 is a conservative round number, not a measured bound: it comfortably covers every geometry/font/cell-metrics
-    * combination a single window session realistically cycles through (a handful of panes times a handful of
-    * font-size/theme/viewport combinations), mirroring the same capacity
-    * [[com.serenity.ui.renderer.RendererFrameState.cacheCapacity]] uses for its own "no real bound, but must not grow
-    * forever" caches. Raise it if a session with many concurrently open panes or frequent geometry changes sees
-    * avoidable extra scene rebuilds from eviction churn.
+    * 64 is a conservative round number, not a measured bound: it covers every geometry/font/cell-metrics combination a
+    * single window session realistically cycles through. Raise it if eviction churn shows up as avoidable rebuilds.
     */
   private val prepared = new LinkedHashMap[SceneKey, UiSceneSnapshot](16, 0.75f, true):
     override def removeEldestEntry(
       eldest: java.util.Map.Entry[SceneKey, UiSceneSnapshot]
     ): Boolean =
       size() > 64
+
+  private val inFlight = new ConcurrentHashMap[SceneKey, CompletableFuture[Option[UiSceneSnapshot]]]()
 
   /** `cellMetrics` is the "pixel" unit this scene's cell-based (non-measured) `TextLayoutSnapshot`s are built in --
     * `None` (every caller but the render entry points below) keeps this scene's long-standing behaviour of re-deriving
@@ -290,7 +345,7 @@ final private[serenity] class AuthoritativeUiScene(val wrappedLines: WrappedLine
     codeFont: Font,
     textFont: Font,
     cellMetrics: Option[CellMetrics] = None
-  ): UiSceneSnapshot = synchronized {
+  ): UiSceneSnapshot =
     val paneFonts = state.persisted.layout.orderedPaneIds.flatMap { paneId =>
       state.persisted.layout.editorPanes
         .get(paneId)
@@ -302,149 +357,33 @@ final private[serenity] class AuthoritativeUiScene(val wrappedLines: WrappedLine
         }
     }
     val key = SceneKey(layoutKeyFor(state, viewportSize), paneFonts, cellMetrics)
-    Option(prepared.get(key)).getOrElse {
-      val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      val base   = UiSceneSnapshot.from(state, layout, viewportSize)
-      // Pane rects are measured in the screen grid's cells, and that grid is the code font's, whatever font a
-      // buffer draws with. Sizing a document-font pane from its own cells makes the snapshot wrap at a width the
-      // pane does not have, so its rows run off the right edge instead of wrapping.
-      val gridMetrics   = cellMetrics.getOrElse(CellMetrics.fromFont(codeFont))
-      val surfaceConfig = state.persisted.config.surfaceConfig
-      // Column-based document layout (issue #1338): mirrors `RendererPaneSetup.snapshotForBuffer`'s column branch so
-      // this shared scene -- used by both painting and mouse hit-testing -- narrows the viewport to one column's width
-      // and wraps at it whenever column mode and word wrap are both on. Without this the scene stayed full-width and a
-      // column-mode toggle had no visible render effect (Phase 1 regression).
-      val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
-      val perPane = base.paneLayouts.flatMap {
-        case (paneId, paneLayout) =>
-          for
-            pane     <- state.persisted.layout.editorPanes.get(paneId)
-            bufferId <- pane.bufferId
-            buffer   <- state.persisted.buffers.get(bufferId)
-          yield
-            val font        = if buffer.usesTextFont then textFont else codeFont
-            val fontMetrics = cellMetrics.getOrElse(CellMetrics.fromFont(font))
-            val width       = paneLayout.contentRect.width * gridMetrics.charWidth
-            val heightPx    = paneLayout.contentRect.height * gridMetrics.lineHeight
-            val baseViewport = LayoutEngine
-              .updateBufferViewportDimensions(
-                buffer,
-                paneLayout.contentRect,
-                surfaceConfig.wordWrapEnabled,
-                columnModeEnabled = surfaceConfig.columnModeEnabled,
-                surfaceConfig
-              )
-            val visibleColumns =
-              if surfaceConfig.wordWrapEnabled then baseViewport.visibleColumns
-              else
-                val averageAdvance = math.max(
-                  1.0f,
-                  TextLayoutSnapshot
-                    .caretXsForText(
-                      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-                      font,
-                      TextLayoutSnapshot.defaultFontRenderContext()
-                    )
-                    .lastOption
-                    .getOrElse(0.0f) / 62.0f
-                )
-                math
-                  .ceil(width.toDouble / averageAdvance.toDouble)
-                  .toInt
-                  .max(baseViewport.visibleColumns)
-                  .max(paneLayout.contentRect.width + 64)
-            val cursorColumn =
-              buffer.editing.cursorPositions.headOption.map(_.column).getOrElse(baseViewport.leftColumn)
-            val leftColumn =
-              if surfaceConfig.wordWrapEnabled then 0
-              else baseViewport.leftColumn.max(0).max(cursorColumn - visibleColumns + 1)
-            val viewport = baseViewport.copy(
-              leftColumn = leftColumn,
-              visibleColumns = visibleColumns,
-              visibleLines = math.max(1, heightPx / math.max(1, fontMetrics.lineHeight))
-            )
-            val proseScale = com.serenity.ui.theme.RichTextStyling.proseZoom(font.getSize2D)
-            if columnModeActive then
-              // `viewport.visibleColumns` is the column's own full band in cells (from the column-aware `baseViewport`
-              // above). Slice 2: each column carries its own line-number rail on its left edge, so its TEXT wraps in the
-              // band minus that rail (`columnTextWidthCells`) while the band itself (placement `columnWidthCells`) and
-              // the inter-column offset stay full-width -- matching `RendererPaneSetup.snapshotForBuffer`'s column
-              // branch. Slice 4: `resolvedColumnCount` is count-driven -- Auto fits "as many columns as fit" the pane's
-              // full content width, `Some(n)` pins n; each column is placed at `columnIndex * (columnWidth + gap)`
-              // cells.
-              val columnWidthCells     = math.max(1, viewport.visibleColumns)
-              val gutterWidthCells     = LayoutEngine.perColumnGutterWidth(state)
-              val columnTextWidthCells = math.max(1, columnWidthCells - gutterWidthCells)
-              val columnTextWidthPx    = math.max(1, columnTextWidthCells * gridMetrics.charWidth)
-              val columnCount =
-                LayoutEngine.resolvedColumnCount(paneLayout.contentRect.width, surfaceConfig)
-              val columnSnapshotList = TextLayoutSnapshot.fromBufferColumns(
-                buffer.copy(viewport = viewport),
-                columnTextWidthPx,
-                font,
-                cellMetricsOverride = Some(fontMetrics),
-                forceCellLayout = cellMetrics.isDefined,
-                proseScale = proseScale,
-                columnCount = columnCount,
-                dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
-                wrapCache = wrappedLines
-              )
-              // Only a genuinely multi-column page carries per-column placements. A single fitted column is fully
-              // served by `textSnapshots` alone (identical to the pre-multi-column render path, including its
-              // column-transition animation overlay), so emitting a lone placement would only make the renderer take
-              // its multi-column branch for a page that has nothing to lay out side by side.
-              val placements =
-                if columnCount <= 1 then Vector.empty[ColumnSnapshotPlacement]
-                else
-                  columnSnapshotList.zipWithIndex.map {
-                    case (snapshot, columnIndex) =>
-                      ColumnSnapshotPlacement(
-                        columnIndex = columnIndex,
-                        xOffsetCells = columnIndex * (columnWidthCells + math.max(0, surfaceConfig.columnGap)),
-                        columnWidthCells = columnWidthCells,
-                        snapshot = snapshot,
-                        gutterWidthCells = gutterWidthCells
-                      )
-                  }
-              // The single active-column snapshot every non-column consumer still reads is the page's first column
-              // (index 0) -- the cursor's own column, since the viewport was snapped to the page holding it.
-              val activeSnapshot = placements.headOption
-                .map(_.snapshot)
-                .getOrElse(
-                  TextLayoutSnapshot.fromBufferColumn(
-                    buffer.copy(viewport = viewport),
-                    columnTextWidthPx,
-                    font,
-                    cellMetricsOverride = Some(fontMetrics),
-                    forceCellLayout = cellMetrics.isDefined,
-                    proseScale = proseScale,
-                    dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
-                    wrapCache = wrappedLines
-                  )
-                )
-              paneId -> (activeSnapshot, placements)
-            else
-              val single = TextLayoutSnapshot.fromBuffer(
-                buffer.copy(viewport = viewport),
-                width,
-                font,
-                wordWrapEnabled = surfaceConfig.wordWrapEnabled,
-                cellMetricsOverride = Some(fontMetrics),
-                forceCellLayout = cellMetrics.isDefined,
-                // Match the render path's prose zoom so hit-testing rows/advances line up with what was drawn.
-                proseScale = proseScale,
-                dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
-                wrapCache = wrappedLines
-              )
-              paneId -> (single, Vector.empty[ColumnSnapshotPlacement])
-      }
-      val textSnapshots   = perPane.view.mapValues(_._1).toMap
-      val columnSnapshots = perPane.view.mapValues(_._2).filter(_._2.nonEmpty).toMap
-      val scene           = base.withTextSnapshots(textSnapshots).withColumnSnapshots(columnSnapshots)
-      prepared.put(key, scene)
-      scene
-    }
-  }
+    publishedScene(key).getOrElse(
+      buildOnce(key, () => buildScene(state, viewportSize, codeFont, textFont, cellMetrics))
+    )
+
+  private def publishedScene(key: SceneKey): Option[UiSceneSnapshot] =
+    prepared.synchronized(Option(prepared.get(key)))
+
+  /** One caller per key builds, outside every lock; a concurrent caller for the same key waits for that result rather
+    * than laying the state out a second time, and a caller for any other key is never held up. A build that failed
+    * publishes nothing, so the next caller builds afresh.
+    */
+  private def buildOnce(key: SceneKey, build: () => UiSceneSnapshot): UiSceneSnapshot =
+    val outcome = new CompletableFuture[Option[UiSceneSnapshot]]()
+    Option(inFlight.putIfAbsent(key, outcome)) match
+      case Some(running) => running.join().getOrElse(buildOnce(key, build))
+      case None =>
+        try
+          val scene = publishedScene(key).getOrElse(publish(key, build()))
+          val _     = outcome.complete(Some(scene))
+          scene
+        finally
+          val _ = outcome.complete(None)
+          inFlight.remove(key, outcome): Unit
+
+  private def publish(key: SceneKey, scene: UiSceneSnapshot): UiSceneSnapshot =
+    val _ = prepared.synchronized(prepared.put(key, scene))
+    scene
 
   /** The convenience entry point every mouse-hit-testing call site actually uses (`MouseTargetCache.fromState`,
     * `ContextualToolbarHitTesting`, `CommandRunnerMouseHitTesting`, `MouseHitTestGeometry`,
@@ -472,8 +411,11 @@ private[serenity] object AuthoritativeUiScene:
       cellMetrics: Option[CellMetrics]
   )
 
-  def apply(wrappedLines: WrappedLineCache = WrappedLineCache.bounded()): AuthoritativeUiScene =
-    new AuthoritativeUiScene(wrappedLines)
+  def apply(
+    wrappedLines: WrappedLineCache = WrappedLineCache.bounded(),
+    decorateBuild: UiSceneBuilder.Build => UiSceneBuilder.Build = identity
+  ): AuthoritativeUiScene =
+    new AuthoritativeUiScene(wrappedLines, decorateBuild(UiSceneBuilder(wrappedLines)))
 
 final private[manager] case class MouseTargetCache(
     layoutKey: MouseTargetLayoutKey,

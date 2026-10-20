@@ -21,7 +21,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Node` tree
+  // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Branch` tree
   // while itself extending the still-open `Leaf` purely to satisfy the type system -- every method that matters for
   // this test forwards to `delegate` rather than using anything inherited from `Leaf`.
   final class NonCollectingRope(delegate: Rope) extends Leaf(delegate.collect()):
@@ -39,15 +39,6 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
     override val endsWithNewline: Boolean =
       delegate.endsWithNewline
-
-    override def isWeightBalanced: Boolean =
-      delegate.isWeightBalanced
-
-    override def isHeightBalanced: Boolean =
-      delegate.isHeightBalanced
-
-    override def rebalance: Rope =
-      this
 
     override def index(i: Int): Option[Char] =
       delegate.index(i)
@@ -90,15 +81,6 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
     override val endsWithNewline: Boolean =
       delegate.endsWithNewline
-
-    override def isWeightBalanced: Boolean =
-      delegate.isWeightBalanced
-
-    override def isHeightBalanced: Boolean =
-      delegate.isHeightBalanced
-
-    override def rebalance: Rope =
-      this
 
     override def index(i: Int): Option[Char] =
       delegate.index(i)
@@ -406,50 +388,6 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     surface.drawRunPxCalls.map(_.s) should contain("paragraph-1")
   }
 
-  it should "share markdown lens source lines between content and cursor rendering" in {
-    val paneId    = PaneId(0)
-    val bufferId  = BufferId(1)
-    val lineReads = AtomicInteger(0)
-    val markdown  = (1 to 2_000).map(i => s"# Heading $i").mkString("\n")
-    val content   = CountingAccessRope(Rope(markdown), lineReads = lineReads)
-    val buffer = Buffer(bufferId, Document(content, language = Some(LanguageId.Markdown))).copy(
-      editing = EditingState(List(CursorPosition(0, 0))),
-      viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
-    )
-    val initial = AppState.initial
-    val state = initial.copy(persisted =
-      initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = singlePaneLayout(paneId, bufferId),
-        theme = Theme.light,
-        config = AppConfig.default
-          .withLineNumbers(false)
-          .withoutStatusLine
-          .withWordWrap(false)
-          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
-      )
-    )
-    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
-    val layout  = LayoutEngine.calculateLayout(state, viewportSize)
-    val paneContentHeight =
-      LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect.height
-
-    RendererEntryPoints.render(
-      state,
-      cursorVisible = true,
-      surface,
-      viewportSize,
-      FontSpec.fromAwt(monoFont),
-      FontSpec.fromAwt(monoFont),
-      cellMetrics,
-      None,
-      com.serenity.state.manager.RenderCaches.create()
-    )
-
-    lineReads.get() should be < 200
-  }
-
   it should "bound renderer reads for a long fenced block in a large document" in {
     val paneId    = PaneId(0)
     val bufferId  = BufferId(1)
@@ -476,7 +414,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
           .withLineNumbers(false)
           .withoutStatusLine
           .withWordWrap(false)
-          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+          .withMarkdownViewMode(MarkdownViewMode.LivePreview)
       )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
@@ -520,7 +458,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
           .withLineNumbers(false)
           .withoutStatusLine
           .withWordWrap(false)
-          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+          .withMarkdownViewMode(MarkdownViewMode.LivePreview)
       )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
@@ -537,7 +475,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    // Full-block Markdown lens resolution may inspect the enclosing semantic block.
+    // Live Preview marker hiding may inspect the enclosing semantic block.
     lineReads.get() should be < 20_000
   }
 
@@ -562,7 +500,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
           .withLineNumbers(false)
           .withoutStatusLine
           .withWordWrap(false)
-          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+          .withMarkdownViewMode(MarkdownViewMode.LivePreview)
       )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
@@ -582,20 +520,14 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     lineReads.get() should be < 200_000
   }
 
-  it should "bound bare fence classification reads after a long prose prefix" in {
+  private def readsRenderingLivePreview(markdown: Vector[String], cursorLine: Int): Int =
     val paneId    = PaneId(0)
     val bufferId  = BufferId(1)
     val lineReads = AtomicInteger(0)
-    val markdown =
-      (Vector.fill(1_000)("unrelated prose") ++
-        Vector("```scala") ++
-        Vector.fill(499)("fenced content") ++
-        Vector("```") ++
-        Vector.fill(1_000)("trailing prose")).mkString("\n")
-    val content = CountingAccessRope(Rope(markdown), lineReads = lineReads)
+    val content   = CountingAccessRope(Rope(markdown.mkString("\n")), lineReads = lineReads)
     val buffer = Buffer(bufferId, Document(content, language = Some(LanguageId.Markdown))).copy(
-      editing = EditingState(List(CursorPosition(1_500, 0))),
-      viewport = Viewport(topLine = 1_500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
+      editing = EditingState(List(CursorPosition(cursorLine, 0))),
+      viewport = Viewport(topLine = cursorLine, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
     )
     val initial = AppState.initial
     val state = initial.copy(persisted =
@@ -608,15 +540,13 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
           .withLineNumbers(false)
           .withoutStatusLine
           .withWordWrap(false)
-          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+          .withMarkdownViewMode(MarkdownViewMode.LivePreview)
       )
     )
-    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
-
-    noException should be thrownBy RendererEntryPoints.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
-      surface,
+      new MockRenderSurface(viewportSize.width, viewportSize.height),
       viewportSize,
       FontSpec.fromAwt(monoFont),
       FontSpec.fromAwt(monoFont),
@@ -624,6 +554,36 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       None,
       com.serenity.state.manager.RenderCaches.create()
     )
+    lineReads.get()
 
-    lineReads.get() should be < 2_000
+  it should "share Live Preview source lines between content and cursor rendering" in {
+    val markdown = Vector.tabulate(2_000)(i => s"# Heading ${i + 1}")
+
+    readsRenderingLivePreview(markdown, cursorLine = 0) should be < 200
+  }
+
+  it should "read a fenced document as far as the construct open at the viewport bottom, not to its end" in {
+    val proseBefore   = 1_000
+    val fencedLines   = 499
+    val openParagraph = 1_000
+    val trailing      = 4_500
+    val markdown =
+      Vector.fill(proseBefore)("unrelated prose") ++ Vector("```scala") ++ Vector.fill(fencedLines)("fenced content") ++
+        Vector("```") ++ Vector.fill(openParagraph)("one unbroken paragraph") ++
+        Vector.fill(trailing)(Vector("", "spaced prose")).flatten
+    val viewportBottom = proseBefore + 1 + fencedLines + 1 + 6
+    val margin         = 100
+
+    val reads = readsRenderingLivePreview(markdown, cursorLine = proseBefore + fencedLines + 1)
+
+    reads should be <= viewportBottom + openParagraph + margin
+    reads should be < markdown.length / 4
+  }
+
+  it should "read only about the viewport when blank lines settle the constructs just below it" in {
+    val markdown = Vector.fill(2_500)(Vector("paragraph line", "")).flatten
+
+    val reads = readsRenderingLivePreview(markdown, cursorLine = 100)
+
+    reads should be < 200
   }

@@ -28,19 +28,24 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
         )
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        theme = Theme.light,
-        config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
+    val state = AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> pane),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+            ),
+            theme = Theme.light,
+            config = com.serenity.config.AppConfig.conventional.withSyntaxHighlighting(false)
+          )
       )
-    )
 
     val surface = new MockRenderSurface(100, 30)
 
@@ -66,19 +71,24 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer   = Buffer.fromFile(bufferId, Path.of("notes.md"), "alpha")
     val pane     = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        theme = Theme.light,
-        config = com.serenity.config.AppConfig.default.withLineNumbers(false)
+    val state = AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> pane),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+            ),
+            theme = Theme.light,
+            config = com.serenity.config.AppConfig.conventional.withLineNumbers(false)
+          )
       )
-    )
     val viewport = ViewportSize(80, 24)
     val surface  = new MockRenderSurface(viewport.width, viewport.height)
 
@@ -121,19 +131,24 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer   = Buffer.fromFile(bufferId, Path.of("notes.md"), "alpha\nbeta\ngamma")
     val pane     = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        theme = Theme.light,
-        config = com.serenity.config.AppConfig.default.withLineNumbers(true)
+    val state = AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> pane),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+            ),
+            theme = Theme.light,
+            config = com.serenity.config.AppConfig.conventional.withLineNumbers(true)
+          )
       )
-    )
     val viewport = ViewportSize(80, 24)
     val surface  = new MockRenderSurface(viewport.width, viewport.height)
     val layout   = LayoutEngine.calculateLayout(state, viewport)
@@ -193,19 +208,24 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
         )
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        theme = Theme.light,
-        config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
+    val state = AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> pane),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+            ),
+            theme = Theme.light,
+            config = com.serenity.config.AppConfig.conventional.withSyntaxHighlighting(false)
+          )
       )
-    )
 
     val surface = new MockRenderSurface(100, 30)
 
@@ -230,27 +250,39 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer   = Buffer.fromString(bufferId, "alpha\nbeta")
     val pane     = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        theme = Theme.light,
-        config = com.serenity.config.AppConfig.default
-          .withSyntaxHighlighting(false)
-          .withLineNumbers(false)
-          .withoutStatusLine
-      ),
-      runtime = AppState.initial.runtime.copy(
-        pointerGesture = AppState.initial.runtime.pointerGesture.copy(
-          hoveredEditorTarget = Some(HoveredEditorTarget(paneId, bufferId, CursorPosition(1, 0)))
-        )
+    val state = AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(
+        persisted = AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> pane),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+            ),
+            theme = Theme.light,
+            config = com.serenity.config.AppConfig.conventional
+              .withSyntaxHighlighting(false)
+              .withLineNumbers(false)
+              .withoutStatusLine
+          ),
+        runtime = AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .runtime
+          .copy(
+            pointerGesture = AppState
+              .initial(com.serenity.config.AppConfig.conventional)
+              .runtime
+              .pointerGesture
+              .copy(
+                hoveredEditorTarget = Some(HoveredEditorTarget(paneId, bufferId, CursorPosition(1, 0)))
+              )
+          )
       )
-    )
 
     val surface = new MockRenderSurface(100, 30)
 
@@ -280,19 +312,24 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
         )
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        theme = Theme.light,
-        config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
+    val state = AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> pane),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+            ),
+            theme = Theme.light,
+            config = com.serenity.config.AppConfig.conventional.withSyntaxHighlighting(false)
+          )
       )
-    )
 
     val surface           = new MockRenderSurface(100, 30)
     val commentBackground = RendererHighlights.commentHighlightBackground(state.persisted.theme)
@@ -328,19 +365,24 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
         )
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        theme = Theme.light,
-        config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
+    val state = AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> pane),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+            ),
+            theme = Theme.light,
+            config = com.serenity.config.AppConfig.conventional.withSyntaxHighlighting(false)
+          )
       )
-    )
 
     val surface           = new MockRenderSurface(100, 30)
     val commentBackground = RendererHighlights.commentHighlightBackground(state.persisted.theme)
@@ -376,19 +418,24 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
         )
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        theme = Theme.light,
-        config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
+    val state = AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> pane),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+            ),
+            theme = Theme.light,
+            config = com.serenity.config.AppConfig.conventional.withSyntaxHighlighting(false)
+          )
       )
-    )
 
     val surface           = new MockRenderSurface(100, 30)
     val commentBackground = RendererHighlights.commentHighlightBackground(state.persisted.theme)
@@ -420,19 +467,24 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
         )
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        theme = Theme.light,
-        config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
+    val state = AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> pane),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+            ),
+            theme = Theme.light,
+            config = com.serenity.config.AppConfig.conventional.withSyntaxHighlighting(false)
+          )
       )
-    )
 
     val surface           = new MockRenderSurface(100, 30)
     val commentBackground = RendererHighlights.commentHighlightBackground(state.persisted.theme)

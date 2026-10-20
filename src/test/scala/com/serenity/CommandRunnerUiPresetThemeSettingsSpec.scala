@@ -6,7 +6,7 @@ import com.serenity.rope.Balance
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The ways to give a preset a theme, or take it away, from the preset's own Preset Actions group. */
+/** The ways to give a preset a theme, or take it away, from the preset's own Edit Preset page. */
 class CommandRunnerUiPresetThemeSettingsSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
@@ -25,8 +25,8 @@ class CommandRunnerUiPresetThemeSettingsSpec extends AnyFlatSpec with Matchers:
       .withUiPresetNames(List("Drafting"))
       .copy(editingPresetName = editing)
     everything(runner.settingsGroups)
-      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-actions" => group }
-      .getOrElse(fail("missing preset actions group"))
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-edit" => group }
+      .getOrElse(fail("missing Edit Preset page"))
       .children
 
   private def input(id: String, editing: Option[String] = Some("Drafting")): CommandSurfaceItem.InputItem =

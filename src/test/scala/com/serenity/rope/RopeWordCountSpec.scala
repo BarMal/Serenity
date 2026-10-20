@@ -104,7 +104,7 @@ class RopeWordCountSpec extends AnyFlatSpec with Matchers with ScalaCheckPropert
       yield (rope, text)
 
     forAll(ropeWithText) { (rope, text) =>
-      val joins = math.max(0, rope.leafValues.size - 1)
+      val joins = math.max(0, RopeChunks.of(rope).size - 1)
       val full  = TextCounts.of(text)
 
       math.abs(rope.textSummary.counts.words - full.words) should be <= joins

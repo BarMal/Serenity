@@ -36,7 +36,8 @@ class ActualStartupFlowSpec extends AnyFlatSpec with Matchers:
         stateManager,
         stateManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _             <- stateManager.applyEvent(MoveDown)
       stateAfterNav <- stateManager.getCurrentState

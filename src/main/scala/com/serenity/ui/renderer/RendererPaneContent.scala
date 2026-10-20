@@ -1,13 +1,11 @@
 package com.serenity.ui.renderer
 
-import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.manager.FocusedTextBody
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.theme.*
 
-/** Paints each editor pane's own content: the header/spacer chrome and the visible text rows (plain or the inline
-  * markdown-lens variant).
+/** Paints each editor pane's own content: the visible text rows (plain or the inline markdown-lens variant), with the
+  * header and spacers delegated to [[RendererPaneChrome]] when the frame repaints them.
   *
   * It also owns the per-row geometry of a pane -- [[textRowMetrics]] and the [[visualLineFits]]/[[visualLineVisible]]/
   * [[visualLineTopPx]]/[[visualLineCellOffset]] questions derived from it. Those are public because everything that
@@ -21,7 +19,8 @@ object RendererPaneContent:
     state: AppState,
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
-    dirtyRowsByPane: Map[PaneId, Set[Int]]
+    dirtyRowsByPane: Map[PaneId, Set[Int]],
+    chrome: ChromeRepaint
   ): Unit =
     val activePaneId = state.persisted.layout.activeEditorPaneId
     val orderedPanes =
@@ -32,19 +31,33 @@ object RendererPaneContent:
     orderedPanes.foreach { (paneId, pane) =>
       renderPlan.paneLayouts.get(paneId) match
         case Some(paneLayout) =>
-          renderEditorPane(
-            pane,
-            paneLayout,
-            state,
-            context,
-            renderPlan.snapshots.get(paneId),
-            renderPlan.columnSnapshotsFor(paneId),
-            renderPlan.layoutContract,
-            pane.bufferId.flatMap(renderPlan.annotations.get),
-            dirtyRowsByPane.get(paneId)
-          )
+          aboveBottomOf(paneLayout.contentRect, context) {
+            renderEditorPane(
+              pane,
+              paneLayout,
+              state,
+              context,
+              renderPlan.snapshots.get(paneId),
+              renderPlan.columnSnapshotsFor(paneId),
+              renderPlan.layoutContract,
+              pane.bufferId.flatMap(renderPlan.annotations.get),
+              dirtyRowsByPane.get(paneId),
+              chrome
+            )
+          }
         case None => ()
     }
+
+  /** A last row that starts inside the pane but ends past it is cut off at the pane's bottom edge. Left unclipped its
+    * glyphs land on the status row, which a frame that repaints chrome clears and one that does not leaves covered, so
+    * the same document drew two ways depending on the frame before. Only the bottom is bounded: glyph overscan to the
+    * sides is deliberate.
+    */
+  private def aboveBottomOf(contentRect: LayoutRect, context: RenderContext)(paint: => Unit): Unit =
+    context.surface.panelOutlines match
+      case Some(clipping) if contentRect.bottom < context.surface.viewportHeight =>
+        clipping.withRectClip(0, 0, context.surface.viewportWidth, contentRect.bottom)(paint)
+      case _ => paint
 
   /** Paint every pane's visible cursors and report the union of pixel rects painted across all of them. */
   def renderEditorCursors(
@@ -105,32 +118,27 @@ object RendererPaneContent:
     columnPlacements: Vector[ColumnSnapshotPlacement],
     contract: EditorLayoutContract,
     annotations: Option[BufferRenderAnnotations],
-    dirtyRows: Option[Set[Int]]
+    dirtyRows: Option[Set[Int]],
+    chrome: ChromeRepaint
   ): Unit =
     val buffer = pane.bufferId.flatMap(state.persisted.buffers.get)
 
-    renderBufferHeader(pane, buffer, paneLayout, state, context, contract)
-    renderEditorPaneVerticalSpacers(paneLayout, state, context)
+    context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
+    if chrome.headers.includes(pane.id) then
+      RendererPaneChrome.renderHeader(pane, buffer, paneLayout, state, context, contract)
+    if chrome.spacers then RendererPaneChrome.renderVerticalSpacers(paneLayout, state, context)
+    context.surface.setBackgroundColor(state.persisted.theme.background)
+    context.surface.setForegroundColor(state.persisted.theme.foreground)
 
     val contentRect = paneLayout.contentRect
 
     val bufferSnapshot =
       preparedSnapshot.orElse(buffer.map(RendererPaneSetup.snapshotForBuffer(_, contentRect, state, context)))
-    val markdownLensFrame =
-      for
-        buf  <- buffer
-        snap <- bufferSnapshot
-        if RendererMarkdownLens.isInlineMarkdownLens(buf, state)
-      yield RendererMarkdownLens.markdownLensFrameFor(buf, snap, context.caches.markdownPreviewCache)
-
     // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): a column-mode pane paints each column's own
     // snapshot at its own x-origin (`contentRect.x + placement.xOffsetCells`), so the page reads as columns side by
-    // side. The markdown lens keeps its single full-width path -- its content is not the plain wrapped text these
-    // placements chunk. `dirtyRows` (the row-reuse contract) is a per-column-snapshot row index, which the multi-column
-    // path does not track yet, so a column-mode pane always redraws in full (see report's slice-2 note).
+    // side. `dirtyRows` numbers the rows across the columns ([[ColumnPaneRows]]); each column draws its share.
     val paintsColumns =
-      columnPlacements.nonEmpty &&
-        buffer.exists(buf => buf.document.content.weight > 0 && !RendererMarkdownLens.isInlineMarkdownLens(buf, state))
+      columnPlacements.nonEmpty && buffer.exists(_.document.content.weight > 0)
 
     buffer match
       case Some(buf) if buf.document.content.weight == 0 && buf.document.isNewEmpty =>
@@ -140,17 +148,17 @@ object RendererPaneContent:
       case Some(buf) if paintsColumns =>
         val bufferAnnotations =
           annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending))
-        columnPlacements.foreach { placement =>
-          renderBufferContent(
-            buf,
-            columnRect(contentRect, placement),
-            state,
-            context,
-            placement.snapshot,
-            markdownLensFrame = None,
-            bufferAnnotations,
-            dirtyRows = None
-          )
+        columnPlacements.zip(ColumnPaneRows.localRows(columnPlacements, dirtyRows)).foreach {
+          (placement, columnDirtyRows) =>
+            renderBufferContent(
+              buf,
+              columnRect(contentRect, placement),
+              state,
+              context,
+              placement.snapshot,
+              bufferAnnotations,
+              columnDirtyRows
+            )
         }
       case Some(buf) =>
         bufferSnapshot.fold(RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)) { snap =>
@@ -160,7 +168,6 @@ object RendererPaneContent:
             state,
             context,
             snap,
-            markdownLensFrame,
             annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending)),
             dirtyRows
           )
@@ -187,123 +194,25 @@ object RendererPaneContent:
           )
         }
       case (Some(buf), Some(snap)) =>
-        if RendererMarkdownLens.isInlineMarkdownLens(buf, state) then
-          RendererMarkdownLens.renderMarkdownLensCursors(
-            buf,
-            contentRect,
-            state.persisted.theme,
-            state.persisted.config,
-            cursorContext,
-            snap,
-            markdownLensFrame.getOrElse(
-              RendererMarkdownLens.markdownLensFrameFor(buf, snap, context.caches.markdownPreviewCache)
-            )
-          )
-        else
-          val _ = RendererCursorGlyphs.renderCursors(
-            buf,
-            contentRect,
-            state.persisted.theme,
-            state.persisted.config,
-            cursorContext,
-            snap
-          )
+        val _ = RendererCursorGlyphs.renderCursors(
+          buf,
+          contentRect,
+          state.persisted.theme,
+          state.persisted.config,
+          cursorContext,
+          snap
+        )
       case _ => ()
 
   /** The x-shifted content rect a single page column's TEXT paints into: the pane's content rect moved right by the
     * column's own cell offset, past its line-number rail (`gutterWidthCells`, slice 2), and narrowed to the remaining
     * band -- so a column's text never paints over its own rail or past its neighbour.
     */
-  private def columnRect(contentRect: LayoutRect, placement: ColumnSnapshotPlacement): LayoutRect =
+  def columnRect(contentRect: LayoutRect, placement: ColumnSnapshotPlacement): LayoutRect =
     val leftX     = contentRect.x + placement.xOffsetCells + placement.gutterWidthCells
     val bandWidth = math.max(0, placement.columnWidthCells - placement.gutterWidthCells)
     val width     = math.min(bandWidth, math.max(0, contentRect.right - leftX))
     contentRect.copy(x = leftX, width = math.max(0, width))
-
-  private def renderBufferHeader(
-    pane: EditorPane,
-    buffer: Option[Buffer],
-    paneLayout: EditorPaneLayout,
-    state: AppState,
-    context: RenderContext,
-    contract: EditorLayoutContract
-  ): Unit =
-    val surface    = context.surface
-    val headerRect = contract.paneHeaderRect(pane.id).getOrElse(paneLayout.headerRect)
-    if headerRect.height > 0 then
-      context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
-      val isActive  = state.persisted.layout.activeEditorPaneId.contains(pane.id)
-      val titleRect = contract.paneTitleRect(pane.id).getOrElse(paneLayout.titleRect)
-
-      if isActive then
-        surface.setBackgroundColor(state.persisted.theme.highlighted.background)
-        surface.setForegroundColor(state.persisted.theme.highlighted.foreground)
-      else
-        surface.setBackgroundColor(state.persisted.theme.panel.background)
-        surface.setForegroundColor(state.persisted.theme.panel.foreground)
-
-      val bufferTitleBase = buffer match
-        case Some(buf) =>
-          buf.document.filePath match
-            case Some(path) =>
-              val filename = path.getFileName.toString
-              if buf.document.isDirty then s"$filename - unsaved" else filename
-            case None =>
-              if buf.document.isDirty then s"Buffer ${buf.id.value} - unsaved" else s"Buffer ${buf.id.value}"
-        case None =>
-          "No Buffer"
-      val bufferTitle = bufferTitleBase
-
-      val maxTitleWidth = math.max(1, titleRect.width - 2)
-      val displayTitle =
-        if bufferTitle.length > maxTitleWidth then bufferTitle.take(maxTitleWidth - 3) + "..."
-        else bufferTitle
-
-      surface.putString(headerRect.x, headerRect.y, " " * headerRect.width)
-
-      surface.text.fontRenderContext match
-        case Some(frc) =>
-          val titlePlacement = TextAlignment.placeLine(
-            displayTitle,
-            TextAreaPx(
-              xPx = context.cellMetrics.toPixelX(titleRect.x).toFloat,
-              yPx = context.cellMetrics.toPixelY(titleRect.y),
-              widthPx = titleRect.width * context.cellMetrics.charWidth.toFloat,
-              heightPx = context.cellMetrics.lineHeight
-            ),
-            context.uiFont,
-            context.cellMetrics.lineHeight,
-            context.cellMetrics.ascent,
-            TextHorizontalAlignment.Center,
-            TextVerticalAlignment.Top,
-            frc
-          )
-          surface.text.drawRunPx(
-            titlePlacement.xPx,
-            titlePlacement.yPx,
-            titlePlacement.widthPx,
-            titlePlacement.lineHeightPx,
-            titlePlacement.ascentPx,
-            displayTitle
-          )
-        case None =>
-          val centerX = titleRect.x + math.max(0, (titleRect.width - displayTitle.length) / 2)
-          CharacterRenderer.renderString(surface, centerX, titleRect.y, displayTitle)
-
-    surface.setBackgroundColor(state.persisted.theme.background)
-    surface.setForegroundColor(state.persisted.theme.foreground)
-
-  private def renderEditorPaneVerticalSpacers(
-    paneLayout: EditorPaneLayout,
-    state: AppState,
-    context: RenderContext
-  ): Unit =
-    context.surface.setBackgroundColor(state.persisted.theme.margin)
-    List(paneLayout.topSpacerRect, paneLayout.bottomSpacerRect)
-      .filter(rect => rect.width > 0 && rect.height > 0)
-      .foreach(rect => context.surface.fillRect(rect.x, rect.y, rect.width, rect.height, ' '))
-    context.surface.setBackgroundColor(state.persisted.theme.background)
-    context.surface.setForegroundColor(state.persisted.theme.foreground)
 
   private def renderBufferContent(
     buffer: Buffer,
@@ -311,18 +220,23 @@ object RendererPaneContent:
     state: AppState,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
-    markdownLensFrame: Option[MarkdownLensFrame],
     annotations: BufferRenderAnnotations,
     dirtyRows: Option[Set[Int]]
   ): Unit =
     context.surface.text.setFont(FontSpec.fromAwt(context.fontForBuffer(buffer)))
-    if RendererMarkdownLens.isInlineMarkdownLens(buffer, state) then
-      val frame = markdownLensFrame.getOrElse(
-        RendererMarkdownLens.markdownLensFrameFor(buffer, snapshot, context.caches.markdownPreviewCache)
-      )
-      renderInlineMarkdownPreview(buffer, rect, state, context, frame)
-      RendererMarkdownLens.renderMarkdownRawLenses(buffer, rect, state, context, snapshot, frame)
-    else renderPlainBufferContent(buffer, rect, state, context, snapshot, annotations, dirtyRows)
+    renderPlainBufferContent(buffer, rect, state, context, snapshot, annotations, dirtyRows)
+
+  /** Paints `buffer` into `rect` as plain, annotation-free text: what a docked preview shows of the document. */
+  private[renderer] def renderReadOnlyText(
+    buffer: Buffer,
+    rect: LayoutRect,
+    state: AppState,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
+  ): Unit =
+    context.surface.text.setFont(FontSpec.fromAwt(context.fontForBuffer(buffer)))
+    val noAnnotations = BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending)
+    renderPlainBufferContent(buffer, rect, state, context, snapshot, noAnnotations, dirtyRows = None)
 
   /** Draw the pane's visible rows.
     *
@@ -343,12 +257,14 @@ object RendererPaneContent:
     val contentRightXPx   = context.cellMetrics.toPixelX(rect.right).toFloat
     val activeBodyLines   = focusedTextBodyLines(buffer, state)
     val rowMetrics        = textRowMetrics(rect, context, snapshot)
+    val rowsBottomPx      = rowMetrics.lineTopPx(visualLines.size).min(rowMetrics.contentBottomPx)
     val findMatchesByLine = RendererHighlights.findMatchesOnDrawnRows(buffer, state, visualLines, dirtyRows)
+    FrameCounting.rowsPainted(context.caches.frameCounters, visualLines.size, dirtyRows)
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
         if dirtyRows.forall(_.contains(screenLineIndex)) && rowMetrics.lineFits(screenLineIndex) then
-          val screenY   = rect.y + screenLineIndex
+          val screenY   = rowMetrics.screenRow(screenLineIndex)
           val lineTopPx = rowMetrics.lineTopPx(screenLineIndex)
           val screenX   = rect.x + visualLineCellOffset(visualLine, context)
 
@@ -360,8 +276,7 @@ object RendererPaneContent:
               screenX >= 0 &&
               screenX < rect.right
           then
-            val lineTheme      = state.persisted.theme
-            val styledSegments = visualLineStyledSegments(visualLine, lineTheme, snapshot, activeBodyLines)
+            val lineTheme = state.persisted.theme
             // `Pending` renders as `Some(Nil)`, not `None` -- a request still in flight (or one not yet sent) must
             // not flash the muted "unavailable" style a confirmed `Unavailable` gets; it renders exactly like a
             // connected document whose visible lines just don't have tokens yet.
@@ -369,6 +284,16 @@ object RendererPaneContent:
               case SemanticTokensAvailability.Available(byLine) => Some(byLine.getOrElse(visualLine.bufferLine, Nil))
               case SemanticTokensAvailability.Pending           => Some(Nil)
               case SemanticTokensAvailability.Unavailable       => None
+            val styledSegments = RendererLineSegments.forLine(
+              visualLine,
+              lineTheme,
+              snapshot,
+              activeBodyLines,
+              buffer,
+              state,
+              context,
+              lineSemanticTokens
+            )
             if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
               DropCapRenderer.renderMeasuredHomeAware(
                 snapshot,
@@ -382,7 +307,8 @@ object RendererPaneContent:
                 rowHeightPxFor(visualLine, snapshot),
                 rowAscentPxFor(visualLine, snapshot),
                 contentRightXPx,
-                lineSemanticTokens
+                lineSemanticTokens,
+                rowsBottomPx
               )
             else
               CharacterRenderer.renderStyledString(
@@ -396,9 +322,30 @@ object RendererPaneContent:
                 styledSegments = styledSegments,
                 semanticTokens = lineSemanticTokens,
                 maxColumn = Some(rect.right),
-                highlightCache = context.caches.themeHighlightCache
+                highlightCache = context.caches.themeHighlightCache,
+                tabWidth = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
               )
               DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, context.surface, screenX, screenY)
+              RendererHeadingRules.paintCells(
+                context.surface,
+                snapshot,
+                visualLine,
+                lineTheme,
+                rect,
+                screenY,
+                dimmed = !activeBodyLines(visualLine.bufferLine)
+              )
+
+            RendererMarkdownRules.paint(
+              context.surface,
+              snapshot.markdownInline,
+              visualLine,
+              lineTheme,
+              xOriginPx,
+              contentRightXPx,
+              lineTopPx,
+              rowHeightPxFor(visualLine, snapshot)
+            )
 
             RendererHighlights.renderDocumentCommentHighlights(
               context.surface,
@@ -425,7 +372,8 @@ object RendererPaneContent:
               snapshot,
               styledSegments,
               dimmed = !activeBodyLines(visualLine.bufferLine),
-              blendWeight = state.persisted.config.surfaceConfig.diagnosticHighlightBlendWeight
+              blendWeight = state.persisted.config.surfaceConfig.diagnosticHighlightBlendWeight,
+              clipBottomPx = rowsBottomPx
             )
 
             RendererHighlights.renderKeywordHighlights(
@@ -497,13 +445,11 @@ object RendererPaneContent:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): TextRowMetrics =
-    TextRowMetrics(
-      contentRect = rect,
-      gridMetrics = context.cellMetrics,
-      rowLineHeightPx = snapshot.lineHeightPx,
-      usesMeasuredLayout = RendererPaneSetup.usesMeasuredDrawing(snapshot, context),
-      rowHeightsPx =
-        snapshot.visualLines.map(line => if line.heightPx > 0 then line.heightPx else snapshot.lineHeightPx)
+    TextRowMetrics.forSnapshot(
+      rect,
+      context.cellMetrics,
+      snapshot,
+      measured = RendererPaneSetup.usesMeasuredDrawing(snapshot, context)
     )
 
   def visualLineCellOffset(visualLine: TextVisualLine, context: RenderContext): Int =
@@ -519,37 +465,6 @@ object RendererPaneContent:
   def rowAscentPxFor(visualLine: TextVisualLine, snapshot: TextLayoutSnapshot): Int =
     if visualLine.ascentPx > 0 then visualLine.ascentPx else snapshot.ascentPx
 
-  private def richTextStyledSegments(
-    visualLine: TextVisualLine,
-    theme: Theme,
-    snapshot: TextLayoutSnapshot
-  ): Option[List[StyledText]] =
-    snapshot.richTextDocument
-      .map { document =>
-        RichTextStyling.styledLine(
-          document,
-          visualLine.bufferLine,
-          visualLine.startColumn,
-          visualLine.endColumn,
-          theme,
-          snapshot.proseScale
-        )
-      }
-      .filter(segments => segments.map(_.content).mkString == visualLine.text)
-
-  private def visualLineStyledSegments(
-    visualLine: TextVisualLine,
-    theme: Theme,
-    snapshot: TextLayoutSnapshot,
-    activeBodyLine: Int => Boolean
-  ): Option[List[StyledText]] =
-    val richSegments = richTextStyledSegments(visualLine, theme, snapshot)
-    if activeBodyLine(visualLine.bufferLine) then richSegments
-    else
-      val baseSegments =
-        richSegments.getOrElse(List(StyledText(visualLine.text, TextStyle.normal, theme.foreground, theme.background)))
-      Some(baseSegments.map(segment => segment.copy(foregroundColor = theme.muted, backgroundColor = theme.background)))
-
   private def focusedTextBodyLines(buffer: Buffer, state: AppState): Int => Boolean =
     if !state.persisted.config.surfaceConfig.focusedTextBodyEnabled then _ => true
     else
@@ -558,41 +473,3 @@ object RendererPaneContent:
         .activeRange(buffer, activeLine)
         .map((range: Range.Inclusive) => (line: Int) => range.contains(line))
         .getOrElse((_: Int) => true)
-
-  private def renderInlineMarkdownPreview(
-    buffer: Buffer,
-    rect: LayoutRect,
-    state: AppState,
-    context: RenderContext,
-    frame: MarkdownLensFrame
-  ): Unit =
-    val widthPx = RendererMarkdownLens.scaledImagePixelDimension(
-      rect.width * context.cellMetrics.charWidth,
-      context.surface.devicePixelScaleX
-    )
-    val heightPx = RendererMarkdownLens.scaledImagePixelDimension(
-      rect.height * context.cellMetrics.lineHeight,
-      context.surface.devicePixelScaleY
-    )
-    val previewFont = MarkdownDocumentPreview.inlineLensFont(
-      context.textFont,
-      context.cellMetrics.lineHeight,
-      context.surface.devicePixelScaleY
-    )
-    val title = buffer.document.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
-    val image = MarkdownDocumentPreview.renderInlineRowsImage(
-      rows = frame.previewRows,
-      sourceLines = frame.lines,
-      title = title,
-      widthPx = widthPx,
-      heightPx = heightPx,
-      theme = state.persisted.theme,
-      font = previewFont,
-      inlineLineHeightPx = MarkdownDocumentPreview.lineHeightForDeviceScale(
-        context.cellMetrics.lineHeight,
-        context.surface.devicePixelScaleY
-      ),
-      cache = context.caches.markdownPreviewCache,
-      reuseLastRenderWhileEditing = buffer.markdownPreviewEditGeneration != buffer.markdownPreviewCommittedGeneration
-    )
-    context.surface.pixels.drawImage(RenderImage.fromAwt(image), rect.x, rect.y, rect.width, rect.height)

@@ -2,8 +2,8 @@ package com.serenity.state.manager
 
 import cats.effect.IO
 import cats.syntax.foldable.*
-import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.{DocumentDelta, LspEffect}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
 
@@ -25,7 +25,10 @@ final private[manager] case class LspDocumentSyncPort(
 final private[manager] class LspDocumentSync(port: LspDocumentSyncPort):
   import port.*
 
-  /** A prose workspace never announces its documents to a server (see `announceOpenedToLsp`), so its edits have no one
+  /** A document that grows past the large-file limit is closed on the server and stays out of its sight; see
+    * [[LargeFilePolicy]].
+    *
+    * A prose workspace never announces its documents to a server (see `announceOpenedToLsp`), so its edits have no one
     * to sync to and must not pay for collecting the whole text on every keystroke (#1834).
     */
   def enqueueChangedLspDocuments(previousState: AppState): IO[Unit] =
@@ -39,9 +42,8 @@ final private[manager] class LspDocumentSync(port: LspDocumentSyncPort):
       currentState.persisted.buffers.get(bufferId) match
         case None => IO.unit
         case Some(buffer) =>
-          val previous = previousState.persisted.buffers.get(bufferId)
-          val changedContent =
-            previous.exists(_.document.content != buffer.document.content)
+          val previous       = previousState.persisted.buffers.get(bufferId)
+          val changedContent = previous.exists(before => buffer.document.textDiffersFrom(before.document))
           val scrolled = previous.exists(before =>
             before.viewport.topLine != buffer.viewport.topLine ||
               before.viewport.visibleLines != buffer.viewport.visibleLines
@@ -49,9 +51,16 @@ final private[manager] class LspDocumentSync(port: LspDocumentSyncPort):
           val effects = for
             path       <- buffer.document.filePath.toList
             languageId <- buffer.document.language.toList
-            uri    = path.toUri.toString
-            change = Option.when(changedContent)(LspDocumentSync.changedDocument(uri, languageId, buffer))
-            shown  = Option.when(scrolled)(LspDocumentSync.visibleRange(uri, languageId, buffer, currentState))
+            uri        = path.toUri.toString
+            largeFiles = currentState.persisted.config.largeFiles
+            served     = largeFiles.allowsLanguageTooling(buffer.document)
+            wasServed  = previous.forall(before => largeFiles.allowsLanguageTooling(before.document))
+            change =
+              if served && wasServed then
+                Option.when(changedContent)(LspDocumentSync.changedDocument(uri, languageId, buffer, previous))
+              else if served then Some(LspDocumentSync.reopened(uri, languageId, buffer))
+              else Option.when(wasServed)(LspQueueEffect.Enqueue(LspEffect.FileClosed(uri, languageId)))
+            shown = Option.when(scrolled && served)(LspDocumentSync.visibleRange(uri, languageId, buffer, currentState))
             effect <- change.toList ++ shown.toList
           yield AppEffect.LspQueue(effect)
           effects.traverse_(interpretEffect)
@@ -59,8 +68,23 @@ final private[manager] class LspDocumentSync(port: LspDocumentSyncPort):
 
 private[manager] object LspDocumentSync:
 
-  private def changedDocument(uri: String, languageId: LanguageId, buffer: Buffer): LspQueueEffect =
-    LspQueueEffect.DocumentChanged(uri, languageId, buffer.document.content)
+  private def changedDocument(
+    uri: String,
+    languageId: LanguageId,
+    buffer: Buffer,
+    previous: Option[Buffer]
+  ): LspQueueEffect =
+    val delta = previous.flatMap { before =>
+      buffer.document
+        .changeFrom(before.document)
+        .map(DocumentDelta(_, before.document.contentVersion, buffer.document.contentVersion))
+    }
+    LspQueueEffect.DocumentChanged(uri, languageId, buffer.document.content, delta)
+
+  /** A document that shrank back under the large-file limit is announced afresh: the server let go of it on the way up.
+    */
+  private def reopened(uri: String, languageId: LanguageId, buffer: Buffer): LspQueueEffect =
+    LspQueueEffect.Enqueue(LspEffect.FileOpened(uri, languageId, buffer.document.content))
 
   private def visibleRange(uri: String, languageId: LanguageId, buffer: Buffer, state: AppState): LspQueueEffect =
     val lines = VisibleBufferLines.of(buffer, state)

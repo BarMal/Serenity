@@ -98,11 +98,15 @@ object CommandRunnerSettingsItems:
           "Split Preview",
           CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.SplitPreview))
         ),
-        CommandOption("Inline Lens", CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.InlineLens)))
+        CommandOption(
+          "Live Preview",
+          CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.LivePreview))
+        ),
+        CommandOption("Read", CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.Read)))
       ),
       selectedIndex = optionSelections.getOrElse("markdown-view", 0),
       category = CommandCategory.Settings,
-      hint = Some("Source, side preview, or inline editing lens")
+      hint = Some("Source, side preview, live preview, or read mode")
     )
 
   private[command] def defaultDocumentModeOptionItem(
@@ -304,7 +308,68 @@ object CommandRunnerSettingsItems:
       hint = Some("How font sizes adapt to the display")
     )
 
-  private def fontFamilyGroupItem(
+  private[command] def textFontOptionItem(
+    optionSelections: Map[String, Int],
+    availableFamilies: List[String]
+  ): CommandSurfaceItem.OptionItem =
+    fontFamilyOptionItem(
+      id = "text-font",
+      label = "Text Font",
+      optionSelections = optionSelections,
+      families = availableFamilies,
+      intent =
+        commandIntentArg => CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextFontFamily(commandIntentArg))),
+      hint = "Used in prose buffers"
+    )
+
+  private[command] def codeFontOptionItem(
+    optionSelections: Map[String, Int],
+    availableFamilies: List[String]
+  ): CommandSurfaceItem.OptionItem =
+    fontFamilyOptionItem(
+      id = "code-font",
+      label = "Code Font",
+      optionSelections = optionSelections,
+      families = availableFamilies,
+      intent =
+        commandIntentArg => CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetCodeFontFamily(commandIntentArg))),
+      hint = "Used in code buffers"
+    )
+
+  private[command] def uiFontOptionItem(
+    optionSelections: Map[String, Int],
+    availableFamilies: List[String]
+  ): CommandSurfaceItem.OptionItem =
+    fontFamilyOptionItem(
+      id = "ui-font",
+      label = "UI Font",
+      optionSelections = optionSelections,
+      families = availableFamilies,
+      intent =
+        commandIntentArg => CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetUiFontFamily(commandIntentArg))),
+      hint = "Used in the app interface"
+    )
+
+  private def fontFamilyOptionItem(
+    id: String,
+    label: String,
+    optionSelections: Map[String, Int],
+    families: List[String],
+    intent: String => CommandIntent,
+    hint: String
+  ): CommandSurfaceItem.OptionItem =
+    val options = families.map(family => CommandOption(family, intent(family)))
+    CommandSurfaceItem.OptionItem(
+      id = id,
+      label = label,
+      options = options,
+      selectedIndex =
+        CommandRunnerSettingsOptionItemHelpers.boundedOptionIndex(optionSelections.getOrElse(id, 0), options),
+      category = CommandCategory.Settings,
+      hint = Some(hint)
+    )
+
+  private[command] def fontFamilyGroupItem(
     id: String,
     label: String,
     selectedIndex: Int,

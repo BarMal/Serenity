@@ -72,7 +72,7 @@ class LspDocumentSyncPerformanceSpec extends AnyFlatSpec with Matchers:
     val port = LspDocumentSyncPort(
       currentState = IO.pure(after),
       interpretEffect = {
-        case AppEffect.LspQueue(LspQueueEffect.DocumentChanged(uri, languageId, text)) =>
+        case AppEffect.LspQueue(LspQueueEffect.DocumentChanged(uri, languageId, text, _)) =>
           queue.enqueueDocumentChange(uri, languageId, text)
         case _ => IO.unit
       },
@@ -115,6 +115,6 @@ class LspDocumentSyncPerformanceSpec extends AnyFlatSpec with Matchers:
     dispatch(queue, before, after).unsafeRunSync()(using isolated)
 
     val queued = queue.stream.take(1).compile.toList.unsafeRunSync()(using isolated)
-    queued.collect { case LspEffect.FileChanged(_, _, text, _) => text } shouldBe
+    queued.collect { case LspEffect.FileChanged(_, _, text, _, _) => text } shouldBe
       List(after.persisted.buffers(bufferId).document.content)
   }

@@ -6,18 +6,29 @@ package com.serenity.state.models
   * however large the input is. A value-equal but rebuilt input counts as changed: that costs a recompute, never a stale
   * value.
   */
-final case class DerivedValue[S, I, A](inputs: S => I, references: I => List[AnyRef], compute: I => A):
+final case class DerivedValue[S, I, A](
+    inputs: S => I,
+    references: I => List[AnyRef],
+    compute: I => A,
+    update: Option[(A, I) => A] = None
+):
 
   /** `previous` itself while it is current for `source`; otherwise a memo of a fresh computation. */
   def refreshed(previous: Option[Memo[A]], source: S): Memo[A] =
     val read    = inputs(source)
     val current = references(read)
-    previous.filter(_.isCurrentFor(current)).getOrElse(Memo(current, compute(read)))
+    previous.filter(_.isCurrentFor(current)).getOrElse(Memo(current, recomputed(previous.map(_.value), read)))
 
   /** `memo`'s value while it is current for `source`; otherwise computed now, uncached. */
   def valueFor(memo: Option[Memo[A]], source: S): A =
     val read = inputs(source)
-    memo.filter(_.isCurrentFor(references(read))).fold(compute(read))(_.value)
+    memo.filter(_.isCurrentFor(references(read))).fold(recomputed(memo.map(_.value), read))(_.value)
+
+  /** `update` carries the value of an earlier, now stale, computation forward when it can be cheaper than `compute`. */
+  private def recomputed(stale: Option[A], read: I): A =
+    (update, stale) match
+      case (Some(carry), Some(value)) => carry(value, read)
+      case _                          => compute(read)
 
 final case class Memo[A](inputs: List[AnyRef], value: A):
 

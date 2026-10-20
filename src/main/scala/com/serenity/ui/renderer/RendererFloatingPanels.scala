@@ -1,6 +1,6 @@
 package com.serenity.ui.renderer
 
-import com.serenity.markdown.MarkdownDocumentPreview
+import com.serenity.config.MarkdownViewMode
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -22,8 +22,16 @@ object RendererFloatingPanels:
     scene: UiSceneSnapshot,
     damage: Damage
   ): Unit =
+    renderFloatingPanels(state, context, damage, FramePanels.of(state, context, scene))
+
+  private[renderer] def renderFloatingPanels(
+    state: AppState,
+    context: RenderContext,
+    damage: Damage,
+    panels: FramePanels
+  ): Unit =
     context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
-    val overlays     = OverlayViewModel.fromState(state, scene)
+    val overlays     = panels.overlays
     val panelIsDirty = RendererFramePlanner.panelDirtyCheck(damage)
 
     def paintOverlay(overlay: TextOverlayView): Unit =
@@ -35,27 +43,27 @@ object RendererFloatingPanels:
           state.persisted.config,
           layerContext.cursorVisible,
           layerContext.uiFont,
-          layerContext.cellMetrics
+          layerContext.cellMetrics,
+          layerContext.caches.measuredAdvances
         )
-      overlay.surfaceId match
-        case Some(surfaceId) =>
-          RendererFramePlanner.paintPanelLayer(state, context, surfaceId, overlay.rect, panelIsDirty(surfaceId))(
-            paint
-          )
+      overlay.surfaceId.flatMap(panels.sites.get) match
+        case Some(site) =>
+          PanelLayers.paint(
+            state,
+            context,
+            site,
+            panelIsDirty(site.id),
+            panels.kept.contains(site.id)
+          )(paint)
         case None => paint(context)
 
-    overlays.tabBar.foreach(paintOverlay)
-    overlays.aboveCursorStack.foreach(paintOverlay)
-    val belowOverlays =
-      if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
-    belowOverlays.foreach(paintOverlay)
-    overlays.cornerStack.foreach(paintOverlay)
+    panels.floating.foreach(paintOverlay)
 
     // Recorded *after* this frame's panels are painted, so `dirtyRowsFor`'s read of this same state (via `planFrame`,
     // which always runs before this method for a given frame) still sees last frame's rects while planning this one --
     // see `RendererFrameState.previousFloatingSurfaceRects`' doc comment.
     val currentFloatingRects: Map[SurfaceId, PixelRect] =
-      (overlays.aboveCursorStack ++ belowOverlays ++ overlays.cornerStack).flatMap { overlay =>
+      (overlays.aboveCursorStack ++ panels.belowCursorOverlays ++ overlays.cornerStack).flatMap { overlay =>
         overlay.surfaceId.map(_ -> floatingPanelPixelRect(overlay.rect, context.cellMetrics))
       }.toMap
     context.caches.frameState.rememberFloatingSurfaceRects(context.surface, currentFloatingRects)
@@ -72,6 +80,14 @@ object RendererFloatingPanels:
   private val ModalBackdropEffect = LayerEffect(0.4f)
 
   def renderModalLayer(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
+    renderModalLayer(state, context, scene, FramePanels.of(state, context, scene))
+
+  private[renderer] def renderModalLayer(
+    state: AppState,
+    context: RenderContext,
+    scene: UiSceneSnapshot,
+    panels: FramePanels
+  ): Unit =
     scene.modalBackdrop.foreach { backdrop =>
       LayerCompositor.withEffect(context.surface)(ModalBackdropEffect) {
         context.surface.setBackgroundColor(state.persisted.theme.margin)
@@ -84,7 +100,7 @@ object RendererFloatingPanels:
         )
       }
     }
-    OverlayViewModel.fromState(state, scene).modal.foreach { overlay =>
+    panels.overlays.modal.foreach { overlay =>
       TextOverlayRenderer.render(
         context.surface,
         overlay,
@@ -92,7 +108,8 @@ object RendererFloatingPanels:
         state.persisted.config,
         context.cursorVisible,
         context.uiFont,
-        context.cellMetrics
+        context.cellMetrics,
+        context.caches.measuredAdvances
       )
     }
 
@@ -101,6 +118,15 @@ object RendererFloatingPanels:
     context: RenderContext,
     scene: UiSceneSnapshot,
     damage: Damage
+  ): Unit =
+    renderPinnedPanels(state, context, scene, damage, FramePanels.of(state, context, scene))
+
+  private[renderer] def renderPinnedPanels(
+    state: AppState,
+    context: RenderContext,
+    scene: UiSceneSnapshot,
+    damage: Damage,
+    panels: FramePanels
   ): Unit =
     context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
     val surfaceNodes = scene.workspace.collect {
@@ -112,7 +138,7 @@ object RendererFloatingPanels:
         def paintContent(layerContext: RenderContext): Unit =
           surface.content match
             case SurfaceContent.MarkdownPreview(bufferId, title) =>
-              renderMarkdownPreviewPanel(bufferId, title, rect, node.contentRect, state, layerContext)
+              renderMarkdownPreviewPanel(bufferId, title, rect, node.contentRect, state, scene, layerContext)
             case _ =>
               PinnedPanelRenderer.render(
                 layerContext.surface,
@@ -125,7 +151,12 @@ object RendererFloatingPanels:
               )
 
         val isDirty = RendererFramePlanner.panelDirtyCheck(damage)(surface.id)
-        RendererFramePlanner.paintPanelLayer(state, context, surface.id, rect, isDirty)(paintContent)
+        panels.sites.get(surface.id) match
+          case Some(site) =>
+            PanelLayers.paint(state, context, site, isDirty, panels.kept.contains(site.id))(
+              paintContent
+            )
+          case None => paintContent(context)
       }
     }
 
@@ -138,12 +169,17 @@ object RendererFloatingPanels:
   def pinnedAndExpandedSurfaces(state: AppState): List[UiSurface] =
     state.pinnedSurfaces
 
+  /** The panel shows the buffer's text on the editor's own pipeline: the same layout, glyph runs and Markdown restyling
+    * as an editor pane, in read mode so every marker is hidden, scrolled to the editor's top line, and without a caret,
+    * selection or word-wrap setting of its own.
+    */
   private def renderMarkdownPreviewPanel(
     bufferId: BufferId,
     title: String,
     rect: LayoutRect,
     contentRect: LayoutRect,
     state: AppState,
+    scene: UiSceneSnapshot,
     context: RenderContext
   ): Unit =
     val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = s"Preview: $title", rows = Nil)
@@ -155,44 +191,69 @@ object RendererFloatingPanels:
       context.cellMetrics
     )
 
-    val imageRect          = markdownPreviewImageRect(rect, contentRect, context)
-    val contentWidthCells  = math.max(1, imageRect.width)
-    val contentHeightCells = math.max(1, imageRect.height)
-    val widthPx = RendererMarkdownLens.scaledImagePixelDimension(
-      contentWidthCells * context.cellMetrics.charWidth,
-      context.surface.devicePixelScaleX
-    )
-    val heightPx = RendererMarkdownLens.scaledImagePixelDimension(
-      contentHeightCells * context.cellMetrics.lineHeight,
-      context.surface.devicePixelScaleY
-    )
-    val buffer = state.persisted.buffers.get(bufferId)
-    val content = buffer
-      .map(buffer => markdownSplitPreviewWindow(buffer, contentHeightCells).source)
-      .getOrElse("")
-    val baseUri =
-      buffer.flatMap(_.document.filePath).flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
-    val image = MarkdownDocumentPreview.renderImage(
-      source = content,
-      title = title,
-      widthPx = widthPx,
-      heightPx = heightPx,
-      theme = state.persisted.theme,
-      font = context.textFont,
-      cache = context.caches.markdownPreviewCache,
-      baseUri = baseUri,
-      reuseLastRenderWhileEditing =
-        buffer.exists(b => b.markdownPreviewEditGeneration != b.markdownPreviewCommittedGeneration)
-    )
-    context.surface.pixels.drawImage(
-      RenderImage.fromAwt(image),
-      imageRect.x,
-      imageRect.y,
-      contentWidthCells,
-      contentHeightCells
+    state.persisted.buffers.get(bufferId).foreach { buffer =>
+      val textRect     = markdownPreviewTextRect(rect, contentRect, context)
+      val previewState = readingState(state)
+      val lineStart =
+        buffer.clearSelections.copy(viewport = MarkdownPreviewScroll.previewViewport(buffer.viewport))
+      val lineStartSnapshot = RendererPaneSetup.snapshotForBuffer(lineStart, textRect, previewState, context)
+      val (previewBuffer, previewSnapshot) = followEditorWithinLine(buffer, lineStart, lineStartSnapshot)(
+        scene,
+        state,
+        textRect,
+        previewState,
+        context
+      )
+      RendererPaneContent.renderReadOnlyText(previewBuffer, textRect, previewState, context, previewSnapshot)
+    }
+
+  /** Moves the preview from the start of the editor's top line to the same fraction of that line, so it scrolls with
+    * the editor row by row instead of jumping a wrapped paragraph at a time.
+    */
+  private def followEditorWithinLine(editorBuffer: Buffer, lineStart: Buffer, lineStartSnapshot: TextLayoutSnapshot)(
+    scene: UiSceneSnapshot,
+    state: AppState,
+    textRect: LayoutRect,
+    previewState: AppState,
+    context: RenderContext
+  ): (Buffer, TextLayoutSnapshot) =
+    val editorViewport = editorBuffer.viewport
+    val row = for
+      paneId   <- editorPaneShowing(state, editorBuffer.id)
+      snapshot <- scene.textSnapshot(paneId)
+      previewRows = MarkdownPreviewScroll.leadingRows(lineStartSnapshot, editorViewport.topLine)
+      target = MarkdownPreviewScroll.previewRow(
+        editorViewport.topVisualLine,
+        MarkdownPreviewScroll.editorRows(editorViewport, snapshot),
+        previewRows
+      )
+      if target > 0
+    yield target
+    row.fold((lineStart, lineStartSnapshot)) { target =>
+      val scrolled = lineStart.copy(viewport = lineStart.viewport.copy(topVisualLine = target))
+      (scrolled, RendererPaneSetup.snapshotForBuffer(scrolled, textRect, previewState, context))
+    }
+
+  private def editorPaneShowing(state: AppState, bufferId: BufferId): Option[PaneId] =
+    val panes = state.persisted.layout.editorPanes
+    state.persisted.layout.activeEditorPaneId
+      .filter(id => panes.get(id).exists(_.bufferId.contains(bufferId)))
+      .orElse(panes.collectFirst { case (id, pane) if pane.bufferId.contains(bufferId) => id })
+
+  private def readingState(state: AppState): AppState =
+    val config = state.persisted.config
+    state.copy(persisted =
+      state.persisted.copy(config =
+        config
+          .withMarkdownViewMode(MarkdownViewMode.Read)
+          .withSurfaceConfig(
+            config.surfaceConfig
+              .copy(wordWrapEnabled = true, columnModeEnabled = false, focusedTextBodyEnabled = false)
+          )
+      )
     )
 
-  private def markdownPreviewImageRect(
+  private def markdownPreviewTextRect(
     rect: LayoutRect,
     contentRect: LayoutRect,
     context: RenderContext
@@ -210,24 +271,3 @@ object RendererFloatingPanels:
       width = math.max(1, right - x),
       height = math.max(1, contentRect.height)
     )
-
-  private def markdownSplitPreviewWindow(buffer: Buffer, visibleRows: Int): MarkdownDocumentPreview.PreviewWindow =
-    val lineCount = buffer.document.content.lineCount
-    if lineCount == 0 then MarkdownDocumentPreview.PreviewWindow(0, 0, "")
-    else
-      val maxSourceLines = RendererMarkdownLens.markdownPreviewSourceLineLimit(visibleRows).max(1)
-      val maxStart       = (lineCount - maxSourceLines).max(0)
-      val fallbackStart  = buffer.viewport.topLine.max(0).min(maxStart)
-      val anchorLine = buffer.editing.cursorPositions.headOption
-        .map(_.line)
-        .filter(line => line >= 0 && line < lineCount)
-        .getOrElse(buffer.viewport.topLine.max(0).min(lineCount - 1))
-      val firstSourceLine =
-        if anchorLine < fallbackStart then anchorLine.min(maxStart)
-        else if anchorLine >= fallbackStart + maxSourceLines then (anchorLine - maxSourceLines / 2).max(0).min(maxStart)
-        else fallbackStart
-      MarkdownDocumentPreview.PreviewWindow(
-        firstSourceLine,
-        firstPreviewRow = 0,
-        buffer.document.content.linesFrom(firstSourceLine, maxSourceLines).mkString("\n")
-      )

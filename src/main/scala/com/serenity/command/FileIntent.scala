@@ -3,7 +3,7 @@ package com.serenity.command
 import java.nio.file.Path
 
 import com.serenity.lsp.config.LanguageId
-import com.serenity.state.models.BufferId
+import com.serenity.state.models.{BufferId, IndentationSettings}
 import com.serenity.text.{LineEnding, TextEncoding}
 
 enum FileIntent:
@@ -42,3 +42,6 @@ enum FileIntent:
   // #1964: change the line ending a buffer saves with -- see LineEndingCommands.
   case ChooseLineEnding
   case SetLineEnding(bufferId: BufferId, ending: LineEnding)
+  // #1996: change how one buffer is indented (`None` hands the choice back to detection) -- see IndentationCommands.
+  case ChooseIndentation
+  case SetIndentation(bufferId: BufferId, settings: Option[IndentationSettings])

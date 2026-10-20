@@ -38,6 +38,8 @@ final case class SessionState(
     recentFilesByMode: Map[String, List[String]] = Map.empty,
     recentFolders: List[String] = Nil,
     commandUsage: Map[String, Int] = Map.empty,
+    // Keyed by `ChromeElement.configKey`. Added without a schema bump: an older build ignores it, losing only the lock.
+    lockedChrome: List[String] = Nil,
     schemaVersion: SchemaVersion = SessionState.CurrentSchemaVersion
 )
 
@@ -91,7 +93,8 @@ object SessionState:
       recentFolders = appState.persisted.recentFolders.map(_.toString),
       // `commandUsage` is keyed by `CommandId` in `Persisted` (issue #1693); the session file itself stays plain
       // `String`-keyed JSON, the same convention `recentFilesByMode` above uses for `AppMode`.
-      commandUsage = appState.persisted.commandUsage.map { case (id, generation) => id.value -> generation }
+      commandUsage = appState.persisted.commandUsage.map { case (id, generation) => id.value -> generation },
+      lockedChrome = appState.runtime.summons.locked.toList.sortBy(_.ordinal).map(_.configKey)
     )
 
   private def orderedBuffers(appState: AppState): List[Buffer] =
@@ -169,6 +172,8 @@ object SessionState:
         uiSurfaces = restoredLayout.surfaces,
         nextBufferId = BufferId(bufferMap.keys.map(_.value).maxOption.getOrElse(-1) + 1),
         nextPaneId = PaneId(layout.editorPanes.keys.map(_.value).maxOption.getOrElse(-1) + 1),
-        nextSurfaceId = restoredLayout.nextSurfaceId
+        nextSurfaceId = restoredLayout.nextSurfaceId,
+        chapterGhostsVisible = sessionState.config.documentConfig.chapterGhosts,
+        summons = ChromeSummons(locked = sessionState.lockedChrome.flatMap(ChromeElement.fromConfigKey).toSet)
       )
     )

@@ -42,15 +42,17 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     // "Show all settings" is on: this test inspects the full taxonomy, mode filtering (issue #1297) aside.
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
+      .activate(registry, AppConfig.conventional.withShowAllSettingsRegardlessOfMode(true))
       .openSettings
 
     val groupItems = runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group }
 
     groupItems.map(_.id) shouldBe List(
       "settings-workspace",
+      "settings-ui-presets",
       "settings-editor",
       "settings-typography",
+      "settings-headings",
       "settings-look",
       "settings-language-tools",
       "settings-keymap"
@@ -67,20 +69,20 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     group("settings-workspace").children.map(_.id) shouldBe List(
       "app-mode",
       "settings-show-all",
-      "settings-workspace-layout",
-      "settings-ui-presets"
+      "settings-workspace-layout"
     )
     val workspaceLayoutGroup = nestedGroup("settings-workspace-layout")
     workspaceLayoutGroup.label shouldBe "Panels"
     workspaceLayoutGroup.children.map(_.id) shouldBe
       List("arrange-panels", "panel-escape-code", "panel-escape-prose")
-    nestedGroup("settings-ui-presets").children.map(_.id) shouldBe List(
+    group("settings-ui-presets").children.map(_.id) shouldBe List(
       "settings-preset-select",
       "settings-preset-create",
       "settings-preset-edit"
     )
     group("settings-editor").children.map(_.id) shouldBe List(
       "settings-text-display",
+      "settings-indentation",
       "settings-status-line",
       "settings-text-area",
       "settings-document-defaults",
@@ -112,8 +114,11 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-interface-layout").label shouldBe "Interface Layout"
     nestedGroup("settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
+      "ui-layout",
       "window-chrome",
-      "command-runner-key-hints"
+      "menu-bar",
+      "command-runner-key-hints",
+      "settings-summon"
     )
     // Blur, spacing, corners, outlines, render cadence and decorative extras are one Advanced leaf, not five groups.
     nestedGroup("settings-look-advanced").label shouldBe "Advanced"
@@ -217,7 +222,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     def panelsGroupIntents(selections: Map[String, Int]) =
       val runner =
-        CommandRunner.empty.activate(registry, AppConfig.default).copy(optionSelections = selections).openSettings
+        CommandRunner.empty.activate(registry, AppConfig.conventional).copy(optionSelections = selections).openSettings
       groupByIdRecursive(runner.settingsGroups, "settings-workspace-layout").children.collect {
         case CommandSurfaceItem.CommandItem(command, _) => command.intent
       }
@@ -229,9 +234,9 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
   it should "show current text display states as settings options" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val config = AppConfig.default
+    val config = AppConfig.conventional
       .copy(surfaceConfig =
-        AppConfig.default.surfaceConfig.copy(
+        AppConfig.conventional.surfaceConfig.copy(
           showLineNumbers = false,
           wordWrapEnabled = false,
           contextualToolbarEnabled = false,
@@ -274,9 +279,9 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
   it should "surface column count and gap as always-visible input rows regardless of column mode" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val columnModeOff     = CommandRunner.empty.activate(registry, AppConfig.default.withColumnMode(false))
+    val columnModeOff     = CommandRunner.empty.activate(registry, AppConfig.conventional.withColumnMode(false))
     val columnModeOn =
-      CommandRunner.empty.activate(registry, AppConfig.default.withColumnMode(true).withColumnCount(Some(3)))
+      CommandRunner.empty.activate(registry, AppConfig.conventional.withColumnMode(true).withColumnCount(Some(3)))
 
     val textDisplayOff = groupByIdRecursive(columnModeOff.settingsGroups, "settings-text-display")
     val textDisplayOn  = groupByIdRecursive(columnModeOn.settingsGroups, "settings-text-display")
@@ -315,7 +320,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withCommandRunnerVisibleRows(Some(9)))
+      .activate(registry, AppConfig.conventional.withCommandRunnerVisibleRows(Some(9)))
 
     val interfaceGroup = groupByIdRecursive(runner.settingsGroups, "settings-interface-layout")
 
@@ -329,7 +334,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withRenderFpsTarget(RenderFpsTarget.Fps120))
+      .activate(registry, AppConfig.conventional.withRenderFpsTarget(RenderFpsTarget.Fps120))
 
     val renderingGroup = groupByIdRecursive(runner.settingsGroups, "settings-look-advanced")
     val option = renderingGroup.children
@@ -347,7 +352,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
 
     runner.settingsGroups shouldBe theSameInstanceAs(runner.settingsGroups)
   }
@@ -356,7 +361,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
 
     runner.visibleItems shouldBe theSameInstanceAs(runner.visibleItems)
   }
@@ -367,7 +372,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(
         registry,
-        AppConfig.default
+        AppConfig.conventional
           .withDefaultDocumentMode(DefaultDocumentMode.RichText)
           .withShowAllSettingsRegardlessOfMode(true)
       )
@@ -395,7 +400,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withDropCapsEnabled(false).withShowAllSettingsRegardlessOfMode(true))
+      .activate(registry, AppConfig.conventional.withDropCapsEnabled(false).withShowAllSettingsRegardlessOfMode(true))
 
     val documentDefaultsGroup = groupByIdRecursive(runner.settingsGroups, "settings-document-defaults")
 
@@ -417,7 +422,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     // A deterministic catalog, not the host's installed fonts (see `CommandRunnerSettingsGroups.build`'s own doc).
     val fontFamilies = FontLoader.FontFamilyCatalog(monospace = List("Mono"), text = List("Serif", "Sans"), ui = Nil)
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
+      .activate(registry, AppConfig.conventional.withShowAllSettingsRegardlessOfMode(true))
       .copy(fontFamilies = fontFamilies)
 
     val richTextGroup = groupByIdRecursive(runner.settingsGroups, "settings-rich-text")
@@ -447,7 +452,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(
         registry,
-        AppConfig.default
+        AppConfig.conventional
           .withSpellCheck(
             SpellCheckConfig(
               enabled = true,
@@ -500,7 +505,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
   it should "file every key binding under exactly one Keys section" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val runner            = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val runner            = CommandRunner.empty.activate(registry, AppConfig.conventional).openSettings
     val keys              = groupByIdRecursive(runner.settingsGroups, "settings-keymap")
     val bindingIds        = descendants(keys).collect { case item: CommandSurfaceItem.InputItem => item.id }
     val expected =

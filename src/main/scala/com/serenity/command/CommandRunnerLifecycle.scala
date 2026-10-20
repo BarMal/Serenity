@@ -48,8 +48,9 @@ private[command] trait CommandRunnerLifecycle:
     withUiPresetPreviews(CommandRunnerSettingsItems.normalizedUiPresetNames(names).map(UiPreset.Preview.fromName))
 
   def withUiPresetPreviews(previews: List[UiPreset.Preview]): CommandRunner =
-    copy(uiPresetPreviews =
-      CommandRunnerSettingsItems.normalizedUiPresetPreviews(previews)
+    copy(
+      uiPresetPreviews = CommandRunnerSettingsItems.normalizedUiPresetPreviews(previews),
+      optionSelections = CommandRunnerSettingsPresetScope.withoutScopedSelections(optionSelections)
     ).withSearchCacheRefreshed.syncEditMode.normalizeSubmenuEditMode
 
   def withProjectPresence(presence: ProjectPresence): CommandRunner =

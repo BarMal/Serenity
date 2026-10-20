@@ -95,6 +95,8 @@ private[manager] object FileResults:
         val document =
           disk.document
             .replacingContentOf(current.document)
+            .keepingChosenIndentationOf(current.document)
+            .keepingOpeningsOf(current.document)
             .copy(savedGeneration = current.document.savedGeneration + 1)
         withBuffer(
           state,

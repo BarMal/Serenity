@@ -71,17 +71,17 @@ final case class CommandRunner(
     * one otherwise (regardless of whether a group is drilled into on top of it; see `CommandRunnerSurface`).
     */
   private[command] def rootState: CommandPaletteState = surface match
-    case CommandRunnerSurface.Palette(state)                => state
-    case CommandRunnerSurface.Settings(root, _)             => root
-    case CommandRunnerSurface.PresetDiffReview(_, _, state) => state
+    case CommandRunnerSurface.Palette(state)                   => state
+    case CommandRunnerSurface.Settings(root, _)                => root
+    case CommandRunnerSurface.PresetDiffReview(_, _, state, _) => state
 
   private[command] def withRootSelectedIndex(index: Int): CommandRunner =
     val updatedSurface = surface match
       case CommandRunnerSurface.Palette(state) => CommandRunnerSurface.Palette(state.copy(selectedIndex = index))
       case CommandRunnerSurface.Settings(root, drilled) =>
         CommandRunnerSurface.Settings(root.copy(selectedIndex = index), drilled)
-      case CommandRunnerSurface.PresetDiffReview(name, changes, state) =>
-        CommandRunnerSurface.PresetDiffReview(name, changes, state.copy(selectedIndex = index))
+      case review: CommandRunnerSurface.PresetDiffReview =>
+        review.copy(state = review.state.copy(selectedIndex = index))
     copy(surface = updatedSurface)
 
   /** Replaces the drilled-in page, preserving the current root (whichever it is) and `drilled`'s own history -- the one
@@ -120,8 +120,8 @@ final case class CommandRunner(
   lazy val visibleItems: List[CommandSurfaceItem] =
     surface match
       case _: CommandRunnerSurface.Settings => settingsSurfaceItems
-      case CommandRunnerSurface.PresetDiffReview(presetName, changes, _) =>
-        presetDiffReviewItems(presetName, changes)
+      case CommandRunnerSurface.PresetDiffReview(presetName, changes, _, purpose) =>
+        presetDiffReviewItems(presetName, changes, purpose)
       case CommandRunnerSurface.Palette(state) =>
         val offered = state.filteredCommands
           .map(command => command -> CommandAvailability.of(command, context))
@@ -226,9 +226,13 @@ final case class CommandRunner(
     * empty here (not merely left as-is) so a stale toggle from a *different* preset's earlier review can never bleed
     * into this one by key collision.
     */
-  def openPresetDiffReview(presetName: String, changes: List[PresetChange]): CommandRunner =
+  def openPresetDiffReview(
+    presetName: String,
+    changes: List[PresetChange],
+    purpose: PresetDiffPurpose = PresetDiffPurpose.ApplyPreset
+  ): CommandRunner =
     copy(
-      surface = CommandRunnerSurface.PresetDiffReview(presetName, changes),
+      surface = CommandRunnerSurface.PresetDiffReview(presetName, changes, purpose = purpose),
       toggleSelections = Map.empty,
       statusMessage = None
     )
@@ -237,7 +241,11 @@ final case class CommandRunner(
     * checked when submitted -- the selection is read and baked into that command's intent here, at render time, rather
     * than re-read from `toggleSelections` after `RunnerSubmit` deactivates the runner (issue: preset diff-toggle UI).
     */
-  private def presetDiffReviewItems(presetName: String, changes: List[PresetChange]): List[CommandSurfaceItem] =
+  private def presetDiffReviewItems(
+    presetName: String,
+    changes: List[PresetChange],
+    purpose: PresetDiffPurpose
+  ): List[CommandSurfaceItem] =
     val toggleItems = changes.map { change =>
       CommandSurfaceItem.ToggleItem(
         id = change.key,
@@ -248,9 +256,8 @@ final case class CommandRunner(
     }
     val confirmCommand = Command.typed(
       name = "confirm-preset-diff-apply",
-      description = s"Apply the selected changes from $presetName",
-      intent =
-        CommandIntent.UiPresets(UiPresetsIntent.ConfirmUiPresetDiffApply(presetName, presetDiffSelectedKeys(changes))),
+      description = purpose.confirmDescription(presetName),
+      intent = purpose.confirmIntent(presetName, presetDiffSelectedKeys(changes)),
       category = CommandCategory.Settings,
       label = "Apply Selected Changes"
     )
@@ -274,10 +281,10 @@ final case class CommandRunner(
 
   def settingsSurfaceSelectedIndex: Int =
     surface match
-      case CommandRunnerSurface.Settings(_, Some(drilled))    => pageSelectedIndex(drilled.current)
-      case CommandRunnerSurface.Settings(root, None)          => root.selectedIndex
-      case CommandRunnerSurface.Palette(state)                => state.selectedIndex
-      case CommandRunnerSurface.PresetDiffReview(_, _, state) => state.selectedIndex
+      case CommandRunnerSurface.Settings(_, Some(drilled))       => pageSelectedIndex(drilled.current)
+      case CommandRunnerSurface.Settings(root, None)             => root.selectedIndex
+      case CommandRunnerSurface.Palette(state)                   => state.selectedIndex
+      case CommandRunnerSurface.PresetDiffReview(_, _, state, _) => state.selectedIndex
 
   def settingsSurfaceBreadcrumbLabels: List[String] =
     activeSettingsSurface match

@@ -59,7 +59,7 @@ class StateManagerPartialDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
       _          <- operations.modelCommit.commitState(first.copy(), first)
       shown      <- eventually(ModelViews.appRef(modelRef).get.map(noticeText))
       _          <- operations.modelCommit.commitState(second, first)
-      _          <- IO.sleep(1.second)
+      _          <- operations.awaitEffects
       later      <- ModelViews.appRef(modelRef).get.map(noticeText)
       _          <- operations.shutdownEffects()
     yield (shown, later)

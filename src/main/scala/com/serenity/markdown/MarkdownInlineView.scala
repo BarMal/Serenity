@@ -1,0 +1,88 @@
+package com.serenity.markdown
+
+import com.serenity.config.MarkdownViewMode
+import com.serenity.lsp.config.LanguageId
+import com.serenity.markdown.MarkdownBlockLens.{BlockIndex, FenceRangeIndex}
+import com.serenity.markdown.MarkdownInlineSpans.Run
+import com.serenity.markdown.MarkdownTableColumns.Columns
+
+/** Whether, and where, a buffer's Markdown markers (emphasis, code, heading hashes, rules) are hidden. */
+enum MarkerMode:
+  /** Markers are ordinary text: source editing, or any buffer a live preview does not apply to. */
+  case Off
+
+  /** Markers are hidden except on the lines the caret or a selection touches. */
+  case Live
+
+  /** Markers are hidden on every line. */
+  case Read
+
+object MarkerMode:
+
+  /** A live preview needs per-glyph measurement and a pixel surface, so a Markdown buffer on a cell grid keeps its
+    * markers whatever the view mode says.
+    */
+  def of(viewMode: MarkdownViewMode, language: Option[LanguageId], cellGrid: Boolean): MarkerMode =
+    if cellGrid || !language.contains(LanguageId.Markdown) then Off
+    else
+      viewMode match
+        case MarkdownViewMode.LivePreview => Live
+        case MarkdownViewMode.Read        => Read
+        case _                            => Off
+
+/** The padding geometry of a document's tables, measured when a table is first asked about rather than for all of them
+  * at once.
+  */
+trait TableColumns:
+  def of(table: Range.Inclusive): Option[Columns]
+
+object TableColumns:
+
+  /** No table is padded. */
+  val None: TableColumns = _ => scala.None
+
+/** Everything layout and painting need to restyle one buffer's inline Markdown: how markers are hidden, the lines that
+  * stay revealed, the fenced blocks whose text is code rather than prose, and whether the buffer's own font is already
+  * monospaced, which decides if a code span needs a face of its own. It is a plain value, so two views that would lay a
+  * line out alike compare equal and a cached layout keyed on one is reused.
+  */
+final case class MarkdownInlineView(
+    mode: MarkerMode,
+    revealed: Vector[Range.Inclusive],
+    fences: BlockIndex,
+    baseIsMonospaced: Boolean = false,
+    tableColumns: TableColumns = TableColumns.None
+):
+
+  def isActive: Boolean = mode != MarkerMode.Off
+
+  /** The decorated stretches of `text`, the content of buffer line `line`. Code inside a fenced block is not prose. */
+  def runsOn(line: Int, text: String): Vector[Run] =
+    if !isActive || fences.rangeAt(line).isDefined then Vector.empty
+    else MarkdownBlockSpans.scan(text, fences.tableRowAt(line), fences.setextAt(line))
+
+  /** Whether `text`, buffer line `line`, is a thematic break, setext underline or table delimiter row drawn as a line
+    * in place of its hidden characters.
+    */
+  def drawsRuleOn(line: Int, text: String): Boolean =
+    isActive && hidesMarkersOn(line) && fences.rangeAt(line).isEmpty &&
+      MarkdownBlockSpans.isRule(text, fences.tableRowAt(line), fences.setextAt(line))
+
+  /** The padding geometry of the table `line` is a row of, when its pipes are to line up. */
+  def columnsOn(line: Int): Option[Columns] =
+    if (tableColumns eq TableColumns.None) || fences.tableRowAt(line) == MarkdownBlockLens.TableRow.Delimiter then None
+    else fences.tableAt(line).flatMap(tableColumns.of)
+
+  /** Whether `other` pads every one of `lines` just as this view does. */
+  def padsAlike(other: MarkdownInlineView, lines: Iterable[Int]): Boolean =
+    (tableColumns eq other.tableColumns) || lines.forall(line => columnsOn(line) == other.columnsOn(line))
+
+  def hidesMarkersOn(line: Int): Boolean =
+    mode match
+      case MarkerMode.Off  => false
+      case MarkerMode.Read => true
+      case MarkerMode.Live => !revealed.exists(range => range.start <= line && line <= range.end)
+
+object MarkdownInlineView:
+
+  val Off: MarkdownInlineView = MarkdownInlineView(MarkerMode.Off, Vector.empty, FenceRangeIndex(Vector.empty))

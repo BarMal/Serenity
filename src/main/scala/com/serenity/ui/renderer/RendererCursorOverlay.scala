@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.config.CursorMode
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.ui.color.RenderColor
@@ -85,7 +86,7 @@ object RendererCursorOverlay:
       caches
     )
     val cursorRects = RendererPaneContent.renderEditorCursors(state0, context, renderPlan)
-    presentHardwareCursor(surface, cursorVisible, cursorRects, cellMetrics)
+    presentHardwareCursor(surface, cursorVisible, cursorRects, cellMetrics, state0.persisted.config.cursorMode)
     surface.flush()
     cursorRects
 
@@ -97,7 +98,8 @@ object RendererCursorOverlay:
     surface: RenderSurface,
     cursorVisible: Boolean,
     cursorRects: List[PixelRect],
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    cursorMode: CursorMode
   ): Unit =
     surface.hardwareCursor.foreach { hardwareCursor =>
       cursorRects.headOption match
@@ -105,7 +107,7 @@ object RendererCursorOverlay:
           hardwareCursor.present(
             cellMetrics.toCol(rect.xPx),
             cellMetrics.toRow(rect.yPx),
-            HardwareCursorStyle(HardwareCursorShape.Block, blinking = true)
+            HardwareCursorStyle.forMode(cursorMode)
           )
         case _ =>
           hardwareCursor.hide()
@@ -352,7 +354,8 @@ object RendererCursorOverlay:
       codeFont.toAwt,
       swingWin.canvas,
       swingWin.onBaseImageReady,
-      swingWin.acquireBaseImage
+      swingWin.acquireBaseImage,
+      caches.surfaceText
     )
     // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.
@@ -394,7 +397,9 @@ object RendererCursorOverlay:
           damage,
           caches
         )
-        .fold(false) { renderPlan =>
+        // No plan means the start page was drawn under a blocking prompt: no caret and nothing to reuse, but the
+        // window must still repaint it, or the frame stays unseen until something else does.
+        .fold(swingWin.onCursorOverlayReady(None)(Nil)) { renderPlan =>
           val baseDirtyRects = repaintRegion.get().map(_.map(RendererFrameState.toAwtRectangle))
           swingWin.onCursorOverlayReady(baseDirtyRects) {
             val cursorSurface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont.toAwt, swingWin.canvas)

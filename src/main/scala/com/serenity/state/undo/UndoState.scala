@@ -1,7 +1,7 @@
 package com.serenity.state.undo
 
 import com.serenity.io.DocumentRevision
-import com.serenity.rope.Rope
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEditSupport
 import com.serenity.text.{LineEnding, LineEndingCounts}
@@ -27,15 +27,14 @@ final case class BufferSnapshot(
     // Bumped even when `content` is the current text: whatever was stamped against the current version (the rich
     // text, an outline) was stamped against the state being undone, not this one.
     val restoredDocument = buffer.document
-      .withContent(content)
+      .replacedWith(content)(using Balance.default)
       .copy(isNewEmpty = isNewEmpty, isDirty = !cleanIn.contains(buffer.document.savedGeneration))
     buffer.copy(
       document = restoredDocument,
       editing = editing,
       viewport = viewport,
       findState = findState,
-      annotations =
-        EditorEditSupport.adjustAnnotationsAcrossReplacement(buffer.annotations, buffer.document.content, content),
+      annotations = EditorEditSupport.adjustAnnotationsAcross(buffer.annotations, buffer.document, restoredDocument),
       // Fidelity describes the file as last read or written, not this edit state: undoing past a save must not bring
       // back a lossy-import warning that save already settled.
       richText = richText.copy(
@@ -87,6 +86,34 @@ object HistoryEntry:
         )
         (restoredState, inverse)
       }
+
+  /** A buffer's content as it stood before an edit made while no pane showed the buffer (#1965), so there is no pane
+    * for undo to snap focus to. The snapshot carries the cursors, which come back with the text, so the buffer shows
+    * them wherever it is next shown. It sits on the buffer's own history, so undo reaches it once a pane shows the
+    * buffer and is focused.
+    */
+  final case class DetachedBufferEdit(bufferId: BufferId, snapshot: BufferSnapshot) extends HistoryEntry:
+
+    def restore(state: AppState): Option[(AppState, HistoryEntry)] =
+      state.persisted.buffers.get(bufferId).map { current =>
+        val restored = state.copy(persisted =
+          state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> snapshot.restoreInto(current)))
+        )
+        (restored, DetachedBufferEdit(bufferId, BufferSnapshot.fromBuffer(current)))
+      }
+
+  /** One undo step that spans buffers (#1965): a rename or `workspace/applyEdit` that edits several, reverted by a
+    * single undo and re-applied by a single redo. It sits on the layout history, since no one buffer owns it. Members
+    * whose buffer has since been closed are skipped.
+    */
+  final case class Group(entries: List[HistoryEntry]) extends HistoryEntry:
+
+    def restore(state: AppState): Option[(AppState, HistoryEntry)] =
+      val (restored, inverses) = entries.foldLeft((state, List.empty[HistoryEntry])) {
+        case ((current, inversesSoFar), entry) =>
+          entry.restore(current).fold((current, inversesSoFar))((next, inverse) => (next, inverse :: inversesSoFar))
+      }
+      Option.when(inverses.nonEmpty)((restored, Group(inverses)))
 
   /** A buffer's line ending as it stood before it was changed (#1964). Only the document's save settings travel, never
     * its text, so it composes with [[BufferEdit]] entries in any order. `revision` tells a restore whether a save has
@@ -344,6 +371,7 @@ final case class UndoState(
     entry match
       case edit: HistoryEntry.BufferEdit         => withBufferStacks(edit.bufferId)(update)
       case change: HistoryEntry.LineEndingChange => withBufferStacks(change.bufferId)(update)
+      case edit: HistoryEntry.DetachedBufferEdit => withBufferStacks(edit.bufferId)(update)
       case _                                     => withStacksOf(HistoryOwner.OfLayout)(update)
 
   // Any change to a buffer's stacks ends its open run: the run's step is no longer the one an edit would fold into.

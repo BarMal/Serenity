@@ -2,7 +2,7 @@ package com.serenity.lsp.model
 
 import scala.annotation.tailrec
 
-import com.serenity.rope.{Balance, Rope, RopeDiff}
+import com.serenity.rope.{Balance, ChangeSet, Replacement, Rope, RopeDiff}
 
 /** Computes the minimal single-range edit between two full document snapshots, for LSP incremental sync
   * (`TextDocumentContentChangeEvent`). Only the before/after text is available at the call site (the buffer layer hands
@@ -45,6 +45,20 @@ object TextChangeDiff:
       range = LspRange(positionIn(before, oldStart), positionIn(before, oldEnd)),
       rangeLength = oldEnd - oldStart,
       text = after.sliceString(oldStart, end - suffixLen)
+    )
+
+  /** `change`, an edit of `before` already known, as the content changes a server applies one after another. Taken last
+    * part first, so each range is still in the coordinates of the text it applies to; positions come from the rope's
+    * own line index, and nothing is compared.
+    */
+  def changes(before: Rope, change: ChangeSet): List[Change] =
+    change.parts.reverseIterator.map(changeOf(before, _)).toList
+
+  private def changeOf(before: Rope, part: Replacement): Change =
+    Change(
+      range = LspRange(positionIn(before, part.from), positionIn(before, part.to)),
+      rangeLength = part.removedLength,
+      text = part.insert
     )
 
   /** The window starts after the last high surrogate it would otherwise split from its low half. */

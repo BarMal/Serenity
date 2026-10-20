@@ -14,10 +14,11 @@ import com.serenity.text.SmartPunctuation
 private[reducers] object EditorTextEditReducer:
   import EditorCursorMovement.*
   import EditorEditSupport.*
-  import EditorCursorSupport.{CursorEventContext, TabInsertion}
+  import EditorCursorSupport.CursorEventContext
 
   def reduce(event: TextEntryEvent, ctx: CursorEventContext): ReducerResult =
     import ctx.*
+    val indentation = buffer.effectiveIndentation(currentState.persisted.config.indentation)
 
     /** Like a plain buffer update, but `f` also reports the edits it made, so the undo boundary can record them.
       * `grouping` decides, from those edits, whether they coalesce into the run before them or are one undo step
@@ -41,25 +42,19 @@ private[reducers] object EditorTextEditReducer:
       else reduceDeletion(buffer, currentState, paneId, Some(kind), withoutSelection)
 
     event match
-      case InsertChar(char) =>
-        if hasSelection then applyEditedBuffer(standalone)(applyMultiSelectionReplacement(_, char.toString))
-        else if isMulti then applyEditedBuffer(typingGrouping(buffer))(applyMultiCursorInsertion(_, char.toString))
-        else
-          smartPunctuationReplacement(buffer, head, char, currentState) match
-            case Some(substitution) =>
-              insertWithSmartPunctuation(buffer, head, char, substitution, currentState, paneId)
-            case None =>
-              insertAtCursor(buffer, head, char.toString, currentState, paneId)
+      case InsertChar(char) => insertCharacter(char, ctx, applyEditedBuffer)
+      case InsertText(text) => insertCommittedText(text, ctx, applyEditedBuffer)
 
       case TabKey =>
         if hasSelection then
-          val (updated, edits) = applyLineIndent(buffer, selectionLines(buffer))
+          val (updated, edits) = applyLineIndent(buffer, selectionLines(buffer), indentation.indentUnit)
           ReducerResult(
             Focused.replaceBuffer(currentState, updated),
             undoBoundaryEffects(buffer.id, paneId, buffer, edits, EditGrouping.Standalone)
           )
-        else if isMulti then applyEditedBuffer(typingGrouping(buffer))(applyMultiCursorInsertion(_, TabInsertion))
-        else insertAtCursor(buffer, head, TabInsertion, currentState, paneId)
+        else if isMulti then
+          applyEditedBuffer(typingGrouping(buffer))(applyMultiCursorInsertion(_, indentation.indentUnit))
+        else insertAtCursor(buffer, head, indentation.indentUnit, currentState, paneId)
 
       case NewLine | Enter =>
         if hasSelection then applyEditedBuffer(standalone)(applyMultiSelectionReplacement(_, "\n"))
@@ -71,7 +66,7 @@ private[reducers] object EditorTextEditReducer:
           if hasSelection then selectionLines(buffer)
           else if isMulti then distinctCursorLines(buffer)
           else List(head.line)
-        applyEditedBuffer(standalone)(applyLineUnindent(_, targetLines))
+        applyEditedBuffer(standalone)(applyLineUnindent(_, targetLines, indentation.tabSize))
 
       case DeleteBackward => deleteGrapheme(EditKind.DeletingBackward)(graphemeBackwardDeletion(_, head))
 
@@ -153,7 +148,11 @@ private[reducers] object EditorTextEditReducer:
         val newContent = deleteOrUnchanged(buffer.document.content, start, end)
         val newCursor  = newContent.offsetToCursorPosition(start)
         val updated = buffer
-          .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, start, end, ""))
+          .withEditedDocument(
+            newContent,
+            richTextDocumentAfterEdit(buffer, start, end, ""),
+            Some(ChangeSet.single(buffer.document.content.weight, start, end, ""))
+          )
           .copy(
             editing = buffer.editing.withPrimary(Cursor(newCursor)),
             annotations = adjustAnnotations(
@@ -174,7 +173,11 @@ private[reducers] object EditorTextEditReducer:
         val newContent = deleteOrUnchanged(buffer.document.content, start, end)
         val newCursor  = newContent.offsetToCursorPosition(start)
         val updated = buffer
-          .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, start, end, ""))
+          .withEditedDocument(
+            newContent,
+            richTextDocumentAfterEdit(buffer, start, end, ""),
+            Some(ChangeSet.single(buffer.document.content.weight, start, end, ""))
+          )
           .copy(
             editing = buffer.editing.withPrimary(Cursor(newCursor)),
             annotations = adjustAnnotations(
@@ -206,7 +209,11 @@ private[reducers] object EditorTextEditReducer:
     val newContent = deleteOrUnchanged(buffer.document.content, startOffset, endOffset)
     val newCursor  = newContent.offsetToCursorPosition(cursorOffset)
     val baseBuffer = buffer
-      .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
+      .withEditedDocument(
+        newContent,
+        richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""),
+        Some(ChangeSet.single(buffer.document.content.weight, startOffset, endOffset, ""))
+      )
       .copy(
         editing = buffer.editing.withPrimary(Cursor(newCursor)),
         annotations = adjustAnnotations(
@@ -298,7 +305,11 @@ private[reducers] object EditorTextEditReducer:
     val newCursor = newContent.offsetToCursorPosition(startOffset + insertedText.length)
     val edit      = MultiCursorEdit(0, startOffset, endOffset, insertedText)
     val replaced = buffer
-      .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText))
+      .withEditedDocument(
+        newContent,
+        richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText),
+        Some(ChangeSet.single(buffer.document.content.weight, startOffset, endOffset, insertedText))
+      )
       .copy(
         editing = buffer.editing.withPrimary(Cursor(newCursor)),
         annotations = adjustAnnotations(
@@ -343,6 +354,35 @@ private[reducers] object EditorTextEditReducer:
         )
       }
     )
+
+  private type EditApplier =
+    (List[MultiCursorEdit] => EditGrouping) => (Buffer => (Buffer, List[MultiCursorEdit])) => ReducerResult
+
+  private def insertCharacter(char: Char, ctx: CursorEventContext, applyEditedBuffer: EditApplier): ReducerResult =
+    import ctx.*
+    if hasSelection then applyEditedBuffer(standalone)(applyMultiSelectionReplacement(_, char.toString))
+    else if isMulti then applyEditedBuffer(typingGrouping(buffer))(applyMultiCursorInsertion(_, char.toString))
+    else
+      smartPunctuationReplacement(buffer, head, char, currentState) match
+        case Some(substitution) =>
+          insertWithSmartPunctuation(buffer, head, char, substitution, currentState, paneId)
+        case None =>
+          insertAtCursor(buffer, head, char.toString, currentState, paneId)
+
+  /** A lone character is typing, smart punctuation included; anything longer is committed text, which is never
+    * reinterpreted.
+    */
+  private def insertCommittedText(
+    text: String,
+    ctx: CursorEventContext,
+    applyEditedBuffer: EditApplier
+  ): ReducerResult =
+    import ctx.*
+    if text.isEmpty then ReducerResult.noEffects(currentState)
+    else if text.length == 1 then insertCharacter(text.charAt(0), ctx, applyEditedBuffer)
+    else if hasSelection then applyEditedBuffer(standalone)(applyMultiSelectionReplacement(_, text))
+    else if isMulti then applyEditedBuffer(typingGrouping(buffer))(applyMultiCursorInsertion(_, text))
+    else insertAtCursor(buffer, head, text, currentState, paneId)
 
   private def insertAtCursor(
     buffer: Buffer,
@@ -409,7 +449,11 @@ private[reducers] object EditorTextEditReducer:
     }
     applyMergedDeletionEdits(buffer, entries.map(_.offset), edits)
 
-  private def applyLineIndent(buffer: Buffer, targetLines: List[Int]): (Buffer, List[MultiCursorEdit]) =
+  private def applyLineIndent(
+    buffer: Buffer,
+    targetLines: List[Int],
+    indentUnit: String
+  ): (Buffer, List[MultiCursorEdit]) =
     val targetSet = targetLines.filter(line => line >= 0 && line < buffer.document.content.lineCount).toSet
 
     if targetSet.isEmpty then (buffer, Nil)
@@ -417,7 +461,7 @@ private[reducers] object EditorTextEditReducer:
       val edits = targetSet.toList.sorted.zipWithIndex.map {
         case (line, index) =>
           val offset = buffer.document.content.lineColumnToOffset(line, 0)
-          MultiCursorEdit(index, offset, offset, TabInsertion)
+          MultiCursorEdit(index, offset, offset, indentUnit)
       }
       val folded = foldEditsTracked(buffer, edits.sortBy(edit => (-edit.start, -edit.end))) { (content, edit) =>
         insertOrUnchanged(content, edit.start, edit.insertedText)
@@ -426,7 +470,7 @@ private[reducers] object EditorTextEditReducer:
       val appliedEdits                              = folded.appliedAmong(edits)
       val indentedLines                             = linesOf(buffer, appliedEdits)
       val finalCursors = buffer.editing.cursorPositions.map { cursor =>
-        if indentedLines.contains(cursor.line) then cursor.copy(column = cursor.column + TabInsertion.length)
+        if indentedLines.contains(cursor.line) then cursor.copy(column = cursor.column + indentUnit.length)
         else cursor
       }.distinct
       val indented = buffer.withEditedContent(
@@ -438,17 +482,19 @@ private[reducers] object EditorTextEditReducer:
           updatedContent,
           appliedEdits
         ),
-        richTextDocument = updatedRichTextDocument
+        richTextDocument = updatedRichTextDocument,
+        change = Some(folded.change(buffer.document.content.weight))
       )
       (indented.clampedToContent, appliedEdits)
 
   private def applyLineUnindent(
     buffer: Buffer,
-    targetLines: List[Int]
+    targetLines: List[Int],
+    tabSize: Int
   ): (Buffer, List[MultiCursorEdit]) =
     val targetSet = targetLines.filter(line => line >= 0 && line < buffer.document.content.lineCount).toSet
     val removals = targetSet.toList.sorted.map { line =>
-      val (_, removed) = unindentLine(buffer.document.content.getLine(line).getOrElse(""))
+      val (_, removed) = unindentLine(buffer.document.content.getLine(line).getOrElse(""), tabSize)
       line -> removed
     }.toMap
 
@@ -481,16 +527,17 @@ private[reducers] object EditorTextEditReducer:
           updatedContent,
           appliedEdits
         ),
-        richTextDocument = updatedRichTextDocument
+        richTextDocument = updatedRichTextDocument,
+        change = Some(folded.change(buffer.document.content.weight))
       )
       (baseBuffer.clampedToContent, appliedEdits)
 
   private def linesOf(buffer: Buffer, edits: List[MultiCursorEdit]): Set[Int] =
     edits.map(edit => buffer.document.content.offsetToLineColumn(edit.start)._1).toSet
 
-  private def unindentLine(lineText: String): (String, Int) =
+  private def unindentLine(lineText: String, tabSize: Int): (String, Int) =
     if lineText.startsWith("\t") then (lineText.drop(1), 1)
     else
-      val spacesToRemove = lineText.take(TabInsertion.length).takeWhile(_ == ' ').length
+      val spacesToRemove = lineText.take(tabSize).takeWhile(_ == ' ').length
       if spacesToRemove == 0 then (lineText, 0)
       else (lineText.drop(spacesToRemove), spacesToRemove)

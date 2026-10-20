@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Runs PerformanceBenchmarks in <dir> under a virtual display and writes its CSV to <out>. Any further arguments are
+# benchmark names (prefixes) to run alone; with none, the whole suite runs.
+#   run-perf-benchmark.sh <dir> <out> [benchmark ...]
+# Needs SCREEN (e.g. 1920x1200x24), DPI and SCALE (Java2D's uiScale) in the environment.
+set -uo pipefail
+
+dir="$1" out="$2"
+shift 2
+names="$*"
+
+# sbt prefixes every line of runMain's stdout with "[info] " and `sbt -v` wraps it in ANSI colour escapes; strip both,
+# keeping from the suite's own title line onward so earlier sbt log noise is excluded. A run that crashes leaves an
+# empty CSV, which the comparison skips or reports.
+# A run that produced no rows measured nothing: dependency resolution failing on the runner's network (seen as a
+# missing scala3-sbt-bridge) says nothing about the commit, so it gets one more attempt. A benchmark that runs and is
+# slow is never retried -- the paired comparison decides that.
+for attempt in 1 2; do
+  (cd "$dir" && xvfb-run -a -s "-screen 0 ${SCREEN} -dpi ${DPI}" \
+    sbt -v "set Test / run / javaOptions += \"-Dsun.java2d.uiScale=${SCALE}\"" \
+    "Test/runMain com.serenity.perf.PerformanceBenchmarks ${names}") > "$out.raw" 2>&1 || true
+  sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$out.raw" \
+    | sed -n '/^\[info\] Serenity performance benchmarks$/,$p' \
+    | sed 's/^\[info\] //' > "$out"
+  echo "$out (attempt $attempt): $(grep -c . "$out" || true) lines"
+  if [ -s "$out" ]; then break; fi
+done

@@ -31,22 +31,25 @@ enum PickerSource:
     */
   case BufferText(batchSize: Int = BufferTextSearch.BatchSize, resumeAt: Option[BufferLine] = None)
 
-  /** The files under `root`, ranked against the query by [[FileFinder]] once their listing lands. */
-  case ProjectFiles(root: Path, listing: Loadable[ProjectFileListing])
+  /** The files under `root`, ranked against the query by [[FileFinder]] once their listing lands. `matched` is what the
+    * last non-empty query matched, for a longer one to narrow from.
+    */
+  case ProjectFiles(root: Path, listing: Loadable[ProjectFileListing], matched: Option[FileMatches] = None)
 
   /** Whether more choices than the picker holds can still be loaded, by [[ListPickerSearch.extended]]. */
   def hasMore: Boolean =
     this match
       case Fixed(_)                => false
       case BufferText(_, resumeAt) => resumeAt.isDefined
-      case ProjectFiles(_, _)      => false
+      case ProjectFiles(_, _, _)   => false
 
 /** A titled list to pick one entry from, as data -- so a new picker needs only a value of this. Its choices may still
   * be loading when it opens. While it is `pending` on a picked choice, that choice's work applies only if the picker is
   * still open and pending on it when the work lands, so Escape abandons it.
   *
   * A picker with a `query` shows it as an editable row; each edit recomputes its items from its `source`. Without a
-  * source, its items are only ever the ones it was given. `onDismiss` runs, unrecorded, when Escape closes it.
+  * source, its items are only ever the ones it was given. `onDismiss` runs, unrecorded, when Escape closes it. While
+  * `searchPending`, its items are those of an earlier query: a background search for the current one is running.
   */
 final case class ListPicker(
     title: String,
@@ -54,7 +57,8 @@ final case class ListPicker(
     pending: Option[ListChoice] = None,
     query: Option[TextField] = None,
     source: Option[PickerSource] = None,
-    onDismiss: Option[Command] = None
+    onDismiss: Option[Command] = None,
+    searchPending: Boolean = false
 ):
   def selectedChoice: Option[ListChoice] = items.toOption.flatMap(_.selectedItem)
 

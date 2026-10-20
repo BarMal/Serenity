@@ -2,7 +2,7 @@ package com.serenity.spellcheck
 
 import java.nio.file.Path
 
-import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
+import com.serenity.config.{AppConfig, SpellCheckConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.model.*
 import com.serenity.state.models.*
@@ -50,6 +50,7 @@ object SpellChecker:
 
   private[spellcheck] def lineDiagnostics(line: ProseLine, dictionary: DictionaryContext): List[Diagnostic] =
     line.words
+      .flatMap(CheckableScripts.checkable(_, dictionary.declaredUncoveredScripts))
       .flatMap(word => misspelledParts(line.text, word, dictionary))
       .map(misspelled => unknownWordDiagnostic(line.index, misspelled, dictionary))
 
@@ -98,7 +99,7 @@ object SpellChecker:
       state.persisted.buffers.values.foldLeft((preserved, Map.empty[DocumentUri, SpellCheckCacheEntry])) {
         case ((diagnostics, cache), buffer) =>
           val uri = diagnosticsUri(buffer)
-          if shouldCheck(buffer, state.persisted.config.languageToolsConfig.spellCheck) then
+          if shouldCheck(buffer, state.persisted.config) then
             val fingerprint = SpellCheckFingerprint.from(
               buffer,
               state.persisted.config.languageToolsConfig.spellCheck,
@@ -147,12 +148,24 @@ object SpellChecker:
     if !config.normalized.enabled then SpellCheckCacheEntry(fingerprint, Nil)
     else if dictionary.missingDictionary.nonEmpty then SpellCheckCacheEntry(fingerprint, loadFailures)
     else
+      val reusable = previous.filter(_.fingerprint.sameDictionaryAndConfig(fingerprint))
       val analysis = ParagraphSpellCheck.analyze(
         buffer.document.content,
-        previous.filter(_.fingerprint.sameDictionaryAndConfig(fingerprint)).flatMap(_.analysis),
-        dictionary
+        reusable.flatMap(_.analysis),
+        dictionary,
+        for
+          entry    <- reusable
+          version  <- entry.contentVersion
+          analysed <- entry.analysis
+          change   <- buffer.document.changeSinceText(version, analysed.content)
+        yield change
       )
-      SpellCheckCacheEntry(fingerprint, loadFailures ++ analysis.unknownWords, Some(analysis))
+      SpellCheckCacheEntry(
+        fingerprint,
+        loadFailures ++ analysis.unknownWords,
+        Some(analysis),
+        Some(buffer.document.contentVersion)
+      )
 
   /** Pure: `dictionaryFingerprints` must be discovered once (via `SpellCheckConfig.discoverDictionaryFingerprints` or
     * `DictionaryLoader.loadSnapshot`, both `IO.blocking`) and passed in -- this method never reads the filesystem, so
@@ -163,17 +176,18 @@ object SpellChecker:
     dictionaryFingerprints: List[SpellCheckDictionaryFingerprint]
   ): Map[DocumentUri, SpellCheckFingerprint] =
     state.persisted.buffers.values
-      .filter(buffer => shouldCheck(buffer, state.persisted.config.languageToolsConfig.spellCheck))
+      .filter(buffer => shouldCheck(buffer, state.persisted.config))
       .map(buffer =>
         diagnosticsUri(buffer) -> SpellCheckFingerprint
           .from(buffer, state.persisted.config.languageToolsConfig.spellCheck, dictionaryFingerprints)
       )
       .toMap
 
-  /** Pure: publishes `analyzed` onto `current` only if `current` still matches the fingerprints the analysis was
-    * computed against, rejecting stale results from a buffer or dictionary that changed mid-analysis.
-    * `dictionaryFingerprints` is the same precomputed value used to build `expected`, not re-read here -- this is what
-    * makes the comparison safe to run from inside `Ref.update`.
+  /** Pure: publishes what `analyzed` found onto `current`, buffer by buffer. A buffer unchanged since the analysis
+    * (`expected`) shows its result as found. One edited meanwhile shows the result moved through the edits made since,
+    * and keeps the entry for the next check to continue from, so typing never discards a finished analysis; one whose
+    * dictionary or config changed keeps what it showed. `dictionaryFingerprints` is the same precomputed value used to
+    * build `expected`, not re-read here -- this is what makes the comparison safe to run from inside `Ref.update`.
     */
   def applyIfCurrent(
     current: AppState,
@@ -181,18 +195,55 @@ object SpellChecker:
     expected: Map[DocumentUri, SpellCheckFingerprint],
     dictionaryFingerprints: List[SpellCheckDictionaryFingerprint]
   ): AppState =
-    if analysisFingerprints(current, dictionaryFingerprints) == expected then
-      current.copy(runtime =
-        current.runtime.copy(languageService =
-          current.runtime.languageService.copy(diagnosticsState =
-            current.runtime.languageService.diagnosticsState.copy(
-              diagnostics = withoutIgnoredWords(current, analyzed.runtime.languageService.diagnosticsState.diagnostics),
-              spellCheckCache = analyzed.runtime.languageService.diagnosticsState.spellCheckCache
-            )
-          )
+    val now           = analysisFingerprints(current, dictionaryFingerprints)
+    val held          = current.runtime.languageService.diagnosticsState
+    val analyzedCache = analyzed.runtime.languageService.diagnosticsState.spellCheckCache
+    val buffers       = if now == expected then Map.empty else buffersByUri(current)
+    val published: Map[DocumentUri, (List[Diagnostic], SpellCheckCacheEntry)] = now.flatMap { (uri, fingerprint) =>
+      analyzedCache
+        .get(uri)
+        .flatMap(entry =>
+          if expected.get(uri).contains(fingerprint) then Some(entry.diagnostics -> entry)
+          else movedToCurrent(entry, fingerprint, buffers.get(uri))
+        )
+        .map(uri -> _)
+    }
+    val diagnostics = (held.diagnostics.keySet ++ now.keySet).iterator.flatMap { uri =>
+      val shown = held.diagnostics.getOrElse(uri, Nil)
+      val spell =
+        if !now.contains(uri) then Nil
+        else published.get(uri).fold(shown.filter(isSpellCheckDiagnostic))(_._1)
+      val others = if shown.forall(isSpellCheckDiagnostic) then Nil else shown.filterNot(isSpellCheckDiagnostic)
+      val all    = if others.isEmpty then spell else others ++ spell
+      Option.when(all.nonEmpty)(uri -> all)
+    }.toMap
+    val cache = now.keysIterator.flatMap { uri =>
+      published.get(uri).map(_._2).orElse(held.spellCheckCache.get(uri)).map(uri -> _)
+    }.toMap
+    current.copy(runtime =
+      current.runtime.copy(languageService =
+        current.runtime.languageService.copy(diagnosticsState =
+          held.copy(diagnostics = withoutIgnoredWords(current, diagnostics), spellCheckCache = cache)
         )
       )
-    else current
+    )
+
+  private def buffersByUri(state: AppState): Map[DocumentUri, Buffer] =
+    state.persisted.buffers.values.map(buffer => diagnosticsUri(buffer) -> buffer).toMap
+
+  /** `entry` as it reads in `buffer` now, when only its text has changed since the analysis and the edits are known. */
+  private def movedToCurrent(
+    entry: SpellCheckCacheEntry,
+    fingerprint: SpellCheckFingerprint,
+    buffer: Option[Buffer]
+  ): Option[(List[Diagnostic], SpellCheckCacheEntry)] =
+    for
+      current  <- buffer
+      version  <- entry.contentVersion
+      analysed <- entry.analysis
+      if entry.fingerprint.sameDictionaryAndConfig(fingerprint)
+      change <- current.document.changeSinceText(version, analysed.content)
+    yield DiagnosticsEditRemap.through(entry.diagnostics, change, analysed.content, current.document.content) -> entry
 
   /** The word covered by an active spell-check diagnostic at the cursor (#1531), read back from the buffer's current
     * content at the diagnostic's own range rather than reparsed from the diagnostic message. `None` when there is no
@@ -289,8 +340,9 @@ object SpellChecker:
   def bufferDiagnosticsUri(bufferId: BufferId): DocumentUri =
     DocumentUri(s"buffer:${bufferId.value}")
 
-  private def shouldCheck(buffer: Buffer, config: SpellCheckConfig): Boolean =
-    config.enabled && buffer.usesTextFont
+  private def shouldCheck(buffer: Buffer, config: AppConfig): Boolean =
+    config.languageToolsConfig.spellCheck.enabled && buffer.usesTextFont &&
+      config.largeFiles.allowsSpellCheck(buffer.document)
 
   private def dictionaryLoadDiagnostics(failures: List[String]): List[Diagnostic] =
     failures.map { message =>

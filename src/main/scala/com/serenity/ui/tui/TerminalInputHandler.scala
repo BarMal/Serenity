@@ -1,7 +1,7 @@
 package com.serenity.ui.tui
 
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 
 import scala.concurrent.duration.*
 
@@ -184,7 +184,9 @@ object TerminalInputHandler:
     escDeadline: FiniteDuration = EscDisambiguationDeadline,
     readerOverride: Option[NonBlockingReader] = None,
     metrics: TerminalInputMetrics = TerminalInputMetrics.Disabled,
-    mouseTrackingSupported: Boolean = defaultMouseTrackingSupported
+    mouseTrackingSupported: Boolean = defaultMouseTrackingSupported,
+    beforeEachRead: IO[Unit] = IO.unit,
+    readSource: Option[ReadGate => IO[Int]] = None
   ): IO[TerminalInputHandler] =
     for
       queue            <- Queue.unbounded[IO, Option[QueuedInput]]
@@ -195,12 +197,13 @@ object TerminalInputHandler:
       modifierTapState <- Ref.of[IO, ModifierTapState](ModifierTapState.empty)
       focusCallback    <- IO(new AtomicReference[Option[Boolean => Unit]](None))
       _                <- enableModes(terminal, mouseTrackingSupported)
-      // `readerOverride` lets a test drive the exact JLine reader in place of `terminal.reader()` -- in particular one
-      // that emulates a non-tty pipe, where a timed read misfires. Production always uses the terminal's own reader.
-      reader = readerOverride.getOrElse(terminal.reader())
+      // `readerOverride` lets a test drive the exact JLine reader in place of `terminal.reader()`, e.g. a non-tty pipe.
+      reader   = readerOverride.getOrElse(terminal.reader())
+      pumpRead = readSource.getOrElse((gate: ReadGate) => IO.interruptible(gate.read(reader)))
       // rawReadLoop runs on a dedicated fiber so the CE3 compute pool is never blocked waiting for the terminal;
-      // guarantee(rawFiber.cancel) tears it down whenever readLoop exits (naturally or via cancellation).
-      fiber <- rawReadLoop(reader, rawQueue, escDeadline, metrics).start.flatMap { rawFiber =>
+      // `background` starts it uncancelably and cancels it whenever readLoop exits (naturally or via cancellation), so
+      // a shutdown landing between the start and the clean-up cannot leave it, or the reader it parks, running.
+      fiber <- rawReadLoop(pumpRead, rawQueue, escDeadline, metrics, beforeEachRead).background.surround {
         readLoop(
           rawQueue,
           queue,
@@ -214,7 +217,6 @@ object TerminalInputHandler:
           wheelScrollLines,
           metrics
         )
-          .guarantee(rawFiber.cancel)
       }.start
     yield new TerminalInputHandler(
       inputRouter,
@@ -256,6 +258,38 @@ object TerminalInputHandler:
   private[tui] def toUtf8Bytes(ch: Int): Array[Byte] =
     if ch < 0x80 then Array(ch.toByte) else String.valueOf(ch.toChar).getBytes(StandardCharsets.UTF_8)
 
+  /** Folds one `read()` into the outcomes it completes. JLine delivers a code point outside the BMP as two reads, a
+    * high then a low surrogate, and each half encoded alone is not UTF-8, so the high half is held until the next read
+    * decides whether it is the start of a pair. A half that never meets its partner is passed on as it always was.
+    */
+  private[tui] def surrogateStep(pendingHigh: Option[Char], read: Int): (List[ReadOutcome], Option[Char]) =
+    val flushed = pendingHigh.toList.map(high => toOutcome(high.toInt))
+    if read >= 0 && read <= 0xffff then
+      val char = read.toChar
+      pendingHigh match
+        case Some(high) if Character.isLowSurrogate(char) =>
+          (List(ReadOutcome.Bytes(new String(Array(high, char)).getBytes(StandardCharsets.UTF_8))), None)
+        case _ if Character.isHighSurrogate(char) => (flushed, Some(char))
+        case _                                    => (flushed :+ toOutcome(read), None)
+    else (flushed :+ toOutcome(read), None)
+
+  /** Tells whether the pump is blocked inside `reader.read()`. The count rises as a read is entered and again as it
+    * returns, both on the reading thread itself, so it is odd exactly while a read is in flight and one value says both
+    * whether and which read -- an unchanged odd count across two samples is the same read, parked throughout.
+    */
+  final private[tui] class ReadGate:
+    private[tui] val transitions = new AtomicLong(0L)
+
+    def read(reader: NonBlockingReader): Int =
+      transitions.incrementAndGet()
+      val next = reader.read()
+      transitions.incrementAndGet()
+      next
+
+    def sample: IO[Long] = IO(transitions.get)
+
+  private def parkedThroughout(first: Long, second: Long): Boolean = first == second && first % 2L == 1L
+
   /** Runs on a dedicated fiber; reads raw chars from the JLine reader as fast as they arrive and stuffs each one into
     * [[rawQueue]], so the CE3 compute pool is never blocked waiting for terminal I/O and the pty kernel buffer never
     * fills during a slow dispatch cycle. [[readLoop]] consumes from [[rawQueue]] and can safely use [[Queue.tryTake]]
@@ -271,25 +305,45 @@ object TerminalInputHandler:
     * The deadline is a Cats-Effect timer, not JLine's `reader.read(timeout)`. `IO.sleep` is terminal-independent;
     * `NonBlockingReader.read(timeout)` is not -- on a non-tty stdin (git bash on Windows without winpty, whose stdin is
     * a plain MSYS pipe) it reports `READ_EXPIRED` even while the rest of the sequence is already available, which split
-    * every arrow and kitty-Backspace back into Escape-plus-characters. So an ever-running [[pump]] does only plain,
-    * uninterrupted `reader.read()` into [[pumpQueue]], and the [[arbiter]] races the deadline against *taking* the next
-    * pumped byte -- never against a real read. Losing that race therefore cannot lose a byte: it stays in [[pumpQueue]]
-    * for the next take. Before committing to `Expired`, the arbiter re-checks with [[Queue.tryTake]] so a byte that
-    * landed exactly on the boundary (or while the arbiter fiber was momentarily starved) still wins, keeping #1283's
-    * guarantee intact on both real ptys and non-tty pipes.
+    * every arrow and kitty-Backspace back into Escape-plus-characters. (`ready()` cannot stand in for it either: the
+    * POSIX and dumb-terminal readers never override it, so it is always false.) So an ever-running [[pump]] does only
+    * plain, uninterrupted `reader.read()` into [[pumpQueue]], and the [[arbiter]] races the deadline against *taking*
+    * the next pumped byte -- never against a real read. Losing that race therefore cannot lose a byte: it stays in
+    * [[pumpQueue]] for the next take.
+    *
+    * What the timer alone cannot say is whether the pump has read yet. A pump that is late getting back to the reader
+    * (the blocking pool is busy, the fiber is unscheduled) leaves bytes already in the terminal buffer that nothing has
+    * pumped, and the deadline would read that silence as "nothing followed" (#1709). So `Expired` needs the pump to be
+    * parked in the same `read()` at the half-way point and at the deadline ([[ReadGate]]). A `read()` entered while
+    * input is buffered returns at once, so a read still blocked after half a deadline was entered with nothing
+    * buffered; whatever arrived since is a byte that came after the `ESC`'s window, not one the pump failed to pick up.
+    * The gate is cleared by the reading thread the instant `read()` returns, before the byte is enqueued, so a byte in
+    * transit between `read()` and [[pumpQueue]] also counts as "not parked". If the pump was not parked throughout, the
+    * arbiter gives it one more `escDeadline` to deliver before concluding Escape, which bounds the wait on a pump that
+    * never comes back. What remains is the span between the OS making a byte readable and the reading thread running
+    * the next instruction after `read()` returns, which only a whole-process pause or thread preemption inside it can
+    * stretch to a deadline.
     */
   private def rawReadLoop(
-    reader: NonBlockingReader,
+    readSource: ReadGate => IO[Int],
     rawQueue: Queue[IO, ReadOutcome],
     escDeadline: FiniteDuration,
-    metrics: TerminalInputMetrics
+    metrics: TerminalInputMetrics,
+    beforeEachRead: IO[Unit]
   ): IO[Unit] =
     Queue.unbounded[IO, ReadOutcome].flatMap { pumpQueue =>
-      def pump: IO[Unit] =
-        IO.interruptible(reader.read()).map(toOutcome).flatMap {
-          case ReadOutcome.Eof                => pumpQueue.offer(ReadOutcome.Eof)
-          case outcome @ ReadOutcome.Bytes(_) => metrics.recordCharsRead(1) >> pumpQueue.offer(outcome) >> pump
-          case outcome                        => pumpQueue.offer(outcome) >> pump
+      val gate = new ReadGate
+
+      def offerOutcome(outcome: ReadOutcome): IO[Unit] =
+        outcome match
+          case ReadOutcome.Bytes(_) => metrics.recordCharsRead(1) >> pumpQueue.offer(outcome)
+          case _                    => pumpQueue.offer(outcome)
+
+      def pump(pendingHigh: Option[Char]): IO[Unit] =
+        (beforeEachRead >> readSource(gate)).flatMap { read =>
+          val (outcomes, nextPending) = surrogateStep(pendingHigh, read)
+          outcomes.traverse_(offerOutcome) >> (if outcomes.contains(ReadOutcome.Eof) then IO.unit
+                                               else pump(nextPending))
         }
 
       def forward(outcome: ReadOutcome): IO[Unit] =
@@ -299,19 +353,36 @@ object TerminalInputHandler:
             rawQueue.offer(outcome) >> awaitAfterEsc
           case _ => rawQueue.offer(outcome) >> arbiter
 
+      def nextWithin(window: FiniteDuration): IO[Option[ReadOutcome]] =
+        IO.race(IO.sleep(window), pumpQueue.take).map(_.toOption)
+
       def awaitAfterEsc: IO[Unit] =
-        IO.race(IO.sleep(escDeadline), pumpQueue.take).flatMap {
-          case Right(outcome) => forward(outcome)
-          case Left(_) =>
-            pumpQueue.tryTake.flatMap {
-              case Some(outcome) => forward(outcome)
-              case None          => rawQueue.offer(ReadOutcome.Expired) >> arbiter
+        val firstHalf = escDeadline / 2
+        nextWithin(firstHalf).flatMap {
+          case Some(outcome) => forward(outcome)
+          case None =>
+            gate.sample.flatMap { atHalfway =>
+              nextWithin(escDeadline - firstHalf).flatMap {
+                case Some(outcome) => forward(outcome)
+                case None =>
+                  gate.sample.flatMap { atDeadline =>
+                    if parkedThroughout(atHalfway, atDeadline) then concludeEscape
+                    else nextWithin(escDeadline).flatMap(_.fold(concludeEscape)(forward))
+                  }
+              }
             }
+        }
+
+      // Last look before committing: a byte that landed exactly on the boundary still wins.
+      def concludeEscape: IO[Unit] =
+        pumpQueue.tryTake.flatMap {
+          case Some(outcome) => forward(outcome)
+          case None          => rawQueue.offer(ReadOutcome.Expired) >> arbiter
         }
 
       def arbiter: IO[Unit] = pumpQueue.take.flatMap(forward)
 
-      pump.start.flatMap(pumpFiber => arbiter.guarantee(pumpFiber.cancel))
+      pump(None).background.surround(arbiter)
     }
 
   private def readLoop(
@@ -335,6 +406,9 @@ object TerminalInputHandler:
       case DecodedToken.Key(info) =>
         modifierTapState.update(ModifierTapDetector.otherKeyPressed) >>
           latestMovement.set(None) >> queue.offer(Some(QueuedInput.Key(info))) >> metrics.recordKeysQueued(1)
+      case DecodedToken.Text(text) =>
+        modifierTapState.update(ModifierTapDetector.otherKeyPressed) >>
+          latestMovement.set(None) >> queue.offer(Some(QueuedInput.Direct(InsertText(text))))
       case DecodedToken.Mouse(event) => enqueueMouse(event)
       case DecodedToken.WheelNotch(col, row, down) =>
         val scroll = MouseWheel(col, row, if down then wheelScrollLines else -wheelScrollLines)

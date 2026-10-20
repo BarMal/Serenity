@@ -75,6 +75,7 @@ private[manager] object ModeTransition:
         for
           path     <- buffer.document.filePath
           language <- buffer.document.language
+          if state.persisted.config.largeFiles.allowsLanguageTooling(buffer.document)
         yield (path.toUri.toString, language, buffer.document.content)
       }
       .distinctBy((uri, _, _) => uri)

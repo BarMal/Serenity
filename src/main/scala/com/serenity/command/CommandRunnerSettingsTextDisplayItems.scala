@@ -50,6 +50,16 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
       hint = "Wrap long logical lines to the editor width"
     )
 
+  private[command] def insertSpacesOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
+      id = "insert-spaces",
+      label = "Insert Spaces",
+      selectedIndex = optionSelections.getOrElse("insert-spaces", 0),
+      enabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetInsertSpaces(true))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetInsertSpaces(false))),
+      hint = "On: Tab inserts spaces. Off: Tab inserts a tab character"
+    )
+
   private[command] def visualLineNavigationOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =

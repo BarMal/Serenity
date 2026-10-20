@@ -36,8 +36,9 @@ default.
 
 ## Other launch flags
 
-`--tui` forces the terminal interface, `--gui` forces the window (and wins over `--tui`), `--eco` lowers the frame-rate
-target, `--alpha` enables experimental features, and `--version` prints the build and exits. Give a path, or
+`--tui` forces the terminal interface, `--gui` forces the window (and wins over `--tui`), `--eco` saves power (30fps
+rendering, a steady caret, no chapter ghosts, and longer pauses before spell check and the outline refresh), `--alpha`
+enables experimental features, and `--version` prints the build and exits. Give a path, or
 `--open path`, to open a file on start.
 
 Logs for a problem report are in `~/.serenity/serenity.log`.

@@ -43,6 +43,15 @@ private[state] object EditorEditSupport:
       val entry = HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(before))
       List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, grouping)))
 
+  /** The undo entry for `edits` made to `before` (#1965): in `paneId` when a pane shows the buffer, detached otherwise.
+    */
+  def undoEntry(before: Buffer, paneId: Option[PaneId], edits: List[MultiCursorEdit]): Option[HistoryEntry] =
+    Option.when(edits.nonEmpty)(
+      paneId.fold[HistoryEntry](HistoryEntry.DetachedBufferEdit(before.id, BufferSnapshot.fromBuffer(before)))(pane =>
+        HistoryEntry.BufferEdit(before.id, pane, BufferSnapshot.fromBuffer(before))
+      )
+    )
+
   val standalone: List[MultiCursorEdit] => EditGrouping = _ => EditGrouping.Standalone
 
   /** Typing `edits` into `before`: whitespace typed straight after a word opens a new undo step. */
@@ -99,6 +108,11 @@ private[state] object EditorEditSupport:
     */
   final case class FoldedEdits(content: Rope, richText: Option[RichTextDocument], applied: List[MultiCursorEdit]):
 
+    /** The applied edits as one change to a document of `oldLength` characters. They were applied in `applied` order,
+      * each against the original offsets, so edits meeting at a point nest the way sequential inserts do.
+      */
+    def change(oldLength: Int): ChangeSet = EditorEditSupport.changeOf(oldLength, applied)
+
     /** The members of `edits` that were applied, for the adjustments (annotations, cursors, undo) that follow the text:
       * a skipped edit changed nothing, so it must not move anything.
       */
@@ -108,6 +122,13 @@ private[state] object EditorEditSupport:
           done.start == edit.start && done.end == edit.end && done.insertedText == edit.insertedText
         )
       )
+
+  private[reducers] def changeOf(oldLength: Int, edits: List[MultiCursorEdit]): ChangeSet =
+    ChangeSet.fromIntents(
+      oldLength,
+      edits.map(edit => Replacement(edit.start, edit.end, edit.insertedText)),
+      OverlapPolicy.ConcatAtPoint
+    )
 
   def foldEditsTracked(
     buffer: Buffer,
@@ -154,26 +175,14 @@ private[state] object EditorEditSupport:
   ): (Buffer, List[MultiCursorEdit]) =
     if edits.isEmpty then (buffer, Nil)
     else
-      val trackedOffsets = initialOffsets.toArray
-      val sortedEdits    = edits.sortBy(edit => (-edit.start, -edit.end))
+      val sortedEdits = edits.sortBy(edit => (-edit.start, -edit.end))
       val folded = foldEditsTracked(buffer, sortedEdits) { (content, edit) =>
         insertOrUnchanged(deleteOrUnchanged(content, edit.start, edit.end), edit.start, edit.insertedText)
       }
       val (updatedContent, updatedRichTextDocument) = (folded.content, folded.richText)
       val appliedEdits                              = folded.appliedAmong(edits)
-      val finalOffsets = folded.applied.foldLeft(trackedOffsets) { (offsets, edit) =>
-        val delta = edit.insertedText.length - (edit.end - edit.start)
-        offsets.indices.foreach { i =>
-          val offset = offsets(i)
-          offsets(i) =
-            if offset < edit.start then offset
-            else if offset > edit.end then offset + delta
-            else if i == edit.ownerIndex then edit.start + edit.insertedText.length
-            else edit.start + edit.insertedText.length
-        }
-        offsets
-      }
-      val finalCursors = finalOffsets.toList
+      val finalOffsets                              = remapCursorOffsets(initialOffsets, folded.applied)
+      val finalCursors = finalOffsets
         .map(offset => updatedContent.offsetToCursorPosition(offset))
         .distinct
       val baseBuffer = buffer.withEditedContent(
@@ -185,9 +194,31 @@ private[state] object EditorEditSupport:
           updatedContent,
           appliedEdits
         ),
-        richTextDocument = updatedRichTextDocument
+        richTextDocument = updatedRichTextDocument,
+        change = Some(folded.change(buffer.document.content.weight))
       )
       (baseBuffer, appliedEdits)
+
+  /** `applied` is in the order the edits were applied, descending by offset. Separated edits are mapped in one merge;
+    * touching or overlapping ones keep the edit-by-edit rule, which says where a cursor on a shared boundary ends up.
+    */
+  private def remapCursorOffsets(offsets: List[Int], applied: List[MultiCursorEdit]): List[Int] =
+    val ascending = applied.reverse
+    if EditRemap.areSeparated(ascending) then EditRemap.mapCursorOffsets(offsets, ascending)
+    else
+      applied
+        .foldLeft(offsets.toArray) { (current, edit) =>
+          val delta = edit.insertedText.length - (edit.end - edit.start)
+          current.indices.foreach { i =>
+            val offset = current(i)
+            current(i) =
+              if offset < edit.start then offset
+              else if offset > edit.end then offset + delta
+              else edit.start + edit.insertedText.length
+          }
+          current
+        }
+        .toList
 
   /** Merged-range sibling of [[applyTrackedEdits]] -- deletion-only, so no `insertedText` bookkeeping, but the content
     * and `richTextDocument` folds mirror it exactly: both need each range applied against the content (and rich-text
@@ -228,7 +259,8 @@ private[state] object EditorEditSupport:
           updatedContent,
           mergedEdits
         ),
-        richTextDocument = updatedRichTextDocument
+        richTextDocument = updatedRichTextDocument,
+        change = Some(folded.change(buffer.document.content.weight))
       )
       (baseBuffer, mergedEdits)
 
@@ -267,21 +299,7 @@ private[state] object EditorEditSupport:
     edits: List[MultiCursorEdit]
   ): List[DocumentComment] =
     if comments.isEmpty || edits.isEmpty then comments
-    else
-      val sortedEdits = edits.sortBy(edit => (edit.start, edit.end))
-      comments.map { comment =>
-        val startOffset              = initialContent.lineColumnToOffset(comment.start.line, comment.start.column)
-        val endOffset                = initialContent.lineColumnToOffset(comment.end.line, comment.end.column)
-        val nextStart                = remapCommentStart(startOffset, sortedEdits)
-        val nextEnd                  = remapCommentEnd(endOffset, sortedEdits).max(nextStart)
-        val (startLine, startColumn) = updatedContent.offsetToLineColumn(nextStart)
-        val (endLine, endColumn)     = updatedContent.offsetToLineColumn(nextEnd)
-
-        comment.copy(
-          anchor = CursorPosition(startLine, startColumn),
-          focus = CursorPosition(endLine, endColumn)
-        )
-      }
+    else remapComments(comments, EditShape.of(initialContent, updatedContent, edits))
 
   /** A placeholder stays put when text is typed exactly at its position: it marks where writing is still owed, so an
     * Enter at the end of a heading must leave it on the heading line rather than carrying it into the new paragraph.
@@ -293,11 +311,7 @@ private[state] object EditorEditSupport:
     edits: List[MultiCursorEdit]
   ): List[Placeholder] =
     if placeholders.isEmpty || edits.isEmpty then placeholders
-    else
-      val sortedEdits = edits.sortBy(edit => (edit.start, edit.end))
-      placeholders.map(placeholder =>
-        placeholder.copy(position = remapPoint(placeholder.position, initialContent, updatedContent, sortedEdits))
-      )
+    else remapPlaceholders(placeholders, EditShape.of(initialContent, updatedContent, edits))
 
   /** Bookmarks follow edits the way placeholders do, and two that a deletion collapses onto one spot become one. */
   def adjustBookmarks(
@@ -307,18 +321,58 @@ private[state] object EditorEditSupport:
     edits: List[MultiCursorEdit]
   ): List[CursorPosition] =
     if bookmarks.isEmpty || edits.isEmpty then bookmarks
-    else
-      val sortedEdits = edits.sortBy(edit => (edit.start, edit.end))
-      bookmarks.map(remapPoint(_, initialContent, updatedContent, sortedEdits)).distinct
+    else remapBookmarks(bookmarks, EditShape.of(initialContent, updatedContent, edits))
 
-  private def remapPoint(
-    position: CursorPosition,
-    initialContent: Rope,
-    updatedContent: Rope,
-    sortedEdits: List[MultiCursorEdit]
-  ): CursorPosition =
-    val offset = initialContent.lineColumnToOffset(position.line, position.column)
-    updatedContent.offsetToCursorPosition(remapEditBoundary(offset, sortedEdits, insertionAtBoundaryMoves = false))
+  /** One batch of edits as the annotation remaps need it: sorted, and described by line and column when the edits are
+    * separated, so positions are mapped by arithmetic instead of by converting each through the rope.
+    */
+  final private case class EditShape(
+      initialContent: Rope,
+      updatedContent: Rope,
+      sortedEdits: List[MultiCursorEdit],
+      lineColumnMap: Option[EditRemap.LineColumnEditMap]
+  )
+
+  private object EditShape:
+
+    def of(initialContent: Rope, updatedContent: Rope, edits: List[MultiCursorEdit]): EditShape =
+      val sorted = edits.sortBy(edit => (edit.start, edit.end))
+      EditShape(initialContent, updatedContent, sorted, EditRemap.LineColumnEditMap.forEdits(initialContent, sorted))
+
+  private def remapComments(comments: List[DocumentComment], shape: EditShape): List[DocumentComment] =
+    shape.lineColumnMap match
+      case Some(lineColumnMap) =>
+        comments.map { comment =>
+          val start = lineColumnMap.map(comment.start, insertionAtBoundaryMoves = true)
+          val end   = lineColumnMap.map(comment.end, insertionAtBoundaryMoves = false)
+          comment.copy(anchor = start, focus = if EditRemap.isBefore(end, start) then start else end)
+        }
+      case None =>
+        comments.map { comment =>
+          val startOffset = shape.initialContent.lineColumnToOffset(comment.start.line, comment.start.column)
+          val endOffset   = shape.initialContent.lineColumnToOffset(comment.end.line, comment.end.column)
+          val nextStart   = remapCommentStart(startOffset, shape.sortedEdits)
+          val nextEnd     = remapCommentEnd(endOffset, shape.sortedEdits).max(nextStart)
+          comment.copy(
+            anchor = shape.updatedContent.offsetToCursorPosition(nextStart),
+            focus = shape.updatedContent.offsetToCursorPosition(nextEnd)
+          )
+        }
+
+  private def remapPlaceholders(placeholders: List[Placeholder], shape: EditShape): List[Placeholder] =
+    placeholders.map(placeholder => placeholder.copy(position = remapPoint(placeholder.position, shape)))
+
+  private def remapBookmarks(bookmarks: List[CursorPosition], shape: EditShape): List[CursorPosition] =
+    bookmarks.map(remapPoint(_, shape)).distinct
+
+  private def remapPoint(position: CursorPosition, shape: EditShape): CursorPosition =
+    shape.lineColumnMap match
+      case Some(lineColumnMap) => lineColumnMap.map(position, insertionAtBoundaryMoves = false)
+      case None =>
+        val offset = shape.initialContent.lineColumnToOffset(position.line, position.column)
+        shape.updatedContent.offsetToCursorPosition(
+          remapEditBoundary(offset, shape.sortedEdits, insertionAtBoundaryMoves = false)
+        )
 
   /** The one place an edit's effect on user-authored annotations is decided, so a new annotation kind cannot be added
     * to `Annotations` and then forgotten by one of the edit paths.
@@ -329,11 +383,14 @@ private[state] object EditorEditSupport:
     updatedContent: Rope,
     edits: List[MultiCursorEdit]
   ): Annotations =
-    annotations.copy(
-      bookmarks = adjustBookmarks(annotations.bookmarks, initialContent, updatedContent, edits),
-      documentComments = adjustDocumentComments(annotations.documentComments, initialContent, updatedContent, edits),
-      placeholders = adjustPlaceholders(annotations.placeholders, initialContent, updatedContent, edits)
-    )
+    if edits.isEmpty || hasNoAnnotations(annotations) then annotations
+    else
+      val shape = EditShape.of(initialContent, updatedContent, edits)
+      annotations.copy(
+        bookmarks = remapBookmarks(annotations.bookmarks, shape),
+        documentComments = remapComments(annotations.documentComments, shape),
+        placeholders = remapPlaceholders(annotations.placeholders, shape)
+      )
 
   /** For a whole-content swap that carries no edit list -- undo and redo restore a snapshot's text outright. The
     * difference is treated as one replaced region (common prefix and suffix trimmed), so annotations keep their place
@@ -342,16 +399,32 @@ private[state] object EditorEditSupport:
     * marker there may land anywhere within the run.
     */
   def adjustAnnotationsAcrossReplacement(annotations: Annotations, before: Rope, after: Rope): Annotations =
-    if annotations.bookmarks.isEmpty && annotations.documentComments.isEmpty && annotations.placeholders.isEmpty then
-      annotations
-    else
-      // `RopeDiff` wants a `Balance` only for an empty rope on a branch its bounds make unreachable; the ropes compared
-      // carry their own.
-      RopeDiff.changedOffsetRange(before, after)(using Balance.default).fold(annotations) { (start, end) =>
-        val replacedEnd = before.weight - (after.weight - end)
-        val edit        = MultiCursorEdit(0, start, replacedEnd, after.sliceString(start, end))
-        adjustAnnotations(annotations, before, after, List(edit))
-      }
+    if hasNoAnnotations(annotations) then annotations
+    else adjustAnnotationsAcross(annotations, before, after, ChangeSet.fromDiff(before, after)(using Balance.default))
+
+  /** Annotations carried from `before` to `after`, a later state of the same document: through the change `after`
+    * recorded when it has one, and by comparing the texts only when it has not (a reload, an evicted large edit).
+    */
+  def adjustAnnotationsAcross(annotations: Annotations, before: Document, after: Document): Annotations =
+    after.changeFrom(before) match
+      case Some(change) => adjustAnnotationsAcross(annotations, before.content, after.content, change)
+      case None         => adjustAnnotationsAcrossReplacement(annotations, before.content, after.content)
+
+  /** [[adjustAnnotationsAcrossReplacement]] for a transition whose change is already known, so nothing is compared. */
+  def adjustAnnotationsAcross(
+    annotations: Annotations,
+    before: Rope,
+    after: Rope,
+    change: ChangeSet
+  ): Annotations =
+    if hasNoAnnotations(annotations) || change.isIdentity then annotations
+    else adjustAnnotations(annotations, before, after, change.parts.map(multiCursorEditOf).toList)
+
+  private def multiCursorEditOf(part: Replacement): MultiCursorEdit =
+    MultiCursorEdit(0, part.from, part.to, part.insert)
+
+  private def hasNoAnnotations(annotations: Annotations): Boolean =
+    annotations.bookmarks.isEmpty && annotations.documentComments.isEmpty && annotations.placeholders.isEmpty
 
   private def remapCommentStart(offset: Int, edits: List[MultiCursorEdit]): Int =
     remapEditBoundary(offset, edits, insertionAtBoundaryMoves = true)
@@ -422,7 +495,11 @@ private[state] object EditorEditSupport:
 
     (
       buffer
-        .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText))
+        .withEditedDocument(
+          newContent,
+          richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText),
+          Some(ChangeSet.single(buffer.document.content.weight, startOffset, endOffset, insertedText))
+        )
         .copy(
           editing = buffer.editing.withPrimary(Cursor(newCursor)),
           annotations = adjustAnnotations(
@@ -460,7 +537,11 @@ private[state] object EditorEditSupport:
     val newContent  = deleteOrUnchanged(buffer.document.content, startOffset, endOffset)
     val newCursor   = newContent.offsetToCursorPosition(startOffset)
     val baseBuffer = buffer
-      .withEditedDocument(newContent, richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
+      .withEditedDocument(
+        newContent,
+        richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""),
+        Some(ChangeSet.single(buffer.document.content.weight, startOffset, endOffset, ""))
+      )
       .copy(
         editing = buffer.editing.withPrimary(Cursor(newCursor)),
         annotations = adjustAnnotations(
@@ -491,35 +572,25 @@ private[state] object EditorEditSupport:
     insertedText: String
   ): Option[RichTextDocument] =
     buffer.richText.richTextDocument.filter(_ => buffer.richTextInSync).map { document =>
+      val start = richTextPositionForOffset(buffer.document.content, startOffset)
       val updatedDocument = document
-        .replaceRange(
-          RichTextRange(
-            richTextPositionForOffset(buffer.document.content, startOffset),
-            richTextPositionForOffset(buffer.document.content, endOffset)
-          ),
-          insertedText
-        )
+        .replaceRange(RichTextRange(start, richTextPositionForOffset(buffer.document.content, endOffset)), insertedText)
         .normalized
       buffer.richText.insertionRichTextStyle
         .filter(_ => insertedText.nonEmpty)
         .map { style =>
-          val updatedContent =
-            insertOrUnchanged(
-              deleteOrUnchanged(buffer.document.content, startOffset, endOffset),
-              startOffset,
-              insertedText
-            )
           updatedDocument
-            .updateInlineStyle(
-              RichTextRange(
-                richTextPositionForOffset(updatedContent, startOffset),
-                richTextPositionForOffset(updatedContent, startOffset + insertedText.length)
-              )
-            )(_ => style)
+            .updateInlineStyle(RichTextRange(start, richTextPositionAfterInsertion(start, insertedText)))(_ => style)
             .normalized
         }
         .getOrElse(updatedDocument)
     }
+
+  /** Where `insertedText` ends once inserted at `start`, from the text alone: the edited content is not rebuilt. */
+  private def richTextPositionAfterInsertion(start: RichTextPosition, insertedText: String): RichTextPosition =
+    val lines = insertedText.split("\n", -1)
+    if lines.length == 1 then start.copy(offset = start.offset + insertedText.length)
+    else RichTextPosition(start.paragraphIndex + lines.length - 1, lines.last.length)
 
   def richTextPositionForOffset(content: Rope, offset: Int): RichTextPosition =
     val (line, column) = content.offsetToLineColumn(offset)

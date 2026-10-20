@@ -65,7 +65,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
       shown      <- eventually(ModelViews.appRef(modelRef).get.map(noticeText))
       // `second` carries no notice of its own, so one showing after its analysis would be a second announcement.
       _     <- operations.modelCommit.commitState(second, first)
-      _     <- IO.sleep(1.second)
+      _     <- operations.awaitEffects
       later <- ModelViews.appRef(modelRef).get.map(noticeText)
       _     <- operations.shutdownEffects()
     yield (shown, later)
@@ -84,7 +84,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
       modelRef   <- ModelViews.modelOf(state)
       operations <- StateManagerOperationBoundary.create(modelRef, NoOpLogger.impl[IO])
       _          <- operations.modelCommit.commitState(state.copy(), state)
-      _          <- IO.sleep(1.second)
+      _          <- operations.awaitEffects
       notice     <- ModelViews.appRef(modelRef).get.map(noticeText)
       _          <- operations.shutdownEffects()
     yield notice
@@ -103,7 +103,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
       modelRef   <- ModelViews.modelOf(state)
       operations <- StateManagerOperationBoundary.create(modelRef, NoOpLogger.impl[IO])
       _          <- operations.modelCommit.commitState(state.copy(), state)
-      _          <- IO.sleep(1.second)
+      _          <- operations.awaitEffects
       notice     <- ModelViews.appRef(modelRef).get.map(noticeText)
       _          <- operations.shutdownEffects()
     yield notice
@@ -124,7 +124,7 @@ class StateManagerMissingDictionaryNoticeSpec extends AnyFlatSpec with Matchers:
       modelRef   <- ModelViews.modelOf(withPeek)
       operations <- StateManagerOperationBoundary.create(modelRef, NoOpLogger.impl[IO])
       _          <- operations.modelCommit.commitState(withPeek.copy(), withPeek)
-      _          <- IO.sleep(1.second)
+      _          <- operations.awaitEffects
       during     <- ModelViews.appRef(modelRef).get.map(noticeText)
       _          <- operations.modelCommit.commitState(later, withPeek)
       after      <- eventually(ModelViews.appRef(modelRef).get.map(noticeText))

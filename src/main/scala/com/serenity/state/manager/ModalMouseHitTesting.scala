@@ -70,9 +70,8 @@ private[manager] object ModalMouseHitTesting:
         .nodesInPaintOrder
         .find(_.id == SceneNodeId.Surface(id))
       _ <- Option.when(node.frameRect.contains(click.col, click.row))(())
-      targetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
       hit <- ModalSurfaceComposition
-        .forModal(modal, node.frameRect, targetRows)
+        .forState(modal, node.frameRect, state)
         .flatMap(_.hitAt(click.col.toDouble, click.row.toDouble))
     yield (modal, hit)
 

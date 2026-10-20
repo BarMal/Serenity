@@ -31,17 +31,14 @@ object ChapterRenumbering:
         }
     else Nil
 
-  /** Every line that looks like a chapter heading, in document order, as `(line, numberStartColumn, numberEndColumn,
-    * currentNumberText)`. A fenced code block containing a line that merely looks like a heading is not filtered out
-    * here (unlike `DocumentOutline`'s AST walk) -- true positives inside code fences are rare for a "Chapter N" line
-    * specifically, and the cost of getting this wrong is a number that gets put back in sequence inside a code block,
-    * not a lost heading.
+  /** Every heading the Markdown parse found that is labelled "Chapter <number>", in document order, as `(line,
+    * numberStartColumn, numberEndColumn, currentNumberText)`. The headings come from the buffer's shared
+    * [[MarkdownHeadingIndex]], so a "Chapter 3" line inside a fenced code block is not one, and an Enter does not scan
+    * the document's lines.
     */
   private def chapterHeadingLines(buffer: Buffer): List[(Int, Int, Int, String)] =
-    buffer.document.content
-      .linesIteratorFrom(0)
-      .flatMap {
-        case (line, text) =>
-          HeadingLine.findFirstMatchIn(text).map(m => (line, m.start(2), m.end(2), m.group(2)))
-      }
-      .toList
+    buffer.document.markdownHeadings.entries.iterator.flatMap { entry =>
+      HeadingLine
+        .findFirstMatchIn(entry.sourceLine)
+        .map(found => (entry.symbol.location.line, found.start(2), found.end(2), found.group(2)))
+    }.toList

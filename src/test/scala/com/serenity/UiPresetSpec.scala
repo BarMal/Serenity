@@ -179,7 +179,8 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     UiPreset.Preview.fromPreset(writing) shouldBe UiPreset.Preview(
       "Writing",
-      "rich text default; spacious density; Serif 18pt prose; 1 editor pane"
+      "rich text default; spacious density; Serif 18pt prose; 1 editor pane",
+      Some(writing.config)
     )
   }
 
@@ -335,12 +336,12 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     )
     val sourceConfig = AppConfig.default
       .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
-      .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      .withMarkdownViewMode(MarkdownViewMode.LivePreview)
 
     val patched = UiPreset.Patch.DocumentDefaults(sourceConfig).applyTo(preset)
 
     patched.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    patched.config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
+    patched.config.markdownViewMode shouldBe MarkdownViewMode.LivePreview
     patched.pinnedPanels shouldBe List(panel)
     patched.targetEditorPaneCount shouldBe Some(1)
   }

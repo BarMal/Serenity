@@ -38,7 +38,9 @@ object ThemeConfigWriter:
         delimiter = Some(syntaxConfig(theme, SyntaxElement.Delimiter)),
         whitespace = Some(syntaxConfig(theme, SyntaxElement.Whitespace)),
         error = Some(syntaxConfig(theme, SyntaxElement.Error)),
-        normal = Some(syntaxConfig(theme, SyntaxElement.Normal))
+        normal = Some(syntaxConfig(theme, SyntaxElement.Normal)),
+        heading = ownSyntaxConfig(theme, SyntaxElement.Heading),
+        headingMarker = ownSyntaxConfig(theme, SyntaxElement.HeadingMarker)
       )
     )
 
@@ -75,6 +77,10 @@ object ThemeConfigWriter:
       .map(field => s"    ${field.hoconKey} ${renderSyntax(field.select(config.syntax), 4)}")
       .mkString("\n")
 
+    val inheritingSyntaxLines = ThemeFieldSchema.inheritingSyntaxFields
+      .flatMap(field => field.select(config.syntax).map(own => s"\n    ${field.hoconKey} ${renderSyntax(own, 4)}"))
+      .mkString
+
     s"""theme {
        |  name = "${escape(config.name)}"
        |  ui {
@@ -90,7 +96,7 @@ $mandatorySyntaxLines
        |    delimiter ${optional(ThemeFieldSchema.delimiterField)}
        |    whitespace ${optional(ThemeFieldSchema.whitespaceField)}
        |    error ${optional(ThemeFieldSchema.errorField)}
-       |    normal ${optional(ThemeFieldSchema.normalField)}
+       |    normal ${optional(ThemeFieldSchema.normalField)}$inheritingSyntaxLines
        |  }
        |}
        |""".stripMargin
@@ -101,6 +107,9 @@ $mandatorySyntaxLines
       background = hex(color.background),
       style = StyleConfig(color.style.isBold, color.style.isItalic, color.style.isUnderlined)
     )
+
+  private def ownSyntaxConfig(theme: Theme, element: SyntaxElement): Option[SyntaxElementConfig] =
+    Option.when(theme.syntaxColors.contains(element))(syntaxConfig(theme, element))
 
   private def syntaxConfig(theme: Theme, element: SyntaxElement): SyntaxElementConfig =
     val color = theme.colorFor(element)

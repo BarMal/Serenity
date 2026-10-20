@@ -148,6 +148,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def reloadBuffer(id: BufferId): IO[Unit]             = callsVar.update(_ :+ s"reloadBuffer:$id")
       def forceSaveExistingBuffer(id: BufferId): IO[Unit]  = callsVar.update(_ :+ s"forceSaveExistingBuffer:$id")
       def loadFile(path: Path): IO[Unit]                   = filePersistence.loadFile(path)
+      def openFile(path: Path): IO[Unit]                   = filePersistence.openFile(path)
       def openFromDialog(dialog: FileDialog): IO[Unit]     = filePersistence.openFromDialog(dialog)
       def openFolderFromDialog(dialog: FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
         filePersistence.openFolderFromDialog(dialog, openFolder)
@@ -196,6 +197,8 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def openSessionPicker(state: AppState, purpose: SessionListPurpose): IO[Unit] =
         callsVar.update(_ :+ s"openSessionPicker:$purpose")
       def openFileFinder: IO[Unit] = callsVar.update(_ :+ "openFileFinder")
+      def refreshPickerEffect(surfaceId: SurfaceId, query: String): IO[Unit] =
+        callsVar.update(_ :+ s"refreshPickerEffect:$surfaceId:$query")
       def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit] =
         callsVar.update(_ :+ s"submitSessionNamePromptEffect:$surfaceId")
       def openNamedSession(sessionId: SessionId, state: AppState): IO[Unit] =

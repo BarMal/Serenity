@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.*
+import com.serenity.io.StorageLocation
 import com.serenity.keystroke.events.{CutToDarlings, RestoreDarling}
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
@@ -39,9 +40,10 @@ final private[manager] class StateManagerEffectHandlers(
   private val workflowEffects = new WorkflowEffectHandler(new WorkflowEffectPort:
     def requestOpenFile: IO[Unit] = requestOpenFileOrFolderDialog
     def requestSaveAs: IO[Unit]   = currentState.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
-    def refresh(surfaceId: SurfaceId): IO[Unit]           = refreshFileWorkflowEffect(surfaceId)
-    def refreshFind(request: FindSearchRequest): IO[Unit] = scheduleFindSearch(request)
-    def submitFile(surfaceId: SurfaceId): IO[Unit]        = submitFileWorkflowEffect(surfaceId)
+    def refresh(surfaceId: SurfaceId): IO[Unit]                      = refreshFileWorkflowEffect(surfaceId)
+    def refreshFind(request: FindSearchRequest): IO[Unit]            = scheduleFindSearch(request)
+    def refreshPicker(surfaceId: SurfaceId, query: String): IO[Unit] = refreshPickerEffect(surfaceId, query)
+    def submitFile(surfaceId: SurfaceId): IO[Unit]                   = submitFileWorkflowEffect(surfaceId)
     def openAsProjectRoot(surfaceId: SurfaceId): IO[Unit] =
       openFileWorkflowAsProjectRootEffect(surfaceId, openFolderAsProjectRoot)
     def submitReplace(surfaceId: SurfaceId): IO[Unit]           = submitReplaceWorkflowEffect(surfaceId)
@@ -54,9 +56,10 @@ final private[manager] class StateManagerEffectHandlers(
       def completeQuit: IO[Unit] = quitSignal.complete(()).attempt.void
   )
 
-  private val reopenEffects     = new ReopenWithEncodingEffects(currentState, commitState, editor, fileManager)
-  private val lineEndingEffects = new LineEndingEffects(currentState, commitState, updateModelValidated)
-  private val manuscriptExport  = new ManuscriptExportEffects(logger, fileDialog, editor, currentState, commitState)
+  private val reopenEffects      = new ReopenWithEncodingEffects(currentState, commitState, editor, fileManager)
+  private val lineEndingEffects  = new LineEndingEffects(currentState, commitState, updateModelValidated)
+  private val indentationEffects = new IndentationEffects(currentState, commitState)
+  private val manuscriptExport   = new ManuscriptExportEffects(logger, fileDialog, editor, currentState, commitState)
 
   private val appearanceFollower = new SystemAppearanceFollower(
     appearanceDetector,
@@ -235,6 +238,7 @@ final private[manager] class StateManagerEffectHandlers(
       case FileEffect.SaveBuffer(bufferId)         => saveBufferEffect(bufferId)
       case FileEffect.SaveBufferAs(bufferId, path) => saveBufferAsEffect(bufferId, path)
       case FileEffect.DirectLoadFile(path)         => directLoadFileEffect(path)
+      case FileEffect.OpenForRenameEdit(pending)   => openFilesForRenameEdit(pending)
 
   private def interpretExplorerEffect(effect: ExplorerEffect): IO[Unit] =
     effect match
@@ -248,8 +252,8 @@ final private[manager] class StateManagerEffectHandlers(
     effect match
       case LspQueueEffect.Enqueue(effect) =>
         lspQueue.enqueue(effect)
-      case LspQueueEffect.DocumentChanged(uri, languageId, text) =>
-        lspQueue.enqueueDocumentChange(uri, languageId, text)
+      case LspQueueEffect.DocumentChanged(uri, languageId, text, delta) =>
+        lspQueue.enqueueDocumentChange(uri, languageId, text, delta)
 
   private[manager] def updateConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
@@ -290,11 +294,25 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.Lsp(intent)                            => projectLspEffects.interpretLsp(intent, state)
       case CommandIntent.Theme(intent) => surfacePopupEffects.interpretThemeIntent(intent, state, chosen = recordUsage)
       case CommandIntent.View(intent)  => panelEffects.interpret(intent, state)
-      case CommandIntent.Project(intent)     => projectLspEffects.interpretProject(intent, state)
-      case CommandIntent.Session(intent)     => interpretSessionIntent(intent, state)
-      case CommandIntent.Keybindings(intent) => keybindingEffects.interpret(intent)
-      case CommandIntent.UiPresets(intent)   => uiPresetEffects.interpret(intent)
-      case CommandIntent.Settings(intent)    => configEffects.interpret(intent, state)
+      case CommandIntent.Project(intent)                           => projectLspEffects.interpretProject(intent, state)
+      case CommandIntent.Session(intent)                           => interpretSessionIntent(intent, state)
+      case CommandIntent.Keybindings(intent)                       => keybindingEffects.interpret(intent)
+      case CommandIntent.UiPresets(intent)                         => uiPresetEffects.interpret(intent)
+      case CommandIntent.Settings(intent)                          => configEffects.interpret(intent, state)
+      case CommandIntent.Scoped(SettingsTarget.Preset(name), edit) => uiPresetEffects.editSetting(name, edit)
+      case CommandIntent.Scoped(SettingsTarget.Global, edit) =>
+        dispatchCommand(
+          Command.typed(
+            command.name,
+            command.description,
+            edit,
+            command.category,
+            command.label,
+            command.keepMenuOpenOnSubmit
+          ),
+          state,
+          recordUsage
+        )
     // issue #1048: MRU tracking -- every executed registry command counts toward its recency, regardless of what
     // triggered it (palette, hotkey, mouse click, ...), living on `persisted` since `CommandRunner` itself is
     // reconstructed fresh each time the palette opens (`CommandRunner.recordCommandUsage`'s own doc). Left out:
@@ -365,8 +383,10 @@ final private[manager] class StateManagerEffectHandlers(
       case FileIntent.ChooseReopenEncoding => reopenEffects.chooseEncoding
       case FileIntent.ReopenWithEncoding(bufferId, encoding, discardEdits) =>
         reopenEffects.reopen(bufferId, encoding, discardEdits)
-      case FileIntent.ChooseLineEnding                => lineEndingEffects.chooseLineEnding
-      case FileIntent.SetLineEnding(bufferId, ending) => lineEndingEffects.setLineEnding(bufferId, ending)
+      case FileIntent.ChooseLineEnding                   => lineEndingEffects.chooseLineEnding
+      case FileIntent.SetLineEnding(bufferId, ending)    => lineEndingEffects.setLineEnding(bufferId, ending)
+      case FileIntent.ChooseIndentation                  => indentationEffects.chooseIndentation
+      case FileIntent.SetIndentation(bufferId, settings) => indentationEffects.setIndentation(bufferId, settings)
 
   private def setBufferLanguage(state: AppState, language: Option[LanguageId]): IO[Unit] =
     (state.focusedBufferId, state.focusedBufferId.flatMap(state.persisted.buffers.get)) match
@@ -388,14 +408,15 @@ final private[manager] class StateManagerEffectHandlers(
         val refreshLspBinding =
           buffer.document.filePath match
             case Some(path) if buffer.document.language != language =>
-              val uri  = path.toUri.toString
-              val text = buffer.document.content
+              val uri    = path.toUri.toString
+              val text   = buffer.document.content
+              val served = state.persisted.config.largeFiles.allowsLanguageTooling(buffer.document)
               val closeOld =
-                buffer.document.language.fold(IO.unit)(previous =>
-                  lspQueue.enqueue(LspEffect.FileClosed(uri, previous))
-                )
+                buffer.document.language
+                  .filter(_ => served)
+                  .fold(IO.unit)(previous => lspQueue.enqueue(LspEffect.FileClosed(uri, previous)))
               val openNew =
-                if !state.editingContext.hasCodeTooling then IO.unit
+                if !state.editingContext.hasCodeTooling || !served then IO.unit
                 else language.fold(IO.unit)(next => lspQueue.enqueue(LspEffect.FileOpened(uri, next, text)))
               closeOld >> openNew
             case _ =>
@@ -453,6 +474,16 @@ final private[manager] class StateManagerEffectHandlers(
   /** Opens `path` in the background (#1672): the read runs on the file's lane and the buffer lands when it is done. */
   private[manager] def directLoadFileEffect(path: Path): IO[Unit] =
     loadFile(path)
+
+  /** Opens the files a rename names that no buffer holds, one after another, then applies the rename's remaining edits
+    * to them (#1965). A file that cannot be opened is reported by the open itself and left out of the rename.
+    */
+  private def openFilesForRenameEdit(pending: PendingRename): IO[Unit] =
+    val paths = pending.edits.keys.toList.flatMap(StorageLocation.localPath)
+    submitEffect(
+      Lane.Keyed(LaneKey.RenameEdit, LanePolicy.Sequential),
+      paths.traverse_(openFile) >> dispatchEffectResult(EffectResult.RenameFilesOpened(pending), _ => IO.unit)
+    )
 
   private[manager] def saveBufferEffect(bufferId: BufferId): IO[Unit] =
     currentState.flatMap { state =>

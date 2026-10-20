@@ -3,7 +3,8 @@ package com.serenity.ui.layout
 import java.text.StringCharacterIterator
 
 import com.ibm.icu.text.BreakIterator
-import com.serenity.ui.layout.TextCaretMeasurement.{SegmentFit, normalizeCollapsedCarets}
+import com.serenity.ui.layout.TextCaretMeasurement.SegmentFit
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** What wrapping a logical line needs measured, computed once over a window of it rather than once per row: grapheme
   * boundaries from a single sweep and, for a measured layout, every character's glyph advance. Rows are then fitted and
@@ -15,7 +16,8 @@ final private[layout] class ParagraphMeasurement private (
     start: Int,
     end: Int,
     boundaries: Array[Int],
-    val advances: Option[GlyphAdvances]
+    val advances: Option[GlyphAdvances],
+    val shapedText: ShapedTextCache
 ):
   import ParagraphMeasurement.*
 
@@ -26,7 +28,7 @@ final private[layout] class ParagraphMeasurement private (
   def coveringRowAt(from: Int, rowsLeft: Int): ParagraphMeasurement =
     val budget = rowBudget(spec)
     if from >= start && (end == spec.text.length || from + budget <= end) then this
-    else ParagraphMeasurement(spec, from, rowsLeft)
+    else ParagraphMeasurement(spec, from, rowsLeft, shapedText)
 
   /** A row's caret-stop offsets from its start. Agrees with sweeping the row alone whenever the row both starts and
     * ends on this window's boundaries, since grapheme rules never look back past a boundary; a row cut mid-cluster (a
@@ -47,27 +49,35 @@ final private[layout] class ParagraphMeasurement private (
       IArray.unsafeFromArray(offsets)
 
   /** The row fit the per-row `TextLayout` search would find, read from the measured advances -- or `None` when the
-    * candidate leaves the window, holds a character needing per-row measurement, or lands too near the width for float
-    * rounding between the two measurements to be ruled out.
+    * candidate leaves the window, holds a character whose shaping depends on its neighbours beyond a kerning pair, or
+    * lands too near the width for float rounding between the two measurements to be ruled out.
     */
-  def measuredFit(from: Int, panelWidthPx: Int): Option[SegmentFit] =
+  def measuredFit(from: Int, panelWidthPx: Int, givenBackPx: Float = 0.0f): Option[SegmentFit] =
     val remaining = spec.text.length - from
-    val width     = panelWidthPx.toFloat
+    val width     = panelWidthPx.toFloat + givenBackPx
     @annotation.tailrec
     def loop(limit: Int): Option[SegmentFit] =
       advances match
-        case Some(measured) if from + limit <= end && measured.isContextFree(from - start, from - start + limit) =>
-          val raw  = measured.caretsFrom(from - start, limit)
-          val last = raw(limit)
+        case Some(measured) if from + limit <= end && measured.isMeasurable(from - start, from - start + limit) =>
+          val raw   = measured.caretsFrom(from - start, limit)
+          val edges = measured.trailingEdgesFrom(from - start, limit)
+          val last  = raw(limit)
           if math.abs(last - width) < DecisionGuardPx then None
-          else if limit >= remaining || last > width then settledFit(raw, limit, width)
+          else if limit >= remaining || edges.exists(_ > width) then
+            settledFit(
+              raw,
+              edges,
+              measured.kerningsFrom(from - start, limit),
+              limit,
+              width
+            )
           else loop(math.min(remaining, math.max(limit + 1, limit * 2)))
         case _ => None
     loop(math.min(remaining, initialCandidateLength(panelWidthPx, spec.cellMetrics)))
 
 private[layout] object ParagraphMeasurement:
 
-  /** Comfortably above the largest gap seen between summed glyph advances and `TextLayout` carets (under 0.01px). */
+  /** Comfortably above the largest gap seen between summed glyph advances and shaped glyph positions (under 0.01px). */
   private val DecisionGuardPx = 0.05f
 
   private[layout] val MaxWindowChars = 16384
@@ -75,20 +85,24 @@ private[layout] object ParagraphMeasurement:
   private val threadLocalCharacterBreaks: ThreadLocal[BreakIterator] =
     ThreadLocal.withInitial(() => BreakIterator.getCharacterInstance())
 
-  def apply(spec: WrappedLineKey, from: Int, rowsLeft: Int): ParagraphMeasurement =
+  def apply(spec: WrappedLineKey, from: Int, rowsLeft: Int, shapedText: ShapedTextCache): ParagraphMeasurement =
     val budget = rowBudget(spec).toLong
     val wanted = math.max(budget, math.min(MaxWindowChars.toLong, rowsLeft.toLong * budget))
     val end    = math.min(spec.text.length.toLong, from + wanted).toInt
     val advances = Option.when(spec.measuredLayout)(
-      GlyphAdvances.measure(spec.text, from, end, spec.baseColumn, spec.resolver, spec.frc)
+      GlyphAdvances.measure(spec.text, from, end, spec.baseColumn, spec.resolver, spec.frc, shapedText)
     )
-    new ParagraphMeasurement(spec, from, end, boundariesOf(spec.text, from, end), advances)
+    new ParagraphMeasurement(spec, from, end, boundariesOf(spec.text, from, end), advances, shapedText)
 
   /** A window over the whole of `spec.text` whose advances were assembled rather than measured in one sweep. It holds
     * no grapheme boundaries, so every row sweeps its own, which agrees with reading them off a window's boundaries.
     */
-  def assembled(spec: WrappedLineKey, advances: Option[GlyphAdvances]): ParagraphMeasurement =
-    new ParagraphMeasurement(spec, 0, spec.text.length, Array.empty[Int], advances)
+  def assembled(
+    spec: WrappedLineKey,
+    advances: Option[GlyphAdvances],
+    shapedText: ShapedTextCache
+  ): ParagraphMeasurement =
+    new ParagraphMeasurement(spec, 0, spec.text.length, Array.empty[Int], advances, shapedText)
 
   /** The first candidate the per-row search measures, in characters. */
   def initialCandidateLength(panelWidthPx: Int, cellMetrics: CellMetrics): Int =
@@ -111,11 +125,16 @@ private[layout] object ParagraphMeasurement:
         collect(count + 1, breaks.next())
     java.util.Arrays.copyOf(found, collect(0, breaks.first()))
 
-  /** Mirrors the per-row search's stopping rule over the candidate's normalized carets. */
-  private def settledFit(raw: IArray[Float], limit: Int, width: Float): Option[SegmentFit] =
-    val carets     = normalizeCollapsedCarets(raw)
-    val firstOver  = carets.indexWhere(_ > width)
+  /** Mirrors the per-row search's stopping rule over the candidate's trailing edges. */
+  private def settledFit(
+    raw: IArray[Float],
+    edges: IArray[Float],
+    kerning: IArray[Float],
+    limit: Int,
+    width: Float
+  ): Option[SegmentFit] =
+    val firstOver  = edges.indexWhere(_ > width)
     val maxFitting = if firstOver < 0 then limit else firstOver - 1
-    val nearFit    = maxFitting >= 0 && width - carets(maxFitting) < DecisionGuardPx
-    val nearOver   = firstOver >= 0 && carets(firstOver) - width < DecisionGuardPx
-    Option.unless(nearFit || nearOver)(SegmentFit(math.max(1, maxFitting), Some(raw)))
+    val nearFit    = maxFitting >= 0 && width - edges(maxFitting) < DecisionGuardPx
+    val nearOver   = firstOver >= 0 && edges(firstOver) - width < DecisionGuardPx
+    Option.unless(nearFit || nearOver)(SegmentFit(math.max(1, maxFitting), Some(raw), kerning))

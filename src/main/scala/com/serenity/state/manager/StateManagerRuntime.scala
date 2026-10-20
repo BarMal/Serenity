@@ -6,7 +6,7 @@ import cats.effect.*
 import cats.effect.std.Queue
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.{FileDialog, FileManager}
-import com.serenity.lsp.LspEffect
+import com.serenity.lsp.{DocumentDelta, LspEffect}
 import com.serenity.project.{ProjectTaskCommand, ProjectTaskResult, ProjectTaskRunner}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.session.{SessionManager, SessionPersistence}
@@ -36,20 +36,27 @@ final private[manager] class LspEffectQueue private (
 
   def enqueue(effect: LspEffect): IO[Unit] =
     effect match
-      case LspEffect.FileChanged(uri, languageId, text, _) => enqueueDocumentChange(uri, languageId, text)
+      case LspEffect.FileChanged(uri, languageId, text, _, delta) => enqueueDocumentChange(uri, languageId, text, delta)
       case LspEffect.ReleaseAll =>
         pendingChanges.update(_.closedForAll) >> queue.offer(Entry.Immediate(LspEffect.ReleaseAll))
       case other =>
         pendingChanges.update(pending => other.documentUri.fold(pending)(pending.closedFor)) >>
           queue.offer(Entry.Immediate(other))
 
-  def enqueueDocumentChange(uri: String, languageId: com.serenity.lsp.config.LanguageId, text: Rope): IO[Unit] =
+  def enqueueDocumentChange(
+    uri: String,
+    languageId: com.serenity.lsp.config.LanguageId,
+    text: Rope,
+    delta: Option[DocumentDelta] = None
+  ): IO[Unit] =
     pendingChanges.modify { pending =>
-      val change = PendingChange(languageId, text)
       pending.open.get(uri) match
-        case Some(token) => (pending.copy(texts = pending.texts.updated(token, change)), IO.unit)
+        case Some(token) =>
+          val joined = PendingChange(languageId, text, pending.texts.get(token).flatMap(_.joinedWith(delta)))
+          (pending.copy(texts = pending.texts.updated(token, joined)), IO.unit)
         case None =>
-          val token = pending.nextToken
+          val token  = pending.nextToken
+          val change = PendingChange(languageId, text, delta)
           (
             PendingChanges(token + 1, pending.open.updated(uri, token), pending.texts.updated(token, change)),
             queue.offer(Entry.Change(uri, token))
@@ -81,10 +88,10 @@ final private[manager] class LspEffectQueue private (
           pendingChanges
             .modify(pending => (pending.taken(uri, token), pending.texts.get(token)))
             .flatMap {
-              case Some(PendingChange(languageId, text)) =>
+              case Some(PendingChange(languageId, text, delta)) =>
                 documentVersions.modify { versions =>
                   val version = versions.getOrElse(uri, 1) + 1
-                  (versions.updated(uri, version), Some(LspEffect.FileChanged(uri, languageId, text, version)))
+                  (versions.updated(uri, version), Some(LspEffect.FileChanged(uri, languageId, text, version, delta)))
                 }
               case None =>
                 IO.none
@@ -98,7 +105,21 @@ private[manager] object LspEffectQueue:
     case Immediate(effect: LspEffect)
     case Change(uri: String, token: Long)
 
-  final private case class PendingChange(languageId: com.serenity.lsp.config.LanguageId, text: Rope)
+  /** `delta` takes the text the server last saw to `text`; a change that coalesces into this one extends it, and one
+    * that cannot say what it did drops it, so the receiver compares texts instead.
+    */
+  final private case class PendingChange(
+      languageId: com.serenity.lsp.config.LanguageId,
+      text: Rope,
+      delta: Option[DocumentDelta]
+  ):
+
+    def joinedWith(next: Option[DocumentDelta]): Option[DocumentDelta] =
+      for
+        earlier <- delta
+        later   <- next
+        both    <- earlier.andThen(later)
+      yield both
 
   /** Queued changes' latest text by token; `open` names, per document, the queued change a new edit may still join. */
   final private case class PendingChanges(nextToken: Long, open: Map[String, Long], texts: Map[Long, PendingChange]):

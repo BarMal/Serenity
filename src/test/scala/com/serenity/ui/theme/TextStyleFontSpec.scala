@@ -1,6 +1,7 @@
 package com.serenity.ui.theme
 
 import java.awt.Font
+import java.awt.font.TextAttribute
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -32,4 +33,9 @@ class TextStyleFontSpec extends AnyFlatSpec with Matchers:
 
   it should "switch font family when one is given" in {
     TextStyle.styledFont(base, TextStyle(fontFamily = Some("Serif"), fontSize = Some(18.0f))).getSize2D shouldBe 18.0f
+  }
+
+  it should "leave an underline to the painter rather than carry it as a font attribute" in {
+    val font = TextStyle.styledFont(base, TextStyle.underlined)
+    font.getAttributes.get(TextAttribute.UNDERLINE) shouldBe null
   }

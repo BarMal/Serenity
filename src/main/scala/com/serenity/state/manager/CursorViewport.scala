@@ -4,12 +4,16 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
   CellMetrics,
+  ColumnPager,
+  ColumnPaging,
   LayoutEngine,
   RichTextContext,
   TextLayoutSnapshot,
+  TextLayoutSnapshotColumnMode,
   VisualRowCounts,
   WrappedLineCache
 }
+import com.serenity.ui.theme.RichTextStyling
 
 /** Java2D/font measurement for cursor-visibility scrolling belongs at the effect boundary, not in a reducer -- a
   * reducer runs mid-edit against content the effect boundary has not seen yet. `adjustForCursor` is the shared
@@ -67,22 +71,8 @@ object CursorViewport:
     val fontConfig                 = currentState.persisted.config.editorConfig.fontConfig
     val font                       = previewFontForBuffer(buffer, fontConfig)
     val gridWidthPx                = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig)
-    // `viewport.visibleLines` is a code-grid row count (`LayoutEngine.updateViewportDimensions` sets it from the
-    // panel's grid rows, the same convention `gridWrapWidthPx` uses for columns) -- it does not vary with which font a
-    // pane actually draws with. A document-font pane whose font has a taller line height than the code font fits fewer
-    // of its own rows into that same pixel height than a code-font pane would, exactly what
-    // `RendererPaneSetup.snapshotForBuffer`'s own `visibleLines = panelHeightPx / bufferMetrics.lineHeight` computes
-    // for the pane actually painted. Using the code-grid count unadjusted let this centred/bottom-aligned scroll math
-    // assume more rows fit than the pane's own font renders, scrolling the cursor below the pane's real bottom edge on
-    // a long wrapped line (#1041).
-    val effectiveVisibleLines =
-      if isTui then viewport.visibleLines
-      else
-        val codeLineHeightPx =
-          CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
-        val panelHeightPx = viewport.visibleLines * codeLineHeightPx
-        math.max(1, panelHeightPx / math.max(1, CellMetrics.fromFont(font).lineHeight))
-    val halfVisibleLines = effectiveVisibleLines / 2
+    val effectiveVisibleLines      = rowsDrawnPerScreen(viewport, fontConfig, font, isTui)
+    val halfVisibleLines           = effectiveVisibleLines / 2
     // Count wrapped rows the way the terminal actually drew them: TUI wraps on a fixed 1px-per-cell grid
     // (`CellMetrics.cellUnit` + forceCellLayout), never a pixel measurement of the inert proportional prose font, which
     // folds each line across a different number of rows and so mis-places the centred viewport. Mirrors
@@ -92,6 +82,11 @@ object CursorViewport:
     val wrapWidthPx         = if isTui then viewport.visibleColumns * CellMetrics.cellUnit.charWidth else gridWidthPx
     val lineText            = buffer.document.content.getLine(cursor.line).getOrElse("")
     val dropCapsEnabled     = currentState.persisted.config.documentConfig.dropCapsEnabled
+    val markdownViewMode    = currentState.persisted.config.inlineMarkdownViewMode
+    val tabSize             = buffer.effectiveIndentation(currentState.persisted.config.indentation).tabSize
+    val fontFallback        = currentState.persisted.config.editorConfig.fontConfig.fallback
+    val headings            = currentState.effectiveHeadingSettings
+    val openings            = buffer.effectiveOpenings(currentState.persisted.config.openingsConfig)
     val cursorVisualLine =
       if !wordWrapEnabled then 0
       else
@@ -106,7 +101,20 @@ object CursorViewport:
           rowAffinity = cursor.rowAffinity,
           wrapCache = wrapCache,
           bufferLine = cursor.line,
-          richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled)
+          richText = RichTextContext
+            .forBuffer(
+              buffer,
+              font,
+              dropCapsEnabled,
+              markdownViewMode,
+              isTui,
+              wrapCache,
+              tabSize = tabSize,
+              headings = headings,
+              openings = openings,
+              dropCapGapEm = currentState.persisted.config.documentConfig.dropCapGapEm,
+              fallback = fontFallback
+            )
         )
 
     // Counted the same way `cursorVisualLine` above was measured, or the two disagree.
@@ -120,7 +128,13 @@ object CursorViewport:
           cellMetricsOverride,
           forceCellLayout,
           wrapCache,
-          dropCapsEnabled
+          dropCapsEnabled,
+          markdownViewMode,
+          tabSize,
+          headings = headings,
+          openings = openings,
+          dropCapGapEm = currentState.persisted.config.documentConfig.dropCapGapEm,
+          fallback = fontFallback
         )
 
     // Desired top: halfVisibleLines rows of context above the cursor's own visual row, counted in visual rows (not
@@ -161,8 +175,12 @@ object CursorViewport:
             cursor.column,
             if isTui then wrapWidthPx else gridWidthPx,
             font,
+            wrapCache.shapedText,
             cellMetricsOverride = cellMetricsOverride,
-            forceCellLayout = forceCellLayout
+            forceCellLayout = forceCellLayout,
+            tabSize = tabSize,
+            wrapCache = wrapCache,
+            fallback = fontFallback
           )
         val minimumVisibleColumn = math.max(0, cursor.column - viewport.visibleColumns + 1)
         math.max(minimumVisibleColumn, measuredLeftColumn)
@@ -173,23 +191,34 @@ object CursorViewport:
       topVisualLine = topVisualLine
     )
 
-  /** Column-based document layout (issue #1338, Phase 1): fixed/discrete snapping only -- `topVisualLine` always lands
-    * on an exact `activeColumnIndex * visibleLines` boundary (`activeColumnIndex` derived here as
-    * `absoluteCursorRow / visibleLines`, never stored), so the column holding the cursor's visual row is always shown
-    * from its own top row. A sibling to [[adjustForCursor]] rather than a branch inside it -- that function's centring/
-    * typewriter/bottom-clamp logic does not apply here at all, so branching it in would only add complexity to both
-    * paths for no shared benefit.
-    *
-    * Walks from the *previous* placement (`buffer.viewport`) rather than re-measuring every line from the document
-    * start on every call. `buffer.viewport.topVisualLine` is always an exact multiple of the `visibleLines` it was
-    * placed with (the invariant above), so the new target column boundary can be found by measuring only the lines
-    * between the previous top and the cursor, and then walking that same distance from the previous top -- cost
-    * proportional to how far the cursor moved since the last placement, not to its absolute position in the document.
-    * Re-scanning from line 0 made moving the cursor progressively through a large wrapped document O(n) per move
-    * (O(n^2) overall). The one case that invalidates the shortcut -- column mode just switched on (the inherited
-    * viewport came from `adjustForCursor`'s centring, whose `topVisualLine` has no reason to be a multiple of
-    * `visibleLines`) or a resize changed `visibleLines` since the last placement -- is detected by the same modulus
-    * check and falls back to the original from-scratch scan.
+  /** `viewport.visibleLines` is a code-grid row count (`LayoutEngine.updateViewportDimensions` sets it from the panel's
+    * grid rows, the same convention `gridWrapWidthPx` uses for columns) -- it does not vary with which font a pane
+    * actually draws with. A document-font pane whose font has a taller line height than the code font fits fewer of its
+    * own rows into that same pixel height than a code-font pane would, exactly what
+    * `RendererPaneSetup.snapshotForBuffer`'s own `visibleLines = panelHeightPx / bufferMetrics.lineHeight` computes for
+    * the pane actually painted. Using the code-grid count unadjusted let the centred/bottom-aligned scroll math assume
+    * more rows fit than the pane's own font renders, scrolling the cursor below the pane's real bottom edge on a long
+    * wrapped line (#1041), and let column mode's page anchor run past the last drawn column without turning.
+    */
+  private[manager] def rowsDrawnPerScreen(
+    viewport: Viewport,
+    fontConfig: FontLoader.FontConfig,
+    font: java.awt.Font,
+    isTui: Boolean
+  ): Int =
+    if isTui then viewport.visibleLines
+    else
+      val codeLineHeightPx =
+        CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
+      val panelHeightPx = viewport.visibleLines * codeLineHeightPx
+      math.max(1, panelHeightPx / math.max(1, CellMetrics.fromFont(font).lineHeight))
+
+  /** Column-based document layout (issue #1338, Phase 1): discrete snapping only -- the viewport always lands on the
+    * first column of the page holding the cursor's column, so that column is shown from its own top row. Columns are
+    * filled by pixel height (see [[ColumnPager]]), so where one starts is read off the document's own canonical column
+    * starts from its beginning, not a multiple of a row count; the same cursor therefore gets the same page whichever
+    * way it got there. A sibling to [[adjustForCursor]] rather than a branch inside it -- that function's centring/
+    * typewriter/bottom-clamp logic does not apply here at all.
     */
   def adjustForCursorColumnMode(
     buffer: Buffer,
@@ -210,19 +239,18 @@ object CursorViewport:
     val forceCellLayout     = isTui
     val wrapWidthPx         = if isTui then textColumns * CellMetrics.cellUnit.charWidth else gridWidthPx
     val lineCount           = buffer.document.content.lineCount
-    val visibleLines        = math.max(1, viewport.visibleLines)
+    val visibleLines        = math.max(1, rowsDrawnPerScreen(viewport, fontConfig, font, isTui))
 
-    val dropCapsEnabled = currentState.persisted.config.documentConfig.dropCapsEnabled
-    val visualRows =
-      VisualRowCounts.forBuffer(
-        buffer,
-        wrapWidthPx,
-        font,
-        cellMetricsOverride,
-        forceCellLayout,
-        wrapCache,
-        dropCapsEnabled
-      )
+    val pager = columnPagerFor(
+      buffer,
+      currentState,
+      wrapWidthPx,
+      font,
+      visibleLines,
+      cellMetricsOverride,
+      forceCellLayout,
+      wrapCache
+    )
 
     val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
     val cursorVisualRowInLine =
@@ -237,37 +265,49 @@ object CursorViewport:
         rowAffinity = cursor.rowAffinity,
         wrapCache = wrapCache,
         bufferLine = cursor.line,
-        richText = RichTextContext.forBuffer(buffer, font, dropCapsEnabled)
+        richText = pager.richText
       )
 
-    // Multi-column page anchoring (issue #1338, Phase 2 / slice 1): a "page" shows `columnCount` columns side by side,
-    // so the viewport anchors to a whole-page boundary (`pageRows` rows) rather than a single column (`visibleLines`
-    // rows). With one column -- the fallback whenever the pane's full width is unknown -- `pageRows == visibleLines`,
-    // so this reduces exactly to the single-column anchoring from before multi-column pages existed.
+    // A page is `columnCount` consecutive columns, and columns break where their rows stop fitting the column's pixel
+    // height (`ColumnPager`), so the page is the one holding the cursor's column, from that page's first column.
     val columnCount = columnCountForBuffer(buffer, currentState)
-    val pageRows    = columnCount * visibleLines
-
-    def findTopForward(line: Int, targetRow: Int): (Int, Int) =
-      visualRows.rowBelow(line, targetRow).getOrElse((math.max(0, lineCount - 1), 0))
-
-    val previousTopValid = viewport.topVisualLine % pageRows == 0
-
-    val (topLine, topVisualLine) =
-      if lineCount <= 0 then (0, 0)
-      else if previousTopValid then
-        val previousTopLine = math.max(0, math.min(viewport.topLine, lineCount - 1))
-        val relativeCursorRow =
-          visualRows.rowsBetween(previousTopLine, cursor.line) + cursorVisualRowInLine - viewport.topVisualLine
-        val targetOffsetFromPreviousTop      = Math.floorDiv(relativeCursorRow, pageRows) * pageRows
-        val targetRowFromPreviousTopLineHead = viewport.topVisualLine + targetOffsetFromPreviousTop
-        if targetRowFromPreviousTopLineHead >= 0 then findTopForward(previousTopLine, targetRowFromPreviousTopLineHead)
-        else visualRows.rowAbove(previousTopLine, -targetRowFromPreviousTopLineHead)
+    val pageStart =
+      if lineCount <= 0 then ColumnPaging.ColumnStart.Origin
       else
-        val absoluteCursorRow = visualRows.rowsBetween(0, cursor.line) + cursorVisualRowInLine
-        val targetVisualRow   = (absoluteCursorRow / pageRows) * pageRows
-        findTopForward(0, targetVisualRow)
+        val starts = pager.startsThrough(ColumnPaging.ColumnStart(cursor.line, cursorVisualRowInLine))
+        starts((starts.length - 1) / columnCount * columnCount)
 
-    viewport.copy(topLine = topLine, leftColumn = 0, topVisualLine = topVisualLine)
+    viewport.copy(topLine = pageStart.line, leftColumn = 0, topVisualLine = pageStart.row)
+
+  /** The pager that decides where `buffer`'s columns break, built from the same inputs the painter uses
+    * (`RendererPaneSetup`, `UiSceneBuilder`) so anchoring and painting agree on every column.
+    */
+  private[manager] def columnPagerFor(
+    buffer: Buffer,
+    state: AppState,
+    wrapWidthPx: Int,
+    font: java.awt.Font,
+    visibleLines: Int,
+    cellMetricsOverride: Option[CellMetrics],
+    forceCellLayout: Boolean,
+    wrapCache: WrappedLineCache
+  ): ColumnPager =
+    TextLayoutSnapshotColumnMode.pagerFor(
+      buffer,
+      wrapWidthPx,
+      font,
+      visibleLines,
+      cellMetricsOverride = cellMetricsOverride,
+      forceCellLayout = forceCellLayout,
+      proseScale = RichTextStyling.proseZoom(font.getSize2D),
+      dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
+      wrapCache = wrapCache,
+      tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
+      headings = state.effectiveHeadingSettings,
+      openings = buffer.effectiveOpenings(state.persisted.config.openingsConfig),
+      dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+      fallback = state.persisted.config.editorConfig.fontConfig.fallback
+    )
 
   /** How many e-reader columns a page shows for `buffer`'s pane -- `LayoutEngine.resolvedColumnCount` of the pane's own
     * full content width (in cells): Auto fits "as many as fit" at the configured target width/gap, an explicit

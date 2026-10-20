@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.TestTemp
-import com.serenity.config.{AppConfig, ConfigManager, HotkeyAction, HotkeyConfig}
+import com.serenity.config.{AppConfig, ConfigManager, ConfigManagerTestSupport, HotkeyAction, HotkeyConfig}
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -14,10 +14,18 @@ import org.scalatest.matchers.should.Matchers
   */
 class ConfigFileSyncHotkeysSpec extends AnyFlatSpec with Matchers with OptionValues:
 
+  private val linuxPlan = ConfigManagerTestSupport.linuxPlan
+
   private def reloaded(fileText: String): HotkeyConfig =
     val file: Path = TestTemp.file("serenity-hot-reload", ".conf")
     Files.writeString(file, fileText)
-    val sync = ConfigFileSync.unsafe(file, Some(AppConfig.default), ConfigManager.saveConfigIO)
+    val sync = ConfigFileSync.unsafe(
+      file,
+      Some(AppConfig.default),
+      ConfigManager.saveConfigIO,
+      load = path =>
+        cats.effect.IO.blocking(Right(ConfigManagerTestSupport.loadConfigResult(Some(path.toString), linuxPlan)))
+    )
     sync.externalChange.unsafeRunSync() match
       case Some(ConfigFileChange.Edited(loaded, _)) => loaded.config.inputConfig.hotkeyConfig
       case other                                    => fail(s"expected an edit to be read, found $other")
@@ -26,14 +34,12 @@ class ConfigFileSyncHotkeysSpec extends AnyFlatSpec with Matchers with OptionVal
     val hotkeys = reloaded("config.version = 2\nhotkey.redo = [\"ctrl+alt+r\"]\n")
 
     hotkeys.bindingsFor(HotkeyAction.Redo).map(_.render) shouldBe List("ctrl+alt+r")
-    hotkeys.bindingsFor(HotkeyAction.Save) shouldBe AppConfig.default.inputConfig.hotkeyConfig
-      .bindingsFor(HotkeyAction.Save)
+    hotkeys.bindingsFor(HotkeyAction.Save) shouldBe HotkeyConfig.forOs("linux").bindingsFor(HotkeyAction.Save)
   }
 
   "a hot reload of a file that pins an old default" should "bring the current default back" in {
     val hotkeys = reloaded("config.version = 1\nhotkey.redo = [\"ctrl+y\"]\n")
 
-    hotkeys.bindingsFor(HotkeyAction.Redo) shouldBe AppConfig.default.inputConfig.hotkeyConfig
-      .bindingsFor(HotkeyAction.Redo)
+    hotkeys.bindingsFor(HotkeyAction.Redo) shouldBe HotkeyConfig.forOs("linux").bindingsFor(HotkeyAction.Redo)
     hotkeys.bindingsFor(HotkeyAction.Redo).map(_.render) should contain("ctrl+shift+z")
   }

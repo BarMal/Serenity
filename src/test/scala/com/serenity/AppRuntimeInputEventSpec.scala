@@ -61,15 +61,18 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       resizeChecks  <- Ref.of[IO, Int](0)
       cursorVisible <- Ref.of[IO, Boolean](true)
       router = new InputRouter[IO, Event]:
-        private val initialTranslator = new TextEntryTranslator(AppConfig.default)
+        private val initialTranslator = new TextEntryTranslator(AppConfig.conventional)
 
         def eventStream(infoStream: Stream[IO, KeyStrokeInfo]): Stream[IO, Event] = Stream.empty
         def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = refreshes.update(_ + 1)
         def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(initialTranslator)
       stateManager = new com.serenity.state.manager.StateEngine:
-        def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
+        def getCurrentState: IO[AppState] = IO.pure(AppState.initial(AppConfig.conventional))
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState()))
+          IO.pure(
+            com.serenity.state.manager
+              .Model(AppState.initial(AppConfig.conventional), com.serenity.state.undo.UndoState())
+          )
         def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
         def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
         def applyEvent(event: Event): IO[Unit]                           = IO.unit
@@ -100,15 +103,18 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
     val program = for
       cursorVisible <- Ref.of[IO, Boolean](true)
       router = new InputRouter[IO, Event]:
-        private val initialTranslator = new TextEntryTranslator(AppConfig.default)
+        private val initialTranslator = new TextEntryTranslator(AppConfig.conventional)
 
         def eventStream(infoStream: Stream[IO, KeyStrokeInfo]): Stream[IO, Event] = Stream.empty
         def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = IO.unit
         def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(initialTranslator)
       stateManager = new com.serenity.state.manager.StateEngine:
-        def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
+        def getCurrentState: IO[AppState] = IO.pure(AppState.initial(AppConfig.conventional))
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState()))
+          IO.pure(
+            com.serenity.state.manager
+              .Model(AppState.initial(AppConfig.conventional), com.serenity.state.undo.UndoState())
+          )
         def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
         def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
         def applyEvent(event: Event): IO[Unit]                           = IO.unit
@@ -137,15 +143,18 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       resizeChecks  <- Ref.of[IO, Int](0)
       cursorVisible <- Ref.of[IO, Boolean](true)
       router = new InputRouter[IO, Event]:
-        private val initialTranslator = new TextEntryTranslator(AppConfig.default)
+        private val initialTranslator = new TextEntryTranslator(AppConfig.conventional)
 
         def eventStream(infoStream: Stream[IO, KeyStrokeInfo]): Stream[IO, Event] = Stream.empty
         def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = IO.unit
         def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(initialTranslator)
       stateManager = new com.serenity.state.manager.StateEngine:
-        def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
+        def getCurrentState: IO[AppState] = IO.pure(AppState.initial(AppConfig.conventional))
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState()))
+          IO.pure(
+            com.serenity.state.manager
+              .Model(AppState.initial(AppConfig.conventional), com.serenity.state.undo.UndoState())
+          )
         def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
         def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
         def applyEvent(event: Event): IO[Unit]                           = IO.unit
@@ -204,7 +213,7 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
               _: com.serenity.state.manager.RenderCaches
             ) => IO.unit
           ),
-          appConfig = AppConfig.default,
+          appConfig = AppConfig.conventional,
           makeStateManager = Some(_ => IO.pure(stateManager)),
           awaitExternalQuit = closeRequested.get,
           registerResizeCallback = _ => ()
@@ -259,7 +268,7 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
               _: com.serenity.state.manager.RenderCaches
             ) => IO.unit
           ),
-          appConfig = AppConfig.default,
+          appConfig = AppConfig.conventional,
           makeStateManager = Some(_ => IO.pure(stateManager)),
           registerResizeCallback = _ => ()
         )
@@ -277,15 +286,18 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       refreshes     <- Ref.of[IO, Int](0)
       cursorVisible <- Ref.of[IO, Boolean](true)
       router = new InputRouter[IO, Event]:
-        private val initialTranslator = new TextEntryTranslator(AppConfig.default)
+        private val initialTranslator = new TextEntryTranslator(AppConfig.conventional)
 
         def eventStream(infoStream: Stream[IO, KeyStrokeInfo]): Stream[IO, Event] = Stream.empty
         def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = refreshes.update(_ + 1)
         def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(initialTranslator)
       stateManager = new com.serenity.state.manager.StateEngine:
-        def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
+        def getCurrentState: IO[AppState] = IO.pure(AppState.initial(AppConfig.conventional))
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState()))
+          IO.pure(
+            com.serenity.state.manager
+              .Model(AppState.initial(AppConfig.conventional), com.serenity.state.undo.UndoState())
+          )
         def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
         def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
         def applyEvent(event: Event): IO[Unit]                           = IO.unit

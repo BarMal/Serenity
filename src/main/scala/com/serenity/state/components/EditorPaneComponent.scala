@@ -47,14 +47,28 @@ class EditorPaneComponent(
     val visibleState = CursorViewport.ensureVisibleCursors(currentState, reduced.state, wrapCache)
     ComponentResult.reducerResult(ReducerResult(visibleState, reduced.effects))
 
-  /** A typed character's edit with the cursor left where centring found it, for a caller that centres a whole run of
-    * them once (#1985). `None` for anything else, including a key whose reduction would need the pane's geometry.
+  /** The edit or caret step `event` makes with the cursor left where centring found it, for a caller that centres a
+    * whole run of them once (#1985, #1879). `None` for any other event, including a key whose reduction would need the
+    * pane's geometry.
     */
   def typedWithoutCentring(event: Event, currentState: AppState): Option[ReducerResult] =
     event match
-      case typed: InsertChar if currentState.persisted.layout.editorPanes.contains(paneId) =>
-        EditorEventReducer.geometryRequirement(typed, currentState) match
+      case step: TextEntryEvent
+          if EditorPaneComponent.joinsRun(step) && currentState.persisted.layout.editorPanes.contains(paneId) =>
+        EditorEventReducer.geometryRequirement(step, currentState) match
           case EditorEventReducer.GeometryRequirement.NotNeeded =>
-            Some(EditorEventReducer.reduce(typed, paneId, currentState))
+            Some(EditorEventReducer.reduce(step, paneId, currentState))
           case _ => None
       case _ => None
+
+object EditorPaneComponent:
+
+  /** The keys a held key or a fast typist repeats that reduce to text edits or one-character caret steps without
+    * reading the settled viewport, so a batch may apply a run of them and centre once at its end.
+    */
+  def joinsRun(event: TextEntryEvent): Boolean =
+    event match
+      case _: InsertChar | _: InsertText | DeleteBackward | DeleteForward | DeleteWordBackward | DeleteWordForward |
+          DeleteToLineStart | DeleteToLineEnd | Enter | NewLine | MoveLeft | MoveRight =>
+        true
+      case _ => false

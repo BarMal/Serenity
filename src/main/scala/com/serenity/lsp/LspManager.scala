@@ -11,6 +11,7 @@ import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.OpenDocument.{changedWithoutConnection, served, textOf, unserved}
 import com.serenity.lsp.client.{DocumentUri, LspConnection, LspMethod, LspProtocol, WorkspaceRootUri}
 import com.serenity.lsp.config.*
+import com.serenity.state.effects.{EffectLanes, Lane}
 import com.serenity.state.models.CursorPosition
 import fs2.Stream
 import org.typelevel.log4cats.Logger
@@ -27,9 +28,6 @@ object LspManager:
 
     /** The visible-lines request that runs beside [[SemanticTokens]], or alone for a server offering only `range`. */
     case SemanticTokensRange
-
-    /** The timer a refresh waits on, kept as a request so a newer edit cancels it with the rest. */
-    case SemanticTokensDebounce
 
   final private[lsp] case class RequestKey(uri: DocumentUri, kind: RequestKind)
 
@@ -100,8 +98,8 @@ object LspManager:
     notices: LspNotices = LspNotices.ignoring,
     semanticTokensDebounce: FiniteDuration = LspManagerSemanticTokens.DefaultDebounce
   ): IO[Unit] =
-    Supervisor[IO].allocated.flatMap {
-      case (supervisor, releaseRequests) =>
+    (Supervisor[IO].allocated, EffectLanes.resource(logLaneFailure(logger)).allocated).tupled.flatMap {
+      case ((supervisor, releaseRequests), (lanes, releaseLanes)) =>
         for
           serverNotices    <- LspServerNotices.create(notices)
           documentVersions <- Ref.of[IO, Map[DocumentUri, Int]](Map.empty)
@@ -130,6 +128,7 @@ object LspManager:
             applyEvent,
             logger,
             semanticTokensSession,
+            lanes,
             semanticTokensDebounce
           )
           runEffects = effects
@@ -151,9 +150,12 @@ object LspManager:
             )
             .compile
             .drain
-          _ <- runEffects.guarantee(releaseRequests >> pool.releaseAll)
+          _ <- runEffects.guarantee(releaseLanes >> releaseRequests >> pool.releaseAll)
         yield ()
     }
+
+  private def logLaneFailure(logger: Logger[IO])(lane: Lane.Scheduled, error: Throwable): IO[Unit] =
+    logger.error(error)(s"[LSP] job failed on lane $lane")
 
   private def handleEffect(
     effect: LspEffect,
@@ -197,7 +199,7 @@ object LspManager:
                 applyEvent(LspEvent.LspSemanticTokensUnavailable(rawUri))
           }
 
-      case LspEffect.FileChanged(rawUri, languageId, text, version) =>
+      case LspEffect.FileChanged(rawUri, languageId, text, version, delta) =>
         val uri = DocumentUri(rawUri)
         invalidateDocument(uri, requestContexts, requestFibers) >>
           documentVersions.update(_ + (uri -> version)) >>
@@ -205,17 +207,24 @@ object LspManager:
             .connectionFor(uri)
             .flatMap {
               case Some(connection) =>
-                openDocuments.get.map(_.textOf(uri)).flatMap { previous =>
-                  LspDidChange.send(connection, uri, version, text, openDocuments, logger).flatMap {
+                openDocuments.get.flatMap { registry =>
+                  val previous = registry.textOf(uri)
+                  val known = for
+                    change <- delta
+                    held   <- previous
+                    if change.appliesTo(registry.versionOf(uri), held, text)
+                  yield change.change
+                  LspDidChange.send(connection, uri, version, text, openDocuments, logger, known).flatMap {
                     case true =>
-                      openDocuments.update(_.served(uri, text)) >>
-                        previous.traverse_(semanticTokens.documentEdited(rawUri, _, text))
+                      openDocuments.update(_.served(uri, text, delta.map(_.toVersion))) >>
+                        previous.traverse_(semanticTokens.documentEdited(rawUri, _, text, known))
                     case false => IO.unit
                   }
                 } >> semanticTokens.refreshAfterQuiet(rawUri, languageId)
               case None =>
                 // Already reported by FileOpened or this document's first edit; a repeat is a commit per keystroke.
-                pool.hasServer(uri).flatMap { awaitsServer =>
+                // A refresh still waiting would ask `attach` for a server the restart policy is holding back.
+                semanticTokens.cancelPendingRefresh(uri) >> pool.hasServer(uri).flatMap { awaitsServer =>
                   openDocuments
                     .modify(_.changedWithoutConnection(uri, text, awaitsServer))
                     .flatMap(reported => applyEvent(LspEvent.LspSemanticTokensUnavailable(rawUri)).unlessA(reported))
@@ -440,7 +449,6 @@ object LspManager:
       case RequestKind.Rename     => None
       case RequestKind.SemanticTokens | RequestKind.SemanticTokensRange =>
         Some(LspEvent.LspSemanticTokensUnavailable(uri.value))
-      case RequestKind.SemanticTokensDebounce => None
 
   private[lsp] def isCurrent(
     key: RequestKey,

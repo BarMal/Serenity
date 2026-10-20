@@ -45,13 +45,16 @@ class MainThreadHandoffSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "wait for a body as long as it takes once it has started, however short the start timeout" in {
+    // The start timeout is real time against a real thread start, so it is kept generous enough that a loaded runner
+    // starts the thread inside it; the body outlasts it, which is the point.
+    val startTimeout = 500.millis
     val result = MainThreadHandoff.run(
       work =>
         runLoopThread(work); () => ()
       ,
-      50.millis
+      startTimeout
     ) {
-      Thread.sleep(300)
+      Thread.sleep((startTimeout * 2).toMillis)
       "chosen"
     }
 

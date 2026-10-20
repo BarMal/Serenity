@@ -181,6 +181,22 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
     )
   }
 
+  it should "report a scrollbar value that is not a boolean, and keep the default" in {
+    val result = load(tempFile("editor.scrollbar = sometimes\n"))
+
+    result.config.surfaceConfig.scrollbarEnabled shouldBe false
+    result.report.invalidEntries.map(entry => entry.key -> entry.value) shouldBe
+      List("editor.scrollbar" -> "sometimes")
+  }
+
+  it should "report a memory compaction value that is not a boolean, and keep the default" in {
+    val result = load(tempFile("performance.memory.compact = sometimes\n"))
+
+    result.config.surfaceConfig.memoryCompactionEnabled shouldBe true
+    result.report.invalidEntries.map(entry => entry.key -> entry.value) shouldBe
+      List("performance.memory.compact" -> "sometimes")
+  }
+
   it should "reach the start page notice as the key, the value and the reason" in {
     val file   = tempFile("typography.code.size = banana\neditor.word_wrap = false\n")
     val result = load(file)
@@ -373,7 +389,7 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
   }
 
   it should "add a setting the file did not state at the end, leaving the rest alone" in {
-    val original = currentVersionLine + "# comment\neditor.word_wrap = false\n"
+    val original = currentVersionLine + "# comment\nui.layout = conventional\neditor.word_wrap = false\n"
     val file     = tempFile(original)
 
     save(load(file).config.withLineNumbers(false), file) shouldBe Right(())

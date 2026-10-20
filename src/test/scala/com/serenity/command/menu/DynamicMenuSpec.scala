@@ -64,7 +64,7 @@ class DynamicMenuSpec extends AnyFlatSpec with Matchers:
     chosen(section).map(c => (c.label, c.description)) shouldBe
       List(("new.md", Some(absolute("/work/notes").toString)), ("old.txt", Some(absolute("/home/me").toString)))
     chosen(section).map(_.choice) shouldBe
-      List(Choice.RecentFile(Paths.get("/work/notes/new.md")), Choice.RecentFile(Paths.get("/home/me/old.txt")))
+      List(Choice.RecentFile(absolute("/work/notes/new.md")), Choice.RecentFile(absolute("/home/me/old.txt")))
   }
 
   it should "show a file once, at its most recent place" in {
@@ -109,7 +109,7 @@ class DynamicMenuSpec extends AnyFlatSpec with Matchers:
     chosen(section).map(c => (c.label, c.description)) shouldBe
       List(("book", Some(absolute("/work").toString)), ("notes", Some(absolute("/home/me").toString)))
     chosen(section).map(_.choice) shouldBe
-      List(Choice.RecentFolder(Paths.get("/work/book")), Choice.RecentFolder(Paths.get("/home/me/notes")))
+      List(Choice.RecentFolder(absolute("/work/book")), Choice.RecentFolder(absolute("/home/me/notes")))
   }
 
   it should "show a folder once, at its most recent place" in {

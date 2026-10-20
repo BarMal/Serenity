@@ -35,7 +35,13 @@ class EditIdleSessionSaveSpec extends AnyFlatSpec with Matchers with StateManage
         sessionRootOverride = Some(sessionRoot),
         dictionaryCache = SharedDictionary.default
       )
-      _ <- AppStartup.initializeState(editor, editor.sessionStartupInfo, Theme.default, ViewportSize(80, 24))
+      _ <- AppStartup.initializeState(
+        editor,
+        editor.sessionStartupInfo,
+        Theme.default,
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
+      )
       _ <- editor.applyEvent(Enter)
     yield editor
 

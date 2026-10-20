@@ -13,6 +13,10 @@ private[command] object CommandRunnerSettingsCursorItems:
         CommandOption(
           "Blink",
           CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.SetCursorMode(CursorMode.Blink)))
+        ),
+        CommandOption(
+          "Steady",
+          CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.SetCursorMode(CursorMode.Steady)))
         )
       ),
       selectedIndex = optionSelections.getOrElse("cursor-mode", 0),

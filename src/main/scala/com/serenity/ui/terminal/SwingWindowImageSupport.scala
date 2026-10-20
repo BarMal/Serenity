@@ -1,8 +1,10 @@
 package com.serenity.ui.terminal
 
 import java.awt.*
+import java.awt.event.{ContainerAdapter, ContainerEvent}
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
+import javax.swing.JComponent
 
 import com.serenity.ui.layout.PixelRect
 
@@ -17,9 +19,12 @@ private[terminal] trait SwingWindowImageSupport:
   /** A two-image frame pool: the render thread draws into the spare while the EDT presents the published image.
     *
     * The EDT leases the published image for the length of a paint. A paint that started before the next publish can
-    * still be reading that image once it has become the spare, so the spare is never handed back while leased.
+    * still be reading that image once it has become the spare, so the spare is never handed back while leased. Rather
+    * than allocate a third full-window image (about 50MB at 2x) for that rare overlap, `acquire` waits a short while
+    * for the paint to finish; only a paint stuck past [[MaxLeaseWaitNanos]] makes it allocate, so a hung event thread
+    * can never stall rendering.
     */
-  final private[serenity] class ReusableImagePool:
+  final private[serenity] class ReusableImagePool(maxLeaseWaitNanos: Long = MaxLeaseWaitNanos):
 
     final private case class Slots(
         published: Option[BufferedImage],
@@ -28,9 +33,29 @@ private[terminal] trait SwingWindowImageSupport:
     ):
       def spareIsLeased: Boolean = spare.exists(image => leased.exists(_ eq image))
 
-    private val slots = new AtomicReference(Slots(None, None, None))
+    private val slots     = new AtomicReference(Slots(None, None, None))
+    private val leaseLock = new Object
+
+    @annotation.tailrec
+    private def awaitSpareRelease(deadlineNanos: Long): Unit =
+      val remainingNanos = deadlineNanos - System.nanoTime()
+      if slots.get().spareIsLeased && remainingNanos > 0 then
+        val interrupted =
+          leaseLock.synchronized {
+            if slots.get().spareIsLeased then
+              try
+                leaseLock.wait(remainingNanos / 1_000_000L, (remainingNanos % 1_000_000L).toInt)
+                false
+              catch
+                case _: InterruptedException =>
+                  Thread.currentThread().interrupt()
+                  true
+            else false
+          }
+        if !interrupted then awaitSpareRelease(deadlineNanos)
 
     def acquire(width: Int, height: Int, imageType: Int): BufferedImage =
+      awaitSpareRelease(System.nanoTime() + maxLeaseWaitNanos)
       val before = slots.getAndUpdate(current => if current.spareIsLeased then current else current.copy(spare = None))
       before.spare
         .filterNot(_ => before.spareIsLeased)
@@ -49,6 +74,12 @@ private[terminal] trait SwingWindowImageSupport:
 
     def releaseLease(): Unit =
       val _ = slots.updateAndGet(_.copy(leased = None))
+      leaseLock.synchronized(leaseLock.notifyAll())
+
+  /** A paint takes a few milliseconds; this is generous for one and short enough that a stuck one costs a single frame.
+    * A pool takes its own wait so a test can make it long enough to be immune to scheduling pauses.
+    */
+  private val MaxLeaseWaitNanos = 50_000_000L
 
   def shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible: Boolean): Boolean =
     !cursorVisible
@@ -137,6 +168,45 @@ private[terminal] trait SwingWindowImageSupport:
       }
       .flatten
 
+  /** Stops `RepaintManager` copying each already-buffered frame through a back buffer of its own.
+    *
+    * `JComponent.paintImmediately` walks from the painted component up to its window and paints through the buffer of
+    * any double-buffered ancestor it passes, so unbuffering only `canvas` is not enough: the root pane, layered pane
+    * and content pane are buffered by default and would still be the buffer. Components that are not ancestors keep
+    * their own buffering.
+    *
+    * The canvas's own children are unbuffered too, now and as they are added. A child is only spared a buffer of its
+    * own when an ancestor is the one being buffered (`JComponent.paintToOffscreen` sets `ANCESTOR_USING_BUFFER`); with
+    * the canvas unbuffered, a double-buffered child painted during a `RepaintManager` pass is drawn into the shared
+    * opaque back buffer and that buffer, which nothing initialised for it, is copied over the frame. A non-opaque child
+    * that paints nothing, as every accessibility proxy does, thereby blanks its whole rectangle.
+    */
+  private[serenity] def presentDirectly(canvas: JComponent): Unit =
+    canvas.setOpaque(true)
+    LazyList
+      .unfold[Component, Option[Component]](Some(canvas))(_.map(component => (component, Option(component.getParent))))
+      .collect { case swingComponent: JComponent => swingComponent }
+      .foreach(_.setDoubleBuffered(false))
+    canvas.getComponents.foreach(unbufferTree)
+    canvas.addContainerListener(
+      new ContainerAdapter:
+        override def componentAdded(event: ContainerEvent): Unit = unbufferTree(event.getChild)
+    )
+
+  private def unbufferTree(component: Component): Unit =
+    component match
+      case swingComponent: JComponent => swingComponent.setDoubleBuffered(false)
+      case _                          => ()
+    component match
+      case container: Container => container.getComponents.foreach(unbufferTree)
+      case _                    => ()
+
+  /** An opaque frame is stretched over the whole panel and overwrites every pixel of the clip, so filling black first
+    * is a second full-clip write; only a missing or alpha-carrying frame leaves pixels to define.
+    */
+  private[serenity] def needsBackgroundFill(base: Option[BufferedImage]): Boolean =
+    !base.exists(image => image.getWidth > 0 && image.getHeight > 0 && image.getTransparency == Transparency.OPAQUE)
+
   /** Present a frame into `g`, touching only its clip: Java2D bounds a software image upload by the destination
     * rectangle, not the clip, so drawing the whole image for a caret-sized repaint copies the whole window.
     */
@@ -147,10 +217,11 @@ private[terminal] trait SwingWindowImageSupport:
     panelWidth: Int,
     panelHeight: Int
   ): Unit =
-    val clip       = Option(g.getClipBounds).getOrElse(new Rectangle(0, 0, panelWidth, panelHeight))
-    val background = g.create().asInstanceOf[Graphics2D]
-    try SwingWindow.paintCanvasBackground(background, panelWidth, panelHeight)
-    finally background.dispose()
+    val clip = Option(g.getClipBounds).getOrElse(new Rectangle(0, 0, panelWidth, panelHeight))
+    if needsBackgroundFill(base) then
+      val background = g.create().asInstanceOf[Graphics2D]
+      try SwingWindow.paintCanvasBackground(background, panelWidth, panelHeight)
+      finally background.dispose()
     base.foreach(image => drawImageRegion(g, image, clip, panelWidth, panelHeight))
     carets.filter(_.rect.intersects(clip)).foreach { caret =>
       g.setColor(caret.color)

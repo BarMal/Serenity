@@ -46,7 +46,8 @@ object StatusLineText:
             val total   = TextStatistics.of(buffer.document.content).wordCount
             val percent = if goal <= 0 then 0 else math.min(100, total * 100 / goal)
             s"$total / $goal words ($percent%)"
-      case StatusSegment.LineEnding => lineEnding(buffer.document)
+      case StatusSegment.LineEnding  => lineEnding(buffer.document)
+      case StatusSegment.Indentation => buffer.effectiveIndentation(state.persisted.config.indentation).statusLabel
 
   private def lineEnding(document: Document): String =
     val label = document.lineEnding.label

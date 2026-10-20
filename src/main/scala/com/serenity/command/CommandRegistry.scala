@@ -82,12 +82,19 @@ object CommandRegistry:
   def apply(commands: List[Command]): CommandRegistry = new CommandRegistry(commands)
 
   /** Registry with default commands. The command list is static, so this is built once and reused. */
-  lazy val default: CommandRegistry = new CommandRegistry(defaultCommands)
+  lazy val default: CommandRegistry = new CommandRegistry(defaultCommands ++ commentCommands ++ occurrenceCommands)
 
   /** Registry with default commands plus UI toggle commands. The command list is static, so this is built once and
     * reused.
     */
-  lazy val withToggleUI: CommandRegistry = new CommandRegistry(defaultCommands ++ toggleUICommands)
+  lazy val withToggleUI: CommandRegistry = new CommandRegistry(
+    defaultCommands ++ toggleUICommands ++ commentCommands ++ occurrenceCommands
+  )
+
+  // Last in every registry, so that adding them leaves the ranking of the commands before them as it was.
+  private def commentCommands: List[Command] = CommandRegistryEditCommands.commentCommands
+
+  private def occurrenceCommands: List[Command] = CommandRegistryEditCommands.occurrenceCommands
 
   /** Pure typed UI toggle commands. */
   private def toggleUICommands: List[Command] = List(
@@ -97,6 +104,13 @@ object CommandRegistry:
       CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers)),
       CommandCategory.View,
       label = "Toggle Line Numbers"
+    ),
+    Command.typed(
+      "toggle-layout",
+      "Switch between the minimal layout and the conventional one: line numbers, pane headers, status bar, tab strip and scrollbar. Anything you set yourself keeps its value.",
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.ToggleUiLayout)),
+      CommandCategory.View,
+      label = "Toggle Layout"
     ),
     Command.typed(
       "toggle-status-line",

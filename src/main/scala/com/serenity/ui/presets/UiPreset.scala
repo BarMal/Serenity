@@ -200,12 +200,13 @@ object UiPreset:
       }
     )
 
-  final case class Preview(name: String, hint: String)
+  /** `config` is what the preset holds, where known: the preset's own edit pages show it rather than the live one. */
+  final case class Preview(name: String, hint: String, config: Option[AppConfig] = None)
 
   object Preview:
 
     def fromPreset(preset: UiPreset): Preview =
-      Preview(preset.name, UiPresetSummary.previewHint(preset))
+      Preview(preset.name, UiPresetSummary.previewHint(preset), Some(preset.config))
 
     def fromName(name: String): Preview =
       Preview(name.trim, "Saved workspace setup")
@@ -253,7 +254,10 @@ object UiPreset:
     * workspace looks, so a preset (captured with it off, or on someone else's machine) neither switches it off nor on.
     */
   private[presets] def appliedConfig(running: AppConfig, preset: UiPreset): AppConfig =
-    HotkeyOverrides.likeRunning(running, preset.config).withThemeFollowConfig(running.themeFollowConfig)
+    HotkeyOverrides
+      .likeRunning(running, preset.config)
+      .withThemeFollowConfig(running.themeFollowConfig)
+      .withHeadingsConfig(running.headingsConfig)
 
   /** Apply a built-in workflow without replacing unrelated persisted configuration -- the theme included: a workflow is
     * about how the workspace behaves, and the user's colours are theirs (#1880).

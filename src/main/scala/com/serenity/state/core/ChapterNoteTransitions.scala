@@ -67,7 +67,7 @@ object ChapterNoteTransitions:
     DerivedValue(
       inputs = identity,
       references = buffer => List(buffer.document.content, buffer.document.language, buffer.richText.richTextDocument),
-      compute = buffer => HeadingIdentity.forHeadings(DocumentOutline.forBuffer(buffer))
+      compute = DocumentOutline.identifiedHeadings
     )
 
   /** The note of the chapter whose heading is the last at or before a position in `buffer`. */

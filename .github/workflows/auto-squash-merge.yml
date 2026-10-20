@@ -131,10 +131,10 @@ jobs:
 
           if [ "${base_ref}" = "master" ]; then
             # A merge made with the workflow token starts no push-triggered workflows, so master's own CI run -- which
-            # benchmarks each merge against master's previous commit -- has to be dispatched too.
-            echo "Dispatching CI and Desktop Publish for ${base_ref} at ${merge_commit}."
+            # benchmarks each merge against master's previous commit -- has to be dispatched too. Desktop Publish is
+            # not: it republishes desktop-latest on its nightly schedule, not per merge (#2016).
+            echo "Dispatching CI for ${base_ref} at ${merge_commit}."
             gh workflow run ci.yml --repo "${REPO}" --ref "${base_ref}"
-            gh workflow run desktop-publish.yml --repo "${REPO}" --ref "${base_ref}"
           else
-            echo "Skipping CI and Desktop Publish dispatch for non-master base ${base_ref}."
+            echo "Skipping CI dispatch for non-master base ${base_ref}."
           fi

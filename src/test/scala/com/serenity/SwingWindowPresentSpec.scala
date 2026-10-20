@@ -2,6 +2,8 @@ package com.serenity
 
 import java.awt.image.BufferedImage
 import java.awt.{Color, Graphics2D, Rectangle}
+import java.util.concurrent.atomic.AtomicBoolean
+import javax.swing.{JPanel, JRootPane}
 
 import com.serenity.ui.terminal.SwingWindow
 import org.scalatest.flatspec.AnyFlatSpec
@@ -93,6 +95,41 @@ class SwingWindowPresentSpec extends AnyFlatSpec with Matchers:
     new Color(target.getRGB(10, 10), true) shouldBe Color.BLACK
   }
 
+  it should "keep an opaque base image exact when the target held other pixels" in {
+    val target = filled(20, 20, Color.RED)
+    val base   = new BufferedImage(20, 20, BufferedImage.TYPE_INT_RGB)
+    paintInto(target, new Rectangle(0, 0, 20, 20))(g => SwingWindow.paintPresentedFrame(g, Some(base), Nil, 20, 20))
+
+    new Color(target.getRGB(10, 10), true) shouldBe Color.BLACK
+  }
+
+  "SwingWindow.needsBackgroundFill" should "be false for an opaque base frame, which overwrites every pixel it covers" in {
+    SwingWindow.needsBackgroundFill(Some(new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB))) shouldBe false
+  }
+
+  it should "be true for a base frame with alpha, whose transparent pixels would show what was painted before" in {
+    SwingWindow.needsBackgroundFill(Some(new BufferedImage(8, 8, BufferedImage.TYPE_INT_ARGB))) shouldBe true
+  }
+
+  it should "be true when there is no base frame yet" in {
+    SwingWindow.needsBackgroundFill(None) shouldBe true
+  }
+
+  "SwingWindow.presentDirectly" should "unbuffer the canvas and every Swing ancestor Swing would paint it through" in {
+    val root   = new JRootPane
+    val canvas = new JPanel
+    root.getContentPane.add(canvas)
+    val sibling = new JPanel
+    root.getContentPane.add(sibling)
+    List(root, root.getContentPane, canvas).foreach(_.isDoubleBuffered shouldBe true)
+
+    SwingWindow.presentDirectly(canvas)
+
+    List(root, root.getLayeredPane, root.getContentPane, canvas).foreach(_.isDoubleBuffered shouldBe false)
+    canvas.isOpaque shouldBe true
+    sibling.isDoubleBuffered shouldBe true
+  }
+
   "SwingWindow.ReusableImagePool" should "not hand back an image the EDT is still painting" in {
     val pool    = new SwingWindow.ReusableImagePool
     val initial = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
@@ -101,6 +138,39 @@ class SwingWindowPresentSpec extends AnyFlatSpec with Matchers:
 
     val next = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
     pool.publish(next)
+
+    pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB) should not be theSameInstanceAs(
+      initial
+    )
+  }
+
+  it should "wait for a paint in progress and reuse its image rather than allocate a third" in {
+    val pool    = new SwingWindow.ReusableImagePool(maxLeaseWaitNanos = 60_000_000_000L)
+    val initial = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    pool.publish(initial)
+    pool.leasePublished() shouldBe Some(initial)
+    pool.publish(pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB))
+
+    val acquiring = Thread.currentThread()
+    val acquired  = new AtomicBoolean(false)
+    val paint = new Thread(() =>
+      awaitParked(acquiring, acquired)
+      pool.releaseLease()
+    )
+    paint.start()
+
+    val reused = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    acquired.set(true)
+    paint.join()
+    reused should be theSameInstanceAs initial
+  }
+
+  it should "not wait forever on a paint that never finishes" in {
+    val pool    = new SwingWindow.ReusableImagePool
+    val initial = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    pool.publish(initial)
+    val _ = pool.leasePublished()
+    pool.publish(pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB))
 
     pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB) should not be theSameInstanceAs(
       initial
@@ -123,6 +193,12 @@ class SwingWindowPresentSpec extends AnyFlatSpec with Matchers:
   it should "lease nothing before a frame has been published" in {
     new SwingWindow.ReusableImagePool().leasePublished() shouldBe None
   }
+
+  @annotation.tailrec
+  private def awaitParked(thread: Thread, gaveUp: AtomicBoolean): Unit =
+    if !gaveUp.get() && thread.getState != Thread.State.TIMED_WAITING then
+      Thread.onSpinWait()
+      awaitParked(thread, gaveUp)
 
   private def filled(width: Int, height: Int, color: Color): BufferedImage =
     val image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)

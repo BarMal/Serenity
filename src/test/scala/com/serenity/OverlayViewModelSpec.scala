@@ -24,8 +24,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
-    AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -35,7 +35,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.Surface(SurfaceId("peek"))
       ),
-      runtime = AppState.initial.runtime.copy(
+      runtime = ChromeOn.initial.runtime.copy(
         uiSurfaces = List(
           UiSurface(
             SurfaceId("peek"),
@@ -74,8 +74,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .fromString(bufferId, "one\ntwo\nthree")
       .copy(editing = EditingState(List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -85,7 +85,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.Surface(SurfaceId("modal"))
       ),
-      runtime = AppState.initial.runtime.copy(
+      runtime = ChromeOn.initial.runtime.copy(
         uiSurfaces = List(
           UiSurface(
             SurfaceId("modal"),
@@ -113,10 +113,10 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val buffer =
       Buffer.fromString(bufferId, "one\ntwo\nthree").copy(editing = EditingState(List(CursorPosition(1, 2))))
     val pane   = EditorPane.withBuffer(paneId, bufferId)
-    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.withCommandRunnerItemGapRows(Some(1)),
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.conventional)
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
+        config = AppConfig.conventional.withCommandRunnerItemGapRows(Some(1)),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -126,7 +126,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.Surface(SurfaceId("command-runner"))
       ),
-      runtime = AppState.initial.runtime.copy(
+      runtime = ChromeOn.initial.runtime.copy(
         uiSurfaces = List(
           UiSurface(
             SurfaceId("command-runner"),
@@ -163,8 +163,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .fromString(bufferId, "one\ntwo\nthree")
       .copy(editing = EditingState(List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -174,7 +174,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.Surface(SurfaceId("find"))
       ),
-      runtime = AppState.initial.runtime.copy(
+      runtime = ChromeOn.initial.runtime.copy(
         uiSurfaces = List(
           UiSurface(
             SurfaceId("find"),
@@ -212,9 +212,9 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .fromString(bufferId, "one\ntwo\nthree")
       .copy(editing = EditingState(List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
+        config = AppConfig.conventional
           .withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact)
           .withCommandRunnerItemGapRows(Some(1)),
         buffers = Map(bufferId -> buffer),
@@ -226,7 +226,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.Surface(SurfaceId("context-menu"))
       ),
-      runtime = AppState.initial.runtime.copy(
+      runtime = ChromeOn.initial.runtime.copy(
         uiSurfaces = List(
           UiSurface(
             SurfaceId("context-menu"),
@@ -265,14 +265,14 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     )
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .updateSearchTerm("op")(using registry)
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
       .copy(editing = EditingState(List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -282,7 +282,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.Surface(SurfaceId("command-runner"))
       ),
-      runtime = AppState.initial.runtime.copy(
+      runtime = ChromeOn.initial.runtime.copy(
         uiSurfaces = List(
           UiSurface(
             SurfaceId("command-runner"),
@@ -324,8 +324,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .fromString(bufferId, "one\ntwo\nthree")
       .copy(editing = EditingState(List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -335,7 +335,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.EditorPane(paneId)
       ),
-      runtime = AppState.initial.runtime.copy(
+      runtime = ChromeOn.initial.runtime.copy(
         uiSurfaces = List(
           UiSurface(
             SurfaceId("command-runner"),
@@ -360,14 +360,14 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     )
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .updateSearchTerm("op")(using registry)
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
       .copy(editing = EditingState(List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -377,7 +377,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.Surface(SurfaceId("file-modal"))
       ),
-      runtime = AppState.initial.runtime.copy(
+      runtime = ChromeOn.initial.runtime.copy(
         uiSurfaces = List(
           UiSurface(
             SurfaceId("command-runner"),
@@ -415,11 +415,11 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   it should "attach the shared close workflow composition to a modal overlay" in {
     val surfaceId = SurfaceId("close-modal")
     val workflow  = CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         focus = Focus.Modal
       ),
-      runtime = AppState.initial.runtime.copy(
+      runtime = ChromeOn.initial.runtime.copy(
         modalStack = List(ModalDialog(surfaceId, Modal.Confirm(workflow.prompt), ModalPlacement.Centered))
       )
     )
@@ -441,14 +441,14 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     )
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .updateSearchTerm("op")(using registry)
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
       .copy(editing = EditingState(List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -457,9 +457,9 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.Surface(SurfaceId("command-runner")),
-        config = AppConfig.default.withUiElementGap(Some(0.25)).withAppMode(AppMode.Prose)
+        config = AppConfig.conventional.withUiElementGap(Some(0.25)).withAppMode(AppMode.Prose)
       ),
-      runtime = AppState.initial.runtime.copy(
+      runtime = ChromeOn.initial.runtime.copy(
         uiSurfaces = List(
           UiSurface(
             SurfaceId("contextual-toolbar"),
@@ -502,8 +502,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       TabListEntry(BufferId(1), "one.txt", isDirty = false),
       TabListEntry(BufferId(2), "two.txt", isDirty = true)
     )
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -513,7 +513,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.Surface(SurfaceId("tab-bar"))
       ),
-      runtime = AppState.initial.runtime.copy(
+      runtime = ChromeOn.initial.runtime.copy(
         uiSurfaces = List(
           UiSurface(
             SurfaceId("tab-bar"),
@@ -537,8 +537,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val firstBuffer  = Buffer.fromString(BufferId(0), "one")
     val secondBuffer = Buffer.fromString(BufferId(1), "two")
     val pane         = EditorPane.withBuffer(paneId, BufferId(0))
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(firstBuffer.id -> firstBuffer, secondBuffer.id -> secondBuffer),
         bufferOrder = List(firstBuffer.id, secondBuffer.id),
         layout = Layout(
@@ -567,8 +567,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
 
   it should "carry no tab bar overlay with only a single buffer open" in {
     val overlays = OverlayViewModel.fromState(
-      AppState.initial,
-      LayoutEngine.calculateLayout(AppState.initial, ViewportSize(100, 24))
+      ChromeOn.initial,
+      LayoutEngine.calculateLayout(ChromeOn.initial, ViewportSize(100, 24))
     )
 
     overlays.tabBar shouldBe None

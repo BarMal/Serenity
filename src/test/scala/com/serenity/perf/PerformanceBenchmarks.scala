@@ -30,10 +30,10 @@ object PerformanceBenchmarks:
         case ((window, presentWindow), projectRoot) =>
           IO {
             val all = benchmarks(window, projectRoot) ++ LaptopFrameBenchmarks.benchmarks(presentWindow) ++
-              RichDocumentOpenBenchmarks.benchmarks
+              CacheOwnershipBenchmarks.benchmarks ++ RichDocumentOpenBenchmarks.benchmarks
             val unknown = BenchmarkIterationCounts.JitSettled -- all.map(_.name)
             require(unknown.isEmpty, s"JitSettled names no benchmark: ${unknown.mkString(", ")}")
-            val results = BenchmarkRunner.runMatching(args.toList, all)
+            val results = BenchmarkRunner.runMatching(args.toList, all) ++ FootprintBenchmarks.runMatching(args.toList)
             BenchmarkRunner.printResults(results)
           }
       }
@@ -42,9 +42,13 @@ object PerformanceBenchmarks:
   private def benchmarks(cursorWindow: SwingWindow, projectRoot: Path): List[BenchmarkRunner.Benchmark] =
     ropeBenchmarks() ++
       RenderBenchmarks.frameBenchmarks(cursorWindow) ++
+      LayoutSnapshotBenchmarks.benchmarks() ++
       ReducerBenchmarks.benchmarks() ++
+      ProseTypingBenchmarks.benchmarks() ++
       DamageBenchmarks.benchmarks() ++
+      TuiBenchmarks.benchmarks() ++
       CommandRunnerBenchmarks.benchmarks() ++
+      ModalWrapBenchmarks.benchmarks() ++
       EqualsBenchmarks.benchmarks() ++
       FindReplaceBenchmarks.benchmarks() ++
       lspAndProjectBenchmarks(projectRoot) ++
@@ -81,6 +85,15 @@ object PerformanceBenchmarks:
     val projectTask             = ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test)
     val decodedLspMessages      = decodeLspMessages(framedLspMessages)
     val projectTaskPresentation = projectTask.map(ProjectTaskTerminal.started)
+    val largeFrame = List(
+      Json.obj(
+        "jsonrpc" -> Json.fromString("2.0"),
+        "id"      -> Json.fromInt(1),
+        "result"  -> Json.fromString("y" * 1_048_576)
+      )
+    )
+    val framedLargeFrame  = largeFrame.flatMap(LspFramer.encode).toArray
+    val decodedLargeFrame = decodeLspMessages(framedLargeFrame, PipeReadBytes)
 
     List(
       BenchmarkRunner.Benchmark(
@@ -89,6 +102,13 @@ object PerformanceBenchmarks:
         BenchmarkIterationCounts.LspFramer,
         () => assert(decodedLspMessages == lspMessages),
         () => decodeLspMessages(framedLspMessages)
+      ),
+      BenchmarkRunner.Benchmark(
+        "lsp.framer.large_frame",
+        3,
+        20,
+        () => assert(decodedLargeFrame == largeFrame),
+        () => decodeLspMessages(framedLargeFrame, PipeReadBytes)
       ),
       BenchmarkRunner.Benchmark(
         "project_task.responsiveness",
@@ -103,11 +123,15 @@ object PerformanceBenchmarks:
       )
     )
 
-  private def decodeLspMessages(bytes: Array[Byte]): List[Json] =
+  private val PipeReadBytes = 8 * 1024
+
+  private def decodeLspMessages(bytes: Array[Byte], chunkBytes: Int = Int.MaxValue): List[Json] =
     import cats.effect.unsafe.implicits.global
 
     fs2.Stream
       .chunk(fs2.Chunk.array(bytes))
+      .chunkLimit(chunkBytes)
+      .unchunks
       .through(LspFramer.decode)
       .compile
       .toList

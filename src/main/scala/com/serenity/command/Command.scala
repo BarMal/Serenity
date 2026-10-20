@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import com.serenity.config.*
+import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
@@ -43,8 +44,13 @@ enum EditIntent:
   case ChoosePasteFromHistory
   case PasteFromHistory(entry: ClipboardEntry)
   case SelectAll
+  case SelectNextOccurrence
+  case SkipOccurrence
+  case SelectAllOccurrences
   case Undo
   case Redo
+  case ToggleLineComment
+  case ToggleBlockComment
   case FormatCurrentFile
 
 enum RichTextIntent:
@@ -143,6 +149,9 @@ enum ViewIntent:
   case SetPanelPin(id: PanelId, position: Option[PanelPosition])
   case OpenMarkdownPreview
   case SetMarkdownViewMode(mode: MarkdownViewMode)
+
+  /** Switches between hiding Markdown markers everywhere (read) and hiding them off the caret line (live preview). */
+  case ToggleMarkdownReadMode
   case SetDefaultDocumentMode(mode: DefaultDocumentMode)
   case SetAppMode(mode: AppMode)
 
@@ -255,7 +264,6 @@ enum StatusLineIntent:
   /** Sets or clears (`None`) the active document's word-count goal the `WordGoal` segment shows progress against. */
   case SetWordGoal(goal: Option[Int])
 
-/** Panel/text-area chrome: line numbers, gutter, word wrap, toolbar, spacing, window chrome and sitter, insets. */
 /** What the editor surface itself shows around and inside the text: chrome rows, wrap, scrolling, insets. */
 enum TextDisplayIntent:
   case ToggleLineNumbers
@@ -286,6 +294,8 @@ enum TextDisplayIntent:
   case SetTextAreaTopInset(value: Double)
   case SetTextAreaBottomInset(value: Double)
   case SetDropCapsEnabled(enabled: Boolean)
+  case SetTabSize(size: Int)
+  case SetInsertSpaces(enabled: Boolean)
 
 /** How interface surfaces are sized and spaced -- density, gaps, outlines, window chrome, key hints -- and where Escape
   * from a focused panel returns focus.
@@ -296,6 +306,16 @@ enum InterfaceChromeIntent:
   case SetUiOutlineThicknessPx(thickness: Int)
   case SetInterfaceDensity(density: InterfaceDensity)
   case SetWindowChromeMode(mode: WindowChromeMode)
+  case SetMenuBarMode(mode: MenuBarMode)
+  case SetUiLayout(layout: UiLayout)
+  case ToggleUiLayout
+  case SetSummonModifiers(modifiers: Set[Modifier])
+  case SetSummonLock(lock: HotkeyTrigger)
+  case SetSummonLetter(element: ChromeElement, letter: Option[Char])
+  // `useLayoutKeys` are the `LayoutPin.key`s handed back to the layout; every other key the file pins stays as the
+  // file has it. Reached from the prompt a switch (or the first launch) opens, never from the palette.
+  case ReviewUiLayoutOverride(layout: UiLayout)
+  case ConfirmUiLayoutOverride(layout: UiLayout, useLayoutKeys: List[String])
   case SetWheelScrollLines(lines: Int)
   case SetPanelEscapeTarget(mode: AppMode, target: PanelEscapeTarget)
 
@@ -343,9 +363,15 @@ enum SettingsIntent:
   case Cursor(intent: CursorIntent)
   case StatusLine(intent: StatusLineIntent)
   case TextDisplay(intent: TextDisplayIntent)
+  case Headings(intent: HeadingsIntent)
   case InterfaceChrome(intent: InterfaceChromeIntent)
   case SpellCheck(intent: SpellCheckIntent)
   case General(intent: GeneralSettingsIntent)
+
+/** What a settings edit changes: the live config, or one stored UI preset. */
+enum SettingsTarget:
+  case Global
+  case Preset(name: String)
 
 /** Every command the command runner can execute, grouped into per-family sub-enums so that both `interpretCommand` and
   * this type stay exhaustiveness-checked one family at a time instead of as one 170-case flat match.
@@ -369,6 +395,8 @@ enum CommandIntent:
   case Keybindings(intent: KeybindingsIntent)
   case UiPresets(intent: UiPresetsIntent)
   case Settings(intent: SettingsIntent)
+  // An edit aimed at `target`; `Global` is the edit itself, a `Preset` change goes to that stored preset alone.
+  case Scoped(target: SettingsTarget, intent: CommandIntent)
 
 /** A command that can be executed in the command runner */
 final case class Command private (

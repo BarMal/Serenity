@@ -89,7 +89,7 @@ class SafeModeSpec extends AnyFlatSpec with Matchers:
   }
 
   "AppState.statusLineText" should "lead with the safe-mode label while safe mode is on, even with nothing open" in {
-    val base = AppState.empty(AppConfig.default)
+    val base = AppState.empty(AppConfig.conventional)
     val safe = StartupRecovery.Plan(safeMode = true, notices = Nil).appliedTo(base)
 
     safe.runtime.safeMode shouldBe true
@@ -98,7 +98,7 @@ class SafeModeSpec extends AnyFlatSpec with Matchers:
   }
 
   "StartupRecovery.Plan.appliedTo" should "show the crash-loop prompt as a blocking prompt only when one took over" in {
-    val base = AppState.empty(AppConfig.default)
+    val base = AppState.empty(AppConfig.conventional)
     val loop = StartupRecovery.Plan(safeMode = true, notices = Nil, crashLoopAfter = Some(2)).appliedTo(base)
 
     loop.runtime.safeMode shouldBe true

@@ -16,16 +16,6 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       case child                               => List(child)
     }
 
-  private def groupByIdRecursive(
-    groups: List[CommandSurfaceItem.GroupItem],
-    id: String
-  ): CommandSurfaceItem.GroupItem =
-    (groups ++ groups.flatMap(group =>
-      descendants(group).collect { case child: CommandSurfaceItem.GroupItem => child }
-    ))
-      .find(_.id == id)
-      .getOrElse(fail(s"missing group $id"))
-
   "CommandRunner state" should "surface UI preset save and apply inputs in settings" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
@@ -79,48 +69,17 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       }
       .getOrElse(fail("missing edit preset group"))
 
-    // issue #1058: editing/creating a preset used to walk a hand-maintained parallel clone tree (Active Panels,
-    // Theme & Surface > Surface Material, Fonts > Editor/Code/UI
-    // Typography, Document Defaults > New Documents/Markdown Preview/Spelling) that re-sliced the same canonical
-    // items several levels deeper than their top-level counterparts. It now reuses the same canonical settings
-    // groups directly (see `presetScopedGroups` in `CommandRunnerSettingsGroups`), just re-tagged with
-    // `settings-preset-*` ids so they remain addressable as distinct pages.
-    val presetScopedGroupIds = List(
-      "settings-preset-workspace-layout",
-      "settings-preset-cursor",
-      "settings-preset-prose-font",
-      "settings-preset-code-font",
-      "settings-preset-ui-font",
-      "settings-preset-document-defaults",
-      "settings-preset-spellcheck"
-    )
-    createPreset.label shouldBe "Create New Preset"
-    createPreset.children.map(_.id) shouldBe "settings-preset-create-name" :: presetScopedGroupIds
+    // issue #1682: the edit page is flat -- every setting a preset can hold is a row on it, not a page below it -- and
+    // only those settings are offered. Create is just Save As New, and the panel layout is captured whole by
+    // Overwrite Preset.
+    val own = "preset:Writing:"
+    createPreset.label shouldBe "Save As New Preset"
+    createPreset.children.map(_.id) shouldBe List("ui-preset-save-as-new")
     editPreset.label shouldBe "Edit Preset: Writing"
-    editPreset.hint shouldBe Some("Editing Writing")
-    editPreset.children.map(_.id) shouldBe
-      List("settings-preset-name", "settings-preset-actions") ++ presetScopedGroupIds
-    val createName = createPreset.children
-      .collectFirst {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-create-name" => group
-      }
-      .getOrElse(fail("missing create preset name group"))
-    createName.children.map(_.id) shouldBe List("ui-preset-save-as-new")
-
-    val presetName = editPreset.children
-      .collectFirst {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-name" => group
-      }
-      .getOrElse(fail("missing preset name group"))
-    presetName.label shouldBe "Name"
-    presetName.children.map(_.id) shouldBe List("ui-preset-rename")
-    val presetActions = editPreset.children
-      .collectFirst {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-actions" => group
-      }
-      .getOrElse(fail("missing preset actions group"))
-    presetActions.label shouldBe "Preset Actions"
-    presetActions.children.map(_.id) shouldBe List(
+    editPreset.hint shouldBe Some("Editing Writing. Panel layout: use Overwrite Preset")
+    editPreset.children.collect { case group: CommandSurfaceItem.GroupItem => group.id } shouldBe Nil
+    editPreset.children.map(_.id) should contain inOrderOnly (
+      "ui-preset-rename",
       "ui-preset-apply",
       "ui-preset-overwrite",
       "ui-preset-duplicate",
@@ -128,41 +87,36 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       "ui-preset-use-current-theme",
       "ui-preset-clear-theme",
       "ui-preset-delete",
-      "ui-preset-reset"
+      "ui-preset-reset",
+      s"${own}cursor-mode",
+      s"${own}text-font",
+      s"${own}text-ligatures",
+      s"${own}text-font-size",
+      s"${own}code-font",
+      s"${own}code-ligatures",
+      s"${own}code-font-size",
+      s"${own}ui-font",
+      s"${own}ui-ligatures",
+      s"${own}ui-font-size",
+      s"${own}default-document-mode",
+      s"${own}markdown-view",
+      s"${own}drop-caps-enabled",
+      s"${own}spellcheck-enabled",
+      s"${own}spellcheck-languages",
+      s"${own}spellcheck-dictionaries",
+      s"${own}spellcheck-words"
     )
-    val activePanels = editPreset.children
-      .collectFirst {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-workspace-layout" => group
-      }
-      .getOrElse(fail("missing workspace layout group"))
-    activePanels.label shouldBe "Panels"
-    val workspaceItems = descendants(activePanels)
-    workspaceItems.collect { case CommandSurfaceItem.CommandItem(command, _) => command.intent } shouldBe
-      List(CommandIntent.View(ViewIntent.ArrangePanels))
-    val proseFont = groupByIdRecursive(List(editPreset), "settings-preset-prose-font")
-    proseFont.label shouldBe "Prose Font"
-    proseFont.children.map(_.id) should contain allOf ("text-font", "text-ligatures", "text-font-size")
-    val codeFont = groupByIdRecursive(List(editPreset), "settings-preset-code-font")
-    codeFont.children.map(_.id) should contain allOf ("code-font", "code-ligatures", "code-font-size")
-    val uiFont = groupByIdRecursive(List(editPreset), "settings-preset-ui-font")
-    uiFont.children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
-    val documentDefaults = groupByIdRecursive(List(editPreset), "settings-preset-document-defaults")
-    documentDefaults.label shouldBe "Document Defaults"
-    documentDefaults.children.map(_.id) shouldBe List("default-document-mode", "markdown-view", "drop-caps-enabled")
-    val spellcheck = groupByIdRecursive(List(editPreset), "settings-preset-spellcheck")
-    spellcheck.label shouldBe "Spell Check"
-    spellcheck.children.map(_.id) should contain allOf (
-      "spellcheck-enabled",
-      "spellcheck-languages",
-      "spellcheck-dictionaries",
-      "spellcheck-words"
-    )
-    descendants(documentDefaults).map(_.id) should not contain "lang-plain-text"
+    descendants(editPreset).map(_.id) should not contain "arrange-panels"
+    descendants(editPreset).map(_.id) should not contain "lang-plain-text"
     // issue #1057: this used to also carry a "Theme Selection" child (Theme Chooser/Creator/Toggle/Reload) -- those
     // are one-shot actions with no preset-scoped value of their own, now ordinary CommandRegistry commands
     // (CommandRunnerOneShotActionsSpec), not part of this settings subtree.
-    val cursor = groupByIdRecursive(List(editPreset), "settings-preset-cursor")
-    cursor.children.map(_.id) should contain("cursor-mode")
+    // The font families cycle in place like every other carousel row.
+    List("text-font", "code-font", "ui-font").foreach { family =>
+      editPreset.children.collectFirst {
+        case item: CommandSurfaceItem.OptionItem if item.id == s"$own$family" => item
+      } should not be empty
+    }
 
     // issue #1060: Apply/Overwrite/Delete/Reset now pick from the existing-preset catalog instead of requiring a
     // typed exact name -- Duplicate/Rename/Save-As-New still need typed input since each needs a *new* name.

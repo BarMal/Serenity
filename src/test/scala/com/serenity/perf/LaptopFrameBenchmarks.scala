@@ -8,6 +8,7 @@ import javax.swing.SwingUtilities
 import cats.effect.unsafe.IORuntime
 import cats.effect.{IO, Resource}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
+import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{
   DeleteBackward,
   Event,
@@ -23,6 +24,7 @@ import com.serenity.keystroke.events.{
   ScrollDown
 }
 import com.serenity.rope.Balance
+import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.manager.{CursorViewport, DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
@@ -56,28 +58,22 @@ private[perf] object LaptopFrameBenchmarks:
   val LogicalHeightPx = 1000
   val DeviceScale     = 2.0
 
-  private val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val textFont    = Font(Font.SERIF, Font.PLAIN, 14)
-  private val cellMetrics = CellMetrics.fromFont(codeFont)
+  /** The rows a damaged frame may redraw: the typed row with a row of margin either side and the rows its reflow moves,
+    * and the rows a three-line wheel scroll uncovers with the same margin.
+    */
+  val MaxTypingRowsDrawn = 6L
+  val MaxScrollRowsDrawn = 12L
+
+  private[perf] val codeFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
+  private val textFont       = Font(Font.SERIF, Font.PLAIN, 14)
+  private val cellMetrics    = CellMetrics.fromFont(codeFont)
   private val viewport =
     ViewportSize(LogicalWidthPx / cellMetrics.charWidth, LogicalHeightPx / cellMetrics.lineHeight)
   private val bufferId = BufferId(1)
 
-  def proseState: AppState =
-    val base   = BenchmarkFixtures.editorState(BenchmarkFixtures.loremIpsumProse(paragraphs = 300), None)
-    val buffer = base.persisted.buffers(bufferId)
-    val sized = buffer.copy(
-      viewport = buffer.viewport.copy(visibleColumns = viewport.width, visibleLines = viewport.height),
-      editing = EditingState(List(CursorPosition(150, 40)))
-    )
-    base.copy(
-      persisted = base.persisted.copy(
-        config = AppConfig.default,
-        buffers = Map(bufferId -> sized),
-        focus = Focus.EditorPane(PaneId(0))
-      ),
-      runtime = base.runtime.copy(viewportSize = Some(viewport))
-    )
+  def proseState: AppState = proseStateOf(BenchmarkFixtures.loremIpsumProse(paragraphs = 300))
+
+  def proseStateOf(text: String): AppState = LaptopProse.stateOf(text, viewport, bufferId)
 
   def proseWithPinnedPanelState: AppState =
     DockedPanelFixtures.dock(
@@ -112,7 +108,8 @@ private[perf] object LaptopFrameBenchmarks:
       logicalWidthPx = LogicalWidthPx,
       logicalHeightPx = LogicalHeightPx,
       deviceScaleX = DeviceScale,
-      deviceScaleY = DeviceScale
+      deviceScaleY = DeviceScale,
+      textCaches = caches.surfaceText
     )
     RendererEntryPoints.render(
       state,
@@ -127,7 +124,7 @@ private[perf] object LaptopFrameBenchmarks:
     )
     image
 
-  private def hasPixels(image: BufferedImage): Boolean =
+  private[perf] def hasPixels(image: BufferedImage): Boolean =
     val row = image.getHeight / 2
     (0 until image.getWidth).exists(x => image.getRGB(x, row) != image.getRGB(0, row))
 
@@ -140,7 +137,7 @@ private[perf] object LaptopFrameBenchmarks:
     )
 
   def benchmarks(presentWindow: SwingWindow)(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    renderBenchmarks ++ interactionBenchmarks ++ inputBenchmarks ++ typingBenchmarks ++
+    renderBenchmarks ++ interactionBenchmarks ++ LigatureTypingBenchmarks.benchmarks ++ PanelLayerCachingBenchmarks.benchmarks ++ EreaderTypingBenchmarks.benchmarks ++ inputBenchmarks ++ typingBenchmarks ++
       List(presentBenchmark(presentWindow), presentCaretBenchmark(presentWindow))
 
   private def renderBenchmarks: List[BenchmarkRunner.Benchmark] =
@@ -173,17 +170,28 @@ private[perf] object LaptopFrameBenchmarks:
     */
   private[perf] def proseStateManager(
     paragraphs: Int = 300,
-    config: AppConfig = AppConfig.default,
-    cursorLine: Int = 150
+    config: AppConfig = AppConfig.conventional,
+    cursorLine: Int = 150,
+    dictionaryCache: Option[DictionaryCache] = None,
+    grid: ViewportSize = viewport
   )(using IORuntime): (StateManager, BufferId) =
-    stateManagerHolding(BenchmarkFixtures.loremIpsumProse(paragraphs), config, cursorLine, cursorColumn = 40)
+    stateManagerHolding(
+      BenchmarkFixtures.loremIpsumProse(paragraphs),
+      config,
+      cursorLine,
+      cursorColumn = 40,
+      dictionaryCache,
+      grid
+    )
 
   /** [[proseStateManager]] over any `text`, with the cursor placed at `cursorLine`, `cursorColumn`. */
   private[perf] def stateManagerHolding(
     text: String,
-    config: AppConfig = AppConfig.default,
+    config: AppConfig = AppConfig.conventional,
     cursorLine: Int = 0,
-    cursorColumn: Int = 0
+    cursorColumn: Int = 0,
+    dictionaryCache: Option[DictionaryCache] = None,
+    grid: ViewportSize = viewport
   )(using IORuntime): (StateManager, BufferId) =
     given LoggerFactory[IO] = NoOpFactory[IO]
     val sessionRoot         = TestTemp.directory("serenity-laptop-benchmarks")
@@ -191,7 +199,7 @@ private[perf] object LaptopFrameBenchmarks:
       .apply(
         NoOpLogger[IO],
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = WarmDictionary.cacheFor(config)
+        dictionaryCache = dictionaryCache.getOrElse(WarmDictionary.cacheFor(config))
       )
       .unsafeRunSync()
     val proseBufferId = (for
@@ -200,7 +208,7 @@ private[perf] object LaptopFrameBenchmarks:
       state   <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, created)
-      _ <- stateManager.applyEvent(ResizeEvent(viewport))
+      _ <- stateManager.applyEvent(ResizeEvent(grid))
       _ <- stateManager.setCursorPosition(paneId, cursorLine, cursorColumn)
       _ <- stateManager.updateState(scrolledToCursor(created))
       // Every fixture is built before the first benchmark is timed, so an analysis still running here would overlap it.
@@ -211,7 +219,12 @@ private[perf] object LaptopFrameBenchmarks:
   private def scrolledToCursor(id: BufferId)(state: AppState): AppState =
     state.persisted.buffers.get(id).flatMap(buffer => buffer.editing.cursorPositions.headOption.map(buffer -> _)) match
       case Some((buffer, cursor)) =>
-        val placed = buffer.copy(viewport = CursorViewport.adjustForCursor(buffer, state, cursor))
+        val surface = state.persisted.config.surfaceConfig
+        val viewport =
+          if surface.columnModeEnabled && surface.wordWrapEnabled then
+            CursorViewport.adjustForCursorColumnMode(buffer, state, cursor)
+          else CursorViewport.adjustForCursor(buffer, state, cursor)
+        val placed = buffer.copy(viewport = viewport)
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(id, placed)))
       case None => state
 
@@ -328,7 +341,9 @@ private[perf] object LaptopFrameBenchmarks:
 
   private def typewriterBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
     val typewriter =
-      AppConfig.default.copy(surfaceConfig = AppConfig.default.surfaceConfig.copy(typewriterScrollingEnabled = true))
+      AppConfig.conventional.copy(surfaceConfig =
+        AppConfig.conventional.surfaceConfig.copy(typewriterScrollingEnabled = true)
+      )
     val (stateManager, proseBufferId) = proseStateManager(config = typewriter)
     def length: Option[Int] =
       stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(proseBufferId).map(_.document.content.weight)
@@ -387,10 +402,24 @@ private[perf] object LaptopFrameBenchmarks:
     * damaged, as `AppRuntime` reports it, so only damaged rows are redrawn and the rest of the image is kept. Like the
     * app's base frames it leaves the caret out; the window fills carets over the presented frame.
     */
-  final private class PersistingFrames:
+  final private[perf] class PersistingFrames(
+      codeFont: Font = LaptopFrameBenchmarks.codeFont,
+      textFont: Font = LaptopFrameBenchmarks.textFont,
+      cellMetrics: CellMetrics = LaptopFrameBenchmarks.cellMetrics,
+      viewport: ViewportSize = LaptopFrameBenchmarks.viewport
+  ):
     private val image  = frameImage()
     private val caches = RenderCaches.create()
     private val screen = ScreenIdentity(this)
+
+    /** What the latest frame counted, once [[counting]] has switched the counters on. */
+    def lastFrame: FrameCounts = caches.frameCounters.lastFrame
+
+    /** Counts only the frames drawn in `work`, so the timed frames carry no counting at all. */
+    def counting[A](work: => A): A =
+      caches.frameCounters.setEnabled(true)
+      try work
+      finally caches.frameCounters.setEnabled(false)
 
     def render(state: AppState, damage: Damage): BufferedImage =
       val surface = new Java2DRenderSurface(
@@ -403,7 +432,8 @@ private[perf] object LaptopFrameBenchmarks:
         deviceScaleX = DeviceScale,
         deviceScaleY = DeviceScale,
         contentPersists = true,
-        layerCacheOwnerOverride = Some(screen)
+        layerCacheOwnerOverride = Some(screen),
+        textCaches = caches.surfaceText
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
@@ -439,22 +469,26 @@ private[perf] object LaptopFrameBenchmarks:
       val (state, damage) = steps.next()
       frames.render(state, damage)
 
-    /** Both damaged frames must match a frame drawn from scratch for the same state. A few antialiased pixels of
-      * line-number ink bleed into the first text column and are not restored on a damaged frame; that predates these
-      * benchmarks, so it is tolerated up to [[ToleratedStalePixels]] rather than hidden.
+    /** Both damaged frames must match a frame drawn from scratch for the same state, pixel for pixel: a line number
+      * repaints only with its own row (#1839), so no ink of it is left over a row that was kept. They must also redraw
+      * no more than `maxRowsDrawn` rows, so damage that widens, or a row reuse that stops reusing, fails here rather
+      * than showing up only as milliseconds.
       */
-    def verify(name: String): Unit =
+    def verify(name: String, maxRowsDrawn: Long): Unit =
       List(after, before).foreach { expected =>
-        val drawn = nextFrame()
+        val (drawn, counts) = frames.counting((nextFrame(), frames.lastFrame))
         val diff =
           differingPixels(drawn, renderedFrame(expected, RenderCaches.create(), frameImage(), cursorVisible = false))
         assert(
-          diff.size <= ToleratedStalePixels,
+          diff.isEmpty,
           s"$name: the damaged frame differs from a full frame in ${diff.size} pixels: ${diff.take(8).mkString(" ")}"
         )
+        assert(
+          counts(FrameCounter.RowsDrawn) <= maxRowsDrawn,
+          s"$name: the damaged frame redrew ${counts(FrameCounter.RowsDrawn)} rows of " +
+            s"${counts(FrameCounter.RowsDrawn) + counts(FrameCounter.RowsPreserved)}, more than the $maxRowsDrawn allowed"
+        )
       }
-
-  private val ToleratedStalePixels = 32
 
   /** The device pixels where `a` and `b` differ, as `(x, y)`. */
   private def differingPixels(a: BufferedImage, b: BufferedImage): IndexedSeq[(Int, Int)] =
@@ -468,11 +502,9 @@ private[perf] object LaptopFrameBenchmarks:
     * letter with its removal, so the edited row's wrapped layout is served from cache, unlike a real new keystroke.
     */
   private def interactionBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val (stateManager, _) = proseStateManager()
-    def current: AppState = stateManager.getCurrentState.unsafeRunSync()
-    val beforeTyping      = current
-    stateManager.applyEvent(InsertChar('x')).unsafeRunSync()
-    val afterTyping = current
+    val (stateManager, _)           = proseStateManager()
+    def current: AppState           = stateManager.getCurrentState.unsafeRunSync()
+    val (beforeTyping, afterTyping) = TypingTransition.of(stateManager)
     stateManager.applyEvent(ScrollDown(3)).unsafeRunSync()
     val afterScroll = current
     val typing      = AlternatingTransition(beforeTyping, afterTyping)
@@ -484,7 +516,7 @@ private[perf] object LaptopFrameBenchmarks:
         12,
         () =>
           assert(typing.forwardDamage != Damage.Everything, "typing damaged the whole frame")
-          typing.verify("typing")
+          typing.verify("typing", MaxTypingRowsDrawn)
         ,
         () => typing.nextFrame()
       ),
@@ -494,7 +526,7 @@ private[perf] object LaptopFrameBenchmarks:
         12,
         () =>
           assert(scroll.forwardDamage != Damage.Everything, "scrolling damaged the whole frame")
-          scroll.verify("scroll")
+          scroll.verify("scroll", MaxScrollRowsDrawn)
         ,
         () => scroll.nextFrame()
       ),

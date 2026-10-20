@@ -34,8 +34,8 @@ private[manager] object FileFinderTransitions:
   private def finderOn(state: AppState, pickerId: SurfaceId, root: Path): Option[ListPicker] =
     state.runtime.uiSurfaces.find(_.id == pickerId).collect {
       case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)), _, _) if picker.source.exists {
-            case PickerSource.ProjectFiles(pickerRoot, _) => pickerRoot == root
-            case _                                        => false
+            case PickerSource.ProjectFiles(pickerRoot, _, _) => pickerRoot == root
+            case _                                           => false
           } =>
         picker
     }

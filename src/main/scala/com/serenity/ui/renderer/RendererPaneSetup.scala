@@ -17,12 +17,22 @@ final case class EditorPaneRenderPlan(
     // pane paints side by side. Empty for a pane not in column mode, where `snapshots` alone drives painting exactly as
     // before.
     columnSnapshots: Map[PaneId, Vector[ColumnSnapshotPlacement]],
-    annotations: Map[BufferId, BufferRenderAnnotations]
+    annotations: Map[BufferId, BufferRenderAnnotations],
+    // Where each pane that has a scrollbar sits in its document, in visual rows.
+    scrolls: Map[PaneId, ScrollExtent] = Map.empty
 ):
   def paneLayouts: Map[PaneId, EditorPaneLayout] = workspaceLayout.paneLayouts
 
   def columnSnapshotsFor(paneId: PaneId): Vector[ColumnSnapshotPlacement] =
     columnSnapshots.getOrElse(paneId, Vector.empty)
+
+  /** The snapshot each pane's row reuse is planned against: a column-mode pane's is every column's rows together
+    * ([[ColumnPaneRows]]), the rest are [[snapshots]].
+    */
+  def recordSnapshots: Map[PaneId, TextLayoutSnapshot] =
+    snapshots.map((paneId, snapshot) =>
+      paneId -> ColumnPaneRows.flatSnapshot(columnSnapshotsFor(paneId)).getOrElse(snapshot)
+    )
 
 /** Per-pane geometry for this frame: which buffer line each visual row shows, to translate `Damage`'s buffer-line facts
   * into row indices, and the pixel band each row owns, to know what a preserved row's pixels actually cover.
@@ -32,7 +42,9 @@ final case class PaneFrameRecord(
     rowBufferLines: Vector[Int],
     rowRects: Vector[PixelRect],
     overflowingRows: Set[Int],
-    snapshot: TextLayoutSnapshot
+    snapshot: TextLayoutSnapshot,
+    // The chapter ghost each row paints (see `RendererChapterGhosts.rowGhosts`); empty when the pane has none.
+    rowGhosts: Vector[Option[String]] = Vector.empty
 )
 
 final case class BufferRenderAnnotations(
@@ -94,7 +106,8 @@ object RendererPaneSetup:
       layoutContract,
       snapshots,
       columnSnapshots,
-      annotationsFor(state, context, snapshots)
+      annotationsFor(state, context, snapshots, columnSnapshots),
+      scene.paneScrolls.view.mapValues(_.extent).toMap
     )
 
   /** What each visible buffer line carries -- comments, diagnostics, semantic tokens, ghosts -- as of `state`. Read per
@@ -105,10 +118,12 @@ object RendererPaneSetup:
   def annotationsFor(
     state: AppState,
     context: RenderContext,
-    snapshots: Map[PaneId, TextLayoutSnapshot]
+    snapshots: Map[PaneId, TextLayoutSnapshot],
+    columnSnapshots: Map[PaneId, Vector[ColumnSnapshotPlacement]]
   ): Map[BufferId, BufferRenderAnnotations] =
     val inputs = AnnotationInputs(
       snapshots,
+      columnSnapshots,
       state.persisted.layout.editorPanes,
       state.persisted.buffers,
       state.runtime.bufferIndexMemos,
@@ -119,12 +134,15 @@ object RendererPaneSetup:
       java.lang.Boolean.valueOf(state.runtime.resolvedCommentsVisible),
       state.persisted.config.markdownViewMode
     )
-    context.caches.frameState.annotationsFor(context.surface, inputs)(visibleAnnotations(state, context, snapshots))
+    context.caches.frameState.annotationsFor(context.surface, inputs)(
+      visibleAnnotations(state, context, snapshots, columnSnapshots)
+    )
 
   private def visibleAnnotations(
     state: AppState,
     context: RenderContext,
-    snapshots: Map[PaneId, TextLayoutSnapshot]
+    snapshots: Map[PaneId, TextLayoutSnapshot],
+    columnSnapshots: Map[PaneId, Vector[ColumnSnapshotPlacement]]
   ): Map[BufferId, BufferRenderAnnotations] =
     val visibleLinesByBuffer = state.persisted.layout.editorPanes.toList
       .flatMap {
@@ -132,7 +150,10 @@ object RendererPaneSetup:
           for
             bufferId <- pane.bufferId
             snapshot <- snapshots.get(paneId)
-          yield bufferId -> snapshot.visualLines.map(_.bufferLine).toSet
+            columnLines = columnSnapshots
+              .getOrElse(paneId, Vector.empty)
+              .flatMap(_.snapshot.visualLines.map(_.bufferLine))
+          yield bufferId -> (snapshot.visualLines.map(_.bufferLine) ++ columnLines).toSet
       }
       .groupMap(_._1)(_._2)
       .view
@@ -146,14 +167,14 @@ object RendererPaneSetup:
       .flatMap { bufferId =>
         state.persisted.buffers.get(bufferId).map { buffer =>
           val visibleLines = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
-          val cached       = state.annotationIndex(bufferId).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
+          val cached       = state.annotationIndex(bufferId).getOrElse(AnnotationLineIndex.from(Nil, Nil))
           val commentsByLine =
             shownComments(cached.commentsByLine(visibleLines), state.runtime.resolvedCommentsVisible)
           val diagnosticsByLine = visibleAnnotationLines(visibleLines, cached.diagnosticsByLine)
           val semanticTokensAvailability =
             state.semanticTokensAvailability(bufferId).getOrElse(SemanticTokensAvailability.Pending)
           val ghostsByLine =
-            if state.runtime.chapterGhostsVisible && !RendererMarkdownLens.isInlineMarkdownLens(buffer, state) then
+            if state.runtime.chapterGhostsVisible then
               context.caches.chapterGhosts.ghostsFor(buffer, state.persisted.buffers)
             else Map.empty[Int, String]
           val keywordsByLine =
@@ -237,7 +258,14 @@ object RendererPaneSetup:
       // would disagree with it, so it is skipped entirely while a column is what is being wrapped/painted.
       if columnModeActive then baseViewport.visibleColumns
       else if bufferFont == context.codeFont then baseViewport.visibleColumns
-      else visibleColumnsFor(bufferFont, fontRenderContext, panelWidthPx, baseViewport.visibleColumns)
+      else
+        visibleColumnsFor(
+          bufferFont,
+          fontRenderContext,
+          context.caches.shapedText,
+          panelWidthPx,
+          baseViewport.visibleColumns
+        )
     val visibleLines = math.max(1, panelHeightPx / math.max(1, bufferMetrics.lineHeight))
     val sizedViewport = baseViewport.copy(
       visibleColumns = visibleColumns,
@@ -282,7 +310,12 @@ object RendererPaneSetup:
           forceCellLayout = !hasFontRenderContext,
           proseScale = proseScale,
           dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
-          wrapCache = context.caches.wrappedLines
+          wrapCache = context.caches.wrappedLines,
+          tabSize = renderBuffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
+          headings = state.effectiveHeadingSettings,
+          openings = renderBuffer.effectiveOpenings(state.persisted.config.openingsConfig),
+          dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+          fallback = state.persisted.config.editorConfig.fontConfig.fallback
         )
       else
         TextLayoutSnapshot.fromBuffer(
@@ -299,18 +332,26 @@ object RendererPaneSetup:
           forceCellLayout = !hasFontRenderContext,
           proseScale = proseScale,
           dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
-          wrapCache = context.caches.wrappedLines
+          wrapCache = context.caches.wrappedLines,
+          markdownViewMode = state.persisted.config.inlineMarkdownViewMode,
+          tabSize = renderBuffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
+          headings = state.effectiveHeadingSettings,
+          openings = renderBuffer.effectiveOpenings(state.persisted.config.openingsConfig),
+          dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+          fallback = state.persisted.config.editorConfig.fontConfig.fallback
         )
     if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
 
   private def visibleColumnsFor(
     font: Font,
     fontRenderContext: java.awt.font.FontRenderContext,
+    shapedText: ShapedTextCache,
     panelWidthPx: Int,
     gridVisibleColumns: Int
   ): Int =
-    val sample          = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    val measuredAdvance = TextLayoutSnapshot.caretXsForText(sample, font, fontRenderContext).lastOption.getOrElse(0.0f)
+    val sample = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    val measuredAdvance =
+      TextLayoutSnapshot.caretXsForText(sample, font, shapedText, fontRenderContext).lastOption.getOrElse(0.0f)
     val averageAdvance  = math.max(1.0f, measuredAdvance / sample.length.toFloat)
     val measuredColumns = math.ceil(panelWidthPx.toDouble / averageAdvance.toDouble).toInt + 32
     val gridOverscan    = gridVisibleColumns + 64
@@ -348,9 +389,58 @@ object RendererPaneSetup:
           bufferId   <- pane.bufferId
           buffer     <- state.persisted.buffers.get(bufferId)
           snapshot   <- renderPlan.snapshots.get(paneId)
-          if buffer.document.content.weight > 0 && !RendererMarkdownLens.isInlineMarkdownLens(buffer, state)
-        yield paneId -> paneFrameRecord(bufferId, paneLayout.contentRect, context, snapshot)
+          if buffer.document.content.weight > 0
+          columns = renderPlan.columnSnapshotsFor(paneId)
+        yield paneId -> ColumnPaneRows
+          .flatSnapshot(columns)
+          .fold(
+            paneFrameRecord(bufferId, paneLayout.contentRect, context, snapshot).copy(rowGhosts =
+              RendererChapterGhosts.rowGhosts(
+                snapshot,
+                renderPlan.annotations.get(bufferId).map(_.ghostsByLine).getOrElse(Map.empty)
+              )
+            )
+          )(
+            columnFrameRecord(bufferId, paneLayout.contentRect, context, columns, _)
+          )
     }.toMap
+
+  private def columnFrameRecord(
+    bufferId: BufferId,
+    contentRect: LayoutRect,
+    context: RenderContext,
+    columns: Vector[ColumnSnapshotPlacement],
+    pageSnapshot: TextLayoutSnapshot
+  ): PaneFrameRecord =
+    val records = columns.map { column =>
+      val columnRect = RendererPaneContent.columnRect(contentRect, column)
+      val record     = paneFrameRecord(bufferId, columnRect, context, column.snapshot)
+      record.copy(rowRects = withLastRowToColumnBottom(record.rowRects, columnRect, context, column.snapshot))
+    }
+    PaneFrameRecord(
+      bufferId = bufferId,
+      rowBufferLines = records.flatMap(_.rowBufferLines),
+      rowRects = records.flatMap(_.rowRects),
+      overflowingRows = records
+        .zip(ColumnPaneRows.firstRows(columns))
+        .flatMap((record, first) => record.overflowingRows.map(_ + first))
+        .toSet,
+      snapshot = pageSnapshot
+    )
+
+  /** A column holds the rows that fit its height, so what lies below its last row is blank room that rows used to fill
+    * when the column broke later. The last row owns it, and so repaints it, when the column changes.
+    */
+  private def withLastRowToColumnBottom(
+    rowRects: Vector[PixelRect],
+    columnRect: LayoutRect,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
+  ): Vector[PixelRect] =
+    val bottomPx = RendererPaneContent.textRowMetrics(columnRect, context, snapshot).contentBottomPx
+    rowRects.lastOption.fold(rowRects) { last =>
+      rowRects.updated(rowRects.length - 1, last.copy(heightPx = math.max(last.heightPx, bottomPx - last.yPx)))
+    }
 
   private def paneFrameRecord(
     bufferId: BufferId,
@@ -372,7 +462,7 @@ object RendererPaneSetup:
     * the pane, so such a row paints pixels outside the band that could be preserved for it. Those rows are always
     * redrawn rather than reasoned about.
     */
-  private def overflowingRows(
+  private[renderer] def overflowingRows(
     contentRect: LayoutRect,
     context: RenderContext,
     snapshot: TextLayoutSnapshot
@@ -393,12 +483,10 @@ object RendererPaneSetup:
     val rowMetrics    = RendererPaneContent.textRowMetrics(contentRect, context, snapshot)
     val leftPx        = context.cellMetrics.toPixelX(contentRect.x)
     val widthPx       = context.cellMetrics.toPixelX(contentRect.right) - leftPx
-    val measured      = usesMeasuredDrawing(snapshot, context)
     val topLimitPx    = context.cellMetrics.toPixelY(contentRect.y)
     val bottomLimitPx = rowMetrics.contentBottomPx
     snapshot.visualLines.indices.toVector.map { row =>
-      val heightPx = if measured then rowMetrics.rowHeightPx(row) else context.cellMetrics.lineHeight
-      val topPx    = rowMetrics.lineTopPx(row).max(topLimitPx)
-      val bottomPx = (rowMetrics.lineTopPx(row) + heightPx).min(bottomLimitPx)
+      val topPx    = rowMetrics.bandTopPx(row).max(topLimitPx)
+      val bottomPx = rowMetrics.bandBottomPx(row).min(bottomLimitPx)
       PixelRect(leftPx, topPx, widthPx.max(0), (bottomPx - topPx).max(0))
     }

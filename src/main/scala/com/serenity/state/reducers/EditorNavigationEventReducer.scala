@@ -40,7 +40,7 @@ private[reducers] object EditorNavigationEventReducer:
     // rather than in each `moveFn` keeps an upstream affinity from outliving the End that set it, whatever route the
     // cursor takes away from that column afterwards.
     def navigate(moveFn: CursorPosition => CursorPosition): ReducerResult =
-      navigateWithAffinity(cursor => moveFn(cursor).downstream)
+      navigateWithAffinity(cursor => HiddenMarkerCaret.settle(currentState, buffer, cursor, moveFn(cursor)).downstream)
 
     event match
       case MoveLeft  => navigate(cursor => moveCursorLeft(cursor, buffer.document.content))
