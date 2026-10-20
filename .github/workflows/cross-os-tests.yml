@@ -1,10 +1,11 @@
 name: Cross-OS Tests
 
-# Runs the test suite on Windows and macOS for master pushes, nightly, and on demand. It does not run on pull requests:
-# macOS runners are scarce, and Auto Squash Merge waits on every check, so a queued or hung macOS job stalled every PR
-# for hours. A Windows/macOS regression shows up on the next master push or nightly run and is fixed forward. Kept out
-# of the CI workflow while known Windows/macOS failures remain (#2016).
+# Runs the test suite on Windows and macOS for every pull request, master pushes, nightly, and on demand. The job names
+# below ("Test (windows)", "Test (macos)") are what branch protection lists as required checks: renaming a job or a
+# matrix label un-requires it, so change them only together with the repository's required-check settings (#2016).
+# Auto Squash Merge waits for these checks before merging, as for every other check on the pull request.
 on:
+  pull_request:
   push:
     branches:
       - master
@@ -20,9 +21,10 @@ on:
 permissions:
   contents: read
 
-# Only the newest master commit matters here; a newer push cancels the older run so runs don't queue behind each other.
+# Only the newest commit of a branch or pull request matters here; a newer push cancels the older run so runs don't queue
+# behind each other (macOS runners especially).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
