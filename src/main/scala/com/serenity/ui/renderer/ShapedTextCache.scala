@@ -107,7 +107,7 @@ final class ShapedStretch private (
   def isRightToLeft(glyph: Int): Boolean = rightToLeft(glyph)
 
   /** The glyph's own advance: unlike [[rightEdgeAt]] it holds nothing of the kerning with its neighbour. */
-  def advanceAt(glyph: Int): Float = whole.getGlyphMetrics(glyph).getAdvance
+  def advanceAt(glyph: Int): Float = GlyphAdvance.of(font, fontRenderContext, glyphCodes(glyph))
 
   def xAt(glyph: Int): Float = xs(glyph)
 
