@@ -5,7 +5,7 @@ name: Skiko Natives
 # stock library first. Publishing adds attested jars to the Maven repository on the `skiko-maven` branch, which GitHub Pages
 # serves; see DEVELOPMENT.md for the rebuild-on-bump procedure.
 #
-# A pull request builds only linux-x64, to keep a try cheap; a manual run chooses its targets and whether to publish.
+# A pull request builds linux-x64 and linux-arm64, to keep a try cheap; a manual run chooses its targets and whether to publish.
 on:
   pull_request:
     paths:
@@ -50,7 +50,7 @@ jobs:
           PUBLISH_INPUT: ${{ inputs.publish }}
         run: |
           set -euo pipefail
-          wanted="linux-x64"
+          wanted="linux-x64,linux-arm64"
           if [ "${EVENT}" = workflow_dispatch ]; then wanted="${GROUPS_INPUT}"; fi
           has() { [ "${wanted}" = all ] || [[ ",${wanted// /}," == *",$1,"* ]]; }
           for group in linux-x64 linux-arm64 macos windows; do
