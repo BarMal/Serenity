@@ -1,6 +1,6 @@
 package com.serenity.text
 
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 
 import com.serenity.rope.Rope
 
@@ -50,26 +50,34 @@ object TextStatistics:
       characterCountExcludingWhitespace = counts.nonWhitespaceCharacters
     )
 
-  private val rangeMemo = new RangeStatisticsMemo()
-
   /** Counts `content[start, end)` by slicing the rope, which reuses the cached summaries of every subtree the range
-    * covers, so no selection text is copied or rescanned. The last answer is kept: a status line asks again on every
-    * frame, usually about the very same rope and selection.
+    * covers, so no selection text is copied or rescanned.
     */
   def ofRange(content: Rope, start: Int, end: Int): TextStatistics =
-    rangeMemo.statisticsOf(content, start, end)(of(content.slice(start, end)))
+    of(content.slice(start, end))
 
-final private class RangeStatisticsMemo:
+/** The last range counted, kept for the state that asked: a status line asks again on every frame, usually about the
+  * very same rope and selection.
+  *
+  * It has no parameters so that every memo is equal to every other, as [[com.serenity.markdown.MarkdownBlockIndexMemo]]
+  * does: what the memo holds never changes what the state carrying it means.
+  */
+final case class RangeStatisticsMemo():
 
-  private val last = new AtomicReference[Option[RangeStatisticsMemo.Entry]](None)
+  private val last         = new AtomicReference[Option[RangeStatisticsMemo.Entry]](None)
+  private val computedMany = new AtomicLong(0)
 
-  def statisticsOf(content: Rope, start: Int, end: Int)(compute: => TextStatistics): TextStatistics =
+  /** How many ranges were counted rather than remembered. */
+  def computations: Long = computedMany.get
+
+  def of(content: Rope, start: Int, end: Int): TextStatistics =
     last.get.filter(entry => (entry.content eq content) && entry.start == start && entry.end == end) match
       case Some(entry) => entry.statistics
       case None =>
-        val statistics = compute
+        val statistics = TextStatistics.ofRange(content, start, end)
+        val _          = computedMany.incrementAndGet()
         last.set(Some(RangeStatisticsMemo.Entry(content, start, end, statistics)))
         statistics
 
-private object RangeStatisticsMemo:
-  final case class Entry(content: Rope, start: Int, end: Int, statistics: TextStatistics)
+object RangeStatisticsMemo:
+  final private case class Entry(content: Rope, start: Int, end: Int, statistics: TextStatistics)

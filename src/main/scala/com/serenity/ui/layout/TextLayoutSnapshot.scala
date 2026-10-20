@@ -24,7 +24,7 @@ import com.serenity.state.models.{
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TextCaretMeasurement.*
 import com.serenity.ui.openings.{OpeningSettings, ParagraphRoles}
-import com.serenity.ui.renderer.FontFirstUse
+import com.serenity.ui.renderer.{FontFirstUse, ShapedTextCache}
 import com.serenity.ui.theme.HeadingSettings
 
 final case class TextLayoutSnapshot(
@@ -67,7 +67,6 @@ final case class TextLayoutSnapshot(
     navigationGeometry.moveVertical(cursor, direction, preferredXPx)
 
 object TextLayoutSnapshot:
-  private val UnwrappedOverscanColumns = 2
   final private case class MeasuredLayoutKey(font: Font, fontRenderContext: FontRenderContext)
   private val measuredLayoutCache = java.util.concurrent.ConcurrentHashMap[MeasuredLayoutKey, java.lang.Boolean]()
 
@@ -88,19 +87,22 @@ object TextLayoutSnapshot:
   def caretXsForText(
     text: String,
     font: Font,
+    shapedText: ShapedTextCache,
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false
   ): Vector[Float] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
-    val xs             = caretXs(text, 0, singleFontResolver(font), fontRenderContext, measuredLayout, cellMetrics)
+    val xs = caretXs(text, 0, singleFontResolver(font), fontRenderContext, measuredLayout, cellMetrics, shapedText)
     Vector.tabulate(xs.length)(xs(_))
 
   def visualLineForText(
     text: String,
     bufferLine: Int,
     font: Font,
+    shapedText: ShapedTextCache,
+    memos: LayoutMemos,
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     startColumn: Int = 0,
     cellMetricsOverride: Option[CellMetrics] = None
@@ -116,7 +118,9 @@ object TextLayoutSnapshot:
         singleFontResolver(font),
         fontRenderContext,
         measuredLayout,
-        cellMetrics
+        cellMetrics,
+        shapedText,
+        memos
       ),
       xOffsetPx = 0.0f,
       spaceBeforePx = 0,
@@ -128,6 +132,7 @@ object TextLayoutSnapshot:
     cursorColumn: Int,
     visibleWidthPx: Int,
     font: Font,
+    shapedText: ShapedTextCache,
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
@@ -145,7 +150,7 @@ object TextLayoutSnapshot:
         math.max(0, safeColumn - visibleColumns + 1)
       else
         val resolver      = singleFontResolver(font, tabSize)
-        val xs            = caretXs(lineText, 0, resolver, fontRenderContext, measuredLayout, cellMetrics)
+        val xs            = caretXs(lineText, 0, resolver, fontRenderContext, measuredLayout, cellMetrics, shapedText)
         val cursorXPx     = xs(math.min(safeColumn, xs.length - 1))
         val targetLeftXPx = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
         val firstPast     = xs.indexWhere(_ > targetLeftXPx)
@@ -267,10 +272,10 @@ object TextLayoutSnapshot:
     // font's metrics -- otherwise a caller whose "pixel" is coarser or finer than the font's actual line height (TUI's
     // CellMetricsOne, 1 pixel == 1 terminal row) gets a snapshot describing rows in a scale nothing downstream uses.
     val lineHeightPx =
-      if measuredLayout then math.max(1, FontLineExtents.of(font, fontRenderContext).heightPx)
+      if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).heightPx)
       else math.max(1, cellMetrics.lineHeight)
     val ascentPx =
-      if measuredLayout then math.max(1, FontLineExtents.of(font, fontRenderContext).ascentPx)
+      if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).ascentPx)
       else math.max(0, cellMetrics.ascent)
     val viewportTopVisualLine = if wordWrapEnabled then buffer.viewport.topVisualLine else 0
     val visualLineLimit       = viewportTopVisualLine + buffer.viewport.visibleLines
@@ -344,28 +349,19 @@ object TextLayoutSnapshot:
                   wrapCache
                 )
               else
-                val startColumn  = math.min(buffer.viewport.leftColumn, rawLine.length)
-                val visibleSlice = unwrappedVisibleSlice(rawLine, startColumn, buffer.viewport.visibleColumns)
-                val inputs =
-                  LineLayout.lineLayoutInputs(font, frc, measuredLayout, richText, lineIndex, rawLine.length, rawLine)
-                val row = measureSegment(
-                  visibleSlice,
-                  startColumn,
-                  startColumn + visibleSlice.length,
-                  inputs.resolver,
+                LineLayout.unwrappedLine(
+                  lineIndex,
+                  rawLine,
+                  buffer.viewport,
+                  panelWidthPx,
+                  font,
                   frc,
                   measuredLayout,
-                  cellMetrics
+                  cellMetrics,
+                  richText,
+                  wrapCache.shapedText,
+                  wrapCache.layoutMemos
                 )
-                val wrapped = DropCapLayout.reservingGlyphHeight(
-                  Vector(
-                    DropCapLayout.placed(row, lineIndex, inputs.paragraphRole, lineWithinParagraph = 0, inputs.dropCap)
-                  ),
-                  inputs.paragraphRole
-                )
-                val aligned = ParagraphAlignmentLayout.apply(wrapped, lineIndex, panelWidthPx, richText)
-                HeadingSpacingLayout
-                  .apply(aligned, inputs.headingLevel, true, font, measuredLayout, cellMetrics, richText)
             loop(rest, acc ++ spaced)
           case _ => acc
 
@@ -374,10 +370,6 @@ object TextLayoutSnapshot:
       buffer.document.content.linesIteratorFrom(buffer.viewport.topLine).take(maxLogicalLines).toVector,
       Vector.empty
     )
-
-  private def unwrappedVisibleSlice(rawLine: String, startColumn: Int, visibleColumns: Int): String =
-    val visibleEndColumn = startColumn + math.max(1, visibleColumns) + UnwrappedOverscanColumns
-    rawLine.slice(startColumn, math.min(rawLine.length, visibleEndColumn))
 
   private[layout] def wrapLogicalLine(
     line: String,
@@ -411,9 +403,11 @@ object TextLayoutSnapshot:
       )
       // Measuring keeps the caller's context so the shaped-text cache is shared with whoever draws with it; only the
       // cache identity ignores the device transform.
+      val shapedText = wrapCache.shapedText
+      val memos      = wrapCache.layoutMemos
       val rows = wrapCache.wrapped(spec.copy(frc = logicalFontRenderContext(frc)), maxVisualLines)(
-        limit => wrapRows(spec, limit),
-        predecessors => IncrementalWrap.rewrap(spec, predecessors)
+        limit => wrapRows(spec, limit, shapedText, memos),
+        predecessors => IncrementalWrap.rewrap(spec, predecessors, shapedText, memos)
       )
       val placedRows =
         Vector.tabulate(rows.length)(index =>
@@ -421,13 +415,19 @@ object TextLayoutSnapshot:
         )
       if rows.length < maxVisualLines then DropCapLayout.reservingGlyphHeight(placedRows, paragraphRole) else placedRows
 
-  private[layout] def wrapRows(spec: WrappedLineKey, maxVisualLines: Int): RowWrap =
+  private[layout] def wrapRows(
+    spec: WrappedLineKey,
+    maxVisualLines: Int,
+    shapedText: ShapedTextCache,
+    memos: LayoutMemos
+  ): RowWrap =
     import spec.{baseColumn, cellMetrics, frc, measuredLayout, resolver, text}
     if text.isEmpty then
-      val empty = measureSegment("", baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics)
+      val empty =
+        measureSegment("", baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics, shapedText, memos)
       RowWrap(Vector(empty), 1, 0, None)
     else
-      val initial   = ParagraphMeasurement(spec, 0, maxVisualLines)
+      val initial   = ParagraphMeasurement(spec, 0, maxVisualLines, shapedText)
       val traceable = maxVisualLines == Int.MaxValue && IncrementalWrap.traceable(spec)
       @annotation.tailrec
       def loop(
@@ -439,9 +439,10 @@ object TextLayoutSnapshot:
         if startColumn >= text.length || acc.length >= maxVisualLines then (acc, reaches)
         else
           val paragraph = measured.coveringRowAt(startColumn, maxVisualLines - acc.length)
-          val row       = wrapRow(spec, paragraph, startColumn, acc.length)
+          val row       = wrapRow(spec, paragraph, startColumn, acc.length, shapedText, memos)
           val reach =
-            if traceable then reaches :+ IncrementalWrap.reachOf(spec, startColumn, row.fitLength) else reaches
+            if traceable then reaches :+ IncrementalWrap.reachOf(spec, startColumn, row.fitLength, shapedText)
+            else reaches
           loop(row.endColumn, paragraph, acc :+ row.row, reach)
 
       val (rows, reaches) = loop(0, initial, Vector.empty, Vector.empty)
@@ -455,13 +456,15 @@ object TextLayoutSnapshot:
     spec: WrappedLineKey,
     paragraph: ParagraphMeasurement,
     startColumn: Int,
-    lineWithinParagraph: Int
+    lineWithinParagraph: Int,
+    shapedText: ShapedTextCache,
+    memos: LayoutMemos
   ): WrappedRow =
     import spec.{baseColumn, cellMetrics, dropCapIndentPx, frc, measuredLayout, paragraphRole, resolver, text}
     val spanInsetPx = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapIndentPx)
     val insetPx =
       if DropCapLayout.isHomeRow(paragraphRole, lineWithinParagraph, baseColumn + startColumn) then
-        (spanInsetPx - DropCapLayout.replacedCharacterWidthPx(text, baseColumn, resolver, frc)).max(0.0f)
+        (spanInsetPx - DropCapLayout.replacedCharacterWidthPx(text, baseColumn, resolver, frc, shapedText)).max(0.0f)
       else spanInsetPx
     val wrapWidthPx      = math.max(1, spec.panelWidthPx - math.round(insetPx))
     val segmentStart     = baseColumn + startColumn
@@ -476,6 +479,8 @@ object TextLayoutSnapshot:
       frc,
       measuredLayout,
       cellMetrics,
+      shapedText,
+      memos,
       fit.caretXsForPrefix(segmentLength, resolver, segmentStart),
       Some(paragraph.graphemeOffsets(startColumn, endColumnInSlice))
     )
@@ -516,17 +521,19 @@ object TextLayoutSnapshot:
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
+    shapedText: ShapedTextCache,
+    memos: LayoutMemos,
     measuredXs: Option[IArray[Float]] = None,
     graphemeOffsets: Option[IArray[Int]] = None
   ): MeasuredRow =
-    val xs      = measuredXs.getOrElse(caretXs(text, startColumn, resolver, frc, measuredLayout, cellMetrics))
+    val xs = measuredXs.getOrElse(caretXs(text, startColumn, resolver, frc, measuredLayout, cellMetrics, shapedText))
     val offsets = graphemeOffsets.getOrElse(ParagraphMeasurement.graphemeBoundaryOffsets(text))
     val stopXs  = IArray.tabulate(offsets.length)(index => xs(math.min(offsets(index), xs.length - 1)))
     val (landingXs, landingOffsets) =
       if resolver.hasHidden then landableStops(stopXs, offsets, startColumn, resolver)
       else MeasuredRow.orderedByX(stopXs, offsets)
     val (heightPx, ascentPx) =
-      if measuredLayout then resolver.lineMetrics(frc, startColumn, endColumn) else (0, 0)
+      if measuredLayout then resolver.lineMetrics(frc, memos.lineExtents, startColumn, endColumn) else (0, 0)
     MeasuredRow(
       startColumn = startColumn,
       endColumn = endColumn,
@@ -559,7 +566,8 @@ object TextLayoutSnapshot:
       // size, not a caller override (which would otherwise make every font look like it drifts under TUI's
       // CellMetricsOne).
       val fontCellMetrics = CellMetrics.fromFont(font)
-      val measuredXs = caretXs(sampleText, 0, singleFontResolver(font), frc, measuredLayout = true, fontCellMetrics)
+      val resolver        = singleFontResolver(font)
+      val measuredXs = caretXs(sampleText, 0, resolver, frc, measuredLayout = true, fontCellMetrics, ShapedTextCache())
       val measuredAdvance = measuredXs(measuredXs.length - 1)
       val cellAdvance     = fontCellMetrics.charWidth.toFloat * sampleText.length
       math.abs(measuredAdvance - cellAdvance) > 0.5f

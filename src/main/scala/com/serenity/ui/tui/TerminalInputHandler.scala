@@ -258,6 +258,21 @@ object TerminalInputHandler:
   private[tui] def toUtf8Bytes(ch: Int): Array[Byte] =
     if ch < 0x80 then Array(ch.toByte) else String.valueOf(ch.toChar).getBytes(StandardCharsets.UTF_8)
 
+  /** Folds one `read()` into the outcomes it completes. JLine delivers a code point outside the BMP as two reads, a
+    * high then a low surrogate, and each half encoded alone is not UTF-8, so the high half is held until the next read
+    * decides whether it is the start of a pair. A half that never meets its partner is passed on as it always was.
+    */
+  private[tui] def surrogateStep(pendingHigh: Option[Char], read: Int): (List[ReadOutcome], Option[Char]) =
+    val flushed = pendingHigh.toList.map(high => toOutcome(high.toInt))
+    if read >= 0 && read <= 0xffff then
+      val char = read.toChar
+      pendingHigh match
+        case Some(high) if Character.isLowSurrogate(char) =>
+          (List(ReadOutcome.Bytes(new String(Array(high, char)).getBytes(StandardCharsets.UTF_8))), None)
+        case _ if Character.isHighSurrogate(char) => (flushed, Some(char))
+        case _                                    => (flushed :+ toOutcome(read), None)
+    else (flushed :+ toOutcome(read), None)
+
   /** Tells whether the pump is blocked inside `reader.read()`. The count rises as a read is entered and again as it
     * returns, both on the reading thread itself, so it is odd exactly while a read is in flight and one value says both
     * whether and which read -- an unchanged odd count across two samples is the same read, parked throughout.
@@ -319,11 +334,16 @@ object TerminalInputHandler:
     Queue.unbounded[IO, ReadOutcome].flatMap { pumpQueue =>
       val gate = new ReadGate
 
-      def pump: IO[Unit] =
-        (beforeEachRead >> readSource(gate)).map(toOutcome).flatMap {
-          case ReadOutcome.Eof                => pumpQueue.offer(ReadOutcome.Eof)
-          case outcome @ ReadOutcome.Bytes(_) => metrics.recordCharsRead(1) >> pumpQueue.offer(outcome) >> pump
-          case outcome                        => pumpQueue.offer(outcome) >> pump
+      def offerOutcome(outcome: ReadOutcome): IO[Unit] =
+        outcome match
+          case ReadOutcome.Bytes(_) => metrics.recordCharsRead(1) >> pumpQueue.offer(outcome)
+          case _                    => pumpQueue.offer(outcome)
+
+      def pump(pendingHigh: Option[Char]): IO[Unit] =
+        (beforeEachRead >> readSource(gate)).flatMap { read =>
+          val (outcomes, nextPending) = surrogateStep(pendingHigh, read)
+          outcomes.traverse_(offerOutcome) >> (if outcomes.contains(ReadOutcome.Eof) then IO.unit
+                                               else pump(nextPending))
         }
 
       def forward(outcome: ReadOutcome): IO[Unit] =
@@ -362,7 +382,7 @@ object TerminalInputHandler:
 
       def arbiter: IO[Unit] = pumpQueue.take.flatMap(forward)
 
-      pump.background.surround(arbiter)
+      pump(None).background.surround(arbiter)
     }
 
   private def readLoop(
@@ -386,6 +406,9 @@ object TerminalInputHandler:
       case DecodedToken.Key(info) =>
         modifierTapState.update(ModifierTapDetector.otherKeyPressed) >>
           latestMovement.set(None) >> queue.offer(Some(QueuedInput.Key(info))) >> metrics.recordKeysQueued(1)
+      case DecodedToken.Text(text) =>
+        modifierTapState.update(ModifierTapDetector.otherKeyPressed) >>
+          latestMovement.set(None) >> queue.offer(Some(QueuedInput.Direct(InsertText(text))))
       case DecodedToken.Mouse(event) => enqueueMouse(event)
       case DecodedToken.WheelNotch(col, row, down) =>
         val scroll = MouseWheel(col, row, if down then wheelScrollLines else -wheelScrollLines)

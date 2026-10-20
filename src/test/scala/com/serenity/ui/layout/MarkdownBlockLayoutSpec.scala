@@ -8,6 +8,7 @@ import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
 import com.serenity.markdown.{MarkdownInlineView, MarkerMode}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.ui.renderer.ShapedTextCache
 import com.serenity.ui.theme.{HeadingScale, HeadingSettings, HeadingStyle, TextStyle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -30,7 +31,8 @@ class MarkdownBlockLayoutSpec extends AnyFlatSpec with Matchers:
       TextStyle(isBold = true, fontSize = Some(serif.getSize2D * HeadingStyle.default(level).sizeScale))
     )
 
-  private def advance(text: String, font: Font): Float = TextLayoutSnapshot.caretXsForText(text, font, frc).last
+  private def advance(text: String, font: Font): Float =
+    TextLayoutSnapshot.caretXsForText(text, font, ShapedTextCache(), frc).last
 
   private def view(
     mode: MarkerMode,

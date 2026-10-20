@@ -13,6 +13,7 @@ import com.serenity.state.models.{
   Modal
 }
 import com.serenity.ui.layout.{LayoutRect, ModalSurfaceComposition, TextMeasure}
+import com.serenity.ui.renderer.{MeasuredTextAdvances, ShapedTextCache}
 
 /** What wrapping a dialog's prose costs a frame, wrapped by cells against by the GUI font's pixels: the frame height a
   * layout pass asks for plus the composition a paint pass builds, each wrapping the same text once. `nowrap` is a frame
@@ -78,7 +79,10 @@ private[perf] object ModalWrapBenchmarks:
     rect -> ModalSurfaceComposition.forModal(modal, rect, 1, measure = measure).fold(0)(_.paintBoxes.size)
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
-    val pixels = TextMeasure.pixelsFor(AppState.initial(AppConfig.default))
+    val pixels = TextMeasure.pixelsFor(
+      AppState.initial(AppConfig.default),
+      MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache())
+    )
     val modals = List(
       "layout_override" -> layoutOverride,
       "long_confirm"    -> longConfirm(""),

@@ -63,7 +63,7 @@ object TextLayoutSnapshotColumnMode:
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
     val lineHeightPx =
-      if measuredLayout then math.max(1, FontLineExtents.of(font, fontRenderContext).heightPx)
+      if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).heightPx)
       else math.max(1, cellMetrics.lineHeight)
     val width   = math.max(1, columnWidthPx)
     val content = buffer.document.content
@@ -181,7 +181,8 @@ object TextLayoutSnapshotColumnMode:
         cellMetricsOverride,
         forceCellLayout,
         proseScale,
-        headings
+        headings,
+        wrapCache.layoutMemos
       )
     )
 
@@ -212,10 +213,10 @@ object TextLayoutSnapshotColumnMode:
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
     val lineHeightPx =
-      if measuredLayout then math.max(1, FontLineExtents.of(font, fontRenderContext).heightPx)
+      if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).heightPx)
       else math.max(1, cellMetrics.lineHeight)
     val ascentPx =
-      if measuredLayout then math.max(1, FontLineExtents.of(font, fontRenderContext).ascentPx)
+      if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).ascentPx)
       else math.max(0, cellMetrics.ascent)
     val totalLines = buffer.document.content.lineCount
     val richDocument =
@@ -264,15 +265,16 @@ object TextLayoutSnapshotColumnMode:
     cellMetricsOverride: Option[CellMetrics],
     forceCellLayout: Boolean,
     proseScale: Float,
-    headings: HeadingSettings
+    headings: HeadingSettings,
+    memos: LayoutMemos
   ): TextLayoutSnapshot =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
     val lineHeightPx =
-      if measuredLayout then math.max(1, FontLineExtents.of(font, fontRenderContext).heightPx)
+      if measuredLayout then math.max(1, memos.lineExtents.of(font, fontRenderContext).heightPx)
       else math.max(1, cellMetrics.lineHeight)
     val ascentPx =
-      if measuredLayout then math.max(1, FontLineExtents.of(font, fontRenderContext).ascentPx)
+      if measuredLayout then math.max(1, memos.lineExtents.of(font, fontRenderContext).ascentPx)
       else math.max(0, cellMetrics.ascent)
     TextLayoutSnapshot(
       visualLines = Vector.empty,

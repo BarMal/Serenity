@@ -100,7 +100,12 @@ trait PersistedFrameFixture:
       )
     )
 
-  private def surfaceOver(image: BufferedImage, scale: Double, persists: Boolean): Java2DRenderSurface =
+  private def surfaceOver(
+    image: BufferedImage,
+    scale: Double,
+    persists: Boolean,
+    caches: RenderCaches
+  ): Java2DRenderSurface =
     new Java2DRenderSurface(
       image,
       cellMetrics,
@@ -111,7 +116,8 @@ trait PersistedFrameFixture:
       deviceScaleX = scale,
       deviceScaleY = scale,
       contentPersists = persists,
-      layerCacheOwnerOverride = Some(ScreenIdentity(image))
+      layerCacheOwnerOverride = Some(ScreenIdentity(image)),
+      textCaches = caches.surfaceText
     )
 
   final protected class Session(scale: Double = 2.0):
@@ -147,7 +153,7 @@ trait PersistedFrameFixture:
         .renderFrame(
           state,
           cursorVisible = false,
-          surfaceOver(image, scale, persists = true),
+          surfaceOver(image, scale, persists = true, caches),
           viewport,
           caches.authoritativeScene.forState(state, viewport, codeFont, textFont),
           codeFont,
@@ -175,7 +181,7 @@ trait PersistedFrameFixture:
     val _ = RendererFramePlanner.renderFrame(
       state,
       cursorVisible = false,
-      surfaceOver(image, scale, persists = false),
+      surfaceOver(image, scale, persists = false, caches),
       viewport,
       caches.authoritativeScene.forState(state, viewport, codeFont, textFont),
       codeFont,

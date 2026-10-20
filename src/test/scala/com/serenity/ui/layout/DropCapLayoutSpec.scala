@@ -39,10 +39,10 @@ class DropCapLayoutSpec extends AnyFlatSpec with Matchers:
     DropCapLayout.leftInsetPx(ParagraphRole.Body, 0, indentPx = 40.0f) shouldBe 0.0f
   }
 
-  "DropCapLayout.glyphWidthPx" should "measure a font's advance width for the glyph text" in {
+  "DropCapWidths" should "measure a font's advance width for the glyph text" in {
     val font  = Font(Font.SERIF, Font.BOLD, 36)
     val frc   = TextLayoutSnapshot.defaultFontRenderContext()
-    val width = DropCapLayout.glyphWidthPx(font, frc, "C")
+    val width = DropCapWidths()(font, frc, "C")
 
     width should be > 0.0f
   }
@@ -51,7 +51,7 @@ class DropCapLayoutSpec extends AnyFlatSpec with Matchers:
     val font = Font(Font.SERIF, Font.BOLD, 36)
     val frc  = TextLayoutSnapshot.defaultFontRenderContext()
 
-    DropCapLayout.glyphWidthPx(font, frc, "") shouldBe 0.0f
+    DropCapWidths()(font, frc, "") shouldBe 0.0f
   }
 
   "DropCapLayout.glyphHeightPx" should "be the room of the drop cap's line count at the paragraph's normal line height" in {

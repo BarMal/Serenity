@@ -51,6 +51,7 @@ object DropCapGlyph:
     lineIndex: Int,
     role: ParagraphRole,
     proseScale: Float,
+    memos: LayoutMemos,
     shape: LetterShape = LetterShape.Drop
   ): Option[DropCapGlyph] =
     role match
@@ -60,7 +61,7 @@ object DropCapGlyph:
           template <- RichTextStyling.dropCapGlyphStyle(firstRun.style, role, ReferenceSizePx)
         yield
           val charCount = Character.charCount(firstRun.text.codePointAt(0))
-          fits(
+          memos.dropCapFits(
             FitKey(
               baseFont,
               RichTextStyling.dropCapBodyStyle(firstRun.style, proseScale),
@@ -76,7 +77,7 @@ object DropCapGlyph:
   /** The size capital heights are read at: large enough that outline rounding is far below a pixel of the result. */
   private val ReferenceSizePx = 100.0f
 
-  final private case class FitKey(
+  final private[layout] case class FitKey(
       baseFont: Font,
       bodyStyle: TextStyle,
       glyphTemplate: TextStyle,
@@ -86,14 +87,12 @@ object DropCapGlyph:
       shape: LetterShape
   )
 
-  private val fits = MeasurementMemo[FitKey, DropCapGlyph](maxEntries = 256)(measure)
-
-  private def measure(key: FitKey): DropCapGlyph =
+  private[layout] def measure(key: FitKey, extents: FontLineExtents, widths: DropCapWidths): DropCapGlyph =
     val bodyFont = TextStyle.styledFont(key.baseFont, key.bodyStyle)
     val template = TextStyle.styledFont(key.baseFont, key.glyphTemplate)
     FontFirstUse.settle(bodyFont, key.frc)
     FontFirstUse.settle(template, key.frc)
-    val extent     = FontLineExtents.of(bodyFont, key.frc)
+    val extent     = extents.of(bodyFont, key.frc)
     val baselinePx = extent.ascentPx + (key.lines - 1) * extent.heightPx
     def sizeFor(lines: Int): Float =
       RichTextStyling.dropCapGlyphFontSize(
@@ -123,7 +122,7 @@ object DropCapGlyph:
       key.text.length,
       styleAt(sizePx),
       font,
-      DropCapLayout.glyphWidthPx(font, key.frc, key.text),
+      widths(font, key.frc, key.text),
       inkRightPx,
       baselinePx,
       DropCapLayout.glyphHeightPx(ParagraphRole.dropCap(key.lines), extent.heightPx).max(baselinePx + hangPx),

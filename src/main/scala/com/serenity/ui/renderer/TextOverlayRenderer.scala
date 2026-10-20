@@ -19,11 +19,12 @@ object TextOverlayRenderer:
     config: AppConfig,
     cursorVisible: Boolean,
     font: java.awt.Font,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    advances: MeasuredTextAdvances
   ): Unit =
     val offsetPx = FloatingSurfaceGeometry.signedRowOffsetPixels(overlay.verticalOffsetRows, cellMetrics)
     surface.pixels.withPixelTranslation(0.0, offsetPx) {
-      renderAtLogicalPixelOrigin(surface, overlay, theme, config, cursorVisible, font, cellMetrics)
+      renderAtLogicalPixelOrigin(surface, overlay, theme, config, cursorVisible, font, cellMetrics, advances)
     }
 
   private def renderAtLogicalPixelOrigin(
@@ -33,7 +34,8 @@ object TextOverlayRenderer:
     config: AppConfig,
     cursorVisible: Boolean,
     font: java.awt.Font,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    advances: MeasuredTextAdvances
   ): Unit =
     val rect = overlay.rect
 
@@ -71,7 +73,7 @@ object TextOverlayRenderer:
       // paint (no bespoke composition and no rows/header/footer/key-hint given at construction) simply has none, and
       // there is no separate plain-rows path left to fall back to.
       overlay.composition.foreach(
-        drawComposition(surface, _, theme, cursorVisible, fg, bg, font, cellMetrics, textInsetPx)
+        drawComposition(surface, _, theme, cursorVisible, fg, bg, font, cellMetrics, advances, textInsetPx)
       )
     }
     // The status row and the tab strip are both quiet single lines, not floating panels: no border.
@@ -120,6 +122,7 @@ object TextOverlayRenderer:
     bg: RenderColor,
     font: Font,
     cellMetrics: CellMetrics,
+    advances: MeasuredTextAdvances,
     textInsetPx: Double
   ): Unit =
     composition.paintBoxes.foreach { box =>
@@ -141,6 +144,7 @@ object TextOverlayRenderer:
           defaultBackground = Some(bg),
           font = font,
           cellMetrics = cellMetrics,
+          advances = advances,
           textInsetPx = textInsetPx,
           // `rect.y` may carry a fractional row offset (a sub-row `itemGapRows` gap) that `y` above already rounded
           // away -- pixel positioning must come from the box's own exact offset, not from that rounded cell row, or a

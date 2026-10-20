@@ -14,6 +14,7 @@ import com.serenity.rope.{Balance, Rope, RopeDiff}
 import com.serenity.state.models.{BufferId, MeasuredRow}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 import com.serenity.ui.openings.{OpeningLines, OpeningRules, OpeningSettings, VirtualDropCaps}
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** Memoises [[TextLayoutSnapshot]]'s wrap-and-measure of one logical line -- the AWT `TextLayout` work that otherwise
   * dominates every keystroke on word-wrapped prose, and that the state-update path and the render path each repeat for
@@ -24,6 +25,15 @@ import com.serenity.ui.openings.{OpeningLines, OpeningRules, OpeningSettings, Vi
   * of what a wrap depends on and so belongs with it.
   */
 sealed abstract class WrappedLineCache:
+
+  /** The cache a wrap measures its glyphs through. A wrap shapes the runs it measures so that painting the row finds
+    * them shaped; the painter and this cache must therefore be handed the same instance, which is why it lives here,
+    * with the layout state the renderer's owner already threads to every wrap.
+    */
+  private[serenity] def shapedText: ShapedTextCache
+
+  /** The font-keyed measurements wraps and painting share, kept for as long as this cache is. */
+  private[serenity] def layoutMemos: LayoutMemos
 
   /** `cold(limit)` wraps the line into at most `limit` rows from scratch. `incremental` may instead resume from a
     * recently wrapped edit of the same line, and answers `None` whenever it cannot reproduce `cold` exactly.
@@ -150,8 +160,8 @@ object WrappedLineCache:
     */
   val DefaultMaxChars: Long = 262_144L
 
-  /** Measures on every call; the default for callers that own no cache. */
-  object Uncached extends WrappedLineCache:
+  /** A cache that remembers no wrap: every call measures afresh. */
+  sealed abstract class Unremembering extends WrappedLineCache:
 
     private[layout] def wrapped(key: WrappedLineKey, maxVisualLines: Int)(
       cold: Int => RowWrap,
@@ -186,8 +196,31 @@ object WrappedLineCache:
     def virtualDropCaps(document: RichTextDocument, settings: OpeningSettings): Option[VirtualDropCaps] =
       VirtualDropCaps.of(settings, document)
 
+  /** Measures on every call; the default for callers that own no cache. Nothing is remembered, so each wrap shapes into
+    * and probes caches of its own and keeps none of it.
+    */
+  object Uncached extends Unremembering:
+
+    private[serenity] def shapedText: ShapedTextCache = ShapedTextCache()
+
+    private[serenity] def layoutMemos: LayoutMemos = LayoutMemos()
+
+  /** Measures every wrap afresh over a shaper and font memos that outlive it, as when no wrap is remembered but the
+    * measurements underneath are.
+    */
+  final class Measuring private[WrappedLineCache] (
+      private[serenity] val shapedText: ShapedTextCache,
+      private[serenity] val layoutMemos: LayoutMemos
+  ) extends Unremembering
+
+  def measuring(shapedText: ShapedTextCache, layoutMemos: LayoutMemos): Measuring =
+    new Measuring(shapedText, layoutMemos)
+
   def bounded(maxLines: Int = DefaultMaxLines, maxChars: Long = DefaultMaxChars): Bounded =
-    new Bounded(math.max(1, maxLines), math.max(1L, maxChars))
+    new Bounded(math.max(1, maxLines), math.max(1L, maxChars), ShapedTextCache())
+
+  /** A default-sized cache whose wraps measure through `shapedText`, which the painter of the same owner must share. */
+  def sharing(shapedText: ShapedTextCache): Bounded = new Bounded(DefaultMaxLines, DefaultMaxChars, shapedText)
 
   final private case class TableColumnsEntry(
       content: Rope,
@@ -228,19 +261,23 @@ object WrappedLineCache:
   /** An access-ordered LRU. Rendering and the state dispatcher may run on different threads, so every map access holds
     * this instance's monitor; wrapping a missed line happens outside it.
     */
-  final class Bounded private[WrappedLineCache] (maxLines: Int, maxChars: Long) extends WrappedLineCache:
-    private val entries          = new LinkedHashMap[WrappedLineKey, Entry](256, 0.75f, true)
-    private val recent           = new HashMap[WrapShape, ArrayDeque[(WrappedLineKey, Entry)]]
-    private val retainedChar     = new AtomicLong(0L)
-    private val coldCount        = new AtomicLong(0L)
-    private val incrementalCount = new AtomicLong(0L)
-    private val rowCount         = new AtomicLong(0L)
-    private val measuredCount    = new AtomicLong(0L)
-    private val visualRows       = new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries)
-    private val bandRows         = new VisualLineIndexStore[BandHeightKey](VisualLineIndexStore.DefaultMaxEntries)
-    private val fences           = new LinkedHashMap[BufferId, FenceEntry](16, 0.75f, true)
-    private val columns          = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
-    private val openings         = new LinkedHashMap[ScannedOpenings, OpeningLines](16, 0.75f, true)
+  final class Bounded private[WrappedLineCache] (maxLines: Int, maxChars: Long, shaper: ShapedTextCache)
+      extends WrappedLineCache:
+    private[serenity] def shapedText: ShapedTextCache = shaper
+
+    private[serenity] val layoutMemos: LayoutMemos = LayoutMemos()
+    private val entries                            = new LinkedHashMap[WrappedLineKey, Entry](256, 0.75f, true)
+    private val recent                             = new HashMap[WrapShape, ArrayDeque[(WrappedLineKey, Entry)]]
+    private val retainedChar                       = new AtomicLong(0L)
+    private val coldCount                          = new AtomicLong(0L)
+    private val incrementalCount                   = new AtomicLong(0L)
+    private val rowCount                           = new AtomicLong(0L)
+    private val measuredCount                      = new AtomicLong(0L)
+    private val visualRows = new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries)
+    private val bandRows   = new VisualLineIndexStore[BandHeightKey](VisualLineIndexStore.DefaultMaxEntries)
+    private val fences     = new LinkedHashMap[BufferId, FenceEntry](16, 0.75f, true)
+    private val columns    = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
+    private val openings   = new LinkedHashMap[ScannedOpenings, OpeningLines](16, 0.75f, true)
 
     def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
       compute: => TableColumns

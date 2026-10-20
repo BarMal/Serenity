@@ -7,7 +7,7 @@ import com.serenity.config.{AppConfig, HeadingsConfig}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.state.models.{AppState, TextCaretStop, TextVisualLine}
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.TextLayoutSnapshot
+import com.serenity.ui.layout.{LayoutMemos, TextLayoutSnapshot}
 import com.serenity.ui.theme.{DropCapColour, HeadingColour, SyntaxElement, TextStyle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -160,7 +160,8 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
         theme = state.persisted.theme,
         glyphColour = state.persisted.theme.highlighted.foreground,
         xOriginPx = 0.0f,
-        lineTopPx = 0
+        lineTopPx = 0,
+        memos = LayoutMemos()
       )
 
       surface.drawRunPxCalls should have size 1
@@ -194,7 +195,8 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       theme = state.persisted.theme,
       glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
-      lineTopPx = 0
+      lineTopPx = 0,
+      memos = LayoutMemos()
     )
 
     drawSegments.map(_.map(_.content)) shouldBe Some(List("ello", " world"))
@@ -222,7 +224,8 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       theme = state.persisted.theme,
       glyphColour = chosen,
       xOriginPx = 0.0f,
-      lineTopPx = 0
+      lineTopPx = 0,
+      memos = LayoutMemos()
     )
 
     surface.drawRunPxCalls.head.foreground shouldBe chosen
@@ -246,7 +249,8 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       theme = state.persisted.theme,
       glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
-      lineTopPx = 0
+      lineTopPx = 0,
+      memos = LayoutMemos()
     )
 
     drawLine shouldBe visualLine
@@ -274,7 +278,8 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       theme = state.persisted.theme,
       glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
-      lineTopPx = 0
+      lineTopPx = 0,
+      memos = LayoutMemos()
     )
 
     drawLine shouldBe visualLine

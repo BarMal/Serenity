@@ -5,13 +5,14 @@ import java.awt.font.FontRenderContext
 
 import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.ParagraphRole
-import com.serenity.state.models.TextVisualLine
+import com.serenity.state.models.{TextVisualLine, Viewport}
 import com.serenity.ui.layout.TextCaretMeasurement.{
   LineFontResolver,
   markdownResolver,
   resolverForLine,
   singleFontResolver
 }
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** The line-level inputs of a wrap -- per-run fonts, drop cap role and the room its glyph reserves -- shared by the
   * painted layout and every row count so the two cannot disagree.
@@ -38,7 +39,18 @@ private[layout] object LineLayout:
   ): Vector[TextVisualLine] =
     // A slice of a line cannot be scanned for the markup that opened before it.
     val lineText = if baseColumn == 0 then text else ""
-    val inputs   = lineLayoutInputs(font, frc, measuredLayout, richText, bufferLine, lineLength, lineText)
+    val inputs =
+      lineLayoutInputs(
+        font,
+        frc,
+        measuredLayout,
+        richText,
+        bufferLine,
+        lineLength,
+        lineText,
+        wrapCache.shapedText,
+        wrapCache.layoutMemos
+      )
     TextLayoutSnapshot.wrapLogicalLine(
       text,
       bufferLine,
@@ -53,6 +65,48 @@ private[layout] object LineLayout:
       inputs.dropCap,
       wrapCache
     )
+
+  /** The visible slice of an unwrapped line as one row, placed as the painted layout places it. The slice runs a couple
+    * of columns past the viewport so a caret at its edge still has a stop to land on.
+    */
+  def unwrappedLine(
+    lineIndex: Int,
+    rawLine: String,
+    viewport: Viewport,
+    panelWidthPx: Int,
+    font: Font,
+    frc: FontRenderContext,
+    measuredLayout: Boolean,
+    cellMetrics: CellMetrics,
+    richText: RichTextContext,
+    shapedText: ShapedTextCache,
+    memos: LayoutMemos
+  ): Vector[TextVisualLine] =
+    val startColumn = math.min(viewport.leftColumn, rawLine.length)
+    val endColumn   = math.min(rawLine.length, startColumn + math.max(1, viewport.visibleColumns) + OverscanColumns)
+    val slice       = rawLine.slice(startColumn, endColumn)
+    val inputs =
+      lineLayoutInputs(font, frc, measuredLayout, richText, lineIndex, rawLine.length, rawLine, shapedText, memos)
+    val row =
+      TextLayoutSnapshot.measureSegment(
+        slice,
+        startColumn,
+        startColumn + slice.length,
+        inputs.resolver,
+        frc,
+        measuredLayout,
+        cellMetrics,
+        shapedText,
+        memos
+      )
+    val wrapped = DropCapLayout.reservingGlyphHeight(
+      Vector(DropCapLayout.placed(row, lineIndex, inputs.paragraphRole, lineWithinParagraph = 0, inputs.dropCap)),
+      inputs.paragraphRole
+    )
+    val aligned = ParagraphAlignmentLayout.apply(wrapped, lineIndex, panelWidthPx, richText)
+    HeadingSpacingLayout.apply(aligned, inputs.headingLevel, true, font, measuredLayout, cellMetrics, richText)
+
+  private val OverscanColumns = 2
 
   /** The rows of one whole-line wrap (at most `maxVisualLines` of them), placed as the painted layout places them:
     * alignment, drop cap inset and heading space applied. A heading's space below its last row is left off when the
@@ -73,7 +127,17 @@ private[layout] object LineLayout:
     if maxVisualLines <= 0 then Vector.empty
     else
       val inputs =
-        LineLayout.lineLayoutInputs(font, frc, measuredLayout, richText, lineIndex, rawLine.length, rawLine)
+        LineLayout.lineLayoutInputs(
+          font,
+          frc,
+          measuredLayout,
+          richText,
+          lineIndex,
+          rawLine.length,
+          rawLine,
+          wrapCache.shapedText,
+          wrapCache.layoutMemos
+        )
       val wrapped = TextLayoutSnapshot.wrapLogicalLine(
         rawLine,
         lineIndex,
@@ -122,7 +186,9 @@ private[layout] object LineLayout:
     richText: RichTextContext,
     lineIndex: Int,
     lineLength: Int,
-    lineText: String
+    lineText: String,
+    shapedText: ShapedTextCache,
+    memos: LayoutMemos
   ): LineLayoutInputs =
     val markdownRuns =
       if measuredLayout && richText.markdown.isActive then Some(richText.markdown.runsOn(lineIndex, lineText))
@@ -140,7 +206,7 @@ private[layout] object LineLayout:
             richText.headings,
             richText.roles
           )
-        )(markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText, _))
+        )(markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText, shapedText, _))
     val paragraphRole = richText.layoutRole(lineIndex)
     val dropCap =
       if measuredLayout then
@@ -152,6 +218,7 @@ private[layout] object LineLayout:
           paragraphRole,
           richText.proseScale,
           richText.dropCapGapEm,
+          memos,
           richText.letterShape(lineIndex)
         )
       else DropCapLayout.Reserve.none
@@ -170,6 +237,7 @@ private[layout] object LineLayout:
     lineIndex: Int,
     lineLength: Int,
     lineText: String,
+    shapedText: ShapedTextCache,
     runs: Vector[MarkdownInlineSpans.Run]
   ): LineFontResolver =
     if runs.isEmpty then
@@ -191,4 +259,6 @@ private[layout] object LineLayout:
         richText.markdown.baseIsMonospaced,
         richText.headings
       )
-      richText.markdown.columnsOn(lineIndex).fold(resolver)(MarkdownTableMetrics.padded(lineText, resolver, _, frc))
+      richText.markdown
+        .columnsOn(lineIndex)
+        .fold(resolver)(MarkdownTableMetrics.padded(lineText, resolver, _, frc, shapedText))

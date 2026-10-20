@@ -7,6 +7,7 @@ import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.{IndentationSettings, MeasuredRow}
 import com.serenity.ui.openings.ParagraphRoles
+import com.serenity.ui.renderer.ShapedTextCache
 import com.serenity.ui.theme.{HeadingSettings, MarkdownInlineStyling, RichTextStyling, TextStyle}
 
 /** Caret-stop measurement for one logical line: which AWT font each column measures with, and the x position of every
@@ -91,14 +92,14 @@ private[layout] object TextCaretMeasurement:
 
     def isHidden(column: Int): Boolean = hasHidden && runAt(column).exists(_.hidden)
 
-    def lineMetrics(frc: FontRenderContext, startColumn: Int, endColumn: Int): (Int, Int) =
+    def lineMetrics(frc: FontRenderContext, extents: FontLineExtents, startColumn: Int, endColumn: Int): (Int, Int) =
       val covering = runs.collect {
         case run if !run.hidden && run.endColumn > startColumn && run.startColumn < endColumn => run.font
       }
       val fonts = if covering.nonEmpty then covering else Vector(baseFont)
       val (maxAscent, maxDescent) = fonts.foldLeft((1, 0)) {
         case ((ascent, descent), font) =>
-          val extent = FontLineExtents.of(font, frc)
+          val extent = extents.of(font, frc)
           (math.max(ascent, extent.ascentPx), math.max(descent, extent.descentPx))
       }
       (maxAscent + maxDescent, maxAscent)
@@ -191,7 +192,8 @@ private[layout] object TextCaretMeasurement:
     resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    shapedText: ShapedTextCache
   ): IArray[Float] =
     if text.isEmpty then IArray(0.0f)
     else if !measuredLayout then
@@ -200,7 +202,7 @@ private[layout] object TextCaretMeasurement:
       else uniformCaretXs(text, charWidth, resolver.tabSize)
     else
       normalizeCollapsedCarets(
-        rawMeasuredCaretXs(text, absoluteStartColumn, resolver, frc),
+        rawMeasuredCaretXs(text, absoluteStartColumn, resolver, frc, shapedText),
         resolver,
         absoluteStartColumn
       )
@@ -213,17 +215,18 @@ private[layout] object TextCaretMeasurement:
     text: String,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
-    frc: FontRenderContext
+    frc: FontRenderContext,
+    shapedText: ShapedTextCache
   ): IArray[Float] =
     if text.isEmpty then IArray(0.0f)
     else
       val advances =
         if GlyphAdvances.hasContextFreeCharacters(text) then
-          Some(GlyphAdvances.measure(text, 0, text.length, absoluteStartColumn, resolver, frc))
+          Some(GlyphAdvances.measure(text, 0, text.length, absoluteStartColumn, resolver, frc, shapedText))
         else None
       advances.filter(_.isContextFree(0, text.length)) match
         case Some(measured) => measured.caretsFrom(0, text.length)
-        case None           => ExactCaretXs.layoutCaretXs(text, absoluteStartColumn, resolver, frc)
+        case None           => ExactCaretXs.layoutCaretXs(text, absoluteStartColumn, resolver, frc, shapedText)
 
   /** How many characters of a row fit, plus -- when they came from summed advances -- the candidate's raw carets, so
     * the chosen row reuses them instead of being measured a second time. A kerned character's caret already holds the
@@ -272,7 +275,16 @@ private[layout] object TextCaretMeasurement:
       paragraph
         .measuredFit(from, panelWidthPx)
         .getOrElse(
-          fittingMeasuredSegment(line, from, panelWidthPx, absoluteStartColumn, spec.resolver, spec.frc, cellMetrics)
+          fittingMeasuredSegment(
+            line,
+            from,
+            panelWidthPx,
+            absoluteStartColumn,
+            spec.resolver,
+            spec.frc,
+            cellMetrics,
+            paragraph.shapedText
+          )
         )
 
   /** The exact search: lays out ever-longer candidates until one overflows the row. */
@@ -283,14 +295,21 @@ private[layout] object TextCaretMeasurement:
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
     frc: FontRenderContext,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    shapedText: ShapedTextCache
   ): SegmentFit =
     val remainingLength = line.length - from
     val width           = panelWidthPx.toFloat
 
     @annotation.tailrec
     def loop(limit: Int): SegmentFit =
-      val stops = ExactCaretXs.layoutStops(line.substring(from, from + limit), absoluteStartColumn, resolver, frc)
+      val stops = ExactCaretXs.layoutStops(
+        line.substring(from, from + limit),
+        absoluteStartColumn,
+        resolver,
+        frc,
+        shapedText
+      )
       // A row fits when its own trailing edge does; where that edge is not known (right-to-left text) the stops decide.
       val edges =
         stops.trailing.getOrElse(normalizeCollapsedCarets(stops.carets, resolver, absoluteStartColumn))

@@ -90,7 +90,7 @@ class Java2DFrameImageTypeSpec extends AnyFlatSpec with Matchers:
 
   "Java2DRenderSurface.forFrame" should "draw into an RGB image" in {
     val flushed = new AtomicReference[Option[BufferedImage]](None)
-    Java2DRenderSurface.forFrame(metrics, font, canvas, image => flushed.set(Some(image))).flush()
+    SingleUseFrameSurface(metrics, font, canvas, image => flushed.set(Some(image))).flush()
     flushed.get().map(_.getType) shouldBe Some(BufferedImage.TYPE_INT_RGB)
   }
 
