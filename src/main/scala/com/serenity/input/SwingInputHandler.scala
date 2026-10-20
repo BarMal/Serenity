@@ -92,6 +92,10 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   /** Queues an event from outside the AWT listeners, in order with the keys and clicks already queued. */
   def submit(event: Event): Unit = enqueueRaw(event)
 
+  /** Queues what an input-method event stands for, in order with the keys and clicks already queued. */
+  def submitInputMethodEvent(event: java.awt.event.InputMethodEvent): Unit =
+    ImeEventTranslation.fromInputMethodEvent(event).foreach(submit)
+
   private def enqueueKey(info: KeyStrokeInfo, e: KeyEvent): Unit =
     frameTimings.keyLatency.keyReceived(e.getWhen)
     enqueue(QueuedKey(info))
