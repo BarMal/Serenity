@@ -43,138 +43,181 @@ object LspFramer:
           case Right(_)    => Pull.done
     }
 
-  /** The state of decoding one stream: the bytes received and not yet consumed, and what is known of the frame they
-    * start. Feeding a chunk returns the frames it completed with the next state; the state fed is never changed.
+  /** A run of received bytes, sharing the array of the chunk it came from. Chunks are immutable by fs2's contract. */
+  final private[lsp] case class Fragment(values: Array[Byte], offset: Int, length: Int)
+
+  /** The state of decoding one stream: the bytes of the frame being read so far, and where it has got to. Feeding a
+    * chunk returns the frames it completed with the next state; the state fed is never changed.
     *
-    * Bytes are queued chunk by chunk and joined only when a header has to be searched or a body is complete, so a large
-    * body that arrives in many chunks is copied once, not once per chunk.
+    * A header is only joined from its fragments once its terminator has arrived, and a body only once it is complete,
+    * so bytes are neither copied nor searched again as chunks arrive. Within one chunk the state is carried in the
+    * loop, and a body that lies wholly inside a chunk is parsed from that chunk without a copy.
     *
+    * @param received
+    *   the fragments of the current frame so far, newest first
+    * @param held
+    *   how many bytes `received` holds
     * @param bodyLength
-    *   the Content-Length of the frame whose header has been read, until that body is complete
-    * @param headerScanFrom
-    *   where the header terminator search resumes, so a byte is not searched twice
+    *   the Content-Length of the frame whose header has been read, or [[FrameDecoder.NoBody]] while the header is still
+    *   being received
+    * @param matched
+    *   how many bytes of the header terminator end the bytes received so far, 0 to 3
     * @param headerScans
-    *   how many terminator searches have run
+    *   how many times a chunk has been searched for the header terminator
     */
   final private[lsp] case class FrameDecoder(
-      buffered: Chunk.Queue[Byte],
-      bodyLength: Option[Int],
-      headerScanFrom: Int,
+      received: List[Fragment],
+      held: Int,
+      bodyLength: Int,
+      matched: Int,
       headerScans: Int
   ):
 
     def feed(chunk: Chunk[Byte]): Either[FrameError, (List[Json], FrameDecoder)] =
       if chunk.isEmpty then Right((Nil, this))
-      else FrameDecoder.drain(copy(buffered = buffered :+ chunk), Nil)
+      else
+        val slice = chunk.toArraySlice
+        FrameDecoder.step(this, slice.values, slice.offset, slice.offset + slice.length, Nil)
 
     def finish: Either[FrameError, Unit] =
-      bodyLength match
-        case Some(length) =>
-          Left(
-            FrameError(
-              s"Truncated LSP frame at EOF: truncated body, expected $length bytes but received ${buffered.size}"
-            )
+      if bodyLength != FrameDecoder.NoBody then
+        Left(
+          FrameError(
+            s"Truncated LSP frame at EOF: truncated body, expected $bodyLength bytes but received $held"
           )
-        case None if buffered.size != 0 => Left(FrameError("Truncated LSP frame at EOF: incomplete header"))
-        case None                       => Right(())
+        )
+      else if held != 0 then Left(FrameError("Truncated LSP frame at EOF: incomplete header"))
+      else Right(())
 
   private[lsp] object FrameDecoder:
-    val empty: FrameDecoder = FrameDecoder(Chunk.Queue.empty, None, 0, 0)
+    /** A frame's body is never negative, so this says no header has been read yet without boxing an `Option`. */
+    val NoBody: Int = -1
 
+    val empty: FrameDecoder = FrameDecoder(Nil, 0, NoBody, 0, 0)
+
+    /** Consumes `values(from until until)`, one frame at a time. */
     @tailrec
-    def drain(decoder: FrameDecoder, frames: List[Json]): Either[FrameError, (List[Json], FrameDecoder)] =
-      decoder.bodyLength match
-        case None =>
-          readHeader(decoder) match
-            case Left(error)                            => Left(error)
-            case Right(next) if next.bodyLength.isEmpty => Right((frames.reverse, next))
-            case Right(next)                            => drain(next, frames)
-        case Some(length) if decoder.buffered.size < length => Right((frames.reverse, decoder))
-        case Some(length) =>
-          val joined = joinedBytes(decoder.buffered)
-          parseJson(joined.take(length)) match
+    def step(
+      decoder: FrameDecoder,
+      values: Array[Byte],
+      from: Int,
+      until: Int,
+      frames: List[Json]
+    ): Either[FrameError, (List[Json], FrameDecoder)] =
+      if decoder.bodyLength == NoBody then
+        if from == until then Right((frames.reverse, decoder))
+        else
+          val scans = decoder.headerScans + 1
+          val found = terminatorEnd(values, from, until, decoder.matched)
+          if found >= 0 then
+            val received     = decoder.held + (found + 1 - from)
+            val headerLength = received - HeaderSepBytes.length
+            if headerLength > MaxHeaderBytes then Left(headerTooLarge)
+            else
+              val header = headerText(decoder, values, from, found + 1 - from, headerLength)
+              parseBodyLength(header) match
+                case Left(error) => Left(error)
+                case Right(length) =>
+                  step(FrameDecoder(Nil, 0, length, 0, scans), values, found + 1, until, frames)
+          else
+            val held = decoder.held + (until - from)
+            if held > MaxHeaderBytes + HeaderSepBytes.length - 1 then Left(headerTooLarge)
+            else
+              Right(
+                (
+                  frames.reverse,
+                  FrameDecoder(
+                    Fragment(values, from, until - from) :: decoder.received,
+                    held,
+                    NoBody,
+                    -1 - found,
+                    scans
+                  )
+                )
+              )
+      else
+        val missing   = decoder.bodyLength - decoder.held
+        val available = until - from
+        if available < missing then
+          val received =
+            if available == 0 then decoder.received else Fragment(values, from, available) :: decoder.received
+          Right((frames.reverse, decoder.copy(received = received, held = decoder.held + available, matched = 0)))
+        else
+          val parsed =
+            if decoder.received.isEmpty then parseJson(values, from, missing)
+            else
+              val body = joined(decoder, values, from, missing)
+              parseJson(body, 0, body.length)
+          parsed match
             case Left(error) => Left(error)
             case Right(json) =>
-              drain(decoder.copy(buffered = queueOf(joined.drop(length)), bodyLength = None), json :: frames)
+              step(FrameDecoder(Nil, 0, NoBody, 0, decoder.headerScans), values, from + missing, until, json :: frames)
 
-    /** The state after the header: awaiting its body when the header was complete, else still awaiting the header. */
-    private def readHeader(decoder: FrameDecoder): Either[FrameError, FrameDecoder] =
-      if decoder.buffered.size < HeaderSepBytes.length then Right(decoder)
+    /** The index of the last byte of the first header terminator at or after `from`, found by walking the terminator's
+      * four states with `matched` bytes of it already seen. Where there is none, `-1 - m` for the `m` bytes of it that
+      * the bytes searched end with.
+      */
+    @tailrec
+    private def terminatorEnd(values: Array[Byte], index: Int, until: Int, matched: Int): Int =
+      if index == until then -1 - matched
       else
-        val joined = joinedBytes(decoder.buffered)
-        val scans  = decoder.headerScans + 1
-        headerEnd(joined, decoder.headerScanFrom) match
-          case None if joined.size > MaxHeaderBytes + HeaderSepBytes.length - 1 => Left(headerTooLarge)
-          case None =>
-            Right(
-              FrameDecoder(
-                queueOf(joined),
-                None,
-                math.max(0, joined.size - HeaderSepBytes.length + 1),
-                scans
-              )
-            )
-          case Some(end) if end > MaxHeaderBytes => Left(headerTooLarge)
-          case Some(end) =>
-            parseBodyLength(joined.take(end)).map(length =>
-              FrameDecoder(queueOf(joined.drop(end + HeaderSepBytes.length)), Some(length), 0, scans)
-            )
+        val next = values(index) match
+          case '\r' => if matched == 2 then 3 else 1
+          case '\n' => if matched == 1 then 2 else if matched == 3 then 4 else 0
+          case _    => 0
+        if next == HeaderSepBytes.length then index else terminatorEnd(values, index + 1, until, next)
 
     private def headerTooLarge: FrameError = FrameError(s"LSP frame header exceeds $MaxHeaderBytes bytes")
 
-    private def joinedBytes(queue: Chunk.Queue[Byte]): Chunk[Byte] =
-      queue.chunks.toList match
-        case Nil           => Chunk.empty
-        case single :: Nil => single
-        case _             => queue.compact
+    private def headerText(decoder: FrameDecoder, values: Array[Byte], from: Int, take: Int, length: Int): String =
+      if decoder.received.isEmpty then new String(values, from, length, StandardCharsets.US_ASCII)
+      else new String(joined(decoder, values, from, take), 0, length, StandardCharsets.US_ASCII)
 
-    private def queueOf(chunk: Chunk[Byte]): Chunk.Queue[Byte] =
-      if chunk.isEmpty then Chunk.Queue.empty else Chunk.Queue(chunk)
+    /** The fragments received, then `take` bytes of `values` from `from`, as one array. Filled once here, before
+      * anything else sees it.
+      */
+    private def joined(decoder: FrameDecoder, values: Array[Byte], from: Int, take: Int): Array[Byte] =
+      val out = new Array[Byte](decoder.held + take)
+      val _ = decoder.received.foldLeft(decoder.held) { (end, fragment) =>
+        System.arraycopy(fragment.values, fragment.offset, out, end - fragment.length, fragment.length)
+        end - fragment.length
+      }
+      System.arraycopy(values, from, out, decoder.held, take)
+      out
 
-    private def headerEnd(bytes: Chunk[Byte], from: Int): Option[Int] =
-      val slice = bytes.toArraySlice
-      val last  = slice.length - HeaderSepBytes.length
-
-      @tailrec
-      def search(index: Int): Option[Int] =
-        if index > last then None
-        else if (0 until HeaderSepBytes.length).forall(i => slice.values(slice.offset + index + i) == HeaderSepBytes(i))
-        then Some(index)
-        else search(index + 1)
-
-      search(from)
-
-    private def parseBodyLength(header: Chunk[Byte]): Either[FrameError, Int] =
-      val slice = header.toArraySlice
-      val text  = new String(slice.values, slice.offset, slice.length, StandardCharsets.US_ASCII)
-      text
-        .split("\\r\\n", -1)
-        .toList
-        .traverse { line =>
-          val separator = line.indexOf(':')
-          Either.cond(
-            separator > 0,
-            line.substring(0, separator).trim -> line.substring(separator + 1).trim,
-            FrameError(s"Malformed LSP header: $line")
-          )
-        }
-        .flatMap { fields =>
-          fields.collect { case (name, value) if name.equalsIgnoreCase(LengthKey) => value } match
-            case Nil                              => Left(FrameError("Malformed LSP header: missing Content-Length"))
-            case value :: Nil if !isDigits(value) => Left(FrameError(s"Invalid Content-Length: $value"))
-            case value :: Nil if BigInt(value) > MaxBodyBytes =>
-              Left(FrameError(s"LSP frame body exceeds $MaxBodyBytes bytes"))
-            case value :: Nil => Right(BigInt(value).toInt)
+    private def parseBodyLength(header: String): Either[FrameError, Int] =
+      val lines = splitLines(header)
+      lines.find(_.indexOf(':') <= 0) match
+        case Some(line) => Left(FrameError(s"Malformed LSP header: $line"))
+        case None =>
+          lines.flatMap { line =>
+            val separator = line.indexOf(':')
+            Option.when(line.substring(0, separator).trim.equalsIgnoreCase(LengthKey))(
+              line.substring(separator + 1).trim
+            )
+          } match
+            case Nil          => Left(FrameError("Malformed LSP header: missing Content-Length"))
+            case value :: Nil => bodyLengthOf(value)
             case _            => Left(FrameError("Malformed LSP header: multiple Content-Length values"))
-        }
 
-    private def isDigits(value: String): Boolean =
-      value.nonEmpty && value.forall(char => char >= '0' && char <= '9')
+    @tailrec
+    private def splitLines(text: String, from: Int = 0, lines: List[String] = Nil): List[String] =
+      text.indexOf("\r\n", from) match
+        case -1  => (text.substring(from) :: lines).reverse
+        case end => splitLines(text, end + 2, text.substring(from, end) :: lines)
 
-    private def parseJson(body: Chunk[Byte]): Either[FrameError, Json] =
-      val slice = body.toArraySlice
-      io.circe.jawn.parseByteBuffer(ByteBuffer.wrap(slice.values, slice.offset, slice.length)).leftMap { failure =>
-        val text = new String(slice.values, slice.offset, slice.length, StandardCharsets.UTF_8)
+    private def bodyLengthOf(value: String): Either[FrameError, Int] =
+      if value.isEmpty || !value.forall(char => char >= '0' && char <= '9') then
+        Left(FrameError(s"Invalid Content-Length: $value"))
+      else
+        val significant = value.dropWhile(_ == '0')
+        if significant.length > MaxBodyBytes.toString.length || (significant.nonEmpty && significant.toInt > MaxBodyBytes)
+        then Left(FrameError(s"LSP frame body exceeds $MaxBodyBytes bytes"))
+        else Right(if significant.isEmpty then 0 else significant.toInt)
+
+    private def parseJson(values: Array[Byte], offset: Int, length: Int): Either[FrameError, Json] =
+      io.circe.jawn.parseByteBuffer(ByteBuffer.wrap(values, offset, length)).leftMap { failure =>
+        val text = new String(values, offset, length, StandardCharsets.UTF_8)
         FrameError(s"JSON parse error: $failure in: $text")
       }
 
