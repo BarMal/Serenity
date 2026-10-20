@@ -9,8 +9,8 @@ import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** A glyph's advance is read without asking AWT for the glyph's metrics: `GlyphVector.getGlyphMetrics` also measures the
-  * glyph's outline, which costs a native call per glyph on macOS and made the column-paging specs run past forty
+/** A glyph's advance is read without asking AWT for the glyph's metrics: `GlyphVector.getGlyphMetrics` also measures
+  * the glyph's outline, which costs a native call per glyph on macOS and made the column-paging specs run past forty
   * minutes there. What is read must be what the metrics report, on every face and at every scale.
   */
 class GlyphAdvanceSpec extends AnyFlatSpec with Matchers with OptionValues:
@@ -21,24 +21,24 @@ class GlyphAdvanceSpec extends AnyFlatSpec with Matchers with OptionValues:
       "Жд 中文 ́ \t"
 
   private val renderContexts = List(
-    "1x"         -> FontRenderContext(null, true, true),
-    "2x"         -> FontRenderContext(AffineTransform.getScaleInstance(2.0, 2.0), true, true),
+    "1x"          -> FontRenderContext(null, true, true),
+    "2x"          -> FontRenderContext(AffineTransform.getScaleInstance(2.0, 2.0), true, true),
     "whole-pixel" -> FontRenderContext(null, false, false),
-    "1.5x"       -> FontRenderContext(AffineTransform.getScaleInstance(1.5, 1.5), true, true)
+    "1.5x"        -> FontRenderContext(AffineTransform.getScaleInstance(1.5, 1.5), true, true)
   )
 
   private val faces = List(
-    "platform serif"  -> Font(Font.SERIF, Font.PLAIN, 14),
-    "large serif"     -> Font(Font.SERIF, Font.PLAIN, 37),
-    "bold sans"       -> Font(Font.SANS_SERIF, Font.BOLD, 13),
-    "italic"          -> Font(Font.SERIF, Font.ITALIC, 14),
-    "monospaced"      -> Font(Font.MONOSPACED, Font.PLAIN, 12),
-    "bundled Inter"   -> BundledInterFont.plain(14f)
+    "platform serif" -> Font(Font.SERIF, Font.PLAIN, 14),
+    "large serif"    -> Font(Font.SERIF, Font.PLAIN, 37),
+    "bold sans"      -> Font(Font.SANS_SERIF, Font.BOLD, 13),
+    "italic"         -> Font(Font.SERIF, Font.ITALIC, 14),
+    "monospaced"     -> Font(Font.MONOSPACED, Font.PLAIN, 12),
+    "bundled Inter"  -> BundledInterFont.plain(14f)
   )
 
   for
-    (faceName, face)    <- faces
-    (contextName, frc)  <- renderContexts
+    (faceName, face)   <- faces
+    (contextName, frc) <- renderContexts
   do
     s"The advance of a glyph of $faceName at $contextName" should "equal the advance its glyph metrics report" in {
       val nominal = face.createGlyphVector(frc, sample)

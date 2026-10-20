@@ -279,7 +279,13 @@ object LegacyLineMeasurement:
     if !measuredLayout then
       val charWidth = math.max(1, cellMetrics.charWidth)
       if cellMetrics.displayWidthAware then
-        fittingDisplayWidthSegmentLength(line, from, panelWidthPx + math.round(givenBackPx), charWidth, resolver.tabSize)
+        fittingDisplayWidthSegmentLength(
+          line,
+          from,
+          panelWidthPx + math.round(givenBackPx),
+          charWidth,
+          resolver.tabSize
+        )
       else fittingUniformSegmentLength(line, from, panelWidthPx + math.round(givenBackPx), charWidth, resolver.tabSize)
     else
       val remaining = line.length - from

@@ -107,7 +107,11 @@ final class ShapedStretch private (
   def isRightToLeft(glyph: Int): Boolean = rightToLeft(glyph)
 
   /** The glyph's own advance: unlike [[rightEdgeAt]] it holds nothing of the kerning with its neighbour. */
-  def advanceAt(glyph: Int): Float = GlyphAdvance.of(font, fontRenderContext, glyphCodes(glyph))
+  def advanceAt(glyph: Int): Float = advances(glyph)
+
+  private lazy val advances: Array[Float] =
+    val byCode = glyphCodes.distinct.map(code => code -> GlyphAdvance.of(font, fontRenderContext, code)).toMap
+    glyphCodes.map(byCode)
 
   def xAt(glyph: Int): Float = xs(glyph)
 

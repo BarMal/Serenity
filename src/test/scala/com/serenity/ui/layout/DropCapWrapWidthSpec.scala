@@ -81,9 +81,10 @@ class DropCapWrapWidthSpec extends AnyFlatSpec with Matchers:
     * whether the word fits: a fixed list of widths meets those edges only by luck of the platform's font metrics.
     */
   private def wordEdgeWidths(lines: Int, frc: FontRenderContext): List[Int] =
-    val indent = math.round(snapshot(lines, 300, frc).visualLines(1).xOffsetPx)
+    val indent  = math.round(snapshot(lines, 300, frc).visualLines(1).xOffsetPx)
     val visible = bodySnapshot(prose.drop(1), 100000, frc).visualLines.head
-    val edges = visible.text.indices.filter(index => visible.text(index) == ' ').flatMap(index => visible.xForColumn(index + 1))
+    val edges =
+      visible.text.indices.filter(index => visible.text(index) == ' ').flatMap(index => visible.xForColumn(index + 1))
     edges
       .flatMap(edge => (-1 to 1).map(beside => indent + math.ceil(edge.toDouble).toInt + beside))
       .filter(_ >= 200)
