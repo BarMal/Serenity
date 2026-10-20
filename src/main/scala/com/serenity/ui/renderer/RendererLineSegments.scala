@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.SemanticToken
 import com.serenity.state.models.{AppState, Buffer, TextVisualLine}
+import com.serenity.state.reducers.CompositionPreview
 import com.serenity.ui.layout.TextLayoutSnapshot
 import com.serenity.ui.theme.{MarkdownInlineStyling, RichTextStyling, StyledText, TextStyle, Theme}
 
@@ -13,6 +14,23 @@ import com.serenity.ui.theme.{MarkdownInlineStyling, RichTextStyling, StyledText
 private[renderer] object RendererLineSegments:
 
   def forLine(
+    visualLine: TextVisualLine,
+    theme: Theme,
+    snapshot: TextLayoutSnapshot,
+    activeBodyLine: Int => Boolean,
+    buffer: Buffer,
+    state: AppState,
+    context: RenderContext,
+    semanticTokens: Option[List[SemanticToken]]
+  ): Option[List[StyledText]] =
+    val segments = ordinarySegments(visualLine, theme, snapshot, activeBodyLine, buffer, state, context, semanticTokens)
+    CompositionPreview.spanOf(state, buffer).filter(_.line == visualLine.bufferLine) match
+      case Some(span) =>
+        val base = segments.getOrElse(highlighted(visualLine, theme, buffer, state, context, semanticTokens))
+        Some(CompositionStyling.overlay(base, visualLine, span, theme))
+      case None => segments
+
+  private def ordinarySegments(
     visualLine: TextVisualLine,
     theme: Theme,
     snapshot: TextLayoutSnapshot,

@@ -39,6 +39,7 @@ import com.serenity.io.{FileDialogSelection, SwingFileDialog}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.RestartMode
+import com.serenity.state.reducers.CompositionPreview
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.display.DisplayScale
@@ -411,7 +412,7 @@ object Main extends IOApp:
                     syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                     IO(
                       paintFullFrame(
-                        state,
+                        CompositionPreview.displayed(state, caches.compositionRevisions),
                         vis,
                         cc,
                         swingWin,
@@ -426,7 +427,7 @@ object Main extends IOApp:
                     syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                     IO(
                       paintCursorFrame(
-                        state,
+                        CompositionPreview.displayed(state, caches.compositionRevisions),
                         vis,
                         cc,
                         swingWin,
