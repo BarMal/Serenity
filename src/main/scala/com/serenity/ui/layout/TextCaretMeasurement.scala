@@ -303,22 +303,25 @@ private[layout] object TextCaretMeasurement:
     from: Int,
     panelWidthPx: Int,
     absoluteStartColumn: Int,
-    spec: WrappedLineKey
+    spec: WrappedLineKey,
+    givenBackPx: Float = 0.0f
   ): SegmentFit =
     val cellMetrics = spec.cellMetrics
     if !spec.measuredLayout then
       val charWidth = math.max(1, cellMetrics.charWidth)
+      val widthPx   = panelWidthPx + math.round(givenBackPx)
       if cellMetrics.displayWidthAware then
-        SegmentFit(fittingDisplayWidthSegmentLength(line, from, panelWidthPx, charWidth, spec.resolver.tabSize))
-      else SegmentFit(fittingUniformSegmentLength(line, from, panelWidthPx, charWidth, spec.resolver.tabSize))
+        SegmentFit(fittingDisplayWidthSegmentLength(line, from, widthPx, charWidth, spec.resolver.tabSize))
+      else SegmentFit(fittingUniformSegmentLength(line, from, widthPx, charWidth, spec.resolver.tabSize))
     else
       paragraph
-        .measuredFit(from, panelWidthPx)
+        .measuredFit(from, panelWidthPx, givenBackPx)
         .getOrElse(
           fittingMeasuredSegment(
             line,
             from,
             panelWidthPx,
+            givenBackPx,
             absoluteStartColumn,
             spec.resolver,
             spec.frc,
@@ -332,6 +335,7 @@ private[layout] object TextCaretMeasurement:
     line: String,
     from: Int,
     panelWidthPx: Int,
+    givenBackPx: Float,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
     frc: FontRenderContext,
@@ -339,7 +343,7 @@ private[layout] object TextCaretMeasurement:
     shapedText: ShapedTextCache
   ): SegmentFit =
     val remainingLength = line.length - from
-    val width           = panelWidthPx.toFloat
+    val width           = panelWidthPx.toFloat + givenBackPx
 
     @annotation.tailrec
     def loop(limit: Int): SegmentFit =
