@@ -42,15 +42,8 @@ private[reducers] object EditorTextEditReducer:
       else reduceDeletion(buffer, currentState, paneId, Some(kind), withoutSelection)
 
     event match
-      case InsertChar(char) =>
-        if hasSelection then applyEditedBuffer(standalone)(applyMultiSelectionReplacement(_, char.toString))
-        else if isMulti then applyEditedBuffer(typingGrouping(buffer))(applyMultiCursorInsertion(_, char.toString))
-        else
-          smartPunctuationReplacement(buffer, head, char, currentState) match
-            case Some(substitution) =>
-              insertWithSmartPunctuation(buffer, head, char, substitution, currentState, paneId)
-            case None =>
-              insertAtCursor(buffer, head, char.toString, currentState, paneId)
+      case InsertChar(char) => insertCharacter(char, ctx, applyEditedBuffer)
+      case InsertText(text) => insertCommittedText(text, ctx, applyEditedBuffer)
 
       case TabKey =>
         if hasSelection then
@@ -361,6 +354,35 @@ private[reducers] object EditorTextEditReducer:
         )
       }
     )
+
+  private type EditApplier =
+    (List[MultiCursorEdit] => EditGrouping) => (Buffer => (Buffer, List[MultiCursorEdit])) => ReducerResult
+
+  private def insertCharacter(char: Char, ctx: CursorEventContext, applyEditedBuffer: EditApplier): ReducerResult =
+    import ctx.*
+    if hasSelection then applyEditedBuffer(standalone)(applyMultiSelectionReplacement(_, char.toString))
+    else if isMulti then applyEditedBuffer(typingGrouping(buffer))(applyMultiCursorInsertion(_, char.toString))
+    else
+      smartPunctuationReplacement(buffer, head, char, currentState) match
+        case Some(substitution) =>
+          insertWithSmartPunctuation(buffer, head, char, substitution, currentState, paneId)
+        case None =>
+          insertAtCursor(buffer, head, char.toString, currentState, paneId)
+
+  /** A lone character is typing, smart punctuation included; anything longer is committed text, which is never
+    * reinterpreted.
+    */
+  private def insertCommittedText(
+    text: String,
+    ctx: CursorEventContext,
+    applyEditedBuffer: EditApplier
+  ): ReducerResult =
+    import ctx.*
+    if text.isEmpty then ReducerResult.noEffects(currentState)
+    else if text.length == 1 then insertCharacter(text.charAt(0), ctx, applyEditedBuffer)
+    else if hasSelection then applyEditedBuffer(standalone)(applyMultiSelectionReplacement(_, text))
+    else if isMulti then applyEditedBuffer(typingGrouping(buffer))(applyMultiCursorInsertion(_, text))
+    else insertAtCursor(buffer, head, text, currentState, paneId)
 
   private def insertAtCursor(
     buffer: Buffer,

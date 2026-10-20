@@ -24,6 +24,12 @@ final private[renderer] case class MeasuredRun(
   */
 final private[renderer] case class StretchedRun(run: MeasuredRun, stretch: String, from: Int, until: Int)
 
+/** The part of a measured line drawn in one font: `family` is the fallback family, `None` for the line's own font. Its
+  * `runs` are the line's runs cut to the segment, and `text` is the segment, which is what a stretch is shaped from so
+  * that shaping never reaches across a font boundary.
+  */
+final private[renderer] case class FontSegment(family: Option[String], runs: Vector[MeasuredRun], text: String)
+
 /** Splits a measured visual line into [[MeasuredRun]]s wherever a grapheme cluster's effective colours or style differ
   * from the cluster before it, so no cluster is ever split. Runs a full frame of prose through it, so it walks arrays
   * instead of building per-character collections.
@@ -105,6 +111,66 @@ private[renderer] object MeasuredLineRuns:
       group(1, segment, 0, first.endLocalIndex, attributesOf(segment), textOf(first), 0)
     }
     runs.result()
+
+  /** `runs` cut at the boundaries of the line's font runs. The line's own font fills the gaps between them. A run cut
+    * in two keeps the line's caret stop at the cut as the edge of both halves.
+    */
+  def byFont(visualLine: TextVisualLine, runs: Vector[MeasuredRun]): Vector[FontSegment] =
+    val text    = visualLine.text
+    val offsets = runs.scanLeft(0)(_ + _.text.length)
+    val fonts   = visualLine.fontRuns
+
+    def xAt(offset: Int): Float =
+      visualLine.row.xForColumn(visualLine.startColumn + offset).fold(0.0f)(_ + visualLine.xOffsetPx)
+
+    def cut(from: Int, until: Int): Vector[MeasuredRun] =
+      runs.indices.flatMap { index =>
+        val low  = math.max(offsets(index), from)
+        val high = math.min(offsets(index + 1), until)
+        Option.when(low < high) {
+          val run = runs(index)
+          run.copy(
+            text = run.text.substring(low - offsets(index), high - offsets(index)),
+            minXPx = if low == offsets(index) then run.minXPx else xAt(low),
+            maxXPx = if high == offsets(index + 1) then run.maxXPx else xAt(high)
+          )
+        }
+      }.toVector
+
+    def segment(from: Int, until: Int, slot: Int): FontSegment =
+      FontSegment(
+        Option.when(slot > 0)(visualLine.fallbackFamilies.lift(slot - 1)).flatten,
+        cut(from, until),
+        text.substring(from, until)
+      )
+
+    val declared = Vector.tabulate(fonts.length / 3)(run => (fonts(3 * run), fonts(3 * run + 1), fonts(3 * run + 2)))
+    val (covered, segments) = declared.foldLeft((0, Vector.empty[FontSegment])) {
+      case ((reached, found), (from, until, slot)) =>
+        val gap = Option.when(from > reached)(segment(reached, from, 0))
+        (until, found ++ gap :+ segment(from, until, slot))
+    }
+    segments ++ Option.when(covered < text.length)(segment(covered, text.length, 0))
+
+  /** The stretches of `[from, until)` (offsets into the row's text) that one font draws, each with the fallback family
+    * that draws it: the line's own font between the fallback runs.
+    */
+  def fontPieces(visualLine: TextVisualLine, from: Int, until: Int): Vector[(Int, Int, Option[String])] =
+    val fonts    = visualLine.fontRuns
+    val declared = Vector.tabulate(fonts.length / 3)(run => (fonts(3 * run), fonts(3 * run + 1), fonts(3 * run + 2)))
+    def familyOf(slot: Int): Option[String] =
+      Option.when(slot > 0)(visualLine.fallbackFamilies.lift(slot - 1)).flatten
+    val cuts = declared
+      .flatMap((low, high, slot) =>
+        val start = math.max(low, from)
+        val end   = math.min(high, until)
+        Option.when(start < end)((start, end, familyOf(slot)))
+      )
+    val (reached, pieces) = cuts.foldLeft((from, Vector.empty[(Int, Int, Option[String])])) {
+      case ((at, found), (start, end, family)) =>
+        (end, found ++ Option.when(start > at)((at, start, None)) :+ ((start, end, family)))
+    }
+    pieces ++ Option.when(reached < until)((reached, until, None))
 
   /** Places each run in its style stretch -- the consecutive runs of one style, which draw in one font and so can be
     * shaped as one text -- where `runs` are the runs of `text`.

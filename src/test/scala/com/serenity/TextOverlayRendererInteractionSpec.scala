@@ -28,6 +28,19 @@ import org.scalatest.matchers.should.Matchers
 
 class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
 
+  private val shapedText = ShapedTextCache()
+  private val advances   = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText)
+
+  private def renderOverlay(
+    surface: RenderSurface,
+    overlay: TextOverlayView,
+    theme: Theme,
+    config: AppConfig,
+    cursorVisible: Boolean,
+    font: Font,
+    metrics: CellMetrics
+  ): Unit = TextOverlayRenderer.render(surface, overlay, theme, config, cursorVisible, font, metrics, advances)
+
   given Balance = Balance.default
 
   private def closePrompt(frame: LayoutRect, highlighted: Int = 0): Option[ResolvedSurfaceComposition] =
@@ -55,7 +68,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       composition = closePrompt(frame, highlighted = 1)
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
 
     surface.getRow(frame.y + 1) should include("unsaved changes")
     surface.getRow(frame.y + 2) should include("notes.scala")
@@ -93,7 +106,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
     val overlay                      = TextOverlayView(rect = frame, composition = Some(composition))
     def rgb(color: RenderColor): Int = color.argb & 0xffffff
 
-    TextOverlayRenderer.render(surface, overlay, theme, AppConfig.default, cursorVisible = false, font, metrics)
+    renderOverlay(surface, overlay, theme, AppConfig.default, cursorVisible = false, font, metrics)
 
     surface.getRow(1).slice(1, 7) shouldBe "Danger"
     rgb(surface.getFg(1, 1)) shouldBe rgb(theme.error.foreground)
@@ -114,7 +127,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       composition = closePrompt(frame)
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
 
     surface.getRow(frame.bottom).trim shouldBe empty
     (frame.x until frame.right).exists(x => surface.getRow(frame.bottom - 2).charAt(x) != ' ') shouldBe true
@@ -141,7 +154,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
 
     surface.getRow(1) should include("unsaved changes")
     surface.getRow(2) should include("Buffer 0 - unsaved")
@@ -158,7 +171,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       verticalOffsetRows = 0.5
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
 
     surface.pixelTranslationCalls.map(_.yPx) should contain(10.0)
   }
@@ -191,7 +204,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       itemGapRows = 0.25
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
 
     surface.putStringPixelYCalls.filter(_.text.nonEmpty).map(_.pixelY).distinct should contain allOf (20, 45, 70, 95)
   }
@@ -217,7 +230,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     surface.getRow(1).slice(1, 11) shouldBe "1234567890"
     surface.fillPixelRectCalls should not be empty
@@ -246,12 +259,13 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     surface.getRow(1).slice(1, 1 + rowText.length) shouldBe rowText
 
-    val valueX  = 1 + "Find ".length
-    val caretXs = com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(query, font, surface.fontRenderContext.get)
+    val valueX = 1 + "Find ".length
+    val caretXs =
+      com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(query, font, shapedText, surface.fontRenderContext.get)
     val expectedCursorX = metrics.toPixelX(valueX) + math.round(caretXs.last)
 
     surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorX
@@ -272,7 +286,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     surface.fillPixelRectCalls.last.color shouldBe Theme.light.cursor
     surface.fillPixelRectCalls.last.yPx shouldBe metrics.toPixelY(1)
@@ -293,9 +307,10 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
-    val caretXs = com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(rowText, font, surface.fontRenderContext.get)
+    val caretXs =
+      com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(rowText, font, shapedText, surface.fontRenderContext.get)
     val expectedCursorX = metrics.toPixelX(1) + math.round(caretXs.last)
 
     surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorX
@@ -316,7 +331,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     val textRun = surface.drawRunPxCalls.find(_.s == rowText).getOrElse(fail("expected measured row text"))
     textRun.yPx shouldBe metrics.toPixelY(1)
@@ -344,7 +359,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
     val leftPx      = metrics.toPixelX(contentRect.x)
     val rightPx     = metrics.toPixelX(contentRect.right)
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     val textRun = surface.drawRunPxCalls.find(_.s.nonEmpty).getOrElse(fail("expected measured row text"))
     textRun.xPx should be >= leftPx.toFloat
@@ -379,7 +394,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     val renderedRow = surface.getRow(1)
     renderedRow should include("Line")
@@ -411,7 +426,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
     )
 
     surface.setFont(FontSpec.fromAwt(font))
-    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+    renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     val contentWidth = overlay.rect.width - 2
     val labelWidth   = math.min(22, math.max(8, contentWidth / 3))
@@ -421,7 +436,8 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
     val valueX       = valueCellX + valueWidth - value.length
 
     surface.getRow(1).slice(valueX, valueX + value.length) shouldBe value
-    val caretXs = com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(value, font, surface.fontRenderContext.get)
+    val caretXs =
+      com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(value, font, shapedText, surface.fontRenderContext.get)
     val rawCaretXPx     = metrics.toPixelX(valueX) + math.round(caretXs.last)
     val contentRightXPx = metrics.toPixelX(com.serenity.ui.layout.SurfaceFrameLayout(overlay.rect).contentRect.right)
     val caret           = surface.fillPixelRectCalls.last

@@ -117,23 +117,16 @@ object LayoutEngine:
   ): CalculatedLayout =
     calculateLayoutWithUI(state, viewportSize, spacerPercentage)
 
-  private[serenity] val chromeMemo = new ChromeLayoutMemo()
-
-  /** The wraps measured while locating a caret: the layout is a function of state alone, so it keeps its own cache
-    * rather than the scene's.
-    */
-  private val anchorWrappedLines = WrappedLineCache.bounded()
-
   /** The panes of `calculatedLayout` with the text each lays out to, from which a floating surface finds its caret. */
   def laidOutPanes(state: AppState, calculatedLayout: CalculatedLayout): LaidOutPanes =
-    LaidOutPanes(state, calculateEditorPaneLayouts(state, calculatedLayout), anchorWrappedLines)
+    LaidOutPanes(state, calculateEditorPaneLayouts(state, calculatedLayout), state.runtime.anchorWraps.lines)
 
   def calculateLayoutWithUI(
     state: AppState,
     viewportSize: ViewportSize,
     spacerPercentage: Double = DefaultSpacerPercentage
   ): CalculatedLayout =
-    chromeMemo.layoutFor(state, viewportSize, spacerPercentage)(
+    state.runtime.chromeLayouts.layoutFor(state, viewportSize, spacerPercentage)(
       calculateLayoutWithUIUncached(state, viewportSize, spacerPercentage)
     )
 

@@ -20,12 +20,22 @@ final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.Default
 
   private val generations = AtomicReference(Generations(newMap(), newMap()))
   private val shapedN     = AtomicLong(0)
+  private val exactN      = AtomicLong(0)
 
   /** The advances of the glyphs this cache's stretches are made of, and of any run measured beside them. */
   val glyphAdvances: GlyphAdvance = GlyphAdvance()
 
   /** How many stretches were shaped, as opposed to served from the cache. */
   def shapings: Long = shapedN.get()
+
+  /** How many exact measurements (one `TextLayout` or one shaped stretch of a row or candidate) caret and fit
+    * measurement built through this cache: the cost wrapping pays when summed glyph advances cannot answer, which the
+    * wrap specs bound per paragraph.
+    */
+  def exactMeasurements: Long = exactN.get()
+
+  private[serenity] def countExactMeasurement(): Unit =
+    val _ = exactN.incrementAndGet()
 
   def holds(text: String, font: Font, fontRenderContext: FontRenderContext): Boolean =
     val key  = Key(text, font, fontRenderContext)
@@ -64,9 +74,6 @@ object ShapedTextCache:
     font.hasLayoutAttributes || text.exists(_ >= FirstCharNeedingLayout)
 
   private val FirstCharNeedingLayout = '\u0300'
-
-  /** Shared by every surface that is not handed its own: shaping is a pure function of its key. */
-  val shared: ShapedTextCache = new ShapedTextCache()
 
   final private case class Key(text: String, font: Font, fontRenderContext: FontRenderContext)
 

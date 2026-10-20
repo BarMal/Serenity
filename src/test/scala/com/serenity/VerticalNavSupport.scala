@@ -30,5 +30,5 @@ object VerticalNavSupport:
         // Mirrors `EditorPaneComponent.processEventForPane`'s own geometry computation, so tests that dispatch a
         // text event through this helper see exactly the production behavior rather than always falling back to
         // `reduce`'s geometry-free default (#1676).
-        val geometry = EditorGeometryProducer.forEvent(textEvent, state, paneId)
+        val geometry = EditorGeometryProducer.forEvent(textEvent, state, paneId, wrapCache)
         EditorEventReducer.reduce(textEvent, paneId, state, geometry)

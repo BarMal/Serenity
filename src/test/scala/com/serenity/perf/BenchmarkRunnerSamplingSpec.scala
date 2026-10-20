@@ -88,4 +88,12 @@ class BenchmarkRunnerSamplingSpec extends AnyFlatSpec with Matchers:
       allocationP95Bytes = None
     )
 
+  "slowdownFactor" should "read a factor above one" in {
+    BenchmarkRunner.slowdownFactor(Some("2")) shouldBe Some(2.0)
+  }
+
+  it should "leave the benchmark untouched when unset, one, below one or not a number" in {
+    List(None, Some("1"), Some("0.5"), Some("fast")).map(BenchmarkRunner.slowdownFactor) shouldBe List.fill(4)(None)
+  }
+
 end BenchmarkRunnerSamplingSpec
