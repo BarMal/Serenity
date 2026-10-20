@@ -338,11 +338,6 @@ object ArchitectureChecks {
       "Per-thread memo of the last adapter made for a rope. Its identity is the anchor the thread's `BreakIterator` cache compares, so it must live and die with those thread-locals."
     ),
     PurityChecks.Allowed(
-      "main/scala/com/serenity/diagnostics/TuiConsoleLogFilter.scala",
-      "TuiConsoleLogFilter.suppressConsole",
-      "logback builds this filter by reflection from `logback.xml`, so no value can be injected into it; a static flag set once from `Frontend.logRouting` before the first logger exists is the only channel."
-    ),
-    PurityChecks.Allowed(
       "main/scala/com/serenity/ui/presets/UiPresetIndex.scala",
       "UiPresetStore.inProcessLocks",
       "One lock per preset file must be shared by every `UiPresetStore` in the process that names it; per-instance locks would let two stores write the same file at once. The mutual exclusion is the point, so the state is inherently process-wide."

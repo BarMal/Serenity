@@ -122,13 +122,12 @@ object Main extends IOApp:
     toolkit: ToolkitSelection.Decision,
     requestRestart: RestartMode => IO[Unit]
   ): IO[ExitCode] =
-    // #1215/#1669: must run before the `given logger` below, which triggers logback's one-time console-appender setup
-    // on its first call -- `TuiConsoleLogFilter` checks this per log event, but it still has to be configured before
-    // the very first event a TUI launch could otherwise leak onto the terminal surface it is about to take over. The
-    // real `GuiFrontend`/`TuiFrontend` instance doesn't exist yet this early (constructing one means acquiring the
-    // Swing window or terminal resource, below) -- `Frontend.guiLogRouting`/`tuiLogRouting` are exactly what those
-    // instances' own `logRouting` would answer, without needing one built.
-    TuiConsoleLogFilter.configure(
+    // #1215/#1669: must run before the `given logger` below logs anything -- it initialises logback and attaches the
+    // console filter before the very first event a TUI launch could otherwise leak onto the terminal surface it is
+    // about to take over. The real `GuiFrontend`/`TuiFrontend` instance doesn't exist yet this early (constructing one
+    // means acquiring the Swing window or terminal resource, below) -- `Frontend.guiLogRouting`/`tuiLogRouting` are
+    // exactly what those instances' own `logRouting` would answer, without needing one built.
+    TuiConsoleLogFilter.installOnActiveLogback(
       if LaunchOptions.resolveTuiMode(launchOptionsForLogging) then Frontend.tuiLogRouting else Frontend.guiLogRouting
     )
 
