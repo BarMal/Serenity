@@ -1,0 +1,219 @@
+name: Skiko Natives
+
+# Builds the Skiko natives Serenity ships without the Adobe DNG SDK (#2028): Skia and Skiko from the pinned upstream tags in
+# ci/skiko/pins.env, with the reviewed patches beside it. Each build is scanned for DNG, and the scan itself is proved on a
+# stock library first. Publishing adds attested jars to the Maven repository on the `skiko-maven` branch, which GitHub Pages
+# serves; see DEVELOPMENT.md for the rebuild-on-bump procedure.
+#
+# A pull request builds only linux-x64, to keep a try cheap; a manual run chooses its targets and whether to publish.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/skiko-natives.yml'
+      - 'ci/skiko/**'
+      - 'scripts/check_no_dng.py'
+  workflow_dispatch:
+    inputs:
+      groups:
+        description: 'Runner groups to build (comma separated: linux-x64, linux-arm64, macos, windows) or all'
+        required: true
+        default: 'all'
+      publish:
+        description: 'Attest and publish the result to the skiko-maven branch (needs every group)'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      linux_x64: ${{ steps.pick.outputs.linux_x64 }}
+      linux_arm64: ${{ steps.pick.outputs.linux_arm64 }}
+      macos: ${{ steps.pick.outputs.macos }}
+      windows: ${{ steps.pick.outputs.windows }}
+      publish: ${{ steps.pick.outputs.publish }}
+    steps:
+      - id: pick
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          GROUPS_INPUT: ${{ inputs.groups }}
+          PUBLISH_INPUT: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          wanted="linux-x64"
+          if [ "${EVENT}" = workflow_dispatch ]; then wanted="${GROUPS_INPUT}"; fi
+          has() { [ "${wanted}" = all ] || [[ ",${wanted// /}," == *",$1,"* ]]; }
+          for group in linux-x64 linux-arm64 macos windows; do
+            if has "${group}"; then value=true; else value=false; fi
+            echo "${group//-/_}=${value}" >> "${GITHUB_OUTPUT}"
+          done
+          publish=false
+          if [ "${EVENT}" = workflow_dispatch ] && [ "${PUBLISH_INPUT}" = true ] && [ "${wanted}" = all ]; then publish=true; fi
+          echo "publish=${publish}" >> "${GITHUB_OUTPUT}"
+
+  # Each build job builds, then scans (ci/skiko/scan-natives.sh): the scan is first proved on stock libraries, which carry
+  # the DNG SDK on Linux and macOS, and only then run on what was just built.
+  build-linux-x64:
+    name: Build linux-x64
+    needs: plan
+    if: needs.plan.outputs.linux_x64 == 'true'
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04
+    timeout-minutes: 240
+    steps:
+      - name: Install what checkout and the scanner need
+        run: apt-get update -y && apt-get install -y git curl ca-certificates python3
+      - uses: actions/checkout@v4
+      - name: Build
+        run: ci/skiko/build-natives.sh linux-x64 "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo"
+      - name: Scan
+        run: ci/skiko/scan-natives.sh linux-x64 "$GITHUB_WORKSPACE/repo"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: maven-linux-x64
+          path: repo
+          if-no-files-found: error
+
+  build-linux-arm64:
+    name: Build linux-arm64
+    needs: plan
+    if: needs.plan.outputs.linux_arm64 == 'true'
+    runs-on: ubuntu-22.04-arm
+    container: ubuntu:20.04
+    timeout-minutes: 240
+    steps:
+      - name: Install what checkout and the scanner need
+        run: apt-get update -y && apt-get install -y git curl ca-certificates python3
+      - uses: actions/checkout@v4
+      - name: Build
+        run: ci/skiko/build-natives.sh linux-arm64 "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo"
+      - name: Scan
+        run: ci/skiko/scan-natives.sh linux-arm64 "$GITHUB_WORKSPACE/repo"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: maven-linux-arm64
+          path: repo
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macos
+    needs: plan
+    if: needs.plan.outputs.macos == 'true'
+    runs-on: macos-15
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build
+        run: ci/skiko/build-natives.sh macos "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo"
+      - name: Scan
+        run: ci/skiko/scan-natives.sh macos "$GITHUB_WORKSPACE/repo"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: maven-macos
+          path: repo
+          if-no-files-found: error
+
+  build-windows:
+    name: Build windows
+    needs: plan
+    if: needs.plan.outputs.windows == 'true'
+    runs-on: windows-2022
+    timeout-minutes: 300
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf input
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: microsoft/setup-msbuild@v1
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: MSYS
+          update: false
+          install: >-
+            mingw-w64-clang-x86_64-clang
+            mingw-w64-clang-x86_64-libc++
+            make
+            patch
+          path-type: inherit
+      - name: Build
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+          SKIKO_VSBT_PATH: C:\Program Files\Microsoft Visual Studio\2022\Enterprise
+        run: ci/skiko/build-natives.sh windows "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo"
+      - name: Scan
+        run: ci/skiko/scan-natives.sh windows "$GITHUB_WORKSPACE/repo"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: maven-windows
+          path: repo
+          if-no-files-found: error
+
+  publish:
+    name: Publish
+    needs: [plan, build-linux-x64, build-linux-arm64, build-macos, build-windows]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: maven-*
+          path: incoming
+      - name: Merge the groups into one repository tree and scan all six jars
+        run: |
+          set -euo pipefail
+          mkdir -p repo
+          for dir in incoming/maven-*; do cp -R "${dir}/." repo/; done
+          jars=$(find repo -name 'skiko-awt-runtime-*.jar' | sort)
+          test "$(echo "${jars}" | wc -l)" -eq 6
+          python3 scripts/check_no_dng.py ${jars}
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'repo/**/*.jar'
+      - name: Add the tree to the skiko-maven branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git ls-remote --exit-code --heads origin skiko-maven >/dev/null; then
+            git fetch --depth 1 origin skiko-maven
+            git worktree add site FETCH_HEAD
+            git -C site checkout -B skiko-maven
+          else
+            git worktree add --orphan -b skiko-maven site
+          fi
+          cp -R repo/. site/
+          touch site/.nojekyll
+          git -C site add -A
+          git -C site commit -m "Add the DNG-free Skiko natives ${GITHUB_SHA::10}" || echo "nothing new to publish"
+          git -C site push origin skiko-maven
