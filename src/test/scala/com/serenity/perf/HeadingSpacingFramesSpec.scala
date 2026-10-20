@@ -93,7 +93,8 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
         deviceScaleX = scale,
         deviceScaleY = scale,
         contentPersists = persists,
-        layerCacheOwnerOverride = Some(screen)
+        layerCacheOwnerOverride = Some(screen),
+        textCaches = caches.surfaceText
       )
       val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
       val _ = RendererFramePlanner.renderFrame(
