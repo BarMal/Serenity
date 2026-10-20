@@ -45,12 +45,35 @@ private[layout] object ExactCaretXs:
     frc: FontRenderContext,
     shapedText: ShapedTextCache
   ): ShapedCaretStops.Stops =
-    withExtraAdvances(
+    val laidOut =
       if resolver.hasHidden then visibleStops(text, absoluteStartColumn, resolver, frc, shapedText)
-      else plainStops(text, absoluteStartColumn, resolver, frc, shapedText),
-      absoluteStartColumn,
-      resolver
-    )
+      else plainStops(text, absoluteStartColumn, resolver, frc, shapedText)
+    withExtraAdvances(snappedToCells(laidOut, text, absoluteStartColumn, resolver), absoluteStartColumn, resolver)
+
+  /** `stops` with each wide character of a code line set to two cells and each one-cell fallback character to one
+    * ([[WideCells]]), the edges after it moved to match.
+    */
+  private def snappedToCells(
+    stops: ShapedCaretStops.Stops,
+    text: String,
+    absoluteStartColumn: Int,
+    resolver: LineFontResolver
+  ): ShapedCaretStops.Stops =
+    if resolver.wideCellPx <= 0.0f then stops
+    else
+      val carets =
+        WideCells.snapped(
+          stops.carets,
+          text,
+          resolver.wideCellPx,
+          index => resolver.isFallbackAt(absoluteStartColumn + index)
+        )
+      ShapedCaretStops.Stops(
+        carets,
+        stops.trailing.map(edges =>
+          IArray.tabulate(edges.length)(index => edges(index) + carets(index) - stops.carets(index))
+        )
+      )
 
   /** `stops` with each column's extra advance added to every stop after it. */
   private def withExtraAdvances(

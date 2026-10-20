@@ -84,6 +84,7 @@ object CursorViewport:
     val dropCapsEnabled     = currentState.persisted.config.documentConfig.dropCapsEnabled
     val markdownViewMode    = currentState.persisted.config.inlineMarkdownViewMode
     val tabSize             = buffer.effectiveIndentation(currentState.persisted.config.indentation).tabSize
+    val fontFallback        = currentState.persisted.config.editorConfig.fontConfig.fallback
     val headings            = currentState.effectiveHeadingSettings
     val openings            = buffer.effectiveOpenings(currentState.persisted.config.openingsConfig)
     val cursorVisualLine =
@@ -111,7 +112,8 @@ object CursorViewport:
               tabSize = tabSize,
               headings = headings,
               openings = openings,
-              dropCapGapEm = currentState.persisted.config.documentConfig.dropCapGapEm
+              dropCapGapEm = currentState.persisted.config.documentConfig.dropCapGapEm,
+              fallback = fontFallback
             )
         )
 
@@ -131,7 +133,8 @@ object CursorViewport:
           tabSize,
           headings = headings,
           openings = openings,
-          dropCapGapEm = currentState.persisted.config.documentConfig.dropCapGapEm
+          dropCapGapEm = currentState.persisted.config.documentConfig.dropCapGapEm,
+          fallback = fontFallback
         )
 
     // Desired top: halfVisibleLines rows of context above the cursor's own visual row, counted in visual rows (not
@@ -175,7 +178,9 @@ object CursorViewport:
             wrapCache.shapedText,
             cellMetricsOverride = cellMetricsOverride,
             forceCellLayout = forceCellLayout,
-            tabSize = tabSize
+            tabSize = tabSize,
+            wrapCache = wrapCache,
+            fallback = fontFallback
           )
         val minimumVisibleColumn = math.max(0, cursor.column - viewport.visibleColumns + 1)
         math.max(minimumVisibleColumn, measuredLeftColumn)
@@ -300,7 +305,8 @@ object CursorViewport:
       tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
       headings = state.effectiveHeadingSettings,
       openings = buffer.effectiveOpenings(state.persisted.config.openingsConfig),
-      dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
+      dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+      fallback = state.persisted.config.editorConfig.fontConfig.fallback
     )
 
   /** How many e-reader columns a page shows for `buffer`'s pane -- `LayoutEngine.resolvedColumnCount` of the pane's own

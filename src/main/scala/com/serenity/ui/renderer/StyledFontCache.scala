@@ -1,11 +1,12 @@
 package com.serenity.ui.renderer
 
-import java.awt.Font
 import java.awt.font.{FontRenderContext, LineMetrics}
 import java.awt.geom.AffineTransform
+import java.awt.{Font, Graphics2D}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
+import com.serenity.ui.fonts.FontFallback
 import com.serenity.ui.theme.TextStyle
 
 /** The AWT font each `(base font, style)` pair paints with, derived once and handed back by identity afterwards, and
@@ -37,6 +38,22 @@ final class StyledFontCache(maxBaseFonts: Int = 16, maxStylesPerBaseFont: Int = 
           val _ = derived.incrementAndGet()
           TextStyle.styledFont(base, style)
       )
+
+  private val fallbacks = new ConcurrentHashMap[(Font, String), Font]()
+
+  /** `family` at `styled`'s style, size and ligature setting. */
+  def fallbackFontFor(styled: Font, family: String): Font =
+    if fallbacks.size >= maxBaseFonts * maxStylesPerBaseFont then fallbacks.clear()
+    fallbacks.computeIfAbsent((styled, family), _ => FontFallback.matching(styled, Font(family, styled.getStyle, 1)))
+
+  /** Runs the draw on the graphics with its font swapped for the family at the current font's style, size and ligature
+    * setting.
+    */
+  def drawingIn(g: Graphics2D, family: String)(draw: => Unit): Unit =
+    val styled = g.getFont
+    g.setFont(fallbackFontFor(styled, family))
+    try draw
+    finally g.setFont(styled)
 
   def underlineOf(font: Font): Underline =
     if underlines.size >= maxBaseFonts * maxStylesPerBaseFont then underlines.clear()
