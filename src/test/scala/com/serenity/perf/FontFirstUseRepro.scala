@@ -17,8 +17,10 @@ import com.serenity.ui.renderer.{ShapedStretch, ShapedTextCache, StyledFontCache
   */
 object FontFirstUseRepro:
 
-  private val shapedText  = ShapedTextCache()
-  private val styledFonts = StyledFontCache()
+  private val shapedText    = ShapedTextCache()
+  private val styledFonts   = StyledFontCache()
+  private val lineExtents   = FontLineExtents()
+  private val dropCapWidths = DropCapWidths()
 
   private val Texts = Vector(
     "Hoxi AVATAR To Wa Yo",
@@ -60,9 +62,9 @@ object FontFirstUseRepro:
     Texts.foreach { text =>
       val _ = shapedText.stretchOf(text, font, frc)
     }
-    val _ = FontLineExtents.shared(FontLineExtents.Key(font, frc))
+    val _ = lineExtents.of(font, frc)
     val _ = styledFonts.underlineOf(font)
-    val _ = DropCapLayout.glyphWidthPx(font, frc, "A")
+    val _ = dropCapWidths(font, frc, "A")
     val _ = GlyphAdvances.layoutAdvanceMatchesSum(font, frc)
     val _ = GlyphAdvances.advancesAreUniform(font, frc)
     Texts.foreach(text => measure(text, font, frc, shapedText))
@@ -85,9 +87,9 @@ object FontFirstUseRepro:
     val beliefs = Texts.map { text =>
       stretchDigest(shapedText.stretchOf(text, font, frc)) +
         advancesDigest(measure(text, font, frc, shapedText))
-    } :+ FontLineExtents.shared(FontLineExtents.Key(font, frc)).toString :+
+    } :+ lineExtents.of(font, frc).toString :+
       styledFonts.underlineOf(font).toString :+
-      DropCapLayout.glyphWidthPx(font, frc, "A").toString :+
+      dropCapWidths(font, frc, "A").toString :+
       GlyphAdvances.layoutAdvanceMatchesSum(font, frc).toString :+ GlyphAdvances.advancesAreUniform(font, frc).toString
     Integer.toHexString(beliefs.mkString("\n").hashCode)
 
@@ -106,12 +108,12 @@ object FontFirstUseRepro:
           math.ceil(metrics.getAscent.toDouble).toInt,
           math.ceil((metrics.getDescent + metrics.getLeading).toDouble).toInt
         )
-      Option.when(FontLineExtents.shared(FontLineExtents.Key(font, frc)) != settled)("line-extents")
+      Option.when(lineExtents.of(font, frc) != settled)("line-extents")
     val underline =
       val metrics = font.getLineMetrics("", FontRenderContext(AffineTransform(), true, true))
       Option.when(styledFonts.underlineOf(font) != StyledFontCache.Underline.of(metrics))("underline")
     val dropCap =
-      Option.when(DropCapLayout.glyphWidthPx(font, frc, "A") != font.getStringBounds("A", frc).getWidth.toFloat)(
+      Option.when(dropCapWidths(font, frc, "A") != font.getStringBounds("A", frc).getWidth.toFloat)(
         "drop-cap-width"
       )
     val advances = Texts

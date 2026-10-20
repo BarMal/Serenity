@@ -17,6 +17,8 @@ import com.serenity.ui.renderer.FontFirstUse
   */
 object LegacyLineMeasurement:
 
+  private val lineExtents = FontLineExtents()
+
   def wrap(
     text: String,
     bufferLine: Int,
@@ -95,7 +97,8 @@ object LegacyLineMeasurement:
           }
       then caretStops
       else caretStops.sortBy(_.xPx)
-    val (heightPx, ascentPx) = if measuredLayout then resolver.lineMetrics(frc, startColumn, endColumn) else (0, 0)
+    val (heightPx, ascentPx) =
+      if measuredLayout then resolver.lineMetrics(frc, lineExtents, startColumn, endColumn) else (0, 0)
     TextVisualLine(
       bufferLine = bufferLine,
       startColumn = startColumn,

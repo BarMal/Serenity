@@ -9,6 +9,7 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
   CellMetrics,
   LayoutEngine,
+  LayoutMemos,
   TextLayoutSnapshot,
   ViewportSize,
   WorkspaceNode,
@@ -80,7 +81,9 @@ final class ColumnPagingFixture(
     */
   private val shaping = ShapedTextCache()
 
-  private def uncached: WrappedLineCache = WrappedLineCache.sharing(shaping)
+  private val memos = LayoutMemos()
+
+  private def uncached: WrappedLineCache = WrappedLineCache.measuring(shaping, memos)
 
   val widthPx: Int = TextLayoutSnapshot.gridWrapWidthPx(textColumns, fontConfig)
 

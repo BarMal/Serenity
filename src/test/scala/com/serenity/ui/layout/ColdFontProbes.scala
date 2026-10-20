@@ -15,6 +15,7 @@ private[serenity] object ColdFontProbes:
   private val AdvanceText = "Hoxi quick brown fox"
 
   private val shapedText = ShapedTextCache()
+  private val extents    = FontLineExtents()
 
   def glyphAdvances(font: Font, frc: FontRenderContext): (Boolean, Boolean, Boolean, Int) =
     val measured =
@@ -31,3 +32,5 @@ private[serenity] object ColdFontProbes:
 
   def measuredLayoutDecision(font: Font, frc: FontRenderContext): Boolean =
     TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc)
+
+  def lineExtents(font: Font, frc: FontRenderContext): FontLineExtents.Extent = extents.of(font, frc)

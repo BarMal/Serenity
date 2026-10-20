@@ -11,9 +11,11 @@ class DropCapGlyphSpec extends AnyFlatSpec with Matchers:
 
   private def glyphOf(text: String, lines: Int, proseScale: Float = 1.0f): Option[DropCapGlyph] =
     val document = RichTextDocument(List(RichTextParagraph.plain(text, role = ParagraphRole.dropCap(lines))))
-    DropCapGlyph.forParagraph(font, frc, Some(document), 0, ParagraphRole.dropCap(lines), proseScale)
+    DropCapGlyph.forParagraph(font, frc, Some(document), 0, ParagraphRole.dropCap(lines), proseScale, memos)
 
-  private def extent = FontLineExtents.of(font, frc)
+  private val memos = LayoutMemos()
+
+  private def extent = memos.lineExtents.of(font, frc)
 
   "DropCapGlyph.forParagraph" should "single out the paragraph's first character" in {
     val glyph = glyphOf("Quiet morning", 2).getOrElse(fail("expected a glyph"))
@@ -33,9 +35,9 @@ class DropCapGlyphSpec extends AnyFlatSpec with Matchers:
   it should "find no glyph for a paragraph that is not a drop cap, has no text, or has no document" in {
     val body = RichTextDocument(List(RichTextParagraph.plain("Quiet")))
 
-    DropCapGlyph.forParagraph(font, frc, Some(body), 0, ParagraphRole.Body, 1.0f) shouldBe None
+    DropCapGlyph.forParagraph(font, frc, Some(body), 0, ParagraphRole.Body, 1.0f, memos) shouldBe None
     glyphOf("", 2) shouldBe None
-    DropCapGlyph.forParagraph(font, frc, None, 0, ParagraphRole.dropCap(2), 1.0f) shouldBe None
+    DropCapGlyph.forParagraph(font, frc, None, 0, ParagraphRole.dropCap(2), 1.0f, memos) shouldBe None
   }
 
   it should "put the baseline on the last spanned line's, whatever the letter" in
@@ -88,10 +90,10 @@ class DropCapGlyphSpec extends AnyFlatSpec with Matchers:
     val glyph    = glyphOf("Tale", 2).getOrElse(fail("expected a glyph"))
 
     val reserved =
-      DropCapLayout.reserve(font, frc, Some(document), 0, ParagraphRole.dropCap(2), 1.0f, gapEm = 1.0f)
+      DropCapLayout.reserve(font, frc, Some(document), 0, ParagraphRole.dropCap(2), 1.0f, gapEm = 1.0f, memos = memos)
 
     reserved.indentPx shouldBe (inkRightOf(glyph).toFloat + 14.0f) +- 0.01f
     reserved.heightPx shouldBe glyph.heightPx
-    DropCapLayout.reserve(font, frc, Some(document), 0, ParagraphRole.Body, 1.0f, gapEm = 1.0f) shouldBe
+    DropCapLayout.reserve(font, frc, Some(document), 0, ParagraphRole.Body, 1.0f, gapEm = 1.0f, memos = memos) shouldBe
       DropCapLayout.Reserve.none
   }

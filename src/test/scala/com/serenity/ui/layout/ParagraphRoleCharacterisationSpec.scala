@@ -86,7 +86,8 @@ class ParagraphRoleCharacterisationSpec extends AnyFlatSpec with Matchers:
       lineIndex = 0,
       lineLength = prose.length,
       lineText = prose,
-      shapedText = ShapedTextCache()
+      shapedText = ShapedTextCache(),
+      memos = LayoutMemos()
     )
 
   "dropCapSplitFontSpans" should "single the first character out at the paragraph's start" in {
@@ -129,6 +130,7 @@ class ParagraphRoleCharacterisationSpec extends AnyFlatSpec with Matchers:
       theme = state.persisted.theme,
       glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
-      lineTopPx = 0
+      lineTopPx = 0,
+      memos = LayoutMemos()
     )
     surface.drawRunPxCalls.size
