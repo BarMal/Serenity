@@ -132,7 +132,8 @@ object RendererHighlights:
     theme: Theme,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
-    styledSegments: Option[List[StyledText]] = None
+    styledSegments: Option[List[StyledText]] = None,
+    fallback: Option[CellFallback] = None
   ): Unit =
     keywords.foreach { keyword =>
       columnsForRange(keyword.start, keyword.end, visualLine, markPoint = false).foreach {
@@ -149,7 +150,8 @@ object RendererHighlights:
             snapshot,
             keywordStart,
             keywordEnd,
-            styledSegments
+            styledSegments,
+            fallback = fallback
           )
       }
     }

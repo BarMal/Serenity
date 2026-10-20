@@ -399,7 +399,8 @@ object RendererPaneContent:
               state.persisted.theme,
               context,
               snapshot,
-              styledSegments
+              styledSegments,
+              fallback = cellFallback
             )
 
             RendererHighlights.renderFindMatchHighlights(
