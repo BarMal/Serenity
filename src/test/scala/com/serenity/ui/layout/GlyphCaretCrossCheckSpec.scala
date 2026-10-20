@@ -5,7 +5,6 @@ import java.awt.font.{TextAttribute, TextHitInfo, TextLayout}
 import java.text.AttributedString
 
 import com.serenity.ui.renderer.ShapedTextCache
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
