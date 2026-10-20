@@ -98,6 +98,14 @@ class GlyphAdvanceSpec extends AnyFlatSpec with Matchers with OptionValues:
     advance.table(font, frc) should be theSameInstanceAs table
   }
 
+  it should "fill the advances of a run of glyph codes in order" in {
+    val frc   = FontRenderContext(null, true, true)
+    val font  = Font(Font.SERIF, Font.PLAIN, 14)
+    val table = GlyphAdvance().table(font, frc)
+    val codes = font.createGlyphVector(frc, sample).getGlyphCodes(0, sample.length, null)
+    table.advancesOf(codes).toVector shouldBe codes.toVector.map(table.of)
+  }
+
   it should "keep each glyph's own advance where many glyphs share a slot" in {
     val frc   = FontRenderContext(null, true, true)
     val font  = Font(Font.SERIF, Font.PLAIN, 14)

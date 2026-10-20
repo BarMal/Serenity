@@ -59,6 +59,18 @@ object GlyphAdvance:
 
       probe(0)
 
+    def advancesOf(glyphCodes: Array[Int]): Array[Float] =
+      val advances = new Array[Float](glyphCodes.length)
+
+      @annotation.tailrec
+      def fill(glyph: Int): Array[Float] =
+        if glyph == glyphCodes.length then advances
+        else
+          advances(glyph) = of(glyphCodes(glyph))
+          fill(glyph + 1)
+
+      fill(0)
+
     private def remember(slot: Int, glyphCode: Int): Float =
       val advance = measure(glyphCode)
       slots.set(slot, (glyphCode.toLong << 32) | (java.lang.Float.floatToRawIntBits(advance) & 0xffffffffL))
