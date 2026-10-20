@@ -283,7 +283,8 @@ object TextLayoutSnapshot:
         dropCapGapEm,
         fallback = fallback
       )
-    val measuredLayout = LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText, wrapCache.shapedText.probes)
+    val measuredLayout =
+      LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText, wrapCache.shapedText.probes)
     // The non-measured (cell) path draws every row on `cellMetrics`' own grid (see `TextRowMetrics`'s non-measured
     // `lineTopPx`), so its line height/ascent must come from that same caller-supplied unit rather than the real
     // font's metrics -- otherwise a caller whose "pixel" is coarser or finer than the font's actual line height (TUI's
