@@ -61,9 +61,9 @@ jobs:
         shell: bash
         # Fails with a thread dump after 40 minutes instead of holding the runner for 6 hours on a hang.
         env:
-          HANG_SECONDS: '1140'
+          HANG_SECONDS: '600'
         run: |
-          export SBT_OPTS="$SBT_OPTS -XX:StartFlightRecording:filename=jvm-diag/rec.jfr,settings=profile,duration=1020s"
+          export SBT_OPTS="$SBT_OPTS -XX:StartFlightRecording:filename=jvm-diag/rec.jfr,settings=profile,duration=300s"
           bash .github/scripts/run-tests-with-hang-dump.sh sbt -v "testOnly com.serenity.state.manager.ColumnPagingNavigationSpec com.serenity.state.manager.KeepWithNextColumnPagingSpec com.serenity.state.manager.ColumnPixelPagingSpec"
 
       # The console log of a Windows/macOS run can drop the assertion text (see build.sbt's Test/testOptions), so the
