@@ -96,6 +96,9 @@ object EditorEventReducer:
       case ScrollLeft(columns) =>
         reduceHorizontalScroll(paneId, pane, currentState, geometry, columns, direction = -1, ColumnLeft)
 
+      case imeEvent: ImeEvent =>
+        ImeReducer.reduce(imeEvent, paneId, pane, currentState)
+
       case textEvent: TextEntryEvent =>
         reduceTextEvent(textEvent, paneId, pane, currentState, geometry)
 

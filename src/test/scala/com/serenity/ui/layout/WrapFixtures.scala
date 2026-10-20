@@ -7,6 +7,7 @@ import scala.util.Random
 
 import com.serenity.state.models.{MeasuredRow, TextVisualLine}
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.renderer.FontProbes
 import org.scalatest.Assertions
 
 /** Layouts, prose and edits for checking [[IncrementalWrap]] against the cold wrap. */
@@ -59,7 +60,7 @@ object WrapFixtures extends Assertions:
   /** The key the cache wraps `text` under in `layout` at `widthPx`. */
   def keyFor(text: String, layout: Layout, widthPx: Int, baseColumn: Int = 0): WrappedLineKey =
     val cellMetrics = layout.cellMetrics.getOrElse(CellMetrics.fromFont(layout.font))
-    val measured    = !layout.forceCellLayout && TextLayoutSnapshot.shouldUseMeasuredLayout(layout.font, frc)
+    val measured = !layout.forceCellLayout && TextLayoutSnapshot.shouldUseMeasuredLayout(layout.font, frc, FontProbes())
     WrappedLineKey(
       text,
       widthPx,

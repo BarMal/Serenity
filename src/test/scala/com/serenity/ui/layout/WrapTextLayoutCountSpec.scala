@@ -6,7 +6,7 @@ import java.awt.font.TextAttribute
 import scala.util.Random
 
 import com.serenity.state.models.TextVisualLine
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.ui.renderer.{FontProbes, ShapedTextCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -67,7 +67,7 @@ class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDriven
 
   "Wrapping kerned prose" should "build a constant number of exact measurements however many rows wrap" in
     forAll(kernedFonts) { font =>
-      TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc) shouldBe true
+      TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc, FontProbes()) shouldBe true
       wrap("warm up the font probes", 200, font)
       forAll(widths) { widthPx =>
         val (rows, built) = constructedWhile(kernedProse, widthPx, font)
