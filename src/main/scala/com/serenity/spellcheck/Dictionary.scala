@@ -72,6 +72,11 @@ final case class DictionaryContext(
     breaksAtHyphens: Boolean = true
 ):
 
+  /** The ideographic and syllabic scripts this dictionary has letters of, which are then checked rather than skipped.
+    */
+  lazy val declaredUncoveredScripts: Set[java.lang.Character.UnicodeScript] =
+    CheckableScripts.declaredBy(tryCharacters +: words.toList)
+
   /** Whether `word` (already `DictionaryWord.normalize`d) is a dictionary word or an affixed form of one. */
   def knows(word: String): Boolean = words.contains(word) || stems.exists(_.contains(word))
 
