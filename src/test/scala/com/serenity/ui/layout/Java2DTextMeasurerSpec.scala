@@ -7,7 +7,7 @@ import java.awt.{Font, RenderingHints}
 import com.serenity.richtext.ParagraphRole
 import com.serenity.ui.layout.TextCaretMeasurement.{ColumnFontRun, LineFontResolver}
 import com.serenity.ui.layout.TextMeasurer.{FontRun, LineFonts, LineMetrics, MetricsKey, ParagraphDirection}
-import com.serenity.ui.renderer.{FontSpec, ShapedTextCache}
+import com.serenity.ui.renderer.{FontProbes, FontSpec, ShapedTextCache}
 import org.scalacheck.Gen
 
 /** [[Java2DTextMeasurer]] keeps the measurer contract and answers every measurement bit for bit as the Java2D functions
@@ -132,7 +132,7 @@ class Java2DTextMeasurerSpec extends TextMeasurerContract:
   property("the measured-layout decision equals TextLayoutSnapshot.shouldUseMeasuredLayout") {
     forAll(Gen.oneOf(awtFonts), Gen.oneOf(oneX, twoX)) { (font, frc) =>
       Java2DTextMeasurer(frc).measuresProportionally(FontSpec.fromAwt(font)) shouldBe
-        TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc)
+        TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc, FontProbes())
     }
   }
 

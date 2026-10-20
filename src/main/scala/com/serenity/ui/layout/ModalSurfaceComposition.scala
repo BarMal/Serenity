@@ -40,7 +40,7 @@ object ModalSurfaceComposition:
       frameRect,
       SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity),
       state.persisted.config.inputConfig.focusedKeymapConfig.modal.bindings,
-      TextMeasure.forState(state)
+      TextMeasure.Cells
     )
 
   /** [[frameHeight]] for a frame `width` cells wide, as the app's own state sizes it. */
@@ -50,7 +50,7 @@ object ModalSurfaceComposition:
       SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity),
       width,
       state.persisted.config.inputConfig.focusedKeymapConfig.modal.bindings,
-      TextMeasure.forState(state)
+      TextMeasure.Cells
     )
 
   /** The minimum frame height needed to show a modal workflow at the requested density, in a frame `width` cells wide:

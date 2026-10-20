@@ -9,7 +9,7 @@ import com.serenity.richtext.ParagraphRole
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
-import com.serenity.ui.renderer.FontFirstUse
+import com.serenity.ui.renderer.{FontFirstUse, FontProbes}
 
 /** The wrap-and-measure algorithm as it stood before per-paragraph measurement: every row fitted by laying out a
   * candidate prefix with `TextLayout`, and every row's carets read back from a `TextLayout` of that row alone. Kept as
@@ -154,7 +154,7 @@ object LegacyLineMeasurement:
     else
       val fonts = (0 until text.length).map(index => resolver.fontAt(absoluteStartColumn + index)).distinct
       val bidi  = java.text.Bidi.requiresBidi(text.toCharArray, 0, text.length)
-      if !fonts.forall(GlyphAdvances.layoutAdvanceMatchesSum(_, frc)) || (bidi && fonts.length > 1) then
+      if !fonts.forall(GlyphAdvances.layoutAdvanceMatchesSum(_, frc, FontProbes())) || (bidi && fonts.length > 1) then
         RowEdges(textLayoutCaretXs(text, absoluteStartColumn, resolver, frc), None)
       else glyphEdges(text, absoluteStartColumn, resolver, frc, bidi)
 

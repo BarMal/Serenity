@@ -24,7 +24,8 @@ import com.serenity.state.models.{
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TextCaretMeasurement.*
 import com.serenity.ui.openings.{OpeningSettings, ParagraphRoles}
-import com.serenity.ui.renderer.{FontFirstUse, ShapedTextCache}
+import com.serenity.ui.renderer.FontProbes.Probe
+import com.serenity.ui.renderer.{FontFirstUse, FontProbes, ShapedTextCache}
 import com.serenity.ui.theme.HeadingSettings
 
 final case class TextLayoutSnapshot(
@@ -67,8 +68,6 @@ final case class TextLayoutSnapshot(
     navigationGeometry.moveVertical(cursor, direction, preferredXPx)
 
 object TextLayoutSnapshot:
-  final private case class MeasuredLayoutKey(font: Font, fontRenderContext: FontRenderContext)
-  private val measuredLayoutCache = java.util.concurrent.ConcurrentHashMap[MeasuredLayoutKey, java.lang.Boolean]()
 
   /** The pixel width text layout wraps at. The screen grid is the code font's cells whatever font a buffer draws with,
     * so scroll and navigation math must wrap at the grid width the renderer uses -- not the buffer font's own
@@ -93,7 +92,7 @@ object TextLayoutSnapshot:
     forceCellLayout: Boolean = false
   ): Vector[Float] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-    val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
+    val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext, shapedText.probes)
     val xs = caretXs(text, 0, singleFontResolver(font), fontRenderContext, measuredLayout, cellMetrics, shapedText)
     Vector.tabulate(xs.length)(xs(_))
 
@@ -108,7 +107,7 @@ object TextLayoutSnapshot:
     cellMetricsOverride: Option[CellMetrics] = None
   ): TextVisualLine =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-    val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
+    val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext, shapedText.probes)
     TextVisualLine(
       bufferLine,
       measureSegment(
@@ -141,7 +140,7 @@ object TextLayoutSnapshot:
     if lineText.isEmpty || visibleWidthPx <= 0 then 0
     else
       val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-      val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
+      val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext, shapedText.probes)
       val safeColumn     = cursorColumn.max(0).min(lineText.length)
       // A display-width-aware grid, or a line with a tab, takes the caret-stop path too: there a column is not a cell
       // count, so the uniform `column - visibleColumns + 1` arithmetic below would scroll wrong through a wide glyph.
@@ -172,8 +171,9 @@ object TextLayoutSnapshot:
   ): Int =
     if !wordWrapEnabled then 0
     else
-      val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-      val measuredLayout = LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText)
+      val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
+      val measuredLayout =
+        LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText, wrapCache.shapedText.probes)
       // At a wrap boundary (one row's endColumn == the next row's startColumn) both rows match the column, and the
       // cursor's own affinity settles it exactly as `NavigationGeometry.visualRowIndexFor` does -- so viewport centring
       // measures the cursor's visual row as the row the caret is actually drawn on.
@@ -210,8 +210,9 @@ object TextLayoutSnapshot:
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
     richText: RichTextContext = RichTextContext.plain
   ): Vector[TextVisualLine] =
-    val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-    val measuredLayout = LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText)
+    val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
+    val measuredLayout =
+      LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText, wrapCache.shapedText.probes)
     LineLayout.wrappedLine(
       text,
       bufferLine,
@@ -266,7 +267,8 @@ object TextLayoutSnapshot:
     val caps = richDocument.flatMap(wrapCache.virtualDropCaps(_, openings))
     val richText =
       RichTextContext(richDocument, proseScale, dropCapsEnabled, markdownInline, tabSize, headings, caps, dropCapGapEm)
-    val measuredLayout = LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText)
+    val measuredLayout =
+      LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText, wrapCache.shapedText.probes)
     // The non-measured (cell) path draws every row on `cellMetrics`' own grid (see `TextRowMetrics`'s non-measured
     // `lineTopPx`), so its line height/ascent must come from that same caller-supplied unit rather than the real
     // font's metrics -- otherwise a caller whose "pixel" is coarser or finer than the font's actual line height (TUI's
@@ -547,15 +549,13 @@ object TextLayoutSnapshot:
       ascentPx = ascentPx
     )
 
-  private[layout] def shouldUseMeasuredLayout(font: Font, frc: FontRenderContext): Boolean =
+  private[layout] def shouldUseMeasuredLayout(font: Font, frc: FontRenderContext, probes: FontProbes): Boolean =
     FontFirstUse.settle(font, frc)
-    measuredLayoutCache.computeIfAbsent(
-      MeasuredLayoutKey(font, logicalFontRenderContext(frc)),
-      key =>
-        (!FontLoader.isMonospacedFont(key.font) ||
-          FontLoader.ligaturesEnabled(key.font) ||
-          hasFractionalAdvanceDrift(key.font, key.fontRenderContext)): java.lang.Boolean
-    )
+    probes.measuredLayout(Probe(font, logicalFontRenderContext(frc))) { key =>
+      !FontLoader.isMonospacedFont(key.font) ||
+      FontLoader.ligaturesEnabled(key.font) ||
+      hasFractionalAdvanceDrift(key.font, key.frc)
+    }
 
   private def hasFractionalAdvanceDrift(font: Font, frc: FontRenderContext): Boolean =
     val sampleText = "iiiiiiiiiiii"

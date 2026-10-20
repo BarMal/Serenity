@@ -12,7 +12,7 @@ import com.serenity.ui.layout.TextCaretMeasurement.{
   resolverForLine,
   singleFontResolver
 }
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.ui.renderer.{FontProbes, ShapedTextCache}
 
 /** The line-level inputs of a wrap -- per-run fonts, drop cap role and the room its glyph reserves -- shared by the
   * painted layout and every row count so the two cannot disagree.
@@ -163,9 +163,11 @@ private[layout] object LineLayout:
     font: Font,
     frc: FontRenderContext,
     forceCellLayout: Boolean,
-    richText: RichTextContext
+    richText: RichTextContext,
+    probes: FontProbes
   ): Boolean =
-    !forceCellLayout && (richText.requiresMeasuredLayout || TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc))
+    !forceCellLayout &&
+      (richText.requiresMeasuredLayout || TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc, probes))
 
   /** `headingLevel` is the level of the heading the line is, whether its paragraph says so or its Markdown does. */
   final case class LineLayoutInputs(

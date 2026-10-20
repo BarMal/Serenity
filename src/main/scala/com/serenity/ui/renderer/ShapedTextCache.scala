@@ -22,6 +22,9 @@ final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.Default
   private val shapedN     = AtomicLong(0)
   private val exactN      = AtomicLong(0)
 
+  /** What the owner of this cache has read off the fonts it shapes: probed once per font, by whatever shapes for it. */
+  val probes: FontProbes = FontProbes()
+
   /** How many stretches were shaped, as opposed to served from the cache. */
   def shapings: Long = shapedN.get()
 
