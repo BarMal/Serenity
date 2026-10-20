@@ -11,6 +11,11 @@ on:
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
+    inputs:
+      jvm_opts:
+        description: Extra JVM options appended to SBT_OPTS for this run, for example -Xmx5g, to compare GC behaviour
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -53,9 +58,12 @@ jobs:
       # wall-clock time. Written outside target/ because `clean` deletes that directory.
       - name: Enable JVM stall diagnostics
         shell: bash
+        # The extra options come last, so an -Xmx there wins over the one in .jvmopts.
+        env:
+          EXTRA_JVM_OPTS: ${{ inputs.jvm_opts }}
         run: |
           mkdir -p jvm-diag
-          echo "SBT_OPTS=-Xlog:gc*,safepoint:file=jvm-diag/gc-safepoint.log:time,uptime,level,tags -Dserenity.test.stallLog=jvm-diag/stalls.log" >> "$GITHUB_ENV"
+          echo "SBT_OPTS=-Xlog:gc*,safepoint:file=jvm-diag/gc-safepoint.log:time,uptime,level,tags -Dserenity.test.stallLog=jvm-diag/stalls.log $EXTRA_JVM_OPTS" >> "$GITHUB_ENV"
 
       - name: Run tests
         shell: bash
