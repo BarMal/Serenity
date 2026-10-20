@@ -4,6 +4,7 @@ import com.serenity.keystroke.events.{EditorEvent, TextEntryEvent, VerticalNavig
 import com.serenity.state.manager.EditorGeometryProducer
 import com.serenity.state.models.{AppState, EditorGeometry, NavigationGeometry, PaneId}
 import com.serenity.state.reducers.{EditorEventReducer, ReducerResult}
+import com.serenity.ui.layout.WrappedLineCache
 
 /** Routes an editor event to the right reducer entry in tests: vertical navigation gets geometry built exactly the way
   * the effect boundary builds it, everything else goes straight to `reduce`. Lets specs keep dispatching the whole
@@ -11,13 +12,18 @@ import com.serenity.state.reducers.{EditorEventReducer, ReducerResult}
   */
 object VerticalNavSupport:
 
-  def dispatch(event: EditorEvent, paneId: PaneId, state: AppState)(using
+  def dispatch(
+    event: EditorEvent,
+    paneId: PaneId,
+    state: AppState,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  )(using
     balance: com.serenity.rope.Balance
   ): ReducerResult =
     event match
       case vertical: VerticalNavigationEvent =>
         val geometry = EditorGeometryProducer
-          .forPane(state, paneId)
+          .forPane(state, paneId, wrapCache = wrapCache)
           .getOrElse(EditorGeometry(NavigationGeometry(Vector.empty), charWidthPx = 8, panelWidthColumns = 80))
         EditorEventReducer.reduceVerticalNavigation(vertical, paneId, state, geometry)
       case textEvent: TextEntryEvent =>

@@ -10,6 +10,7 @@ import com.serenity.ui.layout.{
   CellMetrics,
   LayoutEngine,
   TextLayoutSnapshot,
+  WrappedLineCache,
   ViewportSize,
   WorkspaceNode,
   WorkspaceNodeId,
@@ -84,6 +85,9 @@ final class ColumnPagingFixture(
   /** The pixels the pane gives one column: its rows of the cell grid the pane is divided into. */
   val columnHeightPx: Int = rowsPerColumn * CellMetrics.fromFont(FontLoader.previewTextFont(fontConfig)).lineHeight
 
+  /** Kept across layouts as the running editor keeps its own, so a walk over a document measures each line once. */
+  val wrapCache: WrappedLineCache = WrappedLineCache.bounded()
+
   /** The columns of the page `viewport` anchors, laid out as the painter lays them out. */
   def columnsAt(viewport: Viewport, count: Int = columnCount, rows: Int = rowsPerColumn): Vector[TextLayoutSnapshot] =
     TextLayoutSnapshot.fromBufferColumns(
@@ -92,6 +96,7 @@ final class ColumnPagingFixture(
       font,
       proseScale = RichTextStyling.proseZoom(font.getSize2D),
       columnCount = count,
+      wrapCache = wrapCache,
       headings = state.persisted.config.headingSettings
     )
 
@@ -103,7 +108,7 @@ final class ColumnPagingFixture(
     val cursor = CursorPosition(id._1, id._2)
     from.copy(
       editing = EditingState(List(cursor)),
-      viewport = CursorViewport.adjustForCursorColumnMode(from, state, cursor)
+      viewport = CursorViewport.adjustForCursorColumnMode(from, state, cursor, wrapCache)
     )
 
   /** The pages the cursor can anchor, in document order, each placed from a cold viewport. */
