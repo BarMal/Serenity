@@ -33,6 +33,9 @@ object TerminalInputDecoder:
     final case class Mouse(event: MouseInputEvent) extends DecodedToken
     final case class Pasted(text: String)          extends DecodedToken
 
+    /** A typed code point outside the BMP, which no [[KeyStrokeInfo]] can carry (it holds one UTF-16 `Char`). */
+    final case class Text(text: String) extends DecodedToken
+
     /** One wheel notch at the pointer's (0-based) cell. How far a notch scrolls is a setting
       * (`InputConfig.wheelScrollLines`), and this decoder is pure over bytes with no configuration to consult, so it
       * reports the notch and leaves the distance to [[TerminalInputHandler]].
@@ -360,6 +363,7 @@ object TerminalInputDecoder:
             namedCsiUKey(code, modifiers)
               .orElse(csiUChar(code).map(ch => (InputKey.Character, Some(ch), modifiers)))
               .map { case (key, ch, mods) => DecodedToken.Key(KeyStrokeInfo(key, ch, mods)) }
+              .orElse(csiUAstral(code, modifiers))
               .toList
 
   /** modifier value is `1 + bitmask`; `super`(0b1000)/`hyper`(0b10000)/`caps_lock`(0b1000000)/`num_lock`(0b10000000)
@@ -388,10 +392,18 @@ object TerminalInputDecoder:
       case 27                                      => Some((InputKey.Escape, None, modifiers))
       case _                                       => None
 
-  /** A codepoint outside the BMP can't be represented as one UTF-16 `Char` (same constraint [[decodeUtf8Char]]
-    * documents for the legacy path); other non-printable codepoints (C0/C1 controls not covered by [[namedCsiUKey]])
-    * have no keystroke to report either. U+FFFF and U+FFFE are Unicode noncharacters -- permanently reserved, never
-    * valid text -- so they are rejected here rather than inserted as glyphs.
+  private def csiUAstral(code: Int, modifiers: Set[Modifier]): Option[DecodedToken] =
+    Option.when(Character.isSupplementaryCodePoint(code) && isTextModifiers(modifiers))(
+      DecodedToken.Text(new String(Character.toChars(code)))
+    )
+
+  private def isTextModifiers(modifiers: Set[Modifier]): Boolean =
+    modifiers.subsetOf(Set(Modifier.Shift, Modifier.Alt))
+
+  /** A codepoint outside the BMP can't be represented as one UTF-16 `Char`; [[csiUAstral]] reports it as text. Other
+    * non-printable codepoints (C0/C1 controls not covered by [[namedCsiUKey]]) have no keystroke to report either.
+    * U+FFFF and U+FFFE are Unicode noncharacters -- permanently reserved, never valid text -- so they are rejected here
+    * rather than inserted as glyphs.
     */
   private def csiUChar(code: Int): Option[Char] =
     Option.when(code >= 0x20 && code < 0x110000 && Character.charCount(code) == 1 && code != 0xffff && code != 0xfffe)(
@@ -555,13 +567,15 @@ object TerminalInputDecoder:
     if i + length > bytes.length then Step.Incomplete
     else
       val decoded = new String(bytes, i, length, StandardCharsets.UTF_8)
-      // A Char is UTF-16 code-unit-wide, same as AWT's KeyEvent#getKeyChar; codepoints outside the BMP (4-byte
-      // UTF-8 sequences) can't be represented as one and are dropped rather than emitting a bogus surrogate half.
+      // A Char is UTF-16 code-unit-wide, same as AWT's KeyEvent#getKeyChar, so a code point outside the BMP (a 4-byte
+      // UTF-8 sequence) travels as a Text token instead of a KeyStrokeInfo; an invalid sequence is dropped.
       // U+FFFF and U+FFFE are Unicode noncharacters -- permanently reserved, never valid text -- so they are
       // dropped rather than inserted as glyphs (belt-and-suspenders: the handler boundary already translates the
       // JLine/Windows 0xFFFF Backspace quirk to 0x7F before it reaches the decoder).
       val ch = decoded.charAt(0)
-      if decoded.length == 1 && ch.toInt != 0xffff && ch.toInt != 0xfffe then
+      if decoded.length == 2 && Character.isSurrogatePair(ch, decoded.charAt(1)) then
+        Step.Complete(List(DecodedToken.Text(decoded)), i + length)
+      else if decoded.length == 1 && ch.toInt != 0xffff && ch.toInt != 0xfffe then
         Step.Complete(
           List(DecodedToken.Key(KeyStrokeInfo(InputKey.Character, Some(decoded.charAt(0)), Set.empty))),
           i + length
