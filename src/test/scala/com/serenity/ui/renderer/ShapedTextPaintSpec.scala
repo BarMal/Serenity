@@ -274,15 +274,21 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
       carets.last shouldBe stretch.advance +- 0.01f
     }
 
+  // The platform's faces form whatever ligatures their fonts and the platform's shaper give them -- none for a
+  // monospace face, and none for Windows' serif -- so only the bundled face is required to ligate.
   it should "divide a ligature's span evenly between the characters it stands for" in
-    List("platform serif" -> font, "ligatured Inter" -> ligaturedInter).foreach {
-      case (name, face) =>
+    List(
+      ("platform serif", font, false),
+      ("platform monospace", kerned(new Font(Font.MONOSPACED, Font.PLAIN, 14)), false),
+      ("ligatured Inter", ligaturedInter, true)
+    ).foreach {
+      case (name, face, mustLigate) =>
         val text              = "office waffle ffl fi -> => AV"
         val (stretch, carets) = stretchAndCarets(text, face)
         val glyphStarts       = (0 until stretch.glyphCount).map(stretch.charIndexAt)
         val ligatures = glyphStarts.zip(glyphStarts.drop(1) :+ text.length).filter((from, until) => until - from > 1)
 
-        withClue(s"$name: ")(ligatures should not be empty)
+        if mustLigate then withClue(s"$name: ")(ligatures should not be empty)
         ligatures.foreach { (from, until) =>
           val startX = stretch.leftEdgeOf(from).getOrElse(Float.NaN)
           val endX   = stretch.leftEdgeOf(until).getOrElse(stretch.advance)
@@ -324,6 +330,26 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
     glyphX should not be 0.0f
     inkOf(expected) should be > 0
     differingPixels(actual, expected).take(6) shouldBe Nil
+  }
+
+  it should "sit at the leading edge of the glyph in a right-to-left run, and at the glyph's x in a left-to-right one" in {
+    val text = "AVAWAY To \u05e9\u05dc\u05d5\u05dd \u05e2\u05d5\u05dc\u05dd WWWW \u0645\u0631\u062d\u0628\u0627 Ty"
+    val (stretch, carets) = stretchAndCarets(text, font)
+    val glyphs            = stretch.glyphsOf(0, text.length).getOrElse(fail("no glyphs"))
+    val bidi              = java.text.Bidi(text, java.text.Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT)
+
+    bidi.isMixed shouldBe true
+    graphemeStarts(text).foreach { column =>
+      val own = (0 until stretch.glyphCount).filter(stretch.charIndexAt(_) == column)
+      withClue(s"column $column: ") {
+        own should not be empty
+        val expected =
+          if bidi.getLevelAt(column) % 2 == 1 then
+            own.map(glyph => stretch.xAt(glyph) + glyphs.getGlyphMetrics(glyph).getAdvance).max
+          else own.map(stretch.xAt).min
+        carets(column) shouldBe expected +- 0.01f
+      }
+    }
   }
 
   "A plain font over simple text" should "draw with drawString, which shapes nothing there, and leave the cache alone" in {

@@ -74,7 +74,12 @@ final case class RichTextParagraph(
 
   /** True when a block atom shares its paragraph with other content, which an edit must never produce. */
   def hasMixedBlock: Boolean =
-    runs.sizeIs > 1 && runs.exists(_.atom.exists(_.isInstanceOf[InlineAtom.Block]))
+    runs.sizeIs > 1 && runs.exists(_.atom.exists(isBlock))
+
+  private def isBlock(atom: InlineAtom): Boolean =
+    atom match
+      case _: InlineAtom.Block => true
+      case _                   => false
 
   /** A heading paragraph with visible text: what a document outline lists. */
   lazy val isOutlineHeading: Boolean =

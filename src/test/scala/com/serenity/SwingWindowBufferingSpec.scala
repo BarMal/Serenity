@@ -2,7 +2,7 @@ package com.serenity
 
 import java.awt.image.BufferedImage
 import java.awt.{Component, GraphicsEnvironment, Image}
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import javax.swing.{JPanel, RepaintManager, SwingUtilities}
 
 import cats.effect.IO
@@ -17,15 +17,22 @@ import org.scalatest.matchers.should.Matchers
   */
 class SwingWindowBufferingSpec extends AnyFlatSpec with Matchers:
 
-  final private class CountingRepaintManager extends RepaintManager:
+  /** The current `RepaintManager` is JVM-wide, so while it is installed any other spec that paints a component, and any
+    * part of the window beside the canvas, asks it for buffers too. Only a request for the canvas or one of its
+    * ancestors says how the canvas was presented, so only those are counted.
+    */
+  final private class CountingRepaintManager(presents: Component => Boolean) extends RepaintManager:
     val buffersRequested = new AtomicInteger(0)
 
+    def noteRequest(c: Component): Unit =
+      if presents(c) then buffersRequested.incrementAndGet(): Unit
+
     override def getOffscreenBuffer(c: Component, proposedWidth: Int, proposedHeight: Int): Image =
-      val _ = buffersRequested.incrementAndGet()
+      noteRequest(c)
       super.getOffscreenBuffer(c, proposedWidth, proposedHeight)
 
     override def getVolatileOffscreenBuffer(c: Component, proposedWidth: Int, proposedHeight: Int): Image =
-      val _ = buffersRequested.incrementAndGet()
+      noteRequest(c)
       super.getVolatileOffscreenBuffer(c, proposedWidth, proposedHeight)
 
   private def onEventThread(action: => Unit): Unit = SwingUtilities.invokeAndWait(() => action)
@@ -34,7 +41,8 @@ class SwingWindowBufferingSpec extends AnyFlatSpec with Matchers:
     assume(!GraphicsEnvironment.isHeadless, "Painting through RepaintManager needs a display")
 
     DisplayExclusive {
-      val counting = new CountingRepaintManager
+      val canvasUnderTest = new AtomicReference[Option[Component]](None)
+      val counting = new CountingRepaintManager(c => canvasUnderTest.get.exists(SwingUtilities.isDescendingFrom(_, c)))
       val previous = RepaintManager.currentManager(new JPanel)
       RepaintManager.setCurrentManager(counting)
       try
@@ -43,6 +51,7 @@ class SwingWindowBufferingSpec extends AnyFlatSpec with Matchers:
           .use { window =>
             IO.blocking {
               val canvas = window.canvas
+              canvasUnderTest.set(Some(canvas))
               onEventThread(())
               canvas.isShowing shouldBe true
 
@@ -63,4 +72,16 @@ class SwingWindowBufferingSpec extends AnyFlatSpec with Matchers:
           .unsafeRunSync()
       finally RepaintManager.setCurrentManager(previous)
     }
+  }
+
+  it should "not count buffers requested for components outside the canvas's hierarchy" in {
+    val canvas   = new JPanel
+    val sibling  = new JPanel
+    val counting = new CountingRepaintManager(SwingUtilities.isDescendingFrom(canvas, _))
+
+    val _ = counting.noteRequest(sibling)
+    counting.buffersRequested.get() shouldBe 0
+
+    val _ = counting.noteRequest(canvas)
+    counting.buffersRequested.get() shouldBe 1
   }

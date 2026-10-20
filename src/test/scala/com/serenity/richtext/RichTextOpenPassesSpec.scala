@@ -22,13 +22,17 @@ class RichTextOpenPassesSpec extends AnyFlatSpec with Matchers with EitherValues
 
     val steps: RichTextDecodeSteps = RichTextDecodeSteps(readArchive, parseBody)
 
-    private def readArchive(bytes: Array[Byte], format: String, wanted: Set[String]): ArchiveContents =
+    private def readArchive(
+      bytes: Array[Byte],
+      format: String,
+      wanted: Set[String]
+    ): Either[RichTextCodecException, ArchiveContents] =
       archiveReads.incrementAndGet()
       RichTextArchive.read(bytes, format, wanted)
 
-    private def parseBody(bytes: Array[Byte]) =
+    private def parseBody(bytes: Array[Byte], format: String) =
       bodyParses.incrementAndGet()
-      RichTextXmlParser.parse(bytes)
+      RichTextXmlParser.parse(bytes, format)
 
   "Decoding a DOCX with fidelity" should "scan the archive once and parse document.xml once" in {
     val counting = CountingSteps()
@@ -58,7 +62,7 @@ class RichTextOpenPassesSpec extends AnyFlatSpec with Matchers with EitherValues
   }
 
   "The archive reader" should "return every entry name and only the wanted entries' bytes" in {
-    val archive = RichTextArchive.read(DocxDocumentCodec.writeBytes(source), "DOCX", Set("word/document.xml"))
+    val archive = RichTextArchive.read(DocxDocumentCodec.writeBytes(source), "DOCX", Set("word/document.xml")).value
 
     archive.entryNames should contain allOf ("[Content_Types].xml", "word/document.xml", "word/_rels/document.xml.rels")
     archive.entries.keySet shouldBe Set("word/document.xml")

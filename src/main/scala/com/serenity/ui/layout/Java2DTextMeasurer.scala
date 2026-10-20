@@ -53,6 +53,13 @@ final case class Java2DTextMeasurer(frc: FontRenderContext) extends TextMeasurer
     if text.isEmpty then IArray(0.0f)
     else ExactCaretXs.layoutCaretXs(text, startColumn, resolverFor(fonts), frc)
 
+  override def exactEdges(text: String, startColumn: Int, fonts: LineFonts): IArray[Float] =
+    if text.isEmpty then IArray(0.0f)
+    else
+      val resolver = resolverFor(fonts)
+      val stops    = ExactCaretXs.layoutStops(text, startColumn, resolver, frc)
+      stops.trailing.getOrElse(TextCaretMeasurement.normalizeCollapsedCarets(stops.carets, resolver, startColumn))
+
   def shapingCutAtOrAfter(text: String, from: Int, font: FontSpec): Int =
     ShapingBarriers.cutAtOrAfter(text, from, font.toAwt, frc)
 

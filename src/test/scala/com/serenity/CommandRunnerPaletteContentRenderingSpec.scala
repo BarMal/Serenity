@@ -173,11 +173,11 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       .updateSearchTerm("open")(using registry)
     val content = (1 to 60).map(i => s"line $i").mkString("\n")
 
-    def overlayFor(cursor: CursorPosition): (LayoutRect, LayoutRect) =
+    def overlayFor(cursor: CursorPosition): (LayoutRect, LayoutRect, Int) =
       val buffer = Buffer
         .fromString(bufferId, content)
         .copy(editing = EditingState(List(cursor)))
-      val initialState = AppState.initial(AppConfig.conventional)
+      val initialState = AppState.initial(AppConfig.conventional.withFontConfig(MeasuredRows.driftingFontConfig))
       val state = initialState.copy(
         persisted = initialState.persisted.copy(
           buffers = Map(bufferId -> buffer),
@@ -200,15 +200,20 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       val paneRect = LayoutEngine
         .calculatePaneLayouts(state, layout)
         .getOrElse(paneId, fail("Expected pane layout"))
+      val caretRow =
+        MeasuredRows.caretRow(state, layout, paneId, cursor).getOrElse(fail("Expected the cursor to be painted"))
 
-      layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay")) ->
-        CursorLayout.contentRectForPane(paneRect)
+      (
+        layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay")),
+        CursorLayout.contentRectForPane(paneRect),
+        caretRow
+      )
 
-    val (topOverlay, topContentRect)     = overlayFor(CursorPosition(0, 0))
-    val (lowerOverlay, lowerContentRect) = overlayFor(CursorPosition(20, 0))
+    val (topOverlay, _, topCaretRow)                    = overlayFor(CursorPosition(0, 0))
+    val (lowerOverlay, lowerContentRect, lowerCaretRow) = overlayFor(CursorPosition(20, 0))
 
-    topOverlay.y shouldBe topContentRect.y + 2
-    lowerOverlay.y shouldBe lowerContentRect.y + 22
+    topOverlay.y shouldBe topCaretRow + 2
+    lowerOverlay.y shouldBe lowerCaretRow + 2
     lowerOverlay.y should be > topOverlay.y
     // Horizontally centered on screen, not cursor-anchored (bug fix): both cursors sit at column 0, but the palette's
     // x position depends only on the content rect's width, not the cursor's row.

@@ -126,6 +126,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
 
     val documentXml = RichTextArchive
       .zipEntry(DocxDocumentCodec.writeBytes(source), "word/document.xml", "DOCX")
+      .value
       .map(new String(_, java.nio.charset.StandardCharsets.UTF_8))
       .getOrElse(fail("word/document.xml missing from written DOCX archive"))
 

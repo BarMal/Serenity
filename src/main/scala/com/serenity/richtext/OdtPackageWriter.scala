@@ -17,7 +17,7 @@ private[richtext] object OdtPackageWriter:
   final private case class NewParagraphStyle(style: OdtParagraphStyle, parent: Option[String])
   final private case class NewTextStyle(style: RichTextStyle, parent: Option[String])
 
-  def rewrite(document: RichTextDocument, source: DocumentSource): Array[Byte] =
+  def rewrite(document: RichTextDocument, source: DocumentSource): Either[RichTextCodecException, Array[Byte]] =
     val paragraphs = document.paragraphs
     val plan       = source.body.fold(BodyPlanner.planWithoutSlices(paragraphs))(BodyPlanner.plan(paragraphs, _))
     val rewritten  = plan.collect { case PlannedBlock.Rewrite(paragraph, _) => paragraph }.toList

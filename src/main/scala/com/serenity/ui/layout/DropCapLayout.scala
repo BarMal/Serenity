@@ -53,6 +53,21 @@ object DropCapLayout:
     if row.text.isEmpty then 0.0f
     else row.xForColumn(row.startColumn + Character.charCount(row.text.codePointAt(0))).getOrElse(0.0f)
 
+  /** [[replacedCharacterWidthPx]] before the row exists: the width `text`'s first character measures, which the home
+    * row's wrap gives back so the text it does draw has the room the other spanned rows have.
+    */
+  private[layout] def replacedCharacterWidthPx(
+    text: String,
+    baseColumn: Int,
+    resolver: TextCaretMeasurement.LineFontResolver,
+    frc: FontRenderContext
+  ): Float =
+    if text.isEmpty then 0.0f
+    else
+      val carets =
+        ExactCaretXs.layoutCaretXs(text.take(Character.charCount(text.codePointAt(0))), baseColumn, resolver, frc)
+      carets(carets.length - 1)
+
   /** A cached row read onto `bufferLine`. The drop cap indent is the only offset the row carries until alignment. The
     * home row, which does not draw its first character (the glyph is drawn in its place), gives the width of that
     * character back, so the text it does draw starts at the indent like every other spanned row; its caret stops keep
