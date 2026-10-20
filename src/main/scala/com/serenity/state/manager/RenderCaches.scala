@@ -60,7 +60,7 @@ object RenderCaches:
     */
   def create(rendererFrameStateCacheCapacity: Int = 64): RenderCaches =
     val shapedText   = ShapedTextCache()
-    val wrappedLines = WrappedLineCache.bounded(shapedText = shapedText)
+    val wrappedLines = WrappedLineCache.sharing(shapedText)
     new RenderCaches(
       RendererFrameState(rendererFrameStateCacheCapacity),
       ThemeHighlightCache(),

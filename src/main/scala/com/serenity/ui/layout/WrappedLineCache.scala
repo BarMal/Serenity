@@ -196,12 +196,11 @@ object WrappedLineCache:
     def virtualDropCaps(document: RichTextDocument, settings: OpeningSettings): Option[VirtualDropCaps] =
       VirtualDropCaps.of(settings, document)
 
-  def bounded(
-    maxLines: Int = DefaultMaxLines,
-    maxChars: Long = DefaultMaxChars,
-    shapedText: ShapedTextCache = ShapedTextCache()
-  ): Bounded =
-    new Bounded(math.max(1, maxLines), math.max(1L, maxChars), shapedText)
+  def bounded(maxLines: Int = DefaultMaxLines, maxChars: Long = DefaultMaxChars): Bounded =
+    new Bounded(math.max(1, maxLines), math.max(1L, maxChars), ShapedTextCache())
+
+  /** A default-sized cache whose wraps measure through `shapedText`, which the painter of the same owner must share. */
+  def sharing(shapedText: ShapedTextCache): Bounded = new Bounded(DefaultMaxLines, DefaultMaxChars, shapedText)
 
   final private case class TableColumnsEntry(
       content: Rope,

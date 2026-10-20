@@ -450,7 +450,11 @@ object TextLayoutSnapshot:
     shapedText: ShapedTextCache
   ): WrappedRow =
     import spec.{baseColumn, cellMetrics, dropCapIndentPx, frc, measuredLayout, paragraphRole, resolver, text}
-    val insetPx          = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapIndentPx)
+    val spanInsetPx = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapIndentPx)
+    val insetPx =
+      if DropCapLayout.isHomeRow(paragraphRole, lineWithinParagraph, baseColumn + startColumn) then
+        (spanInsetPx - DropCapLayout.replacedCharacterWidthPx(text, baseColumn, resolver, frc)).max(0.0f)
+      else spanInsetPx
     val wrapWidthPx      = math.max(1, spec.panelWidthPx - math.round(insetPx))
     val segmentStart     = baseColumn + startColumn
     val fit              = fittingSegment(paragraph, text, startColumn, wrapWidthPx, segmentStart, spec)
