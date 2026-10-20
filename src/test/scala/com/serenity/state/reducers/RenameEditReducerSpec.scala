@@ -141,3 +141,19 @@ class RenameEditReducerSpec extends AnyFlatSpec with Matchers:
       "Rename not applied: 1 file(s) have overlapping edits (" + secondPath.getFileName + ")."
     )
   }
+
+  it should "record an undo step for an open buffer that no pane shows" in {
+    val base   = stateWithTwoBuffers("val old = 1", "def f = old")
+    val layout = base.persisted.layout
+    val before =
+      base.copy(persisted = base.persisted.copy(layout = layout.copy(editorPanes = layout.editorPanes - PaneId(1))))
+    val edits = Map(secondUri -> List(LspTextEdit(LspRange(LspPosition(0, 8), LspPosition(0, 11)), "renamed")))
+
+    val result = RenameEditReducer.apply(edits, anchor, before)
+
+    result.state.persisted.buffers(secondId).document.content.collect() shouldBe "def f = renamed"
+    result.effects.collect {
+      case AppEffect.Undo(UndoEffect.RecordBoundary(entry: HistoryEntry.DetachedBufferEdit, _)) =>
+        entry.bufferId
+    } shouldBe List(secondId)
+  }

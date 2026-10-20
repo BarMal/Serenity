@@ -5,8 +5,8 @@ import com.serenity.state.models.*
 import com.serenity.state.undo.EditGrouping
 
 /** Applies a server's `workspace/applyEdit` (#1847) to every open buffer whose document uri the edit names. Each
-  * buffer's edits are recorded as one undo step, in a pane that shows the buffer; a buffer shown in no pane is edited
-  * without one, as there is no pane to restore the cursor into.
+  * buffer's edits are recorded as one undo step: in a pane that shows the buffer, or, for a buffer shown in no pane, as
+  * a [[HistoryEntry.DetachedBufferEdit]] that brings the cursors back with the text (#1965).
   */
 object WorkspaceEditReducer:
 
@@ -61,11 +61,13 @@ object WorkspaceEditReducer:
     val initialOffsets =
       buffer.editing.cursorPositions.map(cursor => content.lineColumnToOffset(cursor.line, cursor.column))
     val (updatedBuffer, appliedEdits) = EditorEditSupport.applyTrackedEdits(buffer, initialOffsets, multiCursorEdits)
-    val undoEffects = state.persisted.layout.editorPanes
-      .collectFirst { case (paneId, pane) if pane.bufferId.contains(buffer.id) => paneId }
-      .toList
-      .flatMap(paneId =>
-        EditorEditSupport
-          .undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, grouping = EditGrouping.Standalone)
-      )
+    val shownIn = state.persisted.layout.editorPanes.collectFirst {
+      case (paneId, pane) if pane.bufferId.contains(buffer.id) => paneId
+    }
+    val undoEffects = shownIn.fold(
+      EditorEditSupport.detachedUndoBoundaryEffects(buffer, appliedEdits)
+    )(paneId =>
+      EditorEditSupport
+        .undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, grouping = EditGrouping.Standalone)
+    )
     (Focused.replaceBuffer(state, updatedBuffer), undoEffects, appliedEdits.length)
