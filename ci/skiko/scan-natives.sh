@@ -28,7 +28,7 @@ for target in "${targets[@]}"; do
   name="skiko-awt-runtime-$target"
   expected+=("$name-$NATIVES_VERSION.jar")
 done
-while IFS= read -r jar; do found+=("$(basename "$jar")"); done < <(find "$repo" -name 'skiko-awt-runtime-*.jar' | sort)
+while IFS= read -r jar; do found+=("$(basename "$jar")"); done < <(find "$repo" -name "skiko-awt-runtime-*-$NATIVES_VERSION.jar" | sort)
 if [ "$(printf '%s\n' "${found[@]:-}" | sort | tr '\n' ' ')" != "$(printf '%s\n' "${expected[@]}" | sort | tr '\n' ' ')" ]; then
   echo "expected jars: ${expected[*]}" >&2
   echo "found jars:    ${found[*]:-none}" >&2
@@ -51,6 +51,6 @@ echo "::endgroup::"
 
 echo "::group::The libraries built here must have none"
 jars=()
-while IFS= read -r jar; do jars+=("$jar"); done < <(find "$repo" -name 'skiko-awt-runtime-*.jar' | sort)
+while IFS= read -r jar; do jars+=("$jar"); done < <(find "$repo" -name "skiko-awt-runtime-*-$NATIVES_VERSION.jar" | sort)
 python3 "$root/scripts/check_no_dng.py" "${jars[@]}"
 echo "::endgroup::"
