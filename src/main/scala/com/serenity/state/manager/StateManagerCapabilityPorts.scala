@@ -27,6 +27,11 @@ private[manager] trait EffectRuntimePort:
   def deviceTextScaleProvider: IO[Double]
   def configPersistencePath: Option[Path]
 
+  /** Ends the input method's composition on the platform's side. Only a windowed session has one; the default is the
+    * terminal's, which has no input-method context to end.
+    */
+  def endInputMethodComposition: IO[Unit] = IO.unit
+
   /** The config the config file is believed to hold, when this session keeps one and it was just read. */
   def configOnDisk: Option[AppConfig] = None
   def uiPresetStore: UiPresetStore

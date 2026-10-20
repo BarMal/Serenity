@@ -2,7 +2,6 @@ package com.serenity.ui.layout
 
 import java.awt.Font
 import java.awt.image.BufferedImage
-import java.util.concurrent.ConcurrentHashMap
 
 import com.serenity.config.AppMode
 import com.serenity.state.models.{AppState, TypographyRole}
@@ -13,10 +12,7 @@ import com.serenity.ui.renderer.FontFirstUse
 /** The prose measure as a width on the editor grid, whose cells are the code font's whatever font a buffer draws in. */
 object ProseColumn:
 
-  final private case class GlyphWidths(chPx: Double, gridCellPx: Int)
-
-  // Layout runs many times a frame; measuring fonts is AWT work, and only a font change alters the answer.
-  private val glyphWidthsByFont = ConcurrentHashMap[FontConfig, GlyphWidths]()
+  final private[layout] case class GlyphWidths(chPx: Double, gridCellPx: Int)
 
   /** Grid cells a `measure`-character column needs, where a character is the prose font's `0` advance -- CSS's `ch`.
     */
@@ -29,7 +25,7 @@ object ProseColumn:
     config.surfaceConfig.proseMeasure.filter(_ => config.appMode == AppMode.Prose).map { measure =>
       if state.runtime.capabilities.isCellGrid then measure
       else
-        val widths = glyphWidths(config.editorConfig.fontConfig)
+        val widths = glyphWidths(config.editorConfig.fontConfig, state.runtime.proseGlyphWidths)
         cells(measure, widths.chPx, widths.gridCellPx)
     }
 
@@ -43,14 +39,12 @@ object ProseColumn:
       (insetLeft.max(spareLeft), insetRight.max(spare - spareLeft))
     }
 
-  private def glyphWidths(fontConfig: FontConfig): GlyphWidths =
-    glyphWidthsByFont.computeIfAbsent(
-      fontConfig,
-      (config: FontConfig) =>
-        GlyphWidths(
-          chPx = chAdvancePx(FontLoader.previewTextFont(config)),
-          gridCellPx = CellMetrics.fromFont(FontLoader.previewFontForRole(config, TypographyRole.Code)).charWidth
-        )
+  private def glyphWidths(config: FontConfig, kept: ProseGlyphWidths): GlyphWidths =
+    kept.of(config)(
+      GlyphWidths(
+        chPx = chAdvancePx(FontLoader.previewTextFont(config)),
+        gridCellPx = CellMetrics.fromFont(FontLoader.previewFontForRole(config, TypographyRole.Code)).charWidth
+      )
     )
 
   /** Measured the way [[CellMetrics.fromFont]] measures the grid cell, so the two widths share a rendering context. */

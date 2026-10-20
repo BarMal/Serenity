@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Font
 import java.awt.font.FontRenderContext
 import java.awt.geom.AffineTransform
+import java.util.concurrent.{Callable, Executors}
 
 import com.serenity.ui.layout.BundledInterFont
 import org.scalatest.OptionValues
@@ -77,9 +78,87 @@ class GlyphAdvanceSpec extends AnyFlatSpec with Matchers with OptionValues:
   "A glyph advance cache" should "measure a glyph once and forget nothing below its bound" in {
     val frc     = FontRenderContext(null, true, true)
     val font    = Font(Font.SERIF, Font.PLAIN, 14)
-    val advance = GlyphAdvance(maxEntries = 8)
+    val advance = GlyphAdvance(maxTables = 8)
     val code    = font.createGlyphVector(frc, "a").getGlyphCode(0)
     val first   = advance.of(font, frc, code)
     advance.of(font, frc, code) shouldBe first
     advance.measurements shouldBe 1L
+  }
+
+  "A table of one font's advances" should "answer each glyph as the advance cache does and measure it once" in {
+    val frc     = FontRenderContext(null, true, true)
+    val font    = Font(Font.SERIF, Font.PLAIN, 14)
+    val advance = GlyphAdvance()
+    val table   = advance.table(font, frc)
+    val codes   = font.createGlyphVector(frc, sample).getGlyphCodes(0, sample.length, null).toVector
+    codes.foreach(code => table.of(code) shouldBe GlyphAdvance().of(font, frc, code))
+    val measured = advance.measurements
+    codes.foreach(table.of)
+    advance.measurements shouldBe measured
+    advance.table(font, frc) should be theSameInstanceAs table
+  }
+
+  it should "fill the advances of a run of glyph codes in order" in {
+    val frc   = FontRenderContext(null, true, true)
+    val font  = Font(Font.SERIF, Font.PLAIN, 14)
+    val table = GlyphAdvance().table(font, frc)
+    val codes = font.createGlyphVector(frc, sample).getGlyphCodes(0, sample.length, null)
+    table.advancesOf(codes).toVector shouldBe codes.toVector.map(table.of)
+  }
+
+  for (faceName, face) <- faces do
+    it should s"read glyph codes far above 255 as $faceName's glyph metrics report them" in {
+      val frc    = FontRenderContext(null, true, true)
+      val count  = face.getNumGlyphs
+      val codes  = (List(256, 1000, 4096, 40000, 65534) ++ (count - 40 until count)).filter(_ < count).distinct.toArray
+      val table  = GlyphAdvance().table(face, frc)
+      val glyphs = face.createGlyphVector(frc, codes)
+      codes.indices.foreach { index =>
+        withClue(s"glyph code ${codes(index)}: ")(
+          table.of(codes(index)) shouldBe glyphs.getGlyphMetrics(index).getAdvance
+        )
+      }
+    }
+
+  it should "answer a code no glyph carries the way the advance cache does" in {
+    val frc   = FontRenderContext(null, true, true)
+    val font  = Font(Font.SERIF, Font.PLAIN, 14)
+    val table = GlyphAdvance().table(font, frc)
+    val alone = GlyphAdvance()
+    List(0xffff, 0x7fffffff, Int.MinValue, -1, 0x01000000 | 5).foreach { code =>
+      withClue(s"glyph code $code: ")(table.of(code) shouldBe alone.of(font, frc, code))
+      table.of(code) shouldBe table.of(code)
+    }
+  }
+
+  it should "keep each glyph's own advance where many glyphs share a slot" in {
+    val frc   = FontRenderContext(null, true, true)
+    val font  = Font(Font.SERIF, Font.PLAIN, 14)
+    val table = GlyphAdvance().table(font, frc)
+    val alone = GlyphAdvance()
+    val codes = (0 until 3000).toVector
+    val first = codes.map(table.of)
+    codes.map(table.of) shouldBe first
+    codes.foreach(code => first(code) shouldBe alone.of(font, frc, code))
+  }
+
+  it should "give every thread the advances it would measure alone" in {
+    val frc      = FontRenderContext(null, true, true)
+    val font     = Font(Font.SERIF, Font.PLAIN, 14)
+    val shared   = GlyphAdvance().table(font, frc)
+    val alone    = GlyphAdvance()
+    val codes    = (0 until 600).toVector
+    val expected = codes.map(alone.of(font, frc, _))
+    val pool     = Executors.newFixedThreadPool(8)
+    val answers =
+      try
+        val pending = (0 until 8).toVector.map { _ =>
+          pool.submit(
+            new Callable[Vector[Float]]:
+              def call(): Vector[Float] = codes.reverse.map(shared.of).reverse
+          )
+        }
+        pending.map(_.get())
+      finally pool.shutdown()
+    answers.foreach(_ shouldBe expected)
   }
