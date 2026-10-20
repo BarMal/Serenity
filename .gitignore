@@ -109,3 +109,7 @@ coverage-reports/
 # Scalafix cache
 .scalafix-cache
 
+
+# Python bytecode
+__pycache__/
+*.pyc
