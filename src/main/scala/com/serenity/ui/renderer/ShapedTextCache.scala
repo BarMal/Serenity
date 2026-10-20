@@ -121,8 +121,8 @@ final class ShapedStretch private (
   def advanceAt(glyph: Int): Float = advances(glyph)
 
   private lazy val advances: Array[Float] =
-    val byCode = glyphCodes.distinct.map(code => code -> glyphAdvances.of(font, fontRenderContext, code)).toMap
-    glyphCodes.map(byCode)
+    val table = glyphAdvances.table(font, fontRenderContext)
+    Array.tabulate(glyphCodes.length)(glyph => table.of(glyphCodes(glyph)))
 
   def xAt(glyph: Int): Float = xs(glyph)
 
