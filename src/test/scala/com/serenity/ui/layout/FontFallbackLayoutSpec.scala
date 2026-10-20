@@ -167,3 +167,12 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
     }
     cache.fallbackCoverageLookups shouldBe 1L
   }
+
+  it should "scan a repeated plain ASCII line once, however often the line is laid out" in {
+    val cache = WrappedLineCache.bounded()
+    val text  = "hello, world " * 20
+    (1 to 5).foreach { _ =>
+      val _ = LineLayout.lineLayoutInputs(codeFont, frc, true, context(), 0, text.length, text, wrapCache = cache)
+    }
+    cache.plainAsciiScans shouldBe 1L
+  }

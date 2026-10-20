@@ -74,6 +74,11 @@ sealed abstract class WrappedLineCache:
     */
   def virtualDropCaps(document: RichTextDocument, settings: OpeningSettings): Option[VirtualDropCaps]
 
+  /** Whether `text` is printable ASCII and tabs, which every font a line is set in has glyphs for: such a line is never
+    * itemised, and deciding that from the text alone keeps the common line off the coverage lookups entirely.
+    */
+  def isPlainAscii(text: String): Boolean = FallbackItemisations.isPlainAscii(text)
+
   /** The runs `text` is drawn in when `primary` and the chain `fallback` describes are asked in turn, `stickyNeutrals`
     * letting spaces and punctuation follow the cluster before them. A cache keeps the answer, and the coverage memo
     * behind it, for the next layout of the same line; without one every call itemises afresh.
@@ -253,6 +258,10 @@ object WrappedLineCache:
     private val coverages        = FallbackCoverages(FallbackCoverages.DefaultCapacity)
 
     private val itemisations = FallbackItemisations(coverages, FallbackItemisations.DefaultEntries)
+
+    override def isPlainAscii(text: String): Boolean = itemisations.isPlainAscii(text)
+
+    def plainAsciiScans: Long = itemisations.plainAsciiScans
 
     override def fallbackRuns(
       primary: Font,

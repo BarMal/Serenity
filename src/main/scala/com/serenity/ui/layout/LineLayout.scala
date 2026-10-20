@@ -232,7 +232,7 @@ private[layout] object LineLayout:
     frc: FontRenderContext
   ): LineFontResolver =
     val (text, firstColumn) = if lineText.nonEmpty then (lineText, 0) else (sliceText, sliceFirstColumn)
-    if text.isEmpty || FallbackResolution.isPlainAscii(text) then styled
+    if text.isEmpty || wrapCache.isPlainAscii(text) then styled
     else
       val monospaced = FontLoader.isMonospacedFont(font)
       val runs       = wrapCache.fallbackRuns(font, richText.fallback, text, stickyNeutrals = !monospaced)

@@ -10,18 +10,6 @@ import com.serenity.ui.layout.TextCaretMeasurement.{ColumnFontRun, LineFontResol
   */
 private[layout] object FallbackResolution:
 
-  /** Whether `text` is printable ASCII and tabs, which every font a line is set in has glyphs for: such a line is never
-    * itemised. Deciding this from the text alone keeps the common line off the coverage lookups entirely.
-    */
-  def isPlainAscii(text: String): Boolean =
-    @annotation.tailrec
-    def plain(index: Int): Boolean =
-      index >= text.length || {
-        val char = text.charAt(index)
-        (char >= ' ' && char <= '~' || char == '\t') && plain(index + 1)
-      }
-    plain(0)
-
   /** `resolver` with fallback runs for `text`, whose first character is at `firstColumn`. A line the primary font
     * covers throughout returns `resolver` itself, so it keeps its identity and its cache entries.
     */
