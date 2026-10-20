@@ -50,6 +50,7 @@ private[layout] object LineLayout:
         lineLength,
         lineText,
         wrapCache.shapedText,
+        wrapCache.layoutMemos,
         fallbackText = text,
         fallbackFirstColumn = baseColumn,
         wrapCache = wrapCache
@@ -91,6 +92,7 @@ private[layout] object LineLayout:
       text.length,
       "",
       wrapCache.shapedText,
+      wrapCache.layoutMemos,
       fallbackText = text,
       fallbackFirstColumn = startColumn,
       wrapCache = wrapCache
@@ -124,6 +126,7 @@ private[layout] object LineLayout:
         rawLine.length,
         rawLine,
         wrapCache.shapedText,
+        wrapCache.layoutMemos,
         wrapCache = wrapCache
       )
     val row =
@@ -135,7 +138,8 @@ private[layout] object LineLayout:
         frc,
         measuredLayout,
         cellMetrics,
-        wrapCache.shapedText
+        wrapCache.shapedText,
+        wrapCache.layoutMemos
       )
     val wrapped = DropCapLayout.reservingGlyphHeight(
       Vector(DropCapLayout.placed(row, lineIndex, inputs.paragraphRole, lineWithinParagraph = 0, inputs.dropCap)),
@@ -174,6 +178,7 @@ private[layout] object LineLayout:
           rawLine.length,
           rawLine,
           wrapCache.shapedText,
+          wrapCache.layoutMemos,
           wrapCache = wrapCache
         )
       val wrapped = TextLayoutSnapshot.wrapLogicalLine(
@@ -226,6 +231,7 @@ private[layout] object LineLayout:
     lineLength: Int,
     lineText: String,
     shapedText: ShapedTextCache,
+    memos: LayoutMemos,
     fallbackText: String = "",
     fallbackFirstColumn: Int = 0,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached
@@ -261,6 +267,7 @@ private[layout] object LineLayout:
           paragraphRole,
           richText.proseScale,
           richText.dropCapGapEm,
+          memos,
           richText.letterShape(lineIndex)
         )
       else DropCapLayout.Reserve.none

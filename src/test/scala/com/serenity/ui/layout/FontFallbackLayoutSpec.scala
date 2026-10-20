@@ -89,7 +89,17 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
 
   "A line the primary font covers" should "keep a resolver with no fallback runs" in {
     val inputs =
-      LineLayout.lineLayoutInputs(codeFont, frc, measuredLayout = true, context(), 0, 5, "hello", ShapedTextCache())
+      LineLayout.lineLayoutInputs(
+        codeFont,
+        frc,
+        measuredLayout = true,
+        context(),
+        0,
+        5,
+        "hello",
+        ShapedTextCache(),
+        LayoutMemos()
+      )
     inputs.resolver.runs shouldBe empty
   }
 
@@ -140,7 +150,8 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "lay out a line of fallback symbols on the cell grid when it holds no wide character" in {
-    val inputs = LineLayout.lineLayoutInputs(codeFont, frc, true, context(), 0, 3, "a★b", ShapedTextCache())
+    val inputs =
+      LineLayout.lineLayoutInputs(codeFont, frc, true, context(), 0, 3, "a★b", ShapedTextCache(), LayoutMemos())
     inputs.resolver.wideCellPx should be > 0.0f
   }
 
@@ -189,6 +200,7 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
       12,
       "hello, world",
       cache.shapedText,
+      cache.layoutMemos,
       wrapCache = cache
     )
     cache.fallbackCoverageLookups shouldBe 0L
@@ -198,7 +210,18 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
     val cache = WrappedLineCache.bounded()
     (1 to 5).foreach { _ =>
       val _ =
-        LineLayout.lineLayoutInputs(codeFont, frc, true, context(), 0, 3, "a中b", cache.shapedText, wrapCache = cache)
+        LineLayout.lineLayoutInputs(
+          codeFont,
+          frc,
+          true,
+          context(),
+          0,
+          3,
+          "a中b",
+          cache.shapedText,
+          cache.layoutMemos,
+          wrapCache = cache
+        )
     }
     cache.fallbackCoverageLookups shouldBe 1L
   }
@@ -216,6 +239,7 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
         text.length,
         text,
         cache.shapedText,
+        cache.layoutMemos,
         wrapCache = cache
       )
     }

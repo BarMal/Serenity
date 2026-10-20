@@ -51,6 +51,7 @@ class WrappedRowMeasurementSpec extends AnyFlatSpec with Matchers with TableDriv
               4,
               font,
               ShapedTextCache(),
+              LayoutMemos(),
               frc,
               startColumn = row.startColumn
             )

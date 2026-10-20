@@ -7,7 +7,7 @@ import com.serenity.lsp.model.SemanticToken
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{AppState, Buffer, TextVisualLine}
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{DropCapGlyph, DropCapLayout, TextLayoutSnapshot}
+import com.serenity.ui.layout.{DropCapGlyph, DropCapLayout, LayoutMemos, TextLayoutSnapshot}
 import com.serenity.ui.openings.LetterShape
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 
@@ -110,10 +110,20 @@ object DropCapRenderer:
     glyphColour: RenderColor,
     xOriginPx: Float,
     lineTopPx: Int,
+    memos: LayoutMemos,
     clipBottomPx: Int = Int.MaxValue,
     shape: LetterShape = LetterShape.Drop
   ): (TextVisualLine, Option[List[StyledText]]) =
-    DropCapGlyph.forParagraph(baseFont, frc, Some(document), visualLine.bufferLine, dropCap, proseScale, shape) match
+    DropCapGlyph.forParagraph(
+      baseFont,
+      frc,
+      Some(document),
+      visualLine.bufferLine,
+      dropCap,
+      proseScale,
+      memos,
+      shape
+    ) match
       case None => (visualLine, styledSegments)
       case Some(glyph) =>
         renderGlyphPx(
@@ -218,6 +228,7 @@ object DropCapRenderer:
     glyphColour: RenderColor,
     xOriginPx: Float,
     lineTopPx: Int,
+    memos: LayoutMemos,
     clipBottomPx: Int = Int.MaxValue
   ): (TextVisualLine, Option[List[StyledText]]) =
     (for
@@ -238,6 +249,7 @@ object DropCapRenderer:
       glyphColour,
       xOriginPx,
       lineTopPx,
+      memos,
       clipBottomPx,
       snapshot.roles.shapeAt(document, visualLine.bufferLine)
     )).getOrElse((visualLine, styledSegments))
@@ -274,6 +286,7 @@ object DropCapRenderer:
       glyphColourOf(state),
       xOriginPx,
       lineTopPx,
+      context.caches.wrappedLines.layoutMemos,
       clipBottomPx
     )
     CharacterRenderer.renderMeasuredLine(

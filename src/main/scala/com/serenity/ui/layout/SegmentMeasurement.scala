@@ -18,6 +18,7 @@ private[layout] object SegmentMeasurement:
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
     shapedText: ShapedTextCache,
+    memos: LayoutMemos,
     measuredXs: Option[IArray[Float]] = None,
     graphemeOffsets: Option[IArray[Int]] = None
   ): MeasuredRow =
@@ -28,7 +29,7 @@ private[layout] object SegmentMeasurement:
       if resolver.hasHidden then landableStops(stopXs, offsets, startColumn, resolver)
       else MeasuredRow.orderedByX(stopXs, offsets)
     val (heightPx, ascentPx) =
-      if measuredLayout then resolver.lineMetrics(frc, startColumn, endColumn) else (0, 0)
+      if measuredLayout then resolver.lineMetrics(frc, memos.lineExtents, startColumn, endColumn) else (0, 0)
     val fontRuns = RowFontRuns.of(resolver, text, startColumn, endColumn)
     MeasuredRow(
       startColumn = startColumn,

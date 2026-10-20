@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-10-20
+
+- Fixed the terminal interface dropping characters outside the Basic Multilingual Plane (emoji and rare CJK ideographs such as 𠮷): they now insert whole, as one edit, under the same undo grouping as typed text (#2008).
+
 ### 2026-10-15
 
 - Added hold-to-summon chrome: hold `Alt+Shift` with `L`, `S`, `T`, `B` or `H` to show the line numbers, status bar, tab strip, scrollbar or pane headers for as long as the chord is held. Press `Space` during the hold to lock the element shown (it stays across a restart, in the session), and press the chord again to dismiss it. An element shows if the config shows it, or it is summoned, or it is locked; nothing summoned is written to `config.conf`, and the layout and renderer share one answer so what is reserved is what is painted. In the terminal, which reports no key release, the chord toggles instead. New settings `ui.summon.modifiers` (default `"alt+shift"`, quoted in the file), `ui.summon.lock` (`space`) and `ui.summon.line_numbers`/`status_bar`/`tab_strip`/`scrollbar`/`pane_headers` (`l`, `s`, `t`, `b`, `h`, or `off`), also in the palette's Interface Layout settings under Summon Chrome. A chord a hotkey already holds goes to the hotkey and is reported like any hotkey conflict. X11 and XWayland auto-repeat, sent as a release and a press together, does not end a hold, and `Alt` used in a chord is not a tap that shows the menu bar. `space` is now a key name in hotkey triggers (docs/user/layout.md, docs/user/keyboard.md).

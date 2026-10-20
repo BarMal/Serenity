@@ -103,6 +103,7 @@ object TextLayoutSnapshot:
     bufferLine: Int,
     font: Font,
     shapedText: ShapedTextCache,
+    memos: LayoutMemos,
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     startColumn: Int = 0,
     cellMetricsOverride: Option[CellMetrics] = None,
@@ -120,7 +121,8 @@ object TextLayoutSnapshot:
         fontRenderContext,
         measuredLayout,
         cellMetrics,
-        shapedText
+        shapedText,
+        memos
       ),
       xOffsetPx = 0.0f,
       spaceBeforePx = 0,
@@ -286,10 +288,10 @@ object TextLayoutSnapshot:
     // font's metrics -- otherwise a caller whose "pixel" is coarser or finer than the font's actual line height (TUI's
     // CellMetricsOne, 1 pixel == 1 terminal row) gets a snapshot describing rows in a scale nothing downstream uses.
     val lineHeightPx =
-      if measuredLayout then math.max(1, FontLineExtents.of(font, fontRenderContext).heightPx)
+      if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).heightPx)
       else math.max(1, cellMetrics.lineHeight)
     val ascentPx =
-      if measuredLayout then math.max(1, FontLineExtents.of(font, fontRenderContext).ascentPx)
+      if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).ascentPx)
       else math.max(0, cellMetrics.ascent)
     val viewportTopVisualLine = if wordWrapEnabled then buffer.viewport.topVisualLine else 0
     val visualLineLimit       = viewportTopVisualLine + buffer.viewport.visibleLines
@@ -417,9 +419,10 @@ object TextLayoutSnapshot:
       // Measuring keeps the caller's context so the shaped-text cache is shared with whoever draws with it; only the
       // cache identity ignores the device transform.
       val shapedText = wrapCache.shapedText
+      val memos      = wrapCache.layoutMemos
       val rows = wrapCache.wrapped(spec.copy(frc = logicalFontRenderContext(frc)), maxVisualLines)(
-        limit => wrapRows(spec, limit, shapedText),
-        predecessors => IncrementalWrap.rewrap(spec, predecessors, shapedText)
+        limit => wrapRows(spec, limit, shapedText, memos),
+        predecessors => IncrementalWrap.rewrap(spec, predecessors, shapedText, memos)
       )
       val placedRows =
         Vector.tabulate(rows.length)(index =>
@@ -427,10 +430,16 @@ object TextLayoutSnapshot:
         )
       if rows.length < maxVisualLines then DropCapLayout.reservingGlyphHeight(placedRows, paragraphRole) else placedRows
 
-  private[layout] def wrapRows(spec: WrappedLineKey, maxVisualLines: Int, shapedText: ShapedTextCache): RowWrap =
+  private[layout] def wrapRows(
+    spec: WrappedLineKey,
+    maxVisualLines: Int,
+    shapedText: ShapedTextCache,
+    memos: LayoutMemos
+  ): RowWrap =
     import spec.{baseColumn, cellMetrics, frc, measuredLayout, resolver, text}
     if text.isEmpty then
-      val empty = measureSegment("", baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics, shapedText)
+      val empty =
+        measureSegment("", baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics, shapedText, memos)
       RowWrap(Vector(empty), 1, 0, None)
     else
       val initial   = ParagraphMeasurement(spec, 0, maxVisualLines, shapedText)
@@ -445,7 +454,7 @@ object TextLayoutSnapshot:
         if startColumn >= text.length || acc.length >= maxVisualLines then (acc, reaches)
         else
           val paragraph = measured.coveringRowAt(startColumn, maxVisualLines - acc.length)
-          val row       = wrapRow(spec, paragraph, startColumn, acc.length, shapedText)
+          val row       = wrapRow(spec, paragraph, startColumn, acc.length, shapedText, memos)
           val reach =
             if traceable then reaches :+ IncrementalWrap.reachOf(spec, startColumn, row.fitLength, shapedText)
             else reaches
@@ -463,13 +472,14 @@ object TextLayoutSnapshot:
     paragraph: ParagraphMeasurement,
     startColumn: Int,
     lineWithinParagraph: Int,
-    shapedText: ShapedTextCache
+    shapedText: ShapedTextCache,
+    memos: LayoutMemos
   ): WrappedRow =
     import spec.{baseColumn, cellMetrics, dropCapIndentPx, frc, measuredLayout, paragraphRole, resolver, text}
     val spanInsetPx = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapIndentPx)
     val insetPx =
       if DropCapLayout.isHomeRow(paragraphRole, lineWithinParagraph, baseColumn + startColumn) then
-        (spanInsetPx - DropCapLayout.replacedCharacterWidthPx(text, baseColumn, resolver, frc)).max(0.0f)
+        (spanInsetPx - DropCapLayout.replacedCharacterWidthPx(text, baseColumn, resolver, frc, shapedText)).max(0.0f)
       else spanInsetPx
     val wrapWidthPx      = math.max(1, spec.panelWidthPx - math.round(insetPx))
     val segmentStart     = baseColumn + startColumn
@@ -485,6 +495,7 @@ object TextLayoutSnapshot:
       measuredLayout,
       cellMetrics,
       shapedText,
+      memos,
       fit.caretXsForPrefix(segmentLength, resolver, segmentStart),
       Some(paragraph.graphemeOffsets(startColumn, endColumnInSlice))
     )

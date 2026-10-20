@@ -19,7 +19,7 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
     layouts.filter(layout => !layout.forceCellLayout && TextLayoutSnapshot.shouldUseMeasuredLayout(layout.font, frc))
 
   private def cold(text: String, layout: Layout, widthPx: Int): RowWrap =
-    TextLayoutSnapshot.wrapRows(keyFor(text, layout, widthPx), Int.MaxValue, ShapedTextCache())
+    TextLayoutSnapshot.wrapRows(keyFor(text, layout, widthPx), Int.MaxValue, ShapedTextCache(), LayoutMemos())
 
   // -- ICU's lookahead ---------------------------------------------------------------------------------------------
 
@@ -113,10 +113,11 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
       val after  = change.applyTo(before)
       val oldKey = keyFor(before, layout, width)
       val newKey = keyFor(after, layout, width)
-      val old    = TextLayoutSnapshot.wrapRows(oldKey, Int.MaxValue, ShapedTextCache())
+      val old    = TextLayoutSnapshot.wrapRows(oldKey, Int.MaxValue, ShapedTextCache(), LayoutMemos())
       (old.trace, Option.when(IncrementalWrap.traceable(newKey))(())) match
         case (Some(trace), Some(_)) =>
-          val resumed = IncrementalWrap.rewrap(newKey, Seq(Predecessor(oldKey, old.rows, trace)), ShapedTextCache())
+          val resumed =
+            IncrementalWrap.rewrap(newKey, Seq(Predecessor(oldKey, old.rows, trace)), ShapedTextCache(), LayoutMemos())
           resumed.foreach { wrapped =>
             val whole = GlyphAdvances.measure(after, 0, after.length, 0, newKey.resolver, frc, ShapedTextCache())
             withClue(s"${layout.name} $change in '${before.take(80)}': ") {
@@ -150,17 +151,17 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
         val after  = change.applyTo(before)
         val oldKey = keyFor(before, layout, width)
         val newKey = keyFor(after, layout, width)
-        val old    = TextLayoutSnapshot.wrapRows(oldKey, Int.MaxValue, ShapedTextCache())
+        val old    = TextLayoutSnapshot.wrapRows(oldKey, Int.MaxValue, ShapedTextCache(), LayoutMemos())
         val resumed =
           old.trace.flatMap(trace =>
-            IncrementalWrap.rewrap(newKey, Seq(Predecessor(oldKey, old.rows, trace)), ShapedTextCache())
+            IncrementalWrap.rewrap(newKey, Seq(Predecessor(oldKey, old.rows, trace)), ShapedTextCache(), LayoutMemos())
           )
         withClue(s"${layout.name} $change: ") {
           resumed.isDefined shouldBe true
           val whole = GlyphAdvances.measure(after, 0, after.length, 0, newKey.resolver, frc, ShapedTextCache())
           resumed.flatMap(_.trace).flatMap(_.advances).exists(sameAdvances(_, whole, after.length)) shouldBe true
           bitwiseRows(resumed.get.rows) shouldBe bitwiseRows(
-            TextLayoutSnapshot.wrapRows(newKey, Int.MaxValue, ShapedTextCache()).rows
+            TextLayoutSnapshot.wrapRows(newKey, Int.MaxValue, ShapedTextCache(), LayoutMemos()).rows
           )
         }
       }

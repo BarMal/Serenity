@@ -9,7 +9,7 @@ import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.layout.{CellMetrics, LayoutMemos, TextLayoutSnapshot}
 import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -375,7 +375,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    val line = TextLayoutSnapshot.visualLineForText(text, bufferLine = 0, font, ShapedTextCache())
+    val line = TextLayoutSnapshot.visualLineForText(text, bufferLine = 0, font, ShapedTextCache(), LayoutMemos())
 
     line.caretStops.map(_.column) shouldBe (0 to text.length).toVector
     line.caretStops.sliding(2).forall {

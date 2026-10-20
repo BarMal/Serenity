@@ -87,11 +87,16 @@ private[layout] object IncrementalWrap:
   /** The wrap of `spec` resumed from the candidate whose text differs least from it, or `None` when no candidate
     * qualifies.
     */
-  def rewrap(spec: WrappedLineKey, predecessors: Seq[Predecessor], shapedText: ShapedTextCache): Option[RowWrap] =
+  def rewrap(
+    spec: WrappedLineKey,
+    predecessors: Seq[Predecessor],
+    shapedText: ShapedTextCache,
+    memos: LayoutMemos
+  ): Option[RowWrap] =
     if predecessors.isEmpty || !traceable(spec) then None
     else
       closestEdit(spec.text, predecessors.iterator)
-        .flatMap((candidate, edit) => resume(spec, candidate, edit, shapedText))
+        .flatMap((candidate, edit) => resume(spec, candidate, edit, shapedText, memos))
 
   /** Candidates arrive newest first, and an edit of a character or two cannot be beaten, so the scan stops there. */
   private def closestEdit(text: String, candidates: Iterator[Predecessor]): Option[(Predecessor, EditSpan)] =
@@ -159,7 +164,8 @@ private[layout] object IncrementalWrap:
     spec: WrappedLineKey,
     candidate: Predecessor,
     edit: EditSpan,
-    shapedText: ShapedTextCache
+    shapedText: ShapedTextCache,
+    memos: LayoutMemos
   ): Option[RowWrap] =
     assemble(spec, candidate, edit, shapedText).map { assembled =>
       val oldRows  = candidate.rows
@@ -206,7 +212,7 @@ private[layout] object IncrementalWrap:
 
       @annotation.tailrec
       def walk(startColumn: Int, rows: Vector[MeasuredRow], freshReaches: Vector[Int]): RowWrap =
-        val row       = TextLayoutSnapshot.wrapRow(spec, measured, startColumn, rows.length, shapedText)
+        val row       = TextLayoutSnapshot.wrapRow(spec, measured, startColumn, rows.length, shapedText, memos)
         val nextRows  = rows :+ row.row
         val nextReach = freshReaches :+ reachOf(spec, startColumn, row.fitLength, shapedText)
         if row.endColumn >= spec.text.length then done(nextRows, nextReach, -1, computed = nextRows.length - kept)

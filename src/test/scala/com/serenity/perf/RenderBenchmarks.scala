@@ -53,7 +53,13 @@ private[perf] object RenderBenchmarks:
   private val renderCaches = RenderCaches.create()
 
   private lazy val longMeasuredLine =
-    TextLayoutSnapshot.visualLineForText("Wi" * 8_000, bufferLine = 0, textFont, renderCaches.shapedText)
+    TextLayoutSnapshot.visualLineForText(
+      "Wi" * 8_000,
+      bufferLine = 0,
+      textFont,
+      renderCaches.shapedText,
+      renderCaches.wrappedLines.layoutMemos
+    )
 
   def frameBenchmarks(cursorWindow: SwingWindow): List[BenchmarkRunner.Benchmark] =
     val richState        = editorStateForRichDocument(largeRichTextDocument(lines = 6_000))
