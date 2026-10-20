@@ -21,6 +21,9 @@ final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.Default
   private val generations = AtomicReference(Generations(newMap(), newMap()))
   private val shapedN     = AtomicLong(0)
 
+  /** The advances of the glyphs this cache's stretches are made of, and of any run measured beside them. */
+  val glyphAdvances: GlyphAdvance = GlyphAdvance()
+
   /** How many stretches were shaped, as opposed to served from the cache. */
   def shapings: Long = shapedN.get()
 
@@ -38,7 +41,7 @@ final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.Default
 
   private def shapeAndRemember(key: Key): ShapedStretch =
     val _ = shapedN.incrementAndGet()
-    remember(key, ShapedStretch.shape(key.text, key.font, key.fontRenderContext))
+    remember(key, ShapedStretch.shape(key.text, key.font, key.fontRenderContext, glyphAdvances))
 
   private def remember(key: Key, stretch: ShapedStretch): ShapedStretch =
     val held = generations.get()
@@ -83,6 +86,7 @@ final class ShapedStretch private (
     textLength: Int,
     font: Font,
     fontRenderContext: FontRenderContext,
+    glyphAdvances: GlyphAdvance,
     glyphCodes: Array[Int],
     charIndices: Array[Int],
     rightToLeft: Array[Boolean],
@@ -110,7 +114,7 @@ final class ShapedStretch private (
   def advanceAt(glyph: Int): Float = advances(glyph)
 
   private lazy val advances: Array[Float] =
-    val byCode = glyphCodes.distinct.map(code => code -> GlyphAdvance.of(font, fontRenderContext, code)).toMap
+    val byCode = glyphCodes.distinct.map(code => code -> glyphAdvances.of(font, fontRenderContext, code)).toMap
     glyphCodes.map(byCode)
 
   def xAt(glyph: Int): Float = xs(glyph)
@@ -163,6 +167,14 @@ object ShapedStretch:
   )
 
   def shape(text: String, font: Font, fontRenderContext: FontRenderContext): ShapedStretch =
+    shape(text, font, fontRenderContext, GlyphAdvance())
+
+  def shape(
+    text: String,
+    font: Font,
+    fontRenderContext: FontRenderContext,
+    glyphAdvances: GlyphAdvance
+  ): ShapedStretch =
     FontFirstUse.settle(font, fontRenderContext)
     val chars   = text.toCharArray
     val shaped  = visualRuns(text, chars).map(shapeRun(chars, _, font, fontRenderContext))
@@ -171,6 +183,7 @@ object ShapedStretch:
       chars.length,
       font,
       fontRenderContext,
+      glyphAdvances,
       shaped.flatMap(_.glyphCodes).toArray,
       shaped.flatMap(_.charIndices).toArray,
       shaped.flatMap(run => Array.fill(run.charIndices.length)(run.rightToLeft)).toArray,

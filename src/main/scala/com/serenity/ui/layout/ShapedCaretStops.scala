@@ -3,7 +3,7 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.FontRenderContext
 
-import com.serenity.ui.renderer.ShapedStretch
+import com.serenity.ui.renderer.{ShapedStretch, ShapedTextCache}
 
 /** Caret stops read off the glyphs the draw path paints: a character's stop is where the glyph shaped for it begins in
   * reading direction, so a caret drawn there touches its glyph. That is the glyph's x for a left-to-right character and
@@ -30,7 +30,7 @@ private[layout] object ShapedCaretStops:
     val trailing = new Array[Float](text.length + 1)
     val (advance, readsRightToLeft) = spans.foldLeft((0.0f, false)) {
       case ((offset, rightToLeft), span) =>
-        val stretch = ShapedStretch.shape(text.substring(span.start, span.end), span.font, frc)
+        val stretch = ShapedTextCache.shared.stretchOf(text.substring(span.start, span.end), span.font, frc)
         val length  = span.end - span.start
         val stops   = spanStops(stretch, length)
         val pulls   = leftToRightPulls(stretch, length)

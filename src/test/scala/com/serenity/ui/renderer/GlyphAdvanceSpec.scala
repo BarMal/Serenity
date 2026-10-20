@@ -45,7 +45,7 @@ class GlyphAdvanceSpec extends AnyFlatSpec with Matchers with OptionValues:
       (0 until nominal.getNumGlyphs).foreach { glyph =>
         val code = nominal.getGlyphCode(glyph)
         withClue(s"glyph $glyph (code $code): ")(
-          GlyphAdvance.of(face, frc, code) shouldBe nominal.getGlyphMetrics(glyph).getAdvance
+          GlyphAdvance().of(face, frc, code) shouldBe nominal.getGlyphMetrics(glyph).getAdvance
         )
       }
     }
@@ -57,3 +57,29 @@ class GlyphAdvanceSpec extends AnyFlatSpec with Matchers with OptionValues:
         withClue(s"glyph $glyph: ")(stretch.advanceAt(glyph) shouldBe whole.getGlyphMetrics(glyph).getAdvance)
       }
     }
+
+  "A stretch shaped through a cache" should "measure a glyph once, however many stretches contain it" in {
+    val frc   = FontRenderContext(null, true, true)
+    val font  = Font(Font.SERIF, Font.PLAIN, 14)
+    val cache = ShapedTextCache()
+    val words = List("alpha beta", "beta gamma", "gamma alpha")
+    val measured = words.map { word =>
+      val stretch = cache.stretchOf(word, font, frc)
+      (0 until stretch.glyphCount).foreach(stretch.advanceAt)
+      cache.glyphAdvances.measurements
+    }
+    val distinct = words.mkString.distinct.length
+    measured.last should be <= distinct.toLong
+    cache.stretchOf("alpha beta", font, frc)
+    cache.glyphAdvances.measurements shouldBe measured.last
+  }
+
+  "A glyph advance cache" should "measure a glyph once and forget nothing below its bound" in {
+    val frc     = FontRenderContext(null, true, true)
+    val font    = Font(Font.SERIF, Font.PLAIN, 14)
+    val advance = GlyphAdvance(maxEntries = 8)
+    val code    = font.createGlyphVector(frc, "a").getGlyphCode(0)
+    val first   = advance.of(font, frc, code)
+    advance.of(font, frc, code) shouldBe first
+    advance.measurements shouldBe 1L
+  }

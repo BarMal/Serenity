@@ -263,7 +263,7 @@ private[layout] object GlyphAdvances:
     val nominal  = font.createGlyphVector(frc, runChars)
     if nominal.getNumGlyphs == runChars.length && layoutAdvanceMatchesSum(font, frc) then
       val codes = nominal.getGlyphCodes(0, runChars.length, new Array[Int](runChars.length))
-      val memo  = GlyphAdvanceMemo(nominal, font, frc)
+      val memo  = GlyphAdvanceMemo(nominal, font, frc, shapedText.glyphAdvances)
       runChars.indices.foreach { index =>
         val advance = memo.advance(codes(index))
         advances(start + index) = advance
@@ -334,7 +334,12 @@ private[layout] object GlyphAdvances:
     faithful.indices.foreach(char => if !faithful(char) then contextFree(start + char) = false)
 
   /** A glyph's advance depends only on the glyph, so each distinct glyph code in a run is read once. */
-  final private class GlyphAdvanceMemo(glyphs: GlyphVector, font: Font, frc: FontRenderContext):
+  final private class GlyphAdvanceMemo(
+      glyphs: GlyphVector,
+      font: Font,
+      frc: FontRenderContext,
+      advanceOf: GlyphAdvance
+  ):
     private val capacity = Integer.highestOneBit(math.max(16, math.min(glyphs.getNumGlyphs, 1024)) * 2)
     private val keys     = new Array[Int](capacity)
     private val values   = new Array[Float](capacity)
@@ -343,9 +348,9 @@ private[layout] object GlyphAdvances:
     def advance(code: Int): Float =
       @annotation.tailrec
       def probe(slot: Int, remaining: Int): Float =
-        if remaining == 0 then GlyphAdvance.of(font, frc, code)
+        if remaining == 0 then advanceOf.of(font, frc, code)
         else if !filled(slot) then
-          val measured = GlyphAdvance.of(font, frc, code)
+          val measured = advanceOf.of(font, frc, code)
           filled(slot) = true
           keys(slot) = code
           values(slot) = measured
