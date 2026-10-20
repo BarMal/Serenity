@@ -72,6 +72,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.lspQueue,
       runtime.mouseTargetCacheRef,
       runtime.onFontConfigChanged,
+      runtime.endInputMethodComposition,
       runtime.deviceTextScaleProvider,
       runtime.configPersistencePath,
       runtime.uiPresetStore,

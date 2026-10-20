@@ -39,7 +39,22 @@ Paths are relative to `src/main/scala/com/serenity/`.
 - `Composition` and `CompositionClause` (`state/models/Composition.scala`) and `Runtime.composition` / `Runtime.compositionRefused`.
 - `ImeComposing`, `ImeCommit`, `ImeCancelled` (`keystroke/events/TextEntryEvent.scala`), reduced by `ImeReducer`.
 - `ImeEventTranslation`: an AWT `InputMethodEvent` (committed prefix, then pre-edit) becomes a commit followed by the composition that goes on; `SwingInputHandler.submitInputMethodEvent` queues the result in order with the keys.
-- `AppEffect.Ime(ImeEffect.Refused)`: shows `ImeNotices.refused` and calls `EffectRuntimePort.endInputMethodComposition`.
+- `AppEffect.Ime(ImeEffect.Refused)`: shows `ImeNotices.refused` and calls `EffectRuntimePort.endInputMethodComposition`,
+  which the windowed runtime wires to `InputContext.endComposition()`.
+- The canvas listens for `InputMethodEvent`s and answers `InputMethodRequests` (`ImeRequests`): the candidate window goes
+  at the primary caret, and no committed text is offered for reconversion or cancellation.
+
+## How the pre-edit is drawn
+
+While `Runtime.composition` holds a pre-edit that began against the buffer's current text, the windowed renderer is
+handed `CompositionPreview.displayed(state)`: a copy of the buffer with the pre-edit spliced in at the anchor by the
+real edit path, so layout, wrapping and carets are the real ones. The copy carries a content revision no real buffer has
+(`CompositionRevisions`), so nothing that caches by revision can confuse it with the real text. `CompositionStyling`
+underlines the pre-edit and puts the clause being converted on the selection background; the primary caret sits at the
+composition's caret. The real state is never touched.
+
+Known limits: the status line reads the displayed cursor while composing; a mouse click on the composing line maps
+through the displayed text; syntax and spell-check marks on that line after the anchor are not shifted.
 
 ## Decisions (accepted)
 

@@ -52,12 +52,24 @@ object DamageProducer:
               granularity
             )
     }
-    val damage = bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+|
+    val damage = bufferDamage |+| compositionDamage(before, after) |+| chromeDamage(before, after) |+|
+      fullRenderDamage(before, after) |+|
       paneChromeDamage(before, after) |+| statusLineDamage(before, after) |+| tabBarDamage(before, after)
     // Every combine regroups all the facts it holds, so a transition that grabs no thumb does not pay for one.
     scrollbarDamage(before, after) match
       case Damage.Nothing => damage
       case grabbed        => damage |+| grabbed
+
+  /** The pre-edit is drawn into the text, so the buffer shows differently when one begins, changes or ends (#2008) -
+    * though none of its own state does. Whole-buffer, since a pre-edit can reflow the rows below it.
+    */
+  private def compositionDamage(before: AppState, after: AppState): Damage =
+    if before.runtime.composition == after.runtime.composition then Damage.Nothing
+    else
+      List(before, after)
+        .flatMap(_.runtime.composition)
+        .map(composition => Damage.BufferAll(composition.bufferId): Damage)
+        .combineAll
 
   /** Everything about one buffer's own state that can dirty its visible rows without necessarily touching its rope
     * content -- cursor and selection movement, comment/diagnostic annotation changes, and a language reclassification
