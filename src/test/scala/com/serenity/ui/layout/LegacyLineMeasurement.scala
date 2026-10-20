@@ -141,7 +141,27 @@ object LegacyLineMeasurement:
   ): Vector[Float] =
     layoutEdges(text, absoluteStartColumn, resolver, frc).carets
 
+  /** [[unsnappedEdges]] with each wide character of a code line set to two cells of the primary font, the edges after
+    * it moved to match: the rule the production path adds, applied here row by row.
+    */
   def layoutEdges(
+    text: String,
+    absoluteStartColumn: Int,
+    resolver: LineFontResolver,
+    frc: FontRenderContext
+  ): RowEdges =
+    val edges = unsnappedEdges(text, absoluteStartColumn, resolver, frc)
+    if resolver.wideCellPx <= 0.0f || !WideCells.hasWide(text) then edges
+    else
+      val carets = WideCells.snapped(IArray.from(edges.carets), text, resolver.wideCellPx)
+      RowEdges(
+        carets.toVector,
+        edges.trailing.map(trailing =>
+          trailing.zipWithIndex.map((edge, index) => edge + carets(index) - edges.carets(index))
+        )
+      )
+
+  private def unsnappedEdges(
     text: String,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
