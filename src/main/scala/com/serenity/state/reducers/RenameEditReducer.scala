@@ -1,10 +1,6 @@
 package com.serenity.state.reducers
 
-import java.net.URI
-import java.nio.file.Path
-
-import scala.util.Try
-
+import com.serenity.io.StorageLocation
 import com.serenity.lsp.model.LspTextEdit
 import com.serenity.state.models.*
 import com.serenity.ui.layout.PeekContent
@@ -69,7 +65,7 @@ object RenameEditReducer:
     )
 
   private def fileName(uri: String): String =
-    Try(Path.of(URI.create(uri)).getFileName.toString).getOrElse(uri)
+    StorageLocation.localPath(uri).flatMap(path => Option(path.getFileName)).fold(uri)(_.toString)
 
   private def summaryPeek(
     state: AppState,

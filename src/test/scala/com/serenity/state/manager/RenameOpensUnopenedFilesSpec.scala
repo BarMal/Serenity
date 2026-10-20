@@ -4,6 +4,7 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.keystroke.events.{LspEvent, Undo}
 import com.serenity.lsp.model.{LspPosition, LspRange, LspTextEdit}
 import com.serenity.rope.Balance
@@ -38,11 +39,10 @@ class RenameOpensUnopenedFilesSpec extends AnyFlatSpec with Matchers with Eventu
   private def opened(sm: StateManager, path: java.nio.file.Path): Option[Buffer] =
     sm.getCurrentState.unsafeRunSync().persisted.buffers.values.find(_.document.filePath.contains(path))
 
-  "A rename naming a file that is not open" should "open it, edit it unsaved, leave the user's focus, and undo as one step" in {
-    val dir  = Files.createTempDirectory("serenity-rename-open")
-    val file = dir.resolve("Other.scala")
-    Files.writeString(file, "def f = old")
-    try
+  "A rename naming a file that is not open" should "open it, edit it unsaved, leave the user's focus, and undo as one step" in
+    TestTemp.within("rename-open") { dir =>
+      val file = dir.resolve("Other.scala")
+      Files.writeString(file, "def f = old")
       val sm          = stateManager()
       val before      = sm.getCurrentState.unsafeRunSync()
       val focusBefore = before.persisted.focus
@@ -63,7 +63,4 @@ class RenameOpensUnopenedFilesSpec extends AnyFlatSpec with Matchers with Eventu
       eventually {
         opened(sm, file).map(_.document.content.collect()) shouldBe Some("def f = old")
       }
-    finally
-      Files.deleteIfExists(file)
-      Files.deleteIfExists(dir)
-  }
+    }

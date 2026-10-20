@@ -1,14 +1,13 @@
 package com.serenity.state.manager
 
-import java.net.URI
 import java.nio.file.Path
 
 import scala.concurrent.duration.*
-import scala.util.Try
 
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.*
+import com.serenity.io.StorageLocation
 import com.serenity.keystroke.events.{CutToDarlings, RestoreDarling}
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
@@ -480,7 +479,7 @@ final private[manager] class StateManagerEffectHandlers(
     * to them (#1965). A file that cannot be opened is reported by the open itself and left out of the rename.
     */
   private def openFilesForRenameEdit(pending: PendingRename): IO[Unit] =
-    val paths = pending.edits.keys.toList.flatMap(uri => Try(Path.of(URI.create(uri))).toOption)
+    val paths = pending.edits.keys.toList.flatMap(StorageLocation.localPath)
     submitEffect(
       Lane.Keyed(LaneKey.RenameEdit, LanePolicy.Sequential),
       paths.traverse_(openFile) >> dispatchEffectResult(EffectResult.RenameFilesOpened(pending), _ => IO.unit)
