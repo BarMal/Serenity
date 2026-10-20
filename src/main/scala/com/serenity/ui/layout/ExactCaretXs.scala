@@ -3,33 +3,20 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.{FontRenderContext, TextAttribute, TextHitInfo, TextLayout}
 import java.text.AttributedString
-import java.util.concurrent.atomic.AtomicLong
 
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
-import com.serenity.ui.renderer.FontFirstUse
+import com.serenity.ui.renderer.{FontFirstUse, ShapedTextCache}
 
 /** The measurement a row falls back to when summed glyph advances cannot answer: its glyphs shaped as the draw path
   * shapes them, or a `TextLayout` for the text shaping cannot stand in for.
   */
 private[layout] object ExactCaretXs:
 
-  private val exactMeasurementsBuilt: ThreadLocal[AtomicLong] = ThreadLocal.withInitial(() => AtomicLong(0))
-
-  /** How many exact measurements (one `TextLayout` or one shaped stretch of a row or candidate) caret and fit
-    * measurement has built on the calling thread: the cost wrapping pays when summed glyph advances cannot answer,
-    * which the wrap specs bound per paragraph. Counted per thread so specs running side by side do not see each
-    * other's.
-    */
-  private[layout] def exactMeasurementsConstructed: Long = exactMeasurementsBuilt.get().get()
-
-  private def countExactMeasurement(): Unit =
-    val _ = exactMeasurementsBuilt.get().incrementAndGet()
-
   private def settleFonts(resolver: LineFontResolver, frc: FontRenderContext): Unit =
     FontFirstUse.settleAll(resolver.baseFont +: resolver.runs.map(_.font), frc)
 
-  private def textLayoutOf(text: AttributedString, frc: FontRenderContext): TextLayout =
-    countExactMeasurement()
+  private def textLayoutOf(text: AttributedString, frc: FontRenderContext, shapedText: ShapedTextCache): TextLayout =
+    shapedText.countExactMeasurement()
     TextLayout(text.getIterator, frc)
 
   /** Whether the glyphs the draw path places can stand for `TextLayout`. A face whose layout advance is not its summed
@@ -45,20 +32,22 @@ private[layout] object ExactCaretXs:
     text: String,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
-    frc: FontRenderContext
+    frc: FontRenderContext,
+    shapedText: ShapedTextCache
   ): IArray[Float] =
-    layoutStops(text, absoluteStartColumn, resolver, frc).carets
+    layoutStops(text, absoluteStartColumn, resolver, frc, shapedText).carets
 
   /** [[layoutCaretXs]] with, where the row reads left to right, the edge each boundary has as the end of a row. */
   private[layout] def layoutStops(
     text: String,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
-    frc: FontRenderContext
+    frc: FontRenderContext,
+    shapedText: ShapedTextCache
   ): ShapedCaretStops.Stops =
     withExtraAdvances(
-      if resolver.hasHidden then visibleStops(text, absoluteStartColumn, resolver, frc)
-      else plainStops(text, absoluteStartColumn, resolver, frc),
+      if resolver.hasHidden then visibleStops(text, absoluteStartColumn, resolver, frc, shapedText)
+      else plainStops(text, absoluteStartColumn, resolver, frc, shapedText),
       absoluteStartColumn,
       resolver
     )
@@ -80,15 +69,16 @@ private[layout] object ExactCaretXs:
   private def layoutStopsOf(
     text: String,
     spans: Vector[ShapedCaretStops.Span],
-    frc: FontRenderContext
+    frc: FontRenderContext,
+    shapedText: ShapedTextCache
   ): ShapedCaretStops.Stops =
     if measuresByGlyphs(text, spans.map(_.font), frc) then
-      countExactMeasurement()
+      shapedText.countExactMeasurement()
       ShapedCaretStops.of(text, spans, frc)
     else
       val attributed = AttributedString(text)
       spans.foreach(span => attributed.addAttribute(TextAttribute.FONT, span.font, span.start, span.end))
-      val layout = textLayoutOf(attributed, frc)
+      val layout = textLayoutOf(attributed, frc, shapedText)
       ShapedCaretStops.Stops(
         IArray.tabulate(text.length + 1)(index =>
           if index == text.length then layout.getAdvance else layout.getCaretInfo(TextHitInfo.leading(index))(0)
@@ -100,7 +90,8 @@ private[layout] object ExactCaretXs:
     text: String,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
-    frc: FontRenderContext
+    frc: FontRenderContext,
+    shapedText: ShapedTextCache
   ): ShapedCaretStops.Stops =
     settleFonts(resolver, frc)
     // One font per contiguous run of equal per-column fonts, so a mixed-size rich line's caret advances (and thus wrap
@@ -112,7 +103,8 @@ private[layout] object ExactCaretXs:
         .map(span =>
           ShapedCaretStops.Span(span.startColumn - absoluteStartColumn, span.endColumn - absoluteStartColumn, span.font)
         ),
-      frc
+      frc,
+      shapedText
     )
 
   /** [[layoutStops]] for a line with hidden columns: the visible characters are laid out as if the hidden ones were not
@@ -122,7 +114,8 @@ private[layout] object ExactCaretXs:
     text: String,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
-    frc: FontRenderContext
+    frc: FontRenderContext,
+    shapedText: ShapedTextCache
   ): ShapedCaretStops.Stops =
     settleFonts(resolver, frc)
     val hidden        = resolver.hiddenMask(absoluteStartColumn, text.length)
@@ -140,7 +133,7 @@ private[layout] object ExactCaretXs:
             span.font
           )
         )
-      val visible = layoutStopsOf(visibleText, spans, frc)
+      val visible = layoutStopsOf(visibleText, spans, frc, shapedText)
       def spread(xs: IArray[Float]): IArray[Float] =
         val full = new Array[Float](text.length + 1)
         full(text.length) = xs(visibleText.length)

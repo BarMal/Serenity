@@ -98,7 +98,7 @@ class FontFirstUseSpec extends AnyFlatSpec with Matchers:
     FontFirstUse.isSettled(shaped, frc) shouldBe true
 
     val extent = unsettledFont()
-    FontLineExtents.shared(FontLineExtents.Key(extent, frc))
+    FontLineExtents().of(extent, frc)
     FontFirstUse.isSettled(extent, frc) shouldBe true
 
     val underlined = unsettledFont()
@@ -106,7 +106,7 @@ class FontFirstUseSpec extends AnyFlatSpec with Matchers:
     FontFirstUse.isSettled(underlined, frc) shouldBe true
 
     val dropCap = unsettledFont()
-    DropCapLayout.glyphWidthPx(dropCap, frc, "A")
+    DropCapWidths()(dropCap, frc, "A")
     FontFirstUse.isSettled(dropCap, frc) shouldBe true
 
     val advanced = unsettledFont()

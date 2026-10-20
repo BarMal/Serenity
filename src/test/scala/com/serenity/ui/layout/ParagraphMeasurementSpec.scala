@@ -140,7 +140,9 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
         xs.length shouldBe legacy.length
         xs.zip(legacy).foreach((x, expected) => x shouldBe expected +- tolerance)
         assertSameRows(
-          Vector(TextLayoutSnapshot.visualLineForText(line, 2, font, ShapedTextCache(), frc, startColumn = 5)),
+          Vector(
+            TextLayoutSnapshot.visualLineForText(line, 2, font, ShapedTextCache(), LayoutMemos(), frc, startColumn = 5)
+          ),
           Vector(
             LegacyLineMeasurement.shapeSegment(
               line,
@@ -279,7 +281,9 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
       val paragraph = document.flatMap(_.paragraphAt(lineIndex))
       val role = RichTextStyling.effectiveRole(paragraph.map(_.role).getOrElse(ParagraphRole.Body), dropCapsEnabled)
       val glyphPx =
-        DropCapLayout.reserve(font, frc, document, lineIndex, role, proseScale, DropCapLayout.DefaultGapEm).indentPx
+        DropCapLayout
+          .reserve(font, frc, document, lineIndex, role, proseScale, DropCapLayout.DefaultGapEm, LayoutMemos())
+          .indentPx
       val rows = LegacyLineMeasurement.wrap(
         line,
         lineIndex,

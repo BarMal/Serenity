@@ -76,7 +76,8 @@ class ParagraphRoleResolverAgreementSpec extends AnyFlatSpec with Matchers:
       lineIndex = 0,
       lineLength = prose.length,
       lineText = prose,
-      shapedText = ShapedTextCache()
+      shapedText = ShapedTextCache(),
+      memos = LayoutMemos()
     )
 
     inputs.paragraphRole shouldBe ParagraphRole.dropCap(3)
@@ -125,7 +126,8 @@ class ParagraphRoleResolverAgreementSpec extends AnyFlatSpec with Matchers:
       theme = state.persisted.theme,
       glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
-      lineTopPx = 0
+      lineTopPx = 0,
+      memos = LayoutMemos()
     )
 
     surface.drawRunPxCalls should have size 1
