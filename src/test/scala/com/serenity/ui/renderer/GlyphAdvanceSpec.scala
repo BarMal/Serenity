@@ -106,6 +106,31 @@ class GlyphAdvanceSpec extends AnyFlatSpec with Matchers with OptionValues:
     table.advancesOf(codes).toVector shouldBe codes.toVector.map(table.of)
   }
 
+  for (faceName, face) <- faces do
+    it should s"read glyph codes far above 255 as $faceName's glyph metrics report them" in {
+      val frc    = FontRenderContext(null, true, true)
+      val count  = face.getNumGlyphs
+      val codes  = (List(256, 1000, 4096, 40000, 65534) ++ (count - 40 until count)).filter(_ < count).distinct.toArray
+      val table  = GlyphAdvance().table(face, frc)
+      val glyphs = face.createGlyphVector(frc, codes)
+      codes.indices.foreach { index =>
+        withClue(s"glyph code ${codes(index)}: ")(
+          table.of(codes(index)) shouldBe glyphs.getGlyphMetrics(index).getAdvance
+        )
+      }
+    }
+
+  it should "answer a code no glyph carries the way the advance cache does" in {
+    val frc   = FontRenderContext(null, true, true)
+    val font  = Font(Font.SERIF, Font.PLAIN, 14)
+    val table = GlyphAdvance().table(font, frc)
+    val alone = GlyphAdvance()
+    List(0xffff, 0x7fffffff, Int.MinValue, -1, 0x01000000 | 5).foreach { code =>
+      withClue(s"glyph code $code: ")(table.of(code) shouldBe alone.of(font, frc, code))
+      table.of(code) shouldBe table.of(code)
+    }
+  }
+
   it should "keep each glyph's own advance where many glyphs share a slot" in {
     val frc   = FontRenderContext(null, true, true)
     val font  = Font(Font.SERIF, Font.PLAIN, 14)
