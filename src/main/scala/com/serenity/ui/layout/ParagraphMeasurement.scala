@@ -4,6 +4,7 @@ import java.text.StringCharacterIterator
 
 import com.ibm.icu.text.BreakIterator
 import com.serenity.ui.layout.TextCaretMeasurement.SegmentFit
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** What wrapping a logical line needs measured, computed once over a window of it rather than once per row: grapheme
   * boundaries from a single sweep and, for a measured layout, every character's glyph advance. Rows are then fitted and
@@ -15,7 +16,8 @@ final private[layout] class ParagraphMeasurement private (
     start: Int,
     end: Int,
     boundaries: Array[Int],
-    val advances: Option[GlyphAdvances]
+    val advances: Option[GlyphAdvances],
+    shapedText: ShapedTextCache
 ):
   import ParagraphMeasurement.*
 
@@ -26,7 +28,7 @@ final private[layout] class ParagraphMeasurement private (
   def coveringRowAt(from: Int, rowsLeft: Int): ParagraphMeasurement =
     val budget = rowBudget(spec)
     if from >= start && (end == spec.text.length || from + budget <= end) then this
-    else ParagraphMeasurement(spec, from, rowsLeft)
+    else ParagraphMeasurement(spec, from, rowsLeft, shapedText)
 
   /** A row's caret-stop offsets from its start. Agrees with sweeping the row alone whenever the row both starts and
     * ends on this window's boundaries, since grapheme rules never look back past a boundary; a row cut mid-cluster (a
@@ -83,20 +85,24 @@ private[layout] object ParagraphMeasurement:
   private val threadLocalCharacterBreaks: ThreadLocal[BreakIterator] =
     ThreadLocal.withInitial(() => BreakIterator.getCharacterInstance())
 
-  def apply(spec: WrappedLineKey, from: Int, rowsLeft: Int): ParagraphMeasurement =
+  def apply(spec: WrappedLineKey, from: Int, rowsLeft: Int, shapedText: ShapedTextCache): ParagraphMeasurement =
     val budget = rowBudget(spec).toLong
     val wanted = math.max(budget, math.min(MaxWindowChars.toLong, rowsLeft.toLong * budget))
     val end    = math.min(spec.text.length.toLong, from + wanted).toInt
     val advances = Option.when(spec.measuredLayout)(
-      GlyphAdvances.measure(spec.text, from, end, spec.baseColumn, spec.resolver, spec.frc)
+      GlyphAdvances.measure(spec.text, from, end, spec.baseColumn, spec.resolver, spec.frc, shapedText)
     )
-    new ParagraphMeasurement(spec, from, end, boundariesOf(spec.text, from, end), advances)
+    new ParagraphMeasurement(spec, from, end, boundariesOf(spec.text, from, end), advances, shapedText)
 
   /** A window over the whole of `spec.text` whose advances were assembled rather than measured in one sweep. It holds
     * no grapheme boundaries, so every row sweeps its own, which agrees with reading them off a window's boundaries.
     */
-  def assembled(spec: WrappedLineKey, advances: Option[GlyphAdvances]): ParagraphMeasurement =
-    new ParagraphMeasurement(spec, 0, spec.text.length, Array.empty[Int], advances)
+  def assembled(
+    spec: WrappedLineKey,
+    advances: Option[GlyphAdvances],
+    shapedText: ShapedTextCache
+  ): ParagraphMeasurement =
+    new ParagraphMeasurement(spec, 0, spec.text.length, Array.empty[Int], advances, shapedText)
 
   /** The first candidate the per-row search measures, in characters. */
   def initialCandidateLength(panelWidthPx: Int, cellMetrics: CellMetrics): Int =

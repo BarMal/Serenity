@@ -246,7 +246,14 @@ object RendererPaneSetup:
       // would disagree with it, so it is skipped entirely while a column is what is being wrapped/painted.
       if columnModeActive then baseViewport.visibleColumns
       else if bufferFont == context.codeFont then baseViewport.visibleColumns
-      else visibleColumnsFor(bufferFont, fontRenderContext, panelWidthPx, baseViewport.visibleColumns)
+      else
+        visibleColumnsFor(
+          bufferFont,
+          fontRenderContext,
+          context.caches.shapedText,
+          panelWidthPx,
+          baseViewport.visibleColumns
+        )
     val visibleLines = math.max(1, panelHeightPx / math.max(1, bufferMetrics.lineHeight))
     val sizedViewport = baseViewport.copy(
       visibleColumns = visibleColumns,
@@ -326,11 +333,13 @@ object RendererPaneSetup:
   private def visibleColumnsFor(
     font: Font,
     fontRenderContext: java.awt.font.FontRenderContext,
+    shapedText: ShapedTextCache,
     panelWidthPx: Int,
     gridVisibleColumns: Int
   ): Int =
-    val sample          = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    val measuredAdvance = TextLayoutSnapshot.caretXsForText(sample, font, fontRenderContext).lastOption.getOrElse(0.0f)
+    val sample = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    val measuredAdvance =
+      TextLayoutSnapshot.caretXsForText(sample, font, shapedText, fontRenderContext).lastOption.getOrElse(0.0f)
     val averageAdvance  = math.max(1.0f, measuredAdvance / sample.length.toFloat)
     val measuredColumns = math.ceil(panelWidthPx.toDouble / averageAdvance.toDouble).toInt + 32
     val gridOverscan    = gridVisibleColumns + 64

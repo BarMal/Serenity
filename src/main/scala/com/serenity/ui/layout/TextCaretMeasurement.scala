@@ -8,6 +8,7 @@ import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.{IndentationSettings, MeasuredRow}
 import com.serenity.text.fallback.FontSlot
 import com.serenity.ui.openings.ParagraphRoles
+import com.serenity.ui.renderer.ShapedTextCache
 import com.serenity.ui.theme.{HeadingSettings, MarkdownInlineStyling, RichTextStyling, TextStyle}
 
 /** Caret-stop measurement for one logical line: which AWT font each column measures with, and the x position of every
@@ -228,7 +229,8 @@ private[layout] object TextCaretMeasurement:
     resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    shapedText: ShapedTextCache
   ): IArray[Float] =
     if text.isEmpty then IArray(0.0f)
     else if !measuredLayout then
@@ -237,7 +239,7 @@ private[layout] object TextCaretMeasurement:
       else uniformCaretXs(text, charWidth, resolver.tabSize)
     else
       normalizeCollapsedCarets(
-        rawMeasuredCaretXs(text, absoluteStartColumn, resolver, frc),
+        rawMeasuredCaretXs(text, absoluteStartColumn, resolver, frc, shapedText),
         resolver,
         absoluteStartColumn
       )
@@ -250,13 +252,14 @@ private[layout] object TextCaretMeasurement:
     text: String,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
-    frc: FontRenderContext
+    frc: FontRenderContext,
+    shapedText: ShapedTextCache
   ): IArray[Float] =
     if text.isEmpty then IArray(0.0f)
     else
       val advances =
         if GlyphAdvances.hasContextFreeCharacters(text) then
-          Some(GlyphAdvances.measure(text, 0, text.length, absoluteStartColumn, resolver, frc))
+          Some(GlyphAdvances.measure(text, 0, text.length, absoluteStartColumn, resolver, frc, shapedText))
         else None
       advances.filter(_.isContextFree(0, text.length)) match
         case Some(measured) => measured.caretsFrom(0, text.length)

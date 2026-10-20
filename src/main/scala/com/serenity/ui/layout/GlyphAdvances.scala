@@ -212,7 +212,7 @@ private[layout] object GlyphAdvances:
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
     frc: FontRenderContext,
-    shapedText: ShapedTextCache = ShapedTextCache.shared
+    shapedText: ShapedTextCache
   ): GlyphAdvances =
     val chars       = text.substring(from, until).toCharArray
     val advances    = new Array[Float](chars.length)

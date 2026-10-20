@@ -118,7 +118,8 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         deviceScaleX = scale,
         deviceScaleY = scale,
         contentPersists = persists,
-        layerCacheOwnerOverride = Some(screen)
+        layerCacheOwnerOverride = Some(screen),
+        textCaches = caches.surfaceText
       ):
         override def drawRunPx(
           xPx: Float,

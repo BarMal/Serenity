@@ -50,7 +50,7 @@ enum LaneKey:
     */
   case NoticeExpiry(deadlineNanos: Long)
 
-  case Search, Analysis, Theme, Config, Presets, Keybindings, Session, Project, Dialog, Timer
+  case Search, Analysis, Theme, Config, Presets, Keybindings, Session, Project, Dialog, Timer, RenameEdit
 
 enum LanePolicy:
   /** FIFO per key. */

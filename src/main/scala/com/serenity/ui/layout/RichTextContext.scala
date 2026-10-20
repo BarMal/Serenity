@@ -108,7 +108,9 @@ object RichTextContext:
       )
       val mono = FontLoader.isMonospacedFont(font)
       val columns =
-        wrapCache.tableColumns(buffer.id, content, font, frc)(MarkdownTableMetrics.columnsFor(content, font, frc, mono))
+        wrapCache.tableColumns(buffer.id, content, font, frc)(
+          MarkdownTableMetrics.columnsFor(content, font, frc, mono, wrapCache.shapedText)
+        )
       MarkdownInlineView(
         mode,
         if mode == MarkerMode.Live then revealedLines(buffer) else Vector.empty,

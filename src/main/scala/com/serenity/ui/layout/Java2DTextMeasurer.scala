@@ -5,12 +5,13 @@ import java.awt.font.FontRenderContext
 
 import com.serenity.ui.layout.TextCaretMeasurement.{ColumnFontRun, LineFontResolver}
 import com.serenity.ui.layout.TextMeasurer.{FontRun, LineFonts, LineMetrics, MetricsKey, ShapedRun}
-import com.serenity.ui.renderer.{FontFirstUse, FontSpec}
+import com.serenity.ui.renderer.{FontFirstUse, FontSpec, ShapedTextCache}
 
 /** [[TextMeasurer]] over Java2D at one `FontRenderContext`, answering exactly as the layout's own Java2D measurement
   * does.
   */
-final case class Java2DTextMeasurer(frc: FontRenderContext) extends TextMeasurer:
+final case class Java2DTextMeasurer(frc: FontRenderContext, shapedText: ShapedTextCache = ShapedTextCache())
+    extends TextMeasurer:
 
   val metricsKey: MetricsKey = MetricsKey("java2d", Vector(frc))
 
@@ -29,7 +30,7 @@ final case class Java2DTextMeasurer(frc: FontRenderContext) extends TextMeasurer
     LineMetrics(heightPx, ascentPx)
 
   def rawCaretXs(text: String, startColumn: Int, fonts: LineFonts): IArray[Float] =
-    TextCaretMeasurement.rawMeasuredCaretXs(text, startColumn, resolverFor(fonts), frc)
+    TextCaretMeasurement.rawMeasuredCaretXs(text, startColumn, resolverFor(fonts), frc, shapedText)
 
   def glyphWidthPx(font: FontSpec, text: String): Float = DropCapLayout.glyphWidthPx(font.toAwt, frc, text)
 
@@ -61,10 +62,10 @@ final case class Java2DTextMeasurer(frc: FontRenderContext) extends TextMeasurer
       stops.trailing.getOrElse(TextCaretMeasurement.normalizeCollapsedCarets(stops.carets, resolver, startColumn))
 
   def shapingCutAtOrAfter(text: String, from: Int, font: FontSpec): Int =
-    ShapingBarriers.cutAtOrAfter(text, from, font.toAwt, frc)
+    ShapingBarriers.cutAtOrAfter(text, from, font.toAwt, frc, shapedText)
 
   def shapingCutAtOrBefore(text: String, limit: Int, font: FontSpec): Int =
-    ShapingBarriers.cutAtOrBefore(text, limit, font.toAwt, frc)
+    ShapingBarriers.cutAtOrBefore(text, limit, font.toAwt, frc, shapedText)
 
   private[layout] def mayMeasureByAdvances(text: String): Boolean = GlyphAdvances.hasContextFreeCharacters(text)
 
@@ -75,7 +76,7 @@ final case class Java2DTextMeasurer(frc: FontRenderContext) extends TextMeasurer
     startColumn: Int,
     fonts: LineFonts
   ): GlyphAdvances =
-    GlyphAdvances.measure(text, from, until, startColumn, resolverFor(fonts), frc)
+    GlyphAdvances.measure(text, from, until, startColumn, resolverFor(fonts), frc, shapedText)
 
   private def resolverFor(fonts: LineFonts): LineFontResolver =
     LineFontResolver(

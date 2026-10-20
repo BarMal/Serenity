@@ -5,6 +5,7 @@ import java.nio.file.Paths
 
 import com.serenity.state.models.{MeasuredRow, TextVisualLine}
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -87,7 +88,8 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   "A line the primary font covers" should "keep a resolver with no fallback runs" in {
-    val inputs = LineLayout.lineLayoutInputs(codeFont, frc, measuredLayout = true, context(), 0, 5, "hello")
+    val inputs =
+      LineLayout.lineLayoutInputs(codeFont, frc, measuredLayout = true, context(), 0, 5, "hello", ShapedTextCache())
     inputs.resolver.runs shouldBe empty
   }
 
@@ -156,14 +158,25 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
 
   "The fallback itemisation on the hot path" should "not be consulted for a line of plain ASCII" in {
     val cache = WrappedLineCache.bounded()
-    val _     = LineLayout.lineLayoutInputs(codeFont, frc, true, context(), 0, 12, "hello, world", wrapCache = cache)
+    val _ = LineLayout.lineLayoutInputs(
+      codeFont,
+      frc,
+      true,
+      context(),
+      0,
+      12,
+      "hello, world",
+      cache.shapedText,
+      wrapCache = cache
+    )
     cache.fallbackCoverageLookups shouldBe 0L
   }
 
   it should "be done once for a line that needs it, however often the line is laid out" in {
     val cache = WrappedLineCache.bounded()
     (1 to 5).foreach { _ =>
-      val _ = LineLayout.lineLayoutInputs(codeFont, frc, true, context(), 0, 3, "a中b", wrapCache = cache)
+      val _ =
+        LineLayout.lineLayoutInputs(codeFont, frc, true, context(), 0, 3, "a中b", cache.shapedText, wrapCache = cache)
     }
     cache.fallbackCoverageLookups shouldBe 1L
   }
@@ -172,7 +185,17 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
     val cache = WrappedLineCache.bounded()
     val text  = "hello, world " * 20
     (1 to 5).foreach { _ =>
-      val _ = LineLayout.lineLayoutInputs(codeFont, frc, true, context(), 0, text.length, text, wrapCache = cache)
+      val _ = LineLayout.lineLayoutInputs(
+        codeFont,
+        frc,
+        true,
+        context(),
+        0,
+        text.length,
+        text,
+        cache.shapedText,
+        wrapCache = cache
+      )
     }
     cache.plainAsciiScans shouldBe 1L
   }

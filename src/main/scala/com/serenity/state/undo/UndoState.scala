@@ -87,6 +87,21 @@ object HistoryEntry:
         (restoredState, inverse)
       }
 
+  /** A buffer's content as it stood before an edit made while no pane showed the buffer (#1965), so there is no pane
+    * for undo to snap focus to. The snapshot carries the cursors, which come back with the text, so the buffer shows
+    * them wherever it is next shown. It sits on the buffer's own history, so undo reaches it once a pane shows the
+    * buffer and is focused.
+    */
+  final case class DetachedBufferEdit(bufferId: BufferId, snapshot: BufferSnapshot) extends HistoryEntry:
+
+    def restore(state: AppState): Option[(AppState, HistoryEntry)] =
+      state.persisted.buffers.get(bufferId).map { current =>
+        val restored = state.copy(persisted =
+          state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> snapshot.restoreInto(current)))
+        )
+        (restored, DetachedBufferEdit(bufferId, BufferSnapshot.fromBuffer(current)))
+      }
+
   /** A buffer's line ending as it stood before it was changed (#1964). Only the document's save settings travel, never
     * its text, so it composes with [[BufferEdit]] entries in any order. `revision` tells a restore whether a save has
     * happened since: the file on disk then has the other ending, and the restored buffer differs from it whatever it
@@ -343,6 +358,7 @@ final case class UndoState(
     entry match
       case edit: HistoryEntry.BufferEdit         => withBufferStacks(edit.bufferId)(update)
       case change: HistoryEntry.LineEndingChange => withBufferStacks(change.bufferId)(update)
+      case edit: HistoryEntry.DetachedBufferEdit => withBufferStacks(edit.bufferId)(update)
       case _                                     => withStacksOf(HistoryOwner.OfLayout)(update)
 
   // Any change to a buffer's stacks ends its open run: the run's step is no longer the one an edit would fold into.

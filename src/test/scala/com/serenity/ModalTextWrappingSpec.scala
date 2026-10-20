@@ -7,7 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.accessibility.{AccessibilityRole, AccessibilitySnapshot}
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{MeasuredTextAdvances, RendererEntryPoints}
+import com.serenity.ui.renderer.{MeasuredTextAdvances, RendererEntryPoints, ShapedTextCache}
 import com.serenity.ui.widget.{Loadable, TextField}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -230,12 +230,14 @@ class ModalTextWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   "Pixel wrapping" should "keep every row of a dialog within the content's pixel width" in {
-    val font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+    val font     = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+    val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache())
     val measure: TextMeasure.Pixels = TextMeasure.Pixels(
       font,
       TextLayoutSnapshot.defaultFontRenderContext(),
       CellMetrics.fromFont(Font(Font.MONOSPACED, Font.PLAIN, 14)).charWidth,
-      0.0
+      0.0,
+      advances
     )
     val modal = Modal.Confirm(overridePrompt)
 
@@ -243,7 +245,7 @@ class ModalTextWrappingSpec extends AnyFlatSpec with Matchers:
       val (frame, plan) = framed(modal, width, measure)
       val rows          = textRows(plan).flatMap(_.text)
       rows.foreach { row =>
-        MeasuredTextAdvances.shared.advanceOf(row, font, measure.fontRenderContext) should be <=
+        advances.advanceOf(row, font, measure.fontRenderContext) should be <=
           ((width - 2) * measure.cellPx).toFloat
       }
       words(rows) shouldBe words(overridePrompt.title :: overridePrompt.message)

@@ -11,7 +11,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
-import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, ShapedTextCache}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -128,7 +128,9 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     searchRun.yPx shouldBe cellMetrics.toPixelY(commandContentRect.y)
 
     val searchCursorXPx = cellMetrics.toPixelX(commandContentRect.x) +
-      math.round(TextLayoutSnapshot.caretXsForText(searchText, uiFont, surface.fontRenderContext.get).last)
+      math.round(
+        TextLayoutSnapshot.caretXsForText(searchText, uiFont, ShapedTextCache(), surface.fontRenderContext.get).last
+      )
     val searchCursorYPx = cellMetrics.toPixelY(commandContentRect.y)
     surface.fillPixelRectCalls.exists(call =>
       call.xPx == searchCursorXPx &&

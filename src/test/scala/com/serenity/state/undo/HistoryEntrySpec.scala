@@ -55,6 +55,37 @@ class HistoryEntrySpec extends AnyFlatSpec with Matchers with OptionValues:
     entry.restore(AppState.initial) shouldBe None
   }
 
+  "HistoryEntry.DetachedBufferEdit.restore" should "restore the snapshotted text and cursors without moving focus" in {
+    val bufferId = BufferId(0)
+    val original = Buffer.fromString(bufferId, "hello").copy(editing = EditingState(List(CursorPosition(0, 2))))
+    val snapshot = BufferSnapshot.fromBuffer(original)
+    val edited = original.copy(
+      document = original.document.copy(content = com.serenity.rope.Rope("hello!")),
+      editing = EditingState(List(CursorPosition(0, 6)))
+    )
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = Map(bufferId -> edited), focus = Focus.EditorPane(PaneId(1)))
+    )
+
+    val (restoredState, inverse) = HistoryEntry.DetachedBufferEdit(bufferId, snapshot).restore(state).value
+
+    val restored = restoredState.persisted.buffers(bufferId)
+    (restored.document.content.collect(), restored.editing.cursorPositions) shouldBe (
+      "hello",
+      List(CursorPosition(0, 2))
+    )
+    restoredState.persisted.focus shouldBe Focus.EditorPane(PaneId(1))
+    inverse shouldBe HistoryEntry.DetachedBufferEdit(bufferId, BufferSnapshot.fromBuffer(edited))
+  }
+
+  it should "return None when the buffer no longer exists" in {
+    val buffer = Buffer.fromString(BufferId(999), "hi")
+
+    HistoryEntry
+      .DetachedBufferEdit(buffer.id, BufferSnapshot.fromBuffer(buffer))
+      .restore(AppState.initial) shouldBe None
+  }
+
   "HistoryEntry.PaneClose.restore" should "restore the pre-removal layout and focus, and capture the current ones as the inverse" in {
     val closedLayout = AppState.initial.persisted.layout
     val closedFocus  = AppState.initial.persisted.focus

@@ -108,7 +108,8 @@ private[perf] object LaptopFrameBenchmarks:
       logicalWidthPx = LogicalWidthPx,
       logicalHeightPx = LogicalHeightPx,
       deviceScaleX = DeviceScale,
-      deviceScaleY = DeviceScale
+      deviceScaleY = DeviceScale,
+      textCaches = caches.surfaceText
     )
     RendererEntryPoints.render(
       state,
@@ -431,7 +432,8 @@ private[perf] object LaptopFrameBenchmarks:
         deviceScaleX = DeviceScale,
         deviceScaleY = DeviceScale,
         contentPersists = true,
-        layerCacheOwnerOverride = Some(screen)
+        layerCacheOwnerOverride = Some(screen),
+        textCaches = caches.surfaceText
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
