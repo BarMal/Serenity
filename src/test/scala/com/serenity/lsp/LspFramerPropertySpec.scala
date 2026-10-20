@@ -98,14 +98,40 @@ class LspFramerPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wi
     }
   }
 
-  property("a stream cut short is a FrameError at the end of the stream") {
-    forAll(Gen.nonEmptyListOf(message), Gen.posNum[Int], cuts) { (framed, drop, cut) =>
-      val bytes  = framed.flatMap(LspFramer.encode).toArray
-      val lost   = 1 + (drop % bytes.length)
-      val chunks = split(bytes.dropRight(lost), cut)
+  /** Cutting `lost` bytes off the end of a framed stream is an error unless it lands exactly on a frame boundary, which
+    * includes cutting everything: a stream of whole frames, or of none, is complete.
+    */
+  private def checkCutShort(framed: List[Json], lost: Int, cut: List[Int]): Unit =
+    val frames     = framed.map(LspFramer.encode)
+    val bytes      = frames.flatten.toArray
+    val boundaries = frames.scanLeft(0)(_ + _.length)
+    val kept       = bytes.length - lost
+    val chunks     = split(bytes.take(kept), cut)
 
-      FramerRuns.pure(chunks).left.value.getMessage should startWith("Truncated LSP frame at EOF")
+    if boundaries.contains(kept) then FramerRuns.pure(chunks).value._1 shouldBe framed.take(boundaries.indexOf(kept))
+    else FramerRuns.pure(chunks).left.value.getMessage should startWith("Truncated LSP frame at EOF")
+
+    FramerRuns.pure(chunks).map(_._1).left.map(_.getMessage) shouldBe FramerRuns.legacy(chunks)
+
+  property("a stream cut short is a FrameError unless the cut lands on a frame boundary") {
+    forAll(Gen.nonEmptyListOf(message), Gen.posNum[Int], cuts) { (framed, drop, cut) =>
+      checkCutShort(framed, 1 + (drop % framed.flatMap(LspFramer.encode).length), cut)
     }
+  }
+
+  property("cutting a stream off on each frame boundary leaves the whole frames before it") {
+    forAll(Gen.nonEmptyListOf(message), Gen.posNum[Int], cuts) { (framed, pick, cut) =>
+      val frames = framed.map(LspFramer.encode)
+      val keep   = pick % (frames.size + 1)
+      checkCutShort(framed, frames.drop(keep).map(_.length).sum, cut)
+    }
+  }
+
+  // Found by a property run on master: one message, and a cut of every byte.
+  property("a stream cut off entirely is empty, not truncated") {
+    val only = Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 22570.asJson, "result" -> " ".asJson)
+
+    checkCutShort(List(only), LspFramer.encode(only).length, Nil)
   }
 
   private val mutated: Gen[List[Array[Byte]]] =
