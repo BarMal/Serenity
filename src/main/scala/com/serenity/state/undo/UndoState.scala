@@ -102,6 +102,19 @@ object HistoryEntry:
         (restored, DetachedBufferEdit(bufferId, BufferSnapshot.fromBuffer(current)))
       }
 
+  /** One undo step that spans buffers (#1965): a rename or `workspace/applyEdit` that edits several, reverted by a
+    * single undo and re-applied by a single redo. It sits on the layout history, since no one buffer owns it. Members
+    * whose buffer has since been closed are skipped.
+    */
+  final case class Group(entries: List[HistoryEntry]) extends HistoryEntry:
+
+    def restore(state: AppState): Option[(AppState, HistoryEntry)] =
+      val (restored, inverses) = entries.foldLeft((state, List.empty[HistoryEntry])) {
+        case ((current, inversesSoFar), entry) =>
+          entry.restore(current).fold((current, inversesSoFar))((next, inverse) => (next, inverse :: inversesSoFar))
+      }
+      Option.when(inverses.nonEmpty)((restored, Group(inverses)))
+
   /** A buffer's line ending as it stood before it was changed (#1964). Only the document's save settings travel, never
     * its text, so it composes with [[BufferEdit]] entries in any order. `revision` tells a restore whether a save has
     * happened since: the file on disk then has the other ending, and the restored buffer differs from it whatever it

@@ -26,7 +26,8 @@ object RenameEditReducer:
         outcome.editedBuffers,
         outcome.heldBack,
         state.persisted.focus,
-        state.persisted.layout.activeEditorPaneId
+        state.persisted.layout.activeEditorPaneId,
+        outcome.undoEntries
       )
       ReducerResult(
         outcome.result.state,
@@ -37,6 +38,7 @@ object RenameEditReducer:
     val outcome = WorkspaceEditReducer.applyToOpenBuffers(pending.edits, state)
     val whole = outcome.copy(
       result = outcome.result.copy(state = focusRestored(outcome.result.state, pending)),
+      undoEntries = pending.undoEntries ++ outcome.undoEntries,
       appliedCount = pending.applied + outcome.appliedCount,
       editedBuffers = pending.editedBuffers + outcome.editedBuffers,
       heldBack = pending.heldBack + outcome.heldBack
@@ -45,7 +47,10 @@ object RenameEditReducer:
 
   private def summarised(outcome: WorkspaceEditReducer.Outcome, anchor: CursorPosition): ReducerResult =
     val summary = summaryPeek(outcome.result.state, anchor, outcome)
-    ReducerResult(summary.state, outcome.result.effects ++ summary.effects)
+    ReducerResult(
+      summary.state,
+      outcome.result.effects ++ WorkspaceEditReducer.undoEffects(outcome.undoEntries) ++ summary.effects
+    )
 
   /** Opening a file focuses it; the user was somewhere else. */
   private def focusRestored(state: AppState, pending: PendingRename): AppState =
