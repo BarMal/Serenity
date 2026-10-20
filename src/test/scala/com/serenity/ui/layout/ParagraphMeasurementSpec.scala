@@ -109,7 +109,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
       text,
       3,
       widthPx,
-      singleFontResolver(font),
+      LineLayout.plainResolver(text, 0, font, frc, measured),
       frc,
       measured,
       cellMetrics,
@@ -149,7 +149,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
               2,
               5,
               5 + line.length,
-              singleFontResolver(font),
+              LineLayout.plainResolver(line, 5, font, frc, measuredLayout = true),
               frc,
               true,
               CellMetrics.fromFont(font)

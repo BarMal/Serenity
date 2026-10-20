@@ -21,7 +21,8 @@ import com.serenity.state.models.{
   TextVisualLine,
   TypographyRole
 }
-import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.{FontFallback, FontLoader}
+import com.serenity.ui.layout.SegmentMeasurement.measureSegment
 import com.serenity.ui.layout.TextCaretMeasurement.*
 import com.serenity.ui.openings.{OpeningSettings, ParagraphRoles}
 import com.serenity.ui.renderer.FontProbes.Probe
@@ -104,7 +105,8 @@ object TextLayoutSnapshot:
     memos: LayoutMemos,
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     startColumn: Int = 0,
-    cellMetricsOverride: Option[CellMetrics] = None
+    cellMetricsOverride: Option[CellMetrics] = None,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): TextVisualLine =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext, shapedText.probes)
@@ -114,7 +116,7 @@ object TextLayoutSnapshot:
         text,
         startColumn,
         startColumn + text.length,
-        singleFontResolver(font),
+        LineLayout.plainResolver(text, startColumn, font, fontRenderContext, measuredLayout, wrapCache = wrapCache),
         fontRenderContext,
         measuredLayout,
         cellMetrics,
@@ -135,7 +137,9 @@ object TextLayoutSnapshot:
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
+    fallback: FontFallback = FontFallback.Default
   ): Int =
     if lineText.isEmpty || visibleWidthPx <= 0 then 0
     else
@@ -148,7 +152,8 @@ object TextLayoutSnapshot:
         val visibleColumns = math.max(1, visibleWidthPx / math.max(1, cellMetrics.charWidth))
         math.max(0, safeColumn - visibleColumns + 1)
       else
-        val resolver      = singleFontResolver(font, tabSize)
+        val resolver =
+          LineLayout.plainResolver(lineText, 0, font, fontRenderContext, measuredLayout, tabSize, wrapCache, fallback)
         val xs            = caretXs(lineText, 0, resolver, fontRenderContext, measuredLayout, cellMetrics, shapedText)
         val cursorXPx     = xs(math.min(safeColumn, xs.length - 1))
         val targetLeftXPx = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
@@ -256,7 +261,8 @@ object TextLayoutSnapshot:
     headings: HeadingSettings = HeadingSettings.default,
     openings: OpeningSettings = OpeningSettings.default,
     // `document.drop_cap_gap`: the room beside a drop cap's glyph, in em of the body font.
-    dropCapGapEm: Float = DropCapLayout.DefaultGapEm
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm,
+    fallback: FontFallback = FontFallback.Default
   ): TextLayoutSnapshot =
     val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val totalLines  = buffer.document.content.lineCount
@@ -266,9 +272,18 @@ object TextLayoutSnapshot:
       RichTextContext.markdownViewFor(buffer, markdownViewMode, forceCellLayout, wrapCache, font, fontRenderContext)
     val caps = richDocument.flatMap(wrapCache.virtualDropCaps(_, openings))
     val richText =
-      RichTextContext(richDocument, proseScale, dropCapsEnabled, markdownInline, tabSize, headings, caps, dropCapGapEm)
-    val measuredLayout =
-      LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText, wrapCache.shapedText.probes)
+      RichTextContext(
+        richDocument,
+        proseScale,
+        dropCapsEnabled,
+        markdownInline,
+        tabSize,
+        headings,
+        caps,
+        dropCapGapEm,
+        fallback = fallback
+      )
+    val measuredLayout = LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText, wrapCache.shapedText.probes)
     // The non-measured (cell) path draws every row on `cellMetrics`' own grid (see `TextRowMetrics`'s non-measured
     // `lineTopPx`), so its line height/ascent must come from that same caller-supplied unit rather than the real
     // font's metrics -- otherwise a caller whose "pixel" is coarser or finer than the font's actual line height (TUI's
@@ -361,8 +376,7 @@ object TextLayoutSnapshot:
                   measuredLayout,
                   cellMetrics,
                   richText,
-                  wrapCache.shapedText,
-                  wrapCache.layoutMemos
+                  wrapCache
                 )
             loop(rest, acc ++ spaced)
           case _ => acc
@@ -514,40 +528,6 @@ object TextLayoutSnapshot:
       boundary.setText(StringCharacterIterator(line, from, line.length, from))
       val candidate = boundary.preceding(from + fittingLength + 1) - from
       if candidate > 0 then candidate else fittingLength
-
-  private[layout] def measureSegment(
-    text: String,
-    startColumn: Int,
-    endColumn: Int,
-    resolver: LineFontResolver,
-    frc: FontRenderContext,
-    measuredLayout: Boolean,
-    cellMetrics: CellMetrics,
-    shapedText: ShapedTextCache,
-    memos: LayoutMemos,
-    measuredXs: Option[IArray[Float]] = None,
-    graphemeOffsets: Option[IArray[Int]] = None
-  ): MeasuredRow =
-    val xs = measuredXs.getOrElse(caretXs(text, startColumn, resolver, frc, measuredLayout, cellMetrics, shapedText))
-    val offsets = graphemeOffsets.getOrElse(ParagraphMeasurement.graphemeBoundaryOffsets(text))
-    val stopXs  = IArray.tabulate(offsets.length)(index => xs(math.min(offsets(index), xs.length - 1)))
-    val (landingXs, landingOffsets) =
-      if resolver.hasHidden then landableStops(stopXs, offsets, startColumn, resolver)
-      else MeasuredRow.orderedByX(stopXs, offsets)
-    val (heightPx, ascentPx) =
-      if measuredLayout then resolver.lineMetrics(frc, memos.lineExtents, startColumn, endColumn) else (0, 0)
-    MeasuredRow(
-      startColumn = startColumn,
-      endColumn = endColumn,
-      text = text,
-      widthPx = xs(xs.length - 1),
-      caretXs = stopXs,
-      caretOffsets = offsets,
-      landingXs = landingXs,
-      landingOffsets = landingOffsets,
-      heightPx = heightPx,
-      ascentPx = ascentPx
-    )
 
   private[layout] def shouldUseMeasuredLayout(font: Font, frc: FontRenderContext, probes: FontProbes): Boolean =
     FontFirstUse.settle(font, frc)

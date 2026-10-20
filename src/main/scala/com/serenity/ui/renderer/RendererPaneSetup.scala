@@ -302,7 +302,8 @@ object RendererPaneSetup:
           tabSize = renderBuffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
           headings = state.effectiveHeadingSettings,
           openings = renderBuffer.effectiveOpenings(state.persisted.config.openingsConfig),
-          dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
+          dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+          fallback = state.persisted.config.editorConfig.fontConfig.fallback
         )
       else
         TextLayoutSnapshot.fromBuffer(
@@ -324,7 +325,8 @@ object RendererPaneSetup:
           tabSize = renderBuffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
           headings = state.effectiveHeadingSettings,
           openings = renderBuffer.effectiveOpenings(state.persisted.config.openingsConfig),
-          dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
+          dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+          fallback = state.persisted.config.editorConfig.fontConfig.fallback
         )
     if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
 

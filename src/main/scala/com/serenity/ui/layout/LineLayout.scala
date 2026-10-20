@@ -5,7 +5,8 @@ import java.awt.font.FontRenderContext
 
 import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.ParagraphRole
-import com.serenity.state.models.{TextVisualLine, Viewport}
+import com.serenity.state.models.{IndentationSettings, TextVisualLine, Viewport}
+import com.serenity.ui.fonts.{FontFallback, FontLoader}
 import com.serenity.ui.layout.TextCaretMeasurement.{
   LineFontResolver,
   markdownResolver,
@@ -49,7 +50,10 @@ private[layout] object LineLayout:
         lineLength,
         lineText,
         wrapCache.shapedText,
-        wrapCache.layoutMemos
+        wrapCache.layoutMemos,
+        fallbackText = text,
+        fallbackFirstColumn = baseColumn,
+        wrapCache = wrapCache
       )
     TextLayoutSnapshot.wrapLogicalLine(
       text,
@@ -66,6 +70,34 @@ private[layout] object LineLayout:
       wrapCache
     )
 
+  /** The resolver a line of `text` with no rich-text styling measures with, whose first character is at `startColumn`:
+    * the one the wrapped layout derives for it, so measuring a row's text alone gives the row the wrap produced.
+    */
+  def plainResolver(
+    text: String,
+    startColumn: Int,
+    font: Font,
+    fontRenderContext: FontRenderContext,
+    measuredLayout: Boolean,
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
+    fallback: FontFallback = FontFallback.Default
+  ): LineFontResolver =
+    lineLayoutInputs(
+      font,
+      fontRenderContext,
+      measuredLayout,
+      RichTextContext.plain.copy(tabSize = tabSize, fallback = fallback),
+      0,
+      text.length,
+      "",
+      wrapCache.shapedText,
+      wrapCache.layoutMemos,
+      fallbackText = text,
+      fallbackFirstColumn = startColumn,
+      wrapCache = wrapCache
+    ).resolver
+
   /** The visible slice of an unwrapped line as one row, placed as the painted layout places it. The slice runs a couple
     * of columns past the viewport so a caret at its edge still has a stop to land on.
     */
@@ -79,16 +111,26 @@ private[layout] object LineLayout:
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
     richText: RichTextContext,
-    shapedText: ShapedTextCache,
-    memos: LayoutMemos
+    wrapCache: WrappedLineCache
   ): Vector[TextVisualLine] =
     val startColumn = math.min(viewport.leftColumn, rawLine.length)
     val endColumn   = math.min(rawLine.length, startColumn + math.max(1, viewport.visibleColumns) + OverscanColumns)
     val slice       = rawLine.slice(startColumn, endColumn)
     val inputs =
-      lineLayoutInputs(font, frc, measuredLayout, richText, lineIndex, rawLine.length, rawLine, shapedText, memos)
+      lineLayoutInputs(
+        font,
+        frc,
+        measuredLayout,
+        richText,
+        lineIndex,
+        rawLine.length,
+        rawLine,
+        wrapCache.shapedText,
+        wrapCache.layoutMemos,
+        wrapCache = wrapCache
+      )
     val row =
-      TextLayoutSnapshot.measureSegment(
+      SegmentMeasurement.measureSegment(
         slice,
         startColumn,
         startColumn + slice.length,
@@ -96,8 +138,8 @@ private[layout] object LineLayout:
         frc,
         measuredLayout,
         cellMetrics,
-        shapedText,
-        memos
+        wrapCache.shapedText,
+        wrapCache.layoutMemos
       )
     val wrapped = DropCapLayout.reservingGlyphHeight(
       Vector(DropCapLayout.placed(row, lineIndex, inputs.paragraphRole, lineWithinParagraph = 0, inputs.dropCap)),
@@ -136,7 +178,8 @@ private[layout] object LineLayout:
           rawLine.length,
           rawLine,
           wrapCache.shapedText,
-          wrapCache.layoutMemos
+          wrapCache.layoutMemos,
+          wrapCache = wrapCache
         )
       val wrapped = TextLayoutSnapshot.wrapLogicalLine(
         rawLine,
@@ -190,12 +233,15 @@ private[layout] object LineLayout:
     lineLength: Int,
     lineText: String,
     shapedText: ShapedTextCache,
-    memos: LayoutMemos
+    memos: LayoutMemos,
+    fallbackText: String = "",
+    fallbackFirstColumn: Int = 0,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): LineLayoutInputs =
     val markdownRuns =
       if measuredLayout && richText.markdown.isActive then Some(richText.markdown.runsOn(lineIndex, lineText))
       else None
-    val resolver =
+    val styled =
       if !measuredLayout then singleFontResolver(font, richText.tabSize)
       else
         markdownRuns.fold(
@@ -209,6 +255,9 @@ private[layout] object LineLayout:
             richText.roles
           )
         )(markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText, shapedText, _))
+    val resolver =
+      if !measuredLayout then styled
+      else withFallback(styled, font, richText, lineText, fallbackText, fallbackFirstColumn, wrapCache, frc)
     val paragraphRole = richText.layoutRole(lineIndex)
     val dropCap =
       if measuredLayout then
@@ -231,6 +280,33 @@ private[layout] object LineLayout:
       case ParagraphRole.Heading(level) => Some(level)
       case _ =>
         markdownRuns.flatMap(_.collectFirst { case run if run.style.headingLevel > 0 => run.style.headingLevel })
+
+  /** `styled` with the runs the line needs in fallback fonts. The whole logical line is itemised when it is at hand, a
+    * wrapped slice (which cannot see what precedes it) otherwise. Code rows keep their pitch whatever glyphs the
+    * fallback fonts add.
+    */
+  private def withFallback(
+    styled: LineFontResolver,
+    font: Font,
+    richText: RichTextContext,
+    lineText: String,
+    sliceText: String,
+    sliceFirstColumn: Int,
+    wrapCache: WrappedLineCache,
+    frc: FontRenderContext
+  ): LineFontResolver =
+    val (text, firstColumn) = if lineText.nonEmpty then (lineText, 0) else (sliceText, sliceFirstColumn)
+    if text.isEmpty || wrapCache.isPlainAscii(text) then styled
+    else
+      val monospaced = FontLoader.isMonospacedFont(font)
+      val runs       = wrapCache.fallbackRuns(font, richText.fallback, text, stickyNeutrals = !monospaced)
+      val itemised   = FallbackResolution(styled, runs, firstColumn, richText.fallback)
+      if !monospaced then itemised
+      else
+        val coded = if itemised eq styled then styled else itemised.copy(fixedLinePitch = true)
+        if WideCells.hasWide(text) || (itemised ne styled) then
+          coded.copy(wideCellPx = WideCells.cellAdvancePx(font, frc))
+        else coded
 
   private def markdownAwareResolver(
     font: Font,

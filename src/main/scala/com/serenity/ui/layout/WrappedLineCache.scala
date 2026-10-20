@@ -12,6 +12,8 @@ import com.serenity.markdown.{LazyBlockIndex, TableColumns}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.rope.{Balance, Rope, RopeDiff}
 import com.serenity.state.models.{BufferId, MeasuredRow}
+import com.serenity.text.fallback.{FallbackItemiser, FallbackRun}
+import com.serenity.ui.fonts.{FallbackCoverages, FallbackItemisations, FontFallback, Java2DGlyphCoverage}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 import com.serenity.ui.openings.{OpeningLines, OpeningRules, OpeningSettings, VirtualDropCaps}
 import com.serenity.ui.renderer.ShapedTextCache
@@ -81,6 +83,18 @@ sealed abstract class WrappedLineCache:
     * before an edit makes the next.
     */
   def virtualDropCaps(document: RichTextDocument, settings: OpeningSettings): Option[VirtualDropCaps]
+
+  /** Whether `text` is printable ASCII and tabs, which every font a line is set in has glyphs for: such a line is never
+    * itemised, and deciding that from the text alone keeps the common line off the coverage lookups entirely.
+    */
+  def isPlainAscii(text: String): Boolean = FallbackItemisations.isPlainAscii(text)
+
+  /** The runs `text` is drawn in when `primary` and the chain `fallback` describes are asked in turn, `stickyNeutrals`
+    * letting spaces and punctuation follow the cluster before them. A cache keeps the answer, and the coverage memo
+    * behind it, for the next layout of the same line; without one every call itemises afresh.
+    */
+  def fallbackRuns(primary: Font, fallback: FontFallback, text: String, stickyNeutrals: Boolean): Vector[FallbackRun] =
+    FallbackItemiser.itemise(text, 0, text.length, Java2DGlyphCoverage.of(primary, fallback), stickyNeutrals)
 
 /** Everything a line's wrap and caret measurement depends on. The rows it yields are position-independent -- no buffer
   * line, alignment or inset -- so a line keeps its entry when lines are inserted or deleted above it. `resolver`
@@ -278,6 +292,24 @@ object WrappedLineCache:
     private val fences     = new LinkedHashMap[BufferId, FenceEntry](16, 0.75f, true)
     private val columns    = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
     private val openings   = new LinkedHashMap[ScannedOpenings, OpeningLines](16, 0.75f, true)
+    private val coverages  = FallbackCoverages(FallbackCoverages.DefaultCapacity)
+
+    private val itemisations = FallbackItemisations(coverages, FallbackItemisations.DefaultEntries)
+
+    override def isPlainAscii(text: String): Boolean = itemisations.isPlainAscii(text)
+
+    def plainAsciiScans: Long = itemisations.plainAsciiScans
+
+    override def fallbackRuns(
+      primary: Font,
+      fallback: FontFallback,
+      text: String,
+      stickyNeutrals: Boolean
+    ): Vector[FallbackRun] =
+      itemisations.runs(primary, fallback, text, stickyNeutrals)
+
+    /** How many times a layout has asked this cache for a fallback coverage. */
+    def fallbackCoverageLookups: Long = coverages.lookups
 
     def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
       compute: => TableColumns
