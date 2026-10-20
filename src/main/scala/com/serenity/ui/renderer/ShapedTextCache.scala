@@ -22,6 +22,9 @@ final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.Default
   private val shapedN     = AtomicLong(0)
   private val exactN      = AtomicLong(0)
 
+  /** What the owner of this cache has read off the fonts it shapes: probed once per font, by whatever shapes for it. */
+  val probes: FontProbes = FontProbes()
+
   /** The advances of the glyphs this cache's stretches are made of, and of any run measured beside them. */
   val glyphAdvances: GlyphAdvance = GlyphAdvance()
 

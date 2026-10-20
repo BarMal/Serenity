@@ -4,7 +4,7 @@ import com.serenity.frontend.FrontendCapabilities
 import com.serenity.markdown.MarkdownBlockIndexMemo
 import com.serenity.project.ProjectPresence
 import com.serenity.text.RangeStatisticsMemo
-import com.serenity.ui.layout.{AnchorWrapCache, ChromeLayoutMemo, ViewportSize}
+import com.serenity.ui.layout.{AnchorWrapCache, ChromeLayoutMemo, ProseGlyphWidths, ViewportSize}
 
 /** State that is never persisted -- reset to defaults (or recomputed) on every session restore. */
 final case class Runtime(
@@ -73,6 +73,8 @@ final case class Runtime(
     chromeLayouts: ChromeLayoutMemo = ChromeLayoutMemo(),
     // Never persisted: the wraps measured while locating a caret, which are a function of the state alone.
     anchorWraps: AnchorWrapCache = AnchorWrapCache(),
+    // Never persisted: the prose font's measured widths, which only a font change alters.
+    proseGlyphWidths: ProseGlyphWidths = ProseGlyphWidths(),
     // Never persisted: the notes pane's source headings as of its last retarget (#1848). See `NotesPaneSync`.
     chapterHeadingMemo: ChapterHeadingMemo = ChapterHeadingMemo.empty,
     // Never persisted: whether resolved comments still show in the lens, the highlights and comment navigation. Resolved

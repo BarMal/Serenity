@@ -12,7 +12,16 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Buffer, BufferId, CursorPosition, EditingState, PaneId}
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{ColdFontProbes, LayoutEngine, ProseColumn, ScreenPosition, TextLayoutSnapshot}
+import com.serenity.ui.layout.{
+  ColdFontProbes,
+  LayoutEngine,
+  LayoutMemos,
+  ProseColumn,
+  ScreenPosition,
+  TextLayoutSnapshot,
+  WrappedLineCache
+}
+import com.serenity.ui.renderer.ShapedTextCache
 
 /** Scenarios that make a move of a process-wide cache into state a runtime owns measurable: what such a move costs when
   * the cache is cold, and what two runtimes in one process stop sharing.
@@ -169,7 +178,12 @@ private[perf] object CacheOwnershipBenchmarks:
     )
 
   private def snapshotOf(buffer: Buffer, font: Font): TextLayoutSnapshot =
-    TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 900, font = font)
+    TextLayoutSnapshot.fromBuffer(
+      buffer,
+      panelWidthPx = 900,
+      font = font,
+      wrapCache = WrappedLineCache.measuring(ShapedTextCache(), LayoutMemos())
+    )
 
   /** Both runtimes start from the same document. The second types the first's letter (`same_text`) or the same letter
     * upper-cased (`different_text`), so its edited line is one the first has just wrapped, or one nobody has.

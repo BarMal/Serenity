@@ -6,7 +6,7 @@ import java.awt.geom.AffineTransform
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
-import com.serenity.ui.renderer.{ShapedStretch, ShapedTextCache, StyledFontCache}
+import com.serenity.ui.renderer.{FontProbes, ShapedStretch, ShapedTextCache, StyledFontCache}
 
 /** Standalone reproduction, run in a fresh JVM per trial (it is a test-scope main, not a spec): many threads make the
   * first use of one font at once through the measuring paths whose results live for the life of the process, then each
@@ -65,8 +65,8 @@ object FontFirstUseRepro:
     val _ = lineExtents.of(font, frc)
     val _ = styledFonts.underlineOf(font)
     val _ = dropCapWidths(font, frc, "A")
-    val _ = GlyphAdvances.layoutAdvanceMatchesSum(font, frc)
-    val _ = GlyphAdvances.advancesAreUniform(font, frc)
+    val _ = GlyphAdvances.layoutAdvanceMatchesSum(font, frc, FontProbes())
+    val _ = GlyphAdvances.advancesAreUniform(font, frc, FontProbes())
     Texts.foreach(text => measure(text, font, frc, shapedText))
 
   private def measure(text: String, font: Font, frc: FontRenderContext, shaped: ShapedTextCache): GlyphAdvances =
@@ -90,7 +90,9 @@ object FontFirstUseRepro:
     } :+ lineExtents.of(font, frc).toString :+
       styledFonts.underlineOf(font).toString :+
       dropCapWidths(font, frc, "A").toString :+
-      GlyphAdvances.layoutAdvanceMatchesSum(font, frc).toString :+ GlyphAdvances.advancesAreUniform(font, frc).toString
+      GlyphAdvances.layoutAdvanceMatchesSum(font, frc, FontProbes()).toString :+ GlyphAdvances
+        .advancesAreUniform(font, frc, FontProbes())
+        .toString
     Integer.toHexString(beliefs.mkString("\n").hashCode)
 
   private def disagreements(font: Font, frc: FontRenderContext): Vector[String] =
