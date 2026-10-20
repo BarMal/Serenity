@@ -35,6 +35,9 @@ enum FileEffect:
   case SaveBufferAs(bufferId: BufferId, path: Path)
   case DirectLoadFile(path: Path)
 
+  /** Opens the files a rename's edits name that no buffer holds, then applies the edits to them (#1965). */
+  case OpenForRenameEdit(pending: PendingRename)
+
 enum ExplorerEffect:
   case OpenRoot(position: PanelPosition, path: Path, size: Int)
 

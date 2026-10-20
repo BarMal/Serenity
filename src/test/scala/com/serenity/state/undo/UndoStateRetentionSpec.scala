@@ -59,3 +59,13 @@ class UndoStateRetentionSpec extends AnyFlatSpec with Matchers:
   it should "keep the depth limit" in {
     UndoState(maxUndoDepth = 7).pushUndo(edit(1)).retainingBuffers(liveOnly()).maxUndoDepth shouldBe 7
   }
+
+  "A detached buffer edit" should "be the next undo once a pane shows its buffer, and be forgotten with the buffer" in {
+    val state    = AppState.initial
+    val bufferId = state.persisted.buffers.keys.head
+    val entry    = HistoryEntry.DetachedBufferEdit(bufferId, snapshot)
+    val history  = UndoState().pushUndo(entry)
+
+    history.nextUndo(state).map(_._2) shouldBe Some(entry)
+    history.retainingBuffers(_ => false).nextUndo(state) shouldBe None
+  }
