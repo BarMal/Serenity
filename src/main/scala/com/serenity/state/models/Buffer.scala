@@ -5,11 +5,13 @@ import java.time.Instant
 
 import cats.Order
 import cats.data.NonEmptyList
+import com.serenity.document.{HeadingIndexCell, MarkdownHeadingIndex}
 import com.serenity.io.{DocumentFormat, DocumentRevision, FileType}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{FidelityReport, InlineAtom, RichTextDocument, RichTextStyle}
-import com.serenity.rope.Rope
+import com.serenity.rope.{Balance, ChangeSet, Rope}
 import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
+import com.serenity.ui.openings.{OpeningOverride, OpeningResolver, OpeningSettings}
 
 opaque type BufferId = Int
 
@@ -120,8 +122,21 @@ final case class Document(
     // `lineEnding` (#1964): until then a save rewrites lines the user never touched, which the editor has to say.
     mixedLineEndings: Option[LineEndingCounts] = None,
     // The user has not yet been told about `mixedLineEndings`: it waits for no modal to be in the way.
-    mixedNoticePending: Boolean = false
+    mixedNoticePending: Boolean = false,
+    // What took `content` through its recent versions (#1838); transient, so a session never stores it and equality
+    // ignores it.
+    changes: ChangeLog = ChangeLog.empty,
+    // The Markdown headings of `content` (#1848); a cache shared by every copy of this document, ignored by equality.
+    headingIndex: HeadingIndexCell = new HeadingIndexCell,
+    // How this document is indented, by the sources that can say; `Buffer.effectiveIndentation` settles it against the global
+    // settings.
+    indentation: DocumentIndentation = DocumentIndentation(),
+    // What the user set for this document's chapter openings, over the global settings; see `Buffer.effectiveOpenings`.
+    openings: OpeningOverride = OpeningOverride.Empty
 ):
+
+  /** The headings of `content` read as Markdown, advanced from the last read rather than parsed afresh. */
+  def markdownHeadings: MarkdownHeadingIndex = headingIndex.indexFor(content, contentVersion, changeSinceText)
 
   /** The line ending saved from now on. Marks the document dirty whenever that changes the bytes a save writes, which
     * includes picking the detected ending for a mixed file: that save rewrites the minority lines.
@@ -130,12 +145,91 @@ final case class Document(
     if ending == lineEnding && mixedLineEndings.isEmpty then this
     else copy(lineEnding = ending, mixedLineEndings = None, mixedNoticePending = false, isDirty = true)
 
-  /** The only sanctioned way to change `content`: keeps `contentVersion` monotonically increasing so a
-    * `richTextDocument` stamped against the old version is correctly seen as stale by `Buffer.richTextInSync`, without
-    * re-comparing any text.
+  /** A way to change `content`, with [[applied]] and [[replacedWith]]: each keeps `contentVersion` monotonically
+    * increasing so a `richTextDocument` stamped against the old version is correctly seen as stale by
+    * `Buffer.richTextInSync`, without re-comparing any text. This one cannot say what changed, so it leaves a gap in
+    * [[changes]].
     */
   def withContent(newContent: Rope): Document =
-    copy(content = newContent, contentVersion = contentVersion + 1, isDirty = true, isNewEmpty = false)
+    copy(
+      content = newContent,
+      contentVersion = contentVersion + 1,
+      isDirty = true,
+      isNewEmpty = false,
+      changes = changes.gapped(contentVersion)
+    )
+
+  /** `None` unless `change` is for this document's text. */
+  def applied(change: ChangeSet): Option[Document] =
+    change.applyTo(content).map { edited =>
+      copy(
+        content = edited,
+        contentVersion = contentVersion + 1,
+        isDirty = true,
+        isNewEmpty = false,
+        changes = changes.appended(contentVersion, change)
+      )
+    }
+
+  /** `newContent`, which `change` made out of this document's text by an edit the caller already knows. A change whose
+    * lengths do not fit the two texts is not trusted: it leaves a gap in [[changes]], like [[withContent]].
+    */
+  def edited(newContent: Rope, change: ChangeSet): Document =
+    if change.oldLength == content.weight && change.newLength == newContent.weight then
+      copy(
+        content = newContent,
+        contentVersion = contentVersion + 1,
+        isDirty = true,
+        isNewEmpty = false,
+        changes = changes.appended(contentVersion, change)
+      )
+    else withContent(newContent)
+
+  /** `newContent` as one change spanning everything that differs, for a caller that has the text but not the edit. */
+  def replacedWith(newContent: Rope)(using Balance): Document =
+    copy(
+      content = newContent,
+      contentVersion = contentVersion + 1,
+      isDirty = true,
+      isNewEmpty = false,
+      changes = changes.appended(contentVersion, ChangeSet.fromDiff(content, newContent))
+    )
+
+  /** This document's content at the version after `previous`, for text read from outside rather than edited. */
+  def replacingContentOf(previous: Document): Document =
+    copy(contentVersion = previous.contentVersion + 1, changes = ChangeLog.at(previous.contentVersion + 1))
+
+  /** This document with the indentation `previous` was given by the user, which a re-read of the file does not undo. */
+  def keepingChosenIndentationOf(previous: Document): Document =
+    copy(indentation = indentation.copy(chosen = previous.indentation.chosen))
+
+  /** This document with the opening settings `previous` was given by the user, which a re-read of the file does not
+    * undo.
+    */
+  def keepingOpeningsOf(previous: Document): Document =
+    copy(openings = previous.openings)
+
+  /** The change from `version` to now, or `None` when it cannot be known exactly. */
+  def changesSince(version: Long): Option[ChangeSet] =
+    if version == contentVersion then Some(ChangeSet.identity(content.weight))
+    else if changes.head == contentVersion then changes.since(version)
+    else None
+
+  /** What took `before`, an earlier state of this document, to this one; `None` when it was not an edit this document
+    * recorded (a reload, a restored session) or the record no longer reaches back that far.
+    */
+  def changeFrom(before: Document): Option[ChangeSet] = changeSinceText(before.contentVersion, before.content)
+
+  /** [[changeFrom]] for a state of this document remembered as its version and text, the text standing guard for a
+    * version that was not bumped.
+    */
+  def changeSinceText(version: Long, text: Rope): Option[ChangeSet] =
+    if version == contentVersion then Option.when(text eq content)(ChangeSet.identity(content.weight))
+    else changesSince(version).filter(change => change.oldLength == text.weight && change.newLength == content.weight)
+
+  /** Whether the text differs from `before`'s: read off the recorded change when there is one, compared otherwise. */
+  def textDiffersFrom(before: Document): Boolean =
+    changeFrom(before).fold(before.content != content)(!_.isIdentity)
 
   /** This document as just written to (or read from) its file. */
   def markedSaved: Document =
@@ -152,7 +246,11 @@ final case class Document(
   * `multiCursorVerticalStates`), which let a single cursor's own state drift across collections that had to be kept in
   * sync by hand; `NonEmptyList[Cursor]` makes that drift impossible by construction.
   */
-final case class EditingState(cursors: NonEmptyList[Cursor] = NonEmptyList.one(Cursor(CursorPosition(0, 0)))):
+final case class EditingState(
+    cursors: NonEmptyList[Cursor] = NonEmptyList.one(Cursor(CursorPosition(0, 0))),
+    // Only the occurrence commands set it; building a fresh `EditingState` for any other cursor change drops it.
+    occurrenceSearch: Option[OccurrenceSearch] = None
+):
   def cursorPositions: List[CursorPosition] = cursors.toList.map(_.position)
 
   /** Replaces the primary (first) cursor's full state while leaving every other live cursor untouched. */
@@ -271,6 +369,14 @@ final case class Buffer(
   def usesTextFont: Boolean =
     typographyRole.usesTextFont
 
+  /** The indentation Tab types and layout measures for this buffer: its own sources first, `global` for the rest. */
+  def effectiveIndentation(global: IndentationSettings): IndentationSettings =
+    document.indentation.effective(global)
+
+  /** The chapter-opening settings this buffer is laid out with: its own overrides over the `global` ones. */
+  def effectiveOpenings(global: OpeningSettings): OpeningSettings =
+    OpeningResolver.resolve(global, document.openings)
+
   def allSelections: List[Selection] =
     editing.cursors.toList.flatMap(_.selection)
 
@@ -322,7 +428,13 @@ final case class Buffer(
     * inside the new text.
     */
   def withSettledContent(newContent: Rope): Buffer =
-    copy(document = document.copy(content = newContent, contentVersion = document.contentVersion + 1)).clampedToContent
+    copy(document =
+      document.copy(
+        content = newContent,
+        contentVersion = document.contentVersion + 1,
+        changes = document.changes.gapped(document.contentVersion)
+      )
+    ).clampedToContent
 
   /** True when closing this buffer may lose user-authored content. A hidden buffer is never closed on its own, and the
     * session keeps its text, so it never asks to be saved.
@@ -356,23 +468,43 @@ final case class Buffer(
     content: Rope,
     cursors: List[CursorPosition],
     adjustedAnnotations: Annotations = annotations,
-    richTextDocument: Option[RichTextDocument] = richText.richTextDocument
+    richTextDocument: Option[RichTextDocument] = richText.richTextDocument,
+    change: Option[ChangeSet] = None
   ): Buffer =
-    withEditedDocument(content, richTextDocument).copy(
+    withEditedDocument(content, richTextDocument, change).copy(
       editing = EditingState(cursors),
       annotations = adjustedAnnotations
     )
 
   /** [[withEditedContent]] for an edit that places its own cursors: the new `content`, with `richTextDocument` -- the
     * caller's remap of the old one onto it, or `None` -- stamped as matching it. The content version advances even for
-    * a keystroke, so a debounced outline parse of the previous text is recognised as stale (#1935).
+    * a keystroke, so a debounced outline parse of the previous text is recognised as stale (#1935). `change` is the
+    * edit itself, which consumers of the new version read instead of comparing the two texts (#1838).
     */
-  def withEditedDocument(content: Rope, richTextDocument: Option[RichTextDocument]): Buffer =
-    val updatedDocument = document.withContent(content)
+  def withEditedDocument(
+    content: Rope,
+    richTextDocument: Option[RichTextDocument],
+    change: Option[ChangeSet] = None
+  ): Buffer =
+    val updatedDocument = change.fold(document.withContent(content))(document.edited(content, _))
     copy(
       document = updatedDocument,
       richText = richText.withSyncedDocument(richTextDocument, updatedDocument.contentVersion)
     )
+
+  /** This buffer as the next text of the buffer `previous`, whose id it shares, when it was built apart from it (a
+    * restored session): its version moves past `previous`'s, with a rich-text document that was in sync staying so.
+    */
+  def succeeding(previous: Buffer): Buffer =
+    if document.contentVersion > previous.document.contentVersion then this
+    else
+      val successor = document.replacingContentOf(previous.document)
+      copy(
+        document = successor,
+        richText = richText.copy(richTextSyncedVersion =
+          richText.richTextSyncedVersion.filter(_ == document.contentVersion).map(_ => successor.contentVersion)
+        )
+      )
 
   /** `O(1)`: whether `richText.richTextDocument` is known to describe `document.content` exactly, replacing a
     * `matchesPlainText` re-comparison of the whole plain text on every check (`#1663`). Relies on every writer of

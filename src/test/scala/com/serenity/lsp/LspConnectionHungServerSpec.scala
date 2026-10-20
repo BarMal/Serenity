@@ -1,11 +1,13 @@
 package com.serenity.lsp
 
 import java.nio.file.{Files, Path, Paths}
+import javax.tools.ToolProvider
 
 import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.lsp.client.{LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -23,17 +25,33 @@ class LspConnectionHungServerSpec extends AnyFlatSpec with Matchers:
 
   private val releaseBound = 10.seconds
 
+  /** Only stops a fixture that never starts from hanging the suite; nothing asserts on it. The fixture answers
+    * `initialize` the moment it runs, so the handshake ends on that reply, not on this bound, however loaded the
+    * machine is.
+    */
+  private val handshakeGuard = 5.minutes
+
   private val javaExecutable: String =
     val name = if System.getProperty("os.name", "").toLowerCase.startsWith("windows") then "java.exe" else "java"
     Paths.get(System.getProperty("java.home"), "bin", name).toString
 
-  private val serverSource: String =
-    Paths.get(getClass.getResource("/lsp/HungLspServer.java").toURI).toString
+  /** Compiled once up front: launching the `.java` file directly makes every server start compile it first, which on a
+    * loaded machine took longer than the handshake allowed.
+    */
+  private lazy val serverClasses: Path =
+    val source  = Paths.get(getClass.getResource("/lsp/HungLspServer.java").toURI)
+    val classes = TestTemp.directory("hung-lsp-server-classes")
+    val compiler = Option(ToolProvider.getSystemJavaCompiler).getOrElse(
+      fail("the fixture needs a JDK: no system Java compiler is available")
+    )
+    val status = compiler.run(null, null, null, "-d", classes.toString, source.toString)
+    withClue("compiling the hung server fixture: ")(status shouldBe 0)
+    classes
 
   private def serverConfig(mode: String, pidFile: Path) = LspServerConfig(
     LanguageId.Scala,
     LspServerBinary.Metals,
-    defaultArgs = List(serverSource, mode, pidFile.toString),
+    defaultArgs = List("-cp", serverClasses.toString, "HungLspServer", mode, pidFile.toString),
     commandOverride = Some(javaExecutable)
   )
 
@@ -47,14 +65,14 @@ class LspConnectionHungServerSpec extends AnyFlatSpec with Matchers:
     * whatever happened, so a release that hangs fails this spec instead of hanging it.
     */
   private def releaseOutcome(mode: String): (Boolean, Boolean) =
-    val pidFile = Files.createTempFile("hung-lsp-server", ".pid")
+    val pidFile = TestTemp.file("hung-lsp-server", ".pid")
     try
       val release = for
         connected <- LspConnection(
           serverConfig(mode, pidFile),
           WorkspaceRootUri("file:///workspace"),
           logger,
-          20.seconds
+          handshakeGuard
         ).allocated
         (_, close) = connected
         fiber    <- close.start

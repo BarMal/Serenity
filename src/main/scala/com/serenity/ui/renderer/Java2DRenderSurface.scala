@@ -4,10 +4,11 @@ import java.awt.*
 import java.awt.font.FontRenderContext
 import java.awt.geom.Rectangle2D
 import java.awt.image.*
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
+import com.serenity.ui.renderer.LabelAnchor.isWhole
 import com.serenity.ui.theme.TextStyle
 
 /** A RenderSurface backed by a BufferedImage via Graphics2D.
@@ -28,18 +29,33 @@ class Java2DRenderSurface(
     deviceScaleX: Double = 1.0,
     deviceScaleY: Double = 1.0,
     contentPersists: Boolean = false,
-    layerCacheOwnerOverride: Option[ScreenIdentity] = None
+    layerCacheOwnerOverride: Option[ScreenIdentity] = None,
+    imageOriginPx: DeviceOrigin = DeviceOrigin.Zero,
+    textCaches: SurfaceTextCaches = SurfaceTextCaches.fresh(),
+    override val activity: SurfaceActivity = SurfaceActivity()
 ) extends RenderSurface
     with TextDrawing
     with PixelDrawing
     with Effects
     with PanelOutlineDrawing
-    with LayerBufferSupport:
+    with LayerBufferSupport
+    with PixelCopying:
+  import textCaches.{labelSprites, shapedText, styledFonts}
+
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
   override def effects: Option[Effects]                   = Some(this)
   override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
   override def layerBuffers: Option[LayerBufferSupport]   = Some(this)
+
+  override def addressesPixels: Boolean = true
+
+  override def pixelCopying: Option[PixelCopying] =
+    Option.when(isWhole(deviceScaleX) && isWhole(deviceScaleY))(this)
+
+  private val lifting = new ImagePixelLifting(image, deviceScaleX, deviceScaleY, () => painted.forgetClear())
+
+  override def pixelLifting: Option[PixelLifting] = Some(lifting)
 
   override def layerCacheOwner: ScreenIdentity = layerCacheOwnerOverride.getOrElse(super.layerCacheOwner)
 
@@ -48,6 +64,20 @@ class Java2DRenderSurface(
     * why that matters).
     */
   override def newLayerSurface(onFlush: RenderImage => Unit, recycled: Option[RenderImage]): RenderSurface =
+    layerSurface(onFlush, recycled, None)
+
+  override def newBoundedLayerSurface(
+    bounds: PixelRect,
+    onFlush: RenderImage => Unit,
+    recycled: Option[RenderImage]
+  ): RenderSurface =
+    layerSurface(onFlush, recycled, Some(bounds))
+
+  private def layerSurface(
+    onFlush: RenderImage => Unit,
+    recycled: Option[RenderImage],
+    bounds: Option[PixelRect]
+  ): RenderSurface =
     Java2DRenderSurface.forLayer(
       metrics,
       baseFontRef.get(),
@@ -56,7 +86,10 @@ class Java2DRenderSurface(
       deviceScaleX,
       deviceScaleY,
       image => onFlush(RenderImage.fromAwt(image)),
-      recycled = recycled.map(_.toAwt)
+      textCaches,
+      recycled = recycled.map(_.toAwt),
+      activity = activity,
+      bounds = bounds
     )
 
   private val g: Graphics2D = image.createGraphics()
@@ -69,6 +102,7 @@ class Java2DRenderSurface(
 
   g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
   g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
+  g.translate(-imageOriginPx.xPx.toDouble, -imageOriginPx.yPx.toDouble)
   g.scale(deviceScaleX, deviceScaleY)
   g.setFont(font)
 
@@ -82,6 +116,10 @@ class Java2DRenderSurface(
   private val lastPaintColorRef       = AtomicReference(Color.WHITE)
   private val baseFontRef             = AtomicReference(font)
   private val logicalPixelRowOverride = AtomicReference[Option[(Int, Int)]](None)
+
+  private val painted       = PaintedPixels()
+  private val underlineRef  = AtomicBoolean(false)
+  private val userClipDepth = AtomicInteger(0)
 
   override def setFont(newFont: FontSpec): Unit =
     baseFontRef.set(newFont.toAwt)
@@ -98,26 +136,117 @@ class Java2DRenderSurface(
     s: String,
     clipGlyphToRun: Boolean = false
   ): Unit =
-    val clipX         = math.floor(xPx.toDouble).toInt
-    val clipRight     = math.ceil((xPx + bgWidthPx).toDouble).toInt
-    val clipBottom    = yPx + lineHeightPx
-    val boundedLeft   = clipX.max(0).min(cellGridWidthPx)
-    val boundedRight  = clipRight.max(0).min(cellGridWidthPx)
-    val boundedTop    = yPx.max(0).min(cellGridHeightPx)
-    val boundedBottom = clipBottom.max(0).min(cellGridHeightPx)
+    paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, s.nonEmpty, clipGlyphToRun)(
+      g.drawString(s, xPx, (yPx + ascentPx).toFloat)
+    )
+
+  override def drawShapedRunPx(
+    xPx: Float,
+    yPx: Int,
+    bgWidthPx: Float,
+    lineHeightPx: Int,
+    ascentPx: Int,
+    stretch: String,
+    from: Int,
+    until: Int,
+    clipGlyphToRun: Boolean
+  ): Unit =
+    paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun) {
+      val shapedBefore = shapedText.shapings
+      val shaped       = shapedText.stretchOf(stretch, g.getFont, renderContext)
+      activity.shaped(shapedText.shapings - shapedBefore)
+      shaped.glyphsOf(from, until).foreach(g.drawGlyphVector(_, xPx, (yPx + ascentPx).toFloat))
+    }
+
+  override def withFallbackFamily(family: String)(draw: => Unit): Unit = styledFonts.drawingIn(g, family)(draw)
+
+  override def shapesStretchesOf(text: String): Boolean =
+    ShapedTextCache.worthShaping(baseFontRef.get(), text)
+
+  private def paintRun(
+    xPx: Float,
+    yPx: Int,
+    bgWidthPx: Float,
+    lineHeightPx: Int,
+    ascentPx: Int,
+    hasText: Boolean,
+    clipGlyphToRun: Boolean
+  )(drawGlyphs: => Unit): Unit =
+    val boundedLeft   = runLeft(xPx)
+    val boundedRight  = runRight(xPx, bgWidthPx)
+    val boundedTop    = runTop(yPx)
+    val boundedBottom = runBottom(yPx, lineHeightPx)
 
     if boundedLeft < boundedRight && boundedTop < boundedBottom then
+      activity.runDrawn()
       val boundedWidth  = boundedRight - boundedLeft
       val boundedHeight = boundedBottom - boundedTop
-      fillBackground(bgRef.get(), boundedLeft, boundedTop, boundedWidth, boundedHeight)
-      if s.nonEmpty then
-        val savedClip = g.getClip
+      if painted.needsBackground(boundedLeft, boundedTop, boundedRight, boundedBottom, bgRef.get()) then
+        fillBackground(bgRef.get(), boundedLeft, boundedTop, boundedWidth, boundedHeight)
+        painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
+      if hasText then
         g.setColor(fgRef.get())
+        val savedClip = if userClipDepth.get() == 0 then None else Option(g.getClip)
         try
           if clipGlyphToRun then g.clipRect(boundedLeft, boundedTop, boundedWidth, boundedHeight)
           else g.clipRect(0, 0, cellGridWidthPx, cellGridHeightPx)
-          g.drawString(s, xPx, (yPx + ascentPx).toFloat)
-        finally g.setClip(savedClip)
+          drawGlyphs
+        finally Java2DRenderSurface.restoreClip(g, savedClip)
+        drawUnderline(boundedLeft, boundedWidth, yPx + ascentPx)
+        painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
+
+  private def runLeft(xPx: Float): Int = math.floor(xPx.toDouble).toInt.max(0).min(cellGridWidthPx)
+
+  private def runRight(xPx: Float, bgWidthPx: Float): Int =
+    math.ceil((xPx + bgWidthPx).toDouble).toInt.max(0).min(cellGridWidthPx)
+
+  private def runTop(yPx: Int): Int = yPx.max(0).min(cellGridHeightPx)
+
+  private def runBottom(yPx: Int, lineHeightPx: Int): Int = (yPx + lineHeightPx).max(0).min(cellGridHeightPx)
+
+  /** An underline is a rule under the run rather than a font attribute, so an underlined run draws with the font of a
+    * plain one. Its thickness never drops below one device pixel.
+    */
+  private def drawUnderline(leftPx: Int, widthPx: Int, baselinePx: Int): Unit =
+    if underlineRef.get() && widthPx > 0 then
+      val underline = styledFonts.underlineOf(g.getFont)
+      val thickness = underline.thicknessPx.max((1.0 / deviceScaleY).toFloat)
+      g.setColor(fgRef.get())
+      g.fill(new Rectangle2D.Float(leftPx.toFloat, baselinePx + underline.offsetPx, widthPx.toFloat, thickness))
+
+  override def drawLabelPx(
+    xPx: Float,
+    yPx: Int,
+    bgWidthPx: Float,
+    lineHeightPx: Int,
+    ascentPx: Int,
+    s: String
+  ): Unit =
+    LabelAnchor.of(g.getTransform, xPx, yPx + ascentPx) match
+      case Some(anchor) if s.nonEmpty && userClipDepth.get() == 0 =>
+        drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, "")
+        blitLabel(anchor, s)
+        val left = runLeft(xPx)
+        drawUnderline(left, runRight(xPx, bgWidthPx) - left, yPx + ascentPx)
+        painted.ranOver(left, runTop(yPx), runRight(xPx, bgWidthPx), runBottom(yPx, lineHeightPx))
+      case _ => drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, s)
+
+  private def blitLabel(anchor: LabelAnchor, s: String): Unit =
+    val sprite = labelSprites.spriteFor(
+      LabelSprites.Key(g.getFont, anchor.scaleX, anchor.scaleY, fgRef.get().getRGB, s, anchor.phaseSixteenths),
+      renderContext
+    )
+    val device = image.createGraphics()
+    try
+      device.setComposite(g.getComposite)
+      device.clipRect(0, 0, cellGridWidthPx * anchor.scaleX, cellGridHeightPx * anchor.scaleY)
+      val _ = device.drawImage(
+        sprite.image,
+        anchor.deviceX - sprite.originX,
+        anchor.deviceBaseline - sprite.baseline,
+        Java2DRenderSurface.NoOpImageObserver
+      )
+    finally device.dispose()
 
   def setForegroundColor(color: RenderColor): Unit = fgRef.set(Java2DRenderSurface.awtColor(color, fgRef.get()))
   def setBackgroundColor(color: RenderColor): Unit = bgRef.set(Java2DRenderSurface.awtColor(color, bgRef.get()))
@@ -157,15 +286,21 @@ class Java2DRenderSurface(
   override def clearViewport(color: RenderColor): Unit =
     setBackgroundColor(color)
     fillBackground(bgRef.get(), 0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
+    painted.cleared(
+      bgRef.get(),
+      scala.collection.immutable.List(PixelRect(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)),
+      clipped = userClipDepth.get() > 0
+    )
 
   override def clearViewportExcept(color: RenderColor, preserved: scala.collection.immutable.List[PixelRect]): Unit =
     if preserved.isEmpty then clearViewport(color)
     else
       setBackgroundColor(color)
       val background = bgRef.get()
-      PixelRect
-        .uncoveredWithin(PixelRect(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx), preserved)
-        .foreach(rect => fillBackground(background, rect.xPx, rect.yPx, rect.widthPx, rect.heightPx))
+      val uncovered =
+        PixelRect.uncoveredWithin(PixelRect(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx), preserved)
+      uncovered.foreach(rect => fillBackground(background, rect.xPx, rect.yPx, rect.widthPx, rect.heightPx))
+      painted.cleared(background, uncovered, clipped = userClipDepth.get() > 0)
 
   def putString(x: Int, y: Int, s: String): Unit =
     if s.nonEmpty then
@@ -173,9 +308,11 @@ class Java2DRenderSurface(
       val py = pixelYForRow(y)
       // Fill background for the whole string using nominal width
       fillBackground(bgRef.get(), px, py, s.length * metrics.charWidth, metrics.lineHeight)
+      painted.touched(px, py, s.length * metrics.charWidth, metrics.lineHeight)
       // Draw the foreground as one shaped string so font features like ligatures can apply.
       g.setColor(fgRef.get())
       g.drawString(s, px, py + metrics.ascent)
+      drawUnderline(px, s.length * metrics.charWidth, py + metrics.ascent)
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
     val px = metrics.toPixelX(x)
@@ -183,6 +320,7 @@ class Java2DRenderSurface(
     val pw = width * metrics.charWidth
     val ph = height * metrics.lineHeight
     fillBackground(bgRef.get(), px, py, pw, ph)
+    painted.touched(px, py, pw, ph)
     if char != ' ' then
       g.setColor(fgRef.get())
       (0 until height).foreach { row =>
@@ -200,7 +338,7 @@ class Java2DRenderSurface(
     val savedTransform = g.getTransform
     try
       g.translate(xPx, yPx)
-      render
+      painted.withTranslation(xPx, yPx)(render)
     finally g.setTransform(savedTransform)
 
   private def pixelYForRow(row: Int): Int =
@@ -210,13 +348,17 @@ class Java2DRenderSurface(
       .getOrElse(metrics.toPixelY(row))
 
   def enableStyle(style: TextStyle): Unit =
-    g.setFont(TextStyle.styledFont(baseFontRef.get(), style))
+    underlineRef.set(style.isUnderlined)
+    g.setFont(styledFonts.fontFor(baseFontRef.get(), style))
 
   def disableStyle(style: TextStyle): Unit =
+    underlineRef.set(false)
     g.setFont(baseFontRef.get())
 
   override def setAlpha(alpha: Float): Unit =
-    g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha.max(0f).min(1f)))
+    val clamped = alpha.max(0f).min(1f)
+    painted.setTranslucent(clamped < 1f)
+    g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, clamped))
 
   override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
     val px          = metrics.toPixelX(x)
@@ -225,6 +367,7 @@ class Java2DRenderSurface(
     val ph          = height * metrics.lineHeight
     val inset       = math.ceil(strokeWidth / 2).toInt
     val savedStroke = g.getStroke
+    painted.touched(px, py, pw, ph)
     g.setColor(paintColor(color))
     g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER))
     g.drawRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset)
@@ -236,10 +379,13 @@ class Java2DRenderSurface(
     val pw        = width * metrics.charWidth
     val ph        = height * metrics.lineHeight
     val savedClip = g.getClip
+    userClipDepth.incrementAndGet()
     try
       g.clip(new Rectangle2D.Double(px, py, pw, ph))
       render
-    finally g.setClip(savedClip)
+    finally
+      userClipDepth.decrementAndGet()
+      g.setClip(savedClip)
 
   override def fillPixelRect(
     xPx: Int,
@@ -248,6 +394,7 @@ class Java2DRenderSurface(
     heightPx: Int,
     color: RenderColor
   ): Unit =
+    painted.touched(xPx, yPx, widthPx.max(1), heightPx.max(1))
     g.setColor(paintColor(color))
     g.fillRect(xPx, yPx, widthPx.max(1), heightPx.max(1))
 
@@ -257,6 +404,7 @@ class Java2DRenderSurface(
     val pw        = width * metrics.charWidth
     val ph        = height * metrics.lineHeight
     val savedClip = g.getClip
+    painted.touched(px, py, pw, ph)
     g.clipRect(px, py, pw, ph)
     g.drawImage(image.toAwt, px, py, pw, ph, Java2DRenderSurface.NoOpImageObserver)
     g.setClip(savedClip)
@@ -268,10 +416,36 @@ class Java2DRenderSurface(
     * through [[drawImage]] instead would shrink it a little per composite.
     */
   override def compositeFullSurfaceLayer(layerImage: RenderImage): Unit =
+    blitLayer(layerImage, DeviceOrigin.Zero)
+
+  override def compositeLayer(layerImage: RenderImage, bounds: PixelRect): Unit =
+    blitLayer(layerImage, DeviceOrigin.of(bounds, deviceScaleX, deviceScaleY))
+
+  private def blitLayer(layerImage: RenderImage, origin: DeviceOrigin): Unit =
+    activity.layerComposited()
+    painted.forgetClear()
     val rawGraphics = image.createGraphics()
     try
-      val _ = rawGraphics.drawImage(layerImage.toAwt, 0, 0, Java2DRenderSurface.NoOpImageObserver)
+      val _ = rawGraphics.drawImage(layerImage.toAwt, origin.xPx, origin.yPx, Java2DRenderSurface.NoOpImageObserver)
     finally rawGraphics.dispose()
+
+  /** In device pixels on an untransformed graphics, because `copyArea` is not implemented for a scaled one. A copy onto
+    * an overlapping area runs bottom-up when it moves down, so no source row is overwritten before it is read.
+    */
+  override def copyPixels(from: PixelRect, dyPx: Int): Unit =
+    painted.forgetClear()
+    val raw = image.createGraphics()
+    try
+      raw.setComposite(AlphaComposite.Src)
+      raw.copyArea(
+        math.round(from.xPx * deviceScaleX).toInt,
+        math.round(from.yPx * deviceScaleY).toInt,
+        math.round(from.widthPx * deviceScaleX).toInt,
+        math.round(from.heightPx * deviceScaleY).toInt,
+        0,
+        math.round(dyPx * deviceScaleY).toInt
+      )
+    finally raw.dispose()
 
   def hideCursor(): Unit = ()
 
@@ -288,6 +462,10 @@ object Java2DRenderSurface:
 
   final private[serenity] case class DeviceScale(x: Double, y: Double)
 
+  /** `Graphics2D` can only express "no clip" as a null `Shape`. */
+  @SuppressWarnings(Array("org.wartremover.warts.Null"))
+  private def restoreClip(g: Graphics2D, saved: Option[Shape]): Unit = g.setClip(saved.orNull)
+
   /** `Graphics2D.drawImage`'s `ImageObserver` callback exists for images that may still be loading asynchronously (e.g.
     * from a URL); every image this class ever draws is an already-fully-materialised `BufferedImage`, so the callback
     * can never fire and a `null` observer (Java's usual shorthand for "don't call me back") is equivalent to this
@@ -300,21 +478,6 @@ object Java2DRenderSurface:
     */
   private def awtColor(color: RenderColor, current: Color): Color =
     if current.getRGB == color.argb then current else color.toAwt
-
-  def forFrame(
-    metrics: CellMetrics,
-    font: Font,
-    canvas: javax.swing.JPanel,
-    onFlush: BufferedImage => Unit
-  ): Java2DRenderSurface =
-    forFrame(
-      metrics,
-      font,
-      canvas,
-      onFlush,
-      (width, height, imageType) => new BufferedImage(width, height, imageType),
-      contentPersists = false
-    )
 
   /** Build a frame surface over an image supplied by `acquireImage`.
     *
@@ -333,6 +496,7 @@ object Java2DRenderSurface:
     canvas: javax.swing.JPanel,
     onFlush: BufferedImage => Unit,
     acquireImage: (Int, Int, Int) => BufferedImage,
+    textCaches: SurfaceTextCaches,
     contentPersists: Boolean = true
   ): Java2DRenderSurface =
     val logicalWidth  = logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
@@ -353,7 +517,8 @@ object Java2DRenderSurface:
       deviceScaleX = scale.x,
       deviceScaleY = scale.y,
       contentPersists = contentPersists,
-      layerCacheOwnerOverride = Some(ScreenIdentity(canvas))
+      layerCacheOwnerOverride = Some(ScreenIdentity(canvas)),
+      textCaches = textCaches
     )
 
   def forImage(
@@ -361,7 +526,8 @@ object Java2DRenderSurface:
     metrics: CellMetrics,
     font: Font,
     canvas: javax.swing.JPanel,
-    onFlush: BufferedImage => Unit
+    onFlush: BufferedImage => Unit,
+    textCaches: SurfaceTextCaches
   ): Java2DRenderSurface =
     val logicalWidth  = logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
     val logicalHeight = logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
@@ -374,7 +540,8 @@ object Java2DRenderSurface:
       logicalWidthPx = logicalWidth,
       logicalHeightPx = logicalHeight,
       deviceScaleX = scale.x,
-      deviceScaleY = scale.y
+      deviceScaleY = scale.y,
+      textCaches = textCaches
     )
 
   /** Build a layer surface from numbers alone -- no `JPanel` required, unlike [[forFrame]]/[[forImage]]. Stage 1 of
@@ -392,33 +559,24 @@ object Java2DRenderSurface:
     deviceScaleX: Double,
     deviceScaleY: Double,
     onFlush: BufferedImage => Unit,
-    recycled: Option[BufferedImage] = None
+    textCaches: SurfaceTextCaches,
+    recycled: Option[BufferedImage] = None,
+    activity: SurfaceActivity = SurfaceActivity(),
+    bounds: Option[PixelRect] = None
   ): Java2DRenderSurface =
-    val width  = deviceImageDimension(logicalWidthPx, deviceScaleX)
-    val height = deviceImageDimension(logicalHeightPx, deviceScaleY)
-    val image = recycled
-      .filter(candidate => candidate.getWidth == width && candidate.getHeight == height)
-      .map(clearedForReuse)
-      .getOrElse(new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB))
-    new Java2DRenderSurface(
-      image,
+    LayerSurfaces.build(
       metrics,
       font,
+      logicalWidthPx,
+      logicalHeightPx,
+      deviceScaleX,
+      deviceScaleY,
       onFlush,
-      logicalWidthPx = logicalWidthPx,
-      logicalHeightPx = logicalHeightPx,
-      deviceScaleX = deviceScaleX,
-      deviceScaleY = deviceScaleY,
-      contentPersists = false
+      textCaches,
+      recycled,
+      activity,
+      bounds
     )
-
-  private def clearedForReuse(image: BufferedImage): BufferedImage =
-    val graphics = image.createGraphics()
-    try
-      graphics.setComposite(AlphaComposite.Clear)
-      graphics.fillRect(0, 0, image.getWidth, image.getHeight)
-    finally graphics.dispose()
-    image
 
   private[serenity] def deviceImageDimension(logicalDimensionPx: Int, deviceScale: Double): Int =
     math.ceil(logicalDimensionPx.max(1) * deviceScale.max(1.0)).toInt.max(1)

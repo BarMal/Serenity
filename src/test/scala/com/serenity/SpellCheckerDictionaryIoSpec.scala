@@ -27,7 +27,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private def writeDic(name: String, words: List[String]): java.nio.file.Path =
-    val path = Files.createTempFile(name, ".dic")
+    val path = TestTemp.file(name, ".dic")
     Files.writeString(path, (words.length.toString :: words).mkString("\n"), StandardCharsets.UTF_8)
     path
 
@@ -36,7 +36,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     words: List[String],
     affixRules: List[String]
   ): (java.nio.file.Path, java.nio.file.Path) =
-    val directory = Files.createTempDirectory(name)
+    val directory = TestTemp.directory(name)
     val dic       = directory.resolve(s"$name.dic")
     val aff       = directory.resolve(s"$name.aff")
     Files.writeString(dic, (words.length.toString :: words).mkString("\n"), StandardCharsets.UTF_8)
@@ -323,7 +323,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   it should "leave compoundCandidateIndex empty when no dictionary declares COMPOUNDRULE" in {
     val config = SpellCheckConfig(enabled = true, languages = List("fr"))
     val context =
-      DictionaryLoader.loadSnapshot(config, DictionaryCache(), List(Files.createTempDirectory("none").toString)).context
+      DictionaryLoader.loadSnapshot(config, DictionaryCache(), List(TestTemp.directory("none").toString)).context
 
     context.compoundCandidateIndex shouldBe CompoundCandidateIndex.empty
   }

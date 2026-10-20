@@ -144,6 +144,7 @@ class MenuModelSpec extends AnyFlatSpec with Matchers:
       "focus-down",
       "toggle-chapter-ghosts",
       "open-chapter-note",
+      "open-term-note",
       "toggle-notes-pin"
     )
   }

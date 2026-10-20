@@ -6,14 +6,14 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Covers the `Rope` <-> `TextEditing.CharacterSource` adapter and the rope-native word/grapheme-boundary extensions
-  * built on it, including across multi-leaf (`Node`) ropes where a naive adapter could get the leaf boundary wrong.
+  * built on it, including across multi-leaf (`Branch`) ropes where a naive adapter could get the leaf boundary wrong.
   */
 class RopeCharacterSourceSpec extends AnyFlatSpec with Matchers:
 
-  // Small leaves force multi-node ropes for short strings, so boundary scans cross leaf/`Node` splits.
+  // Small leaves force multi-node ropes for short strings, so boundary scans cross leaf/`Branch` splits.
   given balance: Balance = Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 3)
 
-  // `Rope` is sealed, so this delegates to a real `Leaf`/`Node` tree while itself extending the still-open `Leaf`
+  // `Rope` is sealed, so this delegates to a real `Leaf`/`Branch` tree while itself extending the still-open `Leaf`
   // purely to satisfy the type system (the same shape `RendererSnapshotReuseSpec.NonCollectingRope` uses). It
   // instruments `leafAt` -- the method `RopeCharacterSource.charAt` actually calls on every cache miss -- rather
   // than `index`, which the current `charAt` never calls at all, so counting it would pass trivially whether or not
@@ -28,7 +28,6 @@ class RopeCharacterSourceSpec extends AnyFlatSpec with Matchers:
     override def index(i: Int): Option[Char] = delegate.index(i)
 
     override def splitAt(index: Int): Option[(Rope, Rope)] = delegate.splitAt(index)
-    override def rebalance: Rope                           = this
 
     override def leafAt(index: Int): Option[(Int, String)] =
       leafAtCalls.incrementAndGet()

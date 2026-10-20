@@ -27,7 +27,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
   it should "handle available startup actions correctly" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-    val selectedFile = java.nio.file.Files.createTempFile("serenity-startup-options-open", ".txt")
+    val selectedFile = TestTemp.file("serenity-startup-options-open", ".txt")
     java.nio.file.Files.writeString(selectedFile, "opened from startup options")
 
     val program = for
@@ -39,7 +39,8 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
         stateManager1,
         stateManager1.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       // Option 1 is selected by default, just press Enter
       _               <- stateManager1.applyEvent(Enter)
@@ -60,7 +61,8 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
         stateManager3,
         stateManager3.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _             <- stateManager3.applyEvent(MoveDown) // Move to option 2
       _             <- stateManager3.applyEvent(Enter)
@@ -90,7 +92,8 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _ <- stateManager.applyEvent(InsertChar('w'))
       // The preset loads on the Presets lane and is applied once that settles (#1697).
@@ -122,7 +125,8 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _ <- stateManager.applyEvent(InsertChar('c'))
       // The preset loads on the Presets lane and is applied once that settles (#1697).

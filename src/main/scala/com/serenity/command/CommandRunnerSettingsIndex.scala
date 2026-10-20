@@ -29,11 +29,11 @@ final class CommandRunnerSettingsIndex(val inputs: CommandRunnerSettingsIndex.In
   private lazy val searchableGroups: List[SearchableGroup] =
     distinctGroupsBelow(settingsGroups).map(SearchableGroup.from)
 
-  // A preset-scoped copy of a leaf the global tree already has is never offered on its own.
+  // A preset page's copy of a setting is never offered on its own.
   private lazy val searchableLeaves: List[SettingLeaf] =
-    val leaves          = settingsGroups.flatMap(group => leavesOf(group, Nil, Nil))
-    val globalTargetIds = leaves.filterNot(_.isPresetScoped).map(_.item.id).toSet
-    leaves.filter(leaf => !leaf.isPresetScoped || !globalTargetIds.contains(leaf.item.id))
+    settingsGroups
+      .flatMap(group => leavesOf(group, Nil, Nil))
+      .filterNot(leaf => CommandRunnerSettingsPresetScope.isScopedItemId(leaf.item.id))
 
   def matchingSettingsResults(term: String): List[CommandSurfaceItem] =
     val lowerTerm = CommandRunnerSearch.normalizedSearchTerm(term)

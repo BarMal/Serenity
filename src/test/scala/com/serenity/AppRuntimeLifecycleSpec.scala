@@ -166,7 +166,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
       ),
       appConfig = AppConfig.default,
       makeStateManager = Some(logger =>
-        IO.blocking(java.nio.file.Files.createTempFile("serenity-session-root", ".tmp")).flatMap { fileRoot =>
+        IO.blocking(TestTemp.file("serenity-session-root", ".tmp")).flatMap { fileRoot =>
           StateManager.apply(
             logger,
             policy = SessionManager.SessionPolicy(saveOnAppClose = true),
@@ -186,7 +186,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
     given org.typelevel.log4cats.Logger[IO] =
       LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeFiberFailureSpec"))
 
-    val sessionRoot = Files.createTempDirectory("serenity-runtime-fiber-failure")
+    val sessionRoot = TestTemp.directory("serenity-runtime-fiber-failure")
 
     val program = AppRuntime.run(
       initialViewportSize = ViewportSize(120, 40),

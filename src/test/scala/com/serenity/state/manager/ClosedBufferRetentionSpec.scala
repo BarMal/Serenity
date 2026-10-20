@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.config.PreferredWindowSize
 import com.serenity.keystroke.events.{CloseTab, Enter, Event, InsertChar, LspEvent}
 import com.serenity.lsp.client.DocumentUri
@@ -85,7 +86,7 @@ class ClosedBufferRetentionSpec extends AnyFlatSpec with Matchers:
       val _      = stateManager.renderCaches.chapterGhosts.ghostsFor(noted, state.persisted.buffers)
 
   private def fixture(): Fixture =
-    val directory = Files.createTempDirectory("closed-buffer-retention-spec")
+    val directory = TestTemp.directory("closed-buffer-retention-spec")
     val program =
       for
         modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))

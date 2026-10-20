@@ -52,12 +52,16 @@ private[perf] object RenderBenchmarks:
   // Shared across the frame and markdown benchmarks, mirroring StateManager's cache reuse across renders (#1677).
   private val renderCaches = RenderCaches.create()
 
-  def frameBenchmarks(cursorWindow: SwingWindow): List[BenchmarkRunner.Benchmark] =
-    val longMeasuredLine = TextLayoutSnapshot.visualLineForText(
+  private lazy val longMeasuredLine =
+    TextLayoutSnapshot.visualLineForText(
       "Wi" * 8_000,
       bufferLine = 0,
-      textFont
+      textFont,
+      renderCaches.shapedText,
+      renderCaches.wrappedLines.layoutMemos
     )
+
+  def frameBenchmarks(cursorWindow: SwingWindow): List[BenchmarkRunner.Benchmark] =
     val richState        = editorStateForRichDocument(largeRichTextDocument(lines = 6_000))
     val multilineState   = editorState(largeMultilineDocument(lines = 15_000), None)
     val commentsState    = withDocumentComments(multilineState)
@@ -163,40 +167,18 @@ private[perf] object RenderBenchmarks:
     val markdownStateBase    = editorState(markdownSource, Some(LanguageId.Markdown))
     val markdownState = markdownStateBase.copy(persisted =
       markdownStateBase.persisted.copy(config =
-        AppConfig.default
+        AppConfig.conventional
           .withLineNumbers(false)
           .withoutStatusLine
           .withWordWrap(false)
-          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+          .withMarkdownViewMode(MarkdownViewMode.LivePreview)
       )
     )
-    val markdownPreviewWindow =
-      MarkdownDocumentPreview.previewWindow(
-        markdownLines,
-        activeLine = Some(1_200),
-        fallbackTopLine = 1_000,
-        cache = markdownPreviewCache,
-        maxSourceLines = 80
-      )
     val markdownHtmlFragment =
       MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
-    val markdownLensFrame = renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
+    val markdownLiveFrame = renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
 
     List(
-      BenchmarkRunner.Benchmark(
-        "markdown.preview.window_mapping",
-        3,
-        20,
-        () => assert(markdownPreviewWindow.firstSourceLine >= 0 && markdownPreviewWindow.source.nonEmpty),
-        () =>
-          MarkdownDocumentPreview.previewWindow(
-            markdownLines,
-            activeLine = Some(1_200),
-            fallbackTopLine = 1_000,
-            cache = markdownPreviewCache,
-            maxSourceLines = 80
-          )
-      ),
       BenchmarkRunner.Benchmark(
         "markdown.preview.html_fragment",
         2,
@@ -205,10 +187,10 @@ private[perf] object RenderBenchmarks:
         () => MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
       ),
       BenchmarkRunner.Benchmark(
-        "render.markdown.inline_lens",
+        "render.markdown.live_preview",
         2,
         BenchmarkIterationCounts.RenderMarkdown,
-        () => assert(renderedFrameHasPixels(markdownLensFrame)),
+        () => assert(renderedFrameHasPixels(markdownLiveFrame)),
         () => renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
       )
     )
@@ -242,7 +224,8 @@ private[perf] object RenderBenchmarks:
       logicalWidthPx = frameWidthPx,
       logicalHeightPx = frameHeightPx,
       deviceScaleX = deviceScale,
-      deviceScaleY = deviceScale
+      deviceScaleY = deviceScale,
+      textCaches = caches.surfaceText
     )
     RendererEntryPoints.render(
       state,
@@ -269,7 +252,8 @@ private[perf] object RenderBenchmarks:
       textFont,
       _ => (),
       logicalWidthPx = frameWidthPx,
-      logicalHeightPx = frameHeightPx
+      logicalHeightPx = frameHeightPx,
+      textCaches = renderCaches.surfaceText
     )
     surface.setFont(FontSpec.fromAwt(textFont))
     surface.clearViewport(Theme.light.background)

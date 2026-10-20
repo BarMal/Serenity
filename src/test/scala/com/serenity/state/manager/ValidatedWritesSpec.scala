@@ -1,12 +1,13 @@
 package com.serenity.state.manager
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.command.{Command, CommandCategory, CommandIntent, EditIntent}
-import com.serenity.config.{AppConfig, MarkdownViewMode, PreferredWindowSize}
+import com.serenity.config.PreferredWindowSize
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.session.SessionManager
@@ -46,7 +47,7 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
 
   private def stateManagerOver(modelRef: Ref[IO, Model]): IO[StateManager] =
     for
-      directory           <- IO.blocking(Files.createTempDirectory("validated-writes-spec"))
+      directory           <- IO.blocking(TestTemp.directory("validated-writes-spec"))
       themeNamesRef       <- Ref.of[IO, List[String]](Nil)
       quitSignal          <- Deferred[IO, Unit]
       lspQueue            <- LspEffectQueue.create
@@ -199,7 +200,7 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
       seen       <- Ref.of[IO, List[AppState]](Nil)
       cacheRef   <- Ref.of[IO, Option[MouseTargetCache]](None)
       operations <- StateManagerOperationBoundary.create(model, quietLogger)
-      directory  <- IO.blocking(Files.createTempDirectory("validated-writes-pipeline"))
+      directory  <- IO.blocking(TestTemp.directory("validated-writes-pipeline"))
     yield
       val stateRef = ModelViews.appRef(model)
       val statePort = new EventStatePort:
@@ -305,11 +306,20 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
     isInvalid(dismissed) shouldBe false
   }
 
-  private val markdownWithInlinePreview: AppState =
-    val initial = AppState.initial(AppConfig.default.withMarkdownViewMode(MarkdownViewMode.InlineLens))
+  private val markdownWithPreviewPanel: AppState =
+    val initial = AppState.initial
     val buffer  = initial.persisted.buffers(bufferId)
-    initial.copy(persisted =
-      initial.persisted.copy(buffers =
+    initial.copy(
+      runtime = initial.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("markdown-preview"),
+            SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        )
+      ),
+      persisted = initial.persisted.copy(buffers =
         initial.persisted.buffers.updated(
           bufferId,
           buffer.copy(document = buffer.document.copy(language = Some(LanguageId.Markdown), content = Rope("edited")))
@@ -318,16 +328,16 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
     )
 
   "The markdown-preview edit-generation bump" should "keep the previous state when the result is invalid" in {
-    val previous = markdownWithInlinePreview.copy(persisted =
-      markdownWithInlinePreview.persisted.copy(buffers =
-        markdownWithInlinePreview.persisted.buffers.updatedWith(bufferId)(
+    val previous = markdownWithPreviewPanel.copy(persisted =
+      markdownWithPreviewPanel.persisted.copy(buffers =
+        markdownWithPreviewPanel.persisted.buffers.updatedWith(bufferId)(
           _.map(buffer => buffer.copy(document = buffer.document.copy(content = Rope("original"))))
         )
       )
     )
     val program =
       for
-        rig    <- pipelineOver(withStaleBufferOrder(markdownWithInlinePreview))
+        rig    <- pipelineOver(withStaleBufferOrder(markdownWithPreviewPanel))
         seeded <- rig.stateRef.get
         _      <- rig.pipeline.scheduleMarkdownPreviewCommits(previous)
         after  <- rig.stateRef.get
@@ -340,16 +350,16 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "bump the generation of an edited buffer with a live preview" in {
-    val previous = markdownWithInlinePreview.copy(persisted =
-      markdownWithInlinePreview.persisted.copy(buffers =
-        markdownWithInlinePreview.persisted.buffers.updatedWith(bufferId)(
+    val previous = markdownWithPreviewPanel.copy(persisted =
+      markdownWithPreviewPanel.persisted.copy(buffers =
+        markdownWithPreviewPanel.persisted.buffers.updatedWith(bufferId)(
           _.map(buffer => buffer.copy(document = buffer.document.copy(content = Rope("original"))))
         )
       )
     )
     val program =
       for
-        rig   <- pipelineOver(markdownWithInlinePreview)
+        rig   <- pipelineOver(markdownWithPreviewPanel)
         _     <- rig.pipeline.scheduleMarkdownPreviewCommits(previous)
         after <- rig.stateRef.get
       yield after

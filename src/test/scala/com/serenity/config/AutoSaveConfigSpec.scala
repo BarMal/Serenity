@@ -3,6 +3,7 @@ package com.serenity.config
 import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -10,7 +11,7 @@ import org.scalatest.matchers.should.Matchers
 class AutoSaveConfigSpec extends AnyFlatSpec with Matchers:
 
   private def load(text: String): ConfigLoadResult =
-    val file: Path = Files.createTempFile("serenity-auto-save", ".conf")
+    val file: Path = TestTemp.file("serenity-auto-save", ".conf")
     try
       Files.writeString(file, text)
       ConfigManager.loadConfigResultIO(Some(file.toString)).unsafeRunSync() match

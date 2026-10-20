@@ -63,6 +63,10 @@ final class FindScan(val content: Rope, pattern: FindPattern):
     val (line, column) = content.offsetToLineColumn(span.start)
     FindResult(line, column)
 
+  /** [[resultFor]] each of `spans`, which must be in document order, converted in one pass over the document. */
+  def resultsFor(spans: Seq[FindSpan]): Vector[FindResult] =
+    content.offsetsToLineColumns(spans.map(_.start).toIndexedSeq).map((line, column) => FindResult(line, column))
+
   def offsetOf(result: FindResult): Int =
     content.lineColumnToOffset(result.line, result.column)
 
@@ -127,7 +131,7 @@ object FindSearch:
           .take(limit + 1 - forward.length)
           .toVector
     val all = wrapped ++ forward
-    FindMatches(all.take(limit).map(scan.resultFor).sorted, capped = all.length > limit)
+    FindMatches(scan.resultsFor(all.take(limit)).sorted, capped = all.length > limit)
 
   /** The next match after `offset`, wrapping to the first in the document. `skipMatchAt` steps past a match starting
     * exactly at `offset` -- the current one -- instead of returning it.

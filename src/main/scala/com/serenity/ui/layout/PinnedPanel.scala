@@ -3,7 +3,7 @@ package com.serenity.ui.layout
 import java.nio.file.Path
 
 import com.serenity.state.models.{BufferId, SurfaceContent, SurfaceId}
-import com.serenity.ui.widget.{EndBehaviour, ListScroll, SelectableList}
+import com.serenity.ui.widget.{EndBehaviour, ListScroll, SelectableList, TreeChildren, TreeNode, TreeRow, TreeView}
 
 enum PanelPosition:
   case Left, Right, Bottom, Top
@@ -65,10 +65,14 @@ final case class DirectoryTreeData(
     failed: Map[Path, String] = Map.empty
 ):
 
-  /** Flattened once per tree value. Moving the selection or repainting reuses the same tree, so only what makes a new
-    * one -- expanding, collapsing or a new listing -- pays for flattening again.
+  /** Built and flattened once per tree value. Moving the selection or repainting reuses the same tree, so only what
+    * makes a new one -- expanding, collapsing or a new listing -- pays for flattening again.
     */
-  private lazy val flattenedRows: Vector[DirectoryTreeRow] = DirectoryTreeData.flatten(this)
+  private lazy val nodes: Vector[TreeNode[Path, DirectoryTreeNode]] =
+    Vector(DirectoryTreeData.node(this, rootPath, DirectoryTreeData.nameOf(rootPath), isDirectory = true))
+  private lazy val treeRows: Vector[TreeRow[Path, DirectoryTreeNode]] =
+    TreeView.flatten(nodes, expandedPaths + rootPath)
+  private lazy val flattenedRows: Vector[DirectoryTreeRow] = treeRows.map(DirectoryTreeData.rowOf(this, _))
 
   def awaitingListing: Set[Path] =
     (expandedPaths + rootPath).filter(path =>
@@ -105,6 +109,15 @@ final case class DirectoryTreeRow(
     failure: Option[String] = None
 )
 
+/** What the explorer's [[TreeView]] carries for each file or folder besides its path. */
+final case class DirectoryTreeNode(
+    path: Path,
+    name: String,
+    isDirectory: Boolean,
+    isLoading: Boolean,
+    failure: Option[String]
+)
+
 object DirectoryTreeData:
 
   def visibleRows(tree: DirectoryTreeData): Vector[DirectoryTreeRow] = tree.flattenedRows
@@ -127,44 +140,77 @@ object DirectoryTreeData:
       endBehaviour = EndBehaviour.Stop
     )
 
+  /** The explorer as a [[TreeView]] selecting `selectedPath`'s row, scrolled to where `scroll` shows them in
+    * `viewportRows`: the widget that gives the explorer its Left/Right/Enter semantics.
+    */
+  def treeView(
+    tree: DirectoryTreeData,
+    selectedPath: Option[Path],
+    scroll: ListScroll,
+    viewportRows: Int
+  ): TreeView[Path, DirectoryTreeNode] =
+    val rows     = tree.treeRows
+    val selected = selectedPath.map(path => rows.indexWhere(_.node.key == path)).filter(_ >= 0)
+    TreeView(
+      tree.nodes,
+      tree.expandedPaths + tree.rootPath,
+      SelectableList(
+        rows,
+        selected,
+        offset = scroll.shownOffset(rows.size, selected, viewportRows),
+        endBehaviour = EndBehaviour.Stop
+      )
+    )
+
   def visibleEntries(tree: DirectoryTreeData): List[(DirEntry, Int)] =
     visibleRows(tree)
       .filterNot(_.isRoot)
       .map(row => DirEntry(row.path, row.name, row.isDirectory) -> (row.depth - 1))
       .toList
 
-  private def flatten(tree: DirectoryTreeData): Vector[DirectoryTreeRow] =
-    rootRow(tree) +: flattenChildren(tree, tree.rootPath, depth = 1)
+  private def nameOf(path: Path): String = path.getFileName.toString
 
-  private def rootRow(tree: DirectoryTreeData): DirectoryTreeRow =
-    DirectoryTreeRow(
-      path = tree.rootPath,
-      name = tree.rootPath.getFileName.toString,
-      isDirectory = true,
-      depth = 0,
-      isRoot = true,
-      isExpanded = true,
-      isLoaded = tree.entries.contains(tree.rootPath),
-      isLoading = tree.loading.contains(tree.rootPath),
-      failure = tree.failed.get(tree.rootPath)
+  private def node(
+    tree: DirectoryTreeData,
+    path: Path,
+    name: String,
+    isDirectory: Boolean
+  ): TreeNode[Path, DirectoryTreeNode] =
+    TreeNode(
+      path,
+      DirectoryTreeNode(path, name, isDirectory, tree.loading.contains(path), tree.failed.get(path)),
+      childrenOf(tree, path, isDirectory)
     )
 
-  private def flattenChildren(tree: DirectoryTreeData, directory: Path, depth: Int): Vector[DirectoryTreeRow] =
-    tree.entries.getOrElse(directory, Nil).toVector.flatMap { entry =>
-      val isExpanded = entry.isDirectory && tree.expandedPaths.contains(entry.path)
-      val row = DirectoryTreeRow(
-        path = entry.path,
-        name = entry.name,
-        isDirectory = entry.isDirectory,
-        depth = depth,
-        isRoot = false,
-        isExpanded = isExpanded,
-        isLoaded = entry.isDirectory && tree.entries.contains(entry.path),
-        isLoading = tree.loading.contains(entry.path),
-        failure = tree.failed.get(entry.path)
-      )
-      if isExpanded then row +: flattenChildren(tree, entry.path, depth + 1) else Vector(row)
-    }
+  private def childrenOf(
+    tree: DirectoryTreeData,
+    directory: Path,
+    isDirectory: Boolean
+  ): TreeChildren[Path, DirectoryTreeNode] =
+    if !isDirectory then TreeChildren.Leaf
+    else
+      tree.entries.get(directory) match
+        case Some(listing) =>
+          TreeChildren.Loaded(listing.toVector.map(entry => node(tree, entry.path, entry.name, entry.isDirectory)))
+        case None =>
+          tree.failed.get(directory) match
+            case Some(reason)                             => TreeChildren.Failed(reason)
+            case None if tree.loading.contains(directory) => TreeChildren.Loading
+            case None                                     => TreeChildren.Unloaded
+
+  private def rowOf(tree: DirectoryTreeData, row: TreeRow[Path, DirectoryTreeNode]): DirectoryTreeRow =
+    val shown = row.node.value
+    DirectoryTreeRow(
+      path = shown.path,
+      name = shown.name,
+      isDirectory = shown.isDirectory,
+      depth = row.depth,
+      isRoot = row.parent.isEmpty,
+      isExpanded = row.expanded,
+      isLoaded = shown.isDirectory && tree.entries.contains(shown.path),
+      isLoading = shown.isLoading,
+      failure = shown.failure
+    )
 
 final case class DirEntry(
     path: Path,

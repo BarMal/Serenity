@@ -17,11 +17,11 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
   private def keys(changes: List[PresetChange]): List[String] = changes.map(_.key)
 
   "UiPresetDiff.changes" should "report nothing when a preset already matches the current state" in {
-    val current = AppConfig.default
+    val current = AppConfig.conventional
     val preset = UiPreset(
       name = "Custom",
       config = current,
-      themeName = Theme.dark.name
+      themeName = Some(Theme.dark.name)
     )
 
     val changes = UiPresetDiff.changes(
@@ -36,11 +36,11 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "capture a single scalar field change for a custom preset" in {
-    val current = AppConfig.default.withLineNumbers(false)
+    val current = AppConfig.conventional.withLineNumbers(false)
     val preset = UiPreset(
       name = "Custom",
       config = current.withLineNumbers(true),
-      themeName = Theme.dark.name
+      themeName = Some(Theme.dark.name)
     )
 
     val changes = UiPresetDiff.changes(
@@ -58,12 +58,12 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "exclude fields the preset leaves untouched" in {
-    val current = AppConfig.default.withLineNumbers(false).withPaneHeaders(true)
+    val current = AppConfig.conventional.withLineNumbers(false).withPaneHeaders(true)
     val preset = UiPreset(
       name = "Custom",
       // showPaneHeaders is left at the current value; only showLineNumbers differs.
       config = current.withLineNumbers(true),
-      themeName = Theme.dark.name
+      themeName = Some(Theme.dark.name)
     )
 
     val changes = UiPresetDiff.changes(
@@ -78,11 +78,11 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "diff a custom (non-built-in) preset by plain config replacement, including a theme change" in {
-    val current = AppConfig.default
+    val current = AppConfig.conventional
     val preset = UiPreset(
       name = "My Saved Setup",
       config = current.withSyntaxHighlighting(!current.languageToolsConfig.syntaxHighlightingEnabled),
-      themeName = Theme.light.name
+      themeName = Some(Theme.light.name)
     )
 
     val changes = UiPresetDiff.changes(
@@ -100,7 +100,7 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
     val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
 
     val changes = UiPresetDiff.changes(
-      currentConfig = AppConfig.default,
+      currentConfig = AppConfig.conventional,
       currentThemeName = Theme.light.name,
       currentHasDockedPanels = false,
       currentHasWorkspaceTree = false,
@@ -114,7 +114,7 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
     val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
 
     val changes = UiPresetDiff.changes(
-      currentConfig = AppConfig.default,
+      currentConfig = AppConfig.conventional,
       currentThemeName = Theme.light.name,
       currentHasDockedPanels = false,
       currentHasWorkspaceTree = false,
@@ -132,12 +132,12 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report docked-panel and workspace-tree presence changes" in {
-    val current = AppConfig.default
+    val current = AppConfig.conventional
     val preset  = UiPreset.builtIn("Code").getOrElse(fail("missing Code preset"))
 
     val changes = UiPresetDiff.changes(
       currentConfig = current,
-      currentThemeName = preset.themeName,
+      currentThemeName = preset.themeName.getOrElse(""),
       currentHasDockedPanels = false,
       currentHasWorkspaceTree = false,
       preset = preset
@@ -151,20 +151,20 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
     // Every field mergeBuiltInWorkflowConfig's "code" case actually assigns (UiPreset.scala:178-182), forced to a
     // value that differs from what the Code preset carries, so each one is guaranteed to show up as a change --
     // fields the merge leaves alone (e.g. statusLine, showPaneHeaders, blurRadius) are left at their defaults, which
-    // the Code preset also inherits from AppConfig.default, so they must NOT show up.
-    val current = AppConfig.default
+    // the Code preset also inherits from AppConfig.conventional, so they must NOT show up.
+    val current = AppConfig.conventional
       .withAppMode(AppMode.Prose)
       .withFontConfig(FontConfig(codeFontFamily = "Current Code Font"))
       .withLineNumbers(false)
       .withInterfaceDensity(InterfaceDensity.Spacious)
       .withSyntaxHighlighting(false)
-      .withSpellCheck(AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = true))
+      .withSpellCheck(AppConfig.conventional.languageToolsConfig.spellCheck.copy(enabled = true))
 
     val codePreset = UiPreset.builtIn("Code").getOrElse(fail("missing Code preset"))
 
     val changes = UiPresetDiff.changes(
       currentConfig = current,
-      currentThemeName = codePreset.themeName,
+      currentThemeName = codePreset.themeName.getOrElse(""),
       currentHasDockedPanels = true,
       currentHasWorkspaceTree = false,
       preset = codePreset
@@ -181,27 +181,39 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
   }
 
   "UiPresetDiff.applySelected" should "apply only the selected scalar field, leaving the rest of the config as-is" in {
-    val current = AppConfig.default.withLineNumbers(false).withSyntaxHighlighting(true)
+    val current = AppConfig.conventional.withLineNumbers(false).withSyntaxHighlighting(true)
     val preset = UiPreset(
       name = "Custom",
       config = current.withLineNumbers(true).withSyntaxHighlighting(false),
-      themeName = Theme.dark.name
+      themeName = Some(Theme.dark.name)
     )
-    val state = AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = current, theme = Theme.dark))
+    val state = AppState
+      .initial(AppConfig.conventional)
+      .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = current, theme = Theme.dark))
 
-    val applied = UiPresetDiff.applySelected(state, Theme.dark, preset, Set("editor.line_numbers"))
+    val applied = UiPresetDiff.applySelected(state, Some(Theme.dark), preset, Set("editor.line_numbers"))
 
     applied.persisted.config.surfaceConfig.showLineNumbers shouldBe true
     applied.persisted.config.languageToolsConfig.syntaxHighlightingEnabled shouldBe true
   }
 
   it should "leave the theme untouched when \"theme\" is not selected, and apply it when it is" in {
-    val current = AppConfig.default
-    val preset  = UiPreset(name = "Custom", config = current, themeName = Theme.light.name)
-    val state = AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = current, theme = Theme.dark))
+    val current = AppConfig.conventional
+    val preset  = UiPreset(name = "Custom", config = current, themeName = Some(Theme.light.name))
+    val state = AppState
+      .initial(AppConfig.conventional)
+      .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = current, theme = Theme.dark))
 
-    UiPresetDiff.applySelected(state, Theme.light, preset, Set.empty).persisted.theme.name shouldBe Theme.dark.name
-    UiPresetDiff.applySelected(state, Theme.light, preset, Set("theme")).persisted.theme.name shouldBe Theme.light.name
+    UiPresetDiff
+      .applySelected(state, Some(Theme.light), preset, Set.empty)
+      .persisted
+      .theme
+      .name shouldBe Theme.dark.name
+    UiPresetDiff
+      .applySelected(state, Some(Theme.light), preset, Set("theme"))
+      .persisted
+      .theme
+      .name shouldBe Theme.light.name
   }
 
   it should "leave docked panels untouched when neither layout key is selected" in {
@@ -210,13 +222,15 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("panel should be capturable"))
     val preset = UiPreset(
       name = "Custom",
-      config = AppConfig.default,
-      themeName = Theme.dark.name,
+      config = AppConfig.conventional,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel))
     )
-    val state = AppState.initial.copy(persisted = AppState.initial.persisted.copy(theme = Theme.dark))
+    val state = AppState
+      .initial(AppConfig.conventional)
+      .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(theme = Theme.dark))
 
-    val applied = UiPresetDiff.applySelected(state, Theme.dark, preset, Set.empty)
+    val applied = UiPresetDiff.applySelected(state, Some(Theme.dark), preset, Set.empty)
 
     applied.pinnedSurfaces shouldBe empty
   }
@@ -227,29 +241,33 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("panel should be capturable"))
     val preset = UiPreset(
       name = "Custom",
-      config = AppConfig.default,
-      themeName = Theme.dark.name,
+      config = AppConfig.conventional,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel))
     )
-    val state = AppState.initial.copy(persisted = AppState.initial.persisted.copy(theme = Theme.dark))
+    val state = AppState
+      .initial(AppConfig.conventional)
+      .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(theme = Theme.dark))
 
-    val applied = UiPresetDiff.applySelected(state, Theme.dark, preset, Set("dockedPanels"))
+    val applied = UiPresetDiff.applySelected(state, Some(Theme.dark), preset, Set("dockedPanels"))
 
     applied.pinnedSurfaces should have size 1
   }
 
   it should "apply a composite group wholesale when selected, and leave it untouched when not" in {
-    val current = AppConfig.default
+    val current = AppConfig.conventional
     val preset =
       UiPreset(
         name = "Custom",
         config = current.withHotkeyOverride(HotkeyAction.Save, "ctrl+shift+s"),
-        themeName = Theme.dark.name
+        themeName = Some(Theme.dark.name)
       )
-    val state = AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = current, theme = Theme.dark))
+    val state = AppState
+      .initial(AppConfig.conventional)
+      .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = current, theme = Theme.dark))
 
-    val untouched = UiPresetDiff.applySelected(state, Theme.dark, preset, Set.empty)
-    val applied   = UiPresetDiff.applySelected(state, Theme.dark, preset, Set("hotkey"))
+    val untouched = UiPresetDiff.applySelected(state, Some(Theme.dark), preset, Set.empty)
+    val applied   = UiPresetDiff.applySelected(state, Some(Theme.dark), preset, Set("hotkey"))
 
     untouched.persisted.config.inputConfig.hotkeyConfig shouldBe current.inputConfig.hotkeyConfig
     applied.persisted.config.inputConfig.hotkeyConfig shouldBe preset.config.inputConfig.hotkeyConfig
@@ -258,12 +276,12 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
   // The terminal on macOS holds the Ctrl rewrite of the Cmd defaults (`forTerminalUse`); a preset is stored with the
   // platform's own, so applying it must not bring the Cmd bindings, or lose the terminal adjustment, with it.
   private val macTerminalConfig =
-    AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X").forTerminalUse)
+    AppConfig.conventional.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X").forTerminalUse)
 
   private val macPlatformPreset = UiPreset(
     name = "Custom",
-    config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X")),
-    themeName = Theme.dark.name
+    config = AppConfig.conventional.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X")),
+    themeName = Some(Theme.dark.name)
   )
 
   private def terminalState: AppState = AppState.initial(macTerminalConfig)
@@ -277,13 +295,13 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep the Ctrl bindings and the terminal adjustment when the keyboard group is applied" in {
-    val applied = UiPresetDiff.applySelected(terminalState, Theme.dark, macPlatformPreset, Set("hotkey"))
+    val applied = UiPresetDiff.applySelected(terminalState, Some(Theme.dark), macPlatformPreset, Set("hotkey"))
 
     saveBinding(applied) shouldBe (List("ctrl+s"), true)
   }
 
   it should "keep the Ctrl bindings and the terminal adjustment when the whole preset is applied" in {
-    val applied = UiPreset.applyToState(macPlatformPreset, terminalState, Theme.dark)
+    val applied = UiPreset.applyToState(macPlatformPreset, terminalState, Some(Theme.dark))
 
     saveBinding(applied) shouldBe (List("ctrl+s"), true)
   }

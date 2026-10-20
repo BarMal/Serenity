@@ -1,7 +1,6 @@
 package com.serenity
 
 import java.awt.Font
-import java.nio.file.Files
 
 import com.serenity.config.*
 import com.serenity.rope.Balance
@@ -18,7 +17,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "UiPreset" should "capture config, theme, preferred window size, and pinned panels from app state" in {
-    val root = Files.createTempDirectory("ui-preset-root")
+    val root = TestTemp.directory("ui-preset-root")
     val config = AppConfig.default
       .withFontConfig(FontConfig(codeFontFamily = "Monospaced", fontSize = 18.0f))
       .withInterfaceDensity(InterfaceDensity.Spacious)
@@ -40,12 +39,12 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     preset.config.editorConfig.fontConfig.codeFontSize shouldBe 18.0f
     preset.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     preset.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1440, 960))
-    preset.themeName shouldBe Theme.light.name
+    preset.themeName shouldBe Some(Theme.light.name)
     preset.pinnedPanels.map(panel => panel.position -> panel.size) shouldBe List(PanelPosition.Left -> 32)
   }
 
   it should "restore captured config, theme, and pinned panels onto app state" in {
-    val root = Files.createTempDirectory("ui-preset-restore")
+    val root = TestTemp.directory("ui-preset-restore")
     val initial = DockedPanelFixtures.dock(
       AppState.initial,
       SurfaceId("old-panel"),
@@ -58,7 +57,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       config = AppConfig.default
         .withFontConfig(FontConfig(textFontFamily = "Serif", textFontSize = 17.0f))
         .withPreferredWindowSize(PreferredWindowSize(1280, 800)),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(
         SessionDockedPanel(
           "panel-1",
@@ -73,7 +72,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val restored = UiPreset.applyToState(preset, initial, Theme.dark)
+    val restored = UiPreset.applyToState(preset, initial, Some(Theme.dark))
 
     restored.persisted.theme.name shouldBe Theme.dark.name
     restored.persisted.config.editorConfig.fontConfig.textFontFamily shouldBe "Serif"
@@ -180,7 +179,8 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     UiPreset.Preview.fromPreset(writing) shouldBe UiPreset.Preview(
       "Writing",
-      "rich text default; spacious density; Serif 18pt prose; 1 editor pane"
+      "rich text default; spacious density; Serif 18pt prose; 1 editor pane",
+      Some(writing.config)
     )
   }
 
@@ -189,8 +189,9 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
     val compact = UiPreset.builtIn("Compact").getOrElse(fail("missing Compact preset"))
 
-    val compactState = UiPreset.applyToState(compact, UiPreset.applyToState(writing, initial, Theme.dark), Theme.dark)
-    val restoredWriting = UiPreset.applyToState(writing, compactState, Theme.dark)
+    val compactState =
+      UiPreset.applyToState(compact, UiPreset.applyToState(writing, initial, Some(Theme.dark)), Some(Theme.dark))
+    val restoredWriting = UiPreset.applyToState(writing, compactState, Some(Theme.dark))
 
     compactState.persisted.config shouldBe compact.config
     compactState.pinnedSurfaces shouldBe Nil
@@ -239,7 +240,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Two Pane Drafting",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = Nil,
       targetEditorPaneCount = Some(2)
     )
@@ -255,7 +256,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Review",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel))
     )
 
@@ -269,7 +270,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Drafting",
       config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Compact),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
@@ -283,7 +284,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     patched.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     patched.config.uiElementGap shouldBe Some(4)
     patched.config.uiOutlineThicknessPx shouldBe 5
-    patched.themeName shouldBe Theme.light.name
+    patched.themeName shouldBe Some(Theme.light.name)
     patched.pinnedPanels shouldBe List(panel)
     patched.targetEditorPaneCount shouldBe Some(1)
   }
@@ -295,7 +296,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Drafting",
       config = AppConfig.default.withFontConfig(FontConfig(textFontFamily = Font.SANS_SERIF, textFontSize = 12.0f)),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
@@ -329,18 +330,18 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       config = AppConfig.default
         .withDefaultDocumentMode(DefaultDocumentMode.PlainText)
         .withMarkdownViewMode(MarkdownViewMode.Source),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
     val sourceConfig = AppConfig.default
       .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
-      .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      .withMarkdownViewMode(MarkdownViewMode.LivePreview)
 
     val patched = UiPreset.Patch.DocumentDefaults(sourceConfig).applyTo(preset)
 
     patched.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    patched.config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
+    patched.config.markdownViewMode shouldBe MarkdownViewMode.LivePreview
     patched.pinnedPanels shouldBe List(panel)
     patched.targetEditorPaneCount shouldBe Some(1)
   }
@@ -355,7 +356,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
         .withLineNumbers(true)
         .withStatusLinePlacement(StatusLinePlacement.Pinned)
         .withWordWrap(true),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
@@ -391,7 +392,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       config = AppConfig.default.withSpellCheck(
         SpellCheckConfig(enabled = false, languages = List("en"), additionalWords = List("serenity"))
       ),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )

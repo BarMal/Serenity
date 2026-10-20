@@ -1,7 +1,5 @@
 package com.serenity
 
-import scala.concurrent.duration.*
-
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
@@ -12,10 +10,11 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.manager.{StateManager, ViewportStateReducer}
 import com.serenity.state.models.*
-import com.serenity.testkit.{EditingStateFixtures, SharedDictionary, VirtualTime}
+import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -194,7 +193,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
         lineText = buffer.document.content.getLine(0).getOrElse(""),
         cursorColumn = 8,
         visibleWidthPx = CellMetrics.fromFont(font).charWidth * 4,
-        font = font
+        font = font,
+        shapedText = ShapedTextCache()
       )
 
       buffer.document.content.collect() shouldBe "iiiiiiii"
@@ -294,10 +294,9 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
       // Type search term
       _ <- "SPECIAL_MARKER".toList.traverse_(char => sm.applyEvent(InsertChar(char)))
-      // The debounced find search runs on a background fiber (`scheduleFindSearch`); this sleep only needs to
-      // outlast `FindSearchDebounce` -- under the virtual clock it resolves as soon as every other fiber is
-      // parked, rather than racing real wall-clock time.
-      _ <- IO.sleep(150.millis)
+      // The debounced find search runs on the lanes' timer fiber, which keeps the clock the manager was built
+      // under (the real one), so wait for the effects rather than for time to pass.
+      _ <- sm.runtimeLifecycle.awaitEffects
 
       // Then: Live find should scroll to first occurrence (line 50)
       afterFindState <- sm.getCurrentState
@@ -332,7 +331,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       }
     yield ()
 
-    VirtualTime.runVirtual(program)
+    program.unsafeRunSync()
   }
 
   it should "handle viewport synchronization across split panes" in new ScrollFixture:

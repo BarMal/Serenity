@@ -3,6 +3,7 @@ package com.serenity.spellcheck
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
+import com.serenity.TestTemp
 import com.serenity.config.SpellCheckConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -13,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
 class AffixedWordListSpec extends AnyFlatSpec with Matchers:
 
   private def load(affix: String, entries: String*): DictionaryContext =
-    val directory = Files.createTempDirectory("serenity-affixed-list")
+    val directory = TestTemp.directory("serenity-affixed-list")
     Files.writeString(directory.resolve("xx.aff"), affix, StandardCharsets.UTF_8)
     Files.writeString(
       directory.resolve("xx.dic"),

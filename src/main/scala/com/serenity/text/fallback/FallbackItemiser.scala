@@ -10,7 +10,8 @@ final case class FallbackRun(from: Int, until: Int, slot: FontSlot)
   *   - a cluster asking for emoji presentation (VS16, Emoji_Presentation, or a pictographic ZWJ sequence) takes the
   *     emoji slot when that slot covers it;
   *   - a Common or Inherited cluster (spaces, punctuation, digits) stays on the previous cluster's slot when that slot
-  *     covers it, so neutrals inside CJK or Arabic text do not flap back to the primary font;
+  *     covers it, so neutrals inside CJK or Arabic text do not flap back to the primary font, unless `stickyNeutrals`
+  *     is off, as on a monospaced grid where every neutral the primary covers belongs in its cell;
   *   - otherwise the first slot covering every codepoint, ignoring default-ignorables such as ZWJ and selectors, then
   *     the first slot covering the base, with VS15 trying the non-emoji slots first;
   *   - a cluster no slot covers stays in the primary, whose missing glyph then does not split the run.
@@ -24,12 +25,18 @@ object FallbackItemiser:
   private enum Presentation:
     case Text, Emoji, Unspecified
 
-  def itemise(text: String, from: Int, until: Int, coverage: GlyphCoverage): Vector[FallbackRun] =
+  def itemise(
+    text: String,
+    from: Int,
+    until: Int,
+    coverage: GlyphCoverage,
+    stickyNeutrals: Boolean = true
+  ): Vector[FallbackRun] =
     val start = math.max(0, from)
     val end   = math.min(until, text.length)
     if start >= end then Vector.empty
     else if primaryCoversPlainly(text, start, end, coverage) then Vector(FallbackRun(start, end, FontSlot.Primary))
-    else itemiseClusters(text, start, end, coverage)
+    else itemiseClusters(text, start, end, coverage, stickyNeutrals)
 
   /** The common case, checked per codepoint without walking clusters so it allocates nothing beyond the one run. */
   @annotation.tailrec
@@ -43,7 +50,13 @@ object FallbackItemiser:
           (isDefaultIgnorable(codePoint) || coverage.covers(FontSlot.Primary, codePoint))
       plain && primaryCoversPlainly(text, index + Character.charCount(codePoint), end, coverage)
 
-  private def itemiseClusters(text: String, start: Int, end: Int, coverage: GlyphCoverage): Vector[FallbackRun] =
+  private def itemiseClusters(
+    text: String,
+    start: Int,
+    end: Int,
+    coverage: GlyphCoverage,
+    stickyNeutrals: Boolean
+  ): Vector[FallbackRun] =
     @annotation.tailrec
     def loop(
       clusterStart: Int,
@@ -54,7 +67,7 @@ object FallbackItemiser:
       if clusterStart >= end then runSlot.fold(runs)(slot => runs :+ FallbackRun(runStart, end, slot))
       else
         val clusterEnd = math.min(end, TextEditing.nextGraphemeBoundary(text, clusterStart))
-        val slot       = slotFor(text, clusterStart, clusterEnd, runSlot, coverage)
+        val slot       = slotFor(text, clusterStart, clusterEnd, runSlot, coverage, stickyNeutrals)
         runSlot match
           case Some(current) if current == slot => loop(clusterEnd, runStart, runSlot, runs)
           case Some(current) =>
@@ -67,7 +80,8 @@ object FallbackItemiser:
     start: Int,
     end: Int,
     previous: Option[FontSlot],
-    coverage: GlyphCoverage
+    coverage: GlyphCoverage,
+    stickyNeutrals: Boolean
   ): FontSlot =
     val base                          = text.codePointAt(start)
     val presentation                  = presentationOf(text, start, end, base)
@@ -75,8 +89,9 @@ object FallbackItemiser:
     def isEmojiSlot(slot: FontSlot)   = coverage.emojiSlot.contains(slot)
     val preferred: Option[FontSlot] = presentation match
       case Presentation.Emoji => coverage.emojiSlot.filter(coversCluster)
-      case Presentation.Text  => previous.filter(slot => isNeutral(base) && !isEmojiSlot(slot) && coversCluster(slot))
-      case Presentation.Unspecified => previous.filter(slot => isNeutral(base) && coversCluster(slot))
+      case Presentation.Text =>
+        previous.filter(slot => stickyNeutrals && isNeutral(base) && !isEmojiSlot(slot) && coversCluster(slot))
+      case Presentation.Unspecified => previous.filter(slot => stickyNeutrals && isNeutral(base) && coversCluster(slot))
     val candidates = Vector.tabulate(coverage.slotCount)(FontSlot(_))
     val ordered = presentation match
       case Presentation.Text =>

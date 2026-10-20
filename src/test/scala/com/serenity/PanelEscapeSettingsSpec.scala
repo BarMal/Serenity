@@ -69,7 +69,7 @@ class PanelEscapeSettingsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "keep the preset editor's Panels group to arranging panels" in {
+  it should "leave the Panels group off the preset editor, whose layout Overwrite Preset captures" in {
     given registry: CommandRegistry = CommandRegistry.default
     val runner = CommandRunner.empty.activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
     def walk(items: List[CommandSurfaceItem]): List[CommandSurfaceItem] =
@@ -77,11 +77,8 @@ class PanelEscapeSettingsSpec extends AnyFlatSpec with Matchers:
         case group: CommandSurfaceItem.GroupItem => group :: walk(group.children)
         case item                                => List(item)
       }
-    val presetPanels = walk(runner.settingsGroups)
-      .collectFirst {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-workspace-layout" => group
-      }
-      .getOrElse(fail("missing the preset Panels group"))
+    val groupIds = walk(runner.settingsGroups).collect { case group: CommandSurfaceItem.GroupItem => group.id }
 
-    presetPanels.children.map(_.id) shouldBe List("arrange-panels")
+    groupIds should contain("settings-workspace-layout")
+    groupIds should not contain "settings-preset-workspace-layout"
   }

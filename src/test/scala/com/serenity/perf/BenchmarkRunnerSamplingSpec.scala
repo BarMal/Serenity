@@ -45,6 +45,35 @@ class BenchmarkRunnerSamplingSpec extends AnyFlatSpec with Matchers:
     BenchmarkRunner.csvRow(result(p50Ms = 1.0, samples = 137)).split(',')(1) shouldBe "137"
   }
 
+  "csvRow memory columns" should "append retained_bytes after the allocation columns" in {
+    val row = BenchmarkRunner.csvRow(result(p50Ms = 1.0).copy(retainedBytes = Some(123456L)))
+    row.split(",", -1).length shouldBe 11
+    row.split(",", -1)(10) shouldBe "123456"
+  }
+
+  it should "leave retained_bytes empty for a timed benchmark" in {
+    BenchmarkRunner.csvRow(result(p50Ms = 1.0)).split(",", -1)(10) shouldBe ""
+  }
+
+  "tracksAllocation" should "cover every laptop, render and command runner benchmark by prefix" in
+    List(
+      "laptop.render.new_frame",
+      "laptop.input.anything",
+      "render.markdown.live_preview",
+      "command_runner.palette.keystroke",
+      "layout.anchor_wrap.warm_caret_lookup",
+      "layout.cold_font.glyph_advances"
+    ).foreach(name => withClue(name)(BenchmarkRunner.tracksAllocation(name) shouldBe true))
+
+  it should "keep the explicitly listed benchmarks and skip the rest" in {
+    BenchmarkRunner.tracksAllocation("reducer.backspace") shouldBe true
+    BenchmarkRunner.tracksAllocation("rope.large_json.search") shouldBe false
+  }
+
+  "the header" should "name the retained_bytes column last" in {
+    BenchmarkRunner.csvHeader.split(',').last shouldBe "retained_bytes"
+  }
+
   private def result(p50Ms: Double, samples: Int = 20): BenchmarkRunner.BenchmarkResult =
     BenchmarkRunner.BenchmarkResult(
       name = "x",
@@ -58,5 +87,13 @@ class BenchmarkRunnerSamplingSpec extends AnyFlatSpec with Matchers:
       allocationP50Bytes = None,
       allocationP95Bytes = None
     )
+
+  "slowdownFactor" should "read a factor above one" in {
+    BenchmarkRunner.slowdownFactor(Some("2")) shouldBe Some(2.0)
+  }
+
+  it should "leave the benchmark untouched when unset, one, below one or not a number" in {
+    List(None, Some("1"), Some("0.5"), Some("fast")).map(BenchmarkRunner.slowdownFactor) shouldBe List.fill(4)(None)
+  }
 
 end BenchmarkRunnerSamplingSpec

@@ -39,10 +39,20 @@ final private[manager] class StateManagerEditIntentEffects(
         enqueueEvent(com.serenity.keystroke.events.PasteFromHistory(entry))
       case EditIntent.SelectAll =>
         enqueueEvent(com.serenity.keystroke.events.SelectAll)
+      case EditIntent.SelectNextOccurrence =>
+        enqueueEvent(com.serenity.keystroke.events.SelectNextOccurrence)
+      case EditIntent.SkipOccurrence =>
+        enqueueEvent(com.serenity.keystroke.events.SkipOccurrence)
+      case EditIntent.SelectAllOccurrences =>
+        enqueueEvent(com.serenity.keystroke.events.SelectAllOccurrences)
       case EditIntent.Undo =>
         enqueueEvent(com.serenity.keystroke.events.Undo)
       case EditIntent.Redo =>
         enqueueEvent(com.serenity.keystroke.events.Redo)
+      case EditIntent.ToggleLineComment =>
+        enqueueEvent(com.serenity.keystroke.events.ToggleLineComment)
+      case EditIntent.ToggleBlockComment =>
+        enqueueEvent(com.serenity.keystroke.events.ToggleBlockComment)
       case EditIntent.FormatCurrentFile =>
         logger.debug("[CMD] Format command requested")
 

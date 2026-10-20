@@ -67,11 +67,12 @@ object TuiEnvironment:
 
   val DefaultFileName = "scratch.md"
 
-  /** The defaults, less spell check: its background analysis (and, with no dictionary installed, its one-off notice)
-    * would draw over screens these scenarios compare cell by cell, at a moment that depends on the machine.
+  /** The conventional layout (these scenarios read line numbers, the status bar and the start page off the screen),
+    * less spell check: its background analysis (and, with no dictionary installed, its one-off notice) would draw over
+    * screens these scenarios compare cell by cell, at a moment that depends on the machine.
     */
   val DefaultConfig: AppConfig =
-    AppConfig.default.withSpellCheck(AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = false))
+    AppConfig.conventional.withSpellCheck(AppConfig.conventional.languageToolsConfig.spellCheck.copy(enabled = false))
 
   /** Long enough never to fire within a scenario. [[TuiSession.feed]] marks the pause after a lone Escape itself, so
     * the clock never decides whether an `ESC` starts a sequence -- under load it could otherwise expire before the rest

@@ -42,13 +42,13 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
   }
 
   "enterSelectedSubmenuGroup" should "push, making the left group (at its current index) the nearest ancestor" in {
-    val level1 = opened.withSelectedItem("settings-look").enterSelectedGroup.moveSubmenuSelection(1)
+    val level1 = opened.withSelectedItem("settings-look").enterSelectedGroup.moveSubmenuSelection(2)
 
     val level2 = level1.enterSelectedSubmenuGroup
 
     level2.activeSettingsSurface.map(_.current.groupId) shouldBe Some("settings-interface-layout")
     level2.activeSettingsSurface.map(_.ancestors) shouldBe Some(
-      List(SettingsPage.Group("settings-look", 1))
+      List(SettingsPage.Group("settings-look", 2))
     )
   }
 
@@ -56,12 +56,12 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     val level2 = opened
       .withSelectedItem("settings-look")
       .enterSelectedGroup
-      .moveSubmenuSelection(1)
+      .moveSubmenuSelection(2)
       .enterSelectedSubmenuGroup
 
     val back = level2.exitSubmenuToPreview
 
-    back.activeSettingsSurface shouldBe Some(SettingsSurfaceState(SettingsPage.Group("settings-look", 1)))
+    back.activeSettingsSurface shouldBe Some(SettingsSurfaceState(SettingsPage.Group("settings-look", 2)))
   }
 
   it should "close the whole stack when there is no parent to reveal" in {
@@ -127,7 +127,7 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     normalized.activeSettingsSurface shouldBe Some(
       SettingsSurfaceState(
         SettingsPage.Group("settings-look-advanced", 0),
-        List(SettingsPage.Group("settings-look", 3))
+        List(SettingsPage.Group("settings-look", 4))
       )
     )
   }
@@ -140,7 +140,7 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     searched.activeSettingsSurface shouldBe Some(
       SettingsSurfaceState(
         SettingsPage.Group("settings-look-advanced", 0, "gap"),
-        List(SettingsPage.Group("settings-look", 3))
+        List(SettingsPage.Group("settings-look", 4))
       )
     )
   }
@@ -149,7 +149,7 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     val level2 = opened
       .withSelectedItem("settings-look")
       .enterSelectedGroup
-      .moveSubmenuSelection(1)
+      .moveSubmenuSelection(2)
       .enterSelectedSubmenuGroup
 
     val adjusted = level2.adjustSelectedSubmenuOption(1)
@@ -226,7 +226,7 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     val level2 = opened
       .withSelectedItem("settings-look")
       .enterSelectedGroup
-      .moveSubmenuSelection(1)
+      .moveSubmenuSelection(2)
       .enterSelectedSubmenuGroup
 
     level2.settingsSurfaceBreadcrumbLabels shouldBe List("Settings", "Look", "Interface Layout")
@@ -236,7 +236,7 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     val level2 = opened
       .withSelectedItem("settings-look")
       .enterSelectedGroup
-      .moveSubmenuSelection(1)
+      .moveSubmenuSelection(2)
       .enterSelectedSubmenuGroup
 
     level2.submenuBreadcrumbLabels("settings-interface-layout") shouldBe List(
@@ -382,5 +382,5 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     opened
       .withSelectedItem("settings-look")
       .enterSelectedGroup
-      .moveSubmenuSelection(3)
+      .moveSubmenuSelection(4)
       .enterSelectedSubmenuGroup

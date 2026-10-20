@@ -1,11 +1,10 @@
 package com.serenity.state.manager
 
-import java.nio.file.Files
-
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.config.{AppConfig, ThemeFollowConfig}
 import com.serenity.rope.Balance
 import com.serenity.ui.theme.appearance.{OsAppearance, OsAppearanceDetector}
@@ -22,7 +21,7 @@ class StateManagerStartupAppearanceSpec extends AnyFlatSpec with Matchers:
   given org.typelevel.log4cats.LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def managerWith(followSystem: Boolean, detector: OsAppearanceDetector): IO[StateManager] =
-    IO.blocking(Files.createTempDirectory("startup-appearance")).flatMap { root =>
+    IO.blocking(TestTemp.directory("startup-appearance")).flatMap { root =>
       StateManager(
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
         sessionRootOverride = Some(root),

@@ -29,7 +29,7 @@ Run `sbt "Test/runMain com.serenity.docs.KeyboardReferenceTable"` to rewrite it 
 | Contextual toolbar | `contextual_toolbar` | `Ctrl+Shift+T` | `Cmd+Shift+T` |
 | New tab | `new_tab` | `Ctrl+T` | `Cmd+T` |
 | Close tab | `close_tab` | `Ctrl+W` | `Cmd+W` |
-| Split pane horizontal | `split_pane_horizontal` | `Ctrl+D` | `Cmd+D` |
+| Split pane horizontal | `split_pane_horizontal` | `Ctrl+Alt+V` | `Alt+Cmd+V` |
 | Split pane vertical | `split_pane_vertical` | `Ctrl+Shift+D` | `Cmd+Shift+D` |
 | Close pane | `close_pane` | `Ctrl+Shift+W` | `Cmd+Shift+W` |
 | File search | `file_search` | `Ctrl+Shift+F` | `Cmd+Shift+F` |
@@ -49,14 +49,50 @@ Run `sbt "Test/runMain com.serenity.docs.KeyboardReferenceTable"` to rewrite it 
 | Focus down | `focus_down` | `Alt+Down` | `Alt+Down` |
 | Toggle chapter ghosts | `toggle_chapter_ghosts` | `Ctrl+Shift+G` | `Cmd+Shift+G` |
 | Open chapter note | `open_chapter_note` | `Ctrl+Shift+N` | `Cmd+Shift+N` |
-| Toggle notes pin | `toggle_notes_pin` | `Ctrl+Shift+L` | `Cmd+Shift+L` |
+| Open keyword note | `open_keyword_note` | `Ctrl+Shift+K` | `Cmd+Shift+K` |
+| Toggle notes pin | `toggle_notes_pin` | `Ctrl+Alt+P` | `Alt+Cmd+P` |
 | Bold | `bold` | `Ctrl+B` | `Cmd+B` |
 | Italic | `italic` | `Ctrl+I` | `Cmd+I` |
+| Select-all-occurrences | `select-all-occurrences` | `Ctrl+Shift+L` | `Cmd+Shift+L` |
+| Select-next-occurrence | `select-next-occurrence` | `Ctrl+D` | `Cmd+D` |
+| Skip-occurrence | `skip-occurrence` | `Ctrl+Alt+K` | `Alt+Cmd+K` |
+| Toggle-block-comment | `toggle-block-comment` | `Alt+Shift+A` | `Alt+Shift+A` |
+| Toggle-line-comment | `toggle-line-comment` | `Ctrl+/`, `Ctrl+_` | `Cmd+/`, `Ctrl+_` |
 | Underline | `underline` | `Ctrl+U` | `Cmd+U` |
 <!-- keyboard-table:end -->
 
-`Ctrl+Ctrl` and `Cmd+Cmd` mean pressing the modifier twice. `EOF` is the end-of-input key a terminal sends. The last three
-rows (bold, italic, underline) are commands; their config keys are written `hotkey.command.<name>`.
+`Ctrl+Ctrl` and `Cmd+Cmd` mean pressing the modifier twice. `EOF` is the end-of-input key a terminal sends. The rows
+after Toggle notes pin (bold, italic, the occurrence and comment commands, underline) are commands; their config keys
+are written `hotkey.command.<name>`.
+
+## Several cursors
+
+Select Next Occurrence (`Ctrl+D`) selects the word at the caret, then adds the next match of the selected text as another
+cursor each time it is pressed, wrapping round the document. A selection that began as a bare caret matches whole words
+only (`cat` does not match inside `concatenate`); a selection you made yourself matches wherever the text occurs.
+Matching is case-sensitive. Skip Occurrence (`Ctrl+Alt+K`) drops the newest match and selects the one after it, and
+Select All Occurrences (`Ctrl+Shift+L`) puts a cursor on every match, up to 10,000. Typing, deleting and pasting then
+reach every cursor. Editors that bind skipping to the chord `Ctrl+K Ctrl+D` have no counterpart here yet, because a
+binding is a single key; the three commands are in the palette and can be given any other key.
+
+`Ctrl+D` used to split the pane side by side; that is now `Ctrl+Alt+V`. Toggle Notes Pin moved from `Ctrl+Shift+L` to
+`Ctrl+Alt+P` for the same reason. A key you set yourself in `config.conf` is never taken over by a default: if you bound `Ctrl+D` to something else, the occurrence command simply starts unbound.
+
+## Summoning chrome
+
+These are not global hotkeys, so they are not in the table above: they act while held. Hold `Alt+Shift` and press
+
+| Chord           | While held                  | Config key               |
+| --------------- | --------------------------- | ------------------------ |
+| `Alt+Shift+L`   | Shows the line numbers      | `ui.summon.line_numbers` |
+| `Alt+Shift+S`   | Shows the status bar        | `ui.summon.status_bar`   |
+| `Alt+Shift+T`   | Shows the tab strip         | `ui.summon.tab_strip`    |
+| `Alt+Shift+B`   | Shows the scrollbar         | `ui.summon.scrollbar`    |
+| `Alt+Shift+H`   | Shows the pane headers      | `ui.summon.pane_headers` |
+
+`Space` pressed during the hold (`ui.summon.lock`) keeps the element shown after release; the chord pressed again hides
+it. In the terminal, which reports no key release, the chord toggles instead. See layout.md for the details and for
+changing the keys.
 
 ## Changing a binding
 

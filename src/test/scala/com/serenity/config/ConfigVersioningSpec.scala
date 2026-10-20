@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.typesafe.config.ConfigFactory
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -18,7 +19,7 @@ class ConfigVersioningSpec extends AnyFlatSpec with Matchers with OptionValues:
   private val currentVersionLine = s"config.version = ${ConfigVersion.Current.value}\n"
 
   private def tempFile(content: String): Path =
-    val file = Files.createTempFile("serenity-versioning", ".conf")
+    val file = TestTemp.file("serenity-versioning", ".conf")
     Files.writeString(file, content)
     file
 

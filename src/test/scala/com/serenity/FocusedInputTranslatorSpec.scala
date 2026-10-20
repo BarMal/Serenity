@@ -169,7 +169,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave a loaded trigger with one owner, and reject a conflicting config built in memory" in {
-    val configFile = Files.createTempFile("serenity-conflicting-hotkeys", ".conf")
+    val configFile = TestTemp.file("serenity-conflicting-hotkeys", ".conf")
     Files.writeString(
       configFile,
       """hotkey.command_palette = ctrl+k

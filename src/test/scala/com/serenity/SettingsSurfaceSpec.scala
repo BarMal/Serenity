@@ -96,7 +96,7 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
       .openSettings
       .withSelectedItem("settings-look")
       .enterSelectedGroup
-      .withSelectedFocusedSubmenuIndex(3)
+      .withSelectedFocusedSubmenuIndex(4)
       .enterSelectedSubmenuGroup
       .withSelectedFocusedSubmenuIndex(0)
       .beginSubmenuEditMode

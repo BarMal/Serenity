@@ -40,10 +40,10 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
       cursorConfig = CursorConfig(mode = CursorMode.Blink),
       statusLine = StatusLineConfig(List(StatusSegment.Position, StatusSegment.Title), StatusLinePlacement.Pinned),
       documentConfig = DocumentConfig(
-        markdownViewMode = MarkdownViewMode.InlineLens,
+        markdownViewMode = MarkdownViewMode.LivePreview,
         defaultMode = DefaultDocumentMode.RichText
       ),
-      interfaceConfig = InterfaceConfig(density = InterfaceDensity.Compact),
+      interfaceConfig = InterfaceConfig(density = InterfaceDensity.Compact, menuBar = MenuBarMode.Alt),
       windowConfig = WindowConfig(chromeMode = WindowChromeMode.NativeThemed),
       languageToolsConfig = LanguageToolsConfig(spellCheck = SpellCheckConfig(enabled = true)),
       editorConfig = EditorConfig(
@@ -70,6 +70,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("status-placement") shouldBe 0
     selections("interface-density") shouldBe 0
     selections("window-chrome") shouldBe 2
+    selections("menu-bar") shouldBe 1
     selections("markdown-view") shouldBe 2
     selections("default-document-mode") shouldBe 2
     selections("drop-caps-enabled") shouldBe 0
@@ -120,12 +121,16 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("render-damage-granularity") shouldBe 1
   }
 
-  it should "reflect whether the word goal and line ending status segments are shown" in {
-    val shown  = AppConfig.default.withStatusLineSegments(List(StatusSegment.WordGoal, StatusSegment.LineEnding))
+  it should "reflect whether the word goal, line ending and indentation status segments are shown" in {
+    val shown = AppConfig.default.withStatusLineSegments(
+      List(StatusSegment.WordGoal, StatusSegment.LineEnding, StatusSegment.Indentation)
+    )
     val hidden = AppConfig.default.withStatusLineSegments(Nil)
 
     CommandRunnerOptionSelections.default(shown)("status-word-goal") shouldBe 0
     CommandRunnerOptionSelections.default(shown)("status-line-ending") shouldBe 0
+    CommandRunnerOptionSelections.default(shown)("status-indentation") shouldBe 0
     CommandRunnerOptionSelections.default(hidden)("status-word-goal") shouldBe 1
     CommandRunnerOptionSelections.default(hidden)("status-line-ending") shouldBe 1
+    CommandRunnerOptionSelections.default(hidden)("status-indentation") shouldBe 1
   }

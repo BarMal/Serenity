@@ -19,7 +19,7 @@ import com.serenity.ui.accessibility.{
   SwingAccessibilityBridge,
   TuiAccessibilityBridge
 }
-import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, LayoutEngine, PanelPosition, UiSceneSnapshot, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -172,4 +172,42 @@ class AccessibilityLazyTextSpec extends AnyFlatSpec with Matchers:
 
     written.mkString should not include "hello"
     collected.get shouldBe 0
+  }
+
+  private def stateWithDockedPreview(content: Rope): AppState =
+    DockedPanelFixtures.dock(
+      stateShowing(content),
+      SurfaceId("preview"),
+      SurfaceContent.MarkdownPreview(BufferId(1), "notes.md"),
+      PanelPosition.Right,
+      40
+    )
+
+  "AccessibilitySnapshot with a docked markdown preview" should "not render the preview's text when projecting edits" in {
+    val collected = new AtomicInteger(0)
+    val first     = AccessibilitySnapshot.from(stateWithDockedPreview(counted("# Heading", collected)), viewport)
+    val edited = (1 to 5).foldLeft(first) { (previous, edit) =>
+      AccessibilitySnapshot.from(
+        stateWithDockedPreview(counted(s"# Heading ${"!" * edit}", collected)),
+        viewport,
+        Some(previous)
+      )
+    }
+
+    edited.nodes.exists(_.id == "surface:preview") shouldBe true
+    collected.get shouldBe 0
+  }
+
+  "UiSceneSnapshot.nodes" should "describe the same nodes as the full scene without resolving any panel content" in {
+    val collected = new AtomicInteger(0)
+    val state     = stateWithDockedPreview(counted("# Heading", collected))
+    val layout    = LayoutEngine.calculateLayoutWithUI(state, viewport)
+
+    val nodes = UiSceneSnapshot.nodes(state, layout)
+    collected.get shouldBe 0
+
+    val scene = UiSceneSnapshot.from(state, layout, viewport)
+    nodes.nodesInPaintOrder shouldBe scene.nodesInPaintOrder
+    nodes.paneLayouts shouldBe scene.paneLayouts
+    nodes.calculatedLayout shouldBe scene.calculatedLayout
   }

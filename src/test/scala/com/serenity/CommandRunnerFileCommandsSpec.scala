@@ -110,7 +110,7 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "save the focused buffer through the native save-as file dialog" in {
-    val targetPath   = Files.createTempDirectory("serenity-save-as").resolve("notes-copy.scala")
+    val targetPath   = TestTemp.directory("serenity-save-as").resolve("notes-copy.scala")
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
     val bufferId     = BufferId(0)
     val filePath     = Path.of("temp", "notes.scala")
@@ -144,7 +144,7 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "export the focused buffer as a manuscript through the native save dialog, leaving the buffer as it was" in {
-    val targetPath   = Files.createTempDirectory("serenity-export").resolve("novel-manuscript.docx")
+    val targetPath   = TestTemp.directory("serenity-export").resolve("novel-manuscript.docx")
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
     val bufferId     = BufferId(0)
 
@@ -168,7 +168,7 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "export the focused buffer as an EPUB through the native save dialog" in {
-    val targetPath   = Files.createTempDirectory("serenity-export-epub").resolve("novel-manuscript.epub")
+    val targetPath   = TestTemp.directory("serenity-export-epub").resolve("novel-manuscript.epub")
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
     val bufferId     = BufferId(0)
 
@@ -191,7 +191,7 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "export the focused buffer as a PDF through the native save dialog" in {
-    val targetPath   = Files.createTempDirectory("serenity-export-pdf").resolve("novel-manuscript.pdf")
+    val targetPath   = TestTemp.directory("serenity-export-pdf").resolve("novel-manuscript.pdf")
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
     val bufferId     = BufferId(0)
 
@@ -215,7 +215,7 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "open a selected file through the native open-file dialog" in {
-    val sourcePath = Files.createTempDirectory("serenity-open").resolve("notes.md")
+    val sourcePath = TestTemp.directory("serenity-open").resolve("notes.md")
     Files.writeString(sourcePath, "# Notes")
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(openSelection = Some(sourcePath))))
     val viewportSize = ViewportSize(120, 40)
@@ -243,7 +243,7 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   private def openFolderThroughPalette(mode: com.serenity.config.AppMode): Unit =
-    val folder       = Files.createTempDirectory("serenity-open-folder")
+    val folder       = TestTemp.directory("serenity-open-folder")
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(folderSelection = Some(folder))))
     stateManager.updateState(TestAppModes.inMode(mode)).unsafeRunSync()
     val buffersBefore = stateManager.getCurrentState.unsafeRunSync().persisted.buffers
@@ -358,7 +358,7 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "save an unsaved buffer through the native save-as file dialog" in {
-    val targetPath   = Files.createTempDirectory("serenity-unsaved-save").resolve("draft.txt")
+    val targetPath   = TestTemp.directory("serenity-unsaved-save").resolve("draft.txt")
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
 
     stateManager.updateBuffer(BufferId(0), "draft body").unsafeRunSync()

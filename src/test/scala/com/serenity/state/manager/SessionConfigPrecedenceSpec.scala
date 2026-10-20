@@ -1,9 +1,8 @@
 package com.serenity.state.manager
 
-import java.nio.file.Files
-
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.config.AppConfig
 import com.serenity.config.AppConfigOps.*
 import com.serenity.rope.Balance
@@ -27,10 +26,10 @@ class SessionConfigPrecedenceSpec extends AnyFlatSpec with Matchers:
 
   private val savedWith  = AppConfig.default.withWheelScrollLines(3)
   private val editedTo   = AppConfig.default.withWheelScrollLines(9)
-  private val sessionDir = Files.createTempDirectory("session-config-precedence")
+  private val sessionDir = TestTemp.directory("session-config-precedence")
 
   "Resuming a session" should "keep the config the editor started with, not the one the session was saved with" in {
-    val root = Files.createTempDirectory("session-config-precedence-root")
+    val root = TestTemp.directory("session-config-precedence-root")
     val manager =
       SessionManager.create(root, AppThemeManager.create, NoOpLogger.impl[IO], SessionManager.SessionPolicy())
     val saved = AppState.initial(savedWith)
@@ -53,7 +52,7 @@ class SessionConfigPrecedenceSpec extends AnyFlatSpec with Matchers:
   }
 
   "A settings change" should "not save the session" in {
-    val root = Files.createTempDirectory("session-config-no-save")
+    val root = TestTemp.directory("session-config-no-save")
     val stateManager =
       StateManager
         .apply(

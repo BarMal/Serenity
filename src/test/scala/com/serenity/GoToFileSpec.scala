@@ -25,7 +25,7 @@ class GoToFileSpec extends AnyFlatSpec with Matchers:
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
   private def project(files: (String, String)*): Path =
-    val root = Files.createTempDirectory("go-to-file")
+    val root = TestTemp.directory("go-to-file")
     files.foreach { (relative, content) =>
       val file = root.resolve(relative)
       Files.createDirectories(file.getParent)
@@ -39,7 +39,7 @@ class GoToFileSpec extends AnyFlatSpec with Matchers:
     val stateManager =
       StateManager(
         logger,
-        sessionRootOverride = Some(Files.createTempDirectory("go-to-file-session")),
+        sessionRootOverride = Some(TestTemp.directory("go-to-file-session")),
         dictionaryCache = SharedDictionary.default
       ).unsafeRunSync()
     stateManager

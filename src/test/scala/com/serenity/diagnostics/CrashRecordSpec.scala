@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 import java.time.Instant
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -12,7 +13,7 @@ class CrashRecordSpec extends AnyFlatSpec with Matchers:
   private val identity = RuntimeIdentity.of("1.2.3", "abc1234", _ => None)
   private val at       = Instant.parse("2026-10-06T08:30:00Z")
 
-  private def record(): CrashRecord = CrashRecord(Files.createTempDirectory("serenity-crash-record").resolve("logs"))
+  private def record(): CrashRecord = CrashRecord(TestTemp.directory("serenity-crash-record").resolve("logs"))
 
   "PreviousRun.decide" should "be clean with neither a running marker nor a crash file" in {
     PreviousRun.decide(None, None, identity, at, Path.of("logs")) shouldBe PreviousRun.Clean
@@ -93,7 +94,7 @@ class CrashRecordSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "never fail when the directory cannot be written" in {
-    val blocker = Files.createTempFile("serenity-not-a-directory", ".txt")
+    val blocker = TestTemp.file("serenity-not-a-directory", ".txt")
     val store   = CrashRecord(blocker.resolve("logs"))
 
     store.markRunning(identity, at).unsafeRunSync()

@@ -177,6 +177,14 @@ final private[manager] class StateManagerEventPipeline(
     TabBarDragHitTestingPort(currentState = modelCommit.currentState, applyReducerResult = applyReducerResult)
   )
 
+  private val scrollbarHitTesting = new ScrollbarHitTesting(
+    ScrollbarHitTestingPort(
+      currentState = modelCommit.currentState,
+      applyReducerResult = applyReducerResult,
+      authoritativeScene = state.authoritativeScene
+    )
+  )
+
   private val mouseHitTesting = new MouseHitTesting(
     MouseHitTestingPort(
       currentState = modelCommit.currentState,
@@ -190,7 +198,8 @@ final private[manager] class StateManagerEventPipeline(
     pinnedPanelMouseHitTesting,
     startupPageMouseHitTesting,
     commentLensMouseHitTesting,
-    tabBarDragHitTesting
+    tabBarDragHitTesting,
+    scrollbarHitTesting
   )
 
   /** Offers `event` to the state dispatcher and returns once it has been applied (#1570, #1697). Never called from code
@@ -231,9 +240,10 @@ final private[manager] class StateManagerEventPipeline(
       ) >>
       Trace.timed(s"$eventLabel.scheduleMarkdownPreviewCommits")(scheduleMarkdownPreviewCommits(prevState))
 
-  /** The model a character typed into an editor pane commits, before centring, when its only effect is undo
-    * bookkeeping; `None` for any other event, which takes the general dispatch. Every typed key goes through here,
-    * whether dispatched alone or folded into a batch's run, and [[commitTypedRun]] centres and commits it (#1985).
+  /** The model a character typed, an edit or a one-character caret step in an editor pane commits, before centring,
+    * when its only effect is undo bookkeeping; `None` for any other event, which takes the general dispatch. Every such
+    * key goes through here, whether dispatched alone or folded into a batch's run, and [[commitTypedRun]] centres and
+    * commits it (#1985, #1879).
     *
     * A key joins a run even when it records an undo snapshot: the buffer it leaves is marked `FollowCaret`, so the
     * snapshot holds a viewport waiting for the caret, which undo and redo place when they restore it.
@@ -243,7 +253,7 @@ final private[manager] class StateManagerEventPipeline(
 
   private def typedKeyModel(event: Event, model: Model, nowNanos: Long): Option[Model] =
     event match
-      case key: InsertChar =>
+      case key: TextEntryEvent if EditorPaneComponent.joinsRun(key) =>
         val prevState = EventPipelineTransitions.typingObserved(event, nowNanos)(
           EventPipelineTransitions.commandRunnerFocusNormalized(model.app)
         )
@@ -404,7 +414,9 @@ final private[manager] class StateManagerEventPipeline(
       case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab | NextTab |
           PreviousTab | FileSearch | GoToFile | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane |
           _: CloseTabById | MoveTabLeft | MoveTabRight | _: FocusInDirection | ToggleChapterGhosts | OpenChapterNote |
-          ToggleNotesPin | _: RunCommand | SettingsPreviewAbandoned | _: ActivateBuffer | _: OpenRecentPath =>
+          OpenKeywordNote | ToggleNotesPin | _: RunCommand | SettingsPreviewAbandoned | _: ActivateBuffer |
+          _: OpenRecentPath | _: OpenRecentFolder | _: ChromeSummonPressed | _: ChromeSummonReleased |
+          ChromeSummonLocked | _: ChromeSummonToggled =>
         reduced
       case _: CursorPeekModifierPressed | _: CursorPeekModifierReleased | CursorPeekOtherKeyPressed =>
         applyReducerResult(EventPipelineTransitions.withCursorPeekAnchorResolved(result), prevState)
@@ -438,7 +450,9 @@ final private[manager] class StateManagerEventPipeline(
           currentState.persisted.buffers
             .get(bufferId)
             .exists(buffer =>
-              previousState.persisted.buffers.get(bufferId).exists(_.document.content != buffer.document.content)
+              previousState.persisted.buffers
+                .get(bufferId)
+                .exists(before => buffer.document.textDiffersFrom(before.document))
             )
         }
       if edited.isEmpty then cats.effect.IO.unit
@@ -460,12 +474,7 @@ final private[manager] class StateManagerEventPipeline(
     state.runtime.uiSurfaces.exists {
       case UiSurface(_, SurfaceContent.MarkdownPreview(id, _), _, _) => id == bufferId
       case _                                                         => false
-    } || (
-      state.persisted.config.markdownViewMode == com.serenity.config.MarkdownViewMode.InlineLens &&
-        state.persisted.buffers
-          .get(bufferId)
-          .exists(_.document.language.contains(com.serenity.lsp.config.LanguageId.Markdown))
-    )
+    }
 
   private[manager] def scheduleDocumentAnalysis(): cats.effect.IO[Unit] =
     operations.scheduleDocumentAnalysis()

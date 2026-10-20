@@ -3,6 +3,7 @@ package com.serenity.spellcheck
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 
+import com.serenity.TestTemp
 import com.serenity.config.SpellCheckConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -15,7 +16,7 @@ class BundledEnglishStandInSpec extends AnyFlatSpec with Matchers:
 
   private val generic = SpellCheckConfig(enabled = true, languages = List("en"))
 
-  private def emptyOsDirectory: Path = Files.createTempDirectory("serenity-stand-in-empty")
+  private def emptyOsDirectory: Path = TestTemp.directory("serenity-stand-in-empty")
 
   private def dictionaryIn(directory: Path, name: String, words: List[String]): Path =
     val dic = directory.resolve(s"$name.dic")
@@ -61,7 +62,7 @@ class BundledEnglishStandInSpec extends AnyFlatSpec with Matchers:
   }
 
   "A dictionary the system supplies for en" should "replace the bundled one" in {
-    val osDirectory = Files.createTempDirectory("serenity-stand-in-system-en")
+    val osDirectory = TestTemp.directory("serenity-stand-in-system-en")
     val dic         = dictionaryIn(osDirectory, "en", List("zzcolour"))
     val cache       = DictionaryCache()
     val snapshot    = load(generic, osDirectory, cache)
@@ -72,7 +73,7 @@ class BundledEnglishStandInSpec extends AnyFlatSpec with Matchers:
   }
 
   "An en_US dictionary named by dictionary_paths" should "replace the bundled one for en" in {
-    val directory = Files.createTempDirectory("serenity-stand-in-en-us")
+    val directory = TestTemp.directory("serenity-stand-in-en-us")
     val dic       = dictionaryIn(directory, "en_US", List("zzcolor"))
     val config    = generic.copy(dictionaryPaths = List(dic.toString))
     val cache     = DictionaryCache()
@@ -83,7 +84,7 @@ class BundledEnglishStandInSpec extends AnyFlatSpec with Matchers:
   }
 
   "A dictionary path not named for any language" should "replace the bundled one for en" in {
-    val directory = Files.createTempDirectory("serenity-stand-in-unnamed")
+    val directory = TestTemp.directory("serenity-stand-in-unnamed")
     val dic       = dictionaryIn(directory, "words", List("zzcolour"))
     val config    = generic.copy(dictionaryPaths = List(dic.toString))
     val cache     = DictionaryCache()
@@ -94,7 +95,7 @@ class BundledEnglishStandInSpec extends AnyFlatSpec with Matchers:
   }
 
   "A dictionary path that fails to load" should "leave en on the bundled dictionary, reporting the failure" in {
-    val missing  = Files.createTempDirectory("serenity-stand-in-missing").resolve("missing.dic")
+    val missing  = TestTemp.directory("serenity-stand-in-missing").resolve("missing.dic")
     val config   = generic.copy(dictionaryPaths = List(missing.toString))
     val snapshot = load(config, emptyOsDirectory)
 
@@ -103,7 +104,7 @@ class BundledEnglishStandInSpec extends AnyFlatSpec with Matchers:
   }
 
   "A configured en-US" should "keep using the installed en_US dictionary, not the bundled one" in {
-    val osDirectory = Files.createTempDirectory("serenity-stand-in-us")
+    val osDirectory = TestTemp.directory("serenity-stand-in-us")
     val dic         = dictionaryIn(osDirectory, "en_US", List("zzcolor"))
     val config      = SpellCheckConfig(enabled = true, languages = List("en-US"))
     val cache       = DictionaryCache()
@@ -125,7 +126,7 @@ class BundledEnglishStandInSpec extends AnyFlatSpec with Matchers:
   }
 
   "A bare en beside an installed fr" should "use the bundled dictionary for en and the installed one for fr" in {
-    val osDirectory = Files.createTempDirectory("serenity-stand-in-fr")
+    val osDirectory = TestTemp.directory("serenity-stand-in-fr")
     dictionaryIn(osDirectory, "fr", List("bonjour"))
     val config   = SpellCheckConfig(enabled = true, languages = List("en", "fr"))
     val cache    = DictionaryCache()

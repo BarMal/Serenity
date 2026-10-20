@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.rope.Balance
 import com.serenity.state.models.BufferId
 import org.scalatest.OptionValues
@@ -58,7 +59,7 @@ class RichDocumentHyperlinkSpec extends AnyFlatSpec with Matchers with OptionVal
   }
 
   private def docxFile(entries: (String, String)*): Path =
-    val path   = Files.createTempDirectory("serenity-hyperlink").resolve("links.docx")
+    val path   = TestTemp.directory("serenity-hyperlink").resolve("links.docx")
     val output = java.io.ByteArrayOutputStream()
     val zip    = ZipOutputStream(output)
     try

@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.nio.file.Files
-
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{
   Command,
@@ -25,7 +23,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "UI preset scenario" should "save a visible draft and render its applied state" in {
-    val store  = UiPresetStore(Files.createTempDirectory("ui-scenario-preset").resolve("presets.json"))
+    val store  = UiPresetStore(TestTemp.directory("ui-scenario-preset").resolve("presets.json"))
     val driver = UiScenarioDriver.create("ui-preset", uiPresetStore = Some(store)).unsafeRunSync()
     driver
       .updateState(state =>
@@ -52,7 +50,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave a saved preset untouched while later settings change, and reapply it after restart" in {
-    val path   = Files.createTempDirectory("ui-scenario-preset-restart").resolve("presets.json")
+    val path   = TestTemp.directory("ui-scenario-preset-restart").resolve("presets.json")
     val store  = UiPresetStore(path)
     val driver = UiScenarioDriver.create("ui-preset-transactions", uiPresetStore = Some(store)).unsafeRunSync()
 
@@ -89,7 +87,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "retain frame evidence when overwriting a saved preset with current settings" in {
-    val store  = UiPresetStore(Files.createTempDirectory("ui-scenario-preset-save").resolve("presets.json"))
+    val store  = UiPresetStore(TestTemp.directory("ui-scenario-preset-save").resolve("presets.json"))
     val driver = UiScenarioDriver.create("ui-preset-preview-save", uiPresetStore = Some(store)).unsafeRunSync()
 
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Scenario")))
@@ -121,7 +119,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep changed settings across a session restart and offer preset actions in the runner" in {
-    val sessionRoot = Files.createTempDirectory("ui-scenario-dirty-restart")
+    val sessionRoot = TestTemp.directory("ui-scenario-dirty-restart")
     val store       = UiPresetStore(sessionRoot.resolve("presets.json"))
     val driver = UiScenarioDriver
       .create("ui-preset-dirty-restart", uiPresetStore = Some(store), sessionRoot = Some(sessionRoot))
@@ -167,7 +165,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "recover after a preset persistence failure" in {
-    val parentFile = Files.createTempFile("ui-scenario-preset-failure", ".tmp")
+    val parentFile = TestTemp.file("ui-scenario-preset-failure", ".tmp")
     val broken     = UiPresetStore(parentFile.resolve("presets.json"))
     val driver     = UiScenarioDriver.create("ui-preset-failure", uiPresetStore = Some(broken)).unsafeRunSync()
 
@@ -175,7 +173,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     broken.find("Broken").unsafeRunSync() shouldBe empty
     driver.renderFrame("failure").unsafeRunSync().evidence.layoutViolations shouldBe empty
 
-    val healthy   = UiPresetStore(Files.createTempDirectory("ui-scenario-preset-recovery").resolve("presets.json"))
+    val healthy   = UiPresetStore(TestTemp.directory("ui-scenario-preset-recovery").resolve("presets.json"))
     val recovered = UiScenarioDriver.create("ui-preset-recovery", uiPresetStore = Some(healthy)).unsafeRunSync()
     execute(recovered, CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Recovered")))
     healthy.find("Recovered").unsafeRunSync() should not be empty

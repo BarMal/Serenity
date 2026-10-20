@@ -49,7 +49,7 @@ class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Mat
       }
 
   "the Open dialog" should "pin the browsed directory as a project root and dismiss itself" in {
-    val tempDir = Files.createTempDirectory("open-as-project-root")
+    val tempDir = TestTemp.directory("open-as-project-root")
     val child   = Files.createDirectory(tempDir.resolve("src"))
 
     try
@@ -92,7 +92,7 @@ class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Mat
   }
 
   it should "report a status message and keep the dialog open when the path is not a directory" in {
-    val tempDir  = Files.createTempDirectory("open-as-project-root-file")
+    val tempDir  = TestTemp.directory("open-as-project-root-file")
     val textFile = Files.createTempFile(tempDir, "notes", ".txt")
 
     try

@@ -6,11 +6,11 @@ import java.nio.file.{Files, Path}
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.StateManagerTestSupport
 import com.serenity.command.{CommandRegistry, LineEndingCommands}
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.state.models.*
 import com.serenity.text.LineEnding
+import com.serenity.{StateManagerTestSupport, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -18,7 +18,7 @@ import org.scalatest.matchers.should.Matchers
 class LineEndingStateManagerSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def fileWith(text: String): Path =
-    Files.write(Files.createTempDirectory("line-endings").resolve("draft.txt"), text.getBytes(UTF_8))
+    Files.write(TestTemp.directory("line-endings").resolve("draft.txt"), text.getBytes(UTF_8))
 
   private def opened(file: Path): (StateManager, BufferId) =
     val editor = createStateManager("LineEndingStateManagerSpec")

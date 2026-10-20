@@ -134,7 +134,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "export the current theme through the native save-file dialog" in {
-    val targetPath   = Files.createTempDirectory("serenity-theme-export").resolve("quiet-focus.conf")
+    val targetPath   = TestTemp.directory("serenity-theme-export").resolve("quiet-focus.conf")
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
     val theme = Theme.light.copy(
       name = "quiet-focus",
@@ -198,7 +198,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "write the current upgraded config from the command runner" in {
-    val configFile   = Files.createTempDirectory("serenity-save-config").resolve("config.conf")
+    val configFile   = TestTemp.directory("serenity-save-config").resolve("config.conf")
     val stateManager = createStateManager(configPersistencePath = Some(configFile))
 
     executeCommandThroughRunner(stateManager, "save-config", "save-config")
@@ -285,7 +285,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "persist the selected compact workflow for a later session" in {
-    val configFile   = Files.createTempFile("serenity-compact-workflow", ".conf")
+    val configFile   = TestTemp.file("serenity-compact-workflow", ".conf")
     val stateManager = createStateManager(configPersistencePath = Some(configFile))
 
     executeCommandThroughRunner(stateManager, "apply-compact-preset", "apply-compact-preset")

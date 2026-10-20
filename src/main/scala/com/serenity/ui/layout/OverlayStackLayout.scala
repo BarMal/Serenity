@@ -65,13 +65,13 @@ object OverlayStackLayout:
   private[layout] def calculateBelowCursorOverlayStack(
     surfaces: List[UiSurface],
     state: AppState,
-    paneLayouts: Map[PaneId, EditorPaneLayout]
+    panes: LaidOutPanes
   ): CursorStackLayout =
     if surfaces.isEmpty then CursorStackLayout(Nil, Set.empty)
     else if surfaces.length == 1 then
       CursorStackLayout(
         surfaces.flatMap(surface =>
-          FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface.id -> _)
+          FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, panes).map(surface.id -> _)
         ),
         Set.empty
       )
@@ -79,7 +79,7 @@ object OverlayStackLayout:
       // The command-runner two-surface stack case (main palette + its settings-group submenu) is gone -- a settings
       // group now renders on the one `CommandPalette` surface instead of a second floating one (issue #1059), so
       // every below-cursor multi-surface case now goes through the same generic stacking.
-      stackBelowCursorSurfaces(surfaces, state, paneLayouts)
+      stackBelowCursorSurfaces(surfaces, state, panes)
 
   /** Stacks `surfaces` (nearest the cursor first) upward from the cursor, each above the previous. A lone surface keeps
     * its own placement. When the stack does not fit above the cursor, unfocused surfaces collapse to a one-line summary
@@ -89,13 +89,13 @@ object OverlayStackLayout:
   private[layout] def calculateAboveCursorOverlayStack(
     surfaces: List[UiSurface],
     state: AppState,
-    paneLayouts: Map[PaneId, EditorPaneLayout]
+    panes: LaidOutPanes
   ): CursorStackLayout =
     val preferredRects = surfaces.flatMap(surface =>
-      FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface -> _)
+      FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, panes).map(surface -> _)
     )
     val nearestAnchor = surfaces.headOption.flatMap(surface =>
-      FloatingSurfaceLayout.calculateFloatingAnchorFrame(surface, state, paneLayouts).map(surface -> _)
+      FloatingSurfaceLayout.calculateFloatingAnchorFrame(surface, state, panes).map(surface -> _)
     )
     (preferredRects, nearestAnchor) match
       case (List((surface, rect)), _) => CursorStackLayout(List(surface.id -> rect), Set.empty)
@@ -174,7 +174,7 @@ object OverlayStackLayout:
     belowSurfaces: List[UiSurface],
     belowRects: List[(SurfaceId, LayoutRect)],
     state: AppState,
-    paneLayouts: Map[PaneId, EditorPaneLayout]
+    panes: LaidOutPanes
   ): Map[SurfaceId, Double] =
     val aboveById       = aboveSurfaces.map(surface => surface.id -> surface).toMap
     val stackedAboveIds = aboveSurfaces.map(_.id)
@@ -184,7 +184,7 @@ object OverlayStackLayout:
       aboveById.get(surfaceId).flatMap { surface =>
         val gap        = FloatingSurfaceLayout.floatingCursorGapRows(state, surface.content)
         val stackIndex = stackedAboveIds.indexOf(surfaceId).max(0)
-        FloatingSurfaceLayout.calculateFloatingAnchorFrame(surface, state, paneLayouts).map { anchorFrame =>
+        FloatingSurfaceLayout.calculateFloatingAnchorFrame(surface, state, panes).map { anchorFrame =>
           surfaceId -> clampedFloatingOffset(
             rect,
             anchorFrame.contentRect,
@@ -197,7 +197,7 @@ object OverlayStackLayout:
       surface   <- belowSurfaces.headOption
       (_, rect) <- belowRects.headOption
       anchorY <- FloatingSurfaceLayout
-        .calculateFloatingAnchorFrame(surface, state, paneLayouts)
+        .calculateFloatingAnchorFrame(surface, state, panes)
         .map(_.screenPosition.y)
     yield if rect.y <= anchorY then -1.0 else 1.0
     val cursorRemainder = belowSurfaces.headOption
@@ -211,7 +211,7 @@ object OverlayStackLayout:
     val direction       = firstBelowDirection.getOrElse(1.0)
     val belowSurfaceIds = belowSurfaces.map(_.id).toSet
     val belowContentRect = belowSurfaces.headOption
-      .flatMap(surface => FloatingSurfaceLayout.calculateFloatingAnchorFrame(surface, state, paneLayouts))
+      .flatMap(surface => FloatingSurfaceLayout.calculateFloatingAnchorFrame(surface, state, panes))
       .map(_.contentRect)
     val belowOffsets = belowRects.zipWithIndex.collect {
       case ((surfaceId, rect), index) if belowSurfaceIds.contains(surfaceId) =>
@@ -228,16 +228,14 @@ object OverlayStackLayout:
   private def stackBelowCursorSurfaces(
     surfaces: List[UiSurface],
     state: AppState,
-    paneLayouts: Map[PaneId, EditorPaneLayout]
+    panes: LaidOutPanes
   ): CursorStackLayout =
     val preferredRects =
       surfaces.flatMap(surface =>
-        FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface -> _)
+        FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, panes).map(surface -> _)
       )
     val anchorFrameOpt =
-      surfaces.headOption.flatMap(surface =>
-        FloatingSurfaceLayout.calculateFloatingAnchorFrame(surface, state, paneLayouts)
-      )
+      surfaces.headOption.flatMap(surface => FloatingSurfaceLayout.calculateFloatingAnchorFrame(surface, state, panes))
     val baseRects = anchorFrameOpt.fold(preferredRects)(frame => fitPaletteBelow(preferredRects, frame, state))
     anchorFrameOpt match
       case None =>

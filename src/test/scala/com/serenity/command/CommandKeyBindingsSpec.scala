@@ -2,6 +2,7 @@ package com.serenity.command
 
 import java.nio.file.Files
 
+import com.serenity.TestTemp
 import com.serenity.config.*
 import com.serenity.config.HotkeyConfig.given
 import com.serenity.keystroke.events.RunCommand
@@ -34,7 +35,7 @@ class CommandKeyBindingsSpec extends AnyFlatSpec with Matchers:
     linux.withHotkeyConfig(linux.inputConfig.hotkeyConfig.withCommandBinding(lineNumbers, "ctrl+alt+l"))
 
   private def loaded(text: String): AppConfig =
-    val file = Files.createTempFile("serenity-command-keys", ".conf")
+    val file = TestTemp.file("serenity-command-keys", ".conf")
     try
       Files.writeString(file, text)
       ConfigManagerTestSupport.loadConfig(Some(file.toString))
@@ -147,7 +148,7 @@ class CommandKeyBindingsSpec extends AnyFlatSpec with Matchers:
   }
 
   "Command key bindings in the config file" should "survive a save and reload" in {
-    val file = Files.createTempFile("serenity-command-keys", ".conf")
+    val file = TestTemp.file("serenity-command-keys", ".conf")
     try
       ConfigManagerTestSupport.saveConfig(withLineKeys, file) shouldBe true
       Files.readString(file) should include(s"""hotkey.command.$lineNumbers = ["ctrl+alt+l"]""")
@@ -192,8 +193,14 @@ class CommandKeyBindingsSpec extends AnyFlatSpec with Matchers:
   }
 
   "The prose formatting defaults" should "bind bold, italic and underline to the primary modifier" in {
+    val formatting = Set("bold", "italic", "underline")
     def rendered(osName: String): Map[String, List[String]] =
-      HotkeyConfig.defaultCommandBindingsFor(osName).view.mapValues(_.map(_.render)).toMap
+      HotkeyConfig
+        .defaultCommandBindingsFor(osName)
+        .view
+        .filterKeys(Set("bold", "italic", "underline"))
+        .mapValues(_.map(_.render))
+        .toMap
 
     rendered("Linux") shouldBe Map("bold" -> List("ctrl+b"), "italic" -> List("ctrl+i"), "underline" -> List("ctrl+u"))
     rendered("Mac OS X") shouldBe
@@ -203,7 +210,16 @@ class CommandKeyBindingsSpec extends AnyFlatSpec with Matchers:
 
   it should "name registered commands and clash with no other default" in {
     HotkeyConfig.defaultCommandBindingsFor("Linux").keySet.map(registered).map(_.name) shouldBe
-      Set("bold", "italic", "underline")
+      Set(
+        "bold",
+        "italic",
+        "underline",
+        "toggle-line-comment",
+        "toggle-block-comment",
+        "select-next-occurrence",
+        "skip-occurrence",
+        "select-all-occurrences"
+      )
     HotkeyConfig.validate(HotkeyConfig.forOs("Linux")) shouldBe Right(())
     HotkeyConfig.validate(HotkeyConfig.forOs("Mac OS X")) shouldBe Right(())
 

@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.{Command, CommandCategory, CommandIntent, FileIntent, SessionIntent}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{AtomicFileWriteException, FileDialog, FileManager, LocalDocumentStorageProvider, SettledClock}
@@ -128,7 +129,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
     def fireSave(): Unit = stateManager.applyEvent(SaveFile).timeout(20.seconds).unsafeRunSync()
 
   private def fixture(gatedName: String = "gated.txt", fileDialog: Option[FileDialog] = None): Fixture =
-    val directory = Files.createTempDirectory("file-io-lanes-spec")
+    val directory = TestTemp.directory("file-io-lanes-spec")
     val program =
       for
         gates               <- Ref.of[IO, List[Deferred[IO, Unit]]](Nil)
@@ -226,7 +227,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
 
     eventually(f.log.get.unsafeRunSync() should contain("end:adraft"))
     // The result is posted after the write; a later dispatch runs behind it.
-    IO.sleep(200.millis).unsafeRunSync()
+    f.stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
     f.stateManager.updateStateValidated(identity).unsafeRunSync()
     f.buffer(id) shouldBe None
     AppStateValidation.validationErrors(f.state) shouldBe Nil
@@ -371,7 +372,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
   }
 
   "Opening a file through the native dialog" should "keep docked panels and commit a valid state (#1672)" in {
-    val directory = Files.createTempDirectory("file-io-lanes-dialog")
+    val directory = TestTemp.directory("file-io-lanes-dialog")
     val target    = file(directory, "picked.txt", "picked")
     val dialog = FileDialog(
       chooseOpenFile = _ => IO.pure(Some(target)),

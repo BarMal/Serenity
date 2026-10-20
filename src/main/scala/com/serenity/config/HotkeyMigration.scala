@@ -4,6 +4,7 @@ import java.util.Locale
 
 import scala.jdk.CollectionConverters.*
 
+import com.serenity.keystroke.{InputKey, Modifier}
 import com.typesafe.config.{Config, ConfigValueType}
 
 /** Version 1 files wrote every `hotkey.<action>` with the full list the writing build held, so a list in one is
@@ -19,9 +20,30 @@ import com.typesafe.config.{Config, ConfigValueType}
 private[config] object HotkeyMigration:
 
   def withoutDefaultBindings(osName: String)(config: Config): Config =
-    val defaults = HotkeyConfig.platformDefaults(osName)
+    val defaults = withRetired(HotkeyConfig.platformDefaults(osName), retiredDefaults(osName))
     config.entrySet().asScala.toList.map(_.getKey).foldLeft(config) { (kept, path) =>
       if isDefault(config, path, defaults) then kept.withoutPath(path) else kept
+    }
+
+  /** Triggers an action held by default in an earlier build and no longer does: Ctrl+D split the pane and Ctrl+Shift+L
+    * pinned the notes until the occurrence commands took those keys (#1994). Read as the defaults they were, they would
+    * otherwise be kept as the user's own bindings and hold on to the keys.
+    */
+  private def retiredDefaults(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
+    val primary = if osName.toLowerCase(Locale.ROOT).contains("mac") then Modifier.Meta else Modifier.Ctrl
+    Map(
+      HotkeyAction.SplitPaneHorizontal -> List(HotkeyTrigger(InputKey.Character, Some('d'), Set(primary))),
+      HotkeyAction.ToggleNotesPin ->
+        List(HotkeyTrigger(InputKey.Character, Some('l'), Set(primary, Modifier.Shift)))
+    )
+
+  private def withRetired(
+    current: Map[HotkeyAction, List[HotkeyTrigger]],
+    retired: Map[HotkeyAction, List[HotkeyTrigger]]
+  ): Map[HotkeyAction, List[HotkeyTrigger]] =
+    retired.foldLeft(current) {
+      case (all, (action, triggers)) =>
+        all.updated(action, all.getOrElse(action, Nil) ++ triggers)
     }
 
   private def isDefault(config: Config, path: String, defaults: Map[HotkeyAction, List[HotkeyTrigger]]): Boolean =

@@ -154,6 +154,21 @@ class FindSearchSpec extends AnyFlatSpec with Matchers:
       .flatMap(_.resultSet.selectedResult) shouldBe Some(FindResult(0, 16))
   }
 
+  private def scanOf(text: String): FindScan =
+    FindPattern.compile("the", FindOptions.default).fold(error => fail(error.message), FindScan(Rope(text), _))
+
+  "FindSearch.search" should "locate every match at the line and column its offset converts to" in {
+    val text    = (1 to 300).map(n => s"line $n has the word the twice, and ${"x" * (n % 17)}the").mkString("\n")
+    val scan    = scanOf((text + "\n") * 5)
+    val content = scan.content
+    val spans   = scan.spansFrom(0).toVector
+    val matches = FindSearch.window(scan, 0, limit = spans.length)
+    matches.results shouldBe spans
+      .map(span => content.offsetToLineColumn(span.start))
+      .map((line, column) => FindResult(line, column))
+    matches.results.map(scan.offsetOf) shouldBe spans.map(_.start)
+  }
+
   "FindHighlights" should "paint the active buffer's matches only while a find surface is open" in {
     val findState = FindState("needle", Vector(FindResult(0, 0), FindResult(1, 4)), 1)
     val closed    = withFindState(stateWith("needle\nthe needle"), findState)

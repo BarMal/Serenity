@@ -154,6 +154,8 @@ object CommandRunnerSettingsInputItems:
         v.elementGapValue,
         v.outlineThicknessValue
       ) ++
+      CommandRunnerSettingsInputItemsSummon.items(config.summon) ++
+      CommandRunnerSettingsInputItemsUiLayout.indentationItems(config.indentation.tabSize) ++
       CommandRunnerSettingsInputItemsUiLayout.lineNumberSpacingItems(
         v.lineNumberMarginLeftValue,
         v.lineNumberMarginRightValue,
@@ -168,6 +170,7 @@ object CommandRunnerSettingsInputItems:
         v.uiFontSizeValue,
         v.textScaleValue
       ) ++
+      CommandRunnerSettingsHeadingItems.inputItems(config.headingsConfig) ++
       CommandRunnerSettingsKeymapItems.buildKeymapInputItems(v.inputConfig)
 
   private[command] def normalizeHexColor(text: String): Option[String] =

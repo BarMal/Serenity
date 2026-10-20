@@ -9,7 +9,6 @@ import java.util.concurrent.atomic.AtomicReference
 import cats.effect.IO
 import com.serenity.config.ConfigManagerTestSupport
 import com.serenity.keystroke.events.ResizeEvent
-import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
@@ -48,9 +47,6 @@ final case class ScenarioFrameEvidence(
     focus: Focus,
     surfaceRects: Map[SurfaceId, LayoutRect],
     itemRects: Map[SurfaceId, List[LayoutRect]],
-    sourcePreviewMappings: Map[BufferId, Set[Int]],
-    previewPlacements: Map[BufferId, ScenarioPreviewPlacement],
-    visiblePreviewSourceLines: Map[BufferId, Set[Int]],
     visibleText: List[String],
     drawnText: List[ScenarioDrawnText],
     paintedRegions: List[ScenarioPaintedRegion],
@@ -76,9 +72,6 @@ final case class ScenarioStyleCall(action: String, style: TextStyle)
 
 /** A layout hit target paired with the text bounds actually drawn into it. */
 final case class ScenarioDrawnItem(hitTarget: LayoutRect, textBounds: List[ScenarioDrawnText])
-
-/** The actual preview draw bounds and source window used to compose an inline Markdown frame. */
-final case class ScenarioPreviewPlacement(firstSourceLine: Int, firstPreviewRow: Int, bounds: LayoutRect)
 
 /** A rendered frame and the semantic evidence used to diagnose assertion failures. */
 final case class ScenarioFrame(image: BufferedImage, evidence: ScenarioFrameEvidence)
@@ -154,7 +147,7 @@ final class UiScenarioDriver private (
         case Left(reason) =>
           val diagnostic =
             s"$reason; focus=${frame.evidence.focus}; surfaces=${frame.evidence.surfaceRects}; " +
-              s"items=${frame.evidence.itemRects}; previews=${frame.evidence.previewPlacements}; " +
+              s"items=${frame.evidence.itemRects}; " +
               s"violations=${frame.evidence.layoutViolations}"
           IO.raiseError(new AssertionError(diagnostic))
     }
@@ -184,34 +177,6 @@ final class UiScenarioDriver private (
       }
       surfaceId -> rects
     }.toMap
-    val mappings = state.persisted.buffers.map {
-      case (bufferId, buffer) =>
-        bufferId -> MarkdownBlockLens.activeBlockLineSet(
-          buffer.document.content.toString.linesIterator.toVector,
-          buffer.editing.cursorPositions.headOption.map(_.line)
-        )
-    }
-    val previewPlacements = contract.workspace.paneLayouts.toList.flatMap {
-      case (paneId, paneLayout) =>
-        for
-          pane       <- state.persisted.layout.editorPanes.get(paneId).toList
-          bufferId   <- pane.bufferId.toList
-          buffer     <- state.persisted.buffers.get(bufferId).toList
-          drawnImage <- recordingSurface.drawnImages.find(_.bounds == paneLayout.contentRect).toList
-          placement  <- previewPlacementFor(buffer, Some(drawnImage)).toList
-        yield bufferId -> placement
-    }.toMap
-    val visiblePreviewSourceLines = previewPlacements.map {
-      case (bufferId, placement) =>
-        val buffer = state.persisted.buffers(bufferId)
-        bufferId -> compositedPreviewSourceLines(
-          image,
-          state.persisted.theme.background,
-          buffer,
-          placement,
-          mappings(bufferId)
-        )
-    }
     val visibleText = state.focusedBufferId.toList.flatMap { bufferId =>
       state.persisted.buffers.get(bufferId).toList.flatMap { buffer =>
         buffer.document.content.toString.linesIterator
@@ -239,9 +204,6 @@ final class UiScenarioDriver private (
       state.persisted.focus,
       surfaceRects,
       itemRects,
-      mappings,
-      previewPlacements,
-      visiblePreviewSourceLines,
       visibleText,
       recordingSurface.drawnText,
       recordingSurface.paintedRegions,
@@ -252,76 +214,6 @@ final class UiScenarioDriver private (
       renderedContentRows,
       contract.violations
     )
-
-  private def previewPlacementFor(buffer: Buffer, image: Option[ScenarioDrawnImage]): Option[ScenarioPreviewPlacement] =
-    for
-      drawnImage <- image
-      if buffer.document.language.contains(com.serenity.lsp.config.LanguageId.Markdown)
-    yield
-      val lines = buffer.document.content.linesFrom(0, buffer.document.content.lineCount)
-      val activeLine =
-        buffer.editing.cursorPositions.headOption.map(_.line).filter(line => line >= 0 && line < lines.length)
-      val activeBlock = activeLine.map(line => MarkdownBlockLens.currentBlock(lines, line))
-      val sourceLimit = math.max(32, buffer.viewport.visibleLines.max(1) * 4)
-      val viewportTop = buffer.viewport.topLine.max(0).min(math.max(0, lines.length - 1))
-      val precedingHeading = activeLine
-        .filter(line => line > 0 && lines(line).trim.isEmpty && lines(line - 1).trim.matches("^#{1,6}\\s+.*"))
-        .map(_ - 1)
-      val preferredTop = precedingHeading.orElse(activeBlock.map(_.start.min(viewportTop))).getOrElse(viewportTop)
-      val firstSourceLine = activeBlock
-        .map { block =>
-          val limit = math.max(sourceLimit, block.end - block.start + 1)
-          if block.end >= preferredTop + limit then (block.end - limit + 1).max(0) else preferredTop
-        }
-        .getOrElse(preferredTop)
-      ScenarioPreviewPlacement(
-        firstSourceLine,
-        MarkdownDocumentPreview
-          .previewRowForSourceLine(lines, firstSourceLine, stateManager.renderCaches.markdownPreviewCache)
-          .getOrElse(firstSourceLine),
-        drawnImage.bounds
-      )
-
-  private def compositedPreviewSourceLines(
-    image: BufferedImage,
-    background: RenderColor,
-    buffer: Buffer,
-    placement: ScenarioPreviewPlacement,
-    activeSourceLines: Set[Int]
-  ): Set[Int] =
-    MarkdownDocumentPreview
-      .renderInlineDocument(
-        buffer.document.content.linesFrom(0, buffer.document.content.lineCount),
-        stateManager.renderCaches.markdownPreviewCache
-      )
-      .zipWithIndex
-      .collect {
-        case (previewLine, previewRow)
-            if previewLine.sourceLine.exists(source => !activeSourceLines.contains(source)) &&
-              previewRow >= placement.firstPreviewRow &&
-              finalPreviewRowHasContent(image, background, placement, previewRow - placement.firstPreviewRow) =>
-          previewLine.sourceLine.get
-      }
-      .toSet
-
-  private def finalPreviewRowHasContent(
-    image: BufferedImage,
-    background: RenderColor,
-    placement: ScenarioPreviewPlacement,
-    localPreviewRow: Int
-  ): Boolean =
-    val scale = environment.deviceScale.max(1.0)
-    val left  = math.floor(placement.bounds.x * environment.cellMetrics.charWidth * scale).toInt.max(0)
-    val right = math.ceil(placement.bounds.right * environment.cellMetrics.charWidth * scale).toInt.min(image.getWidth)
-    val top =
-      math.floor((placement.bounds.y + localPreviewRow) * environment.cellMetrics.lineHeight * scale).toInt.max(0)
-    val bottom = math
-      .ceil((placement.bounds.y + localPreviewRow + 1) * environment.cellMetrics.lineHeight * scale)
-      .toInt
-      .min(image.getHeight)
-    left < right && top < bottom && (top until bottom).exists { y =>
-      (left until right).exists(x => image.getRGB(x, y) != background.argb)
-    }
 
 final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: CellMetrics) extends RenderSurface:
   private val drawnTextBuffer      = scala.collection.mutable.ListBuffer.empty[ScenarioDrawnText]
@@ -466,7 +358,7 @@ object UiScenarioDriver:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger
     for
-      configuredSessionRoot <- sessionRoot.fold(IO.blocking(Files.createTempDirectory(s"$name-ui-scenario")))(IO.pure)
+      configuredSessionRoot <- sessionRoot.fold(IO.blocking(TestTemp.directory(s"$name-ui-scenario")))(IO.pure)
       configuredInitialConfig <-
         if isolatedConfig then IO.blocking(ConfigManagerTestSupport.loadConfig(Some(isolatedConfigPath.toString)))
         else IO.pure(initialConfig)

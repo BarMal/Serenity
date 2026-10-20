@@ -1,7 +1,7 @@
 package com.serenity
 
 import java.awt.Font
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -56,7 +56,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("command runner should be open"))
 
   "StateManager UI presets" should "duplicate, rename, and delete UI presets from commands" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-management").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-management").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -95,9 +95,9 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reject saving or duplicating over an existing preset name" in {
-    val path     = Files.createTempDirectory("state-manager-ui-preset-name-collision").resolve("ui-presets.json")
+    val path     = TestTemp.directory("state-manager-ui-preset-name-collision").resolve("ui-presets.json")
     val store    = UiPresetStore(path)
-    val existing = UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Theme.dark.name, Nil)
+    val existing = UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Some(Theme.dark.name), Nil)
     val sm       = managerWithStore(store)
     store.upsert(existing).unsafeRunSync()
 
@@ -130,7 +130,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep built-in presets immutable for rename commands" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-rename-built-in").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-rename-built-in").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -152,10 +152,12 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "overwrite a custom preset with the live workspace and refuse invalid overwrites" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-overwrite").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-overwrite").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
-    store.upsert(UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Theme.dark.name, Nil)).unsafeRunSync()
+    store
+      .upsert(UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Some(Theme.dark.name), Nil))
+      .unsafeRunSync()
 
     (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     sm.executeCommand(
@@ -207,12 +209,12 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reject unavailable preset resources without changing the workspace" in {
-    val path    = Files.createTempDirectory("state-manager-ui-preset-unavailable-resources").resolve("ui-presets.json")
+    val path    = TestTemp.directory("state-manager-ui-preset-unavailable-resources").resolve("ui-presets.json")
     val store   = UiPresetStore(path)
     val sm      = managerWithStore(store)
     val initial = sm.getCurrentState.unsafeRunSync()
     store
-      .upsert(UiPreset("Missing Theme", AppConfig.default.withLineNumbers(false), "not-installed", Nil))
+      .upsert(UiPreset("Missing Theme", AppConfig.default.withLineNumbers(false), Some("not-installed"), Nil))
       .unsafeRunSync()
     store
       .upsert(
@@ -221,7 +223,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
           AppConfig.default.withFontConfig(
             AppConfig.default.editorConfig.fontConfig.copy(textFontFamily = "not-installed")
           ),
-          Theme.dark.name,
+          Some(Theme.dark.name),
           Nil
         )
       )
@@ -256,7 +258,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep built-in presets immutable for delete commands" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-delete-built-in").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-delete-built-in").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
     (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
@@ -277,7 +279,7 @@ class StateManagerUiPresetManagementSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reset a custom built-in preset override to the built-in defaults" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-reset").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-reset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
     sm.executeCommand(

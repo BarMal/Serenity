@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.richtext.{DocxDocumentCodec, InlineMark, RichTextParagraph}
 import com.serenity.rope.Balance
@@ -78,7 +79,7 @@ class RichDocumentSoftBreakSpec extends AnyFlatSpec with Matchers with OptionVal
     val manager = FileManager()
     val opened =
       manager.loadFile(packageFile("draft.docx", "word/document.xml", docxWithSoftBreak), bufferId).unsafeRunSync()
-    val folder = Files.createTempDirectory("serenity-soft-break-export")
+    val folder = TestTemp.directory("serenity-soft-break-export")
 
     val _ = manager.saveBuffer(opened, folder.resolve("export.txt")).unsafeRunSync()
     val _ = manager.saveBuffer(opened, folder.resolve("export.md")).unsafeRunSync()
@@ -91,7 +92,7 @@ class RichDocumentSoftBreakSpec extends AnyFlatSpec with Matchers with OptionVal
     expectOneLinePerParagraph(open(packageFile("draft.odt", "content.xml", odtWithSoftBreak)))
 
   "Opening an RTF with a soft line break" should "keep one rope line per paragraph" in {
-    val path = Files.createTempDirectory("serenity-soft-break").resolve("draft.rtf")
+    val path = TestTemp.directory("serenity-soft-break").resolve("draft.rtf")
     val _    = Files.write(path, rtfWithSoftBreak.getBytes(StandardCharsets.ISO_8859_1))
     expectOneLinePerParagraph(open(path))
   }
@@ -113,7 +114,7 @@ class RichDocumentSoftBreakSpec extends AnyFlatSpec with Matchers with OptionVal
     paragraph.runs.find(_.text.contains(text)).map(_.style.marks).getOrElse(Set.empty)
 
   private def packageFile(name: String, entryName: String, content: String): Path =
-    val path   = Files.createTempDirectory("serenity-soft-break").resolve(name)
+    val path   = TestTemp.directory("serenity-soft-break").resolve(name)
     val output = java.io.ByteArrayOutputStream()
     val zip    = ZipOutputStream(output)
     try

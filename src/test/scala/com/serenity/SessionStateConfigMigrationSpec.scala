@@ -17,11 +17,15 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "SessionState" should "default spell-check dictionary paths when loading older JSON without the field" in {
-    val config = AppConfig.default.withSpellCheck(
+    val config = AppConfig.conventional.withSpellCheck(
       SpellCheckConfig(enabled = true, languages = List("en"), additionalWords = List("serenity"))
     )
     val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = config)))
+      .fromAppState(
+        AppState
+          .initial(AppConfig.conventional)
+          .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = config))
+      )
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
@@ -53,7 +57,11 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
 
   it should "default renderFpsTarget to 60 FPS when loading older JSON without the field" in {
     val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .fromAppState(
+        AppState
+          .initial(AppConfig.conventional)
+          .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = AppConfig.conventional))
+      )
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
@@ -70,7 +78,11 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
 
   it should "default windowChromeMode to the app default when loading older JSON without the field" in {
     val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .fromAppState(
+        AppState
+          .initial(AppConfig.conventional)
+          .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = AppConfig.conventional))
+      )
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
@@ -82,12 +94,16 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
     val decoded = jsonWithoutWindowChromeMode.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.windowChromeMode shouldBe AppConfig.default.windowChromeMode
+    decoded.toOption.get.config.windowChromeMode shouldBe AppConfig.conventional.windowChromeMode
   }
 
   it should "default visualLineCursorNavigation to the app default when loading older JSON without the field" in {
     val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .fromAppState(
+        AppState
+          .initial(AppConfig.conventional)
+          .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = AppConfig.conventional))
+      )
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
@@ -100,12 +116,16 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.surfaceConfig.visualLineCursorNavigation shouldBe
-      AppConfig.default.surfaceConfig.visualLineCursorNavigation
+      AppConfig.conventional.surfaceConfig.visualLineCursorNavigation
   }
 
   it should "default interfaceDensity to Comfortable when loading older JSON without the field" in {
     val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .fromAppState(
+        AppState
+          .initial(AppConfig.conventional)
+          .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = AppConfig.conventional))
+      )
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
@@ -125,7 +145,11 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
   // number -- exactly as if the field had never existed on that file's `AppConfig` at all.
   it should "leave UI element gap unset when loading older JSON without the field" in {
     val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .fromAppState(
+        AppState
+          .initial(AppConfig.conventional)
+          .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = AppConfig.conventional))
+      )
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
@@ -142,7 +166,11 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
 
   it should "default UI outline thickness when loading older JSON without the field" in {
     val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .fromAppState(
+        AppState
+          .initial(AppConfig.conventional)
+          .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = AppConfig.conventional))
+      )
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
@@ -159,7 +187,11 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
 
   it should "default the status segments when loading older JSON without the field" in {
     val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .fromAppState(
+        AppState
+          .initial(AppConfig.conventional)
+          .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = AppConfig.conventional))
+      )
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
@@ -176,7 +208,11 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
 
   it should "restore a legacy session that stored a single cursorInfoBarMode instead of a segment list" in {
     val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .fromAppState(
+        AppState
+          .initial(AppConfig.conventional)
+          .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = AppConfig.conventional))
+      )
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
@@ -200,9 +236,13 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
       List(StatusSegment.Position, StatusSegment.Title, StatusSegment.Mode)
   }
 
-  it should "default the status placement to pinned when loading older JSON without the field" in {
+  it should "default the status placement to the app default (off in the minimal layout) when loading older JSON without the field" in {
     val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .fromAppState(
+        AppState
+          .initial(AppConfig.conventional)
+          .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = AppConfig.conventional))
+      )
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
@@ -214,12 +254,16 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
     val decoded = jsonWithoutStatusLinePlacement.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.statusLine.placement shouldBe StatusLinePlacement.Pinned
+    decoded.toOption.get.config.statusLine.placement shouldBe StatusLinePlacement.Off
   }
 
   it should "default uiFontFamily to SansSerif when loading older JSON without the field" in {
     val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .fromAppState(
+        AppState
+          .initial(AppConfig.conventional)
+          .copy(persisted = AppState.initial(AppConfig.conventional).persisted.copy(config = AppConfig.conventional))
+      )
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))

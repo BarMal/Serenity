@@ -12,7 +12,8 @@ final case class TextStyle(
     isItalic: Boolean = false,
     isUnderlined: Boolean = false,
     fontFamily: Option[String] = None,
-    fontSize: Option[Float] = None
+    fontSize: Option[Float] = None,
+    isStrikethrough: Boolean = false
 ):
 
   def combine(other: TextStyle): TextStyle =
@@ -21,7 +22,8 @@ final case class TextStyle(
       isItalic = other.isItalic || this.isItalic,
       isUnderlined = other.isUnderlined || this.isUnderlined,
       fontFamily = other.fontFamily.orElse(this.fontFamily),
-      fontSize = other.fontSize.orElse(this.fontSize)
+      fontSize = other.fontSize.orElse(this.fontSize),
+      isStrikethrough = other.isStrikethrough || this.isStrikethrough
     )
 
   def fontMode: Int =
@@ -38,6 +40,9 @@ object TextStyle:
   /** Derive the concrete AWT font a style paints (and is measured) with, over a base font. This is the single source
     * both `Java2DRenderSurface.enableStyle` (drawing) and the measured-layout caret measurement use, so a run's glyph
     * advances always match the glyphs actually drawn.
+    *
+    * An underline is not part of the font: the surface draws it as a rule under the run, so an underlined run shares
+    * the font of its plain counterpart. Strikethrough is still a font attribute.
     */
   def styledFont(base: Font, style: TextStyle): Font =
     val fontMode = style.fontMode
@@ -45,7 +50,9 @@ object TextStyle:
     val styled = style.fontFamily match
       case Some(family) => Font(family, fontMode, size.round.max(1)).deriveFont(fontMode, size)
       case None         => base.deriveFont(fontMode, size)
-    if style.isUnderlined then styled.deriveFont(Map(TextAttribute.UNDERLINE -> TextAttribute.UNDERLINE_ON).asJava)
+    if style.isStrikethrough then
+      val strike: Map[TextAttribute, AnyRef] = Map(TextAttribute.STRIKETHROUGH -> TextAttribute.STRIKETHROUGH_ON)
+      styled.deriveFont(strike.asJava)
     else styled
 
 final case class StyledText(
@@ -54,3 +61,14 @@ final case class StyledText(
     foregroundColor: RenderColor = RenderColor.White,
     backgroundColor: RenderColor = RenderColor.Black
 )
+
+object StyledText:
+
+  /** Whether the segments' contents, concatenated, are exactly `text` -- without building the concatenation. */
+  def spell(segments: List[StyledText], text: String): Boolean =
+    @annotation.tailrec
+    def loop(remaining: List[StyledText], offset: Int): Boolean =
+      remaining match
+        case Nil          => offset == text.length
+        case head :: tail => text.startsWith(head.content, offset) && loop(tail, offset + head.content.length)
+    loop(segments, 0)

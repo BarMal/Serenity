@@ -13,6 +13,7 @@ import scala.util.Try
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.io.FileManager
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, UnreadableSession}
@@ -98,7 +99,7 @@ class KillRecoverySpec extends AnyFlatSpec with Matchers with OptionValues:
   }
 
   private def killAndRecover(round: Int): Recovery =
-    val directory   = Files.createTempDirectory("kill-recovery")
+    val directory   = TestTemp.directory("kill-recovery")
     val sessionRoot = directory.resolve("home")
     val target      = directory.resolve("target.txt")
     Files.writeString(target, text(FileKind, 0))

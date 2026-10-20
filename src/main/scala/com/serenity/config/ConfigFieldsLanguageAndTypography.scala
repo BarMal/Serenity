@@ -1,5 +1,6 @@
 package com.serenity.config
 
+import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.fonts.FontLoader
 
 /** Language tools and typography: syntax highlighting, spell check, fonts. */
@@ -19,6 +20,28 @@ private[config] object ConfigFieldsLanguageAndTypography:
     field("editor.smart_punctuation", "smart_punctuation")(boolean)(
       _.languageToolsConfig.smartPunctuationEnabled,
       (config, value) => config.withSmartPunctuation(value)
+    ),
+    field("editor.large_file.optimizations")(boolean)(
+      _.largeFiles.optimizations,
+      (config, value) => config.withLargeFilePolicy(config.largeFiles.copy(optimizations = value))
+    ),
+    field("editor.large_file.warn_above_chars")(int.filtered(_ >= 1))(
+      _.largeFiles.warnAboveChars,
+      (config, value) => config.withLargeFilePolicy(config.largeFiles.copy(warnAboveChars = value))
+    ),
+    field("editor.large_file.tooling_off_above_chars")(int.filtered(_ >= 1))(
+      _.largeFiles.toolingOffAboveChars,
+      (config, value) => config.withLargeFilePolicy(config.largeFiles.copy(toolingOffAboveChars = value))
+    ),
+    field("editor.tab_size")(
+      int.filtered(size => size >= IndentationSettings.MinTabSize && size <= IndentationSettings.MaxTabSize)
+    )(
+      _.indentation.tabSize,
+      (config, value) => config.withIndentation(config.indentation.copy(tabSize = value))
+    ),
+    field("editor.insert_spaces")(boolean)(
+      _.indentation.insertSpaces,
+      (config, value) => config.withIndentation(config.indentation.copy(insertSpaces = value))
     ),
     field("spellcheck.enabled", "spellcheck_enabled")(boolean)(
       _.languageToolsConfig.spellCheck.enabled,
@@ -84,6 +107,10 @@ private[config] object ConfigFieldsLanguageAndTypography:
     )(
       _.editorConfig.fontConfig.textScaleMultiplier,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(textScaleMultiplier = value))
+    ),
+    field("typography.fallback.families", "font.fallback.families", "font_fallback_families")(stringList)(
+      _.editorConfig.fontConfig.fallbackFamilies,
+      (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(fallbackFamilies = value))
     ),
     field("typography.code.ligatures", "font.code.ligatures", "font_code_ligatures")(boolean)(
       _.editorConfig.fontConfig.codeLigatures,

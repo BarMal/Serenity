@@ -60,3 +60,22 @@ class ChapterRenumberingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer.fromString(BufferId(0), "# Chapter 5\n\n# Chapter 9\n")
     ChapterRenumbering.pendingRenumbers(buffer) shouldBe empty
   }
+
+  it should "not renumber a chapter-looking line inside a fenced code block (#1923)" in {
+    val text = "# Chapter 1\n\n```\n# Chapter 7\n```\n\n# Chapter 2\n"
+    ChapterRenumbering.pendingRenumbers(markdownBuffer(text)) shouldBe empty
+  }
+
+  it should "count only the real chapters around a fenced block when numbering" in {
+    val text = "# Chapter 4\n\n~~~\n# Chapter 4\n~~~\n\n# Chapter 9\n"
+    edited(text) shouldBe "# Chapter 1\n\n~~~\n# Chapter 4\n~~~\n\n# Chapter 2\n"
+  }
+
+  it should "follow an edit made after an earlier read of the same buffer" in {
+    val first = markdownBuffer("# Chapter 1\n\ntext\n\n# Chapter 2\n")
+    ChapterRenumbering.pendingRenumbers(first) shouldBe empty
+    val withoutFirst = first.copy(document =
+      first.document.copy(content = first.document.content.delete(0, 19).getOrElse(first.document.content))
+    )
+    ChapterRenumbering.pendingRenumbers(withoutFirst).map(_._3) shouldBe List("1")
+  }

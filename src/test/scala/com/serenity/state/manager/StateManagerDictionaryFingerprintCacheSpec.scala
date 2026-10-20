@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import cats.syntax.foldable.*
+import com.serenity.TestTemp
 import com.serenity.config.{AppConfig, SpellCheckConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -158,7 +159,7 @@ class StateManagerDictionaryFingerprintCacheSpec extends AnyFlatSpec with Matche
 
   "dictionaryWatchDirectories" should
     "reflect the current spell-check config's configured dictionary directory" in {
-      val configuredDirectory = java.nio.file.Files.createTempDirectory("serenity-watch-dictionary-boundary")
+      val configuredDirectory = TestTemp.directory("serenity-watch-dictionary-boundary")
       val state = AppState.initial.copy(
         persisted = AppState.initial.persisted.copy(
           config = AppConfig.default.withSpellCheck(

@@ -4,7 +4,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.std.Supervisor
 import cats.effect.unsafe.implicits.global
-import cats.effect.{IO, Ref}
+import cats.effect.{Fiber, IO, Ref}
 import com.serenity.config.{AppConfig, SpellCheckConfig, StatusLinePlacement}
 import com.serenity.input.{InputRouter, PendingInput, SystemClipboard}
 import com.serenity.keystroke.events.{Event, InsertChar}
@@ -75,6 +75,50 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
     }
 
     expiries shouldBe (0, 1)
+  }
+
+  private def countingSupervisor(inner: Supervisor[IO], started: Ref[IO, Int]): Supervisor[IO] =
+    new Supervisor[IO]:
+      def supervise[A](fa: IO[A]): IO[Fiber[IO, Throwable, A]] = started.update(_ + 1) >> inner.supervise(fa)
+
+  private def keysTypedFiveMillisApart(timer: TypingQuietTimer, keys: Int): IO[Unit] =
+    def loop(remaining: Int, before: AppState): IO[Unit] =
+      if remaining == 0 then IO.unit
+      else commitTyping(timer, before).flatMap(after => IO.sleep(5.millis) >> loop(remaining - 1, after))
+    loop(keys, settled)
+
+  it should "start no fiber for a keystroke, however many extend the window (#1928)" in {
+    val (fibers, expiries) =
+      runVirtual(
+        Supervisor[IO](await = false).use { inner =>
+          for
+            started  <- Ref.of[IO, Int](0)
+            expiries <- Ref.of[IO, Int](0)
+            timer    <- TypingQuietTimer.create(countingSupervisor(inner, started), expiries.update(_ + 1))
+            _        <- keysTypedFiveMillisApart(timer, 200)
+            _        <- IO.sleep(TypingActivity.QuietWindow + 10.millis)
+            fibers   <- started.get
+            seen     <- expiries.get
+          yield (fibers, seen)
+        }
+      )
+
+    fibers should be <= 1
+    expiries shouldBe 1
+  }
+
+  it should "end a second burst typed after the first one expired" in {
+    val expiries = withTimer { (timer, expiries) =>
+      for
+        _    <- keysTypedFiveMillisApart(timer, 20)
+        _    <- IO.sleep(TypingActivity.QuietWindow + 10.millis)
+        _    <- keysTypedFiveMillisApart(timer, 20)
+        _    <- IO.sleep(TypingActivity.QuietWindow + 10.millis)
+        seen <- expiries.get
+      yield seen
+    }
+
+    expiries shouldBe 2
   }
 
   it should "stay idle for commits that do not change typing activity" in {

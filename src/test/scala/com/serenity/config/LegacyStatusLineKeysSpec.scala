@@ -2,6 +2,7 @@ package com.serenity.config
 
 import java.nio.file.Files
 
+import com.serenity.TestTemp
 import com.serenity.config.{StatusLineConfig, StatusLinePlacement, StatusSegment}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -12,14 +13,14 @@ import org.scalatest.matchers.should.Matchers
 class LegacyStatusLineKeysSpec extends AnyFlatSpec with Matchers:
 
   private def load(text: String): ConfigLoadResult =
-    val file = Files.createTempFile("serenity-legacy-status", ".conf")
+    val file = TestTemp.file("serenity-legacy-status", ".conf")
     Files.writeString(file, text)
     ConfigManagerTestSupport.loadConfigResult(Some(file.toString))
 
   "the old gutter defaults" should "read as today's default pinned row" in {
     val result = load("display.gutter = true\ncursor.info_bar.segments = off\n")
 
-    result.config.statusLine shouldBe AppConfig.default.statusLine
+    result.config.statusLine shouldBe AppConfig.conventional.statusLine
     result.report.deprecatedEntries.map(entry => entry.key -> entry.replacement) should contain allOf (
       "display.gutter"           -> "status.placement",
       "cursor.info_bar.segments" -> "status.segments"

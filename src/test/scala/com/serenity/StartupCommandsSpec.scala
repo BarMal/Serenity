@@ -44,7 +44,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
   it should "open the selected native-dialog file when Open file is selected" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-    val selectedFile = java.nio.file.Files.createTempFile("serenity-startup-open", ".txt")
+    val selectedFile = TestTemp.file("serenity-startup-open", ".txt")
     java.nio.file.Files.writeString(selectedFile, "opened from startup")
 
     val program = for
@@ -56,7 +56,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _ <- stateManager.applyEvent(MoveDown)
 
@@ -92,7 +93,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _          <- stateManager.applyEvent(MoveDown)
       _          <- stateManager.applyEvent(Enter)
@@ -116,7 +118,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       state <- stateManager.getCurrentState
     yield startPageOf(state).actions.map(action => (action.id, action.label, action.shortcut)) shouldBe List(
@@ -131,7 +134,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
   it should "pin the Explorer to the folder chosen in the native dialog and leave the start page" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-    val folder = java.nio.file.Files.createTempDirectory("serenity-startup-folder")
+    val folder = TestTemp.directory("serenity-startup-folder")
 
     val program = for
       stateManager <- createStateManagerIO(
@@ -142,7 +145,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _          <- stateManager.applyEvent(MoveDown)
       _          <- stateManager.applyEvent(MoveDown)
@@ -162,7 +166,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
   it should "choose a folder from the digit key too" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-    val folder = java.nio.file.Files.createTempDirectory("serenity-startup-folder-key")
+    val folder = TestTemp.directory("serenity-startup-folder-key")
 
     val program = for
       stateManager <- createStateManagerIO(
@@ -173,7 +177,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _          <- stateManager.applyEvent(InsertChar('3'))
       finalState <- awaitState(stateManager)(explorerRoots(_).contains(folder))
@@ -192,7 +197,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _      <- stateManager.applyEvent(MoveDown)
       _      <- stateManager.applyEvent(MoveDown)
@@ -212,7 +218,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _     <- stateManager.applyEvent(MoveDown)
       _     <- stateManager.applyEvent(MoveDown)
@@ -237,7 +244,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
   it should "browse to a folder in the Open Folder form, confirm it, pin the Explorer and leave the start page" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-    val parent = java.nio.file.Files.createTempDirectory("serenity-startup-folder-tui")
+    val parent = TestTemp.directory("serenity-startup-folder-tui")
     val child  = java.nio.file.Files.createDirectory(parent.resolve("project"))
 
     val program = for
@@ -288,7 +295,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _      <- stateManager.applyEvent(MoveDown)
       _      <- stateManager.applyEvent(MoveDown)
@@ -318,7 +326,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _          <- stateManager.applyEvent(InsertChar('9'))
       finalState <- stateManager.getCurrentState
@@ -343,7 +352,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _          <- stateManager.applyEvent(Enter) // Select first option: New Session
       finalState <- stateManager.getCurrentState

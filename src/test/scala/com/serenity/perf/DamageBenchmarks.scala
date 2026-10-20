@@ -221,10 +221,10 @@ private[perf] object DamageBenchmarks:
       s.scroll._1,
       s.scroll._2,
       // A scroll changes no buffer *content*, but it does move `viewport.topLine`, which `viewportDamage` keys off.
-      // Both settings are equivalent here, exactly as #997 predicts: every row of the buffer, as one fact whose size
-      // does not grow with the buffer's 20,000 lines (#1891). The status row shows no viewport, so no `Chrome`.
-      verifyRows = damage => assert(damage == Damage.BufferAll(BufferId(1))),
-      verifyCells = damage => assert(damage == Damage.BufferAll(BufferId(1)))
+      // Both settings are equivalent here, exactly as #997 predicts: one scroll fact, whose size does not grow with
+      // the buffer's 20,000 lines (#1891). The status row shows no viewport, so no `Chrome`.
+      verifyRows = damage => assert(damage == Damage.BufferScrolled(BufferId(1))),
+      verifyCells = damage => assert(damage == Damage.BufferScrolled(BufferId(1)))
     ) ++ pair(
       "caret_move_100k_lines",
       s.largeDocumentCaretMove._1,

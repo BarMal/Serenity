@@ -2,7 +2,7 @@ package com.serenity.app.instance
 
 import java.net.{StandardProtocolFamily, UnixDomainSocketAddress}
 import java.nio.channels.ServerSocketChannel
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Executors, LinkedBlockingQueue}
 
@@ -12,6 +12,7 @@ import scala.concurrent.duration.DurationInt
 
 import cats.effect.IO
 import cats.effect.unsafe.IORuntime
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -30,7 +31,7 @@ class InstanceMessengerRuntimeSafetySpec extends AnyFlatSpec with Matchers:
   private given LoggerFactory[IO] = Slf4jFactory.create[IO]
   private val logger: Logger[IO]  = LoggerFactory[IO].getLogger(using LoggerName("InstanceMessengerRuntimeSafetySpec"))
 
-  private def socketPath(): Path = Files.createTempDirectory("sock").resolve("i.sock")
+  private def socketPath(): Path = TestTemp.directory("sock").resolve("i.sock")
 
   /** One thread running blocking tasks in turn, counting those that leave its interrupt flag set. */
   final private class FlagCheckingBlocker extends ExecutionContext:

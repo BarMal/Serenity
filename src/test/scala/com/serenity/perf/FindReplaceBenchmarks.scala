@@ -13,6 +13,10 @@ private[perf] object FindReplaceBenchmarks:
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] = resultSetBenchmarks() ++ queryBenchmarks()
 
+  /** Runs just these benchmarks, which need no window: `sbt "Test/runMain com.serenity.perf.FindReplaceBenchmarks"`. */
+  def main(args: Array[String]): Unit =
+    BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
+
   private def resultSetBenchmarks(): List[BenchmarkRunner.Benchmark] =
     val frequentTermDocument = Rope("the " * 500_000)
     val frequentTermMatches  = FindSearch.search(frequentTermDocument, "the", FindOptions.default, anchor = 0)
@@ -23,7 +27,21 @@ private[perf] object FindReplaceBenchmarks:
     )
     val visibleFindResults = findResultSet.visibleResults(maxResults = 80)
 
+    val stepMatches = FindSearch.search(frequentTermDocument, "the", FindOptions.default, anchor = 0)
+    val stepState   = FindState("the", stepMatches.results, 0, capped = stepMatches.capped)
+    val stepCaret   = CursorPosition(0, 0)
+    def step(): Option[FindState] =
+      FindNavigation.step(frequentTermDocument, stepState, stepCaret, FindDirection.Forward)
+
     List(
+      // F3 with a full window of stored results: every stored result is checked against the current text.
+      BenchmarkRunner.Benchmark(
+        "find_replace.navigation_step",
+        3,
+        20,
+        () => assert(step().exists(_.currentIndex == 1)),
+        () => step()
+      ),
       BenchmarkRunner.Benchmark(
         "find_replace.large_result_set",
         3,

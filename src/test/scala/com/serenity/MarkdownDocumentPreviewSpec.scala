@@ -72,7 +72,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     second should include("<h1>Changed</h1>")
   }
 
-  it should "format markdown tables for inline lens rendering as closed box tables" in {
+  it should "format markdown tables for panel preview rendering as closed box tables" in {
     val rows = MarkdownDocumentPreview.renderInlineLines(
       Vector(
         "| Task | Owner |",
@@ -92,19 +92,6 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518"
     )
     rows.mkString("\n") should not include "| ---- | ----- |"
-  }
-
-  it should "identify only table source rows for block-level inline rendering" in {
-    val lines = Vector(
-      "Before",
-      "| Task | Owner |",
-      "| ---- | ----- |",
-      "| Ship | Codex |",
-      "",
-      "After | not a table"
-    )
-
-    MarkdownDocumentPreview.inlineTableLineIndexes(lines, cache = cache) shouldBe Set(1, 2, 3)
   }
 
   it should "map inline preview rows back to their source lines" in {
@@ -128,98 +115,6 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       "After"
     )
     preview.map(_.sourceLine) shouldBe Vector(Some(0), None, Some(1), Some(2), Some(3), None, Some(4))
-    MarkdownDocumentPreview.previewRowForSourceLine(lines, 3, cache = cache) shouldBe Some(4)
-  }
-
-  it should "map source ranges to preview rows including table borders" in {
-    val lines = Vector(
-      "Before",
-      "| Task | Owner |",
-      "| ---- | ----- |",
-      "| Ship | Codex |",
-      "After"
-    )
-
-    MarkdownDocumentPreview.previewRowsForSourceRange(lines, 1 to 3, cache = cache) shouldBe Some(1 to 5)
-  }
-
-  it should "choose a synced preview window from the active markdown block" in {
-    val lines = Vector(
-      "# Intro",
-      "",
-      "First paragraph",
-      "continued",
-      "",
-      "- one",
-      "  detail",
-      "- two",
-      "",
-      "# Later"
-    )
-
-    val paragraph =
-      MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(3), fallbackTopLine = 0, cache = cache)
-    paragraph.firstSourceLine shouldBe 2
-    paragraph.firstPreviewRow shouldBe 2
-    paragraph.source shouldBe "First paragraph\ncontinued\n\n- one\n  detail\n- two\n\n# Later"
-
-    val list = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(6), fallbackTopLine = 0, cache = cache)
-    list.firstSourceLine shouldBe 5
-    list.firstPreviewRow shouldBe 5
-    list.source shouldBe "- one\n  detail\n- two\n\n# Later"
-
-    val heading = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(9), fallbackTopLine = 0, cache = cache)
-    heading.firstSourceLine shouldBe 9
-    heading.firstPreviewRow shouldBe 9
-    heading.source shouldBe "# Later"
-  }
-
-  it should "bound synced preview window source when a maximum line count is supplied" in {
-    val lines = (1 to 20).map(i => s"# Heading $i").toVector
-
-    val window = MarkdownDocumentPreview.previewWindow(
-      lines,
-      activeLine = Some(4),
-      fallbackTopLine = 0,
-      maxSourceLines = 5,
-      cache = cache
-    )
-
-    window.firstSourceLine shouldBe 4
-    window.source shouldBe (5 to 9).map(i => s"# Heading $i").mkString("\n")
-  }
-
-  it should "fill split preview source windows around the active line instead of rendering only the active block" in {
-    val lines = (1 to 20).map(i => s"# Heading $i").toVector
-
-    val window = MarkdownDocumentPreview.splitPreviewWindow(
-      lines,
-      activeLine = Some(19),
-      fallbackTopLine = 19,
-      maxSourceLines = 5,
-      cache = cache
-    )
-
-    window.firstSourceLine shouldBe 15
-    window.source shouldBe (16 to 20).map(i => s"# Heading $i").mkString("\n")
-  }
-
-  it should "include rendered table chrome in the synced preview row offset" in {
-    val lines = Vector(
-      "Before",
-      "",
-      "| Task | Owner |",
-      "| ---- | ----- |",
-      "| Ship | Codex |",
-      "",
-      "After"
-    )
-
-    val table = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(4), fallbackTopLine = 0, cache = cache)
-
-    table.firstSourceLine shouldBe 2
-    table.firstPreviewRow shouldBe 2
-    table.source shouldBe "| Task | Owner |\n| ---- | ----- |\n| Ship | Codex |\n\nAfter"
   }
 
   it should "preserve rendered image elements in the document preview HTML" in {
@@ -248,7 +143,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render local images only when they are below the preview resource root" in {
-    val root       = Files.createTempDirectory("serenity-markdown-preview-root")
+    val root       = TestTemp.directory("serenity-markdown-preview-root")
     val localImage = root.resolve("local.png")
     writeSolidImage(localImage, Color(220, 30, 40), width = 8, height = 8)
 
@@ -267,8 +162,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "deny images outside the preview resource root" in {
-    val root        = Files.createTempDirectory("serenity-markdown-preview-root")
-    val outsideRoot = Files.createTempDirectory("serenity-markdown-preview-outside")
+    val root        = TestTemp.directory("serenity-markdown-preview-root")
+    val outsideRoot = TestTemp.directory("serenity-markdown-preview-outside")
     val outside     = outsideRoot.resolve("outside.png")
     writeSolidImage(outside, Color(30, 220, 40), width = 8, height = 8)
 
@@ -287,8 +182,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "deny relative traversal outside the preview resource root" in {
-    val root        = Files.createTempDirectory("serenity-markdown-preview-root")
-    val outsideRoot = Files.createTempDirectory("serenity-markdown-preview-outside")
+    val root        = TestTemp.directory("serenity-markdown-preview-root")
+    val outsideRoot = TestTemp.directory("serenity-markdown-preview-outside")
     val outside     = outsideRoot.resolve("outside.png")
     writeSolidImage(outside, Color(30, 220, 40), width = 8, height = 8)
 
@@ -307,8 +202,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "deny symlinked images that resolve outside the preview resource root" in {
-    val root        = Files.createTempDirectory("serenity-markdown-preview-root")
-    val outsideRoot = Files.createTempDirectory("serenity-markdown-preview-outside")
+    val root        = TestTemp.directory("serenity-markdown-preview-root")
+    val outsideRoot = TestTemp.directory("serenity-markdown-preview-outside")
     val outside     = outsideRoot.resolve("outside.png")
     writeSolidImage(outside, Color(30, 220, 40), width = 8, height = 8)
     val link = Try(Files.createSymbolicLink(root.resolve("linked.png"), outside)).toOption
@@ -393,7 +288,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "bound image bytes and decoded dimensions" in {
-    val root       = Files.createTempDirectory("serenity-markdown-preview-bounds")
+    val root       = TestTemp.directory("serenity-markdown-preview-bounds")
     val largeBytes = root.resolve("large.bin")
     Files.write(largeBytes, Array.fill[Byte](3 * 1024 * 1024)(1))
     val largeImage = root.resolve("large.png")
@@ -445,130 +340,6 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
 
     image.getWidth shouldBe 420
     image.getHeight shouldBe 280
-  }
-
-  it should "render inline preview images with editor theme colours instead of panel colours" in {
-    val theme = Theme.default.copy(
-      background = RenderColor.fromRgba(10, 20, 30),
-      panel = Theme.default.panel.copy(background = RenderColor.fromRgba(40, 50, 60))
-    )
-
-    val image = MarkdownDocumentPreview.renderImage(
-      source = "Plain text",
-      title = "inline.md",
-      widthPx = 120,
-      heightPx = 80,
-      theme = theme,
-      font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
-      panelChrome = false,
-      cache = cache
-    )
-
-    RenderColor.fromArgb(image.getRGB(1, 1)) shouldBe theme.background
-  }
-
-  it should "scale inline preview typography to the rendered device size" in {
-    val font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
-
-    MarkdownDocumentPreview.fontForDeviceScale(font, 2.0).getSize2D shouldBe 28.0f
-    MarkdownDocumentPreview.lineHeightForDeviceScale(18, 2.0) shouldBe 36
-  }
-
-  it should "size inline lens typography from the editor row height before device scaling" in {
-    val font = Font(Font.SANS_SERIF, Font.PLAIN, 10)
-
-    MarkdownDocumentPreview.inlineLensFont(font, lineHeightPx = 18, deviceScale = 2.0).getSize2D shouldBe 28.8f
-  }
-
-  it should "render inline lens rows from the same preview rows used for source alignment" in {
-    val lines = Vector(
-      "Before",
-      "| Task | Owner |",
-      "| ---- | ----- |",
-      "| Ship | Codex |",
-      "After"
-    )
-
-    MarkdownDocumentPreview
-      .inlinePreviewRows(lines, firstSourceLine = 1, maxSourceLines = 3)
-      .map(_.text) shouldBe Vector(
-      "┌──────┬───────┐",
-      "│ Task │ Owner │",
-      "├──────┼───────┤",
-      "│ Ship │ Codex │",
-      "└──────┴───────┘"
-    )
-  }
-
-  it should "retain table chrome when the inline preview window begins in a table body" in {
-    val lines = Vector(
-      "Before",
-      "| Task | Owner |",
-      "| ---- | ----- |",
-      "| Ship | Codex |",
-      "After"
-    )
-
-    MarkdownDocumentPreview
-      .inlinePreviewRows(lines, firstSourceLine = 3, maxSourceLines = 1)
-      .map(_.text) shouldBe Vector(
-      "┌──────┬───────┐",
-      "│ Task │ Owner │",
-      "├──────┼───────┤",
-      "│ Ship │ Codex │",
-      "└──────┴───────┘"
-    )
-  }
-
-  it should "avoid stretching inline table preview rows across the editor width" in {
-    val sourceLines = Vector(
-      "| Status | Result |",
-      "| ------ | ------ |",
-      "| Ready  | Passed |"
-    )
-    val theme = Theme.default
-    val rows  = MarkdownDocumentPreview.renderInlineDocument(sourceLines, cache = cache)
-    val xhtml = MarkdownDocumentPreview.renderInlineXhtml(
-      rows = rows,
-      sourceLines = sourceLines,
-      title = "table.md",
-      theme = theme,
-      font = Font(Font.MONOSPACED, Font.PLAIN, 16),
-      inlineLineHeightPx = 24
-    )
-    val image = MarkdownDocumentPreview.renderInlineRowsImage(
-      rows = rows,
-      sourceLines = sourceLines,
-      title = "table.md",
-      widthPx = 800,
-      heightPx = 120,
-      theme = theme,
-      font = Font(Font.MONOSPACED, Font.PLAIN, 16),
-      inlineLineHeightPx = 24,
-      cache = cache
-    )
-
-    xhtml should include("<div class=\"inline-rows\">")
-    xhtml should not include "<table class=\"inline-rows\">"
-
-    val rightmostContentPixel =
-      (for
-        row    <- 0 until image.getHeight
-        column <- 0 until image.getWidth
-        if image.getRGB(column, row) != theme.background.argb
-      yield column).max
-
-    rightmostContentPixel should be < image.getWidth / 2
-  }
-
-  it should "render a bounded inline window without inspecting trailing source lines" in {
-    val lines =
-      Vector("# Visible heading", "Visible prose", "Visible tail") ++
-        Vector.tabulate(100_000)(index => s"Offscreen source line $index")
-
-    MarkdownDocumentPreview
-      .inlinePreviewRows(lines, firstSourceLine = 0, maxSourceLines = 3)
-      .map(_.text) shouldBe Vector("Visible heading", "Visible prose", "Visible tail")
   }
 
   it should "fill the full split preview image with the panel background" in {

@@ -27,7 +27,7 @@ class SaveFailureNoticeUiScenarioSpec extends AnyFlatSpec with Matchers:
       IO.raiseError(new IOException("No space left on device"))
 
   "A save that cannot be written" should "show an error notice in the corner while the editor keeps focus" in {
-    val directory = Files.createTempDirectory("save-failure-notice-scenario")
+    val directory = TestTemp.directory("save-failure-notice-scenario")
     val path      = Files.writeString(directory.resolve("notes.md"), "draft")
     val manager   = StateManagerTestFacade.stateManagerWithFileManager(new FullDisk).unsafeRunSync()
     val driver    = UiScenarioDriver.over(manager).unsafeRunSync()

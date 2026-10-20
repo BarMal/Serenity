@@ -41,6 +41,7 @@ object TextHotkeyConverters:
     HotkeyAction.FocusDown                -> FocusInDirection(Direction.Down),
     HotkeyAction.ToggleChapterGhosts      -> ToggleChapterGhosts,
     HotkeyAction.OpenChapterNote          -> OpenChapterNote,
+    HotkeyAction.OpenKeywordNote          -> OpenKeywordNote,
     HotkeyAction.ToggleNotesPin           -> ToggleNotesPin
   )
 

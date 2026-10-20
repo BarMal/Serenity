@@ -10,6 +10,7 @@ private[manager] trait WorkflowEffectPort:
   def requestSaveAs: IO[Unit]
   def refresh(surfaceId: SurfaceId): IO[Unit]
   def refreshFind(request: FindSearchRequest): IO[Unit]
+  def refreshPicker(surfaceId: SurfaceId, query: String): IO[Unit]
   def submitFile(surfaceId: SurfaceId): IO[Unit]
   def openAsProjectRoot(surfaceId: SurfaceId): IO[Unit]
   def submitReplace(surfaceId: SurfaceId): IO[Unit]
@@ -26,6 +27,7 @@ final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
       case WorkflowEffect.RequestSaveAs                     => port.requestSaveAs
       case WorkflowEffect.RefreshFileWorkflow(id)           => port.refresh(id)
       case WorkflowEffect.RefreshFind(request)              => port.refreshFind(request)
+      case WorkflowEffect.RefreshPicker(id, query)          => port.refreshPicker(id, query)
       case WorkflowEffect.SubmitFileWorkflow(id)            => port.submitFile(id)
       case WorkflowEffect.OpenFileWorkflowAsProjectRoot(id) => port.openAsProjectRoot(id)
       case WorkflowEffect.SubmitReplaceWorkflow(id)         => port.submitReplace(id)

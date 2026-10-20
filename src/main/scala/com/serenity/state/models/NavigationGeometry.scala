@@ -1,11 +1,200 @@
 package com.serenity.state.models
 
-/** Immutable, UI-free text geometry. Produced from a rendered text layout at the effect boundary and consumed by pure
-  * navigation logic, so cursor movement never reaches for a font or a Java2D metric.
+import scala.util.hashing.MurmurHash3
+
+/** A caret position as a value, for callers that want a pair rather than two parallel arrays. Rows do not hold these:
+  * see [[MeasuredRow.caretStops]].
   */
 final case class TextCaretStop(column: Int, xPx: Float)
 
+/** A wrapped row's measured geometry, relative to the row's own origin: independent of the buffer line it sits on, the
+  * paragraph's alignment and any drop cap inset, which [[TextVisualLine]] applies when the row is read. That makes it
+  * the unit a wrap cache can share between every placement of the same text.
+  *
+  * Caret stops are two parallel primitive arrays rather than one object per stop: stop `i` sits at column
+  * `startColumn + caretOffsets(i)` and `caretXs(i)` pixels. The `landing` pair holds the same stops ordered by x for
+  * hit-testing (minus stops a hidden column makes unlandable); it is the same arrays as the caret pair whenever the
+  * stops already ascend. Offsets are relative to `startColumn`, so moving a row to another column is a field change.
+  */
+final case class MeasuredRow(
+    startColumn: Int,
+    endColumn: Int,
+    text: String,
+    widthPx: Float,
+    caretXs: IArray[Float],
+    caretOffsets: IArray[Int],
+    landingXs: IArray[Float],
+    landingOffsets: IArray[Int],
+    // Per-line measured metrics (measured/proportional layout only): the tallest run on this visual line. 0 means
+    // "unset" -- callers fall back to the snapshot's uniform lineHeightPx/ascentPx (cell layout, or non-rich buffers).
+    heightPx: Int = 0,
+    ascentPx: Int = 0,
+    // Height the row's paragraph reserves below the row's own text: a drop cap paragraph shorter than its glyph pads
+    // its last row so the next paragraph starts under the glyph. Stacking rows adds it; the row's text and caret
+    // keep `heightPx`.
+    reservedBelowPx: Int = 0,
+    // A drop cap paragraph's home row records the height from its own top down to the foot of the glyph drawn from it,
+    // so what the glyph covers can be read off the layout.
+    dropCapHeightPx: Int = 0,
+    // Stretches drawn on their own, from their own caret stop, as (startOffset, endOffset, slot) triples ascending by
+    // offset from `startColumn`: a stretch in a fallback font (slot n draws in `fallbackFamilies(n - 1)`) or a wide
+    // character snapped to its two cells. Everything between them is drawn in the row's own font. Empty, and the one
+    // shared array, when the row has none.
+    fontRuns: IArray[Int] = MeasuredRow.NoFontRuns,
+    fallbackFamilies: Vector[String] = Vector.empty
+):
+
+  // Arrays compare by reference, so the generated equals would call two identical measurements different. Row
+  // equality drives dirty-row diffing; the `eq` fast path keeps it free for the shared rows a warm cache serves.
+  override def equals(other: Any): Boolean = other match
+    case that: MeasuredRow =>
+      (this eq that) || (startColumn == that.startColumn && endColumn == that.endColumn && text == that.text &&
+        widthPx == that.widthPx && heightPx == that.heightPx && ascentPx == that.ascentPx &&
+        reservedBelowPx == that.reservedBelowPx && dropCapHeightPx == that.dropCapHeightPx &&
+        caretXs.sameElements(that.caretXs) && caretOffsets.sameElements(that.caretOffsets) &&
+        landingXs.sameElements(that.landingXs) && landingOffsets.sameElements(that.landingOffsets) &&
+        fontRuns.sameElements(that.fontRuns) && fallbackFamilies == that.fallbackFamilies)
+    case _ => false
+
+  override def hashCode: Int =
+    MurmurHash3.finalizeHash(
+      MurmurHash3.mix(MurmurHash3.mix(startColumn, endColumn), MurmurHash3.mix(text.hashCode, caretXs.length)),
+      4
+    )
+
+  def caretCount: Int = caretXs.length
+
+  def caretColumn(index: Int): Int = startColumn + caretOffsets(index)
+
+  /** The stops as objects, allocated on each call: for tests and diagnostics, never for layout or painting. */
+  def caretStops: Vector[TextCaretStop] = MeasuredRow.stops(startColumn, caretOffsets, caretXs)
+
+  def xSortedCaretStops: Vector[TextCaretStop] = MeasuredRow.stops(startColumn, landingOffsets, landingXs)
+
+  def xForColumn(column: Int, offsetPx: Float = 0.0f): Option[Float] =
+    @annotation.tailrec
+    def search(low: Int, high: Int, best: Int): Option[Float] =
+      if low > high then
+        val resolved = if best >= 0 then best else caretXs.length - 1
+        Option.when(resolved >= 0)(caretXs(resolved) + offsetPx)
+      else
+        val middle = (low + high) >>> 1
+        if caretColumn(middle) >= column then search(low, middle - 1, middle)
+        else search(middle + 1, high, best)
+
+    search(0, caretXs.length - 1, -1)
+
+  def nearestColumnForXPx(xPx: Float, offsetPx: Float = 0.0f): Int =
+    val count = landingXs.length
+
+    @annotation.tailrec
+    def search(low: Int, high: Int): Int =
+      if low > high then
+        val left  = Option.when(high >= 0 && high < count)(high)
+        val right = Option.when(low >= 0 && low < count)(low)
+        (left, right) match
+          case (Some(l), Some(r)) => if closer(r, l, xPx, offsetPx) then r else l
+          case (Some(l), None)    => l
+          case (None, Some(r))    => r
+          case (None, None)       => 0
+      else
+        val middle = (low + high) >>> 1
+        if landingXs(middle) + offsetPx < xPx then search(middle + 1, high)
+        else search(low, middle - 1)
+
+    if count == 0 then 0 else startColumn + landingOffsets(search(0, count - 1))
+
+  private def closer(candidate: Int, incumbent: Int, xPx: Float, offsetPx: Float): Boolean =
+    math.abs(landingXs(candidate) + offsetPx - xPx) < math.abs(landingXs(incumbent) + offsetPx - xPx)
+
+object MeasuredRow:
+
+  val NoFontRuns: IArray[Int] = IArray.empty[Int]
+
+  /** A row built from stop objects. `xSorted` empty means "order `stops` by x". */
+  def fromStops(
+    startColumn: Int,
+    endColumn: Int,
+    text: String,
+    widthPx: Float,
+    stops: Vector[TextCaretStop],
+    xSorted: Vector[TextCaretStop] = Vector.empty,
+    heightPx: Int = 0,
+    ascentPx: Int = 0
+  ): MeasuredRow =
+    val landing = if xSorted.nonEmpty then xSorted else stops.sortBy(_.xPx)
+    MeasuredRow(
+      startColumn,
+      endColumn,
+      text,
+      widthPx,
+      IArray.from(stops.map(_.xPx)),
+      IArray.from(stops.map(_.column - startColumn)),
+      IArray.from(landing.map(_.xPx)),
+      IArray.from(landing.map(_.column - startColumn)),
+      heightPx,
+      ascentPx
+    )
+
+  /** `xs` and `offsets` ordered by x, stably, or the arrays themselves when they already ascend. */
+  def orderedByX(xs: IArray[Float], offsets: IArray[Int]): (IArray[Float], IArray[Int]) =
+    val ascending = (1 until xs.length).forall(index => xs(index - 1) <= xs(index))
+    if ascending then (xs, offsets)
+    else
+      val order = xs.indices.sortBy(xs(_))
+      (IArray.from(order.map(xs(_))), IArray.from(order.map(offsets(_))))
+
+  private def stops(startColumn: Int, offsets: IArray[Int], xs: IArray[Float]): Vector[TextCaretStop] =
+    Vector.tabulate(xs.length)(index => TextCaretStop(startColumn + offsets(index), xs(index)))
+
+/** A [[MeasuredRow]] placed on a buffer line and shifted `xOffsetPx` right by its paragraph's alignment and drop cap
+  * inset. Placing a cached row allocates only this wrapper: the measured geometry is shared, never copied.
+  *
+  * `spaceBeforePx` and `spaceAfterPx` are blank room above and below the row -- a heading's space, on the first and
+  * last row of its paragraph. They are laid out when the row is placed, like the offset, never in the cache, and they
+  * hold no caret position: the row's own height is what the caret and a selection span.
+  */
 final case class TextVisualLine(
+    bufferLine: Int,
+    row: MeasuredRow,
+    xOffsetPx: Float,
+    spaceBeforePx: Int,
+    spaceAfterPx: Int
+):
+  export row.{
+    ascentPx,
+    caretCount,
+    caretColumn,
+    dropCapHeightPx,
+    endColumn,
+    fallbackFamilies,
+    fontRuns,
+    heightPx,
+    reservedBelowPx,
+    startColumn,
+    text,
+    widthPx
+  }
+
+  /** Caret x of stop `index` in the coordinates of the pane. */
+  def caretX(index: Int): Float = row.caretXs(index) + xOffsetPx
+
+  /** The row's caret stops in the coordinates of the pane, as objects; see [[MeasuredRow.caretStops]]. */
+  def caretStops: Vector[TextCaretStop] = shifted(row.caretStops)
+
+  def xSortedCaretStops: Vector[TextCaretStop] = shifted(row.xSortedCaretStops)
+
+  def xForColumn(column: Int): Option[Float] = row.xForColumn(column, xOffsetPx)
+
+  def nearestColumnForXPx(xPx: Float): Int = row.nearestColumnForXPx(xPx, xOffsetPx)
+
+  private def shifted(stops: Vector[TextCaretStop]): Vector[TextCaretStop] =
+    if xOffsetPx == 0.0f then stops else stops.map(stop => stop.copy(xPx = stop.xPx + xOffsetPx))
+
+object TextVisualLine:
+
+  /** A line whose carets are already in pane coordinates, which is the whole geometry when there is no offset. */
+  def apply(
     bufferLine: Int,
     startColumn: Int,
     endColumn: Int,
@@ -14,50 +203,16 @@ final case class TextVisualLine(
     caretStops: Vector[TextCaretStop],
     xOffsetPx: Float = 0.0f,
     xSortedCaretStops: Vector[TextCaretStop] = Vector.empty,
-    // Per-line measured metrics (measured/proportional layout only): the tallest run on this visual line. 0 means
-    // "unset" -- callers fall back to the snapshot's uniform lineHeightPx/ascentPx (cell layout, or non-rich buffers).
     heightPx: Int = 0,
     ascentPx: Int = 0
-):
-
-  def xForColumn(column: Int): Option[Float] =
-    @annotation.tailrec
-    def search(low: Int, high: Int, best: Option[TextCaretStop]): Option[Float] =
-      if low > high then best.orElse(caretStops.lastOption).map(_.xPx)
-      else
-        val middle = (low + high) >>> 1
-        val stop   = caretStops(middle)
-        if stop.column >= column then search(low, middle - 1, Some(stop))
-        else search(middle + 1, high, best)
-
-    search(0, caretStops.length - 1, None)
-
-  def nearestColumnForXPx(xPx: Float): Int =
-    val stops = if xSortedCaretStops.nonEmpty then xSortedCaretStops else caretStops.sortBy(_.xPx)
-
-    stops.headOption match
-      case None => 0
-      case Some(firstStop) =>
-        @annotation.tailrec
-        def search(low: Int, high: Int): TextCaretStop =
-          if low > high then
-            // stops is non-empty here (headOption matched Some above), so the (None, None) case can only
-            // arise if both the low and high probes fell outside the array, which the binary search never
-            // does starting from a non-empty range -- firstStop is an unreachable-in-practice fallback.
-            (stops.lift(high), stops.lift(low)) match
-              case (Some(left), Some(right)) => closer(left, right, xPx)
-              case (Some(left), None)        => left
-              case (None, Some(right))       => right
-              case (None, None)              => firstStop
-          else
-            val middle = (low + high) >>> 1
-            if stops(middle).xPx < xPx then search(middle + 1, high)
-            else search(low, middle - 1)
-
-        search(0, stops.length - 1).column
-
-  private def closer(first: TextCaretStop, second: TextCaretStop, xPx: Float): TextCaretStop =
-    if math.abs(second.xPx - xPx) < math.abs(first.xPx - xPx) then second else first
+  ): TextVisualLine =
+    TextVisualLine(
+      bufferLine,
+      MeasuredRow.fromStops(startColumn, endColumn, text, widthPx, caretStops, xSortedCaretStops, heightPx, ascentPx),
+      xOffsetPx,
+      spaceBeforePx = 0,
+      spaceAfterPx = 0
+    )
 
 /** The immutable geometry a vertical cursor move needs, produced once at the effect boundary and handed to the pure
   * reducer. `charWidthPx` and `panelWidthColumns` back the monospace fallbacks used when the measured layout has no
@@ -65,7 +220,31 @@ final case class TextVisualLine(
   */
 final case class EditorGeometry(navigation: NavigationGeometry, charWidthPx: Int, panelWidthColumns: Int)
 
-final case class NavigationGeometry(visualLines: Vector[TextVisualLine]):
+final case class NavigationGeometry(
+    visualLines: Vector[TextVisualLine],
+    // Indices into `visualLines` of the first row of each column, in column mode: columns hold as many rows as fit
+    // their height, so a column move cannot be a fixed number of rows. Empty outside column mode.
+    columnBreaks: Vector[Int] = Vector.empty
+):
+
+  /** Where a move of `direction` columns lands `cursor`: the same row within the adjacent column (or its last row if
+    * that is shorter), at the start of the row. `None` when the cursor's row or `columnBreaks` are unknown. Moving past
+    * the first or last column stays within the window's own first or last row, as a row-count move would.
+    */
+  def columnTarget(cursor: CursorPosition, direction: Int): Option[CursorPosition] =
+    for
+      row <- visualRowIndexFor(cursor)
+      if columnBreaks.nonEmpty
+      current      = math.max(0, columnBreaks.lastIndexWhere(_ <= row))
+      targetColumn = current + direction
+      target <-
+        if targetColumn < 0 then visualLines.headOption
+        else if targetColumn >= columnBreaks.length then visualLines.lastOption
+        else
+          val first = columnBreaks(targetColumn)
+          val last  = columnBreaks.lift(targetColumn + 1).getOrElse(visualLines.length) - 1
+          visualLines.lift(math.min(last, first + (row - columnBreaks(current))))
+    yield CursorPosition(target.bufferLine, target.startColumn)
 
   /** Index into [[visualLines]] of the visual (wrapped) row `cursor` sits on -- the single containment lookup every
     * cursor-to-row resolution shares ([[visualLineFor]], [[xPxForCursor]], [[moveVertical]]) and, crucially, the one
@@ -96,7 +275,15 @@ final case class NavigationGeometry(visualLines: Vector[TextVisualLine]):
     visualLineFor(cursor).map(line => line.xForColumn(cursor.column).getOrElse(line.widthPx))
 
   def cursorForVisualRowAndXPx(row: Int, xPx: Float): Option[CursorPosition] =
-    visualLines.lift(row).map(line => CursorPosition(line.bufferLine, line.nearestColumnForXPx(xPx)))
+    visualLines.lift(row).map { line =>
+      val column = line.nearestColumnForXPx(xPx)
+      val landed = CursorPosition(line.bufferLine, column)
+      // A column shared with the next row would read as that row's start: a point on this row's right edge has to
+      // stay on this row, as End leaves it.
+      if visualLines.lift(row + 1).exists(next => next.bufferLine == line.bufferLine && next.startColumn == column) then
+        landed.upstream
+      else landed
+    }
 
   def moveVertical(cursor: CursorPosition, direction: Int, preferredXPx: Float): Option[CursorPosition] =
     visualRowIndexFor(cursor)

@@ -9,6 +9,7 @@ import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.rope.Balance
 import com.serenity.state.models.BufferId
 import org.scalatest.flatspec.AnyFlatSpec
@@ -36,7 +37,7 @@ class DocumentRevisionStampSpec extends AnyFlatSpec with Matchers:
   private def bytes(text: String): Array[Byte] = text.getBytes(StandardCharsets.UTF_8)
 
   private def largeFile(megabytes: Int): Path =
-    val path = Files.createTempFile("document-revision-stamp", ".txt")
+    val path = TestTemp.file("document-revision-stamp", ".txt")
     Files.writeString(path, "0123456789abcde\n" * (megabytes * 65536))
 
   "Saving over a stamped revision" should "hash only the new content and read nothing back (#1873)" in {
@@ -158,7 +159,7 @@ class DocumentRevisionStampSpec extends AnyFlatSpec with Matchers:
 
   "FileStamp.observe" should "read the clock before it stats, so a write between the two cannot be vouched for" in {
     val second  = 1_000_000_000L
-    val path    = Files.createTempFile("filestamp", ".txt")
+    val path    = TestTemp.file("filestamp", ".txt")
     val settled = FileTime.from(100L * second, TimeUnit.NANOSECONDS)
     Files.write(path, "abc".getBytes(StandardCharsets.UTF_8))
     // The clock lands the file's mtime on a coarse tick: only a stat taken after the clock sees it.

@@ -32,6 +32,7 @@ private[command] object CommandRegistryFileCommands:
     saveAs,
     ReopenWithEncodingCommands.chooseEncoding,
     LineEndingCommands.chooseLineEnding,
+    IndentationCommands.chooseIndentation,
     Command.typed(
       "save-config",
       "Write the current settings using the latest config format.",
@@ -147,10 +148,10 @@ private[command] object CommandRegistryFileCommands:
     ),
     Command.typed(
       "clear-recent-files",
-      "Forget the recently opened files, which empties the Open Recent menu.",
+      "Forget the recently opened files and folders, which empties the Open Recent menus.",
       CommandIntent.File(FileIntent.ClearRecentFiles),
       CommandCategory.File,
-      label = "Clear Recent Files"
+      label = "Clear Recent"
     ),
     Command.typed(
       "show-licence-and-notices",

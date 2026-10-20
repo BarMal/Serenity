@@ -18,7 +18,7 @@ class ExplorerScrollUiScenarioSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private val explorerId = SurfaceId("explorer")
-  private val root       = Files.createTempDirectory("explorer-scroll-")
+  private val root       = TestTemp.directory("explorer-scroll-")
   private val files      = (0 until 500).toList.map(index => Files.createFile(root.resolve(f"entry-$index%03d.md")))
 
   private val tree = DirectoryTreeData(

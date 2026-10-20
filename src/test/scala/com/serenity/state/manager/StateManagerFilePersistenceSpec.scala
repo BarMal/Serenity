@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.io.FileManager
 import com.serenity.lsp.LspEffect
@@ -52,7 +53,7 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
     val modelRefVar        = ModelViews.modelOf(initialState).unsafeRunSync()
     val stateRefVar        = ModelViews.appRef(modelRefVar)
     val operations         = StateManagerOperationBoundary.create(modelRefVar, NoOpLogger.impl[IO]).unsafeRunSync()
-    val sessionRoot        = Files.createTempDirectory("file-persistence-spec")
+    val sessionRoot        = TestTemp.directory("file-persistence-spec")
     val triggersVar        = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
     val lspQueueVar        = LspEffectQueue.create.unsafeRunSync()
     val sessionPersistence = new RecordingSessionPersistence(triggersVar, sessionRoot)
@@ -81,7 +82,7 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
     )
 
   "saveExistingBuffer" should "write the buffer's content to its existing file path and update state with the saved buffer" in {
-    val path = Files.createTempFile("existing", ".txt")
+    val path = TestTemp.file("existing", ".txt")
     Files.writeString(path, "old content")
     val bufferId = BufferId(1)
     val buffer = Buffer
@@ -96,7 +97,7 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "trigger a file-change session save after a successful save" in {
-    val path     = Files.createTempFile("existing", ".txt")
+    val path     = TestTemp.file("existing", ".txt")
     val bufferId = BufferId(1)
     val buffer =
       Buffer
@@ -131,7 +132,7 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
   }
 
   "forceSaveExistingBuffer" should "overwrite the file even though its on-disk content changed since the buffer's captured revision (#1623)" in {
-    val path = Files.createTempFile("force-save", ".txt")
+    val path = TestTemp.file("force-save", ".txt")
     Files.writeString(path, "original")
     val bufferId = BufferId(1)
     val opened   = new FileManager().loadFile(path, bufferId).unsafeRunSync()
@@ -150,7 +151,7 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
   }
 
   "reloadBuffer" should "replace the buffer's content with what is on disk, discarding local edits" in {
-    val path = Files.createTempFile("reload", ".txt")
+    val path = TestTemp.file("reload", ".txt")
     Files.writeString(path, "original")
     val bufferId = BufferId(1)
     val opened   = new FileManager().loadFile(path, bufferId).unsafeRunSync()
@@ -176,7 +177,7 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
   }
 
   "saveBufferAs" should "write the buffer to the new path, update state, and remember it as a recent file" in {
-    val newPath  = Files.createTempFile("save-as", ".txt")
+    val newPath  = TestTemp.file("save-as", ".txt")
     val bufferId = BufferId(1)
     val buffer   = Buffer.fromString(bufferId, "hello")
     val h        = harness(stateWithBuffer(buffer))
@@ -190,8 +191,8 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "move a path to the front of recentFiles rather than duplicate it" in {
-    val pathA    = Files.createTempFile("recent-a", ".txt")
-    val pathB    = Files.createTempFile("recent-b", ".txt")
+    val pathA    = TestTemp.file("recent-a", ".txt")
+    val pathB    = TestTemp.file("recent-b", ".txt")
     val bufferId = BufferId(1)
     val buffer   = Buffer.fromString(bufferId, "x")
     val h        = harness(stateWithBuffer(buffer))
@@ -204,7 +205,7 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "trigger a file-change session save after a successful save-as" in {
-    val newPath  = Files.createTempFile("save-as", ".txt")
+    val newPath  = TestTemp.file("save-as", ".txt")
     val bufferId = BufferId(1)
     val buffer   = Buffer.fromString(bufferId, "x")
     val h        = harness(stateWithBuffer(buffer))
@@ -215,7 +216,7 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "no-op for a buffer id that isn't tracked" in {
-    val newPath = Files.createTempFile("save-as", ".txt")
+    val newPath = TestTemp.file("save-as", ".txt")
     val before  = AppState.initial
     val h       = harness(before)
 
@@ -225,7 +226,7 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
   }
 
   "saveBufferAs in Code mode" should "enqueue an LSP file-opened effect for the new path when the buffer has a recognised language" in {
-    val newPath  = Files.createTempFile("save-as", ".rs")
+    val newPath  = TestTemp.file("save-as", ".rs")
     val bufferId = BufferId(1)
     val buffer = Buffer
       .fromString(bufferId, "fn main() {}")
@@ -243,7 +244,7 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "enqueue nothing when the app is not in Code mode" in {
-    val newPath  = Files.createTempFile("save-as", ".rs")
+    val newPath  = TestTemp.file("save-as", ".rs")
     val bufferId = BufferId(1)
     val buffer = Buffer
       .fromString(bufferId, "fn main() {}")

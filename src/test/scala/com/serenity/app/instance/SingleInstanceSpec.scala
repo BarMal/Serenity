@@ -7,6 +7,8 @@ import scala.concurrent.duration.DurationInt
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref, Resource}
+import com.serenity.TestTemp
+import com.serenity.io.DirectoryTree
 import com.serenity.testkit.VirtualTime
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -166,7 +168,7 @@ class SingleInstanceSpec extends AnyFlatSpec with Matchers:
   }
 
   "SingleInstance.forConfigDirectory" should "forward a second launch's file to the first through the real lock" in {
-    val configDirectory = Files.createTempDirectory("si")
+    val configDirectory = TestTemp.directory("si")
     val real            = SingleInstance.forConfigDirectory(configDirectory, logger)
 
     val program = SingleInstance.claim(real, Nil, logger).use {
@@ -181,10 +183,33 @@ class SingleInstanceSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe (LaunchRole.Forwarded, List(List(notes)))
   }
 
+  it should "remove an isolated launch's session root when the launch ends" in {
+    val program = for
+      created <- Ref.of[IO, Option[Path]](None)
+      base    <- coordination(Resource.pure(LockAttempt.HeldElsewhere), deliveries = List(Delivery.Unreachable))
+      isolated = base.copy(
+        isolatedSessionRoot =
+          IO.blocking(TestTemp.directory("si-isolated-root")).flatTap(dir => created.set(Some(dir))),
+        claimAttempts = 1
+      )
+      role <- SingleInstance.claim(isolated, List(notes), logger).use { role =>
+        IO.blocking(role.sessionRootOverride.foreach(root => Files.writeString(root.resolve("session.json"), "{}")))
+          .as(role)
+      }
+      root <- created.get
+    yield (role.sessionRootOverride, root)
+
+    val (override_, root) = program.unsafeRunSync()
+    override_ should not be empty
+    root.map(Files.exists(_)) shouldBe Some(false)
+  }
+
   it should "give an isolated launch a session root outside the shared config directory" in {
-    val configDirectory = Files.createTempDirectory("si-isolated")
+    val configDirectory = TestTemp.directory("si-isolated")
     val root            = SingleInstance.forConfigDirectory(configDirectory, logger).isolatedSessionRoot.unsafeRunSync()
 
-    root.startsWith(configDirectory) shouldBe false
-    Files.isDirectory(root) shouldBe true
+    try
+      root.startsWith(configDirectory) shouldBe false
+      Files.isDirectory(root) shouldBe true
+    finally DirectoryTree.deleteBlocking(root)
   }

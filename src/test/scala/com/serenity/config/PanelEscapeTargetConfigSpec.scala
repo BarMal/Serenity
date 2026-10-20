@@ -2,6 +2,7 @@ package com.serenity.config
 
 import java.nio.file.Files
 
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -53,7 +54,7 @@ class PanelEscapeTargetConfigSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withPanelEscapeTarget(AppMode.Code, PanelEscapeTarget.Previous)
       .withPanelEscapeTarget(AppMode.Prose, PanelEscapeTarget.Editor)
-    val file = Files.createTempFile("serenity-panel-escape", ".conf")
+    val file = TestTemp.file("serenity-panel-escape", ".conf")
     try
       ConfigManagerTestSupport.saveConfig(config, file) shouldBe true
       Files.readString(file) should include(s"$codeKey = previous")

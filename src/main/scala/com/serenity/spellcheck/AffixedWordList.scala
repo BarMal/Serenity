@@ -183,14 +183,7 @@ private[spellcheck] object AffixedWordList:
     }
 
   def build(entries: Iterator[HunspellEntry], rules: HunspellAffixRules): AffixedWordList =
-    val all = entries.toVector
-    // A dictionary has a few hundred distinct flag sets across ~100k entries; sharing them is most of the saving.
-    val sharedFlagSets = all.iterator.map(_.flags).toSet.map(flags => flags -> flags).toMap
-    val stems = all
-      .groupMap(entry => DictionaryWord.normalize(entry.word))(entry => sharedFlagSets(entry.flags))
-      .view
-      .mapValues(_.toList)
-      .toMap
+    val stems = stemTable(entries)
     new AffixedWordList(
       stems,
       prepare(rules.suffixes, suffix = true).groupBy(_.append),
@@ -200,6 +193,23 @@ private[spellcheck] object AffixedWordList:
       rules.onlyInCompoundFlag,
       rules.noSuggestFlag
     )
+
+  /** One pass over the entries, because a dictionary has ~100k of them and every intermediate collection is paid per
+    * entry at launch. A dictionary has a few hundred distinct flag sets across those entries; sharing them is most of
+    * the saving. The two maps are mutable but never leave this method.
+    */
+  private def stemTable(entries: Iterator[HunspellEntry]): Map[String, List[Set[String]]] =
+    val sharedFlagSets = new java.util.HashMap[Set[String], Set[String]]()
+    val grouped        = new java.util.HashMap[String, List[Set[String]]]()
+    entries.foreach { entry =>
+      val flags = sharedFlagSets.computeIfAbsent(entry.flags, identity)
+      val _ = grouped.merge(DictionaryWord.normalize(entry.word), List(flags), (earlier, added) => earlier ::: added)
+    }
+    val table = Map.newBuilder[String, List[Set[String]]]
+    grouped.forEach { (stem, flagSets) =>
+      val _ = table += stem -> flagSets
+    }
+    table.result()
 
   private def prepare(rules: Map[String, List[HunspellAffixRule]], suffix: Boolean): List[PreparedAffix] =
     rules.toList.flatMap { (flag, flagRules) =>

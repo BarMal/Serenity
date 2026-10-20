@@ -56,7 +56,7 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
 
   private def twoBufferState: AppState =
     val second = Buffer.fromString(BufferId(1), "second")
-    val base   = AppState.initial
+    val base   = AppState.initial(com.serenity.config.AppConfig.conventional)
     base.copy(
       runtime = base.runtime.copy(viewportSize = Some(twoTabViewport)),
       persisted = base.persisted.copy(
@@ -82,7 +82,11 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "miss when there is no tab bar this frame (a single open buffer)" in {
-    TabBarMouseHitTesting.clickTarget(AppState.initial, col = 3, row = 0) shouldBe None
+    TabBarMouseHitTesting.clickTarget(
+      AppState.initial(com.serenity.config.AppConfig.conventional),
+      col = 3,
+      row = 0
+    ) shouldBe None
   }
 
   it should "miss when the viewport size is not yet known" in {
@@ -152,7 +156,11 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "resolve false when there is no tab bar this frame (a single open buffer)" in {
-    TabBarMouseHitTesting.newTabClickTarget(AppState.initial, col = 20, row = 0) shouldBe false
+    TabBarMouseHitTesting.newTabClickTarget(
+      AppState.initial(com.serenity.config.AppConfig.conventional),
+      col = 20,
+      row = 0
+    ) shouldBe false
   }
 
   "handleNewTabClick" should

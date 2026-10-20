@@ -23,7 +23,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def createManager(policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()): SessionManager =
-    val tempDirectory = Files.createTempDirectory("session-manager-spec")
+    val tempDirectory = TestTemp.directory("session-manager-spec")
     createManagerAt(tempDirectory, policy)
 
   private def createManagerAt(
@@ -68,7 +68,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
 
   private def cleanFileStateWithText(diskText: String): IO[AppState] =
     IO.blocking {
-      val tempFile = Files.createTempFile("session-manager-file-backed-clean", ".txt")
+      val tempFile = TestTemp.file("session-manager-file-backed-clean", ".txt")
       Files.writeString(tempFile, diskText)
       val buffer  = Buffer.fromFile(BufferId(7), tempFile, diskText)
       val initial = AppState.initial
@@ -92,7 +92,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
 
   private def dirtyFileStateWithText(diskText: String, unsavedText: String): IO[AppState] =
     IO.blocking {
-      val tempFile = Files.createTempFile("session-manager-file-backed", ".txt")
+      val tempFile = TestTemp.file("session-manager-file-backed", ".txt")
       Files.writeString(tempFile, diskText)
       val plainBuffer = Buffer.fromFile(BufferId(7), tempFile, unsavedText)
       val buffer      = plainBuffer.copy(document = plainBuffer.document.copy(isDirty = true))
@@ -229,7 +229,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "return None and move the malformed session file aside rather than leave it to be overwritten" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-corrupt")
+    val sessionRoot    = TestTemp.directory("session-manager-corrupt")
     val sessionManager = createManagerAt(sessionRoot)
     val sessionFile    = currentSessionFile(sessionRoot)
 
@@ -246,7 +246,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "restore older session config JSON with formerly required fields missing" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-legacy-config")
+    val sessionRoot    = TestTemp.directory("session-manager-legacy-config")
     val sessionManager = createManagerAt(sessionRoot)
     val sessionFile    = currentSessionFile(sessionRoot)
     val missingLegacyConfigKeys = List(
@@ -291,7 +291,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "return None and quarantine sessions written by a newer schema version" in {
-    val sessionRoot    = Files.createTempDirectory("session-manager-future-schema")
+    val sessionRoot    = TestTemp.directory("session-manager-future-schema")
     val sessionManager = createManagerAt(sessionRoot)
     val sessionFile    = currentSessionFile(sessionRoot)
 

@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -37,7 +38,7 @@ class RenameRetryPolicySpec extends AnyFlatSpec with Matchers:
   private val quick = RenameRetryPolicy.exponential(attempts = 5, initial = 1.millis)
 
   private def written(failures: Int, failure: Path => Throwable, policy: RenameRetryPolicy = quick) =
-    val directory = Files.createTempDirectory("rename-retry-spec")
+    val directory = TestTemp.directory("rename-retry-spec")
     val target    = directory.resolve("document.txt")
     Files.writeString(target, "before")
     val fileSystem = FlakyRename(failures, failure)

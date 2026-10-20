@@ -2,6 +2,7 @@ package com.serenity.state.effects
 
 import java.nio.file.Path
 
+import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.{BufferId, SurfaceId}
 
@@ -13,6 +14,10 @@ enum LaneKey:
   /** Separate from [[Buffer]] so other switch-latest work on the buffer cannot cancel a pending preview commit. */
   case MarkdownPreview(id: BufferId)
   case Lsp(language: LanguageId)
+
+  /** The wait before a document's semantic tokens are requested: a newer edit or scroll of that document restarts it.
+    */
+  case SemanticTokens(uri: DocumentUri)
   case Directory(path: Path)
 
   /** One explorer panel's listing of `path`: a newer listing supersedes it, another panel's listing of the same
@@ -25,6 +30,9 @@ enum LaneKey:
 
   /** The "Go to File" finder's walk of the project: reopening the finder supersedes a walk still running. */
   case ProjectFiles
+
+  /** The open list picker's matching of what is typed: the next keystroke supersedes a match still running. */
+  case PickerSearch
 
   /** The project probe a command palette opening starts: reopening the palette supersedes a probe still running. */
   case ProjectProbe
@@ -42,7 +50,7 @@ enum LaneKey:
     */
   case NoticeExpiry(deadlineNanos: Long)
 
-  case Search, Analysis, Theme, Config, Presets, Keybindings, Session, Project, Dialog, Timer
+  case Search, Analysis, Theme, Config, Presets, Keybindings, Session, Project, Dialog, Timer, RenameEdit
 
 enum LanePolicy:
   /** FIFO per key. */

@@ -23,7 +23,10 @@ final case class EditorPaneLayout(
     titleRect: LayoutRect,
     contentRect: LayoutRect,
     topSpacerRect: LayoutRect = LayoutRect(0, 0, 0, 0),
-    bottomSpacerRect: LayoutRect = LayoutRect(0, 0, 0, 0)
+    bottomSpacerRect: LayoutRect = LayoutRect(0, 0, 0, 0),
+    // The column a terminal pane gives its scrollbar, taken out of `contentRect`; empty in the GUI, where the bar is
+    // an overlay (see ScrollbarLayout).
+    scrollbarRect: LayoutRect = LayoutRect(0, 0, 0, 0)
 )
 
 final case class EditorWorkspaceLayout(
@@ -114,10 +117,23 @@ object LayoutEngine:
   ): CalculatedLayout =
     calculateLayoutWithUI(state, viewportSize, spacerPercentage)
 
+  /** The panes of `calculatedLayout` with the text each lays out to, from which a floating surface finds its caret. */
+  def laidOutPanes(state: AppState, calculatedLayout: CalculatedLayout): LaidOutPanes =
+    LaidOutPanes(state, calculateEditorPaneLayouts(state, calculatedLayout), state.runtime.anchorWraps.lines)
+
   def calculateLayoutWithUI(
     state: AppState,
     viewportSize: ViewportSize,
     spacerPercentage: Double = DefaultSpacerPercentage
+  ): CalculatedLayout =
+    state.runtime.chromeLayouts.layoutFor(state, viewportSize, spacerPercentage)(
+      calculateLayoutWithUIUncached(state, viewportSize, spacerPercentage)
+    )
+
+  private[serenity] def calculateLayoutWithUIUncached(
+    state: AppState,
+    viewportSize: ViewportSize,
+    spacerPercentage: Double
   ): CalculatedLayout =
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
     val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
@@ -134,7 +150,7 @@ object LayoutEngine:
     // text width instead.
     val columnModeActive =
       state.persisted.config.surfaceConfig.columnModeEnabled && state.persisted.config.surfaceConfig.wordWrapEnabled
-    val lineNumbersOn        = state.persisted.config.surfaceConfig.showLineNumbers && !columnModeActive
+    val lineNumbersOn        = state.chrome.lineNumbers && !columnModeActive
     val lineNumberLayout     = state.persisted.config.surfaceConfig.lineNumberLayout.normalized
     val lineNumberMarginLeft = state.effectiveLineNumberMarginLeft
     val lineNumberPadding    = state.effectiveLineNumberPadding
@@ -300,21 +316,21 @@ object LayoutEngine:
       tabBarRect = tabBarRect
     )
 
-    val paneLayouts = calculateEditorPaneLayouts(state, baseLayout)
+    val panes = laidOutPanes(state, baseLayout)
 
     val aboveSurfaces = OverlayStackLayout.orderedAboveCursorSurfaces(state)
     val belowSurfaces = OverlayStackLayout.orderedBelowCursorSurfaces(state)
     val aboveLayout =
-      OverlayStackLayout.calculateAboveCursorOverlayStack(aboveSurfaces, state, paneLayouts)
+      OverlayStackLayout.calculateAboveCursorOverlayStack(aboveSurfaces, state, panes)
     val aboveCursorOverlayStack = aboveLayout.stack
-    val belowLayout             = OverlayStackLayout.calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
+    val belowLayout             = OverlayStackLayout.calculateBelowCursorOverlayStack(belowSurfaces, state, panes)
     val floatingOffsets = OverlayStackLayout.floatingOverlayOffsets(
       aboveSurfaces,
       aboveCursorOverlayStack,
       belowSurfaces,
       belowLayout.stack,
       state,
-      paneLayouts
+      panes
     )
 
     baseLayout.copy(
@@ -329,13 +345,10 @@ object LayoutEngine:
 
   /** Center a blocking dialog in the editor workspace without changing workspace allocation. */
   def calculateModalRect(dialog: ModalDialog, state: AppState, layout: CalculatedLayout): LayoutRect =
-    val bounds = layout.editorPanelRect
-    val width  = math.max(3, math.min(72, bounds.width))
-    val rawHeight = ModalSurfaceComposition.frameHeight(
-      dialog.modal,
-      SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
-    )
-    val height = math.max(3, math.min(bounds.height, rawHeight))
+    val bounds    = layout.editorPanelRect
+    val width     = math.max(3, math.min(72, bounds.width))
+    val rawHeight = ModalSurfaceComposition.frameHeightFor(dialog.modal, width, state)
+    val height    = math.max(3, math.min(bounds.height, rawHeight))
     LayoutRect(
       x = bounds.x + math.max(0, (bounds.width - width) / 2),
       y = bounds.y + math.max(0, (bounds.height - height) / 2),
@@ -344,17 +357,17 @@ object LayoutEngine:
     )
 
   private[layout] def usesBottomGutter(state: AppState): Boolean =
-    state.persisted.config.statusLine.isPinned
+    state.chrome.statusLine.isPinned
 
   /** Whether the always-visible tab strip (issue #1074 epic, #1075-1077) reserves its own row. Only once 2+ buffers are
     * open -- with a single buffer there is nothing to switch between, so no strip is reserved or painted (issue #1074
-    * decision).
+    * decision), and never with `editor.tab_strip = off`.
     */
   private[layout] def showsTabBar(state: AppState): Boolean =
-    state.persisted.bufferOrder.size >= 2
+    state.showsTabStrip
 
   private[layout] def paneHeaderHeight(state: AppState): Int =
-    if state.persisted.config.surfaceConfig.showPaneHeaders then EditorPaneHeaderHeight else 0
+    if state.chrome.paneHeaders then EditorPaneHeaderHeight else 0
 
   private def calculateLineNumberWidth(state: AppState): Int =
     lineNumberCounterWidth(state)
@@ -378,7 +391,7 @@ object LayoutEngine:
   def perColumnGutterWidth(state: AppState): Int =
     val surfaceConfig    = state.persisted.config.surfaceConfig
     val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
-    if surfaceConfig.showLineNumbers && columnModeActive then lineNumberCounterWidth(state) else 0
+    if state.chrome.lineNumbers && columnModeActive then lineNumberCounterWidth(state) else 0
 
   def calculateViewportForCursor(
     cursor: CursorPosition,

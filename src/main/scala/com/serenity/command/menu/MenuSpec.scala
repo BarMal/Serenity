@@ -23,7 +23,8 @@ object MenuSpec:
 
   private def file(isMac: Boolean, fileOrFolderOpen: Boolean): List[MenuEntry] =
     (if fileOrFolderOpen then items("new", "open-file-or-folder") else items("new", "open", "open-folder")) ++ List(
-      MenuEntry.Dynamic(DynamicSource.RecentFiles)
+      MenuEntry.Dynamic(DynamicSource.RecentFiles),
+      MenuEntry.Dynamic(DynamicSource.RecentFolders)
     ) ++ items(
       "go-to-file",
       "file-search"
@@ -43,6 +44,7 @@ object MenuSpec:
     items("undo", "redo") ++ List(MenuEntry.Separator) ++
       items("cut", "copy", "paste", "paste-from-history", "select-all") ++ List(MenuEntry.Separator) ++
       items("find", "find-all", "replace", "replace-all", "goto-line") ++ List(MenuEntry.Separator) ++
+      items("toggle-line-comment", "toggle-block-comment") ++ List(MenuEntry.Separator) ++
       items("cut-to-darlings", "restore-darling")
 
   private def view: List[MenuEntry] =

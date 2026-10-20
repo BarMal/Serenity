@@ -61,6 +61,9 @@ object AppEventReducer:
       case OpenChapterNote =>
         ReducerResult.noEffects(ChapterNoteTransitions.openCurrentChapterNote(state, SplitAxis.Horizontal))
 
+      case OpenKeywordNote =>
+        ReducerResult.noEffects(ChapterNoteTransitions.openCurrentKeywordNote(state, SplitAxis.Horizontal))
+
       case ToggleNotesPin =>
         ReducerResult.noEffects(ChapterNoteTransitions.toggleNotesPin(state))
 
@@ -100,11 +103,26 @@ object AppEventReducer:
           if state.persisted.buffers.contains(bufferId) then EditorState.switchToBuffer(state, bufferId) else state
         )
 
+      case OpenRecentFolder(path) =>
+        ReducerResult.withEffect(state, AppEffect.ExecuteCommand(FileFinderCommands.openFolder(path)))
+
       case OpenRecentPath(path) =>
         ReducerResult.withEffect(state, AppEffect.ExecuteCommand(FileFinderCommands.openFile(path)))
 
       case FocusInDirection(direction) =>
         ReducerResult.noEffects(DirectionalFocus.moved(state, direction))
+
+      case ChromeSummonPressed(element) =>
+        ReducerResult.noEffects(summoned(state, _.pressed(element)))
+
+      case ChromeSummonReleased(element) =>
+        ReducerResult.noEffects(summoned(state, _.released(element)))
+
+      case ChromeSummonLocked =>
+        ReducerResult.noEffects(summoned(state, _.lockHeld))
+
+      case ChromeSummonToggled(element) =>
+        ReducerResult.noEffects(summoned(state, _.toggled(element)))
 
       case CursorPeekModifierPressed(modifier, atMillis) =>
         ReducerResult.noEffects(handleCursorPeekModifierPressed(state, registry, modifier, atMillis))
@@ -118,6 +136,9 @@ object AppEventReducer:
       case TogglePanel(id) =>
         if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
         else ReducerResult.noEffects(togglePanel(state, panelRegistry, id))
+
+  private def summoned(state: AppState, change: ChromeSummons => ChromeSummons): AppState =
+    state.copy(runtime = state.runtime.copy(summons = change(state.runtime.summons)))
 
   def rebalancePanes(state: AppState, focusedBufferId: Option[BufferId] = None): AppState =
     EditorState.rebalancePanes(state, focusedBufferId)

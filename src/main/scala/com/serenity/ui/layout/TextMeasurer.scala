@@ -1,5 +1,6 @@
 package com.serenity.ui.layout
 
+import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.renderer.FontSpec
 
 /** The text measurement wrapping, caret placement and viewport centring take from a rendering backend. A backend must
@@ -32,7 +33,8 @@ trait TextMeasurer:
   /** Height and ascent of a visual line covering `[startColumn, endColumn)`, from the tallest font over it. */
   def lineMetrics(fonts: TextMeasurer.LineFonts, startColumn: Int, endColumn: Int): TextMeasurer.LineMetrics
 
-  /** Each character's leading caret plus the trailing edge, before collapsed carets are spread apart. */
+  /** Each character's caret, at the x of its glyph, plus the trailing edge, before collapsed carets are spread apart.
+    */
   def rawCaretXs(text: String, startColumn: Int, fonts: TextMeasurer.LineFonts): IArray[Float]
 
   def glyphWidthPx(font: FontSpec, text: String): Float
@@ -43,24 +45,32 @@ trait TextMeasurer:
     */
   def shape(text: String, startColumn: Int, run: TextMeasurer.FontRun, level: Byte): TextMeasurer.ShapedRun
 
-  /** Carets read from a full layout of `text`, however context-free it is: exact, but a caret query per character. */
+  /** Carets read from a full shaping of `text`, however context-free it is: exact, but a shaping of the whole row. */
   def exactCaretXs(text: String, startColumn: Int, fonts: TextMeasurer.LineFonts): IArray[Float]
 
-  /** Each character's leading caret plus the trailing edge as wrapping places it: the fixed cell grid when
-    * `measuredLayout` is false, otherwise [[rawCaretXs]] with collapsed carets spread apart.
+  /** Where each prefix of `text` ends, which is what decides whether a row fits: the stops without the kerning a
+    * character pulls on its successor, which a row ending at it does not feel. A measurer that cannot tell reports the
+    * stops themselves.
+    */
+  def exactEdges(text: String, startColumn: Int, fonts: TextMeasurer.LineFonts): IArray[Float] =
+    TextCaretMeasurement.normalizeCollapsedCarets(exactCaretXs(text, startColumn, fonts))
+
+  /** Each character's caret plus the trailing edge as wrapping places it: the fixed cell grid when `measuredLayout` is
+    * false, otherwise [[rawCaretXs]] with collapsed carets spread apart.
     */
   def caretXs(
     text: String,
     startColumn: Int,
     fonts: TextMeasurer.LineFonts,
     measuredLayout: Boolean,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    tabSize: Int = IndentationSettings.DefaultTabSize
   ): IArray[Float] =
     if text.isEmpty then IArray(0.0f)
     else if !measuredLayout then
       val charWidth = cellMetrics.charWidth.toFloat
-      if cellMetrics.displayWidthAware then TextCaretMeasurement.displayWidthCaretXs(text, charWidth)
-      else IArray.tabulate(text.length + 1)(index => index * charWidth)
+      if cellMetrics.displayWidthAware then TextCaretMeasurement.displayWidthCaretXs(text, charWidth, tabSize)
+      else TextCaretMeasurement.uniformCaretXs(text, charWidth, tabSize)
     else TextCaretMeasurement.normalizeCollapsedCarets(rawCaretXs(text, startColumn, fonts))
 
   /** How many characters of `line` from `from` fit `panelWidthPx` when measured by full layout: candidates of growing
@@ -79,9 +89,7 @@ trait TextMeasurer:
 
     @annotation.tailrec
     def loop(limit: Int): Int =
-      val carets = TextCaretMeasurement.normalizeCollapsedCarets(
-        exactCaretXs(line.substring(from, from + limit), startColumn, fonts)
-      )
+      val carets     = exactEdges(line.substring(from, from + limit), startColumn, fonts)
       val firstOver  = carets.indexWhere(_ > width)
       val maxFitting = if firstOver < 0 then limit else math.max(0, firstOver - 1)
       if limit >= remainingLength || carets(limit) > width || maxFitting < limit then math.max(1, maxFitting)

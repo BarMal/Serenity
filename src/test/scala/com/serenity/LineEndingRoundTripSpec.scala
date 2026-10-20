@@ -21,7 +21,7 @@ class LineEndingRoundTripSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private def withTempFile(name: String, bytes: Array[Byte])(check: Path => Unit): Unit =
-    val directory = Files.createTempDirectory("serenity-line-endings")
+    val directory = TestTemp.directory("serenity-line-endings")
     val path      = directory.resolve(name)
     Files.write(path, bytes)
     try check(path)

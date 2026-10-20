@@ -88,9 +88,9 @@ class SessionCommentThreadSpec extends AnyFlatSpec with Matchers:
     restored(SessionState.fromAppState(stateWith(annotations)).asJson).nextCommentId shouldBe CommentId(9)
   }
 
-  it should "be written at schema version 5" in {
-    SessionState.CurrentSchemaVersion.value shouldBe 5
-    SessionState.fromAppState(stateWith(Annotations())).asJson.hcursor.get[Int]("schemaVersion") shouldBe Right(5)
+  it should "be written at schema version 6" in {
+    SessionState.CurrentSchemaVersion.value shouldBe 6
+    SessionState.fromAppState(stateWith(Annotations())).asJson.hcursor.get[Int]("schemaVersion") shouldBe Right(6)
   }
 
   "A session written before comments had ids" should "load, giving each comment a fresh id" in {

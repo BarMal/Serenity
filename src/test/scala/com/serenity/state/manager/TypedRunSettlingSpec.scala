@@ -1,7 +1,5 @@
 package com.serenity.state.manager
 
-import java.nio.file.Files
-
 import scala.concurrent.duration.*
 import scala.util.Random
 
@@ -15,7 +13,7 @@ import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateSt
 import com.serenity.state.models.*
 import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{ViewportSize, WrappedLineCache}
-import com.serenity.{setBufferForPane, setCursorPosition}
+import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.LoggerFactory
@@ -42,7 +40,7 @@ class TypedRunSettlingSpec extends AnyFlatSpec with Matchers:
     for
       stateManager <- StateManager(
         NoOpLogger[IO],
-        sessionRootOverride = Some(Files.createTempDirectory("typed-run")),
+        sessionRootOverride = Some(TestTemp.directory("typed-run")),
         dictionaryCache = SharedDictionary.default
       )
       _        <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))

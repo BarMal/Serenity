@@ -2,6 +2,7 @@ package com.serenity.release
 
 import java.nio.file.{Files, Path}
 
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -20,7 +21,7 @@ class ChangelogNotesSpec extends AnyFlatSpec with Matchers:
       |""".stripMargin
 
   private def withChangelog(test: (String, String) => Unit): Unit =
-    val dir  = Files.createTempDirectory("changelog-notes")
+    val dir  = TestTemp.directory("changelog-notes")
     val file = dir.resolve("CHANGELOG.md")
     Files.writeString(file, changelog)
     test(file.toString, dir.resolve("notes.md").toString)

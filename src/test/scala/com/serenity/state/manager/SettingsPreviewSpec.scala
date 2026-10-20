@@ -5,6 +5,7 @@ import java.nio.file.Files
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.command.*
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{AppConfig, AppMode, ConfigError, ConfigManager}
@@ -43,7 +44,7 @@ class SettingsPreviewSpec extends AnyFlatSpec with Matchers:
     private val queued   = Ref.of[IO, List[IO[Unit]]](Nil).unsafeRunSync()
     private val executed = Ref.of[IO, List[AppEffect]](Nil).unsafeRunSync()
     private val fonts    = Ref.of[IO, List[FontLoader.FontConfig]](Nil).unsafeRunSync()
-    private val root     = Files.createTempDirectory("settings-preview-spec")
+    private val root     = TestTemp.directory("settings-preview-spec")
 
     private val editor = new EffectEditorPort:
       def enqueueEvent(event: Event): IO[Unit]                               = IO.unit

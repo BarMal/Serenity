@@ -551,7 +551,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers with Eventually:
 
   it should "handle saving a file" in new EditorFixture:
     // Given: A buffer associated with a real file on disk
-    val savePath = java.nio.file.Files.createTempFile("editor-behavior-save", ".txt")
+    val savePath = TestTemp.file("editor-behavior-save", ".txt")
     try
       val bufferId = stateManager.createBuffer("Original content", None).unsafeRunSync()
       stateManager.setBufferFilePath(bufferId, savePath).unsafeRunSync()

@@ -3,6 +3,7 @@ package com.serenity.io
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.richtext.{DocxDocumentCodec, RichTextDocument}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.{BufferId, CursorPosition}
@@ -17,7 +18,7 @@ class FileManagerReloadSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "Reloading a buffer from disk" should "advance its content version past every edit made before" in {
-    val path    = Files.writeString(Files.createTempDirectory("file-manager-reload").resolve("draft.txt"), "saved")
+    val path    = Files.writeString(TestTemp.directory("file-manager-reload").resolve("draft.txt"), "saved")
     val manager = FileManager()
     val opened  = manager.loadFile(path, BufferId(1)).unsafeRunSync()
     val edited = opened
@@ -31,7 +32,7 @@ class FileManagerReloadSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep a reloaded formatted document in sync with the reloaded text" in {
-    val path = Files.createTempDirectory("file-manager-reload").resolve("draft.docx")
+    val path = TestTemp.directory("file-manager-reload").resolve("draft.docx")
     val _ = Files.write(
       path,
       DocxDocumentCodec.writeBytes(RichTextDocument.fromPlainText("saved"))

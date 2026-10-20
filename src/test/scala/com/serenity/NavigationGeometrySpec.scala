@@ -92,6 +92,28 @@ class NavigationGeometrySpec extends AnyFlatSpec with Matchers:
       Some(CursorPosition(1, 0))
   }
 
+  private val lastWrapRow = TextVisualLine(
+    bufferLine = 0,
+    startColumn = 10,
+    endColumn = 12,
+    text = "dd",
+    widthPx = 20.0f,
+    caretStops = (10 to 12).map(column => TextCaretStop(column, (column - 10).toFloat * 10.0f)).toVector
+  )
+
+  private val threeRowGeometry = NavigationGeometry(Vector(wrapLineA, wrapLineB, lastWrapRow))
+
+  "NavigationGeometry vertical landing at a row's right edge" should
+    "stay on the row below instead of reading as the start of the row after it" in {
+      val landed = threeRowGeometry.moveVertical(CursorPosition(0, 2), direction = 1, preferredXPx = 50.0f)
+      landed.flatMap(threeRowGeometry.visualRowIndexFor) shouldBe Some(1)
+    }
+
+  it should "stay on the row above instead of reading as the start of the row after it" in {
+    val landed = threeRowGeometry.moveVertical(CursorPosition(0, 11), direction = -1, preferredXPx = 50.0f)
+    landed.flatMap(threeRowGeometry.visualRowIndexFor) shouldBe Some(1)
+  }
+
   "NavigationGeometry.visualLineFor" should "return the visual line containing the cursor" in {
     geometry.visualLineFor(CursorPosition(1, 2)) shouldBe Some(line(1, 3))
   }

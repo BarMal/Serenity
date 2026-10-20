@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.command.ProjectIntent
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.project.{ProjectTaskCommand, ProjectTaskKind, ProjectTaskResult, ProjectTaskTerminal}
@@ -94,7 +95,7 @@ class ProjectTaskLanesSpec extends AnyFlatSpec with Matchers:
   /** A focused buffer inside a directory holding a Makefile, so a build task is detected for it. */
   private def rig(scripts: List[(String => IO[Unit]) => IO[Int]]): IO[(Rig, ProjectTaskCommand)] =
     for
-      directory <- IO.blocking(Files.createTempDirectory("project-task-lanes"))
+      directory <- IO.blocking(TestTemp.directory("project-task-lanes"))
       _         <- IO.blocking(Files.writeString(directory.resolve("Makefile"), "all:\n\ttrue\n"))
       state = focusedOn(directory.resolve("main.c"))
       modelRef   <- Ref.of[IO, Model](Model(state, UndoState()))

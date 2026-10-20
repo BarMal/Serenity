@@ -36,7 +36,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         stateManager,
         stateManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
 
       // Verify we start with startup page focused
@@ -87,7 +88,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      sessionRoot <- IO.blocking(Files.createTempDirectory("startup-page-empty-session-restore"))
+      sessionRoot <- IO.blocking(TestTemp.directory("startup-page-empty-session-restore"))
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
@@ -101,7 +102,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         firstManager,
         firstManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _ = firstInitial.startPageSurface should be(defined)
       _ = firstInitial.persisted.buffers shouldBe empty
@@ -123,7 +125,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         secondManager,
         secondManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _         = secondInitial.startPageSurface should be(defined)
       startPage = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
@@ -150,8 +153,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      sessionRoot <- IO.blocking(Files.createTempDirectory("startup-page-open-recent"))
-      recentFile  <- IO.blocking(Files.createTempFile("startup-recent", ".md"))
+      sessionRoot <- IO.blocking(TestTemp.directory("startup-page-open-recent"))
+      recentFile  <- IO.blocking(TestTemp.file("startup-recent", ".md"))
       _           <- IO.blocking(Files.writeString(recentFile, "recent file body"))
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
@@ -166,7 +169,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         firstManager,
         firstManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       openRecentSeed = com.serenity.command.Command.typed(
         "open-recent-seed",
@@ -191,7 +195,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         secondManager,
         secondManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _           = secondInitial.startPageSurface should be(defined)
       startPage   = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
@@ -240,7 +245,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         stateManager,
         stateManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _ = initialState.startPageSurface should be(defined)
 
@@ -267,7 +273,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         stateManager,
         stateManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _ = initialState.startPageSurface should be(defined)
 

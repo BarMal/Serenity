@@ -109,7 +109,7 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
     sm.getCurrentState.unsafeRunSync().pinnedSurfaces shouldBe Nil
 
   it should "navigate into a selected directory when activated from the pinned explorer" in new ExplorerFixture:
-    val rootDir   = Files.createTempDirectory("explorer-root")
+    val rootDir   = TestTemp.directory("explorer-root")
     val childDir  = Files.createDirectory(rootDir.resolve("child"))
     val childFile = Files.createFile(childDir.resolve("nested.txt"))
     try
@@ -146,8 +146,8 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
   // ── dragFileToDirectory ───────────────────────────────────────────────────
 
   it should "move the source file into the target directory on the filesystem" in new ExplorerFixture:
-    val srcDir  = Files.createTempDirectory("drag-src")
-    val dstDir  = Files.createTempDirectory("drag-dst")
+    val srcDir  = TestTemp.directory("drag-src")
+    val dstDir  = TestTemp.directory("drag-dst")
     val srcFile = Files.createFile(srcDir.resolve("hello.txt"))
     Files.writeString(srcFile, "content")
     try
@@ -164,8 +164,8 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
       Files.deleteIfExists(dstDir)
 
   it should "remove the moved file from the source directory listing panel" in new ExplorerFixture:
-    val srcDir  = Files.createTempDirectory("drag-src2")
-    val dstDir  = Files.createTempDirectory("drag-dst2")
+    val srcDir  = TestTemp.directory("drag-src2")
+    val dstDir  = TestTemp.directory("drag-dst2")
     val srcFile = Files.createFile(srcDir.resolve("mover.txt"))
     try
       sm.loadDirectoryTree(srcDir, List("mover.txt", "keeper.txt")).unsafeRunSync()

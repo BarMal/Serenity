@@ -2,8 +2,6 @@ package com.serenity
 
 import java.nio.file.Files
 
-import scala.concurrent.duration.*
-
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, SpellCheckConfig}
@@ -74,7 +72,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
   }
 
   it should "reject background mutations before dispatch while a blocking modal is active" in {
-    val tempFile = Files.createTempFile("state-manager-modal-gate", ".scala")
+    val tempFile = TestTemp.file("state-manager-modal-gate", ".scala")
 
     try
       val stateManager = createStateManager(noBackgroundAnalysis)
@@ -152,7 +150,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
   }
 
   it should "save the focused buffer through the file event path" in {
-    val tempFile       = Files.createTempFile("state-manager-save", ".scala")
+    val tempFile       = TestTemp.file("state-manager-save", ".scala")
     val initialContent = "val x = 42"
 
     try
@@ -293,7 +291,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
       }
       .unsafeRunSync()
 
-    IO.sleep(150.millis).unsafeRunSync()
+    stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface.map(_.content) shouldBe Some(

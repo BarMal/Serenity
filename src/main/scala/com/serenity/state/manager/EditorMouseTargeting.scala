@@ -124,18 +124,17 @@ private[manager] object EditorMouseTargeting:
     val cellWidthDivisor = columnTextWidthCells
     // With variable per-line heights a cell row no longer maps to a visual line, so reverse the click's
     // pixel Y through the same cumulative row geometry the renderer used. Falls back to the cell row when
-    // there's no pixel Y (TUI) or the layout is uniform (cell mode).
-    val rowMetrics = TextRowMetrics(
-      contentRect = contentRect,
-      gridMetrics = MouseHitTestGeometry.floatingCellMetrics(state),
-      rowLineHeightPx = snapshot.lineHeightPx,
-      usesMeasuredLayout = snapshot.usesMeasuredLayout,
-      rowHeightsPx =
-        snapshot.visualLines.map(line => if line.heightPx > 0 then line.heightPx else snapshot.lineHeightPx)
+    // there's no pixel Y (TUI) or the layout is uniform (cell mode), where the cell row is walked past the blank rows
+    // a heading's space leaves.
+    val rowMetrics = TextRowMetrics.forSnapshot(
+      contentRect,
+      MouseHitTestGeometry.floatingCellMetrics(state),
+      snapshot,
+      measured = snapshot.usesMeasuredLayout
     )
     val visualRow = click.pixelY match
       case Some(pixelY) if snapshot.usesMeasuredLayout => rowMetrics.visualRowAt(pixelY)
-      case _                                           => (click.row - contentRect.y).max(0)
+      case _                                           => rowMetrics.visualRowAtScreenRow(click.row)
     val cellWidthPx =
       if cellWidthDivisor > 0 then snapshot.panelWidthPx.toFloat / cellWidthDivisor.toFloat else 1.0f
     val columnOriginPx = (contentRect.x + columnXOriginCells + columnGutterCells) * cellWidthPx
@@ -167,9 +166,39 @@ private[manager] object EditorMouseTargeting:
           }
       }
 
-  def wordSelectionAtCursor(buffer: Buffer, cursor: CursorPosition): Option[Selection] =
-    val source        = RopeCharacterSource(buffer.document.content)
-    val clickedOffset = buffer.document.content.lineColumnToOffset(cursor.line, cursor.column)
+  /** The word under `cursor`. Columns in `hiddenColumns` (markers the view does not draw) are not part of the word: it
+    * is found among the visible characters, so it never starts or ends on a marker.
+    */
+  def wordSelectionAtCursor(
+    buffer: Buffer,
+    cursor: CursorPosition,
+    hiddenColumns: Set[Int] = Set.empty
+  ): Option[Selection] =
+    if hiddenColumns.isEmpty then
+      val source        = RopeCharacterSource(buffer.document.content)
+      val clickedOffset = buffer.document.content.lineColumnToOffset(cursor.line, cursor.column)
+      wordBounds(source, clickedOffset).map { (start, end) =>
+        Selection(
+          offsetToCursorPosition(buffer.document.content, start),
+          offsetToCursorPosition(buffer.document.content, end)
+        )
+      }
+    else visibleWordSelection(buffer.document.content.getLine(cursor.line).getOrElse(""), cursor, hiddenColumns)
+
+  private def visibleWordSelection(line: String, cursor: CursorPosition, hidden: Set[Int]): Option[Selection] =
+    val visibleColumns = line.indices.filterNot(hidden.contains).toVector
+    val visible        = VisibleText(visibleColumns.map(line.charAt).mkString)
+    val clicked = visibleColumns.indexWhere(_ >= cursor.column) match
+      case -1    => visibleColumns.length
+      case index => index
+    wordBounds(visible, clicked).map { (start, end) =>
+      Selection(
+        CursorPosition(cursor.line, visibleColumns(start)),
+        CursorPosition(cursor.line, visibleColumns(end - 1) + 1)
+      )
+    }
+
+  private def wordBounds(source: TextEditing.CharacterSource, clickedOffset: Int): Option[(Int, Int)] =
     if source.length == 0 then None
     else
       val probeOffset =
@@ -181,18 +210,12 @@ private[manager] object EditorMouseTargeting:
         else clickedOffset
       if probeOffset < 0 || source.charAt(probeOffset).isWhitespace then None
       else
-        val start = TextEditing.previousWordBoundary(source, probeOffset)
+        val start = TextEditing.previousWordBoundary(source, probeOffset + 1)
         @annotation.tailrec
         def wordEndFrom(offset: Int): Int =
           if offset < source.length && !source.charAt(offset).isWhitespace then wordEndFrom(offset + 1)
           else offset
-        val end = wordEndFrom(probeOffset)
-        Some(
-          Selection(
-            offsetToCursorPosition(buffer.document.content, start),
-            offsetToCursorPosition(buffer.document.content, end)
-          )
-        )
+        Some((start, wordEndFrom(probeOffset)))
 
   def lineSelectionAtCursor(buffer: Buffer, cursor: CursorPosition): Option[Selection] =
     val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
@@ -211,6 +234,16 @@ private[manager] object EditorMouseTargeting:
   private def offsetToCursorPosition(content: com.serenity.rope.Rope, offset: Int): CursorPosition =
     val (line, column) = content.offsetToLineColumn(offset)
     CursorPosition(line, column)
+
+  final private case class VisibleText(text: String) extends TextEditing.CharacterSource:
+    override def length: Int =
+      text.length
+
+    override def charAt(index: Int): Char =
+      text.charAt(index)
+
+    override def identityAnchor: AnyRef =
+      text
 
   final private case class RopeCharacterSource(content: com.serenity.rope.Rope) extends TextEditing.CharacterSource:
     override def length: Int =

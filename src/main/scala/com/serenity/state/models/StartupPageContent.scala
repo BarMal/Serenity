@@ -8,18 +8,22 @@ import com.serenity.command.{Command, CommandIntent, FileIntent, SessionIntent, 
   * in-session "return to start page" command (`StateManagerWorkflowCapability`). Kept in the state layer -- rather than
   * in `com.serenity.app` -- so the state manager can rebuild the page without a package cycle back into `app` (which
   * already depends on `state.manager`). Does no filesystem access: callers filter `recentFiles` to existing, readable
-  * files first.
+  * files first and `recentFolders` to existing folders.
   */
 object StartupPageContent:
 
   val RecentFilesLimit: Int = 5
+
+  private def distinctRecent(paths: List[Path]): List[Path] =
+    paths.map(_.toAbsolutePath.normalize()).distinct.take(RecentFilesLimit)
 
   def createStartPage(
     sessionExists: Boolean,
     recentFiles: List[Path] = Nil,
     configNotice: Option[String] = None,
     resumeIdentifier: Option[String] = None,
-    fileOrFolderOpen: Boolean = false
+    fileOrFolderOpen: Boolean = false,
+    recentFolders: List[Path] = Nil
   ): StartupPage =
     val statusMessage =
       configNotice.orElse(Option.when(!sessionExists)("No previous session found"))
@@ -83,22 +87,30 @@ object StartupPageContent:
         )
       )
     )
-    val recentActions = recentFiles
-      .map(path => path.toAbsolutePath.normalize())
-      .distinct
-      .take(RecentFilesLimit)
-      .map { path =>
-        StartupAction(
-          s"recent:${path.toString}",
-          path.toString,
-          Command.typed(
-            s"startup.open-recent.${path.getFileName}",
-            s"Open recent file $path",
-            CommandIntent.File(FileIntent.OpenRecentFile(path))
-          ),
-          detail = Some("Recent")
-        )
-      }
+    val recentActions = distinctRecent(recentFiles).map { path =>
+      StartupAction(
+        s"recent:${path.toString}",
+        path.toString,
+        Command.typed(
+          s"startup.open-recent.${path.getFileName}",
+          s"Open recent file $path",
+          CommandIntent.File(FileIntent.OpenRecentFile(path))
+        ),
+        detail = Some("Recent")
+      )
+    }
+    val recentFolderActions = distinctRecent(recentFolders).map { path =>
+      StartupAction(
+        s"recent-folder:${path.toString}",
+        path.toString,
+        Command.typed(
+          s"startup.open-recent-folder.${Option(path.getFileName).getOrElse(path)}",
+          s"Open recent folder $path",
+          CommandIntent.File(FileIntent.OpenRecentFolder(path))
+        ),
+        detail = Some("Recent folder")
+      )
+    }
     val workflowActions = List(("Writing", 'W'), ("Code", 'C'), ("Compact", 'M')).map { (name, key) =>
       StartupAction(
         s"workflow-${name.toLowerCase}",
@@ -113,7 +125,7 @@ object StartupPageContent:
         section = StartupActionSection.Workflow
       )
     }
-    val actions = primaryActions ++ recentActions
+    val actions = primaryActions ++ recentActions ++ recentFolderActions
     StartupPage(
       "Welcome to Serenity",
       options = actions.map(_.renderedLabel),

@@ -38,7 +38,7 @@ class StateManagerSystemAppearanceReloadSpec extends AnyFlatSpec with Matchers:
     StateManager
       .apply(
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
-        sessionRootOverride = Some(Files.createTempDirectory("appearance-reload-session")),
+        sessionRootOverride = Some(TestTemp.directory("appearance-reload-session")),
         initialConfig = followingDark,
         configPersistencePath = Some(configPath),
         dictionaryCache = SharedDictionary.cacheFor(followingDark),
@@ -46,7 +46,7 @@ class StateManagerSystemAppearanceReloadSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-  private def configFile: Path = Files.createTempDirectory("appearance-reload").resolve("config.conf")
+  private def configFile: Path = TestTemp.directory("appearance-reload").resolve("config.conf")
 
   private def editFile(path: Path, config: AppConfig): Unit =
     Files.writeString(path, ConfigManager.configToString(config)): Unit

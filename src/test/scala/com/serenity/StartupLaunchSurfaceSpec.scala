@@ -17,18 +17,24 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
 
   private def stateFor(page: StartupPage): AppState =
     val surfaceId = SurfaceId("startup")
-    AppState.empty.copy(
-      persisted = AppState.empty.persisted.copy(focus = Focus.Surface(surfaceId)),
-      runtime = AppState.empty.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            surfaceId,
-            SurfaceContent.StartPage(page),
-            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    AppState
+      .empty(com.serenity.config.AppConfig.conventional)
+      .copy(
+        persisted =
+          AppState.empty(com.serenity.config.AppConfig.conventional).persisted.copy(focus = Focus.Surface(surfaceId)),
+        runtime = AppState
+          .empty(com.serenity.config.AppConfig.conventional)
+          .runtime
+          .copy(
+            uiSurfaces = List(
+              UiSurface(
+                surfaceId,
+                SurfaceContent.StartPage(page),
+                SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+              )
+            )
           )
-        )
       )
-    )
 
   "Startup launch surface" should "omit Restore when no session is available and keep its visible shortcuts executable" in {
     val page = AppStartup.createStartPage(sessionExists = false, recentFiles = Nil)
@@ -59,7 +65,7 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
   }
 
   it should "number recent files after the three fixed actions" in {
-    val recent = Files.createTempFile("serenity-recent-digit", ".md")
+    val recent = TestTemp.file("serenity-recent-digit", ".md")
     val page   = AppStartup.createStartPage(sessionExists = false, recentFiles = List(recent))
 
     page.actions.map(_.id).take(4) shouldBe List(
@@ -75,7 +81,7 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
   }
 
   it should "activate a selected recent file through a path-carrying command" in {
-    val recent = Files.createTempFile("serenity-recent-document", ".md")
+    val recent = TestTemp.file("serenity-recent-document", ".md")
     val page   = AppStartup.createStartPage(sessionExists = true, recentFiles = List(recent))
     val index  = page.actions.indexWhere(_.id == s"recent:${recent.toString}")
 
@@ -91,7 +97,7 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
   }
 
   it should "use unambiguous recent labels and discard missing paths before rendering" in {
-    val root    = Files.createTempDirectory("serenity-startup-recents")
+    val root    = TestTemp.directory("serenity-startup-recents")
     val first   = Files.createFile(root.resolve("one").resolveSibling("notes.md"))
     val second  = Files.createFile(root.resolve("second-notes.md"))
     val missing = root.resolve("missing.md")
@@ -146,7 +152,8 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        viewport
+        viewport,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       .unsafeRunSync()
     val page = stateManager.getCurrentState
@@ -187,7 +194,8 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        viewport
+        viewport,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       .unsafeRunSync()
     val page = stateManager.getCurrentState

@@ -49,7 +49,7 @@ class OpenFolderStateManagerSpec extends AnyFlatSpec with Matchers with StateMan
     stateManager.runtimeLifecycle.awaitEffects >> stateManager.getCurrentState
 
   private def inTempTree(test: (Path, Path, Path) => Unit): Unit =
-    val root   = Files.createTempDirectory("open-folder-form")
+    val root   = TestTemp.directory("open-folder-form")
     val folder = Files.createDirectory(root.resolve("src"))
     val file   = Files.createFile(root.resolve("notes.txt"))
     try test(root, folder, file)

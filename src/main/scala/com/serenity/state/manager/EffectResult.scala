@@ -18,6 +18,7 @@ import com.serenity.state.models.{
   FileWorkflowState,
   FindMatches,
   FindSearchRequest,
+  ListPicker,
   SessionListPurpose,
   SpellCheckFingerprint,
   SurfaceId
@@ -26,8 +27,10 @@ import com.serenity.state.reducers.{
   CommandRunnerReducer,
   ModalEventReducer,
   NoticeReducer,
+  PendingRename,
   PinnedPanelContentReducer,
   ReducerResult,
+  RenameEditReducer,
   ThemeStateReducer
 }
 import com.serenity.text.TextEncoding
@@ -61,6 +64,9 @@ private[manager] enum EffectResult:
   case FileReopenFailed(bufferId: BufferId, encoding: TextEncoding)
   case FileLoaded(path: Path, loaded: Buffer)
   case FileLoadFailed(path: Path, error: Throwable)
+
+  /** The files a rename names that no buffer held are open now, so its remaining edits can be applied (#1965). */
+  case RenameFilesOpened(pending: PendingRename)
 
   /** A preset store operation finished: `previews` is the store's listing afterwards, when it was read. Always applied,
     * so a failed write is still reported.
@@ -101,6 +107,11 @@ private[manager] enum EffectResult:
     */
   case FilesListed(pickerId: SurfaceId, root: Path, listing: Either[String, ProjectFileListing])
 
+  /** The list picker `pickerId` recomputed for `query`; dropped unless that picker is open and still holds `query`. See
+    * PickerSearchTransitions.
+    */
+  case PickerSearched(pickerId: SurfaceId, query: String, searched: ListPicker)
+
   // What opening the command palette loads (#1911): each result is for the palette `surfaceId` it was started by, and
   // is dropped once that palette has closed. See CommandRunnerOpening.
   case CommandRunnerPresetsListed(surfaceId: SurfaceId, previews: List[UiPreset.Preview])
@@ -109,7 +120,7 @@ private[manager] enum EffectResult:
   /** The session as `saved` has been written; the start page replaces the editor if it is still what was saved. See
     * StartPageTransitions.
     */
-  case StartPageReady(saved: AppState, readableRecentFiles: List[Path])
+  case StartPageReady(saved: AppState, readableRecentFiles: List[Path], readableRecentFolders: List[Path])
 
   // Project tasks (#1697 Wave 3): posted by `LaneKey.Project` jobs; see ProjectTaskTransitions.
   /** Output the task wrote since its previous batch. */
@@ -198,17 +209,20 @@ private[manager] object EffectResult:
         SessionWorkflowTransitions.withNamedSessionLoaded(state, pickerId, restored)
       case FilesListed(pickerId, root, listing) =>
         FileFinderTransitions.withFilesListed(state, pickerId, root, listing)
+      case PickerSearched(pickerId, query, searched) =>
+        PickerSearchTransitions.applied(state, pickerId, query, searched).state
 
       case CommandRunnerPresetsListed(surfaceId, previews) =>
         CommandRunnerOpening.withPresetsListed(state, surfaceId, previews)
       case ProjectPresenceDetected(surfaceId, presence) =>
         CommandRunnerOpening.withPresenceDetected(state, surfaceId, presence)
-      case StartPageReady(saved, readableRecentFiles) =>
-        StartPageTransitions.withStartPageShown(state, saved, readableRecentFiles)
+      case StartPageReady(saved, readableRecentFiles, readableRecentFolders) =>
+        StartPageTransitions.withStartPageShown(state, saved, readableRecentFiles, readableRecentFolders)
 
       case projectTask @ (ProjectTaskOutput(_, _) | ProjectTaskFinished(_, _)) =>
         reduce(state, projectTask, wrapCache).state
       case expired: CommandRunnerBindingExpired => reduce(state, expired, wrapCache).state
+      case renamed: RenameFilesOpened           => reduce(state, renamed, wrapCache).state
 
   /** [[applyIfCurrent]] together with the effects its transition emits; only the cases matched here emit any. */
   def reduce(
@@ -217,6 +231,9 @@ private[manager] object EffectResult:
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): ReducerResult =
     result match
+      case PickerSearched(pickerId, query, searched) =>
+        PickerSearchTransitions.applied(state, pickerId, query, searched)
+      case RenameFilesOpened(pending)           => RenameEditReducer.afterOpening(pending, state)
       case ProjectTaskOutput(taskId, chunk)     => ProjectTaskTransitions.outputArrived(state, taskId, chunk)
       case ProjectTaskFinished(taskId, outcome) => ProjectTaskTransitions.finished(state, taskId, outcome)
       case CommandRunnerBindingExpired(recordedAtMillis) =>

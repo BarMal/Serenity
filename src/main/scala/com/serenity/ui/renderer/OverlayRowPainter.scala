@@ -24,6 +24,7 @@ private[renderer] object OverlayRowPainter:
     defaultBackground: Option[RenderColor],
     font: java.awt.Font,
     cellMetrics: CellMetrics,
+    advances: MeasuredTextAdvances,
     textInsetPx: Double,
     pixelY: Option[Int] = None,
     pixelHeight: Option[Int] = None
@@ -41,6 +42,7 @@ private[renderer] object OverlayRowPainter:
         defaultBackground,
         font,
         cellMetrics,
+        advances,
         textInsetPx,
         pixelY,
         pixelHeight
@@ -59,6 +61,7 @@ private[renderer] object OverlayRowPainter:
     defaultBackground: Option[RenderColor],
     font: java.awt.Font,
     cellMetrics: CellMetrics,
+    advances: MeasuredTextAdvances,
     textInsetPx: Double,
     pixelY: Option[Int],
     pixelHeight: Option[Int]
@@ -112,6 +115,7 @@ private[renderer] object OverlayRowPainter:
         rowBackground,
         font,
         cellMetrics,
+        advances,
         pixelY
       )
     }
@@ -128,6 +132,7 @@ private[renderer] object OverlayRowPainter:
     rowBackground: RenderColor,
     font: java.awt.Font,
     cellMetrics: CellMetrics,
+    advances: MeasuredTextAdvances,
     pixelY: Option[Int]
   ): Unit =
     val rowLeftXPx  = cellMetrics.toPixelX(x)
@@ -162,6 +167,7 @@ private[renderer] object OverlayRowPainter:
             rowView.row.plainText,
             font,
             cellMetrics,
+            advances,
             rowRightXPx
           )
         else CharacterRenderer.renderStringPlain(surface, indentedX, y, rowView.row.plainText.take(indentedWidth))
@@ -227,6 +233,7 @@ private[renderer] object OverlayRowPainter:
               theme,
               font,
               cellMetrics,
+              advances,
               rowLeftXPx,
               rowRightXPx
             )
@@ -340,15 +347,16 @@ private[renderer] object OverlayRowPainter:
     text: String,
     font: java.awt.Font,
     cellMetrics: CellMetrics,
+    advances: MeasuredTextAdvances,
     maxRightXPx: Int
   ): Unit =
     val visibleText = text.take(width)
     if visibleText.nonEmpty then
       val frc        = surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
-      val caretXs    = TextLayoutSnapshot.caretXsForText(visibleText, font, frc)
+      val advancePx  = advances.advanceOf(visibleText, font, frc)
       val textXPx    = cellMetrics.toPixelX(x).toFloat
       val maxWidthPx = math.max(1.0f, maxRightXPx.toFloat - textXPx)
-      val widthPx    = caretXs.lastOption.getOrElse(0.0f).max(1.0f).min(maxWidthPx)
+      val widthPx    = advancePx.max(1.0f).min(maxWidthPx)
       surface.text.drawRunPx(textXPx, yPx, widthPx, cellMetrics.lineHeight, cellMetrics.ascent, visibleText)
 
   private def renderMeasuredCursor(
@@ -359,13 +367,14 @@ private[renderer] object OverlayRowPainter:
     theme: Theme,
     font: java.awt.Font,
     cellMetrics: CellMetrics,
+    advances: MeasuredTextAdvances,
     minXPx: Int,
     maxRightXPx: Int
   ): Unit =
     val frc          = surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
-    val caretXs      = TextLayoutSnapshot.caretXsForText(textBeforeCursor, font, frc)
+    val advancePx    = advances.advanceOf(textBeforeCursor, font, frc)
     val rawWidthPx   = math.max(2, math.round(cellMetrics.charWidth * 0.12f))
     val caretWidthPx = math.min(rawWidthPx, math.max(1, maxRightXPx - minXPx))
-    val unclampedXPx = cellMetrics.toPixelX(x) + math.round(caretXs.lastOption.getOrElse(0.0f))
+    val unclampedXPx = cellMetrics.toPixelX(x) + math.round(advancePx)
     val xPx          = math.max(minXPx, math.min(unclampedXPx, maxRightXPx - caretWidthPx))
     surface.pixels.fillPixelRect(xPx, yPx, caretWidthPx, cellMetrics.lineHeight, theme.cursor)

@@ -92,12 +92,18 @@ private[manager] object FileResults:
             current.document.content,
             disk.document.content
           )
+        val document =
+          disk.document
+            .replacingContentOf(current.document)
+            .keepingChosenIndentationOf(current.document)
+            .keepingOpeningsOf(current.document)
+            .copy(savedGeneration = current.document.savedGeneration + 1)
         withBuffer(
           state,
           current
             .copy(
-              document = disk.document.copy(savedGeneration = current.document.savedGeneration + 1),
-              richText = disk.richText,
+              document = document,
+              richText = disk.richText.withSyncedDocument(disk.richText.richTextDocument, document.contentVersion),
               annotations = annotations
             )
             .clampedToContent
@@ -134,7 +140,12 @@ private[manager] object FileResults:
     withRecentFile(resized, path)
 
   def withoutRecentFiles(state: AppState): AppState =
-    state.copy(persisted = state.persisted.copy(recentFiles = Nil, recentFilesByMode = Map.empty))
+    state.copy(persisted = state.persisted.copy(recentFiles = Nil, recentFilesByMode = Map.empty, recentFolders = Nil))
+
+  def withRecentFolder(state: AppState, folder: Path): AppState =
+    state.copy(persisted =
+      state.persisted.copy(recentFolders = Persisted.trackRecentFolder(state.persisted.recentFolders, folder))
+    )
 
   private def withBuffer(state: AppState, buffer: Buffer): AppState =
     state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(buffer.id, buffer)))
@@ -142,7 +153,7 @@ private[manager] object FileResults:
   private def withRecentFile(state: AppState, path: Path): AppState =
     state.copy(persisted =
       state.persisted.copy(
-        recentFiles = (path :: state.persisted.recentFiles.filterNot(_ == path)).take(20),
+        recentFiles = (path :: state.persisted.recentFiles.filterNot(_ == path)).take(Persisted.RecentLimit),
         recentFilesByMode =
           Persisted.trackRecentFile(state.persisted.recentFilesByMode, state.persisted.config.appMode, path)
       )

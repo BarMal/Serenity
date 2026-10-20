@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.MockRenderSurface
 import com.serenity.state.models.{BufferId, Damage, PaneId, SurfaceId}
-import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -265,6 +265,16 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
       // capacity of 4) are still tracked.
       screens.foreach(output => frameState.drainScreenDamage(Some(output)) shouldNot be(Damage.Everything))
     }
+
+  "A screen's pane that now has fewer rows than it last showed" should "report the band the old rows still fill" in {
+    val output = frameOutput(new Object)
+    val pane   = PaneId(1)
+    frameState.bandsVacatedOnScreen(Some(output), Map(pane -> PixelRect(0, 10, 100, 90))) shouldBe Nil
+    frameState.bandsVacatedOnScreen(Some(output), Map(pane -> PixelRect(0, 10, 100, 40))) shouldBe
+      List(PixelRect(0, 50, 100, 50))
+    frameState.bandsVacatedOnScreen(Some(output), Map(pane -> PixelRect(0, 10, 100, 60))) shouldBe Nil
+    frameState.bandsVacatedOnScreen(Some(output), Map.empty) shouldBe List(PixelRect(0, 10, 100, 60))
+  }
 
   private class OwnedMockSurface(window: AnyRef) extends MockRenderSurface(10, 5, true):
     override def layerCacheOwner: ScreenIdentity = ScreenIdentity(window)

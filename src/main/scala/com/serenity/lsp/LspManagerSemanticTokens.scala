@@ -21,7 +21,8 @@ import com.serenity.lsp.model.{
   SemanticTokensResult,
   TextChangeDiff
 }
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.{Balance, ChangeSet, Rope}
+import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import org.typelevel.log4cats.Logger
 
 /** The result a server last gave for a document, which a later `full/delta` request is relative to. */
@@ -74,7 +75,10 @@ final private[lsp] class SemanticTokensSession private (
 
   def markPending(uri: DocumentUri, refresh: PendingRefresh): IO[Unit] = pending.update(_.updated(uri, refresh))
 
-  def clearPending(uri: DocumentUri): IO[Unit] = pending.update(_ - uri)
+  /** Claims the refresh a document is waiting out its delay for; none when the document was closed or reopened since.
+    */
+  def takePending(uri: DocumentUri): IO[Option[PendingRefresh]] =
+    pending.modify(held => (held - uri, held.get(uri)))
 
   def forgetResults(uri: DocumentUri): IO[Unit] =
     baselines.update(_ - uri) >> shown.update(_ - uri) >> claimed.update(_ - uri) >> pending.update(_ - uri)
@@ -110,6 +114,7 @@ final private[lsp] class LspManagerSemanticTokens(
     applyEvent: Event => IO[Unit],
     logger: Logger[IO],
     session: SemanticTokensSession,
+    lanes: EffectLanes,
     debounce: FiniteDuration
 ):
 
@@ -122,6 +127,8 @@ final private[lsp] class LspManagerSemanticTokens(
   def documentOpened(uri: DocumentUri): IO[Unit] = session.forgetResults(uri)
 
   def documentClosed(uri: DocumentUri): IO[Unit] = session.forget(uri)
+
+  def cancelPendingRefresh(uri: DocumentUri): IO[Unit] = session.takePending(uri).void
 
   /** Requests tokens now, without waiting for the document to go quiet. */
   def refreshNow(rawUri: String, languageId: LanguageId): IO[Unit] =
@@ -137,8 +144,8 @@ final private[lsp] class LspManagerSemanticTokens(
       _ <- plan.preview.traverse_(startPreview(rawUri, languageId, _, connected = connection.isDefined))
     yield ()
 
-  /** Requests tokens once no further call has come for `debounce`: each call replaces the timer the last one started,
-    * so a burst of edits makes one request.
+  /** Requests tokens once no further call has come for `debounce`, or `MaxQuietWait` after the first call of a burst
+    * that never goes quiet: each call replaces the one still waiting, so a burst of edits makes one request.
     */
   def refreshAfterQuiet(rawUri: String, languageId: LanguageId): IO[Unit] =
     afterQuiet(rawUri, PendingRefresh.Everything)(refreshNow(rawUri, languageId))
@@ -151,16 +158,19 @@ final private[lsp] class LspManagerSemanticTokens(
 
   private def afterQuiet(rawUri: String, refresh: PendingRefresh)(request: IO[Unit]): IO[Unit] =
     val uri = DocumentUri(rawUri)
-    val key = RequestKey(uri, RequestKind.SemanticTokensDebounce)
-    val delayed = (IO.sleep(debounce) >> session.clearPending(uri) >> pool.serialized(request))
+    val refreshIfStillPending = session
+      .takePending(uri)
+      .flatMap(_.traverse_(_ => pool.serialized(request)))
       .handleErrorWith(ex => logger.error(ex)(s"[LSP] semanticTokens refresh failed: $rawUri"))
-    for
-      earlier <- requestFibers.modify(fibers => (fibers - key, fibers.get(key)))
-      _       <- earlier.traverse_(_.cancel)
-      _       <- session.markPending(uri, refresh)
-      timer   <- supervisor.supervise(delayed)
-      _       <- requestFibers.update(_.updated(key, timer))
-    yield ()
+    session.markPending(uri, refresh) >>
+      lanes
+        .submitAfter(
+          Lane.Keyed(LaneKey.SemanticTokens(uri), LanePolicy.SwitchLatest),
+          debounce,
+          refreshIfStillPending,
+          Some(LspManagerSemanticTokens.MaxQuietWait)
+        )
+        .recover { case _: EffectLanes.Released => () }
 
   private def refreshVisible(rawUri: String, languageId: LanguageId): IO[Unit] =
     val uri = DocumentUri(rawUri)
@@ -173,14 +183,17 @@ final private[lsp] class LspManagerSemanticTokens(
   /** Moves the tokens on screen with the text that changed from `previous` to `next`, until the server answers for
     * `next`.
     */
-  def documentEdited(rawUri: String, previous: Rope, next: Rope): IO[Unit] =
+  def documentEdited(rawUri: String, previous: Rope, next: Rope, known: Option[ChangeSet] = None): IO[Unit] =
     session
       .isShown(DocumentUri(rawUri))
       .ifM(
-        IO.delay(TextChangeDiff.diff(previous, next)).flatMap { change =>
-          applyEvent(LspEvent.LspSemanticTokensEdited(rawUri, change)).unlessA(
-            change.text.isEmpty && change.rangeLength == 0
-          )
+        IO.delay(known.fold(List(TextChangeDiff.diff(previous, next)))(TextChangeDiff.changes(previous, _))).flatMap {
+          changes =>
+            changes.traverse_(change =>
+              applyEvent(LspEvent.LspSemanticTokensEdited(rawUri, change)).unlessA(
+                change.text.isEmpty && change.rangeLength == 0
+              )
+            )
         },
         IO.unit
       )
@@ -376,3 +389,8 @@ final private[lsp] class LspManagerSemanticTokens(
 private[lsp] object LspManagerSemanticTokens:
 
   val DefaultDebounce: FiniteDuration = 200.millis
+
+  /** Typing or scrolling that never pauses still refreshes the tokens this often; the server is asked at most once per
+    * burst, and the tokens on screen have been moved with the text meanwhile.
+    */
+  val MaxQuietWait: FiniteDuration = 1.second

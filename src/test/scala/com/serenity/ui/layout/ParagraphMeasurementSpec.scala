@@ -15,6 +15,7 @@ import com.serenity.richtext.{
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.TextCaretMeasurement.{resolverForLine, singleFontResolver}
+import com.serenity.ui.renderer.ShapedTextCache
 import com.serenity.ui.theme.RichTextStyling
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
@@ -108,7 +109,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
       text,
       3,
       widthPx,
-      singleFontResolver(font),
+      LineLayout.plainResolver(text, 0, font, frc, measured),
       frc,
       measured,
       cellMetrics,
@@ -133,20 +134,22 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
   it should "measure single segments as per-row measurement did" in
     forAll(measuredFonts) { font =>
       forAll(corpus) { line =>
-        val xs = TextLayoutSnapshot.caretXsForText(line, font, frc)
+        val xs = TextLayoutSnapshot.caretXsForText(line, font, ShapedTextCache(), frc)
         val legacy =
           LegacyLineMeasurement.caretXs(line, 0, singleFontResolver(font), frc, true, CellMetrics.fromFont(font))
         xs.length shouldBe legacy.length
         xs.zip(legacy).foreach((x, expected) => x shouldBe expected +- tolerance)
         assertSameRows(
-          Vector(TextLayoutSnapshot.visualLineForText(line, 2, font, frc, startColumn = 5)),
+          Vector(
+            TextLayoutSnapshot.visualLineForText(line, 2, font, ShapedTextCache(), LayoutMemos(), frc, startColumn = 5)
+          ),
           Vector(
             LegacyLineMeasurement.shapeSegment(
               line,
               2,
               5,
               5 + line.length,
-              singleFontResolver(font),
+              LineLayout.plainResolver(line, 5, font, frc, measuredLayout = true),
               frc,
               true,
               CellMetrics.fromFont(font)
@@ -155,6 +158,39 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
         )
       }
     }
+
+  private val shapedLatinCorpus = Table(
+    "line",
+    "ffl -> ",
+    "-> => ->> =>> a->b a=>b",
+    "office affluent fluffy fjord efficient waffle shuffle ffi ffl -> => != <= " * 3,
+    prose
+  )
+
+  private def assertShapedLatinMatchesPerRowMeasurement(font: Font): Assertion =
+    TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc) shouldBe true
+    forAll(shapedLatinCorpus) { line =>
+      widths.foreach { widthPx =>
+        withClue(s"$font at $widthPx px: ") {
+          assertSameRows(
+            TextLayoutSnapshot.boundedVisualLinesForText(line, 3, widthPx, font, frc),
+            legacyLine(line, widthPx, font, CellMetrics.fromFont(font), measured = true)
+          )
+        }
+      }
+      val xs = TextLayoutSnapshot.caretXsForText(line, font, ShapedTextCache(), frc)
+      val legacy =
+        LegacyLineMeasurement.caretXs(line, 0, singleFontResolver(font), frc, true, CellMetrics.fromFont(font))
+      xs.length shouldBe legacy.length
+      xs.zip(legacy).foreach((x, expected) => x shouldBe expected +- tolerance)
+    }
+    succeed
+
+  it should "measure arrows and ligatures of a substituting font as per-row measurement did, without the ligatures attribute" in
+    assertShapedLatinMatchesPerRowMeasurement(BundledInterFont.plain(13f))
+
+  it should "measure arrows and ligatures of a substituting font as per-row measurement did, with the ligatures attribute" in
+    assertShapedLatinMatchesPerRowMeasurement(BundledInterFont.ligatured(13f))
 
   it should "wrap cell layouts, uniform and display-width aware, exactly as before" in {
     val cellLayouts =
@@ -243,8 +279,11 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
     val document = buffer.richText.richTextDocument
     buffer.document.content.linesIteratorFrom(0).toVector.flatMap { (lineIndex, line) =>
       val paragraph = document.flatMap(_.paragraphAt(lineIndex))
-      val role    = RichTextStyling.effectiveRole(paragraph.map(_.role).getOrElse(ParagraphRole.Body), dropCapsEnabled)
-      val glyphPx = DropCapLayout.measuredGlyphWidthPx(font, frc, document, lineIndex, role, proseScale)
+      val role = RichTextStyling.effectiveRole(paragraph.map(_.role).getOrElse(ParagraphRole.Body), dropCapsEnabled)
+      val glyphPx =
+        DropCapLayout
+          .reserve(font, frc, document, lineIndex, role, proseScale, DropCapLayout.DefaultGapEm, LayoutMemos())
+          .indentPx
       val rows = LegacyLineMeasurement.wrap(
         line,
         lineIndex,
@@ -254,7 +293,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
         measuredLayout = true,
         CellMetrics.fromFont(font),
         paragraphRole = role,
-        dropCapGlyphWidthPx = glyphPx
+        dropCapIndentPx = glyphPx
       )
       rows.map(row => aligned(row, paragraph.map(_.alignment).getOrElse(ParagraphAlignment.Left), widthPx))
     }
@@ -266,12 +305,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
       case ParagraphAlignment.Right  => available
       case _                         => 0.0f
     if offset <= 0.0f then row
-    else
-      row.copy(
-        caretStops = row.caretStops.map(stop => stop.copy(xPx = stop.xPx + offset)),
-        xSortedCaretStops = row.xSortedCaretStops.map(stop => stop.copy(xPx = stop.xPx + offset)),
-        xOffsetPx = offset
-      )
+    else row.copy(xOffsetPx = row.xOffsetPx + offset)
 
   it should "wrap rich text with per-run fonts, prose zoom, alignment and drop caps exactly as before" in
     Seq(sans, ligatured, kerned).foreach { font =>
@@ -295,16 +329,18 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
       }
     }
 
-  it should "split rich text into the same columns as before" in
+  it should "split rich text into columns of the same rows as before, as many as fit each column's height" in
     Seq(sans, ligatured).foreach { font =>
       val buffer = richBuffer(visibleLines = 4)
       val chunks = TextLayoutSnapshot.columnChunksForBuffer(buffer, 160, font, frc, columnCount = 3)
-      chunks.map(_.length).sum shouldBe 12
-      assertSameRows(chunks.flatten, legacyBufferRows(buffer, 160, font, 1.0f, dropCapsEnabled = true).take(12))
+      val rows   = chunks.flatten
+      rows.length should (be > 0 and be <= 12)
+      chunks.foreach(_.length should be <= 4)
+      assertSameRows(rows, legacyBufferRows(buffer, 160, font, 1.0f, dropCapsEnabled = true).take(rows.length))
     }
 
   private def contextFree(text: String, font: Font): Vector[Boolean] =
-    val advances = GlyphAdvances.measure(text, 0, text.length, 0, singleFontResolver(font), frc)
+    val advances = GlyphAdvances.measure(text, 0, text.length, 0, singleFontResolver(font), frc, ShapedTextCache())
     text.indices.toVector.map(index => advances.isContextFree(index, index + 1))
 
   "Glyph advances" should "treat plain text and tabs as context-free" in {

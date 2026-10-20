@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.{ThemeCommands, ThemeIntent}
 import com.serenity.config.AppConfig
 import com.serenity.io.FileDialog
@@ -188,7 +189,7 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "export the current theme to the path chosen through the file dialog" in {
-    val directory = Files.createTempDirectory("theme-export")
+    val directory = TestTemp.directory("theme-export")
     try
       val dialog = FileDialog(
         chooseOpenFile = _ => IO.pure(None),

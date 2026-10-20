@@ -3,7 +3,7 @@ package com.serenity.state.reducers
 import java.util.{Collections, IdentityHashMap}
 
 import com.serenity.keystroke.events.InsertChar
-import com.serenity.rope.{Balance, Leaf, Node, Rope}
+import com.serenity.rope.{Balance, Branch, Leaf, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.undo.HistoryEntry
 import org.scalatest.OptionValues
@@ -28,10 +28,8 @@ class UndoSnapshotSharingSpec extends AnyFlatSpec with Matchers with OptionValue
     def visit(rope: Rope): Unit =
       if seen.add(rope) then
         rope match
-          case Node(left, right) =>
-            visit(left)
-            visit(right)
-          case _: Leaf => ()
+          case branch: Branch => branch.children.foreach(visit)
+          case _: Leaf        => ()
     ropes.foreach(visit)
     seen.size
 

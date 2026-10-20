@@ -4,6 +4,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.*
 import cats.syntax.foldable.*
+import cats.syntax.semigroup.*
 import com.serenity.config.AppConfig
 import com.serenity.diagnostics.{FrameTimings, KeyLatencyTrace, Trace}
 import com.serenity.input.*
@@ -90,7 +91,7 @@ private[serenity] object AppRuntimeRenderLoops:
           count <- blinks.updateAndGet(_ + 1)
           model <- loadModel
           config = model.app.persisted.config
-        yield cursorIdleInterval(config).forall(AppRuntime.keepsBlinking(config, _, count))
+        yield cursorIdleInterval(config).exists(AppRuntime.keepsBlinking(config, _, count))
       )
       .takeWhile(identity)
       .as(IdleTick.Blink)
@@ -161,6 +162,7 @@ private[serenity] object AppRuntimeRenderLoops:
       translatorCache: Ref[IO, Option[FocusedTranslatorCacheEntry]],
       frameTimings: FrameTimings,
       onUserInput: IO[Unit] = IO.unit,
+      damagePublishedFor: AppState => IO[Unit] = _ => IO.unit,
       observeBatch: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit,
       logEvent: (Event, com.serenity.state.models.Focus) => IO[Unit] = (_, _) => IO.unit
   )
@@ -206,6 +208,7 @@ private[serenity] object AppRuntimeRenderLoops:
       _     <- context.observeBatch(batch.before.app, batch.after.app)
       _ <- IO.whenA(batch.applied.nonEmpty)(
         context.emitDamage(DamageProducer.forTransition(batch.before.app, batch.after.app)) >>
+          context.damagePublishedFor(batch.after.app) >>
           IO(context.frameTimings.keyLatency.damageEmitted())
       )
       _ <- batch.isolated.fold(IO.unit)(applyIsolated(context, steps, _))
@@ -267,7 +270,8 @@ private[serenity] object AppRuntimeRenderLoops:
     stateManager.getCurrentState.flatMap { state =>
       cachedTranslators(state.persisted.config, translatorCache).flatMap(translators =>
         inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state, translators)) >>
-          inputRouter.setCursorPeekEnabled(state.persisted.config.surfaceConfig.commandRunnerCursorPeekEnabled)
+          inputRouter.setCursorPeekEnabled(state.persisted.config.surfaceConfig.commandRunnerCursorPeekEnabled) >>
+          inputRouter.setSummonConfig(state.persisted.config.summon)
       )
     }
 
@@ -299,8 +303,11 @@ private[serenity] object AppRuntimeRenderLoops:
     sleep: FiniteDuration => IO[Unit] = IO.sleep,
     frameClock: IO[FiniteDuration] = IO.monotonic,
     lastFrameStart: Ref[IO, Option[FiniteDuration]] = Ref.unsafe[IO, Option[FiniteDuration]](None),
-    keyLatency: KeyLatencyTrace = KeyLatencyTrace()
-  )(using logger: Logger[IO]): Stream[IO, Unit] =
+    keyLatency: KeyLatencyTrace = KeyLatencyTrace(),
+    lastDrawnState: Ref[IO, Option[AppState]] = Ref.unsafe[IO, Option[AppState]](None),
+    damagePublishedFor: Ref[IO, Option[AppState]] = Ref.unsafe[IO, Option[AppState]](None),
+    transitionDamage: Option[(AppState, AppState) => Damage] = None
+  )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Stream[IO, Unit] =
     Stream
       .eval(
         for
@@ -317,8 +324,17 @@ private[serenity] object AppRuntimeRenderLoops:
           model <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
             stateManager.getModel
           )
-          _           <- pendingDamage.set(Damage.Nothing)
-          paintDamage <- pendingPaintDamage.getAndSet(Damage.Nothing)
+          _         <- pendingDamage.set(Damage.Nothing)
+          covered   <- damagePublishedFor.get
+          published <- pendingPaintDamage.getAndSet(Damage.Nothing)
+          previous  <- lastDrawnState.getAndSet(Some(model.app))
+          paintDamage = damageToModel(
+            previous,
+            covered,
+            model.app,
+            published,
+            transitionDamage.getOrElse((before, after) => DamageProducer.forTransition(before, after))
+          )
           _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(model.app)))(
             renderFull(model.app, true, None, paintDamage, renderCaches)
           )
@@ -326,6 +342,23 @@ private[serenity] object AppRuntimeRenderLoops:
         yield ()
       )
       .onFinalize(settleFastMode(fastModeSignal, pendingDamage))
+
+  /** A batch commits each event to the model as it is applied but publishes damage once per slice, so the model a frame
+    * reads can be newer than the damage it drains. When the damage published so far was computed up to exactly this
+    * model (the common case) nothing more is diffed; otherwise diffing against what the last frame drew covers the gap
+    * exactly (#1906), and published damage still carries what no state diff can express.
+    */
+  private def damageToModel(
+    previouslyDrawn: Option[AppState],
+    publishedFor: Option[AppState],
+    model: AppState,
+    published: Damage,
+    transitionDamage: (AppState, AppState) => Damage
+  ): Damage =
+    previouslyDrawn match
+      case Some(previous) if !(previous eq model) && !publishedFor.exists(_ eq model) =>
+        published |+| transitionDamage(previous, model)
+      case _ => published
 
   /** Clears fast mode unless damage arrived since the phase drained it -- and re-raises it if damage lands between that
     * check and the clear, so no wake-up is lost.

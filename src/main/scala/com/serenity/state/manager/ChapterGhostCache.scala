@@ -17,6 +17,7 @@ final class ChapterGhostCache:
       content: Rope,
       notes: Map[NoteKey, Notes],
       noteContents: Map[BufferId, Rope],
+      overviews: Map[BufferId, (Rope, List[String])],
       ghosts: Map[Int, String]
   )
 
@@ -34,11 +35,36 @@ final class ChapterGhostCache:
       entries.get().get(buffer.id).filter(isFresh(_, buffer, noteContents)) match
         case Some(entry) => entry.ghosts
         case None =>
-          val ghosts = ChapterGhosts.byLine(buffer, buffers)
+          val overviews = overviewsOf(buffer, buffers, entries.get().get(buffer.id).map(_.overviews))
+          val ghosts    = ChapterGhosts.byLine(buffer, buffers, note => overviews.get(note.id).fold(Nil)(_._2))
           val _ = entries.updateAndGet(
-            _.updated(buffer.id, Entry(buffer.document.content, buffer.annotations.notes, noteContents, ghosts))
+            _.updated(
+              buffer.id,
+              Entry(buffer.document.content, buffer.annotations.notes, noteContents, overviews, ghosts)
+            )
           )
           ghosts
+
+  /** Each chapter note's overview lines, read again only for a note whose text is not the one `previous` read, so
+    * typing in the manuscript does not copy every note.
+    */
+  private def overviewsOf(
+    buffer: Buffer,
+    buffers: Map[BufferId, Buffer],
+    previous: Option[Map[BufferId, (Rope, List[String])]]
+  ): Map[BufferId, (Rope, List[String])] =
+    buffer.annotations.notes.toList
+      .collect { case (NoteKey.Chapter(_), notes) => notes.overview }
+      .flatMap(buffers.get)
+      .map { note =>
+        val content = note.document.content
+        val lines = previous
+          .flatMap(_.get(note.id))
+          .collect { case (read, lines) if sameObject(read, content) => lines }
+          .getOrElse(ChapterGhosts.overviewLines(note))
+        note.id -> (content, lines)
+      }
+      .toMap
 
   private def noteContentsOf(buffer: Buffer, buffers: Map[BufferId, Buffer]): Map[BufferId, Rope] =
     buffer.annotations.notes.values

@@ -35,7 +35,8 @@ object RenderDamageGranularity:
       case _                => None
 
 enum CursorMode(val configKey: String):
-  case Blink extends CursorMode("blink")
+  case Blink  extends CursorMode("blink")
+  case Steady extends CursorMode("steady")
 
 object CursorMode:
 
@@ -43,6 +44,7 @@ object CursorMode:
   def fromConfigKey(value: String): Option[CursorMode] =
     value.trim.toLowerCase match
       case "blink" | "breathe" | "breathing" => Some(CursorMode.Blink)
+      case "steady" | "solid"                => Some(CursorMode.Steady)
       case _                                 => None
 
 /** Selects how a buffer's `DocumentComment`s become visible (#1222).
@@ -94,18 +96,80 @@ object WindowChromeMode:
       case "native" | "os" | "system"                          => Some(WindowChromeMode.Native)
       case _                                                   => None
 
+/** Whether the desktop window shows a menu bar. Every command a menu holds stays reachable from the command runner, so
+  * `Hidden` loses none of them.
+  */
+enum MenuBarMode(val configKey: String):
+  case Hidden  extends MenuBarMode("hidden")
+  case Alt     extends MenuBarMode("alt")
+  case Visible extends MenuBarMode("visible")
+
+object MenuBarMode:
+
+  def fromConfigKey(value: String): Option[MenuBarMode] =
+    MenuBarMode.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
+
+/** Which chrome the window starts from. A layout is a base the config file is read over: `Minimal` begins with line
+  * numbers, pane headers, the status bar, the tab strip and the scrollbar all off, `Conventional` with all of them on,
+  * and a key the user writes still wins over either.
+  */
+enum UiLayout(val configKey: String):
+  case Minimal      extends UiLayout("minimal")
+  case Conventional extends UiLayout("conventional")
+
+  def toggled: UiLayout = this match
+    case Minimal      => Conventional
+    case Conventional => Minimal
+
+  def label: String = configKey.capitalize
+
+object UiLayout:
+
+  def fromConfigKey(value: String): Option[UiLayout] =
+    UiLayout.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
+
+/** Whether the tab strip is shown: `Auto` once two or more buffers are open, `Off` never. */
+enum TabStripMode(val configKey: String):
+  case Auto extends TabStripMode("auto")
+  case Off  extends TabStripMode("off")
+
+object TabStripMode:
+
+  def fromConfigKey(value: String): Option[TabStripMode] =
+    TabStripMode.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
+
+enum FileDialogMode(val configKey: String):
+  case Auto   extends FileDialogMode("auto")
+  case Native extends FileDialogMode("native")
+  case Swing  extends FileDialogMode("swing")
+
+object FileDialogMode:
+
+  def fromConfigKey(value: String): Option[FileDialogMode] =
+    value.trim.toLowerCase match
+      case "auto"   => Some(FileDialogMode.Auto)
+      case "native" => Some(FileDialogMode.Native)
+      case "swing"  => Some(FileDialogMode.Swing)
+      case _        => None
+
 enum MarkdownViewMode(val configKey: String):
   case Source       extends MarkdownViewMode("source")
   case SplitPreview extends MarkdownViewMode("split-preview")
-  case InlineLens   extends MarkdownViewMode("inline-lens")
+  case LivePreview  extends MarkdownViewMode("live-preview")
+  case Read         extends MarkdownViewMode("read")
 
 object MarkdownViewMode:
 
+  /** The retired inline lens spellings (`inline-lens`, `lens`, session `InlineLens`) decode as [[LivePreview]], its
+    * nearest successor: rendered text with the active block's raw source editable in place.
+    */
   def fromConfigKey(value: String): Option[MarkdownViewMode] =
     value.trim.toLowerCase match
       case "source"                                                => Some(MarkdownViewMode.Source)
       case "split-preview" | "split_preview" | "split" | "preview" => Some(MarkdownViewMode.SplitPreview)
-      case "inline-lens" | "inline_lens" | "lens"                  => Some(MarkdownViewMode.InlineLens)
+      case "live-preview" | "live_preview" | "live"                => Some(MarkdownViewMode.LivePreview)
+      case "inline-lens" | "inline_lens" | "lens" | "inlinelens"   => Some(MarkdownViewMode.LivePreview)
+      case "read" | "reading"                                      => Some(MarkdownViewMode.Read)
       case _                                                       => None
 
 enum ToolbarDisplayMode:

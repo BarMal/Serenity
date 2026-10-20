@@ -14,7 +14,7 @@ class LaunchFolderOpenSpec extends AnyFlatSpec with Matchers with StateManagerTe
     state.pinnedSurfaces.map(_.content).collect { case SurfaceContent.DirectoryTree(tree, _, _) => tree.rootPath }
 
   "StateManager.fileOpener.openFolder" should "pin the Explorer on the folder and leave the start page" in {
-    val folder = Files.createTempDirectory("launch-folder-open")
+    val folder = TestTemp.directory("launch-folder-open")
     try
       val state = (for
         stateManager <- createStateManagerIO("LaunchFolderOpenSpec")

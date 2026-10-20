@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 
 import scala.io.Source
 
+import com.serenity.TestTemp
 import com.serenity.config.SpellCheckConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -17,7 +18,7 @@ class BundledDictionarySpec extends AnyFlatSpec with Matchers:
   private val britishEnglish = SpellCheckConfig(enabled = true, languages = List("en-gb"))
 
   private def emptyOsDictionaryDirectories: List[String] =
-    List(Files.createTempDirectory("serenity-no-os-dictionaries").toString)
+    List(TestTemp.directory("serenity-no-os-dictionaries").toString)
 
   private def resourceText(path: String): Option[String] =
     Option(getClass.getResourceAsStream(path)).map { stream =>
@@ -37,7 +38,7 @@ class BundledDictionarySpec extends AnyFlatSpec with Matchers:
     SpellChecker.analyzeText(text, config, dictionary.context).map(_.message.stripPrefix("Possible spelling issue: "))
 
   private def userDictionary(fileName: String, words: List[String]): Path =
-    val directory = Files.createTempDirectory("serenity-user-dictionary")
+    val directory = TestTemp.directory("serenity-user-dictionary")
     val dic       = directory.resolve(fileName)
     Files.writeString(dic, (words.length.toString :: words).mkString("\n"), StandardCharsets.UTF_8)
     dic

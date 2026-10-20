@@ -1,6 +1,5 @@
 package com.serenity.state.manager
 
-import java.nio.file.Files
 import java.util.concurrent.ConcurrentLinkedQueue
 
 import scala.concurrent.duration.*
@@ -18,7 +17,7 @@ import com.serenity.state.models.*
 import com.serenity.state.undo.HistoryEntry
 import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
-import com.serenity.{setBufferForPane, setCursorPosition}
+import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.LoggerFactory
@@ -49,7 +48,7 @@ class TypedRunsJoinSpec extends AnyFlatSpec with Matchers:
     for
       stateManager <- StateManager(
         NoOpLogger[IO],
-        sessionRootOverride = Some(Files.createTempDirectory("typed-run-join")),
+        sessionRootOverride = Some(TestTemp.directory("typed-run-join")),
         dictionaryCache = SharedDictionary.default
       )
       _        <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))

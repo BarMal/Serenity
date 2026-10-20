@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.nio.file.Files
-
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandIntent, CommandRegistry, SessionIntent}
@@ -27,7 +25,7 @@ class ReturnToStartPageStateManagerSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(): StateManager =
     val logger  = LoggerFactory[IO].getLogger(using LoggerName("ReturnToStartPageStateManagerSpec"))
-    val tempDir = Files.createTempDirectory("serenity-return-to-start-page")
+    val tempDir = TestTemp.directory("serenity-return-to-start-page")
     StateManager
       .apply(logger, sessionRootOverride = Some(tempDir), dictionaryCache = SharedDictionary.default)
       .unsafeRunSync()

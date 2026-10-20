@@ -30,11 +30,13 @@ object HeadingIdentity:
 
   /** Every heading among `symbols` with its identity, in document order. */
   def forHeadings(symbols: List[Symbol]): List[(HeadingIdentity, Symbol)] =
-    val headings = symbols.filter(_.kind == SymbolKind.Heading)
+    forTitled(symbols.filter(_.kind == SymbolKind.Heading).map(heading => heading -> normalizedTitle(heading.name)))
+
+  /** As [[forHeadings]] for headings whose [[normalizedTitle]] is already known. */
+  def forTitled(headings: List[(Symbol, String)]): List[(HeadingIdentity, Symbol)] =
     headings
       .foldLeft((List.empty[(HeadingIdentity, Symbol)], Map.empty[String, Int])) {
-        case ((found, seen), heading) =>
-          val title      = normalizedTitle(heading.name)
+        case ((found, seen), (heading, title)) =>
           val occurrence = seen.getOrElse(title, 0)
           ((HeadingIdentity(title, occurrence), heading) :: found, seen.updated(title, occurrence + 1))
       }

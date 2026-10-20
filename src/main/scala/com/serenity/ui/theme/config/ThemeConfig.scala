@@ -45,7 +45,9 @@ final case class SyntaxColors(
     delimiter: Option[SyntaxElementConfig] = None,
     whitespace: Option[SyntaxElementConfig] = None,
     error: Option[SyntaxElementConfig] = None,
-    normal: Option[SyntaxElementConfig] = None
+    normal: Option[SyntaxElementConfig] = None,
+    heading: Option[SyntaxElementConfig] = None,
+    headingMarker: Option[SyntaxElementConfig] = None
 ) derives ConfigReader
 
 /** Configuration for a specific syntax element (color + style) */

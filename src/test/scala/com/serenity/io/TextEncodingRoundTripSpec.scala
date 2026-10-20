@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path}
 import _root_.io.circe.syntax.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.session.SessionBuffer
 import com.serenity.session.given
@@ -24,7 +25,7 @@ class TextEncodingRoundTripSpec extends AnyFlatSpec with Matchers:
   private val fileManager = new FileManager()
 
   private def withTempFile(name: String, bytes: Array[Byte])(check: Path => Unit): Unit =
-    val directory = Files.createTempDirectory("serenity-encodings")
+    val directory = TestTemp.directory("serenity-encodings")
     val path      = directory.resolve(name)
     Files.write(path, bytes)
     try check(path)

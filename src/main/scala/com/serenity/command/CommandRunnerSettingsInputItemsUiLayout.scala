@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import com.serenity.config.*
+import com.serenity.state.models.IndentationSettings
 
 /** UI spacing and command-runner layout input items. Split out of `CommandRunnerSettingsInputItems.build` to keep both
   * under the architecture size targets -- see that object's doc.
@@ -46,6 +47,23 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
           ),
       category = CommandCategory.Settings,
       defaultValue = Some(AppConfig.default.interfaceConfig.outlineThicknessPx.toString)
+    )
+  )
+
+  private[command] def indentationItems(tabSize: Int): List[CommandSurfaceItem.InputItem] = List(
+    CommandSurfaceItem.InputItem(
+      id = "tab-size",
+      label = "Tab Size",
+      hint =
+        s"Columns per tab stop and per indent (${IndentationSettings.MinTabSize}-${IndentationSettings.MaxTabSize})",
+      currentValue = tabSize.toString,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
+      parse = text =>
+        text.trim.toIntOption
+          .filter(size => size >= IndentationSettings.MinTabSize && size <= IndentationSettings.MaxTabSize)
+          .map(size => CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTabSize(size)))),
+      category = CommandCategory.Settings,
+      defaultValue = Some(IndentationSettings.DefaultTabSize.toString)
     )
   )
 

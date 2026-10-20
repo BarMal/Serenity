@@ -19,7 +19,7 @@ class RichDocumentBlockSaveSpec extends AnyFlatSpec with Matchers:
 
   "A DOCX import with a table" should "be saved over its file, keeping the table and the other parts, keeping the table and the other parts" in {
     val fileManager = new FileManager()
-    val sourceFile  = Files.createTempFile("serenity-table-source", ".docx")
+    val sourceFile  = TestTemp.file("serenity-table-source", ".docx")
 
     try
       val original = GoldenFixtures.zip(GoldenFixtures.wordReport.entries)
@@ -45,8 +45,8 @@ class RichDocumentBlockSaveSpec extends AnyFlatSpec with Matchers:
 
   it should "require Save As before replacing a file with a document that would drop its table" in {
     val fileManager = new FileManager()
-    val sourceFile  = Files.createTempFile("serenity-lossy-source", ".docx")
-    val savedFile   = Files.createTempFile("serenity-lossy-copy", ".rtf")
+    val sourceFile  = TestTemp.file("serenity-lossy-source", ".docx")
+    val savedFile   = TestTemp.file("serenity-lossy-copy", ".rtf")
 
     try
       Files.write(sourceFile, GoldenFixtures.zip(GoldenFixtures.wordReport.entries))
@@ -77,9 +77,9 @@ class RichDocumentBlockSaveSpec extends AnyFlatSpec with Matchers:
 
   it should "turn the block lines of a buffer into empty lines once saved in a format that cannot hold them" in {
     val fileManager = new FileManager()
-    val sourceFile  = Files.createTempFile("serenity-convert-source", ".docx")
-    val savedRtf    = Files.createTempFile("serenity-convert-copy", ".rtf")
-    val savedOdt    = Files.createTempFile("serenity-convert-copy", ".odt")
+    val sourceFile  = TestTemp.file("serenity-convert-source", ".docx")
+    val savedRtf    = TestTemp.file("serenity-convert-copy", ".rtf")
+    val savedOdt    = TestTemp.file("serenity-convert-copy", ".odt")
 
     try
       Files.write(sourceFile, GoldenFixtures.zip(GoldenFixtures.wordReport.entries))
@@ -103,9 +103,9 @@ class RichDocumentBlockSaveSpec extends AnyFlatSpec with Matchers:
 
   it should "write no block placeholder to Markdown or plain text and leave the block line empty in the buffer" in {
     val fileManager = new FileManager()
-    val sourceFile  = Files.createTempFile("serenity-text-source", ".docx")
-    val savedMd     = Files.createTempFile("serenity-text-copy", ".md")
-    val savedTxt    = Files.createTempFile("serenity-text-copy", ".txt")
+    val sourceFile  = TestTemp.file("serenity-text-source", ".docx")
+    val savedMd     = TestTemp.file("serenity-text-copy", ".md")
+    val savedTxt    = TestTemp.file("serenity-text-copy", ".txt")
 
     try
       Files.write(sourceFile, GoldenFixtures.zip(GoldenFixtures.wordReport.entries))
@@ -133,9 +133,9 @@ class RichDocumentBlockSaveSpec extends AnyFlatSpec with Matchers:
 
   it should "write a soft break as a line break and no internal marker to Markdown or plain text" in {
     val fileManager = new FileManager()
-    val sourceFile  = Files.createTempFile("serenity-break-source", ".docx")
-    val savedMd     = Files.createTempFile("serenity-break-copy", ".md")
-    val savedTxt    = Files.createTempFile("serenity-break-copy", ".txt")
+    val sourceFile  = TestTemp.file("serenity-break-source", ".docx")
+    val savedMd     = TestTemp.file("serenity-break-copy", ".md")
+    val savedTxt    = TestTemp.file("serenity-break-copy", ".txt")
     val body        = """<w:p><w:r><w:t>a</w:t><w:br/><w:t>b</w:t></w:r></w:p>"""
     val xml =
       s"""<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>$body</w:body></w:document>"""
@@ -161,8 +161,8 @@ class RichDocumentBlockSaveSpec extends AnyFlatSpec with Matchers:
 
   it should "keep the block lines of a buffer saved in the format it was read from" in {
     val fileManager = new FileManager()
-    val sourceFile  = Files.createTempFile("serenity-keep-source", ".docx")
-    val savedCopy   = Files.createTempFile("serenity-keep-copy", ".docx")
+    val sourceFile  = TestTemp.file("serenity-keep-source", ".docx")
+    val savedCopy   = TestTemp.file("serenity-keep-copy", ".docx")
 
     try
       Files.write(sourceFile, GoldenFixtures.zip(GoldenFixtures.wordReport.entries))

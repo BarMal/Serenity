@@ -56,6 +56,15 @@ final private[manager] class ConfigFileSync private (
       case failed => known.set(None).as(failed)
     }
 
+  /** Takes the chrome `keys` out of the file so the layout supplies them again, and returns the ones that could not be
+    * reached. The file then differs from what was last written, but only by this process's own edit, so its stamp is
+    * recorded here for the watcher to recognise.
+    */
+  def release(keys: Set[String]): IO[Either[ConfigError, Set[String]]] =
+    ConfigManager
+      .releaseKeysIO(path, keys)
+      .flatTap(_ => stampOfFile.flatMap(stamp => known.update(_.map(_.copy(stamp = stamp)))))
+
   /** The file as it now is, if its stamp is not one this process left or already read. A file that is gone, or not a
     * regular file, is no change: the live settings stay and the next save writes the file again.
     */

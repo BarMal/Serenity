@@ -4,15 +4,18 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
 /** Which pixels a bounded repaint has to publish, once [[RendererFramePlanner]] has decided a frame may be bounded at
-  * all. Every frame paints the status row, line numbers and pane headers whole, and redraws the dirty rows, so these
-  * rects only decide which of its pixels reach the screen.
+  * all. The frame redraws the dirty rows and whatever chrome its damage names ([[ChromeRepaint]]), and keeps the rest,
+  * so these rects only decide which of its pixels reach the screen.
   */
 private[renderer] object RendererRepaintRegion:
 
-  /** Each dirty row's band, the line-number cells beside the active pane's dirty rows (a number changes only with its
-    * row, so it repaints with it), the pinned status row when `damage` names [[Damage.Chrome]], and the header of each
-    * pane a [[Damage.PaneChrome]] names -- coalesced into a few disjoint rects, so a caret row and the status row far
-    * below it stay two narrow rects rather than one spanning every row between them.
+  /** Each dirty row's band with the margin a frame keeps with its row ([[RendererChromePlan.withBleed]]: a glyph's
+    * antialiasing can land a pixel past the column), the line-number cells beside the active pane's dirty rows (a
+    * number changes only with its row, so it repaints with it), the pinned status row when `damage` names
+    * [[Damage.Chrome]], and the header of each pane a [[Damage.PaneChrome]] names, the tab strip when `damage` names
+    * it, and the scrollbar column of each pane whose bar the screen shows differently ('scrollbarTracks') -- coalesced
+    * into a few disjoint rects, so a caret row and the status row far below it stay two narrow rects rather than one
+    * spanning every row between them.
     */
   def rects(
     state: AppState,
@@ -20,7 +23,8 @@ private[renderer] object RendererRepaintRegion:
     renderPlan: EditorPaneRenderPlan,
     panes: Map[PaneId, PaneFrameRecord],
     damage: Damage,
-    dirtyRows: (PaneId, PaneFrameRecord) => Set[Int]
+    dirtyRows: (PaneId, PaneFrameRecord) => Set[Int],
+    scrollbarTracks: List[PixelRect]
   ): List[PixelRect] =
     val contract = renderPlan.layoutContract
     val rowRects = panes.toList.flatMap {
@@ -30,18 +34,35 @@ private[renderer] object RendererRepaintRegion:
             (contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList)
               .map(RendererPaneSetup.paneRowRects(_, context, record.snapshot))
           else Nil
-        dirtyRows(paneId, record).toList.flatMap { row =>
-          record.rowRects.lift(row).toList ++ lineNumberRows.flatMap(_.lift(row))
-        }
+        val dirty = dirtyRows(paneId, record)
+        dirty.toList.flatMap { row =>
+          record.rowRects.lift(row).map(RendererChromePlan.withBleed(context)).toList ++
+            lineNumberRows.flatMap(_.lift(row))
+        } ++ columnRailRects(context, renderPlan, paneId, dirty)
     }
     val statusRow = contract.gutterRect.filter(_ => Damage.touchesChrome(damage))
     val headers   = Damage.paneChromeIds(damage).toList.flatMap(contract.paneHeaderRect)
+    val tabBar    = contract.tabBarRect.filter(_ => Damage.touchesTabBar(damage))
     PixelRect.coalesced(
-      rowRects ++ (statusRow.toList ++ headers).map(pixelRectOf(context.cellMetrics)),
+      rowRects ++ scrollbarTracks ++ (statusRow.toList ++ headers ++ tabBar.toList)
+        .map(RendererChromePlan.pixelRectOf(context.cellMetrics)),
       PixelRect.RepaintRectLimit
     )
 
-  private def pixelRectOf(cellMetrics: CellMetrics)(rect: LayoutRect): PixelRect =
-    val leftPx = cellMetrics.toPixelX(rect.x)
-    val topPx  = cellMetrics.toPixelY(rect.y)
-    PixelRect(leftPx, topPx, cellMetrics.toPixelX(rect.right) - leftPx, cellMetrics.toPixelY(rect.bottom) - topPx)
+  /** The rail bands of a multi-column pane's dirty rows, and the band under each column's last row. */
+  private def columnRailRects(
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    paneId: PaneId,
+    dirtyRows: Set[Int]
+  ): List[PixelRect] =
+    val columns = renderPlan.columnSnapshotsFor(paneId)
+    for
+      layout            <- renderPlan.paneLayouts.get(paneId).toList
+      (placement, rows) <- columns.zip(ColumnPaneRows.localRows(columns, Some(dirtyRows)))
+      if placement.gutterWidthCells > 0
+      rail  = ColumnRails.railRect(layout.contentRect, placement)
+      bands = ColumnRails.rowBands(context, rail, placement.snapshot)
+      band <- rows.toList.flatMap(_.toList).flatMap(bands.lift) ++
+        ColumnRails.unownedBands(context, rail, placement.snapshot)
+    yield band

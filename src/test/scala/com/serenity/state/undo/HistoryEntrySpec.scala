@@ -55,6 +55,85 @@ class HistoryEntrySpec extends AnyFlatSpec with Matchers with OptionValues:
     entry.restore(AppState.initial) shouldBe None
   }
 
+  "HistoryEntry.DetachedBufferEdit.restore" should "restore the snapshotted text and cursors without moving focus" in {
+    val bufferId = BufferId(0)
+    val original = Buffer.fromString(bufferId, "hello").copy(editing = EditingState(List(CursorPosition(0, 2))))
+    val snapshot = BufferSnapshot.fromBuffer(original)
+    val edited = original.copy(
+      document = original.document.copy(content = com.serenity.rope.Rope("hello!")),
+      editing = EditingState(List(CursorPosition(0, 6)))
+    )
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = Map(bufferId -> edited), focus = Focus.EditorPane(PaneId(1)))
+    )
+
+    val (restoredState, inverse) = HistoryEntry.DetachedBufferEdit(bufferId, snapshot).restore(state).value
+
+    val restored = restoredState.persisted.buffers(bufferId)
+    (restored.document.content.collect(), restored.editing.cursorPositions) shouldBe (
+      "hello",
+      List(CursorPosition(0, 2))
+    )
+    restoredState.persisted.focus shouldBe Focus.EditorPane(PaneId(1))
+    inverse shouldBe HistoryEntry.DetachedBufferEdit(bufferId, BufferSnapshot.fromBuffer(edited))
+  }
+
+  it should "return None when the buffer no longer exists" in {
+    val buffer = Buffer.fromString(BufferId(999), "hi")
+
+    HistoryEntry
+      .DetachedBufferEdit(buffer.id, BufferSnapshot.fromBuffer(buffer))
+      .restore(AppState.initial) shouldBe None
+  }
+
+  "HistoryEntry.Group.restore" should "restore every member buffer, and its inverse should put the edits back" in {
+    val first  = Buffer.fromString(BufferId(0), "one")
+    val second = Buffer.fromString(BufferId(1), "two")
+    val editedOf = (buffer: Buffer, text: String) =>
+      buffer.copy(document = buffer.document.copy(content = com.serenity.rope.Rope(text)))
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted
+        .copy(buffers = Map(first.id -> editedOf(first, "ONE"), second.id -> editedOf(second, "TWO")))
+    )
+    val group = HistoryEntry.Group(
+      List(
+        HistoryEntry.DetachedBufferEdit(first.id, BufferSnapshot.fromBuffer(first)),
+        HistoryEntry.DetachedBufferEdit(second.id, BufferSnapshot.fromBuffer(second))
+      )
+    )
+
+    val (undone, inverse) = group.restore(state).value
+    val (redone, _)       = inverse.restore(undone).value
+
+    def texts(of: AppState) = of.persisted.buffers.values.toList.sortBy(_.id.value).map(_.document.content.collect())
+    (texts(undone), texts(redone)) shouldBe (List("one", "two"), List("ONE", "TWO"))
+  }
+
+  it should "skip a member whose buffer is gone and restore the rest" in {
+    val kept    = Buffer.fromString(BufferId(0), "kept")
+    val closed  = Buffer.fromString(BufferId(7), "closed")
+    val changed = kept.copy(document = kept.document.copy(content = com.serenity.rope.Rope("changed")))
+    val state   = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(kept.id -> changed)))
+    val group = HistoryEntry.Group(
+      List(
+        HistoryEntry.DetachedBufferEdit(closed.id, BufferSnapshot.fromBuffer(closed)),
+        HistoryEntry.DetachedBufferEdit(kept.id, BufferSnapshot.fromBuffer(kept))
+      )
+    )
+
+    val (restored, _) = group.restore(state).value
+
+    restored.persisted.buffers(kept.id).document.content.collect() shouldBe "kept"
+  }
+
+  it should "return None when none of its buffers exist" in {
+    val gone = Buffer.fromString(BufferId(7), "gone")
+    val group =
+      HistoryEntry.Group(List(HistoryEntry.DetachedBufferEdit(gone.id, BufferSnapshot.fromBuffer(gone))))
+
+    group.restore(AppState.initial) shouldBe None
+  }
+
   "HistoryEntry.PaneClose.restore" should "restore the pre-removal layout and focus, and capture the current ones as the inverse" in {
     val closedLayout = AppState.initial.persisted.layout
     val closedFocus  = AppState.initial.persisted.focus

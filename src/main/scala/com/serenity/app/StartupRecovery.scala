@@ -5,6 +5,7 @@ import java.nio.file.Path
 import cats.effect.IO
 import com.serenity.app.LaunchReset.Moved
 import com.serenity.app.StartupCrashGuard.Decision
+import com.serenity.config.LayoutPin
 import com.serenity.diagnostics.{CrashRecord, CrashReport, PreviousRun, RuntimeIdentity}
 import com.serenity.state.manager.StartupRecoveryState
 import com.serenity.state.models.AppState
@@ -35,6 +36,9 @@ object StartupRecovery:
     * @param unexpectedExit
     *   The report of a previous run that did not end cleanly, offered to the user once. A crash loop's prompt speaks
     *   first, since it is the more actionable of the two.
+    * @param layoutPins
+    *   Chrome the config file pins away from the layout in force, to be asked about once on the first launch that sees
+    *   it (see [[LayoutOverrideReview]]).
     * @param crashRecorder
     *   How a failure of this run is left for the next launch to report.
     */
@@ -43,7 +47,8 @@ object StartupRecovery:
       notices: List[String],
       crashLoopAfter: Option[Int] = None,
       unexpectedExit: Option[String] = None,
-      crashRecorder: CrashRecorder = ignoreCrashes
+      crashRecorder: CrashRecorder = ignoreCrashes,
+      layoutPins: List[LayoutPin] = Nil
   ):
 
     def windowTitle: String =
@@ -64,7 +69,7 @@ object StartupRecovery:
         .fold(UiPresetStore.default)(root => UiPresetStore(root.resolve("ui-presets.json")))
 
     def appliedTo(state: AppState): AppState =
-      StartupRecoveryState.applied(state, safeMode, crashLoopAfter, unexpectedExit)
+      StartupRecoveryState.applied(state, safeMode, crashLoopAfter, unexpectedExit, layoutPins)
 
   object Plan:
     val normal: Plan = Plan(safeMode = false, notices = Nil)

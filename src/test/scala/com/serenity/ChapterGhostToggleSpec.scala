@@ -19,6 +19,15 @@ class ChapterGhostToggleSpec extends AnyFlatSpec with Matchers:
     AppState.initial.runtime.chapterGhostsVisible shouldBe true
   }
 
+  it should "start hidden when the config disables them, and toggle on from there (#1886)" in {
+    val config = com.serenity.config.AppConfig.default.withChapterGhosts(false)
+    val hidden = AppState.initial(config)
+
+    hidden.runtime.chapterGhostsVisible shouldBe false
+    AppState.empty(config).runtime.chapterGhostsVisible shouldBe false
+    ChapterNoteTransitions.toggleGhosts(hidden).runtime.chapterGhostsVisible shouldBe true
+  }
+
   it should "toggle off and back on" in {
     val off = ChapterNoteTransitions.toggleGhosts(AppState.initial)
 

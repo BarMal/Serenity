@@ -7,6 +7,7 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.lsp.client.{LspConnection, LspMethod, LspStderrLog, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
 import io.circe.Json
@@ -41,7 +42,7 @@ class LspConnectionStderrSpec extends AnyFlatSpec with Matchers:
   )
 
   private def withLogDirectory[A](use: Path => A): A =
-    val directory = Files.createTempDirectory("lsp-stderr-spec")
+    val directory = TestTemp.directory("lsp-stderr-spec")
     try use(directory)
     finally Files.walk(directory).iterator().asScala.toList.reverse.foreach(Files.deleteIfExists(_))
 

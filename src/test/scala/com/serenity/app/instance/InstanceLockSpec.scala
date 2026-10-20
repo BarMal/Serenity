@@ -9,6 +9,7 @@ import scala.concurrent.duration.DurationInt
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Resource}
+import com.serenity.TestTemp
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -20,14 +21,14 @@ class InstanceLockSpec extends AnyFlatSpec with Matchers:
   private def lockFileIn(directory: Path): Path = directory.resolve("nested").resolve("instance.lock")
 
   "InstanceLock" should "be acquired in a fresh config directory, creating it" in {
-    val lockFile = lockFileIn(Files.createTempDirectory("instance-lock-fresh"))
+    val lockFile = lockFileIn(TestTemp.directory("instance-lock-fresh"))
 
     InstanceLock.acquire(lockFile).use(attempt => IO(attempt)).unsafeRunSync() shouldBe LockAttempt.Acquired
     Files.exists(lockFile) shouldBe true
   }
 
   it should "report the lock held while another holder has it, and be acquirable once released" in {
-    val lockFile = lockFileIn(Files.createTempDirectory("instance-lock-held"))
+    val lockFile = lockFileIn(TestTemp.directory("instance-lock-held"))
 
     val whileHeld  = InstanceLock.acquire(lockFile).use(_ => InstanceLock.acquire(lockFile).use(IO.pure))
     val afterwards = InstanceLock.acquire(lockFile).use(IO.pure)
@@ -39,7 +40,7 @@ class InstanceLockSpec extends AnyFlatSpec with Matchers:
   // The only place a real second process is observable: a lock held by another JVM, and that JVM dying without
   // releasing it, which is what a crash leaves behind. The lock file itself stays on disk; it must not block.
   it should "see another process's lock, and take over once that process is killed" in {
-    val lockFile = lockFileIn(Files.createTempDirectory("instance-lock-process"))
+    val lockFile = lockFileIn(TestTemp.directory("instance-lock-process"))
     Files.createDirectories(lockFile.getParent)
 
     val outcome = holdingProcess(lockFile).use { child =>
@@ -61,7 +62,7 @@ class InstanceLockSpec extends AnyFlatSpec with Matchers:
       acquireLock = InstanceLock.acquire(lockFile),
       serve = Resource.pure(Stream.empty),
       forward = _ => IO.pure(Delivery.Unreachable),
-      isolatedSessionRoot = IO.blocking(Files.createTempDirectory("instance-lock-isolated")),
+      isolatedSessionRoot = IO.blocking(TestTemp.directory("instance-lock-isolated")),
       claimAttempts = 100,
       claimRetryDelay = 100.millis
     )
@@ -85,7 +86,7 @@ class InstanceLockSpec extends AnyFlatSpec with Matchers:
         |}
         |""".stripMargin
     val start = IO.blocking {
-      val sourceFile = Files.writeString(Files.createTempDirectory("hold-lock").resolve("HoldLock.java"), source)
+      val sourceFile = Files.writeString(TestTemp.directory("hold-lock").resolve("HoldLock.java"), source)
       val java       = Paths.get(System.getProperty("java.home"), "bin", "java").toString
       new ProcessBuilder(java, sourceFile.toString, lockFile.toString)
         .redirectError(ProcessBuilder.Redirect.DISCARD)

@@ -4,7 +4,13 @@ import java.util.LinkedHashMap
 
 import scala.annotation.tailrec
 
-import com.serenity.rope.{Leaf, Node, Rope}
+import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
+import com.serenity.markdown.{LazyBlockIndex, MarkdownInlineView}
+import com.serenity.rope.{Branch, ChangeSet, Leaf, LineSpan, Rope}
+import com.serenity.state.models.IndentationSettings
+import com.serenity.ui.layout.VisualLineIndexStore.StampRelation
+import com.serenity.ui.openings.{OpeningInvalidation, VirtualDropCaps}
+import com.serenity.ui.theme.HeadingSettings
 
 /** The [[VisualLineIndex]] last built for each key -- a buffer under one wrap setting -- together with the content it
   * describes. A key's index follows edits to its buffer: only the lines an edit touched lose their measurements, and
@@ -17,7 +23,16 @@ import com.serenity.rope.{Leaf, Node, Rope}
   */
 final class VisualLineIndexStore[K](maxEntries: Int):
 
-  final private case class Entry(content: Rope, stamp: AnyRef, index: VisualLineIndex)
+  final private case class Entry(
+      content: Rope,
+      version: Option[Long],
+      stamp: AnyRef,
+      index: VisualLineIndex,
+      recent: List[Entry] = Nil
+  ):
+    /** This entry, or the one it remembers for `other`, if either described that very content. */
+    def describing(other: Rope): Option[Entry] =
+      if (content: AnyRef) eq (other: AnyRef) then Some(this) else recent.find(old => (old.content: AnyRef) eq other)
 
   private val entries = new LinkedHashMap[K, Entry](16, 0.75f, true)
 
@@ -27,19 +42,54 @@ final class VisualLineIndexStore[K](maxEntries: Int):
     key: K,
     content: Rope,
     measure: Int => Int,
-    stamp: AnyRef = VisualLineIndexStore.Unstamped
+    stamp: AnyRef = VisualLineIndexStore.Unstamped,
+    revision: Option[ContentRevision] = None
   ): VisualRowCounts =
-    VisualRowCounts.indexed(this, key, content, measure, stamp)
+    VisualRowCounts.indexed(this, key, content, measure, stamp, revision)
 
-  private[layout] def indexFor(key: K, content: Rope, stamp: AnyRef = VisualLineIndexStore.Unstamped): VisualLineIndex =
+  private[layout] def indexFor(
+    key: K,
+    content: Rope,
+    stamp: AnyRef = VisualLineIndexStore.Unstamped,
+    revision: Option[ContentRevision] = None
+  ): VisualLineIndex =
     synchronized(Option(entries.get(key))) match
-      case Some(entry) if entry.stamp ne stamp                  => VisualLineIndex.unmeasured(content.lineCount)
-      case Some(entry) if isSameContent(entry.content, content) => entry.index
-      case Some(entry) => VisualLineIndexStore.followEdit(entry.index, entry.content, content)
-      case None        => VisualLineIndex.unmeasured(content.lineCount)
+      case None => VisualLineIndex.unmeasured(content.lineCount)
+      case Some(head) =>
+        val entry = head.describing(content).getOrElse(head)
+        VisualLineIndexStore.stampsRelate(entry.stamp, stamp) match
+          case StampRelation.Unrelated => VisualLineIndex.unmeasured(content.lineCount)
+          case StampRelation.Same      => followed(entry, content, revision)
+          case StampRelation.AgreesBefore(line) =>
+            VisualLineIndexStore.unmeasuredFrom(followed(entry, content, revision), line)
 
-  private[layout] def update(key: K, content: Rope, index: VisualLineIndex, stamp: AnyRef): Unit = synchronized {
-    val _ = entries.put(key, Entry(content, stamp, index))
+  private def followed(entry: Entry, content: Rope, revision: Option[ContentRevision]): VisualLineIndex =
+    if isSameContent(entry.content, content) then entry.index
+    else
+      val recorded = for
+        current <- revision
+        since   <- entry.version
+        if since != current.version
+        change <- current.changesSince(since)
+        if change.oldLength == entry.content.weight && change.newLength == content.weight
+      yield change
+      recorded.fold(VisualLineIndexStore.followEdit(entry.index, entry.content, content))(
+        VisualLineIndexStore.followChange(entry.index, entry.content, content, _)
+      )
+
+  private[layout] def update(
+    key: K,
+    content: Rope,
+    index: VisualLineIndex,
+    stamp: AnyRef,
+    revision: Option[ContentRevision] = None
+  ): Unit = synchronized {
+    val previous = Option(entries.get(key))
+    val recent = previous.fold(List.empty[Entry]) { head =>
+      val others = (head :: head.recent).filterNot(old => isSameContent(old.content, content))
+      others.take(VisualLineIndexStore.RecentContents)
+    }
+    val _ = entries.put(key, Entry(content, revision.map(_.version), stamp, index, recent.map(_.copy(recent = Nil))))
     evictEldest(entries.values().iterator())
   }
 
@@ -57,7 +107,81 @@ object VisualLineIndexStore:
   /** The stamp of content whose row counts depend on nothing but its text. */
   val Unstamped: AnyRef = new Object
 
+  /** Rich-text styling is stamped by the identity of its document; a restyled Markdown view by what decides how it
+    * restyles (mode, revealed lines, font kind) and by its block index, which is compared by how far two indexes are
+    * known to agree rather than by value (see [[stampsRelate]]). A tab size other than the default stamps too: a tab
+    * wraps by its width, so a new size leaves no row count standing. So do the opening settings, while openings are set
+    * as drop caps, and a gap beside drop caps other than the default: they inset the rows beside the glyph.
+    */
+  final private[layout] case class ViewStamp(
+      base: AnyRef,
+      markdown: MarkdownInlineView,
+      tabSize: Int = IndentationSettings.DefaultTabSize,
+      headings: HeadingSettings = HeadingSettings.default,
+      virtualDropCaps: Option[VirtualDropCaps.Signature] = None,
+      dropCapGapEm: Float = DropCapLayout.DefaultGapEm
+  )
+
+  /** How a stamp the index was built under relates to the one asked for. */
+  enum StampRelation:
+    /** Row counts depend on the same things: every measurement stands. */
+    case Same
+
+    /** Only lines from `line` on may count differently: the block structure above it is the same. */
+    case AgreesBefore(line: Int)
+
+    case Unrelated
+
+  private[layout] def stampsRelate(built: AnyRef, asked: AnyRef): StampRelation =
+    (built, asked) match
+      case _ if built eq asked => StampRelation.Same
+      case (x: ViewStamp, y: ViewStamp)
+          if x.base == y.base && x.tabSize == y.tabSize && x.headings == y.headings &&
+            x.virtualDropCaps == y.virtualDropCaps && x.dropCapGapEm == y.dropCapGapEm && sameRestyling(
+              x.markdown,
+              y.markdown
+            ) =>
+        (x.markdown.fences, y.markdown.fences) match
+          case (a, b) if a eq b => StampRelation.Same
+          case (a: LazyBlockIndex, b: LazyBlockIndex) if b.follows(a) =>
+            StampRelation.AgreesBefore(b.agreesBefore)
+          case (a: FenceRangeIndex, b: FenceRangeIndex) if a == b => StampRelation.Same
+          case _                                                  => StampRelation.Unrelated
+      case _ => StampRelation.Unrelated
+
+  private def sameRestyling(a: MarkdownInlineView, b: MarkdownInlineView): Boolean =
+    a.mode == b.mode && a.revealed == b.revealed && a.baseIsMonospaced == b.baseIsMonospaced
+
+  private[layout] def unmeasuredFrom(index: VisualLineIndex, line: Int): VisualLineIndex =
+    val remaining = index.lineCount - line
+    if remaining <= 0 then index else index.replacedLines(line, remaining, remaining)
+
+  private[layout] def stampOf(richText: RichTextContext): AnyRef =
+    val base        = richText.document.getOrElse(Unstamped)
+    val virtualCaps = richText.virtualDropCaps.map(_.signature)
+    if richText.markdown.isActive || richText.tabSize != IndentationSettings.DefaultTabSize ||
+        richText.headings != HeadingSettings.default || virtualCaps.isDefined ||
+        richText.dropCapGapEm != DropCapLayout.DefaultGapEm
+    then ViewStamp(base, richText.markdown, richText.tabSize, richText.headings, virtualCaps, richText.dropCapGapEm)
+    else base
+
   val DefaultMaxEntries = 32
+
+  /** How many earlier contents of a key the store still holds an index for. */
+  val RecentContents = 3
+
+  /** `index`, which describes `before`, carried over to `after` by the `change` that made it: the lines the change's
+    * parts touched become unmeasured and every other line keeps its measurement, without reading either text.
+    */
+  def followChange(index: VisualLineIndex, before: Rope, after: Rope, change: ChangeSet): VisualLineIndex =
+    if index.lineCount != before.lineCount then VisualLineIndex.unmeasured(after.lineCount)
+    else
+      val spans = change.lineSpans(before)
+      val followed = spans.foldLeft(index) { (current, span) =>
+        current.replacedLines(span.newFirst, span.oldLast - span.oldFirst + 1, span.newLast - span.newFirst + 1)
+      }
+      if followed.lineCount == after.lineCount then unmeasuredBeyond(followed, before, after, spans)
+      else VisualLineIndex.unmeasured(after.lineCount)
 
   /** `index`, which describes `before`, carried over to `after`: the lines an edit may have changed become unmeasured,
     * and every line outside them -- identical text, so an identical row count -- keeps its measurement.
@@ -74,7 +198,24 @@ object VisualLineIndexStore:
         val lastBefore = before.newlineCount - suffix.newlines
         val lastAfter  = after.newlineCount - suffix.newlines
         val followed   = index.replacedLines(firstLine, lastBefore - firstLine + 1, lastAfter - firstLine + 1)
-        if followed.lineCount == after.lineCount then followed else VisualLineIndex.unmeasured(after.lineCount)
+        if followed.lineCount == after.lineCount then
+          unmeasuredBeyond(followed, before, after, Vector(LineSpan(firstLine, lastBefore, firstLine, lastAfter)))
+        else VisualLineIndex.unmeasured(after.lineCount)
+
+  /** `index`, which describes `after`, with the lines unmeasured that an edit can change the chapter-opening status of
+    * without touching them (see [[OpeningInvalidation]]).
+    */
+  private def unmeasuredBeyond(
+    index: VisualLineIndex,
+    before: Rope,
+    after: Rope,
+    spans: Vector[LineSpan]
+  ): VisualLineIndex =
+    spans
+      .flatMap(OpeningInvalidation.widenedLines(before, after, _))
+      .distinct
+      .filter(_ < index.lineCount)
+      .foldLeft(index)((current, line) => current.replacedLines(line, 1, 1))
 
   final private case class Run(length: Int, newlines: Int):
     def plus(more: Run): Run = Run(length + more.length, newlines + more.newlines)
@@ -87,8 +228,8 @@ object VisualLineIndexStore:
     * side of the change without descending the ropes again.
     */
   private def sharedRun(a: Rope, b: Rope, limit: Int, fromEnd: Boolean): Run =
-    def expand(node: Node, rest: List[Rope]): List[Rope] =
-      if fromEnd then node.right :: node.left :: rest else node.left :: node.right :: rest
+    def expand(branch: Branch, rest: List[Rope]): List[Rope] =
+      (if fromEnd then branch.children.reverse else branch.children).toList ::: rest
 
     def matching(x: String, xUsed: Int, y: String, yUsed: Int, count: Int): Run =
       def at(value: String, used: Int, offset: Int): Char =
@@ -124,12 +265,12 @@ object VisualLineIndexStore:
                     else matching(s, leftUsed, t, rightUsed, count)
                   if shared.length < count then run.plus(shared)
                   else walk(left, leftUsed + count, right, rightUsed + count, run.plus(shared))
-                case (nodeX: Node, nodeY: Node) =>
-                  if nodeX.weight > nodeY.weight then walk(expand(nodeX, xs), leftUsed, right, rightUsed, run)
-                  else if nodeY.weight > nodeX.weight then walk(left, leftUsed, expand(nodeY, ys), rightUsed, run)
-                  else walk(expand(nodeX, xs), leftUsed, expand(nodeY, ys), rightUsed, run)
-                case (nodeX: Node, _) => walk(expand(nodeX, xs), leftUsed, right, rightUsed, run)
-                case (_, nodeY: Node) => walk(left, leftUsed, expand(nodeY, ys), rightUsed, run)
+                case (branchX: Branch, branchY: Branch) =>
+                  if branchX.weight > branchY.weight then walk(expand(branchX, xs), leftUsed, right, rightUsed, run)
+                  else if branchY.weight > branchX.weight then walk(left, leftUsed, expand(branchY, ys), rightUsed, run)
+                  else walk(expand(branchX, xs), leftUsed, expand(branchY, ys), rightUsed, run)
+                case (branchX: Branch, _) => walk(expand(branchX, xs), leftUsed, right, rightUsed, run)
+                case (_, branchY: Branch) => walk(left, leftUsed, expand(branchY, ys), rightUsed, run)
           case _ => run
 
     walk(List(a), 0, List(b), 0, Run(0, 0))

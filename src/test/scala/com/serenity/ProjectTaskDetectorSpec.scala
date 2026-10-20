@@ -15,7 +15,7 @@ import org.scalatest.matchers.should.Matchers
 class ProjectTaskDetectorSpec extends AnyFlatSpec with Matchers:
 
   private def withTempDirectory[A](prefix: String)(use: Path => A): A =
-    val root = Files.createTempDirectory(prefix)
+    val root = TestTemp.directory(prefix)
     try use(root)
     finally deleteRecursively(root)
 

@@ -1,9 +1,8 @@
 package com.serenity.state.manager
 
-import java.nio.file.Files
-
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.{Command, CommandIntent, ThemeCommands, ThemeIntent}
 import com.serenity.config.{AppConfig, ThemeFollowConfig}
 import com.serenity.keystroke.events.*
@@ -28,7 +27,7 @@ class ThemeFollowManualPickSpec extends AnyFlatSpec with Matchers:
   ): StateManager =
     val config = AppConfig.default.withThemeFollowConfig(ThemeFollowConfig(followSystem = true))
     val manager = IO
-      .blocking(Files.createTempDirectory("theme-follow-manual-pick"))
+      .blocking(TestTemp.directory("theme-follow-manual-pick"))
       .flatMap(root =>
         StateManager(
           org.typelevel.log4cats.noop.NoOpLogger.impl[IO],

@@ -9,6 +9,7 @@ import scala.concurrent.duration.DurationInt
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Resource}
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -21,7 +22,7 @@ class InstanceMessengerSpec extends AnyFlatSpec with Matchers:
   private val logger: Logger[IO]  = LoggerFactory[IO].getLogger(using LoggerName("InstanceMessengerSpec"))
 
   // Unix socket paths are limited to about 100 bytes, so these stay short and directly under the temp directory.
-  private def socketPath(): Path = Files.createTempDirectory("sock").resolve("i.sock")
+  private def socketPath(): Path = TestTemp.directory("sock").resolve("i.sock")
 
   "InstanceMessenger" should "deliver forwarded paths to the running instance in order" in {
     val socket = socketPath()

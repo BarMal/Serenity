@@ -22,7 +22,7 @@ class CommandRunnerOpeningLoadsSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val preset = UiPreset(name = "Custom", config = AppConfig.default, themeName = Theme.light.name)
+  private val preset = UiPreset(name = "Custom", config = AppConfig.default, themeName = Some(Theme.light.name))
 
   /** `list` runs until the gate opens, as a store on a slow or network disk would. */
   final private class GatedPresetStore(gate: Deferred[IO, Unit], listings: Ref[IO, Int])

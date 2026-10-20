@@ -1,5 +1,7 @@
 package com.serenity.text
 
+import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
+
 import com.serenity.rope.Rope
 
 /** Word/character counts and an estimated reading time for a span of prose.
@@ -47,3 +49,35 @@ object TextStatistics:
       characterCount = counts.characters,
       characterCountExcludingWhitespace = counts.nonWhitespaceCharacters
     )
+
+  /** Counts `content[start, end)` by slicing the rope, which reuses the cached summaries of every subtree the range
+    * covers, so no selection text is copied or rescanned.
+    */
+  def ofRange(content: Rope, start: Int, end: Int): TextStatistics =
+    of(content.slice(start, end))
+
+/** The last range counted, kept for the state that asked: a status line asks again on every frame, usually about the
+  * very same rope and selection.
+  *
+  * It has no parameters so that every memo is equal to every other, as [[com.serenity.markdown.MarkdownBlockIndexMemo]]
+  * does: what the memo holds never changes what the state carrying it means.
+  */
+final case class RangeStatisticsMemo():
+
+  private val last         = new AtomicReference[Option[RangeStatisticsMemo.Entry]](None)
+  private val computedMany = new AtomicLong(0)
+
+  /** How many ranges were counted rather than remembered. */
+  def computations: Long = computedMany.get
+
+  def of(content: Rope, start: Int, end: Int): TextStatistics =
+    last.get.filter(entry => (entry.content eq content) && entry.start == start && entry.end == end) match
+      case Some(entry) => entry.statistics
+      case None =>
+        val statistics = TextStatistics.ofRange(content, start, end)
+        val _          = computedMany.incrementAndGet()
+        last.set(Some(RangeStatisticsMemo.Entry(content, start, end, statistics)))
+        statistics
+
+object RangeStatisticsMemo:
+  final private case class Entry(content: Rope, start: Int, end: Int, statistics: TextStatistics)

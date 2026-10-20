@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.{CommandRegistry, SafeModeCommands}
 import com.serenity.config.AppConfig
 import com.serenity.project.{ProjectTaskCommand, ProjectTaskKind}
@@ -61,7 +62,7 @@ class SafeModeStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   "Reset Settings" should "keep the old config file as a timestamped backup and write the defaults" in {
-    val folder = Files.createTempDirectory("serenity-reset-settings")
+    val folder = TestTemp.directory("serenity-reset-settings")
     val config = folder.resolve("config.conf")
     Files.writeString(config, "editor.word_wrap = false\n", StandardCharsets.UTF_8)
     val manager = StateManager

@@ -28,8 +28,11 @@ object CommandRunnerOptionSelections:
       "status-reading-time"        -> enabledIndex(config.statusLine.segments.contains(StatusSegment.ReadingTime)),
       "status-word-goal"           -> enabledIndex(config.statusLine.segments.contains(StatusSegment.WordGoal)),
       "status-line-ending"         -> enabledIndex(config.statusLine.segments.contains(StatusSegment.LineEnding)),
+      "status-indentation"         -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Indentation)),
       "interface-density"          -> interfaceDensityIndex(interfaceConfig.density),
       "window-chrome"              -> windowChromeModeIndex(config.windowChromeMode),
+      "ui-layout"                  -> uiLayoutIndex(config.uiLayout),
+      "menu-bar"                   -> menuBarModeIndex(config.menuBarMode),
       "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
       "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
       "drop-caps-enabled"          -> enabledIndex(documentConfig.dropCapsEnabled),
@@ -43,6 +46,7 @@ object CommandRunnerOptionSelections:
       "line-numbers"               -> enabledIndex(surfaceConfig.showLineNumbers),
       "line-number-side"           -> lineNumberSideIndex(surfaceConfig.lineNumberLayout.side),
       "line-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
+      "insert-spaces"              -> enabledIndex(config.indentation.insertSpaces),
       "visual-line-navigation"     -> enabledIndex(surfaceConfig.visualLineCursorNavigation),
       "typewriter-scrolling"       -> enabledIndex(surfaceConfig.typewriterScrollingEnabled),
       "focused-text-body"          -> enabledIndex(surfaceConfig.focusedTextBodyEnabled),
@@ -56,11 +60,12 @@ object CommandRunnerOptionSelections:
       "code-ligatures"             -> ligaturesIndex(editorConfig.fontConfig.codeLigatures),
       "text-ligatures"             -> ligaturesIndex(editorConfig.fontConfig.textLigatures),
       "ui-ligatures"               -> ligaturesIndex(editorConfig.fontConfig.uiLigatures)
-    )
+    ) ++ CommandRunnerSettingsHeadingItems.selections(config.headingsConfig)
 
   private def cursorModeIndex(mode: CursorMode): Int =
     mode match
-      case CursorMode.Blink => 0
+      case CursorMode.Blink  => 0
+      case CursorMode.Steady => 1
 
   private def statusPlacementIndex(placement: StatusLinePlacement): Int =
     placement match
@@ -87,6 +92,17 @@ object CommandRunnerOptionSelections:
       case WindowChromeMode.NativeThemed => 2
       case WindowChromeMode.Custom       => 3
 
+  private def uiLayoutIndex(layout: UiLayout): Int =
+    layout match
+      case UiLayout.Minimal      => 0
+      case UiLayout.Conventional => 1
+
+  private def menuBarModeIndex(mode: MenuBarMode): Int =
+    mode match
+      case MenuBarMode.Hidden  => 0
+      case MenuBarMode.Alt     => 1
+      case MenuBarMode.Visible => 2
+
   private def renderFpsTargetIndex(target: RenderFpsTarget): Int =
     target match
       case RenderFpsTarget.Fps30    => 0
@@ -104,7 +120,8 @@ object CommandRunnerOptionSelections:
     mode match
       case MarkdownViewMode.Source       => 0
       case MarkdownViewMode.SplitPreview => 1
-      case MarkdownViewMode.InlineLens   => 2
+      case MarkdownViewMode.LivePreview  => 2
+      case MarkdownViewMode.Read         => 3
 
   private def autoSaveModeIndex(mode: AutoSaveMode): Int =
     mode match

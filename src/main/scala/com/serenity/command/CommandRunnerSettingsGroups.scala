@@ -9,9 +9,9 @@ import com.serenity.ui.presets.UiPreset
 /** Builds the settings tree from schema rows and current option selections.
   *
   * The tree is cut by the task someone is doing, not by where a value happens to live in `AppConfig`: Workspace (what
-  * am I working on), Editor (what the text area shows), Typography, Look, Language Tools and Keys. Each group that has
-  * knobs nobody needs day to day keeps them in one nested "Advanced" leaf rather than spreading them across the top
-  * level.
+  * am I working on), UI Presets, Editor (what the text area shows), Typography, Look, Language Tools and Keys. Each
+  * group that has knobs nobody needs day to day keeps them in one nested "Advanced" leaf rather than spreading them
+  * across the top level.
   */
 object CommandRunnerSettingsGroups:
 
@@ -51,6 +51,15 @@ object CommandRunnerSettingsGroups:
     def group(id: String, label: String, hint: String, children: List[CommandSurfaceItem]) =
       CommandSurfaceItem.GroupItem(id, label, children, CommandCategory.Settings, Some(hint))
 
+    // Preset pages are built from the same definitions, over the edited preset's own values (see `PresetGroups`).
+    val editable              = CommandRunnerSettingsEditableGroups.build(optionSelections, inputItems, fontFamilies)
+    val cursorGroup           = editable.cursor
+    val proseFontGroup        = editable.proseFont
+    val codeFontGroup         = editable.codeFont
+    val uiFontGroup           = editable.uiFont
+    val documentDefaultsGroup = editable.documentDefaults
+    val spellCheckGroup       = editable.spellCheck
+
     val workspaceLayoutGroup = group(
       "settings-workspace-layout",
       "Panels",
@@ -81,6 +90,12 @@ object CommandRunnerSettingsGroups:
         CommandRunnerSettingsTextDisplayItems.contextualToolbarDisplayModeOptionItem(optionSelections)
       )
     )
+    val indentationGroup = group(
+      "settings-indentation",
+      "Indentation",
+      "Tab size, and spaces or tab characters",
+      input("tab-size") :+ CommandRunnerSettingsTextDisplayItems.insertSpacesOptionItem(optionSelections)
+    )
     val statusLineGroup = group(
       "settings-status-line",
       "Status Line",
@@ -95,16 +110,6 @@ object CommandRunnerSettingsGroups:
       "Resize editor margins",
       input("text-area-left", "text-area-right", "text-area-top", "text-area-bottom")
     )
-    val documentDefaultsGroup = group(
-      "settings-document-defaults",
-      "Document Defaults",
-      "New document mode, Markdown view, and drop caps",
-      List(
-        CommandRunnerSettingsItems.defaultDocumentModeOptionItem(optionSelections),
-        CommandRunnerSettingsItems.markdownViewOptionItem(optionSelections),
-        CommandRunnerSettingsItems.dropCapsEnabledOptionItem(optionSelections)
-      )
-    )
     val savingGroup = group(
       "settings-saving",
       "Saving",
@@ -118,34 +123,6 @@ object CommandRunnerSettingsGroups:
       "Comments",
       "Author or reply to a document comment",
       input("document-comment", "reply-document-comment")
-    )
-    val fontHint = "Family, size, ligatures"
-    val proseFontGroup = group(
-      "settings-prose-font",
-      "Prose Font",
-      fontHint,
-      List(
-        CommandRunnerSettingsItems.textFontGroupItem(optionSelections, fontFamilies.text),
-        CommandRunnerSettingsItems.textLigaturesOptionItem(optionSelections)
-      ) ++ input("text-font-size")
-    )
-    val codeFontGroup = group(
-      "settings-code-font",
-      "Code Font",
-      fontHint,
-      List(
-        CommandRunnerSettingsItems.codeFontGroupItem(optionSelections, fontFamilies.monospace),
-        CommandRunnerSettingsItems.codeLigaturesOptionItem(optionSelections)
-      ) ++ input("code-font-size")
-    )
-    val uiFontGroup = group(
-      "settings-ui-font",
-      "UI Font",
-      fontHint,
-      List(
-        CommandRunnerSettingsItems.uiFontGroupItem(optionSelections, fontFamilies.ui),
-        CommandRunnerSettingsItems.uiLigaturesOptionItem(optionSelections)
-      ) ++ input("ui-font-size")
     )
     val textScaleGroup = group(
       "settings-text-scale",
@@ -176,21 +153,32 @@ object CommandRunnerSettingsGroups:
     // issue #1549: that consolidation also buried the setting from a single-word settings search (a query short
     // enough to match by group rather than leaf) -- naming it in this group's own hint, which
     // `CommandRunnerSearch.directGroupSearchText` already searches, is what makes "palette" alone find this group.
+    val summonGroup = group(
+      "settings-summon",
+      "Summon Chrome",
+      "Hold a chord to show line numbers, status bar, tab strip, scrollbar or pane headers; the terminal toggles instead",
+      input(
+        "summon-modifiers",
+        "summon-lock",
+        "summon-line-numbers",
+        "summon-status-bar",
+        "summon-tab-strip",
+        "summon-scrollbar",
+        "summon-pane-headers"
+      )
+    )
     val interfaceLayoutGroup = group(
       "settings-interface-layout",
       "Interface Layout",
-      "Density, window chrome, key hints, and how many command runner/palette items are visible",
+      "Density, layout, window chrome, menu bar, key hints, summoned chrome, and how many command runner/palette items are visible",
       List(
         Some(CommandRunnerSettingsAppearanceItems.interfaceDensityOptionItem(optionSelections)),
+        Some(CommandRunnerSettingsAppearanceItems.layoutOptionItem(optionSelections)),
         onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.windowChromeOptionItem(optionSelections)),
-        Some(CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(optionSelections))
+        onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.menuBarOptionItem(optionSelections)),
+        Some(CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(optionSelections)),
+        Some(summonGroup)
       ).flatten
-    )
-    val cursorGroup = group(
-      "settings-cursor",
-      "Cursor",
-      "Caret style",
-      List(CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections))
     )
     val lookAdvancedGroup = group(
       "settings-look-advanced",
@@ -203,13 +191,6 @@ object CommandRunnerSettingsGroups:
         )
     )
     val bufferLanguageGroup = CommandRunnerSettingsItems.bufferLanguageGroupItem(context.bufferLanguage)
-    val spellCheckGroup = group(
-      "settings-spellcheck",
-      "Spell Check",
-      "Enable, languages, dictionaries, accepted words",
-      CommandRunnerSettingsItems.spellCheckOptionItem(optionSelections) ::
-        input("spellcheck-languages", "spellcheck-dictionaries", "spellcheck-words")
-    )
     val keysGroup = group(
       "settings-keymap",
       "Keys",
@@ -217,50 +198,40 @@ object CommandRunnerSettingsGroups:
       CommandRunnerSettingsKeymapItems.keymapGroups(inputItems.filter(_.id.startsWith("keymap-")))
     )
 
-    // issue #1058: editing a preset reuses these same canonical groups verbatim, only retagged (`settings-preset-*`)
-    // so they stay addressable as distinct pages from their top-level counterparts.
-    val presetScoped = List(
-      workspaceLayoutGroup.copy(
-        id = "settings-preset-workspace-layout",
-        children = CommandRunnerSettingsPanelItems.workspaceLayoutItems
-      ),
-      cursorGroup.copy(id = "settings-preset-cursor")
-    ) ++ onFrontend.rows(
-      guiOnly,
-      List(
-        proseFontGroup.copy(id = "settings-preset-prose-font"),
-        codeFontGroup.copy(id = "settings-preset-code-font"),
-        uiFontGroup.copy(id = "settings-preset-ui-font")
-      )
-    ) ++ List(
-      documentDefaultsGroup.copy(id = "settings-preset-document-defaults"),
-      spellCheckGroup.copy(id = "settings-preset-spellcheck")
-    )
     val presetsGroup =
       CommandRunnerSettingsPresetGroups.build(
         optionSelections,
         inputItems,
         uiPresetPreviews,
         editingPresetName,
-        presetScoped
+        capabilities,
+        fontFamilies,
+        showAllSettingsRegardlessOfMode
       )
 
     val workspaceGroup = group(
       "settings-workspace",
       "Workspace",
-      "Code or prose mode, presets, panels",
+      "Code or prose mode and panels",
       List(
         CommandRunnerSettingsItems.appModeOptionItem(optionSelections),
         CommandRunnerSettingsItems.showAllSettingsOptionItem(optionSelections),
-        workspaceLayoutGroup,
-        presetsGroup
+        workspaceLayoutGroup
       )
     )
     val editorGroup = group(
       "settings-editor",
       "Editor",
       "Display, status line, margins, documents, comments",
-      List(textDisplayGroup, statusLineGroup, textAreaGroup, documentDefaultsGroup, savingGroup, commentsGroup)
+      List(
+        textDisplayGroup,
+        indentationGroup,
+        statusLineGroup,
+        textAreaGroup,
+        documentDefaultsGroup,
+        savingGroup,
+        commentsGroup
+      )
     )
     val typographyGroup = group(
       "settings-typography",
@@ -276,11 +247,12 @@ object CommandRunnerSettingsGroups:
         ).flatten
       ) ++ Option.when(showProseSettings && richTextGroup.children.nonEmpty)(richTextGroup)
     )
+    val headingsGroup = CommandRunnerSettingsHeadingItems.group(optionSelections, inputItems, fontFamilies, onFrontend)
     val lookGroup = group(
       "settings-look",
       "Look",
       "Theme, density, cursor",
-      List(themeGroup, interfaceLayoutGroup, cursorGroup, lookAdvancedGroup, followSystemGroup)
+      List(themeGroup, followSystemGroup, interfaceLayoutGroup, cursorGroup, lookAdvancedGroup)
     )
     val languageToolsGroup = group(
       "settings-language-tools",
@@ -289,5 +261,7 @@ object CommandRunnerSettingsGroups:
       bufferLanguageGroup :: Option.when(showProseSettings)(spellCheckGroup).toList
     )
     // A code workspace on a terminal has no typography row left to show.
-    List(workspaceGroup, editorGroup) ++ Option.when(typographyGroup.children.nonEmpty)(typographyGroup) ++
-      List(lookGroup, languageToolsGroup, keysGroup)
+    List(workspaceGroup, presetsGroup, editorGroup) ++ Option.when(typographyGroup.children.nonEmpty)(
+      typographyGroup
+    ) ++
+      List(headingsGroup, lookGroup, languageToolsGroup, keysGroup)

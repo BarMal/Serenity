@@ -126,5 +126,28 @@ class CombinePerfRunsTests(unittest.TestCase):
         self.assertEqual(check_perf_regression.main_with_args([base, head]), 1)
 
 
+    def test_memory_columns_survive_the_combine(self) -> None:
+        for name, retained in (("a.csv", 9_000_000), ("b.csv", 7_000_000)):
+            with open(self._path(name), "w") as handle:
+                handle.write("name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,"
+                             "allocation_p50_bytes,allocation_p95_bytes,retained_bytes\n")
+                handle.write(f"x,0,0,0,0,1.0,1.0,0,4096,8192,{retained}\n")
+        out = self._path("out.csv")
+        combine_perf_runs.main_with_args([out, self._path("a.csv"), self._path("b.csv")])
+        row = check_perf_regression.parse_csv(out)["x"]
+        self.assertEqual((row.allocation_p50_bytes, row.allocation_p95_bytes), (4096, 8192))
+        self.assertEqual(row.retained_bytes, 7_000_000)
+
+    def test_slowest_keeps_the_largest_retained_bytes(self) -> None:
+        for name, retained in (("a.csv", 9_000_000), ("b.csv", 7_000_000)):
+            with open(self._path(name), "w") as handle:
+                handle.write("name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,"
+                             "allocation_p50_bytes,allocation_p95_bytes,retained_bytes\n")
+                handle.write(f"x,0,0,0,0,1.0,1.0,0,,,{retained}\n")
+        out = self._path("out.csv")
+        combine_perf_runs.main_with_args(["--pick", "slowest", out, self._path("a.csv"), self._path("b.csv")])
+        self.assertEqual(check_perf_regression.parse_csv(out)["x"].retained_bytes, 9_000_000)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -16,18 +16,18 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   "AppConfig.default" should "default the diagnostic highlight blend weight to 0.45" in {
-    AppConfig.default.surfaceConfig.diagnosticHighlightBlendWeight shouldBe 0.45
+    AppConfig.conventional.surfaceConfig.diagnosticHighlightBlendWeight shouldBe 0.45
   }
 
   "AppConfig.withDiagnosticHighlightBlendWeight" should "change only the blend weight" in {
-    val updated = AppConfig.default.withDiagnosticHighlightBlendWeight(0.75)
+    val updated = AppConfig.conventional.withDiagnosticHighlightBlendWeight(0.75)
 
     updated.surfaceConfig.diagnosticHighlightBlendWeight shouldBe 0.75
   }
 
   "ConfigRegistry" should "read and validate the diagnostic highlight blend weight setting" in {
     ConfigRegistry
-      .read(AppConfig.default, "ui.diagnostic_highlight_blend_weight", "0.2")
+      .read(AppConfig.conventional, "ui.diagnostic_highlight_blend_weight", "0.2")
       .getOrElse(fail("ui.diagnostic_highlight_blend_weight parse"))
       .surfaceConfig
       .diagnosticHighlightBlendWeight shouldBe 0.2
@@ -58,11 +58,11 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   "AppConfig.withColumnCount" should "set an explicit column count" in {
-    AppConfig.default.withColumnCount(Some(3)).surfaceConfig.columnCount shouldBe Some(3)
+    AppConfig.conventional.withColumnCount(Some(3)).surfaceConfig.columnCount shouldBe Some(3)
   }
 
   it should "clear the column count back to Auto" in {
-    AppConfig.default.withColumnCount(Some(3)).withColumnCount(None).surfaceConfig.columnCount shouldBe None
+    AppConfig.conventional.withColumnCount(Some(3)).withColumnCount(None).surfaceConfig.columnCount shouldBe None
   }
 
   it should "leave columnCount untouched in normalized (its max is pane-width dependent, clamped in the resolver)" in {
@@ -101,7 +101,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fall back to interface density's item gap rows when no override is configured" in {
-    val config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Spacious)
+    val config = AppConfig.conventional.withInterfaceDensity(InterfaceDensity.Spacious)
 
     config.surfaceConfig.commandRunnerItemGapRows.shouldBe(None)
     config.effectiveCommandRunnerItemGapRows.shouldBe(
@@ -115,7 +115,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   // issue #1046 (review follow-up): `commandRunnerVisibleRows`/`commandRunnerCursorGapRows` complete the same
   // density unification `effectiveCommandRunnerItemGapRows` already covers above.
   it should "fall back to interface density's visible row count when no override is configured" in {
-    val config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Spacious)
+    val config = AppConfig.conventional.withInterfaceDensity(InterfaceDensity.Spacious)
 
     config.surfaceConfig.commandRunnerVisibleRows.shouldBe(None)
     config.effectiveCommandRunnerVisibleRows.shouldBe(
@@ -127,7 +127,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fall back to interface density's overlay gap for the command palette's cursor gap when no override or UI element gap is configured" in {
-    val config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Spacious)
+    val config = AppConfig.conventional.withInterfaceDensity(InterfaceDensity.Spacious)
 
     config.surfaceConfig.commandRunnerCursorGapRows.shouldBe(None)
     config.effectiveCommandRunnerCursorGapRows.shouldBe(
@@ -139,7 +139,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "prefer an explicit UI element gap over interface density's overlay gap for the command palette's cursor gap" in {
-    val config = AppConfig.default
+    val config = AppConfig.conventional
       .withInterfaceDensity(InterfaceDensity.Compact)
       .withUiElementGap(Some(3.5))
 
@@ -153,7 +153,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "group appearance and text display settings under AppConfig" in {
-    val config = AppConfig.default
+    val config = AppConfig.conventional
       .withTextAreaInsets(TextAreaInsets.fromPercent(20.0, 10.0))
       .withViewportSizing(
         ViewportSizing(
@@ -178,19 +178,19 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default the command runner's persistent key-hint footer to on, and expose a with-helper to toggle it" in {
-    AppConfig.default.surfaceConfig.commandRunnerShowKeyHints.shouldBe(true)
+    AppConfig.conventional.surfaceConfig.commandRunnerShowKeyHints.shouldBe(true)
 
-    val disabled = AppConfig.default.withCommandRunnerShowKeyHints(false)
+    val disabled = AppConfig.conventional.withCommandRunnerShowKeyHints(false)
     disabled.surfaceConfig.commandRunnerShowKeyHints.shouldBe(false)
 
     disabled.withCommandRunnerShowKeyHints(true).surfaceConfig.commandRunnerShowKeyHints.shouldBe(true)
   }
 
   it should "default the contextual toolbar display mode to icons and text" in
-    AppConfig.default.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.IconAndText)
+    AppConfig.conventional.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.IconAndText)
 
   it should "leave interface settings owned by InterfaceConfig" in {
-    val config = AppConfig.default
+    val config = AppConfig.conventional
       .withInterfaceDensity(InterfaceDensity.Spacious)
       .withUiElementGap(Some(3))
       .withUiOutlineThicknessPx(4)

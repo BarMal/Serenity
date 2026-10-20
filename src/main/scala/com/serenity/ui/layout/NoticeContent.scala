@@ -58,17 +58,4 @@ private[layout] object NoticeContent:
       case NoticeLevel.Info    => OverlayTone.Normal
 
   private def messageLines(notice: Notice, frameWidth: Int): List[String] =
-    wrapped(notice.message, math.max(1, frameWidth - ChromeCells))
-
-  private def wrapped(text: String, width: Int): List[String] =
-    text
-      .split(' ')
-      .toList
-      .filter(_.nonEmpty)
-      .foldLeft(List.empty[String]) {
-        case (current :: done, word) if current.length + 1 + word.length <= width => s"$current $word" :: done
-        case (lines, word)                                                        => word :: lines
-      }
-      .reverse match
-      case Nil   => List("")
-      case lines => lines
+    TextWrapping.wrap(notice.message, math.max(1, frameWidth - ChromeCells))

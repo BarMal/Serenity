@@ -2,7 +2,7 @@ package com.serenity.frontend
 
 import scala.concurrent.duration.*
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, CursorMode}
 import com.serenity.keystroke.KeyboardFidelityTier
 
 /** Whether the console (STDOUT) log appender should be denied entirely -- issue #1215: in TUI mode stdout is the
@@ -70,7 +70,9 @@ case object GuiFrontend extends Frontend:
   val markdownPreviewWindow: MarkdownPreviewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
 
   def cursorIdleInterval(config: AppConfig): Option[FiniteDuration] =
-    Some(Frontend.BlinkInterval)
+    config.cursorMode match
+      case CursorMode.Blink  => Some(Frontend.BlinkInterval)
+      case CursorMode.Steady => None
 
 /** The TUI frontend: the terminal's own fixed cell grid, no sub-cell motion/typography (epic #1103's accepted
   * degradations), and whatever keyboard fidelity the terminal actually negotiated (issue #1194/#1320).

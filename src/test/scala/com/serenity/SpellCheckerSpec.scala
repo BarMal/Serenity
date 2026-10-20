@@ -26,7 +26,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   // A bare `en` is served by the bundled British dictionary; the default `en-GB` would need an installed one.
   private val EnglishSpellCheck = SpellCheckConfig(enabled = true, languages = List("en"))
 
-  // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Node` tree
+  // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Branch` tree
   // while itself extending the still-open `Leaf` purely to satisfy the type system -- every method that matters for
   // this test forwards to `delegate` rather than using anything inherited from `Leaf`.
   final class NonCollectingRope(delegate: Rope) extends Leaf(delegate.collect()):
@@ -44,15 +44,6 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
 
     override val endsWithNewline: Boolean =
       delegate.endsWithNewline
-
-    override def isWeightBalanced: Boolean =
-      delegate.isWeightBalanced
-
-    override def isHeightBalanced: Boolean =
-      delegate.isHeightBalanced
-
-    override def rebalance: Rope =
-      this
 
     override def index(i: Int): Option[Char] =
       delegate.index(i)
@@ -79,7 +70,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     def apply(delegate: Rope): NonCollectingRope = new NonCollectingRope(delegate)
 
   private def writeDic(name: String, words: List[String]): java.nio.file.Path =
-    val path = Files.createTempFile(name, ".dic")
+    val path = TestTemp.file(name, ".dic")
     Files.writeString(path, (words.length.toString :: words).mkString("\n"), StandardCharsets.UTF_8)
     path
 
@@ -89,7 +80,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     affixRules: List[String],
     charset: Charset = StandardCharsets.UTF_8
   ): (java.nio.file.Path, java.nio.file.Path) =
-    val directory = Files.createTempDirectory(name)
+    val directory = TestTemp.directory(name)
     val dic       = directory.resolve(s"$name.dic")
     val aff       = directory.resolve(s"$name.aff")
     Files.writeString(dic, (words.length.toString :: words).mkString("\n"), charset)
@@ -411,7 +402,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report dictionary load failures without preventing fallback spell checks" in {
-    val missing = Files.createTempDirectory("serenity-missing-dictionaries").resolve("missing.dic")
+    val missing = TestTemp.directory("serenity-missing-dictionaries").resolve("missing.dic")
     val config  = EnglishSpellCheck.copy(dictionaryPaths = List(missing.toString))
 
     val diagnostics = SpellChecker.check("hello wurld", config)

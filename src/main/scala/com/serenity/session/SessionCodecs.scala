@@ -9,7 +9,7 @@ import com.serenity.config.*
 import com.serenity.lsp.config.{LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
 import com.serenity.ui.fonts.FontLoader.{FontConfig, TextScaleMode}
-import com.serenity.ui.theme.ColorFormat
+import com.serenity.ui.theme.{ColorFormat, DropCapColour}
 import io.circe.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.given
@@ -50,19 +50,20 @@ given Encoder[FontConfig] = deriveEncoder
 
 given Decoder[FontConfig] = Decoder.instance { cursor =>
   for
-    codeFontFamily  <- cursor.getOrElse[String]("codeFontFamily")(FontConfig().codeFontFamily)
-    textFontFamily  <- cursor.getOrElse[String]("textFontFamily")(FontConfig().textFontFamily)
-    uiFontFamily    <- cursor.getOrElse[String]("uiFontFamily")(Font.SANS_SERIF)
-    legacyFontSize  <- cursor.getOrElse[Float]("fontSize")(FontConfig().fontSize)
-    codeFontSize    <- cursor.getOrElse[Float]("codeFontSize")(legacyFontSize)
-    textFontSize    <- cursor.getOrElse[Float]("textFontSize")(legacyFontSize)
-    uiFontSize      <- cursor.getOrElse[Float]("uiFontSize")(FontConfig().uiFontSize)
-    textScaleMode   <- cursor.getOrElse[TextScaleMode]("textScaleMode")(FontConfig().textScaleMode)
-    textScale       <- cursor.getOrElse[Double]("textScaleMultiplier")(FontConfig().textScaleMultiplier)
-    legacyLigatures <- cursor.getOrElse[Boolean]("enableLigatures")(FontConfig().enableLigatures)
-    codeLigatures   <- cursor.getOrElse[Boolean]("codeLigatures")(legacyLigatures)
-    textLigatures   <- cursor.getOrElse[Boolean]("textLigatures")(legacyLigatures)
-    uiLigatures     <- cursor.getOrElse[Boolean]("uiLigatures")(FontConfig().uiLigatures)
+    codeFontFamily   <- cursor.getOrElse[String]("codeFontFamily")(FontConfig().codeFontFamily)
+    textFontFamily   <- cursor.getOrElse[String]("textFontFamily")(FontConfig().textFontFamily)
+    uiFontFamily     <- cursor.getOrElse[String]("uiFontFamily")(Font.SANS_SERIF)
+    legacyFontSize   <- cursor.getOrElse[Float]("fontSize")(FontConfig().fontSize)
+    codeFontSize     <- cursor.getOrElse[Float]("codeFontSize")(legacyFontSize)
+    textFontSize     <- cursor.getOrElse[Float]("textFontSize")(legacyFontSize)
+    uiFontSize       <- cursor.getOrElse[Float]("uiFontSize")(FontConfig().uiFontSize)
+    textScaleMode    <- cursor.getOrElse[TextScaleMode]("textScaleMode")(FontConfig().textScaleMode)
+    textScale        <- cursor.getOrElse[Double]("textScaleMultiplier")(FontConfig().textScaleMultiplier)
+    legacyLigatures  <- cursor.getOrElse[Boolean]("enableLigatures")(FontConfig().enableLigatures)
+    codeLigatures    <- cursor.getOrElse[Boolean]("codeLigatures")(legacyLigatures)
+    textLigatures    <- cursor.getOrElse[Boolean]("textLigatures")(legacyLigatures)
+    uiLigatures      <- cursor.getOrElse[Boolean]("uiLigatures")(FontConfig().uiLigatures)
+    fallbackFamilies <- cursor.getOrElse[List[String]]("fallbackFamilies")(FontConfig().fallbackFamilies)
   yield FontConfig(
     codeFontFamily = codeFontFamily,
     textFontFamily = textFontFamily,
@@ -74,7 +75,8 @@ given Decoder[FontConfig] = Decoder.instance { cursor =>
     textScaleMultiplier = FontConfig.clampTextScale(textScale),
     enableLigatures = codeLigatures,
     textLigatures = textLigatures,
-    uiLigatures = uiLigatures
+    uiLigatures = uiLigatures,
+    fallbackFamilies = fallbackFamilies
   )
 }
 
@@ -94,7 +96,14 @@ given Encoder[WindowChromeMode] = configKeyEncoder(_.configKey)
 given Decoder[WindowChromeMode] = configKeyDecoder("WindowChromeMode", WindowChromeMode.values, _.configKey)
 
 given Encoder[MarkdownViewMode] = configKeyEncoder(_.configKey)
-given Decoder[MarkdownViewMode] = configKeyDecoder("MarkdownViewMode", MarkdownViewMode.values, _.configKey)
+
+given Decoder[MarkdownViewMode] =
+  Decoder.decodeString.emap { value =>
+    MarkdownViewMode
+      .fromConfigKey(value)
+      .orElse(MarkdownViewMode.values.find(_.toString == value))
+      .toRight(s"Unknown MarkdownViewMode: $value")
+  }
 
 given Encoder[DefaultDocumentMode] = configKeyEncoder(_.configKey)
 
@@ -115,16 +124,29 @@ given Decoder[RenderDamageGranularity] =
 given Encoder[InterfaceDensity] = configKeyEncoder(_.configKey)
 given Decoder[InterfaceDensity] = configKeyDecoder("InterfaceDensity", InterfaceDensity.values, _.configKey)
 
+given Encoder[MenuBarMode]    = configKeyEncoder(_.configKey)
+given Decoder[MenuBarMode]    = configKeyDecoder("MenuBarMode", MenuBarMode.values, _.configKey)
+given Encoder[UiLayout]       = configKeyEncoder(_.configKey)
+given Decoder[UiLayout]       = configKeyDecoder("UiLayout", UiLayout.values, _.configKey)
+given Encoder[TabStripMode]   = configKeyEncoder(_.configKey)
+given Decoder[TabStripMode]   = configKeyDecoder("TabStripMode", TabStripMode.values, _.configKey)
+given Encoder[FileDialogMode] = configKeyEncoder(_.configKey)
+given Decoder[FileDialogMode] = configKeyDecoder("FileDialogMode", FileDialogMode.values, _.configKey)
+
 given Encoder[PreferredWindowSize] = deriveEncoder
 given Decoder[PreferredWindowSize] = deriveDecoder
 given Encoder[WindowConfig]        = deriveEncoder
 given Decoder[WindowConfig]        = deriveDecoder
 given Encoder[CursorConfig]        = deriveEncoder
 given Decoder[CursorConfig]        = deriveDecoder
-given Encoder[DocumentConfig]      = deriveEncoder
-given Decoder[DocumentConfig]      = deriveDecoder
-given Encoder[InterfaceConfig]     = deriveEncoder
-given Decoder[InterfaceConfig]     = deriveDecoder
+given Encoder[DropCapColour]       = configKeyEncoder(DropCapColour.configKey)
+given Decoder[DropCapColour] =
+  Decoder.decodeString.emap(value => DropCapColour.fromConfigKey(value).toRight(s"Unknown DropCapColour: $value"))
+
+given Encoder[DocumentConfig]  = deriveEncoder
+given Decoder[DocumentConfig]  = deriveDecoder
+given Encoder[InterfaceConfig] = deriveEncoder
+given Decoder[InterfaceConfig] = deriveDecoder
 
 given Encoder[TextAreaInsets] = deriveEncoder
 given Decoder[TextAreaInsets] = deriveDecoder

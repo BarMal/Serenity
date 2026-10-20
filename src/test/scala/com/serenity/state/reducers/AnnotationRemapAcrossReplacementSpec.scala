@@ -4,6 +4,7 @@ import scala.util.Random
 
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
+import com.serenity.testkit.UniqueTextEdits
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -53,5 +54,20 @@ class AnnotationRemapAcrossReplacementSpec extends AnyFlatSpec with Matchers:
 
       EditorEditSupport.adjustAnnotationsAcrossReplacement(annotations, before, after) shouldBe
         oracle(annotations, before, after)
+    }
+  }
+
+  it should "land annotations where the recorded change says, as it does from the texts" in {
+    val random = new Random(1838)
+    UniqueTextEdits.cases(seed = 1838, count = 300).foreach { found =>
+      val annotations = Annotations(
+        bookmarks = List(CursorPosition(random.nextInt(found.lineCount), random.nextInt(4))),
+        placeholders = List(Placeholder(CursorPosition(random.nextInt(found.lineCount), random.nextInt(4)), "n"))
+      )
+      val before = Document(found.before)
+      val edited = before.edited(found.after, found.change)
+
+      EditorEditSupport.adjustAnnotationsAcross(annotations, before, edited) shouldBe
+        EditorEditSupport.adjustAnnotationsAcrossReplacement(annotations, found.before, found.after)
     }
   }

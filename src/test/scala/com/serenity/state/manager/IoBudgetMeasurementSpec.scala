@@ -12,6 +12,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.unsafe.{IORuntime, IORuntimeConfig}
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.app.AppRuntime
 import com.serenity.io.{AtomicFileWriter, FileChangeWatcher, SettledClock}
 import com.serenity.session.SessionManager
@@ -132,7 +133,7 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
     if platformChargesFileApi then measuredFileApiAllocation(atomicWrites) else 0L
 
   private def measuredFileApiAllocation(atomicWrites: Int): Long =
-    val directory = Files.createTempDirectory("io-budget-file-api")
+    val directory = TestTemp.directory("io-budget-file-api")
     val file      = Files.writeString(directory.resolve("probe.txt"), "probe")
     val payload   = Array.fill[Byte](DirtyBytes)('d')
     val stats = IO.blocking {
@@ -166,7 +167,7 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
 
   private def newSession(): SessionManager =
     SessionManager(
-      Files.createTempDirectory("io-budget-edit-idle"),
+      TestTemp.directory("io-budget-edit-idle"),
       AppThemeManager.create,
       NoOpLogger.impl[IO],
       SessionManager.SessionPolicy.interactive,
@@ -176,7 +177,7 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
   "IO budget" should "be measured for file saves and focus-in" in {
     assume(countersAvailable)
     List(1, 10).foreach { megabytes =>
-      val path = Files.createTempFile("io-budget", ".txt")
+      val path = TestTemp.file("io-budget", ".txt")
       Files.writeString(path, "0123456789abcde\n" * (megabytes * 65536))
       val manager = SettledClock.fileManager
       val opened  = manager.loadFile(path, bufferId).unsafeRunSync()
@@ -193,7 +194,7 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
   it should "be measured for session saves" in {
     assume(countersAvailable)
     List(1, 10).foreach { megabytes =>
-      val root = Files.createTempDirectory("io-budget-session")
+      val root = TestTemp.directory("io-budget-session")
       val session =
         SessionManager(
           root,
@@ -276,7 +277,7 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
 
   it should "count external-change watcher wakeups" in {
     // Its own directory, so only this spec's activity reaches the watcher.
-    val file   = Files.createFile(Files.createTempDirectory("io-budget-watch").resolve("notes.txt"))
+    val file   = Files.createFile(TestTemp.directory("io-budget-watch").resolve("notes.txt"))
     val window = 10.seconds
     val count = (open: Map[Path, BufferId]) =>
       FileChangeWatcher.create.use { watcher =>

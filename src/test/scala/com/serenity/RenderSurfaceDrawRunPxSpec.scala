@@ -6,7 +6,7 @@ import javax.swing.JPanel
 
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.Java2DRenderSurface
+import com.serenity.ui.renderer.{Java2DRenderSurface, SurfaceTextCaches}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -58,7 +58,7 @@ class RenderSurfaceDrawRunPxSpec extends AnyFlatSpec with Matchers:
     panel.setPreferredSize(Dimension(40, 30))
     panel.setSize(Dimension(40, 30))
 
-    val surface = Java2DRenderSurface.forImage(image, metrics, font, panel, _ => ())
+    val surface = Java2DRenderSurface.forImage(image, metrics, font, panel, _ => (), SurfaceTextCaches.fresh())
     surface.fillPixelRect(0, 0, 2, 2, RenderColor.fromAwt(Color.BLUE))
     surface.flush()
 

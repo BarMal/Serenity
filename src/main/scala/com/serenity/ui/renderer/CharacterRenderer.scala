@@ -4,9 +4,9 @@ import java.util.LinkedHashMap
 
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.SemanticToken
-import com.serenity.state.models.TextVisualLine
+import com.serenity.state.models.{IndentationSettings, TextVisualLine}
 import com.serenity.text.TextEditing
-import com.serenity.ui.layout.CharWidth
+import com.serenity.ui.layout.{CharWidth, TabStops}
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 
 /** Paints text onto a [[RenderSurface]] in the two ways a surface can accept it: the cell-grid path (`putString`,
@@ -46,9 +46,9 @@ object CharacterRenderer:
     x: Int,
     y: Int,
     content: String,
-    tabWidth: Int = 4
+    tabWidth: Int = IndentationSettings.DefaultTabSize
   ): Unit =
-    val collectedRuns = collectPlainRuns(x, content, tabWidth)
+    val collectedRuns = collectPlainRuns(x, x, content, tabWidth)
     flushPlainRuns(surface, y, collectedRuns.runs)
 
   def renderChar(
@@ -79,16 +79,17 @@ object CharacterRenderer:
     styledSegments: Option[List[StyledText]] = None,
     semanticTokens: Option[List[SemanticToken]] = None,
     maxColumn: Option[Int] = None,
-    highlightCache: com.serenity.ui.theme.ThemeHighlightCache = com.serenity.ui.theme.ThemeHighlightCache()
+    highlightCache: com.serenity.ui.theme.ThemeHighlightCache = com.serenity.ui.theme.ThemeHighlightCache(),
+    tabWidth: Int = IndentationSettings.DefaultTabSize
   ): Unit =
     styledSegments match
       case Some(styledTexts) =>
-        renderStyledLine(surface, x, y, styledTexts, theme, maxColumn)
+        renderStyledLine(surface, x, y, styledTexts, theme, maxColumn, tabWidth)
       case None if syntaxHighlightingEnabled =>
         val styledTexts = highlightCache.highlightLine(content, theme, language, semanticTokens)
-        renderStyledLine(surface, x, y, styledTexts, theme, maxColumn)
+        renderStyledLine(surface, x, y, styledTexts, theme, maxColumn, tabWidth)
       case None =>
-        renderThemedPlain(surface, x, y, content, theme, maxColumn = maxColumn)
+        renderThemedPlain(surface, x, y, content, theme, tabWidth, maxColumn)
 
   def renderThemedPlain(
     surface: RenderSurface,
@@ -96,10 +97,10 @@ object CharacterRenderer:
     y: Int,
     content: String,
     theme: Theme,
-    tabWidth: Int = 4,
+    tabWidth: Int = IndentationSettings.DefaultTabSize,
     maxColumn: Option[Int] = None
   ): Unit =
-    val collectedRuns = collectPlainRuns(x, content, tabWidth)
+    val collectedRuns = collectPlainRuns(x, x, content, tabWidth)
     renderThemedRuns(surface, y, collectedRuns.runs, theme, maxColumn)
 
   /** Render a visual line using pixel-precision caret stops.
@@ -136,7 +137,17 @@ object CharacterRenderer:
           if syntaxHighlightingEnabled then highlightCache.highlightLine(text, theme, language, semanticTokens)
           else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
         }
-      MeasuredLineRuns.of(visualLine, segments, graphemeCache.spansFor(text), theme).foreach { run =>
+      val runs = MeasuredLineRuns.of(visualLine, segments, graphemeCache.spansFor(text), theme)
+
+      val shaped = surface.text.shapesStretchesOf(text)
+
+      def paintRun(
+        run: MeasuredRun,
+        stretch: String,
+        from: Int,
+        until: Int,
+        family: Option[String] = None
+      ): Unit =
         val startXPx      = xOriginPx + run.minXPx
         val endXPx        = xOriginPx + run.maxXPx
         val clippedEndXPx = clipRightXPx.fold(endXPx)(_.min(endXPx))
@@ -145,9 +156,40 @@ object CharacterRenderer:
           surface.setForegroundColor(run.foreground)
           surface.setBackgroundColor(run.background)
           withStyle(surface, run.style) {
-            surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text)
+            // A fallback glyph can stand taller than the row it sits in, and ink outside the row is not ink a repaint
+            // of the rows beside it would put back, so it is cut to the row.
+            val clipToRow = family.isDefined
+            def draw(): Unit =
+              if shaped then
+                surface.text.drawShapedRunPx(
+                  startXPx,
+                  yPx,
+                  widthPx,
+                  lineHeightPx,
+                  ascentPx,
+                  stretch,
+                  from,
+                  until,
+                  clipToRow
+                )
+              else surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text, clipToRow)
+            family.fold(draw())(surface.text.withFallbackFamily(_)(draw()))
           }
-      }
+
+      def paintSegment(segment: FontSegment): Unit =
+        if shaped then
+          MeasuredLineRuns
+            .stretched(segment.runs, segment.text)
+            .foreach(placed => paintRun(placed.run, placed.stretch, placed.from, placed.until, segment.family))
+        else segment.runs.foreach(run => paintRun(run, run.text, 0, run.text.length, segment.family))
+
+      if visualLine.fontRuns.isEmpty then
+        if shaped then
+          MeasuredLineRuns
+            .stretched(runs, text)
+            .foreach(placed => paintRun(placed.run, placed.stretch, placed.from, placed.until))
+        else runs.foreach(run => paintRun(run, run.text, 0, run.text.length))
+      else MeasuredLineRuns.byFont(visualLine, runs).foreach(paintSegment)
 
   private def renderStyledLine(
     surface: RenderSurface,
@@ -155,14 +197,15 @@ object CharacterRenderer:
     y: Int,
     styledTexts: List[com.serenity.ui.theme.StyledText],
     theme: Theme,
-    maxColumn: Option[Int]
+    maxColumn: Option[Int],
+    tabWidth: Int
   ): Unit =
     styledTexts.foldLeft(x) { (currentX, styledText) =>
       val segmentTheme = theme.copy(
         foreground = styledText.foregroundColor,
         background = styledText.backgroundColor
       )
-      val collectedRuns = collectPlainRuns(currentX, styledText.content, tabWidth = 4)
+      val collectedRuns = collectPlainRuns(x, currentX, styledText.content, tabWidth)
       withStyle(surface, styledText.style) {
         renderThemedRuns(surface, y, collectedRuns.runs, segmentTheme, maxColumn)
       }
@@ -174,7 +217,7 @@ object CharacterRenderer:
     try render
     finally surface.disableStyle(style)
 
-  private def collectPlainRuns(startX: Int, content: String, tabWidth: Int): CollectedRuns =
+  private def collectPlainRuns(originX: Int, startX: Int, content: String, tabWidth: Int): CollectedRuns =
     final case class PlainRunState(
         completed: List[TextRun],
         currentText: StringBuilder,
@@ -198,7 +241,7 @@ object CharacterRenderer:
         val nextState = codePoints.nextInt() match
           case '\t' =>
             val flushed     = state.flush
-            val spacesToAdd = tabWidth - (flushed.currentX % tabWidth)
+            val spacesToAdd = TabStops.cellsAt(flushed.currentX - originX, tabWidth)
             val tabSpaces   = " " * spacesToAdd
             flushed.copy(
               completed = TextRun(flushed.currentX, tabSpaces) :: flushed.completed,

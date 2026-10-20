@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.config.{AppConfig, AutoSaveMode, PreferredWindowSize}
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.{Event, InsertChar, NewTab}
@@ -68,14 +69,14 @@ class AutoSaveScenarioSpec extends AnyFlatSpec with Matchers:
       AwaitCondition.awaitValue(IO.blocking(Files.readString(path)))(_ == expected).unsafeRunSync()
 
     def textAfterQuiet(path: Path): String =
-      (IO.sleep(Delay * 5) >> IO.blocking(Files.readString(path))).unsafeRunSync()
+      (stateManager.runtimeLifecycle.awaitEffects >> IO.blocking(Files.readString(path))).unsafeRunSync()
 
     def isDirty(id: BufferId): Boolean = state.persisted.buffers.get(id).exists(_.document.isDirty)
 
     def notices: List[Notice] = NoticeReducer.visible(state)
 
   private def fixture(failingNames: Set[String] = Set.empty): Fixture =
-    val directory = Files.createTempDirectory("auto-save-scenario-spec")
+    val directory = TestTemp.directory("auto-save-scenario-spec")
     val program =
       for
         modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))
@@ -135,7 +136,7 @@ class AutoSaveScenarioSpec extends AnyFlatSpec with Matchers:
     f.autoSave(AutoSaveMode.AfterDelay)
 
     f.send(InsertChar('a'))
-    IO.sleep(Delay * 5).unsafeRunSync()
+    f.stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
 
     f.state.persisted.buffers.values.exists(_.document.isDirty) shouldBe true
     f.state.hasBlockingModal shouldBe false

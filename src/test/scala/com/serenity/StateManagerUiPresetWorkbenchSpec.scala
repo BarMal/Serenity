@@ -1,6 +1,6 @@
 package com.serenity
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -62,14 +62,14 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("command runner should be open"))
 
   "StateManager UI presets" should "list custom UI presets in the command runner when opened" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-list").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-list").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
     val preset = UiPreset(
       name = "Drafting",
       config = AppConfig.default
         .withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact),
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = List(
         SessionDockedPanel(
           "panel-1",
@@ -113,7 +113,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "refresh custom UI presets in an open command runner after saving" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-refresh").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-refresh").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -154,13 +154,13 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep command runner preset context current after preset management actions" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-action-status").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-action-status").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
     val preset = UiPreset(
       name = "Drafting",
       config = AppConfig.default,
-      themeName = Theme.dark.name,
+      themeName = Some(Theme.dark.name),
       dockedPanels = Nil
     )
     store.upsert(preset).unsafeRunSync()
@@ -205,7 +205,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "open preset options after saving a new UI preset from the command runner" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-create-options").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-create-options").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -236,7 +236,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave a saved preset untouched while later settings change the live workspace" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-snapshot").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-snapshot").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -272,7 +272,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "capture live config, theme, and panel changes when overwriting a preset" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-overwrite-capture").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-overwrite-capture").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -314,12 +314,12 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     saved.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    saved.themeName shouldBe Theme.light.name
+    saved.themeName shouldBe Some(Theme.light.name)
     saved.pinnedPanels.map(_.position) shouldBe List(PanelPosition.Right)
   }
 
-  it should "offer the Arrange Panels list in the preset active panels group" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-edit-panel-order-menu").resolve("ui-presets.json")
+  it should "leave panel arrangement to Overwrite Preset rather than offering it under Edit Preset" in {
+    val path  = TestTemp.directory("state-manager-ui-preset-edit-panel-order-menu").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
@@ -354,21 +354,17 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       .flatMap(group => group :: descendants(group))
       .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-ui-presets" => group }
       .getOrElse(fail("missing presets group"))
-    val activePanelsGroup = descendants(presetGroup)
-      .collectFirst {
-        case item: CommandSurfaceItem.GroupItem if item.id == "settings-preset-workspace-layout" => item
-      }
-      .getOrElse(fail("missing active panels group"))
-    val commands = descendants(activePanelsGroup).collect {
-      case item: CommandSurfaceItem.CommandItem =>
-        item.command.label -> item.command.intent
-    }
+    val editGroup = descendants(presetGroup)
+      .collectFirst { case item: CommandSurfaceItem.GroupItem if item.id == "settings-preset-edit" => item }
+      .getOrElse(fail("missing edit preset group"))
 
-    commands shouldBe List("Arrange Panels…" -> CommandIntent.View(ViewIntent.ArrangePanels))
+    descendants(editGroup).map(_.id) should not contain "settings-preset-workspace-layout"
+    descendants(editGroup).collect { case item: CommandSurfaceItem.CommandItem => item.command.intent } should
+      not contain CommandIntent.View(ViewIntent.ArrangePanels)
   }
 
   it should "save the live workspace under a second name without touching the first preset" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-second-name").resolve("ui-presets.json")
+    val path  = TestTemp.directory("state-manager-ui-preset-second-name").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 

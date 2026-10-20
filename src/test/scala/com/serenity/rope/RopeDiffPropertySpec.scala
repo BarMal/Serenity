@@ -8,8 +8,9 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 /** `RopeDiff.changedOffsetRange` only earns its keep as a damage producer if it never under-reports: everything outside
   * the returned range must be provably identical between `before` and `after`, whatever shape the rope tree happens to
-  * be in and however a rebalance may have widened the report. These properties check that directly against the
-  * `String`s the ropes were built from, rather than against `RopeDiff`'s own reasoning about itself.
+  * be in and however an edit may have split or merged leaves and widened the report. These properties check that
+  * directly against the `String`s the ropes were built from, rather than against `RopeDiff`'s own reasoning about
+  * itself.
   */
 class RopeDiffPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matchers:
 
@@ -64,6 +65,33 @@ class RopeDiffPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wit
         val afterText = after.collect()
         RopeDiff.changedOffsetRange(rope, after) shouldBe exactRange(text, afterText)
         (after, afterText)
+    }
+  }
+
+  property("ropes of the same text in different shapes report exactly the common prefix and suffix") {
+    forAll(Generators.genText, Generators.genText, Gen.chooseNum(1, 40), Gen.chooseNum(1, 40)) {
+      (base, inserted, beforeChunk, afterChunk) =>
+        forAll(Gen.chooseNum(0, base.length), Gen.chooseNum(0, 3)) { (at, deleted) =>
+          val removed   = math.min(deleted, base.length - at)
+          val afterText = base.take(at) + inserted + base.drop(at + removed)
+          val before    = Rope.fromLeafValues(base.grouped(beforeChunk).toVector)
+          val after     = Rope.fromLeafValues(afterText.grouped(afterChunk).toVector)
+          RopeDiff.changedOffsetRange(before, after) shouldBe exactRange(base, afterText)
+        }
+    }
+  }
+
+  property("a rope re-cut at other leaf boundaries reports exactly the edit made after the re-cut") {
+    forAll(Generators.ropeWithText, Generators.genText) {
+      case ((original, text), inserted) =>
+        val rebuilt = Rope.fromLeafValues(text.grouped(7).toVector)
+        forAll(Gen.chooseNum(0, text.length)) { at =>
+          val after = rebuilt.insert(at, inserted).getOrElse(fail("expected insert to succeed"))
+          RopeDiff.changedOffsetRange(original, after) shouldBe exactRange(
+            text,
+            text.take(at) + inserted + text.drop(at)
+          )
+        }
     }
   }
 

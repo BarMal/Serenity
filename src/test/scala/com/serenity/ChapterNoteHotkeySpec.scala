@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.command.CommandRegistry
 import com.serenity.config.{HotkeyAction, HotkeyConfig}
-import com.serenity.keystroke.events.{OpenChapterNote, ToggleNotesPin}
+import com.serenity.keystroke.events.{OpenChapterNote, OpenKeywordNote, ToggleNotesPin}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
@@ -10,7 +10,7 @@ import com.serenity.state.reducers.AppEventReducer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Ctrl+G is Go to Line, so opening a chapter's note and pinning the notes pane sit on the shifted letters. */
+/** Ctrl+G is Go to Line, so opening a chapter's note sits on the shifted letters; Ctrl+Shift+L selects occurrences. */
 class ChapterNoteHotkeySpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
@@ -45,8 +45,22 @@ class ChapterNoteHotkeySpec extends AnyFlatSpec with Matchers:
     reduced.runtime.notesPane should not be empty
   }
 
-  "Pin/Unpin Notes" should "be bound to Ctrl+Shift+L (Cmd+Shift+L on macOS)" in
-    platforms.foreach(os => rendered(os, HotkeyAction.ToggleNotesPin) shouldBe List(s"${modifierFor(os)}+shift+l"))
+  "Open Note for Word" should "be bound to Ctrl+Shift+K (Cmd+Shift+K on macOS)" in
+    platforms.foreach(os => rendered(os, HotkeyAction.OpenKeywordNote) shouldBe List(s"${modifierFor(os)}+shift+k"))
+
+  it should "open the note for the word under the cursor when its event is reduced" in {
+    val buffers = manuscript.persisted.buffers
+    val onWord  = buffers(BufferId(0)).copy(editing = EditingState(List(CursorPosition(1, 5))))
+    val state   = manuscript.copy(persisted = manuscript.persisted.copy(buffers = buffers.updated(BufferId(0), onWord)))
+    val reduced = AppEventReducer.reduce(OpenKeywordNote, state, CommandRegistry.withToggleUI).state
+
+    reduced.persisted.buffers(BufferId(0)).annotations.notes.keySet shouldBe Set(NoteKey.Keyword("sea"))
+  }
+
+  "Pin/Unpin Notes" should "be bound to Ctrl+Alt+P (Cmd+Alt+P on macOS)" in
+    platforms.foreach(os =>
+      rendered(os, HotkeyAction.ToggleNotesPin) shouldBe List(if os == "Mac OS X" then "alt+meta+p" else "ctrl+alt+p")
+    )
 
   it should "pin a notes pane that is following when its event is reduced" in {
     val opened = AppEventReducer.reduce(OpenChapterNote, manuscript, CommandRegistry.withToggleUI).state

@@ -74,8 +74,23 @@ final case class CachedPanelLayer(
     viewportWidth: Int,
     viewportHeight: Int,
     cursorVisible: Boolean,
-    frameRect: LayoutRect
-)
+    frameRect: LayoutRect,
+    bounds: Option[PixelRect] = None,
+    compositedOnto: Set[SurfaceContentIdentity] = Set.empty
+):
+
+  /** Whether this layer still describes a panel at `frameRect`, painted within `layerBounds`, on a window of this
+    * shape.
+    */
+  def matches(
+    viewportWidth: Int,
+    viewportHeight: Int,
+    cursorVisible: Boolean,
+    frameRect: LayoutRect,
+    layerBounds: PixelRect
+  ): Boolean =
+    this.viewportWidth == viewportWidth && this.viewportHeight == viewportHeight &&
+      this.cursorVisible == cursorVisible && this.frameRect == frameRect && bounds.forall(_ == layerBounds)
 
 /** What a frame's annotations are worked out from, compared by object identity: each part is an immutable value the
   * state replaces rather than edits, so the same object is the same answer and nothing needs deep comparison.
@@ -299,16 +314,73 @@ final class RendererFrameState(initialCapacity: Int):
   def rememberSnapshots(surface: RenderSurface, snapshots: Map[PaneId, TextLayoutSnapshot]): Unit =
     surface.persistentContentKey.foreach(key => previousSnapshots.put(key, snapshots))
 
+  private[renderer] val screenSnapshots = new ScreenSnapshots(cacheCapacity)
+
+  /** Each pane's [[PaneFrameRecord.rowGhosts]] as of the previous frame planned for a surface, to find the rows whose
+    * ghost changed without any buffer damage saying so.
+    */
+  private val previousRowGhosts =
+    new BoundedRefCache[SurfaceContentIdentity, Map[PaneId, Vector[Option[String]]]](cacheCapacity)
+
+  def previousRowGhostsFor(key: SurfaceContentIdentity): Map[PaneId, Vector[Option[String]]] =
+    previousRowGhosts.get(key).getOrElse(Map.empty)
+
+  def rememberRowGhosts(key: SurfaceContentIdentity, ghosts: Map[PaneId, Vector[Option[String]]]): Unit =
+    previousRowGhosts.put(key, ghosts)
+
+  /** The scrollbars each pixel buffer still holds, as `key` last drew them, and what the screen last showed of each
+    * bar, to present a bar when it has moved.
+    */
+  private val bufferBars =
+    new BoundedRefCache[SurfaceContentIdentity, Map[PaneId, RendererScrollbars.Held]](cacheCapacity)
+  private val screenScrollbars = new BoundedRefCache[ScreenIdentity, Map[PaneId, ScrollbarVisual]](cacheCapacity)
+
+  def heldBars(key: SurfaceContentIdentity): Map[PaneId, RendererScrollbars.Held] =
+    bufferBars.get(key).getOrElse(Map.empty)
+
+  def rememberHeldBars(key: SurfaceContentIdentity, bars: Map[PaneId, RendererScrollbars.Held]): Unit =
+    bufferBars.put(key, bars)
+
+  /** The panes whose bar in `current` differs from the one `output`'s screen last showed, which `current` then becomes;
+    * every bar when there is no screen to measure against.
+    */
+  def scrollbarsChangedOnScreen(output: Option[FrameOutput], current: Map[PaneId, ScrollbarVisual]): Set[PaneId] =
+    output.fold(current.keySet) { value =>
+      screenScrollbars.modify(tracked =>
+        (
+          tracked.updated(value.screenToken, current),
+          RendererScrollbars.changed(current, tracked.getOrElse(value.screenToken, Map.empty))
+        )
+      )
+    }
+
+  private val screenPaneExtents = new BoundedRefCache[ScreenIdentity, Map[PaneId, PixelRect]](cacheCapacity)
+
+  def bandsVacatedOnScreen(output: Option[FrameOutput], current: Map[PaneId, PixelRect]): List[PixelRect] =
+    output.fold(Nil)(value => screenPaneExtents.modify(ScreenPaneExtents.exchange(value.screenToken, current)))
+
   /** Drops `key`'s remembered previous-frame snapshots and floating-panel rects -- used by
     * [[RendererFramePlanner.forgetPreservedContent]] when a surface's preserved pixels are no longer valid, since both
     * are reuse promises about pixels that surface no longer holds.
     */
   def forgetPreviousFrameState(key: SurfaceContentIdentity): Unit =
     previousSnapshots.remove(key)
+    previousRowGhosts.remove(key)
     previousFloatingSurfaceRects.remove(key)
+    bufferBars.remove(key)
+    forgetPanelCompositions(key)
 
   private val bufferDamage    = new BoundedRefCache[SurfaceContentIdentity, Damage](cacheCapacity)
   private val bufferDrawState = new BoundedRefCache[SurfaceContentIdentity, DrawState](cacheCapacity)
+
+  private val chromeGeometries = new BoundedRefCache[SurfaceContentIdentity, ChromeGeometry](cacheCapacity)
+
+  /** Records `geometry` as the rects `key`'s chrome was last painted into and reports whether it differs -- chrome the
+    * surface kept from that frame is only where it should be while the rects have not moved. `Damage` cannot say so: a
+    * line-number column widening as the document passes 99 lines changes no layout reference.
+    */
+  def chromeGeometryChanged(key: SurfaceContentIdentity, geometry: ChromeGeometry): Boolean =
+    chromeGeometries.modify(tracked => (tracked.updated(key, geometry), !tracked.get(key).contains(geometry)))
 
   /** Which screen each tracked buffer identity was last drawn for, so [[accumulateBufferDamage]] only folds a frame's
     * damage into buffers that actually belong to the same screen -- e.g. the same `SwingWindow`'s own two pooled
@@ -358,6 +430,27 @@ final class RendererFrameState(initialCapacity: Int):
       tracked.updated(owner, current.updated(surfaceId, layer))
     }
 
+  /** Records that `surfaceId`'s cached layer now sits in the pixels `key` holds, so a later frame that keeps those
+    * pixels need not composite it again.
+    */
+  def panelCompositedOnto(surface: RenderSurface, surfaceId: SurfaceId, key: SurfaceContentIdentity): Unit =
+    val owner = surface.layerCacheOwner
+    panelLayerBuffers.replaceAll { tracked =>
+      tracked.get(owner).fold(tracked) { layers =>
+        layers.get(surfaceId).fold(tracked) { layer =>
+          tracked.updated(owner, layers.updated(surfaceId, layer.copy(compositedOnto = layer.compositedOnto + key)))
+        }
+      }
+    }
+
+  /** `key`'s pixels no longer hold any cached panel, because they were cleared or are about to be repainted whole. */
+  private def forgetPanelCompositions(key: SurfaceContentIdentity): Unit =
+    panelLayerBuffers.replaceAll { tracked =>
+      tracked.map((owner, layers) =>
+        owner -> layers.map((id, layer) => id -> layer.copy(compositedOnto = layer.compositedOnto - key))
+      )
+    }
+
   /** Drop cached panel buffers for surfaces no longer on screen this frame, scoped to `surface`'s own entry -- a
     * dismissed panel's cache would otherwise sit in that inner `Map[SurfaceId, _]` forever ([[SurfaceId]] is a plain
     * value, not an object this module can bound the lifetime of any other way).
@@ -382,6 +475,7 @@ final class RendererFrameState(initialCapacity: Int):
     bufferDamage.remove(key)
     bufferScreen.remove(key)
     bufferDrawState.remove(key)
+    chromeGeometries.remove(key)
 
   /** Drops every screen-scoped cache entry for `screenToken`, the [[forgetBufferState]] counterpart for the screen
     * rather than a preserving surface.
@@ -389,6 +483,8 @@ final class RendererFrameState(initialCapacity: Int):
   def forgetScreenState(screenToken: ScreenIdentity): Unit =
     screenDamage.remove(screenToken)
     screenPaneIds.remove(screenToken)
+    screenScrollbars.remove(screenToken)
+    screenSnapshots.forget(screenToken)
 
   /** Folds `damage` into every buffer identity already being tracked for `output`'s screen (every identity, if there is
     * no output to scope by), via [[DamageAccumulator.accumulateBuffers]] -- called unconditionally on every frame,
@@ -466,6 +562,7 @@ final class RendererFrameState(initialCapacity: Int):
 
   /** As [[drawStateChanged]], but for the screen's own published pane set -- distinct because the screen shows the
     * previous frame while a surface's own preserved pixels come from the one before that (see [[screenDamage]]).
+    * Records `paneIds` as it compares, so call it on every frame, ahead of any condition that could skip it.
     */
   def screenPaneIdsChanged(output: Option[FrameOutput], paneIds: Set[PaneId]): Boolean =
     output match

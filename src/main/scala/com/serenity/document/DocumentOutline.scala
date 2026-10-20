@@ -1,33 +1,13 @@
 package com.serenity.document
 
-import scala.jdk.CollectionConverters.*
-
 import com.serenity.lsp.config.LanguageId
-import com.serenity.richtext.{ParagraphRole, RichTextDocument}
-import com.serenity.state.models.Buffer
+import com.serenity.richtext.RichTextDocument
+import com.serenity.state.models.{Buffer, HeadingIdentity}
 import com.serenity.ui.layout.{Location, Symbol, SymbolKind}
-import org.commonmark.Extension
-import org.commonmark.ext.gfm.tables.TablesExtension
-import org.commonmark.ext.task.list.items.TaskListItemsExtension
-import org.commonmark.node.{Heading, Node}
-import org.commonmark.parser.{IncludeSourceSpans, Parser}
-import org.commonmark.renderer.text.TextContentRenderer
 
 object DocumentOutline:
 
   private val MaxPlainTextSectionNameLength = 54
-
-  /** Same extension set as [[com.serenity.markdown.MarkdownDocumentPreview]], so heading extraction agrees with what
-    * the Markdown preview itself parses.
-    */
-  private val extensions: java.util.List[Extension] =
-    List[Extension](TablesExtension.create(), TaskListItemsExtension.create()).asJava
-
-  private val markdownParser: Parser =
-    Parser.builder().extensions(extensions).includeSourceSpans(IncludeSourceSpans.BLOCKS).build()
-
-  private val headingTextRenderer: TextContentRenderer =
-    TextContentRenderer.builder().build()
 
   def forBuffer(buffer: Buffer): List[Symbol] =
     richTextHeadings(
@@ -46,9 +26,22 @@ object DocumentOutline:
           case _ =>
             Nil
 
+  /** The headings of `buffer` with their chapter-note identity. A Markdown buffer answers from its heading index, which
+    * has normalised each title already.
+    */
+  def identifiedHeadings(buffer: Buffer): List[(HeadingIdentity, Symbol)] =
+    val rich = richTextHeadings(
+      buffer.richText.richTextDocument.filter(
+        _.matchesPlainTextShape(buffer.document.content.lineCount, buffer.document.content.weight)
+      )
+    ).filter(_.nonEmpty)
+    if rich.isEmpty && buffer.document.language.contains(LanguageId.Markdown) then
+      buffer.document.markdownHeadings.identified
+    else HeadingIdentity.forHeadings(forBuffer(buffer))
+
   private def richTextHeadings(document: Option[RichTextDocument]): Option[List[Symbol]] =
-    document.map(_.paragraphs.zipWithIndex.collect {
-      case (paragraph, line) if isHeading(paragraph.role) && paragraph.plainText.trim.nonEmpty =>
+    document.map(_.headingParagraphs.map {
+      case (line, paragraph) =>
         Symbol(
           name = paragraph.plainText.trim,
           kind = SymbolKind.Heading,
@@ -56,36 +49,8 @@ object DocumentOutline:
         )
     })
 
-  private def isHeading(role: ParagraphRole): Boolean =
-    role match
-      case ParagraphRole.Heading(_) => true
-      case ParagraphRole.Body       => false
-      case ParagraphRole.DropCap(_) => false
-
-  /** Walks the commonmark AST for `Heading` nodes rather than regex-scanning raw lines, so a `#`-prefixed line inside a
-    * fenced code block is never mistaken for a heading.
-    */
   private def markdownHeadings(buffer: Buffer): List[Symbol] =
-    val source   = bufferLines(buffer).map(_._1).mkString("\n")
-    val document = markdownParser.parse(source)
-    headingNodes(document).flatMap { heading =>
-      val title = headingTextRenderer.render(heading).trim
-      heading.getSourceSpans.asScala.headOption
-        .filter(_ => title.nonEmpty)
-        .map(span => Symbol(name = title, kind = SymbolKind.Heading, location = Location(span.getLineIndex, 0)))
-    }
-
-  private def headingNodes(node: Node): List[Heading] =
-    children(node).flatMap {
-      case heading: Heading => List(heading)
-      case other            => headingNodes(other)
-    }
-
-  private def children(node: Node): List[Node] =
-    @annotation.tailrec
-    def loop(current: Node, acc: List[Node]): List[Node] =
-      if current == null then acc.reverse else loop(current.getNext, current :: acc)
-    loop(node.getFirstChild, Nil)
+    buffer.document.markdownHeadings.headings.toList
 
   private def plainTextSections(buffer: Buffer): List[Symbol] =
     val sections = bufferLines(buffer)

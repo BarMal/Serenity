@@ -3,6 +3,7 @@ package com.serenity.spellcheck
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 
+import com.serenity.TestTemp
 import com.serenity.config.SpellCheckConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -15,7 +16,7 @@ class SpellCheckZeroConfigSpec extends AnyFlatSpec with Matchers:
   private val AmericanEnglish = SpellCheckConfig(languages = List("en-US"))
 
   private def dictionaryDirectory(prefix: String, names: String*): Path =
-    val directory = Files.createTempDirectory(prefix)
+    val directory = TestTemp.directory(prefix)
     names.foreach { name =>
       Files.writeString(directory.resolve(s"$name.dic"), "1\ncolour", StandardCharsets.UTF_8)
       Files.writeString(directory.resolve(s"$name.aff"), "SET UTF-8", StandardCharsets.UTF_8)
@@ -70,7 +71,7 @@ class SpellCheckZeroConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   "Spell check with no dictionary installed" should "have a notice naming the searched directories" in {
-    val emptyOsDirectory = Files.createTempDirectory("serenity-no-dictionary")
+    val emptyOsDirectory = TestTemp.directory("serenity-no-dictionary")
     val snapshot =
       DictionaryLoader.loadSnapshot(AmericanEnglish, DictionaryCache(), List(emptyOsDirectory.toString))
 
@@ -82,14 +83,14 @@ class SpellCheckZeroConfigSpec extends AnyFlatSpec with Matchers:
     val snapshot = DictionaryLoader.loadSnapshot(
       AmericanEnglish,
       DictionaryCache(),
-      List(Files.createTempDirectory("serenity-no-dictionary").toString)
+      List(TestTemp.directory("serenity-no-dictionary").toString)
     )
 
     SpellChecker.analyzeText("Colour me unconvinced.", AmericanEnglish, snapshot.context) shouldBe Nil
   }
 
   it should "have no notice for the default British English, which ships a dictionary" in {
-    val emptyOsDirectory = Files.createTempDirectory("serenity-no-dictionary")
+    val emptyOsDirectory = TestTemp.directory("serenity-no-dictionary")
 
     DictionaryLoader
       .loadSnapshot(SpellCheckConfig(), DictionaryCache(), List(emptyOsDirectory.toString))

@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
 import com.serenity.command.SessionCommands
-import com.serenity.io.{FileManager, FileUtils, ProjectFileWalker}
+import com.serenity.io.{FileManager, FileUtils, ProjectFileIndex, ProjectFileListing}
 import com.serenity.session.{SessionId, SessionManager, SessionPersistence}
 import com.serenity.state.core.EditorState
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
@@ -27,7 +27,8 @@ final private[manager] class StateManagerWorkflowCapability(
     operations: StateManagerOperationBoundary,
     lanes: EffectLanePort,
     filePersistence: StateManagerFilePersistence,
-    restarter: Option[RestartMode => IO[Unit]] = None
+    restarter: Option[RestartMode => IO[Unit]] = None,
+    projectFiles: ProjectFileIndex = ProjectFileIndex.empty()
 )(using balance: com.serenity.rope.Balance):
   import StateManagerWorkflowCapability.{ProjectFilesLane, SessionLane}
 
@@ -129,8 +130,8 @@ final private[manager] class StateManagerWorkflowCapability(
       case Right(_) =>
         modelCommit.currentState.flatMap { live =>
           if StartPageTransitions.sameBuffers(live, snapshot) then
-            readableRecentFiles(snapshot).flatMap(recent =>
-              lanes.dispatchEffectResult(EffectResult.StartPageReady(snapshot, recent), _ => IO.unit)
+            (readableRecentFiles(snapshot), existingRecentFolders(snapshot)).flatMapN((files, folders) =>
+              lanes.dispatchEffectResult(EffectResult.StartPageReady(snapshot, files, folders), _ => IO.unit)
             )
           else if rewritesLeft > 0 then saveThenShowStartPage(live, rewritesLeft - 1)
           else operations.showNotice(FileFailureNotice.stayedInEditor)
@@ -142,6 +143,9 @@ final private[manager] class StateManagerWorkflowCapability(
 
   private def readableRecentFiles(committed: AppState): IO[List[Path]] =
     IO.blocking(committed.persisted.recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path)))
+
+  private def existingRecentFolders(committed: AppState): IO[List[Path]] =
+    IO.blocking(committed.persisted.recentFolders.filter(Files.isDirectory(_)))
 
   /** Answers the close waiting on the action stack -- what the close prompt's choices run. */
   private[manager] def resolveClose(choice: CloseWorkflowChoice): IO[Unit] =
@@ -402,9 +406,16 @@ final private[manager] class StateManagerWorkflowCapability(
         .state
     )
 
+  private def dispatchListing(
+    pickerId: SurfaceId,
+    root: Path,
+    listing: Either[String, ProjectFileListing]
+  ): IO[Unit] =
+    lanes.dispatchEffectResult(EffectResult.FilesListed(pickerId, root, listing), _ => IO.unit)
+
   /** Opens the "Go to File" finder at once, still loading, over the docked explorer's root -- the project root "Open as
-    * root" sets -- or the working directory when no explorer is docked, and walks that root into it on the ProjectFiles
-    * lane.
+    * root" sets -- or the working directory when no explorer is docked, and lists that root into it on the ProjectFiles
+    * lane: from the project index, which walks a root only the first time and shows what it has found along the way.
     */
   private[manager] def openFileFinder: IO[Unit] =
     modelCommit.currentState.flatMap { state =>
@@ -413,23 +424,26 @@ final private[manager] class StateManagerWorkflowCapability(
           modelCommit.commitState(opened, state) >>
             lanes.submitEffect(
               ProjectFilesLane,
-              ProjectFileWalker
-                .list(root, FileFinder.MaxListedFiles)
+              projectFiles
+                .listing(root, partial => dispatchListing(pickerId, root, Right(partial)))
                 .attempt
                 .flatMap(listing =>
-                  lanes.dispatchEffectResult(
-                    EffectResult.FilesListed(
-                      pickerId,
-                      root,
-                      listing.left.map(error => s"Couldn't list $root: ${error.getClass.getSimpleName}")
-                    ),
-                    _ => IO.unit
+                  dispatchListing(
+                    pickerId,
+                    root,
+                    listing.left.map(error => s"Couldn't list $root: ${error.getClass.getSimpleName}")
                   )
                 )
             )
         }
       }
     }
+
+  /** Matches the picker's query against its source on the PickerSearch lane, so the keystroke that asked for it has
+    * already been shown; a newer keystroke supersedes it, and a result that finds the query changed is dropped.
+    */
+  private[manager] def refreshPickerEffect(surfaceId: SurfaceId, query: String): IO[Unit] =
+    PickerSearchEffect.refresh(lanes, modelCommit.currentState, surfaceId, query)
 
   private[manager] def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
     SessionWorkflowTransitions.restoredIntoViewport(restoredState, currentState)

@@ -2,7 +2,11 @@ package com.serenity.ui.renderer
 
 import java.awt.font.FontRenderContext
 
+import scala.annotation.unused
+
+import com.serenity.config.CursorMode
 import com.serenity.ui.color.RenderColor
+import com.serenity.ui.layout.PixelRect
 
 /** Character- and pixel-run text drawing. Every real [[RenderSurface]] implements this -- a surface that cannot draw
   * text cannot render Serenity's UI -- so [[RenderSurface.text]] exposes it directly rather than as an `Option`: the
@@ -27,6 +31,48 @@ trait TextDrawing:
     s: String,
     clipGlyphToRun: Boolean = false
   ): Unit
+
+  /** Whether drawing `text` is better served by [[drawShapedRunPx]] than by a [[drawRunPx]] per run. A surface whose
+    * font shapes nothing for the text has no shaping to share, so the default says no.
+    */
+  def shapesStretchesOf(text: String): Boolean = false
+
+  /** As [[drawRunPx]] for `stretch.substring(from, until)`, where `stretch` is text drawn in one font across several
+    * runs. A raster surface shapes the stretch once and draws each run from those glyphs, so ligatures and kerning
+    * reach across run boundaries; the default draws the run's own text.
+    */
+  def drawShapedRunPx(
+    xPx: Float,
+    yPx: Int,
+    bgWidthPx: Float,
+    lineHeightPx: Int,
+    ascentPx: Int,
+    stretch: String,
+    from: Int,
+    until: Int,
+    clipGlyphToRun: Boolean = false
+  ): Unit =
+    drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, stretch.substring(from, until), clipGlyphToRun)
+
+  /** Runs `draw` with the surface font swapped for `family` at the current font's style, size and ligature setting, for
+    * glyphs the current font has none of. A surface with one font for all text, such as a terminal, draws as it would
+    * anyway.
+    */
+  def withFallbackFamily(@unused family: String)(draw: => Unit): Unit = draw
+
+  /** As [[drawRunPx]], for a short label that repeats verbatim from frame to frame, such as a line number. A raster
+    * surface may serve it from sprites of the rendered ink rather than laying the text out again; the default draws it
+    * as any other run.
+    */
+  def drawLabelPx(
+    xPx: Float,
+    yPx: Int,
+    bgWidthPx: Float,
+    lineHeightPx: Int,
+    ascentPx: Int,
+    s: String
+  ): Unit =
+    drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, s)
 
   /** Render cell-addressed content for one row at its logical-pixel top edge. */
   def withLogicalPixelRow(cellRow: Int, pixelY: Int)(render: => Unit): Unit
@@ -58,8 +104,43 @@ trait PixelDrawing:
   def compositeFullSurfaceLayer(image: RenderImage): Unit =
     drawImage(image, 0, 0, image.widthPx, image.heightPx)
 
+  /** Composite a layer buffer made by [[LayerBufferSupport.newBoundedLayerSurface]] for `bounds` back where it was
+    * painted. A surface whose bounded layers are whole-surface ones (the default) composites them as such.
+    */
+  def compositeLayer(image: RenderImage, @unused bounds: PixelRect): Unit =
+    compositeFullSurfaceLayer(image)
+
   /** Translate drawing in device-independent logical pixels for fractional-cell floating geometry. */
   def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit
+
+/** Moving pixels the surface already holds, rather than drawing them again. Genuinely optional: a surface that cannot
+  * (a cell-addressed terminal, or a raster surface whose device scale is not a whole number, where logical pixels do
+  * not land on device ones) simply draws every row, so [[RenderSurface.pixelCopying]] exposes it as an `Option`.
+  */
+trait PixelCopying:
+
+  /** Copy `from`, in logical pixels, `dyPx` rows down (up when negative), overwriting whatever lies there. Source and
+    * destination may overlap: the copy reads every source pixel as it was before it.
+    */
+  def copyPixels(from: PixelRect, dyPx: Int): Unit
+
+/** What a rect of a surface's pixels held, to be put back exactly as they were. */
+trait LiftedPixels
+
+/** Drawing something over pixels that persist from frame to frame, and taking it off again: the pixels beneath are
+  * lifted first and put back before the next frame builds on them. Genuinely optional, so
+  * [[RenderSurface.pixelLifting]] exposes it as an `Option`.
+  */
+trait PixelLifting:
+
+  /** The pixels of `area`, in logical pixels, with a device pixel's margin so that a fill of the same area is covered
+    * whatever the scale rounds it to. `spare` is pixels lifted before and since given back, whose storage is reused
+    * when it fits.
+    */
+  def lift(area: PixelRect, spare: Option[LiftedPixels]): LiftedPixels
+
+  /** Overwrites the pixels `lifted` came from with what they held. */
+  def putBack(lifted: LiftedPixels): Unit
 
 /** Alpha compositing. Genuinely optional: a surface that can't do it (or a headless test double) simply skips the fade
   * rather than degrading a required drawing operation, so [[RenderSurface.effects]] exposes it as an `Option` and
@@ -92,6 +173,18 @@ trait LayerBufferSupport:
     */
   def newLayerSurface(onFlush: RenderImage => Unit, recycled: Option[RenderImage] = None): RenderSurface
 
+  /** As [[newLayerSurface]], for a layer that paints only inside `bounds` (logical pixels): the surface still addresses
+    * the whole window, so a renderer paints at its usual coordinates, but the image it hands back covers `bounds` alone
+    * and goes back through [[PixelDrawing.compositeLayer]]. A capability with no smaller buffer to offer returns the
+    * whole-surface layer, which that composite handles too.
+    */
+  def newBoundedLayerSurface(
+    @unused bounds: PixelRect,
+    onFlush: RenderImage => Unit,
+    recycled: Option[RenderImage] = None
+  ): RenderSurface =
+    newLayerSurface(onFlush, recycled)
+
 /** A caret shape a real terminal's own cursor can be styled as via DECSCUSR (`CSI Ps SP q`). */
 enum HardwareCursorShape:
   case Block, Underline, Bar
@@ -99,10 +192,10 @@ enum HardwareCursorShape:
 /** A DECSCUSR-expressible caret style: shape plus whether the terminal should blink it itself.
   *
   * There is no cursor-shape setting in [[com.serenity.config.CursorConfig]] today (only
-  * [[com.serenity.config.CursorMode]]'s blink mode) -- callers that delegate the caret to the terminal (#1170)
-  * currently always ask for a blinking block, the shape every terminal defaults to. `decscusrParam` is kept as a total
-  * function of shape/blink regardless, so a future per-buffer shape setting has somewhere to plug in without touching
-  * the escape-emission code.
+  * [[com.serenity.config.CursorMode]]'s blink or steady mode) -- callers that delegate the caret to the terminal
+  * (#1170) always ask for a block, the shape every terminal defaults to. `decscusrParam` is kept as a total function of
+  * shape/blink regardless, so a future per-buffer shape setting has somewhere to plug in without touching the
+  * escape-emission code.
   */
 final case class HardwareCursorStyle(shape: HardwareCursorShape, blinking: Boolean):
 
@@ -114,6 +207,11 @@ final case class HardwareCursorStyle(shape: HardwareCursorShape, blinking: Boole
       case HardwareCursorShape.Block     => if blinking then 1 else 2
       case HardwareCursorShape.Underline => if blinking then 3 else 4
       case HardwareCursorShape.Bar       => if blinking then 5 else 6
+
+object HardwareCursorStyle:
+
+  def forMode(mode: CursorMode): HardwareCursorStyle =
+    HardwareCursorStyle(HardwareCursorShape.Block, blinking = mode == CursorMode.Blink)
 
 /** Delegating the caret to a real hardware/terminal cursor instead of painting it as surface content. Genuinely
   * optional -- a surface with no native cursor to delegate to (the GUI canvas, which composites its own caret overlay)

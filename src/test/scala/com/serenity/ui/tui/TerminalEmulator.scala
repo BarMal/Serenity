@@ -9,11 +9,12 @@ import scala.annotation.tailrec
 import com.serenity.ui.layout.CharWidth
 import com.serenity.ui.theme.TextStyle
 
-/** A mock terminal, test-only: it interprets the escape sequences Serenity's TUI actually writes -- cursor positioning,
-  * erase, 24-bit SGR runs, DECTCEM/DECSCUSR, DEC private modes, OSC 52 clipboard writes -- and holds the result as a
-  * cell grid plus the terminal-side state a real terminal would hold. This is what makes a TUI behaviour assertion a
-  * statement about the screen ("row 4 reads `  1 hello`, the caret sits on cell (9, 4)") rather than a substring search
-  * over raw bytes, which passes just as happily when content lands in the wrong place.
+/** A mock terminal, test-only: it interprets the escape sequences Serenity's TUI actually writes -- cursor positioning
+  * and relative motion, erase, scroll regions with SU/SD, 24-bit SGR runs and their per-attribute resets,
+  * DECTCEM/DECSCUSR, DEC private modes, OSC 52 clipboard writes -- and holds the result as a cell grid plus the
+  * terminal-side state a real terminal would hold. This is what makes a TUI behaviour assertion a statement about the
+  * screen ("row 4 reads `  1 hello`, the caret sits on cell (9, 4)") rather than a substring search over raw bytes,
+  * which passes just as happily when content lands in the wrong place.
   *
   * Immutable: [[consume]] returns a new emulator, so a spec can hold a frame from before an interaction and compare it
   * against the frame after. Anything it does not recognise (the keyboard-protocol negotiation sequences, an unknown
@@ -132,8 +133,88 @@ object TerminalEmulator:
       modes: Set[Int],
       payloads: Vector[String],
       title: Option[String],
-      notifications: Vector[String]
+      notifications: Vector[String],
+      region: Option[(Int, Int)]
   )
+
+  /** The mutable cell array one [[interpret]] pass paints into; the immutable [[TerminalFrame]] is cut from it at the
+    * end. Rows and columns outside the grid are ignored, as a real terminal clips a write past its edge.
+    */
+  final private class Grid(cells: Array[Array[TerminalCell]], val width: Int, val height: Int):
+
+    def write(col: Int, row: Int, cell: TerminalCell): Unit =
+      if col >= 0 && col < width && row >= 0 && row < height then cells(row)(col) = cell
+
+    def clear(fromIndex: Int, untilIndex: Int, pen: Pen): Unit =
+      (math.max(0, fromIndex) until math.min(width * height, untilIndex))
+        .foreach(index => write(index % width, index / width, TerminalCell.blank(pen.fg, pen.bg)))
+
+    /** Scrolls rows `top..bottom` by `lines` (positive moves content up, SU; negative down, SD). Exposed rows are
+      * blanked in the pen's background, as a terminal with back-colour-erase does.
+      */
+    def scroll(top: Int, bottom: Int, lines: Int, pen: Pen): Unit =
+      val before = (top to bottom).map(row => cells(row).clone())
+      (top to bottom).foreach { row =>
+        val source = row + lines
+        cells(row) =
+          if source >= top && source <= bottom then before(source - top).clone()
+          else Array.fill(width)(TerminalCell.blank(pen.fg, pen.bg))
+      }
+
+    def toFrame: TerminalFrame = TerminalFrame(width, height, cells.map(_.toVector).toVector)
+
+  private def lineFeed(grid: Grid, state: Interp): Interp =
+    state.region match
+      case Some((top, bottom)) if state.cursor.row == bottom =>
+        grid.scroll(top, bottom, 1, state.pen)
+        state
+      case _ => state.copy(cursor = state.cursor.copy(row = math.min(state.cursor.row + 1, grid.height - 1)))
+
+  private def applyErase(grid: Grid, state: Interp, csi: Csi): Interp =
+    val cursorIndex = state.cursor.row * grid.width + math.min(state.cursor.col, grid.width - 1)
+    val rowStart    = state.cursor.row * grid.width
+    val mode        = firstParam(csi.params, default = 0)
+    csi.finalByte match
+      case 'J' =>
+        mode match
+          case 0 => grid.clear(cursorIndex, grid.width * grid.height, state.pen)
+          case 1 => grid.clear(0, cursorIndex + 1, state.pen)
+          case _ => grid.clear(0, grid.width * grid.height, state.pen)
+      case _ =>
+        mode match
+          case 0 => grid.clear(cursorIndex, rowStart + grid.width, state.pen)
+          case 1 => grid.clear(rowStart, cursorIndex + 1, state.pen)
+          case _ => grid.clear(rowStart, rowStart + grid.width, state.pen)
+    state
+
+  /** CUU/CUD/CUF/CUB/CHA: a count of 0 or none means 1, and the cursor stops at the screen edge. */
+  private def moveCursor(cursor: Cursor, csi: Csi, width: Int, height: Int): Cursor =
+    val count  = math.max(1, firstParam(csi.params, default = 1))
+    val column = math.min(cursor.col, width - 1)
+    csi.finalByte match
+      case 'A' => cursor.copy(row = math.max(0, cursor.row - count))
+      case 'B' => cursor.copy(row = math.min(height - 1, cursor.row + count))
+      case 'C' => cursor.copy(col = math.min(width - 1, column + count))
+      case 'D' => cursor.copy(col = math.max(0, column - count))
+      case _   => cursor.copy(col = math.min(width - 1, count - 1))
+
+  /** DECSTBM: sets the scroll region (1-based, inclusive) and homes the cursor. A malformed or full-screen region
+    * leaves no region set.
+    */
+  private def setScrollRegion(state: Interp, params: String, height: Int): Interp =
+    val fields = params.split(";", -1).toVector.map(_.toIntOption)
+    val top    = fields.headOption.flatten.getOrElse(1) - 1
+    val bottom = fields.lift(1).flatten.getOrElse(height) - 1
+    val region =
+      Option.when(top >= 0 && bottom < height && top < bottom && !(top == 0 && bottom == height - 1))((top, bottom))
+    state.copy(cursor = state.cursor.copy(col = 0, row = 0), region = region)
+
+  /** SU/SD scroll the current region, or the whole screen when none is set. */
+  private def applyScroll(grid: Grid, state: Interp, csi: Csi): Interp =
+    val count         = math.max(1, firstParam(csi.params, default = 1))
+    val (top, bottom) = state.region.getOrElse((0, grid.height - 1))
+    grid.scroll(top, bottom, if csi.finalByte == 'S' then count else -count, state.pen)
+    state
 
   /** OSC 0/2 (title) and OSC 9 (notification) update dedicated `Interp` fields; every other OSC body is handled as
     * before, as a possible OSC 52 clipboard payload. Kept top-level rather than nested in `interpret` so that method
@@ -148,14 +229,7 @@ object TerminalEmulator:
   private def interpret(start: TerminalEmulator, ansi: String): TerminalEmulator =
     val width  = start.frame.width
     val height = start.frame.height
-    val grid   = Array.tabulate(height, width)((row, col) => start.frame(col, row))
-
-    def writeCell(col: Int, row: Int, cell: TerminalCell): Unit =
-      if col >= 0 && col < width && row >= 0 && row < height then grid(row)(col) = cell
-
-    def clearRange(fromIndex: Int, untilIndex: Int, pen: Pen): Unit =
-      (math.max(0, fromIndex) until math.min(width * height, untilIndex))
-        .foreach(index => writeCell(index % width, index / width, TerminalCell.blank(pen.fg, pen.bg)))
+    val grid   = new Grid(Array.tabulate(height, width)((row, col) => start.frame(col, row)), width, height)
 
     def printCodePoint(state: Interp, codePoint: Int): Interp =
       val glyphWidth = CharWidth.of(codePoint)
@@ -164,38 +238,25 @@ object TerminalEmulator:
         else state.cursor
       val row  = math.min(start.row, height - 1)
       val span = if glyphWidth == 2 then CellSpan.Wide else CellSpan.Narrow
-      writeCell(start.col, row, TerminalCell(codePoint, state.pen.fg, state.pen.bg, state.pen.style, span))
+      grid.write(start.col, row, TerminalCell(codePoint, state.pen.fg, state.pen.bg, state.pen.style, span))
       if glyphWidth == 2 then
-        writeCell(start.col + 1, row, TerminalCell.continuation(state.pen.fg, state.pen.bg, state.pen.style))
+        grid.write(start.col + 1, row, TerminalCell.continuation(state.pen.fg, state.pen.bg, state.pen.style))
       state.copy(cursor = start.copy(col = start.col + glyphWidth, row = row))
-
-    def applyErase(state: Interp, csi: Csi): Interp =
-      val cursorIndex = state.cursor.row * width + math.min(state.cursor.col, width - 1)
-      val rowStart    = state.cursor.row * width
-      val mode        = firstParam(csi.params, default = 0)
-      csi.finalByte match
-        case 'J' =>
-          mode match
-            case 0 => clearRange(cursorIndex, width * height, state.pen)
-            case 1 => clearRange(0, cursorIndex + 1, state.pen)
-            case _ => clearRange(0, width * height, state.pen)
-        case _ =>
-          mode match
-            case 0 => clearRange(cursorIndex, rowStart + width, state.pen)
-            case 1 => clearRange(rowStart, cursorIndex + 1, state.pen)
-            case _ => clearRange(rowStart, rowStart + width, state.pen)
-      state
 
     def applyCsi(state: Interp, csi: Csi): Interp =
       (csi.prefix, csi.intermediates, csi.finalByte) match
         case (None, "", 'H') | (None, "", 'f') =>
           state.copy(cursor = cupTarget(state.cursor, csi.params, width, height))
-        case (None, "", 'J') | (None, "", 'K') => applyErase(state, csi)
+        case (None, "", 'J') | (None, "", 'K') => applyErase(grid, state, csi)
         case (None, "", 'm')                   => state.copy(pen = applySgr(state.pen, csi.params))
-        case (None, " ", 'q')                  => state.copy(cursor = state.cursor.copy(shape = csi.params.toIntOption))
-        case (Some('?'), "", 'h')              => applyPrivateModes(state, csi.params, set = true)
-        case (Some('?'), "", 'l')              => applyPrivateModes(state, csi.params, set = false)
-        case _                                 => state
+        case (None, "", 'A' | 'B' | 'C' | 'D' | 'G') =>
+          state.copy(cursor = moveCursor(state.cursor, csi, width, height))
+        case (None, "", 'r')       => setScrollRegion(state, csi.params, height)
+        case (None, "", 'S' | 'T') => applyScroll(grid, state, csi)
+        case (None, " ", 'q')      => state.copy(cursor = state.cursor.copy(shape = csi.params.toIntOption))
+        case (Some('?'), "", 'h')  => applyPrivateModes(state, csi.params, set = true)
+        case (Some('?'), "", 'l')  => applyPrivateModes(state, csi.params, set = false)
+        case _                     => state
 
     @tailrec def loop(index: Int, state: Interp): (Int, Interp) =
       if index >= ansi.length then (index, state)
@@ -212,8 +273,7 @@ object TerminalEmulator:
           case Esc if index + 1 < ansi.length => loop(index + 2, state)
           case Esc                            => (index, state)
           case '\r'                           => loop(index + 1, state.copy(cursor = state.cursor.copy(col = 0)))
-          case '\n' =>
-            loop(index + 1, state.copy(cursor = state.cursor.copy(row = math.min(state.cursor.row + 1, height - 1))))
+          case '\n'                           => loop(index + 1, lineFeed(grid, state))
           case '\b' =>
             loop(index + 1, state.copy(cursor = state.cursor.copy(col = math.max(0, state.cursor.col - 1))))
           case '\t' =>
@@ -225,23 +285,16 @@ object TerminalEmulator:
             loop(index + Character.charCount(codePoint), printCodePoint(state, codePoint))
 
     val initial =
-      Interp(start.cursor, start.pen, start.privateModes, start.osc52Payloads, start.title, start.notifications)
+      Interp(start.cursor, start.pen, start.privateModes, start.osc52Payloads, start.title, start.notifications, None)
     val (consumedTo, finalState) = loop(0, initial)
-    rebuild(width, height, grid, ansi, consumedTo, finalState)
+    rebuild(grid, ansi, consumedTo, finalState)
 
   /** Assembles the emulator `interpret` produces from its loop's end state -- pulled out of `interpret` itself so that
     * method's line count stays under the architecture ratchet's tracked baseline for it.
     */
-  private def rebuild(
-    width: Int,
-    height: Int,
-    grid: Array[Array[TerminalCell]],
-    ansi: String,
-    consumedTo: Int,
-    finalState: Interp
-  ): TerminalEmulator =
+  private def rebuild(grid: Grid, ansi: String, consumedTo: Int, finalState: Interp): TerminalEmulator =
     TerminalEmulator(
-      frame = TerminalFrame(width, height, grid.map(_.toVector).toVector),
+      frame = grid.toFrame,
       cursor = finalState.cursor,
       pen = finalState.pen,
       privateModes = finalState.modes,
@@ -277,6 +330,9 @@ object TerminalEmulator:
           case "1"      => loop(index + 1, current.copy(style = current.style.copy(isBold = true)))
           case "3"      => loop(index + 1, current.copy(style = current.style.copy(isItalic = true)))
           case "4"      => loop(index + 1, current.copy(style = current.style.copy(isUnderlined = true)))
+          case "22"     => loop(index + 1, current.copy(style = current.style.copy(isBold = false)))
+          case "23"     => loop(index + 1, current.copy(style = current.style.copy(isItalic = false)))
+          case "24"     => loop(index + 1, current.copy(style = current.style.copy(isUnderlined = false)))
           case "38"     => loop(index + 5, current.copy(fg = truecolor(fields, index)))
           case "48"     => loop(index + 5, current.copy(bg = truecolor(fields, index)))
           case "49"     => loop(index + 1, current.copy(bg = TransparentBackground))

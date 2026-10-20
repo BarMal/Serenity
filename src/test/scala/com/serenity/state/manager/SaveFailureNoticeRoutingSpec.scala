@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.{
   Command,
   CommandCategory,
@@ -91,7 +92,7 @@ class SaveFailureNoticeRoutingSpec extends AnyFlatSpec with Matchers:
     policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy(),
     fileDialog: Option[FileDialog] = None
   ): Fixture =
-    val directory = Files.createTempDirectory("save-failure-notice-spec")
+    val directory = TestTemp.directory("save-failure-notice-spec")
     // A regular file where the session directory should be: every session write fails to create its folder.
     val sessionRoot =
       if unwritableSession then Files.writeString(directory.resolve("session"), "not a directory")

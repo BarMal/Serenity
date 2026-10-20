@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.nio.file.Files
-
 import scala.concurrent.duration.*
 
 import cats.effect.IO
@@ -41,7 +39,7 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
         "aliquip ex ea commodo consequat."
 
     val program = for
-      sessionRoot <- IO.blocking(Files.createTempDirectory("session-resume-integration"))
+      sessionRoot <- IO.blocking(TestTemp.directory("session-resume-integration"))
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
@@ -55,7 +53,8 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
         firstManager,
         firstManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _ = firstInitial.startPageSurface should be(defined)
 
@@ -90,7 +89,8 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
         secondManager,
         secondManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _         = secondInitial.startPageSurface should be(defined)
       startPage = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
@@ -118,7 +118,7 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      sessionRoot <- IO.blocking(Files.createTempDirectory("session-resume-runtime-fields"))
+      sessionRoot <- IO.blocking(TestTemp.directory("session-resume-runtime-fields"))
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
@@ -132,7 +132,8 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
         firstManager,
         firstManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _ = firstInitial.startPageSurface should be(defined)
       _ <- firstManager.applyEvent(Enter)
@@ -153,7 +154,8 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
         secondManager.sessionStartupInfo,
         theme,
         viewportSize,
-        capabilities = com.serenity.frontend.FrontendCapabilities.tui(KeyboardFidelityTier.ModifyOtherKeys)
+        capabilities = com.serenity.frontend.FrontendCapabilities.tui(KeyboardFidelityTier.ModifyOtherKeys),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       startPage = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       _         = startPage.resume should be(defined)

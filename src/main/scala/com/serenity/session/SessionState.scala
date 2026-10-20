@@ -36,7 +36,10 @@ final case class SessionState(
     // Keyed by `AppMode.configKey` rather than the enum itself: circe's semi-automatic derivation needs an explicit
     // KeyEncoder/KeyDecoder for a non-string map key, and this reuses the string form the config file already has.
     recentFilesByMode: Map[String, List[String]] = Map.empty,
+    recentFolders: List[String] = Nil,
     commandUsage: Map[String, Int] = Map.empty,
+    // Keyed by `ChromeElement.configKey`. Added without a schema bump: an older build ignores it, losing only the lock.
+    lockedChrome: List[String] = Nil,
     schemaVersion: SchemaVersion = SessionState.CurrentSchemaVersion
 )
 
@@ -60,8 +63,11 @@ object SessionState:
     * Schema version 5 gives comments an id, an author, times, replies and a resolved flag (#1903). Every one decodes
     * with a default, and a comment without an id is given one on restore; the bump is so an older build refuses the
     * session rather than silently dropping its threads the next time it saves.
+    *
+    * Schema version 6 adds the recent folders (`recentFolders`, beside `recentFiles`). A session without them restores
+    * with none; the bump is so an older build refuses a newer session rather than dropping its folders when it saves.
     */
-  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(5)
+  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(6)
 
   def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
     assemble(appState, orderedBuffers(appState).map(SessionBuffer.fromBuffer(_, persistUnsaved)))
@@ -82,12 +88,13 @@ object SessionState:
       config = appState.committedConfig,
       themeName = appState.committedTheme.name,
       recentFiles = appState.persisted.recentFiles.map(_.toString),
-      recentFilesByMode = appState.persisted.recentFilesByMode.map {
-        case (mode, paths) => mode.configKey -> paths.map(_.toString)
-      },
+      recentFilesByMode =
+        appState.persisted.recentFilesByMode.map { case (mode, paths) => mode.configKey -> paths.map(_.toString) },
+      recentFolders = appState.persisted.recentFolders.map(_.toString),
       // `commandUsage` is keyed by `CommandId` in `Persisted` (issue #1693); the session file itself stays plain
       // `String`-keyed JSON, the same convention `recentFilesByMode` above uses for `AppMode`.
-      commandUsage = appState.persisted.commandUsage.map { case (id, generation) => id.value -> generation }
+      commandUsage = appState.persisted.commandUsage.map { case (id, generation) => id.value -> generation },
+      lockedChrome = appState.runtime.summons.locked.toList.sortBy(_.ordinal).map(_.configKey)
     )
 
   private def orderedBuffers(appState: AppState): List[Buffer] =
@@ -155,6 +162,7 @@ object SessionState:
         recentFilesByMode = sessionState.recentFilesByMode.flatMap {
           case (key, paths) => AppMode.fromConfigKey(key).map(mode => mode -> paths.map(Path.of(_)))
         },
+        recentFolders = sessionState.recentFolders.map(Path.of(_)),
         commandUsage = CommandUsageHistory.restored(
           sessionState.commandUsage.map { case (name, generation) => CommandId(name) -> generation },
           CommandRegistry.withToggleUI.isRegistered
@@ -164,6 +172,8 @@ object SessionState:
         uiSurfaces = restoredLayout.surfaces,
         nextBufferId = BufferId(bufferMap.keys.map(_.value).maxOption.getOrElse(-1) + 1),
         nextPaneId = PaneId(layout.editorPanes.keys.map(_.value).maxOption.getOrElse(-1) + 1),
-        nextSurfaceId = restoredLayout.nextSurfaceId
+        nextSurfaceId = restoredLayout.nextSurfaceId,
+        chapterGhostsVisible = sessionState.config.documentConfig.chapterGhosts,
+        summons = ChromeSummons(locked = sessionState.lockedChrome.flatMap(ChromeElement.fromConfigKey).toSet)
       )
     )

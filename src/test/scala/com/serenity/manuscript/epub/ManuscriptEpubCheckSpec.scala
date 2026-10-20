@@ -8,6 +8,7 @@ import scala.jdk.CollectionConverters.*
 import com.adobe.epubcheck.api.{EPUBLocation, EpubCheck}
 import com.adobe.epubcheck.messages.{Message, Severity}
 import com.adobe.epubcheck.util.DefaultReportImpl
+import com.serenity.TestTemp
 import com.serenity.manuscript.Manuscript
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -29,7 +30,7 @@ class ManuscriptEpubCheckSpec extends AnyFlatSpec with Matchers:
     def recorded: List[String] = problems.asScala.toList
 
   private def problemsIn(manuscript: Manuscript): (List[String], Int, Int, Int) =
-    val file = Files.createTempFile("manuscript", ".epub")
+    val file = TestTemp.file("manuscript", ".epub")
     try
       Files.write(file, ManuscriptEpubWriter.write(manuscript, ManuscriptEpubFixture.modified))
       val report = RecordingReport()

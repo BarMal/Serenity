@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.{CommandRegistry, RichTextCommands}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.keystroke.events.{CloseTab, Enter, InsertChar}
@@ -65,7 +66,7 @@ class FormattingLossSaveSpec extends AnyFlatSpec with Matchers:
         .unsafeRunSync()
 
   private def fixture(): Fixture =
-    val directory = Files.createTempDirectory("formatting-loss-save-spec")
+    val directory = TestTemp.directory("formatting-loss-save-spec")
     val program =
       for
         modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))
@@ -102,8 +103,8 @@ class FormattingLossSaveSpec extends AnyFlatSpec with Matchers:
         prompt
     }
 
-  /** A save, had one been submitted, lands on a background lane; give it the chance to before asserting it didn't. */
-  private def settle(): Unit = IO.sleep(300.millis).unsafeRunSync()
+  /** A save, had one been submitted, lands on a background lane; wait for the lanes to settle before asserting none. */
+  private def settle(f: Fixture): Unit = f.stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
 
   "Saving a formatted plain-text file" should "ask with a non-blocking prompt instead of writing the file" in {
     val f          = fixture()
@@ -111,7 +112,7 @@ class FormattingLossSaveSpec extends AnyFlatSpec with Matchers:
     f.bolden(id)
 
     f.save()
-    settle()
+    settle(f)
 
     val prompt = floatingConfirm(f.state).getOrElse(fail("expected the formatting prompt"))
     prompt.blocking shouldBe false
@@ -168,7 +169,7 @@ class FormattingLossSaveSpec extends AnyFlatSpec with Matchers:
     f.send(CloseTab)
     com.serenity.ClosePromptFixtures.closePromptHighlight(f.state) shouldBe Some("Save")
     f.send(Enter)
-    settle()
+    settle(f)
 
     f.state.topModal.map(_.modal) should matchPattern {
       case Some(Modal.FileWorkflow(workflow)) if workflow.mode == FileWorkflowMode.SaveAs =>

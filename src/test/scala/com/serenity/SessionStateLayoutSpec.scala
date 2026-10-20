@@ -25,8 +25,8 @@ class SessionStateLayoutSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "SessionState" should "survive a multi-pane multi-buffer layout round trip" in {
-    val file1 = Files.createTempFile("session-multi-pane-1", ".txt")
-    val file2 = Files.createTempFile("session-multi-pane-2", ".txt")
+    val file1 = TestTemp.file("session-multi-pane-1", ".txt")
+    val file2 = TestTemp.file("session-multi-pane-2", ".txt")
     Files.writeString(file1, "pane one content")
     Files.writeString(file2, "pane two content")
 

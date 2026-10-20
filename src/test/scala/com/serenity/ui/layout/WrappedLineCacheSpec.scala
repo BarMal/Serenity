@@ -158,6 +158,15 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
     cache.retainedChars should be <= (prose.length.toLong * 2 + 10)
   }
 
+  it should "keep the default character bound small enough that edit leftovers cannot pin tens of megabytes" in {
+    val cache      = WrappedLineCache.bounded()
+    val paragraphs = (0 until 3000).map(index => s"$index $prose $prose $prose")
+    paragraphs.foreach(paragraph => wrap(paragraph, cache))
+    cache.retainedChars should be <= WrappedLineCache.DefaultMaxChars
+    WrappedLineCache.DefaultMaxChars should be <= 300_000L
+    cache.size should be < paragraphs.length
+  }
+
   it should "rebase cached rows onto a line's new buffer line after a line is inserted above it" in {
     val text   = s"$prose\n\n$prose tail"
     val buffer = Buffer.fromString(BufferId(3), text).copy(viewport = Viewport(0, 0, 40, 40))
@@ -180,6 +189,16 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
     wrap(prose, cache) shouldBe full
     wrap(prose, cache, maxVisualLines = 2) shouldBe firstTwo
     wrap(prose, cache, bufferLine = 5, maxVisualLines = 1) shouldBe full.take(1).map(_.copy(bufferLine = 5))
+  }
+
+  it should "keep serving the very rows a row-limited wrap handed out once a full wrap replaces it" in {
+    val cache    = WrappedLineCache.bounded()
+    val limited  = wrap(prose, cache, maxVisualLines = 2)
+    val full     = wrap(prose, cache)
+    val rowsKept = limited.zip(full).map((before, after) => before.row eq after.row)
+    rowsKept shouldBe Vector(true, true)
+    full.drop(2).map(_.row) should not be empty
+    wrap(prose, cache, maxVisualLines = 2).map(_.row).zip(limited.map(_.row)).forall(_ eq _) shouldBe true
   }
 
   private val variedLines = Table(
@@ -231,4 +250,31 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
     val expected = snapshot(buffer, WrappedLineCache.Uncached, widthPx = 150)
     snapshot(buffer, cache, widthPx = 150) shouldBe expected
     snapshot(buffer, cache, widthPx = 150) shouldBe expected
+  }
+
+  it should "share one entry between the state path's context and a 2x surface context" in {
+    val scaled = FontRenderContext(
+      AffineTransform.getScaleInstance(2.0, 2.0),
+      frc.getAntiAliasingHint,
+      frc.getFractionalMetricsHint
+    )
+    val cache = WrappedLineCache.bounded()
+    val state = wrap(prose, cache)
+    wrap(prose, cache, fontRenderContext = scaled) shouldBe state
+    cache.size shouldBe 1
+    wrap(prose, WrappedLineCache.Uncached, fontRenderContext = scaled) shouldBe
+      wrap(prose, WrappedLineCache.Uncached)
+  }
+
+  it should "serve a line moved to another buffer line from the same cached rows, relabelling none of them" in {
+    val cache = WrappedLineCache.bounded()
+    val above = wrap(prose, cache, bufferLine = 3)
+    val moved = wrap(prose, cache, bufferLine = 4)
+    moved.map(_.bufferLine).distinct shouldBe Vector(4)
+    moved shouldBe above.map(_.copy(bufferLine = 4))
+    moved.zip(above).foreach((a, b) => (a.row: AnyRef) should be theSameInstanceAs (b.row: AnyRef))
+    above.map(_.bufferLine).distinct shouldBe Vector(3)
+    wrap(prose, cache, bufferLine = 3).map(_.bufferLine).distinct shouldBe Vector(3)
+    cache.size shouldBe 1
+    cache.wrapStats.coldWraps shouldBe 1L
   }

@@ -32,7 +32,7 @@ class TerminalAnsiDiffSpec extends AnyFlatSpec with Matchers:
   it should "emit a full clear-and-repaint when there is no previous frame" in {
     val next = TerminalFrame(1, 1, Vector(Vector(cell('x'))))
 
-    val expected = s"$esc[2J$esc[H$esc[1;1H${sgr(Color.WHITE, Color.BLACK)}x$esc[0m"
+    val expected = s"$esc[2J$esc[H${sgr(Color.WHITE, Color.BLACK)}x$esc[0m"
     TerminalAnsiDiff.emit(None, next) shouldBe expected
   }
 
@@ -41,7 +41,7 @@ class TerminalAnsiDiffSpec extends AnyFlatSpec with Matchers:
     val next     = TerminalFrame(2, 1, Vector(Vector(cell('a'), cell('b'))))
 
     val expected =
-      s"$esc[2J$esc[H$esc[1;1H${sgr(Color.WHITE, Color.BLACK)}ab$esc[0m"
+      s"$esc[2J$esc[H${sgr(Color.WHITE, Color.BLACK)}ab$esc[0m"
     TerminalAnsiDiff.emit(Some(previous), next) shouldBe expected
   }
 
@@ -58,7 +58,7 @@ class TerminalAnsiDiffSpec extends AnyFlatSpec with Matchers:
     val next     = TerminalFrame(2, 1, Vector(Vector(cell('a', fg = Color.RED), cell('b', fg = Color.GREEN))))
 
     val expected =
-      s"$esc[1;1H${sgr(Color.RED, Color.BLACK)}a${sgr(Color.GREEN, Color.BLACK)}b$esc[0m"
+      s"$esc[1;1H${sgr(Color.RED, Color.BLACK)}a$esc[38;2;0;255;0mb$esc[0m"
     TerminalAnsiDiff.emit(Some(previous), next) shouldBe expected
   }
 
@@ -134,6 +134,6 @@ class TerminalAnsiDiffSpec extends AnyFlatSpec with Matchers:
     )
 
     val expected =
-      s"$esc[1;1H${sgr(Color.WHITE, opaqueBlack)}a$esc[0;38;2;255;255;255;49mb$esc[0m"
+      s"$esc[1;1H${sgr(Color.WHITE, opaqueBlack)}a$esc[49mb$esc[0m"
     TerminalAnsiDiff.emit(Some(previous), next) shouldBe expected
   }

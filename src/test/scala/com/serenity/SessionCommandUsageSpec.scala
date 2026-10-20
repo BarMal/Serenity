@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.nio.file.Files
-
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
@@ -26,7 +24,7 @@ class SessionCommandUsageSpec extends AnyFlatSpec with Matchers:
     StateManager
       .apply(
         LoggerFactory[IO].getLogger(using LoggerName("SessionCommandUsageSpec")),
-        sessionRootOverride = Some(Files.createTempDirectory("session-command-usage-spec")),
+        sessionRootOverride = Some(TestTemp.directory("session-command-usage-spec")),
         dictionaryCache = SharedDictionary.default
       )
       .unsafeRunSync()

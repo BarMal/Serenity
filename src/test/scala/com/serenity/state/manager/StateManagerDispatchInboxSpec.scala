@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{DocumentRevision, FileManager}
 import com.serenity.keystroke.events.*
@@ -146,7 +147,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       written      <- Deferred[IO, Unit]
       release      <- Deferred[IO, Unit]
       revisionRead <- Deferred[IO, Unit]
-      directory    <- IO.blocking(Files.createTempDirectory("state-manager-dispatch-inbox-spec"))
+      directory    <- IO.blocking(TestTemp.directory("state-manager-dispatch-inbox-spec"))
       file = directory.resolve("notes.txt")
       _                   <- IO.blocking(Files.writeString(file, "draft"))
       modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))

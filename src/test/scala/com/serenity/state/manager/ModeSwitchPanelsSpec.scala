@@ -9,7 +9,7 @@ import com.serenity.config.{AppConfig, AppMode, ConfigManager}
 import com.serenity.state.models.*
 import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.PanelPosition
-import com.serenity.{DockedPanelFixtures, StateManagerTestSupport}
+import com.serenity.{DockedPanelFixtures, StateManagerTestSupport, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -85,7 +85,7 @@ class ModeSwitchPanelsSpec extends AnyFlatSpec with Matchers with StateManagerTe
       )
 
   private def editor(mode: AppMode): Editor =
-    val directory = Files.createTempDirectory("mode-switch-panels")
+    val directory = TestTemp.directory("mode-switch-panels")
     val config    = AppConfig.default.withAppMode(mode)
     val manager = StateManager
       .apply(

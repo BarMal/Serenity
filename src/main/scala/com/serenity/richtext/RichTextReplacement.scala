@@ -80,10 +80,11 @@ object RichTextReplacement:
     val bottom = Vector.fill(newLines.size + 1)(0)
     val rows = oldLines.indices
       .foldRight(List(bottom)) { (i, below) =>
+        val previous = below.headOption.getOrElse(bottom)
         val row = newLines.indices.foldRight(List(0)) { (j, right) =>
           val length =
-            if oldLines(i) == newLines(j) then below.head(j + 1) + 1
-            else below.head(j).max(right.head)
+            if oldLines(i) == newLines(j) then previous(j + 1) + 1
+            else previous(j).max(right.headOption.getOrElse(0))
           length :: right
         }
         row.toVector :: below

@@ -36,7 +36,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "emit semantic diagnostics and a PNG for a controlled red/green regression" in {
-    val artifacts = Files.createTempDirectory("ui-scenario-artifacts")
+    val artifacts = TestTemp.directory("ui-scenario-artifacts")
     val driver = UiScenarioDriver
       .create("controlled-regression", artifactDirectory = Some(artifacts))
       .unsafeRunSync()
@@ -55,7 +55,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     val driver = UiScenarioDriver.create("isolated-config", isolatedConfig = true).unsafeRunSync()
     val config = driver.state.unsafeRunSync().persisted.config
 
-    config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
+    config.markdownViewMode shouldBe MarkdownViewMode.LivePreview
     config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(0)
   }
 
@@ -71,7 +71,8 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
           startupDriver.stateManager,
           startupDriver.stateManager.sessionStartupInfo,
           theme,
-          narrowEnvironment.viewport
+          narrowEnvironment.viewport,
+          appConfig = com.serenity.config.AppConfig.conventional
         )
         .unsafeRunSync()
       val startup = startupDriver.renderFrame("startup").unsafeRunSync()

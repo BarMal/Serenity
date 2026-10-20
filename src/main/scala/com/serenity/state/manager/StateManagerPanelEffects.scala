@@ -59,6 +59,8 @@ final private[manager] class StateManagerPanelEffects(
         commitApp(com.serenity.state.core.EditorState.removeFocusedPane)
       case ViewIntent.OpenChapterNote =>
         commitApp(ChapterNoteTransitions.openCurrentChapterNote(_, SplitAxis.Horizontal))
+      case ViewIntent.OpenKeywordNote =>
+        commitApp(ChapterNoteTransitions.openCurrentKeywordNote(_, SplitAxis.Horizontal))
       case ViewIntent.ToggleChapterGhosts =>
         commitApp(ChapterNoteTransitions.toggleGhosts)
       case ViewIntent.ToggleNotesPin =>
@@ -85,6 +87,11 @@ final private[manager] class StateManagerPanelEffects(
         commitApp(state => ModalStateReducer.show(Modal.PanelArrangement(PanelArrangement.of(state)), state).state)
       case ViewIntent.SetMarkdownViewMode(mode) =>
         setMarkdownViewMode(mode)
+      case ViewIntent.ToggleMarkdownReadMode =>
+        setMarkdownViewMode(
+          if state.persisted.config.markdownViewMode == MarkdownViewMode.Read then MarkdownViewMode.LivePreview
+          else MarkdownViewMode.Read
+        )
       case ViewIntent.SetDefaultDocumentMode(mode) =>
         updateConfig(_.withDefaultDocumentMode(mode)).void
       case ViewIntent.SetAppMode(mode) =>
@@ -112,7 +119,7 @@ final private[manager] class StateManagerPanelEffects(
     mode match
       case MarkdownViewMode.SplitPreview =>
         updateConfigEffect >> openMarkdownPreview
-      case MarkdownViewMode.Source | MarkdownViewMode.InlineLens =>
+      case MarkdownViewMode.Source | MarkdownViewMode.LivePreview | MarkdownViewMode.Read =>
         updateConfigEffect >> commitApp(PanelTransitions.removePanel(PanelId.MarkdownPreview))
 
   // Hidden through the same animated, undoable unpin a drag-off uses.

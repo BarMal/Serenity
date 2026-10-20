@@ -58,11 +58,25 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.startupWarmUpEnabled,
       (config, value) => config.withStartupWarmUp(value)
     ),
+    field("performance.memory.compact")(boolean)(
+      _.surfaceConfig.memoryCompactionEnabled,
+      (config, value) => config.withMemoryCompaction(value)
+    ),
     named("editor.word_wrap", "wordWrapEnabled", "display.word_wrap", "display.word.wrap", "display_word_wrap")(
       boolean
     )(
       _.surfaceConfig.wordWrapEnabled,
       (config, value) => config.withWordWrap(value)
+    ),
+    field("editor.scrollbar")(boolean)(
+      _.surfaceConfig.scrollbarEnabled,
+      (config, value) => config.withScrollbar(value)
+    ),
+    field("editor.tab_strip")(
+      enumerated(TabStripMode.fromConfigKey, _.configKey, text => TabStripMode.values.find(_.toString == text))
+    )(
+      _.surfaceConfig.tabStrip,
+      (config, value) => config.withTabStrip(value)
     ),
     named(
       "editor.visual_line_navigation",

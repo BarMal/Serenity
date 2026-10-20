@@ -4,23 +4,82 @@ import scala.annotation.tailrec
 
 object MarkdownBlockLens:
 
-  final case class FenceRangeIndex(ranges: Vector[Range.Inclusive]):
+  /** A line's place in a pipe table. */
+  enum TableRow:
+    case None, Header, Delimiter, Body
 
-    def rangeAt(line: Int): Option[Range.Inclusive] =
-      @annotation.tailrec
-      def search(low: Int, high: Int): Option[Range.Inclusive] =
-        if low > high then None
-        else
-          val middle = (low + high) / 2
-          val range  = ranges(middle)
-          if line < range.start then search(low, middle - 1)
-          else if line > range.end then search(middle + 1, high)
-          else Some(range)
-      search(0, ranges.length - 1)
+  /** A line's place in a setext heading, whose text lines are underlined by a line of `=` or `-`. */
+  enum SetextRole:
+    case None
+    case Text(level: Int)
+    case Underline
+
+  /** A setext heading: the paragraph lines and, last, the underline. */
+  final case class SetextHeading(lines: Range.Inclusive, level: Int)
+
+  /** The document's fenced code blocks, pipe tables and setext headings, found in one pass over its lines. Despite the
+    * name it is the one block index the live preview consults, so no further scan of the document is needed.
+    */
+  final case class FenceRangeIndex(
+      ranges: Vector[Range.Inclusive],
+      tables: Vector[Range.Inclusive] = Vector.empty,
+      setext: Vector[SetextHeading] = Vector.empty
+  ) extends BlockIndex:
+
+    def tablesIn(lines: Range.Inclusive): Vector[Range.Inclusive] =
+      tables.filter(table => table.end >= lines.start && table.start <= lines.end)
+
+    def rangeAt(line: Int): Option[Range.Inclusive] = containing(ranges, line)(identity)
+
+    def tableAt(line: Int): Option[Range.Inclusive] = containing(tables, line)(identity)
+
+    def setextHeadingAt(line: Int): Option[SetextHeading] = containing(setext, line)(_.lines)
+
+  /** What layout and painting ask of a document's block structure, line by line. Answers are the same whether the index
+    * was built over the whole document or, as [[LazyBlockIndex]] does, only as far as the lines asked about.
+    */
+  trait BlockIndex:
+    def rangeAt(line: Int): Option[Range.Inclusive]
+    def tableAt(line: Int): Option[Range.Inclusive]
+    def setextHeadingAt(line: Int): Option[SetextHeading]
+
+    /** The tables that overlap `lines`, in order. */
+    def tablesIn(lines: Range.Inclusive): Vector[Range.Inclusive]
+
+    final def tableRowAt(line: Int): TableRow =
+      tableAt(line).fold(TableRow.None) { table =>
+        if line == table.start then TableRow.Header
+        else if line == table.start + 1 then TableRow.Delimiter
+        else TableRow.Body
+      }
+
+    final def setextAt(line: Int): SetextRole =
+      setextHeadingAt(line).fold(SetextRole.None) { heading =>
+        if line == heading.lines.end then SetextRole.Underline else SetextRole.Text(heading.level)
+      }
+
+  private[markdown] def containing[A](items: Vector[A], line: Int)(range: A => Range.Inclusive): Option[A] =
+    @annotation.tailrec
+    def search(low: Int, high: Int): Option[A] =
+      if low > high then None
+      else
+        val middle = (low + high) / 2
+        val item   = items(middle)
+        val lines  = range(item)
+        if line < lines.start then search(low, middle - 1)
+        else if line > lines.end then search(middle + 1, high)
+        else Some(item)
+    search(0, items.length - 1)
 
   def fenceRangeIndex(lineCount: Int, lineAt: Int => Option[String]): FenceRangeIndex =
-    val fences = (0 until lineCount).iterator.filter(index => isFenceLine(lineAt(index).getOrElse(""))).toVector
-    FenceRangeIndex(fences.grouped(2).collect { case Vector(open, close) => open to close }.toVector)
+    fenceRangeIndex((0 until lineCount).iterator.map(index => lineAt(index).getOrElse("")))
+
+  /** The fenced blocks of a document given its lines in order, each paired fence line to the next, its tables (a header
+    * row, a delimiter row and the rows after them) and its setext headings, outside any fence.
+    */
+  def fenceRangeIndex(lines: Iterator[String]): FenceRangeIndex =
+    val done = lines.foldLeft(BlockScan.empty)(_.next(_)).finished
+    FenceRangeIndex(done.closedFences, done.tables, done.setext)
 
   final private case class LineSource(lineCount: Int, lineAt: Int => Option[String], fenceProbeWindow: Option[Int]):
     def at(index: Int): String =
@@ -238,10 +297,10 @@ object MarkdownBlockLens:
   private def isHeadingLine(line: String): Boolean =
     line.trim.matches("""^#{1,6}\s+.*""")
 
-  private def isSetextUnderline(line: String): Boolean =
+  private[markdown] def isSetextUnderline(line: String): Boolean =
     line.trim.matches("""^(=+|-+)$""")
 
-  private def isThematicBreak(line: String): Boolean =
+  private[markdown] def isThematicBreak(line: String): Boolean =
     val markers = line.filterNot(_.isWhitespace)
     markers.length >= 3 && markers.headOption.exists(Set('*', '-', '_').contains) && markers.forall(_ == markers.head)
 
@@ -258,7 +317,7 @@ object MarkdownBlockLens:
   private def isBlockQuoteSeparator(line: String): Boolean =
     line.trim.drop(1).trim.isEmpty
 
-  private def isFenceLine(line: String): Boolean =
+  private[markdown] def isFenceLine(line: String): Boolean =
     val trimmed = line.trim
     trimmed.startsWith("```") || trimmed.startsWith("~~~")
 

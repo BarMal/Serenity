@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.{CloseTab, Enter, Escape, InsertChar, Quit}
@@ -51,7 +52,7 @@ class CloseSaveFailureSpec extends AnyFlatSpec with Matchers:
     def quitRequested: Boolean = quitSignal.tryGet.unsafeRunSync().isDefined
 
   private def fixture(failingNames: Set[String] = Set.empty): Fixture =
-    val directory = Files.createTempDirectory("close-save-failure-spec")
+    val directory = TestTemp.directory("close-save-failure-spec")
     val program =
       for
         modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))

@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.io.FileManager
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
@@ -22,7 +23,7 @@ class BufferContentReplacementRichTextSpec extends AnyFlatSpec with Matchers wit
   private val block    = InlineAtom.BlockCharacter.toString
 
   private def withReport[A](use: (Buffer, Array[Byte], java.nio.file.Path) => A): A =
-    val file = Files.createTempFile("serenity-replace-source", ".docx")
+    val file = TestTemp.file("serenity-replace-source", ".docx")
     try
       val bytes = GoldenFixtures.zip(GoldenFixtures.wordReport.entries)
       Files.write(file, bytes)

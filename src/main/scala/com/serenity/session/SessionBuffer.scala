@@ -10,6 +10,7 @@ import com.serenity.richtext.*
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
 import com.serenity.text.{LineEnding, TextEncoding}
+import com.serenity.ui.openings.OpeningOverride
 
 final case class SessionBuffer(
     id: Int,
@@ -41,7 +42,12 @@ final case class SessionBuffer(
     contentRef: Option[String] = None,
     // The next comment id to hand out (#1903), so a deleted comment's id is not given to a new one after a restore. A
     // session written before comment ids has none, and the ids are assigned on restore.
-    nextCommentId: Option[Int] = None
+    nextCommentId: Option[Int] = None,
+    // The indentation the user chose for this buffer (see `IndentationSettings.configKey`); what is detected from the
+    // text is worked out again on restore.
+    indentation: Option[String] = None,
+    // The chapter-opening settings the user gave this buffer; absent when it follows the global ones.
+    openings: Option[SessionOpenings] = None
 )
 
 /** One note, flattened for JSON: `kind` says whether `title` is a chapter heading (with its `occurrence`) or a keyword.
@@ -146,22 +152,26 @@ object SessionBuffer:
       darlings = buffer.annotations.darlings.map(SessionDarling.fromDarling),
       revision = buffer.document.revision.map(_.value),
       hidden = buffer.hidden,
-      notes = buffer.annotations.notes.toList.map(SessionNote.fromEntry).sortBy(SessionNote.order)
+      notes = buffer.annotations.notes.toList.map(SessionNote.fromEntry).sortBy(SessionNote.order),
+      indentation = buffer.document.indentation.chosen.complete.map(IndentationSettings.configKey),
+      openings = SessionOpenings.fromOverride(buffer.document.openings)
     )
     (session, unsaved)
 
   def toBuffer(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): Buffer =
+    // A clean rich-text buffer's session entry holds the formatted document instead of the text it describes.
+    val content = sessionBuffer.unsavedContent
+      .orElse(sessionBuffer.richTextDocument.map(_.plainText))
+      .map(Rope.apply)
+      .getOrElse(Rope.empty)
+    val language = sessionBuffer.language.flatMap(LanguageId.fromString)
     Buffer(
       id = BufferId(sessionBuffer.id),
       document = Document(
-        // A clean rich-text buffer's session entry holds the formatted document instead of the text it describes.
-        content = sessionBuffer.unsavedContent
-          .orElse(sessionBuffer.richTextDocument.map(_.plainText))
-          .map(Rope.apply)
-          .getOrElse(Rope.empty),
+        content = content,
         filePath = sessionBuffer.filePath.map(path => Paths.get(path)),
         isDirty = sessionBuffer.isDirty,
-        language = sessionBuffer.language.flatMap(LanguageId.fromString),
+        language = language,
         isNewEmpty = sessionBuffer.isNewEmpty,
         // A session written before line endings were recorded has no key to restore; LineEnding.default matches
         // what that session's buffers would have been saved with anyway.
@@ -169,7 +179,14 @@ object SessionBuffer:
         // Likewise for a session written before encodings were recorded (#1627): every file was read as UTF-8.
         encoding = sessionBuffer.encoding.flatMap(TextEncoding.fromConfigKey).getOrElse(TextEncoding.default),
         hasBom = sessionBuffer.hasBom,
-        revision = sessionBuffer.revision.map(DocumentRevision(_))
+        revision = sessionBuffer.revision.map(DocumentRevision(_)),
+        indentation = DocumentIndentation(
+          chosen = sessionBuffer.indentation
+            .flatMap(IndentationSettings.fromConfigKey)
+            .fold(IndentationHint.Empty)(IndentationHint.of),
+          detected = IndentationDetector.of(content, language)
+        ),
+        openings = sessionBuffer.openings.fold(OpeningOverride.Empty)(SessionOpenings.toOverride)
       ),
       editing = EditingState(sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition)),
       viewport = SessionViewport.toViewport(sessionBuffer.viewport),
@@ -201,7 +218,7 @@ object SessionBuffer:
       case Some(path) if !(sessionBuffer.isDirty && sessionBuffer.unsavedContent.isDefined) =>
         files.loadFile(path, recorded.id).map(fromDisk(recorded, _)).handleError(_ => recorded)
       case _ => IO.pure(recorded)
-    restored.flatMap(withSourcePackage(_, files))
+    restored.flatMap(files.withEditorConfigIndentation).flatMap(withSourcePackage(_, files))
 
   /** A restored rich document keeps no package bytes, so a DOCX or ODT one is linked to its file read again. The file
     * counts only when it is still at the revision the buffer was read or written at (the stat check): a file changed
@@ -243,7 +260,7 @@ object SessionBuffer:
       case _               => buffer
 
   private def fromDisk(recorded: Buffer, disk: Buffer): Buffer =
-    if disk.document.content.collect() == recorded.document.content.collect() then
+    if disk.document.content == recorded.document.content then
       recorded.copy(
         document = recorded.document.copy(revision = disk.document.revision, isDirty = false),
         // The file just read is the package the unchanged document came from, with every paragraph's source.
@@ -255,7 +272,10 @@ object SessionBuffer:
     else
       recorded
         .copy(
-          document = disk.document.copy(language = recorded.document.language.orElse(disk.document.language)),
+          document = disk.document
+            .copy(language = recorded.document.language.orElse(disk.document.language))
+            .keepingChosenIndentationOf(recorded.document)
+            .keepingOpeningsOf(recorded.document),
           richText = disk.richText,
           findState = None
         )

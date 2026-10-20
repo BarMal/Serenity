@@ -9,8 +9,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * A language server that answers `initialize` and then stops responding. Run by LspConnectionHungServerSpec as a
- * single-file source program: `java HungLspServer.java <ignore|deaf> <pid-file>`.
+ * A language server that answers `initialize` and then stops responding. Run by LspConnectionHungServerSpec, which
+ * compiles it and runs `java -cp <classes> HungLspServer <ignore|deaf> <pid-file>`.
  *
  * `ignore` keeps reading stdin but never answers or exits, not even on `exit` or end of input. `deaf` stops reading
  * stdin altogether. Either way only the process being killed ends it. The pid file lets the spec check it is gone.

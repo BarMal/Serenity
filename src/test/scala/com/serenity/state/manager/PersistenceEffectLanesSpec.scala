@@ -1,11 +1,12 @@
 package com.serenity.state.manager
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import scala.concurrent.duration.*
 
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.command.{CommandRunner, KeybindingsIntent, UiPresetsIntent}
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{AppConfig, ConfigError, HotkeyAction, HotkeyTrigger}
@@ -176,7 +177,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
       override def create(preset: UiPreset): IO[Unit] = gate.get >> super.create(preset)
 
   "Config writes" should "write only the latest of a burst of changes, once, without holding the dispatcher" in {
-    val root = Files.createTempDirectory("persistence-lanes-config-burst")
+    val root = TestTemp.directory("persistence-lanes-config-burst")
     val program =
       for
         rig     <- rig()
@@ -198,7 +199,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "write a change made while an earlier write is still running after it, in order" in {
-    val root = Files.createTempDirectory("persistence-lanes-config-fifo")
+    val root = TestTemp.directory("persistence-lanes-config-fifo")
     val program =
       for
         rig     <- rig()
@@ -218,7 +219,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not write a config the file already holds" in {
-    val root = Files.createTempDirectory("persistence-lanes-config-unchanged")
+    val root = TestTemp.directory("persistence-lanes-config-unchanged")
     val program =
       for
         rig     <- rig()
@@ -237,7 +238,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "persist a keybinding change on the config lane, in the one write that follows a settings change" in {
-    val root = Files.createTempDirectory("persistence-lanes-keybinding")
+    val root = TestTemp.directory("persistence-lanes-keybinding")
     val program =
       for
         rig     <- rig()
@@ -263,7 +264,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
   }
 
   "A slow preset write" should "leave the dispatcher free for an editor keystroke dispatched meanwhile" in {
-    val root = Files.createTempDirectory("persistence-lanes-preset-slow")
+    val root = TestTemp.directory("persistence-lanes-preset-slow")
     val program =
       for
         rig  <- rig(commandPaletteState)
@@ -285,7 +286,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
   }
 
   "A failing preset write" should "surface the same error on the command runner as before" in {
-    val root = Files.createTempDirectory("persistence-lanes-preset-failure")
+    val root = TestTemp.directory("persistence-lanes-preset-failure")
     val failingStore = new UiPresetStore(root.resolve("ui-presets.json")):
       override def create(preset: UiPreset): IO[Unit] = IO.raiseError(new java.io.IOException("disk full"))
     val program =
@@ -301,7 +302,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
   }
 
   "A preset apply result" should "be dropped once a later apply has been requested" in {
-    val root = Files.createTempDirectory("persistence-lanes-preset-stale")
+    val root = TestTemp.directory("persistence-lanes-preset-stale")
     val program =
       for
         rig   <- rig(commandPaletteState)
@@ -350,7 +351,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "let a pending config write finish before releasing the lanes" in {
-    val root = Files.createTempDirectory("persistence-lanes-shutdown-drain")
+    val root = TestTemp.directory("persistence-lanes-shutdown-drain")
     val program =
       for
         rig     <- rig()
@@ -371,7 +372,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "give up on a write that never finishes after the grace period" in {
-    val root = Files.createTempDirectory("persistence-lanes-shutdown-grace")
+    val root = TestTemp.directory("persistence-lanes-shutdown-grace")
     val program =
       for
         rig     <- rig()

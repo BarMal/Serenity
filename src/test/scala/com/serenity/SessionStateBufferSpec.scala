@@ -25,7 +25,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
     )
 
   "SessionState" should "restore clean file-backed buffers from disk content" in {
-    val tempFile = Files.createTempFile("session-state-clean", ".txt")
+    val tempFile = TestTemp.file("session-state-clean", ".txt")
     Files.writeString(tempFile, "content from disk")
 
     val buffer = Buffer.fromFile(BufferId(7), tempFile, "content from disk")
@@ -51,7 +51,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "restore dirty file-backed buffers from unsaved in-memory content" in {
-    val tempFile = Files.createTempFile("session-state-dirty", ".txt")
+    val tempFile = TestTemp.file("session-state-dirty", ".txt")
     Files.writeString(tempFile, "saved on disk")
 
     val baseBuffer = Buffer.fromFile(BufferId(9), tempFile, "unsaved in memory")
@@ -78,7 +78,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve dirty buffer content even when persistUnsavedBuffers is false" in {
-    val tempFile = Files.createTempFile("session-state-no-persist", ".txt")
+    val tempFile = TestTemp.file("session-state-no-persist", ".txt")
     Files.writeString(tempFile, "saved on disk")
 
     val baseBuffer = Buffer.fromFile(BufferId(11), tempFile, "unsaved in memory")
@@ -104,7 +104,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "rely on the on-disk file for clean buffer content when persistUnsavedBuffers is false" in {
-    val tempFile = Files.createTempFile("session-state-clean-persist", ".txt")
+    val tempFile = TestTemp.file("session-state-clean-persist", ".txt")
     Files.writeString(tempFile, "saved on disk")
 
     val buffer = Buffer.fromFile(BufferId(13), tempFile, "saved on disk")
@@ -129,7 +129,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "survive a JSON encode/decode round trip with content, cursor, viewport, and FindState" in {
-    val tempFile = Files.createTempFile("session-json-roundtrip", ".txt")
+    val tempFile = TestTemp.file("session-json-roundtrip", ".txt")
     Files.writeString(tempFile, "json round trip content")
 
     val baseBuffer = Buffer.fromFile(BufferId(20), tempFile, "json round trip content")
@@ -324,8 +324,8 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve distinct find state per buffer through round trip" in {
-    val file1 = Files.createTempFile("session-find-buffer-1", ".txt")
-    val file2 = Files.createTempFile("session-find-buffer-2", ".txt")
+    val file1 = TestTemp.file("session-find-buffer-1", ".txt")
+    val file2 = TestTemp.file("session-find-buffer-2", ".txt")
     Files.writeString(file1, "apple banana cherry")
     Files.writeString(file2, "dog elephant fox")
 

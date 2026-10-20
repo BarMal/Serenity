@@ -90,7 +90,7 @@ class SessionSaveWorkSpec extends AnyFlatSpec with Matchers:
   }
 
   "A session save" should "not collect, encode or hash an unchanged buffer a second time" in {
-    val manager = newManager(Files.createTempDirectory("session-save-work"))
+    val manager = newManager(TestTemp.directory("session-save-work"))
     val leaf    = new CountingLeaf("unsaved draft")
     val id      = AppState.initial.persisted.bufferOrder.head
     val clean   = new CountingLeaf("clean")
@@ -107,7 +107,7 @@ class SessionSaveWorkSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "store the new text once the buffer changes, and prune the old content file" in {
-    val root    = Files.createTempDirectory("session-save-work")
+    val root    = TestTemp.directory("session-save-work")
     val manager = newManager(root)
     val id      = AppState.initial.persisted.bufferOrder.head
     val first   = new CountingLeaf("first draft")
@@ -122,7 +122,7 @@ class SessionSaveWorkSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "write a content file that has gone missing again, even for an unchanged buffer" in {
-    val root    = Files.createTempDirectory("session-save-work")
+    val root    = TestTemp.directory("session-save-work")
     val manager = newManager(root)
     val id      = AppState.initial.persisted.bufferOrder.head
     val state   = withBuffers(untitledBuffer(id, new CountingLeaf("precious")))
@@ -136,7 +136,7 @@ class SessionSaveWorkSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "write nothing when the session is exactly what the last save stored" in {
-    val root    = Files.createTempDirectory("session-save-work")
+    val root    = TestTemp.directory("session-save-work")
     val manager = newManager(root)
     val id      = AppState.initial.persisted.bufferOrder.head
     val state   = withBuffers(untitledBuffer(id, new CountingLeaf("draft")))
@@ -153,7 +153,7 @@ class SessionSaveWorkSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "write the session again when its file was deleted behind the manager's back" in {
-    val root    = Files.createTempDirectory("session-save-work")
+    val root    = TestTemp.directory("session-save-work")
     val manager = newManager(root)
     val id      = AppState.initial.persisted.bufferOrder.head
     val state   = withBuffers(untitledBuffer(id, new CountingLeaf("draft")))
@@ -167,7 +167,7 @@ class SessionSaveWorkSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "write the session again when only a non-text part of the state changed" in {
-    val root    = Files.createTempDirectory("session-save-work")
+    val root    = TestTemp.directory("session-save-work")
     val manager = newManager(root)
     val id      = AppState.initial.persisted.bufferOrder.head
     val state   = withBuffers(untitledBuffer(id, new CountingLeaf("draft")))

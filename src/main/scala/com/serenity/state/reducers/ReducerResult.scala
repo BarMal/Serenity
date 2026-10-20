@@ -4,8 +4,8 @@ import java.nio.file.Path
 
 import cats.syntax.all.*
 import com.serenity.command.Command
-import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.{DocumentDelta, LspEffect}
 import com.serenity.rope.Rope
 import com.serenity.state.models.{AppState, BufferId, CloseScope, SurfaceId}
 import com.serenity.state.undo.{EditGrouping, HistoryEntry}
@@ -35,6 +35,9 @@ enum FileEffect:
   case SaveBufferAs(bufferId: BufferId, path: Path)
   case DirectLoadFile(path: Path)
 
+  /** Opens the files a rename's edits name that no buffer holds, then applies the edits to them (#1965). */
+  case OpenForRenameEdit(pending: PendingRename)
+
 enum ExplorerEffect:
   case OpenRoot(position: PanelPosition, path: Path, size: Int)
 
@@ -43,6 +46,11 @@ enum WorkflowEffect:
   case RequestSaveAs
   case RefreshFileWorkflow(surfaceId: SurfaceId)
   case RefreshFind(request: com.serenity.state.models.FindSearchRequest)
+
+  /** Recomputes the list picker `surfaceId`'s items for `query` off the dispatcher; the result lands only if the picker
+    * still holds exactly that query.
+    */
+  case RefreshPicker(surfaceId: SurfaceId, query: String)
   case SubmitFileWorkflow(surfaceId: SurfaceId)
   case SubmitReplaceWorkflow(surfaceId: SurfaceId)
   // Starts the close workflow (`beginCloseAction`) for `scope`: closes clean buffers, prompts for dirty ones.
@@ -58,7 +66,7 @@ enum WorkflowEffect:
 
 enum LspQueueEffect:
   case Enqueue(effect: LspEffect)
-  case DocumentChanged(uri: String, languageId: LanguageId, text: Rope)
+  case DocumentChanged(uri: String, languageId: LanguageId, text: Rope, delta: Option[DocumentDelta] = None)
 
 /** A reducer's own declaration that the change it just performed is undoable, carrying the [[HistoryEntry]] that
   * restores it -- see #1016. `grouping` says whether this coalesces into the buffer's open run of edits (consecutive

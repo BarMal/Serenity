@@ -23,14 +23,14 @@ class StateManagerConfigReloadSpec extends AnyFlatSpec with Matchers with StateM
     StateManager
       .apply(
         testLogger("StateManagerConfigReloadSpec"),
-        sessionRootOverride = Some(Files.createTempDirectory("config-reload-session")),
+        sessionRootOverride = Some(TestTemp.directory("config-reload-session")),
         initialConfig = initial,
         configPersistencePath = Some(configPath),
         dictionaryCache = SharedDictionary.cacheFor(initial)
       )
       .unsafeRunSync()
 
-  private def configFile: Path = Files.createTempDirectory("config-reload").resolve("config.conf")
+  private def configFile: Path = TestTemp.directory("config-reload").resolve("config.conf")
 
   private def reloadFromWatcher(stateManager: StateManager): Unit =
     (stateManager.fileService.configWatch.traverse_(_.reload) >> stateManager.runtimeLifecycle.awaitEffects)

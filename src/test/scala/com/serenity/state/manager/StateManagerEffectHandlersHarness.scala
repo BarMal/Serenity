@@ -1,9 +1,10 @@
 package com.serenity.state.manager
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.TestTemp
 import com.serenity.command.*
 import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.io.{FileDialog, FileManager}
@@ -62,7 +63,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
     val eventsVar          = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
     val callsVar           = Ref.of[IO, List[String]](Nil).unsafeRunSync()
     val fontConfigsVar     = Ref.of[IO, List[com.serenity.ui.fonts.FontLoader.FontConfig]](Nil).unsafeRunSync()
-    val sessionRoot        = Files.createTempDirectory("effect-handlers-spec")
+    val sessionRoot        = TestTemp.directory("effect-handlers-spec")
     val sessionTriggersVar = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
     val themeNamesRefVar   = Ref.of[IO, List[String]](Nil).unsafeRunSync()
     val quitSignalVar      = Deferred[IO, Unit].unsafeRunSync()
@@ -147,6 +148,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def reloadBuffer(id: BufferId): IO[Unit]             = callsVar.update(_ :+ s"reloadBuffer:$id")
       def forceSaveExistingBuffer(id: BufferId): IO[Unit]  = callsVar.update(_ :+ s"forceSaveExistingBuffer:$id")
       def loadFile(path: Path): IO[Unit]                   = filePersistence.loadFile(path)
+      def openFile(path: Path): IO[Unit]                   = filePersistence.openFile(path)
       def openFromDialog(dialog: FileDialog): IO[Unit]     = filePersistence.openFromDialog(dialog)
       def openFolderFromDialog(dialog: FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
         filePersistence.openFolderFromDialog(dialog, openFolder)
@@ -195,6 +197,8 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def openSessionPicker(state: AppState, purpose: SessionListPurpose): IO[Unit] =
         callsVar.update(_ :+ s"openSessionPicker:$purpose")
       def openFileFinder: IO[Unit] = callsVar.update(_ :+ "openFileFinder")
+      def refreshPickerEffect(surfaceId: SurfaceId, query: String): IO[Unit] =
+        callsVar.update(_ :+ s"refreshPickerEffect:$surfaceId:$query")
       def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit] =
         callsVar.update(_ :+ s"submitSessionNamePromptEffect:$surfaceId")
       def openNamedSession(sessionId: SessionId, state: AppState): IO[Unit] =

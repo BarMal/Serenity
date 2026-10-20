@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -100,7 +101,7 @@ class OpenPanelScriptSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "start in the directory it is given" in {
-    val directory = Files.createTempDirectory("serenity-open-panel")
+    val directory = TestTemp.directory("serenity-open-panel")
     val objc      = new RecordingObjectiveC()
 
     OpenPanelScript.run(objc, Some(directory))
@@ -115,7 +116,7 @@ class OpenPanelScriptSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave the panel's own starting directory alone for a path that is not an existing directory" in {
-    val file = Files.createTempFile("serenity-open-panel", ".txt")
+    val file = TestTemp.file("serenity-open-panel", ".txt")
 
     for initial <- List(Some(file), Some(file.resolveSibling("does-not-exist")), None) do
       val objc = new RecordingObjectiveC()

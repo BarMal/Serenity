@@ -82,8 +82,9 @@ Local mutation that genuinely earns its place is scoped with `// scalafix:off Di
 | `AsInstanceOf`, `IsInstanceOf` | Pattern matching over casting |
 
 `Null`, `Throw`, `OptionPartial` and `IterableOps` are reported as **warnings only** — each needs its
-own migration. Java/AWT interop (`ui/terminal`, `ui/accessibility`), the LSP framer and the richtext
-codecs are excluded, since they sit at the outermost boundary where those constructs are legitimate.
+own migration. Java/AWT interop (`ui/terminal`, `ui/accessibility`) and the LSP framer are excluded, since they
+sit at the outermost boundary where those constructs are legitimate. The richtext codecs are checked like everything
+else; the JAXP callbacks that must throw carry a `@SuppressWarnings` saying why.
 Tests are exempt entirely.
 
 To take a deliberate exception, annotate the declaration and say why:
@@ -120,6 +121,14 @@ entry means deleting it:
 sbt writeArchitectureBaseline   # after removing a violation, to bank the win
 ```
 
+`architectureCheck` also enforces purity (`project/PurityChecks.scala`, #1677), at the level of declarations, so a local
+`var` or mutable collection inside a method is fine. A top-level `object` may not declare a `val`/`lazy val`/`var` that
+holds `AtomicReference/Integer/Long/Boolean`, `synchronized`, `ThreadLocal`, `ConcurrentHashMap`, `mutable.`, or a
+`java.util` `HashMap`/`LinkedHashMap`/`ArrayDeque`/`ArrayList`/`WeakHashMap`/`IdentityHashMap` (only where the file
+imports it), and may not hold an instance of a class that has such a member (`new Cache`, `Cache.bounded()`).
+Declarations that cannot move are named in `ArchitectureChecks.PurityAllowlist` with a reason, apart from the baseline;
+`docs/allowlist-review.md` argues each one's redesign.
+
 The baseline may shrink, never grow. If you must add to it, explain the entry in review: CI's
 `architecture` job fails a PR whose baseline entry count or total measured lines/hits grows unless the
 diff also adds a `# paydown: <why, issue link>` comment line to `project/architecture-baseline.tsv`.
@@ -151,6 +160,17 @@ The packaged app runs with `-XX:+UseG1GC -XX:MaxRAMPercentage=25 -XX:G1PeriodicG
 is capped at a quarter of physical memory, and G1 (named explicitly, since the JVM picks Serial on small machines) runs
 a collection after 60 s idle so freed heap goes back to the OS. They are set beside the AppCDS flags in
 `.github/workflows/desktop-publish.yml` and `desktop-release.yml`; `sbt run` is unaffected.
+
+What the app actually holds, and what each flag does to it, is measured in [docs/memory-footprint.md](docs/memory-footprint.md);
+`scripts/measure-footprint.sh` reproduces it against an assembled jar.
+
+### Returning heap to the OS
+
+At startup, unless `performance.memory.compact = false`, Serenity sets `MinHeapFreeRatio=10`, `MaxHeapFreeRatio=30` and
+(under G1 only) `G1PeriodicGCInterval=30000` through `HotSpotDiagnosticMXBean.setVMOption`, in both window and terminal
+modes. The packaged `-XX:G1PeriodicGCInterval=60000` is therefore replaced by 30 s once the app is up. With the setting
+off the JVM keeps its launch values. A measured idle footprint dropped from about 520 MiB to about 317 MiB
+(`docs/memory-footprint.md`, PR #2266). The log records what was applied on a `[MEMORY]` line.
 
 ### Startup warm-up
 
@@ -197,4 +217,40 @@ codex
 
 Sign in with ChatGPT when prompted, or add `OPENAI_API_KEY` as a Codespaces secret before creating or rebuilding the Codespace if you prefer API-key auth.
 
-Desktop package checks run in GitHub Actions on PRs. Release publishing is handled by the dedicated desktop publish workflow on `master` or manual dispatch.
+Desktop package checks run in GitHub Actions on PRs. Publishing is handled by `desktop-publish.yml`, which has two channels.
+
+### Releasing
+
+The `vX.Y.Z` tag is the one source of truth for a version: sbt-dynver derives `BuildInfo.version` (what `--version` and
+About report) from it, `PackageVersion` derives the numeric jpackage `--app-version` from it (`sbt writePackageVersion`
+writes `target/package/app-version.txt`), and the workflow fails if they disagree. A first component of 0 is rejected
+because macOS packaging refuses it, so the first release is `v1.0.0` or later.
+
+To cut a release:
+
+1. In `CHANGELOG.md`, rename `## [Unreleased]` to `## X.Y.Z — YYYY-MM-DD` and add a fresh empty `## [Unreleased]` above it
+   (see [Changelog](#changelog)), then merge that to `master`.
+2. Tag the merge commit and push the tag: `git tag -a vX.Y.Z -m "Serenity X.Y.Z" && git push origin vX.Y.Z`.
+
+Pushing the tag runs the full three-OS build and test, then publishes a release named `Serenity X.Y.Z` carrying
+`Serenity.jar`, the three app-image zips, `Serenity.cdx.json` (the SBOM, below) and `SHA256SUMS`, with that version's CHANGELOG section as the notes. A plain
+`X.Y.Z` is published as the latest release; `X.Y.Z-rc.N` is published as a pre-release. The run fails, and publishes
+nothing, if the tag is not `vX.Y.Z[-pre]`, is not on `master`, has no non-empty CHANGELOG section, the release already
+exists, or the tag, jpackage version and `--version` output disagree. Releases are never rewritten; fix forward with a
+new tag.
+
+The SBOM is a [CycloneDX](https://cyclonedx.org/) 1.6 JSON document listing every runtime dependency in the jar, with
+versions, purls, hashes and the dependency tree, generated by [sbt-sbom](https://github.com/sbt/sbt-sbom) (pinned in
+`project/plugins.sbt`). `sbt makeBom` writes it to `target/Serenity.cdx.json`; it carries no timestamp or serial number,
+so an unchanged dependency graph gives byte-identical output. Its component set is the same runtime classpath that
+`THIRD-PARTY-NOTICES.md` is rendered from, and `SbomSpec` fails if the two ever differ. A tag build fails, and publishes nothing, if the SBOM cannot be generated; the nightly build
+publishes without one rather than stall. The SBOM is listed in `SHA256SUMS` like the other assets.
+
+To verify a download, put it beside `SHA256SUMS` and run `sha256sum --check --ignore-missing SHA256SUMS`
+(`shasum -a 256 -c` on macOS).
+
+A scheduled run at 04:43 UTC every night also republishes the `desktop-latest` pre-release, titled "Nightly desktop
+build", from the tip of `master`; the "Desktop Publish" workflow can also be run by hand from the Actions tab to publish
+sooner. A push to `master` does not publish. It is a rolling channel, not a version: it is replaced in place and carries
+the unreleased changes. macOS builds are signed
+ad hoc, and Developer ID signing and notarization switch on when the `MACOS_*` secrets in `desktop-publish.yml` are set.

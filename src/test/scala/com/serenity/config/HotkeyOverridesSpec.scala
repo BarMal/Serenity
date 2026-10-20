@@ -3,6 +3,7 @@ package com.serenity.config
 import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.config.AppConfigOps.*
 import com.typesafe.config.ConfigFactory
 import io.circe.parser.decode
@@ -21,8 +22,7 @@ class HotkeyOverridesSpec extends AnyFlatSpec with Matchers with OptionValues:
   private val linux = "linux"
   private val mac   = "Mac OS X"
 
-  private val linuxPlan =
-    ConfigMigrations.Plan(List(ConfigMigrations.droppingDefaultHotkeys(linux)), ConfigVersion.Current)
+  private val linuxPlan = ConfigManagerTestSupport.linuxPlan
 
   private def withHotkeys(hotkeys: HotkeyConfig): AppConfig = AppConfig.default.withHotkeyConfig(hotkeys)
 
@@ -30,7 +30,7 @@ class HotkeyOverridesSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigFileFormat.render(config, osName).linesIterator.filter(_.startsWith("hotkey.")).toList
 
   private def tempFile(content: String): Path =
-    val file = Files.createTempFile("serenity-hotkeys", ".conf")
+    val file = TestTemp.file("serenity-hotkeys", ".conf")
     Files.writeString(file, content)
     file
 
@@ -275,7 +275,7 @@ class HotkeyOverridesSpec extends AnyFlatSpec with Matchers with OptionValues:
   // Reset
 
   "resetting an action" should "delete its override from the file rather than write the default" in {
-    val file = Files.createTempFile("serenity-hotkeys", ".conf")
+    val file = TestTemp.file("serenity-hotkeys", ".conf")
     Files.delete(file)
     val customised = AppConfig.default.withHotkeyConfig(
       AppConfig.default.inputConfig.hotkeyConfig.withBinding(HotkeyAction.Redo, "ctrl+alt+r")
@@ -309,7 +309,7 @@ class HotkeyOverridesSpec extends AnyFlatSpec with Matchers with OptionValues:
   }
 
   it should "not reach config.conf when an unrelated setting is saved from the terminal" in {
-    val file = Files.createTempFile("serenity-terminal-hotkeys", ".conf")
+    val file = TestTemp.file("serenity-terminal-hotkeys", ".conf")
     Files.delete(file)
     val plan = ConfigMigrations.Plan(Nil, ConfigVersion.Current, mac)
 
@@ -321,12 +321,12 @@ class HotkeyOverridesSpec extends AnyFlatSpec with Matchers with OptionValues:
   }
 
   it should "leave an override already in the file alone when the terminal saves" in {
-    val file = tempFile(s"${currentVersion}hotkey.save = [\"ctrl+s\"]\nhotkey.find = [\"meta+alt+f\"]\n")
+    val file = tempFile(s"${currentVersion}hotkey.save = [\"ctrl+s\"]\nhotkey.find = [\"meta+alt+j\"]\n")
     val plan = ConfigMigrations.Plan(Nil, ConfigVersion.Current, mac)
 
     val saved = ConfigManager
       .saveConfigWith(
-        withHotkeys(macTerminal.withBinding(HotkeyAction.Find, "meta+alt+f")).withWheelScrollLines(7),
+        withHotkeys(macTerminal.withBinding(HotkeyAction.Find, "meta+alt+j")).withWheelScrollLines(7),
         file,
         plan
       )
@@ -334,7 +334,7 @@ class HotkeyOverridesSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     saved shouldBe Right(())
     Files.readString(file).linesIterator.filter(_.startsWith("hotkey.")).toList shouldBe
-      List("""hotkey.save = ["ctrl+s"]""", """hotkey.find = ["meta+alt+f"]""")
+      List("""hotkey.save = ["ctrl+s"]""", """hotkey.find = ["meta+alt+j"]""")
   }
 
   "resetting an action in the terminal on macOS" should "restore the terminal's default and write no override" in {

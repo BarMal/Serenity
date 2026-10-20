@@ -3,6 +3,7 @@ package com.serenity.state.undo
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.richtext.{DocxDocumentCodec, InlineMark, RichTextDocument, RichTextPosition, RichTextRange}
@@ -32,7 +33,7 @@ class UndoThenSaveDocxSpec extends AnyFlatSpec with Matchers with OptionValues:
     AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
 
   "Undoing typing in a formatted DOCX and saving" should "write back the document as it was opened" in {
-    val path    = Files.createTempDirectory("serenity-undo-docx").resolve("draft.docx")
+    val path    = TestTemp.directory("serenity-undo-docx").resolve("draft.docx")
     val _       = Files.write(path, DocxDocumentCodec.writeBytes(boldHello))
     val manager = FileManager()
     val opened  = manager.loadFile(path, bufferId).unsafeRunSync()

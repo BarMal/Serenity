@@ -57,7 +57,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
       .getOrElse(fail("Expected active file workflow modal"))
 
   "StateManager.applyEvent" should "refresh file workflow suggestions after path edits" in {
-    val tempRoot   = Files.createTempDirectory("workflow-suggestions")
+    val tempRoot   = TestTemp.directory("workflow-suggestions")
     val projectDir = Files.createDirectory(tempRoot.resolve("project"))
     Files.createDirectory(tempRoot.resolve("private"))
 
@@ -95,7 +95,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
   }
 
   it should "mark missing directories and require confirmation before save-as creates them" in {
-    val tempRoot   = Files.createTempDirectory("workflow-save")
+    val tempRoot   = TestTemp.directory("workflow-save")
     val targetDir  = tempRoot.resolve("new").resolve("nested")
     val targetFile = targetDir.resolve("notes.scala")
     val bufferId   = BufferId(0)
@@ -157,7 +157,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
   }
 
   it should "create missing directories and save in one step via the explicit create-directory action" in {
-    val tempRoot   = Files.createTempDirectory("workflow-save-explicit")
+    val tempRoot   = TestTemp.directory("workflow-save-explicit")
     val targetDir  = tempRoot.resolve("new").resolve("nested")
     val targetFile = targetDir.resolve("notes.scala")
     val bufferId   = BufferId(0)
@@ -242,7 +242,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
   }
 
   it should "open a file from the workflow modal into a new focused buffer" in {
-    val tempRoot   = Files.createTempDirectory("workflow-open")
+    val tempRoot   = TestTemp.directory("workflow-open")
     val targetFile = tempRoot.resolve("notes.scala")
     Files.writeString(targetFile, "val answer = 42")
 
@@ -283,7 +283,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
   }
 
   it should "append a trailing separator when accepting a directory suggestion in the path field with tab" in {
-    val tempRoot   = Files.createTempDirectory("workflow-directory-accept")
+    val tempRoot   = TestTemp.directory("workflow-directory-accept")
     val projectDir = Files.createDirectory(tempRoot.resolve("project"))
 
     try
@@ -316,7 +316,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
   }
 
   it should "accept a filename suggestion with tab in open workflow mode" in {
-    val tempRoot   = Files.createTempDirectory("workflow-file-accept")
+    val tempRoot   = TestTemp.directory("workflow-file-accept")
     val targetFile = tempRoot.resolve("notes.scala")
     Files.writeString(targetFile, "val answer = 42")
 
@@ -350,7 +350,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
   }
 
   it should "offer matching readable files when open workflow focus is on the filename field" in {
-    val tempRoot   = Files.createTempDirectory("workflow-open-files")
+    val tempRoot   = TestTemp.directory("workflow-open-files")
     val targetFile = tempRoot.resolve("notes.scala")
     val otherFile  = tempRoot.resolve("draft.txt")
     Files.writeString(targetFile, "val answer = 42")
@@ -415,7 +415,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
   }
 
   it should "keep the modal open and surface a visible status when open target is missing" in {
-    val tempRoot = Files.createTempDirectory("workflow-open-missing")
+    val tempRoot = TestTemp.directory("workflow-open-missing")
 
     try
       val stateManager = createStateManager()
@@ -510,7 +510,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
     val bufferId = BufferId(0)
     // A regular file standing in for the target "directory" -- writing notes.md underneath it fails regardless of
     // filesystem permissions or which user runs the test, unlike a permission-bit-based fixture.
-    val blockingFile = Files.createTempFile("workflow-unwritable", "")
+    val blockingFile = TestTemp.file("workflow-unwritable", "")
 
     try
       val stateManager = createStateManager()
@@ -551,7 +551,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
   }
 
   it should "block a lossy rich-document overwrite and open Save As with a visible reason" in {
-    val sourceFile = Files.createTempFile("workflow-lossy-save", ".docx")
+    val sourceFile = TestTemp.file("workflow-lossy-save", ".docx")
     val reason     = s"Saving $sourceFile would drop 1 table. Use Save As to write a new file."
 
     try

@@ -14,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
 class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "ConfigManager" should "load and write font configuration including UI font family" in {
-    val configFile = Files.createTempFile("serenity-font-config", ".conf")
+    val configFile = TestTemp.file("serenity-font-config", ".conf")
     Files.writeString(
       configFile,
       """typography.code.family = Monospaced
@@ -54,8 +54,29 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
     ConfigManager.configToString(config) should include(s"config.version = ${ConfigVersion.Current.value}")
   }
 
+  it should "load the font fallback families in order and write them back (#1866)" in {
+    val configFile = TestTemp.file("serenity-font-fallback-config", ".conf")
+    Files.writeString(
+      configFile,
+      """typography.fallback.families = ["Noto Sans CJK JP", "Symbola"]
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.editorConfig.fontConfig.fallbackFamilies shouldBe List("Noto Sans CJK JP", "Symbola")
+    config.editorConfig.fontConfig.fallback.slotFamilies shouldBe Vector("Noto Sans CJK JP", "Symbola", "Dialog")
+    ConfigManager.configToString(config) should include(
+      """typography.fallback.families = ["Noto Sans CJK JP", "Symbola"]"""
+    )
+  }
+
+  it should "default to no configured fallback families, leaving only the system's resolver" in {
+    AppConfig.default.editorConfig.fontConfig.fallbackFamilies shouldBe Nil
+  }
+
   it should "clamp out-of-range font sizes when loading via the registry" in {
-    val configFile = Files.createTempFile("serenity-font-clamp-config", ".conf")
+    val configFile = TestTemp.file("serenity-font-clamp-config", ".conf")
     Files.writeString(
       configFile,
       """typography.code.size = 400
@@ -72,7 +93,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
   }
 
   it should "load and write active and inactive cursor colour overrides" in {
-    val configFile = Files.createTempFile("serenity-cursor-config", ".conf")
+    val configFile = TestTemp.file("serenity-cursor-config", ".conf")
     Files.writeString(
       configFile,
       """editor.cursor.active_color = #3366CC
@@ -89,7 +110,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
   }
 
   it should "load a breathe cursor mode as blink and write it back as blink" in {
-    val configFile = Files.createTempFile("serenity-cursor-mode-config", ".conf")
+    val configFile = TestTemp.file("serenity-cursor-mode-config", ".conf")
     Files.writeString(
       configFile,
       """editor.cursor.mode = breathe
@@ -103,7 +124,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
   }
 
   it should "load and write cursor information bar mode" in {
-    val configFile = Files.createTempFile("serenity-cursor-info-config", ".conf")
+    val configFile = TestTemp.file("serenity-cursor-info-config", ".conf")
     Files.writeString(
       configFile,
       """cursor.info_bar = detailed
@@ -122,7 +143,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
   }
 
   it should "ignore invalid cursor colour overrides" in {
-    val configFile = Files.createTempFile("serenity-cursor-config", ".conf")
+    val configFile = TestTemp.file("serenity-cursor-config", ".conf")
     Files.writeString(
       configFile,
       """editor.cursor.active_color = not-a-colour
@@ -137,7 +158,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
   }
 
   it should "report invalid cursor config values through the cursor schema" in {
-    val configFile = Files.createTempFile("serenity-cursor-invalid-config", ".conf")
+    val configFile = TestTemp.file("serenity-cursor-invalid-config", ".conf")
     Files.writeString(
       configFile,
       """editor.cursor.mode = unknown

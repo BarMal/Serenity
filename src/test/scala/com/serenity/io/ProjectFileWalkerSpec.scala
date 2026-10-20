@@ -3,13 +3,14 @@ package com.serenity.io
 import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class ProjectFileWalkerSpec extends AnyFlatSpec with Matchers:
 
   private def tree(paths: String*): Path =
-    val root = Files.createTempDirectory("project-file-walker")
+    val root = TestTemp.directory("project-file-walker")
     paths.foreach { relative =>
       val file = root.resolve(relative)
       Files.createDirectories(file.getParent)
@@ -60,7 +61,58 @@ class ProjectFileWalkerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fail when the root cannot be listed" in {
-    val missing = Files.createTempDirectory("project-file-walker").resolve("missing")
+    val missing = TestTemp.directory("project-file-walker").resolve("missing")
 
     ProjectFileWalker.list(missing, limit = 10).attempt.unsafeRunSync().isLeft shouldBe true
+  }
+
+  private def write(root: Path, relative: String, content: String): Unit =
+    val file = root.resolve(relative)
+    Files.createDirectories(file.getParent)
+    Files.writeString(file, content)
+
+  private def listed(root: Path): Vector[String] =
+    ProjectFileWalker.list(root, limit = 100000).unsafeRunSync().files.map(ProjectFileWalker.slashed)
+
+  it should "leave out files and directories the root .gitignore matches" in {
+    val root = tree("kept.txt", "debug.log", "out/App.txt", "src/trace.log", "src/Main.scala")
+    write(root, ".gitignore", "*.log\nout/\n")
+
+    listed(root) shouldBe Vector(".gitignore", "kept.txt", "src/Main.scala")
+  }
+
+  it should "scope a nested .gitignore to its own directory and let it override its parents" in {
+    val root = tree("local.txt", "pkg/local.txt", "pkg/inner/local.txt", "pkg/keep.log", "top.log")
+    write(root, ".gitignore", "*.log\n")
+    write(root, "pkg/.gitignore", "local.txt\n!keep.log\n")
+
+    listed(root) shouldBe Vector(".gitignore", "local.txt", "pkg/.gitignore", "pkg/keep.log")
+  }
+
+  it should "honour negation, but never re-include a file inside an ignored directory" in {
+    val root = tree("a.log", "important.log", "cache/important.log", "cache/other.txt")
+    write(root, ".gitignore", "*.log\n!important.log\ncache/\n!cache/important.log\n")
+
+    listed(root) shouldBe Vector(".gitignore", "important.log")
+  }
+
+  it should "anchor a pattern with a leading slash to the directory holding the .gitignore" in {
+    val root = tree("notes.txt", "docs/notes.txt", "docs/deep/notes.txt")
+    write(root, ".gitignore", "/notes.txt\n")
+
+    listed(root) shouldBe Vector(".gitignore", "docs/deep/notes.txt", "docs/notes.txt")
+  }
+
+  it should "honour .ignore files and the repository's info/exclude" in {
+    val root = tree("a.tmp", "b.bak", "c.txt")
+    write(root, ".ignore", "*.tmp\n")
+    write(root, ".git/info/exclude", "*.bak\n")
+
+    listed(root) shouldBe Vector(".ignore", "c.txt")
+  }
+
+  it should "leave out compiled binaries by default" in {
+    val root = tree("Main.scala", "lib/Main.class", "lib/dep.jar")
+
+    listed(root) shouldBe Vector("Main.scala")
   }

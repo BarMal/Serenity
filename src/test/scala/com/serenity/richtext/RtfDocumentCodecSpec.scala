@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -320,7 +321,7 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report an error from IO when the file is not RTF" in {
-    val path = Files.createTempFile("serenity-not-rtf", ".rtf")
+    val path = TestTemp.file("serenity-not-rtf", ".rtf")
     try
       Files.writeString(path, "just words")
       RtfDocumentCodec.read(path).attempt.unsafeRunSync().isLeft shouldBe true
@@ -356,7 +357,7 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "read and write RTF files through IO" in {
-    val path   = Files.createTempFile("serenity-rich-text", ".rtf")
+    val path   = TestTemp.file("serenity-rich-text", ".rtf")
     val source = RichTextDocument.oneParagraph("Saved text")
 
     try

@@ -20,7 +20,11 @@ object ListPickerComposition:
   def choiceIndex(actionId: String): Option[Int] =
     Option.when(actionId.startsWith(ActionIdPrefix))(actionId.stripPrefix(ActionIdPrefix)).flatMap(_.toIntOption)
 
-  def forPicker(picker: ListPicker, frameRect: LayoutRect): ResolvedSurfaceComposition =
+  def forPicker(
+    picker: ListPicker,
+    frameRect: LayoutRect,
+    measure: TextMeasure = TextMeasure.Cells
+  ): ResolvedSurfaceComposition =
     val content = SurfaceFrameLayout(frameRect).contentRect
     val bounds  = ModalSurfaceComposition.logicalRect(content.x, content.y, content.width, content.height)
     val header = ModalSurfaceComposition.textBox(
@@ -29,13 +33,19 @@ object ListPickerComposition:
     )
     val queryRow       = picker.query.map(field => queryBox(field, ModalSurfaceComposition.rowRect(bounds, 1))).toList
     val firstChoiceRow = 1 + queryRow.size
-    def messageRow(text: String, tone: OverlayTone) = List(
-      ModalSurfaceComposition.textBox(text, ModalSurfaceComposition.rowRect(bounds, firstChoiceRow), tone = tone)
-    )
+    val wrap           = ModalWrap.ofContent(content.width, measure)
+    def messageRows(text: String, tone: OverlayTone) =
+      wrap.lines(text).zipWithIndex.map { (line, offset) =>
+        ModalSurfaceComposition.textBox(
+          line,
+          ModalSurfaceComposition.rowRect(bounds, firstChoiceRow + offset),
+          tone = tone
+        )
+      }
     val rows = picker.items match
-      case Loadable.Loading(_)   => messageRow("Loading…", OverlayTone.Muted)
-      case Loadable.Empty(text)  => messageRow(text, OverlayTone.Muted)
-      case Loadable.Failed(text) => messageRow(text, OverlayTone.Error)
+      case Loadable.Loading(_)   => messageRows("Loading…", OverlayTone.Muted)
+      case Loadable.Empty(text)  => messageRows(text, OverlayTone.Muted)
+      case Loadable.Failed(text) => messageRows(text, OverlayTone.Error)
       case Loadable.Ready(choices) =>
         val choiceRows = choices.visible(VisibleRows).toList.zipWithIndex.map {
           case ((choice, index), row) =>
@@ -57,10 +67,12 @@ object ListPickerComposition:
         choiceRows ++ moreRow
     ModalSurfaceComposition.plan(bounds, header :: queryRow ++ rows)
 
-  def frameHeight(picker: ListPicker): Int =
+  def frameHeight(picker: ListPicker, wrap: ModalWrap): Int =
     val rows = picker.items match
       case Loadable.Ready(choices) => choices.items.size.min(VisibleRows) + (if picker.hasMore then 1 else 0)
-      case _                       => 1
+      case Loadable.Loading(_)     => 1
+      case Loadable.Empty(text)    => wrap.lines(text).size
+      case Loadable.Failed(text)   => wrap.lines(text).size
     SurfaceFrameLayout.DefaultBorderCells * 2 + 1 + picker.query.size + rows
 
   /** Label-less, and outside the hit regions: a click anywhere in the picker already leaves typing going here. */

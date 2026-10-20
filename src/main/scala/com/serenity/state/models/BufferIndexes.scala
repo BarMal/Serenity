@@ -16,7 +16,11 @@ object BufferIndexes:
 
   final case class UriInputs(bufferId: BufferId, filePath: Option[Path])
 
-  final case class AnnotationInputs(comments: List[DocumentComment], diagnostics: List[Diagnostic])
+  final case class AnnotationInputs(
+      comments: List[DocumentComment],
+      diagnostics: List[Diagnostic],
+      move: Option[DiagnosticsMove]
+  )
 
   final case class SemanticTokenInputs(tokens: Option[SemanticTokenData], unavailable: Boolean)
 
@@ -38,11 +42,12 @@ object BufferIndexes:
       inputs = source =>
         AnnotationInputs(
           source.buffer.annotations.documentComments,
-          source.languageService.diagnosticsState.diagnostics.getOrElse(source.uri, Nil)
+          source.languageService.diagnosticsState.diagnostics.getOrElse(source.uri, Nil),
+          source.languageService.diagnosticsState.lastMoves.get(source.uri)
         ),
       references = inputs => List(inputs.comments, inputs.diagnostics),
-      compute = inputs =>
-        AnnotationLineIndex(inputs.comments.toVector, inputs.diagnostics.groupMap(_.range.start.line)(identity))
+      compute = inputs => AnnotationLineIndex.from(inputs.comments, inputs.diagnostics),
+      update = Some((previous, inputs) => previous.carriedTo(inputs.comments, inputs.diagnostics, inputs.move))
     )
 
   val semanticTokens: DerivedValue[Source, SemanticTokenInputs, SemanticTokensAvailability] =

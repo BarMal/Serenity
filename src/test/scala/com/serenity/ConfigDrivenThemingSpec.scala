@@ -135,7 +135,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
 
     // This test will verify that we can load from a file
     // We'll create a temporary theme file for testing
-    val tempFile = Files.createTempFile("test-theme", ".conf")
+    val tempFile = TestTemp.file("test-theme", ".conf")
     Files.writeString(
       tempFile,
       """
@@ -192,7 +192,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
 
   it should "raise a clear error when a theme file is missing" in {
     val loader      = new ThemeConfigLoader()
-    val missingFile = Files.createTempDirectory("serenity-missing-theme").resolve("missing.conf")
+    val missingFile = TestTemp.directory("serenity-missing-theme").resolve("missing.conf")
 
     try
       val result = loader.loadThemeFromFile(missingFile).attempt.unsafeRunSync()
@@ -259,7 +259,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
 
   "ThemeReloader" should "reload theme configuration dynamically" in {
     // Create a temporary theme file
-    val tempFile = Files.createTempFile("reload-theme", ".conf")
+    val tempFile = TestTemp.file("reload-theme", ".conf")
 
     def writeThemeConfig(foregroundColor: String) =
       Files.writeString(
