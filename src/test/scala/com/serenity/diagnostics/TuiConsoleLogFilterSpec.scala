@@ -2,9 +2,9 @@ package com.serenity.diagnostics
 
 import scala.jdk.CollectionConverters.*
 
+import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.joran.JoranConfigurator
 import ch.qos.logback.classic.spi.{ILoggingEvent, LoggingEvent}
-import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.core.Appender
 import ch.qos.logback.core.spi.FilterReply
 import com.serenity.frontend.LogRouting
