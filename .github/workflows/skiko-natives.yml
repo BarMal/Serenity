@@ -61,37 +61,55 @@ jobs:
           if [ "${EVENT}" = workflow_dispatch ] && [ "${PUBLISH_INPUT}" = true ] && [ "${wanted}" = all ]; then publish=true; fi
           echo "publish=${publish}" >> "${GITHUB_OUTPUT}"
 
-  # Each build job fetches, prepares, builds Skia, builds Skiko and collects as separate steps, so what each costs shows in the
-  # job's step times and a stuck step is stopped at its own limit; it then scans (ci/skiko/scan-natives.sh): the scan is first
+  # Each build job mirrors how JetBrains builds the same artefacts: Skia as in JetBrains/skia's build_for_skiko.yml, then Skiko
+  # as in JetBrains/skiko's publish-dry-run.yml (on Linux inside its own Amazon Linux 2 image, so the library keeps its glibc
+  # 2.26 compatibility). The Skia archives, what Skiko itself downloads for a stock build, are cached by pin and patch, so
+  # a failure in the Skiko step costs minutes. Each build is then scanned (ci/skiko/scan-natives.sh): the scan is first
   # proved on stock libraries, which carry the DNG SDK on Linux and macOS, and only then run on what was just built.
   build-linux-x64:
     name: Build linux-x64
     needs: plan
     if: needs.plan.outputs.linux_x64 == 'true'
-    runs-on: ubuntu-latest
-    container: ubuntu:20.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
-      - name: Install what checkout and the scanner need
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: apt-get update -y && apt-get install -y --no-install-recommends tzdata git curl ca-certificates python3
       - uses: actions/checkout@v4
-      - name: Fetch the sources and apply the patches
+      - name: Free up space on the runner
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h
+      - name: Fetch Skiko and patch it
+        timeout-minutes: 15
+        run: ci/skiko/build-natives.sh linux-x64 "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" fetch-skiko
+      - name: Restore the cached Skia archives
+        id: skia-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: work/skia-zips
+          key: skia-zips-linux-x64-${{ hashFiles('ci/skiko/pins.env', 'ci/skiko/skia-no-dng.patch') }}
+      - name: Fetch Skia and patch it
+        if: steps.skia-cache.outputs.cache-hit != 'true'
         timeout-minutes: 30
-        run: ci/skiko/build-natives.sh linux-x64 "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" fetch
-      - name: Prepare the toolchain
-        timeout-minutes: 30
-        run: ci/skiko/build-natives.sh linux-x64 "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" prepare
-      - name: Build Skia
+        run: ci/skiko/build-natives.sh linux-x64 "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" fetch-skia
+      - name: Build and archive Skia in ubuntu:20.04
+        if: steps.skia-cache.outputs.cache-hit != 'true'
         timeout-minutes: 240
-        run: ci/skiko/build-natives.sh linux-x64 "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" skia
+        run: docker run --rm -e DEBIAN_FRONTEND=noninteractive -v "$GITHUB_WORKSPACE:/w" -w /w ubuntu:20.04 bash ci/skiko/build-natives.sh linux-x64 /w/work /w/repo skia-linux-inside
+      - name: Save the Skia archives
+        if: steps.skia-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: work/skia-zips
+          key: skia-zips-linux-x64-${{ hashFiles('ci/skiko/pins.env', 'ci/skiko/skia-no-dng.patch') }}
+      - name: Build the image Skiko builds its Linux natives in
+        timeout-minutes: 45
+        run: docker build -t skiko-linux-compat work/skiko/skiko/docker/linux-compat
       - name: Build the Skiko runtime jars
         timeout-minutes: 90
-        run: ci/skiko/build-natives.sh linux-x64 "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" skiko
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/w" -w /w skiko-linux-compat bash ci/skiko/build-natives.sh linux-x64 /w/work /w/repo skiko
       - name: Collect the repository tree
         timeout-minutes: 10
-        run: ci/skiko/build-natives.sh linux-x64 "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" collect
+        run: ci/skiko/build-natives.sh linux-x64 "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" collect
       - name: Scan
         timeout-minutes: 20
         run: ci/skiko/scan-natives.sh linux-x64 "$GITHUB_WORKSPACE/repo"
@@ -105,30 +123,46 @@ jobs:
     name: Build linux-arm64
     needs: plan
     if: needs.plan.outputs.linux_arm64 == 'true'
-    runs-on: ubuntu-22.04-arm
-    container: ubuntu:20.04
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     steps:
-      - name: Install what checkout and the scanner need
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: apt-get update -y && apt-get install -y --no-install-recommends tzdata git curl ca-certificates python3
       - uses: actions/checkout@v4
-      - name: Fetch the sources and apply the patches
+      - name: Free up space on the runner
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h
+      - name: Fetch Skiko and patch it
+        timeout-minutes: 15
+        run: ci/skiko/build-natives.sh linux-arm64 "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" fetch-skiko
+      - name: Restore the cached Skia archives
+        id: skia-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: work/skia-zips
+          key: skia-zips-linux-arm64-${{ hashFiles('ci/skiko/pins.env', 'ci/skiko/skia-no-dng.patch') }}
+      - name: Fetch Skia and patch it
+        if: steps.skia-cache.outputs.cache-hit != 'true'
         timeout-minutes: 30
-        run: ci/skiko/build-natives.sh linux-arm64 "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" fetch
-      - name: Prepare the toolchain
-        timeout-minutes: 30
-        run: ci/skiko/build-natives.sh linux-arm64 "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" prepare
-      - name: Build Skia
+        run: ci/skiko/build-natives.sh linux-arm64 "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" fetch-skia
+      - name: Build and archive Skia in ubuntu:20.04
+        if: steps.skia-cache.outputs.cache-hit != 'true'
         timeout-minutes: 240
-        run: ci/skiko/build-natives.sh linux-arm64 "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" skia
+        run: docker run --rm -e DEBIAN_FRONTEND=noninteractive -v "$GITHUB_WORKSPACE:/w" -w /w ubuntu:20.04 bash ci/skiko/build-natives.sh linux-arm64 /w/work /w/repo skia-linux-inside
+      - name: Save the Skia archives
+        if: steps.skia-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: work/skia-zips
+          key: skia-zips-linux-arm64-${{ hashFiles('ci/skiko/pins.env', 'ci/skiko/skia-no-dng.patch') }}
+      - name: Build the image Skiko builds its Linux natives in
+        timeout-minutes: 45
+        run: docker build -t skiko-linux-compat work/skiko/skiko/docker/linux-compat
       - name: Build the Skiko runtime jars
         timeout-minutes: 90
-        run: ci/skiko/build-natives.sh linux-arm64 "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" skiko
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/w" -w /w skiko-linux-compat bash ci/skiko/build-natives.sh linux-arm64 /w/work /w/repo skiko
       - name: Collect the repository tree
         timeout-minutes: 10
-        run: ci/skiko/build-natives.sh linux-arm64 "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" collect
+        run: ci/skiko/build-natives.sh linux-arm64 "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" collect
       - name: Scan
         timeout-minutes: 20
         run: ci/skiko/scan-natives.sh linux-arm64 "$GITHUB_WORKSPACE/repo"
@@ -148,23 +182,39 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: '17'
-      - name: Fetch the sources and apply the patches
+          distribution: corretto
+          java-version: '21'
+      - name: Install LLVM, as Skiko's own workflow does
+        run: brew install llvm
+      - name: Fetch Skiko and patch it
+        timeout-minutes: 15
+        run: ci/skiko/build-natives.sh macos "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" fetch-skiko
+      - name: Restore the cached Skia archives
+        id: skia-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: work/skia-zips
+          key: skia-zips-macos-${{ hashFiles('ci/skiko/pins.env', 'ci/skiko/skia-no-dng.patch') }}
+      - name: Fetch Skia and patch it
+        if: steps.skia-cache.outputs.cache-hit != 'true'
         timeout-minutes: 30
-        run: ci/skiko/build-natives.sh macos "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" fetch
-      - name: Prepare the toolchain
-        timeout-minutes: 30
-        run: ci/skiko/build-natives.sh macos "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" prepare
-      - name: Build Skia
+        run: ci/skiko/build-natives.sh macos "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" fetch-skia
+      - name: Build and archive Skia
+        if: steps.skia-cache.outputs.cache-hit != 'true'
         timeout-minutes: 240
-        run: ci/skiko/build-natives.sh macos "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" skia
+        run: ci/skiko/build-natives.sh macos "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" skia
+      - name: Save the Skia archives
+        if: steps.skia-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: work/skia-zips
+          key: skia-zips-macos-${{ hashFiles('ci/skiko/pins.env', 'ci/skiko/skia-no-dng.patch') }}
       - name: Build the Skiko runtime jars
         timeout-minutes: 90
-        run: ci/skiko/build-natives.sh macos "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" skiko
+        run: ci/skiko/build-natives.sh macos "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" skiko
       - name: Collect the repository tree
         timeout-minutes: 10
-        run: ci/skiko/build-natives.sh macos "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" collect
+        run: ci/skiko/build-natives.sh macos "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" collect
       - name: Scan
         timeout-minutes: 20
         run: ci/skiko/scan-natives.sh macos "$GITHUB_WORKSPACE/repo"
@@ -193,8 +243,8 @@ jobs:
           python-version: '3.9'
       - uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: '17'
+          distribution: corretto
+          java-version: '21'
       - uses: microsoft/setup-msbuild@v1
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: msys2/setup-msys2@v2
@@ -210,21 +260,51 @@ jobs:
           path-type: inherit
       - name: Tell the build where MSYS2 is
         run: echo "MSYS2_LOCATION=${{ steps.msys2.outputs.msys2-location }}" >> "$GITHUB_ENV"
-      - name: Fetch the sources and apply the patches
+      - name: Cache the Vulkan SDK installer
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\VulkanSDK-1.4.357.0.exe
+          key: vulkan-sdk-installer-${{ runner.os }}-${{ runner.arch }}-1.4.357.0
+      - name: Install the Vulkan SDK, as Skiko's own workflow does
+        shell: pwsh
+        run: |
+          $installer = "$env:RUNNER_TEMP\VulkanSDK-1.4.357.0.exe"
+          if (-not (Test-Path $installer)) {
+            Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/1.4.357.0/windows/vulkan_sdk.exe?Human=true" -OutFile $installer
+          }
+          Start-Process -Wait -FilePath $installer -ArgumentList '--accept-licenses', '--default-answer', '--confirm-command', 'install', 'com.lunarg.vulkan.arm64'
+          $sdk = "C:\VulkanSDK\1.4.357.0"
+          "VULKAN_SDK=$sdk" >> $env:GITHUB_ENV
+          "$sdk\Bin" >> $env:GITHUB_PATH
+      - name: Fetch Skiko and patch it
+        timeout-minutes: 15
+        run: ci/skiko/build-natives.sh windows "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" fetch-skiko
+      - name: Restore the cached Skia archives
+        id: skia-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: work/skia-zips
+          key: skia-zips-windows-${{ hashFiles('ci/skiko/pins.env', 'ci/skiko/skia-no-dng.patch') }}
+      - name: Fetch Skia and patch it
+        if: steps.skia-cache.outputs.cache-hit != 'true'
         timeout-minutes: 30
-        run: ci/skiko/build-natives.sh windows "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" fetch
-      - name: Prepare the toolchain
-        timeout-minutes: 30
-        run: ci/skiko/build-natives.sh windows "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" prepare
-      - name: Build Skia
+        run: ci/skiko/build-natives.sh windows "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" fetch-skia
+      - name: Build and archive Skia
+        if: steps.skia-cache.outputs.cache-hit != 'true'
         timeout-minutes: 240
-        run: ci/skiko/build-natives.sh windows "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" skia
+        run: ci/skiko/build-natives.sh windows "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" skia
+      - name: Save the Skia archives
+        if: steps.skia-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: work/skia-zips
+          key: skia-zips-windows-${{ hashFiles('ci/skiko/pins.env', 'ci/skiko/skia-no-dng.patch') }}
       - name: Build the Skiko runtime jars
         timeout-minutes: 90
-        run: ci/skiko/build-natives.sh windows "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" skiko
+        run: ci/skiko/build-natives.sh windows "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" skiko
       - name: Collect the repository tree
         timeout-minutes: 10
-        run: ci/skiko/build-natives.sh windows "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/repo" collect
+        run: ci/skiko/build-natives.sh windows "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" collect
       - name: Scan
         timeout-minutes: 20
         run: ci/skiko/scan-natives.sh windows "$GITHUB_WORKSPACE/repo"
