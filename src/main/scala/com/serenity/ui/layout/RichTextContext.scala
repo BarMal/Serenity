@@ -7,7 +7,7 @@ import com.serenity.config.MarkdownViewMode
 import com.serenity.markdown.{MarkdownBlockSpans, MarkdownInlineView, MarkerMode}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{Buffer, Cursor, IndentationSettings}
-import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.{FontFallback, FontLoader}
 import com.serenity.ui.openings.{
   ChapterOpenings,
   LetterShape,
@@ -22,7 +22,7 @@ import com.serenity.ui.theme.{HeadingSettings, RichTextStyling}
   * font and a drop cap's role, the prose zoom that scales them, whether drop caps are enabled at all, the chapter
   * openings that are set as drop caps, and how the line's inline Markdown is restyled. `tabSize` is the width a tab
   * takes on the cell grid, `headings` the look its heading paragraphs resolve to and `dropCapGapEm` the room beside a
-  * drop cap's glyph.
+  * drop cap's glyph, and `fallback` the fonts that draw what the line's own font has no glyph for.
   */
 final case class RichTextContext(
     document: Option[RichTextDocument],
@@ -33,7 +33,8 @@ final case class RichTextContext(
     headings: HeadingSettings = HeadingSettings.default,
     virtualDropCaps: Option[VirtualDropCaps] = None,
     dropCapGapEm: Float = DropCapLayout.DefaultGapEm,
-    resolver: ChapterOpenings.Resolver = ChapterOpenings.standard
+    resolver: ChapterOpenings.Resolver = ChapterOpenings.standard,
+    fallback: FontFallback = FontFallback.Default
 ):
 
   val roles: ParagraphRoles = ParagraphRoles(OpeningContext(dropCapsEnabled, virtualDropCaps), resolver)
@@ -68,7 +69,8 @@ object RichTextContext:
     tabSize: Int = IndentationSettings.DefaultTabSize,
     headings: HeadingSettings = HeadingSettings.default,
     openings: OpeningSettings = OpeningSettings.default,
-    dropCapGapEm: Float = DropCapLayout.DefaultGapEm
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm,
+    fallback: FontFallback = FontFallback.Default
   ): RichTextContext =
     val content  = buffer.document.content
     val document = buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(content.lineCount, content.weight))
@@ -80,7 +82,8 @@ object RichTextContext:
       tabSize,
       headings,
       document.flatMap(wrapCache.virtualDropCaps(_, openings)),
-      dropCapGapEm
+      dropCapGapEm,
+      fallback = fallback
     )
 
   /** How `buffer`'s inline Markdown is restyled under `viewMode`. A buffer carrying a rich-text document styles its own

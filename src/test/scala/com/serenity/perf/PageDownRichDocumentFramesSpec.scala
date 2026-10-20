@@ -141,10 +141,11 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
           ascentPx: Int,
           stretch: String,
           from: Int,
-          until: Int
+          until: Int,
+          clipGlyphToRun: Boolean
         ): Unit =
           record(yPx, lineHeightPx)
-          super.drawShapedRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, stretch, from, until)
+          super.drawShapedRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, stretch, from, until, clipGlyphToRun)
           if fringe && from < until then leaveFringe(image, xPx, yPx)
       val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
       lastPlan.set(

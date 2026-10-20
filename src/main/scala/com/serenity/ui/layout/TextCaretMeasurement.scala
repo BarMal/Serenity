@@ -6,6 +6,7 @@ import java.awt.font.FontRenderContext
 import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.{IndentationSettings, MeasuredRow}
+import com.serenity.text.fallback.FontSlot
 import com.serenity.ui.openings.ParagraphRoles
 import com.serenity.ui.renderer.ShapedTextCache
 import com.serenity.ui.theme.{HeadingSettings, MarkdownInlineStyling, RichTextStyling, TextStyle}
@@ -19,9 +20,19 @@ private[layout] object TextCaretMeasurement:
   /** The AWT font a single buffer-line column is measured/drawn with, over the buffer's base font. A `hidden` run stays
     * in the line's text but has no width, so it neither advances the line nor takes a caret stop of its own. The
     * resolver's `extraAdvances` are the dual: a column that is wider than its glyph by that many pixels, which a table
-    * uses to pad a cell out to its column.
+    * uses to pad a cell out to its column. A run with a non-primary `slot` is drawn in a fallback font because the
+    * line's own font has no glyph for it; `fixedLinePitch` keeps such runs out of a row's height, as a code buffer's
+    * rows do not grow for them. A positive `wideCellPx` is the cell a code line is laid out on: each character the
+    * terminal counts as two cells ([[CharWidth]]) takes exactly two of them, whatever font draws it, and each one-cell
+    * character a fallback font draws takes exactly one. A run's slot `n` names `fallbackFamilies(n - 1)`.
     */
-  final private[layout] case class ColumnFontRun(startColumn: Int, endColumn: Int, font: Font, hidden: Boolean = false)
+  final private[layout] case class ColumnFontRun(
+      startColumn: Int,
+      endColumn: Int,
+      font: Font,
+      hidden: Boolean = false,
+      slot: FontSlot = FontSlot.Primary
+  )
 
   /** `[startColumn, endColumn)` measured in one `font`, or not at all when `hidden`. */
   final private[layout] case class FontSpan(startColumn: Int, endColumn: Int, font: Font, hidden: Boolean)
@@ -35,9 +46,14 @@ private[layout] object TextCaretMeasurement:
       baseFont: Font,
       runs: Vector[ColumnFontRun],
       extraAdvances: Map[Int, Float] = Map.empty,
-      tabSize: Int = IndentationSettings.DefaultTabSize
+      tabSize: Int = IndentationSettings.DefaultTabSize,
+      fixedLinePitch: Boolean = false,
+      wideCellPx: Float = 0.0f,
+      fallbackFamilies: Vector[String] = Vector.empty
   ):
     val hasHidden: Boolean = runs.exists(_.hidden)
+
+    val hasFallback: Boolean = runs.exists(_.slot != FontSlot.Primary)
 
     /** Whether the runs are sorted and disjoint, which is what lets [[runAt]] bisect. Overlapping or unordered runs
       * keep the first-listed-wins scan, so the answer never depends on how the runs happened to be supplied.
@@ -68,6 +84,9 @@ private[layout] object TextCaretMeasurement:
     def fontAt(column: Int): Font =
       runAt(column).map(_.font).getOrElse(baseFont)
 
+    def isFallbackAt(column: Int): Boolean =
+      hasFallback && runAt(column).exists(_.slot != FontSlot.Primary)
+
     /** `[startColumn, endColumn)` cut into maximal ranges of one font each, hidden ranges kept apart. */
     def fontRuns(startColumn: Int, endColumn: Int): Vector[FontSpan] =
       val firstInside = lastIndexWhere(boundaries.length)(boundaries(_) <= startColumn) + 1
@@ -92,11 +111,32 @@ private[layout] object TextCaretMeasurement:
 
     def isHidden(column: Int): Boolean = hasHidden && runAt(column).exists(_.hidden)
 
+    /** The runs of each slot over `[startColumn, endColumn)` as `(startColumn, endColumn, slot)`, empty when every
+      * column is drawn in the line's own font.
+      */
+    def slotRuns(startColumn: Int, endColumn: Int): Vector[(Int, Int, FontSlot)] =
+      if !hasFallback then Vector.empty
+      else
+        runs.collect {
+          case run if run.slot != FontSlot.Primary && run.endColumn > startColumn && run.startColumn < endColumn =>
+            (math.max(run.startColumn, startColumn), math.min(run.endColumn, endColumn), run.slot)
+        }
+
+    private def leavesColumnsToBaseFont(startColumn: Int, endColumn: Int): Boolean =
+      val covered = runs.foldLeft(0) { (sum, run) =>
+        sum + math.max(0, math.min(run.endColumn, endColumn) - math.max(run.startColumn, startColumn))
+      }
+      covered < endColumn - startColumn
+
     def lineMetrics(frc: FontRenderContext, extents: FontLineExtents, startColumn: Int, endColumn: Int): (Int, Int) =
       val covering = runs.collect {
-        case run if !run.hidden && run.endColumn > startColumn && run.startColumn < endColumn => run.font
+        case run
+            if !run.hidden && run.endColumn > startColumn && run.startColumn < endColumn &&
+              !(fixedLinePitch && run.slot != FontSlot.Primary) =>
+          run.font
       }
-      val fonts = if covering.nonEmpty then covering else Vector(baseFont)
+      val needsBase = covering.isEmpty || (hasFallback && leavesColumnsToBaseFont(startColumn, endColumn))
+      val fonts     = if needsBase then baseFont +: covering else covering
       val (maxAscent, maxDescent) = fonts.foldLeft((1, 0)) {
         case ((ascent, descent), font) =>
           val extent = extents.of(font, frc)
