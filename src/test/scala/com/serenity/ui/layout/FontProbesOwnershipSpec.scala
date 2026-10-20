@@ -84,3 +84,24 @@ class FontProbesOwnershipSpec extends AnyFlatSpec with Matchers:
 
     owner.shapedText.probes.probesRun should be > 0L
   }
+
+  "An owner's probes" should "stay within their bound however many fonts it meets" in {
+    val probes = FontProbes(capacityPerGeneration = 2)
+    val fonts  = Vector.fill(10)(unseen())
+
+    fonts.foreach(GlyphAdvances.layoutAdvanceMatchesSum(_, frc, probes))
+    probes.probesRun shouldBe 10L
+
+    GlyphAdvances.layoutAdvanceMatchesSum(fonts.head, frc, probes)
+    probes.probesRun shouldBe 11L
+  }
+
+  it should "keep answering from memory while the fonts fit" in {
+    val probes = FontProbes(capacityPerGeneration = 2)
+    val fonts  = Vector.fill(2)(unseen())
+
+    fonts.foreach(GlyphAdvances.layoutAdvanceMatchesSum(_, frc, probes))
+    fonts.foreach(GlyphAdvances.layoutAdvanceMatchesSum(_, frc, probes))
+
+    probes.probesRun shouldBe 2L
+  }
