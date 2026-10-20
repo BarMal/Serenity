@@ -5,7 +5,7 @@ import java.awt.font.{FontRenderContext, TextAttribute, TextHitInfo, TextLayout}
 import java.text.AttributedString
 
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
-import com.serenity.ui.renderer.{FontFirstUse, ShapedTextCache}
+import com.serenity.ui.renderer.{FontFirstUse, FontProbes, ShapedTextCache}
 
 /** The measurement a row falls back to when summed glyph advances cannot answer: its glyphs shaped as the draw path
   * shapes them, or a `TextLayout` for the text shaping cannot stand in for.
@@ -23,8 +23,8 @@ private[layout] object ExactCaretXs:
     * advances (a slanted one) is measured by `TextLayout`, and so is a row of several fonts with right-to-left text in
     * it, which shaping one font at a time would not order across fonts.
     */
-  private def measuresByGlyphs(text: String, fonts: Seq[Font], frc: FontRenderContext): Boolean =
-    fonts.forall(GlyphAdvances.layoutAdvanceMatchesSum(_, frc)) &&
+  private def measuresByGlyphs(text: String, fonts: Seq[Font], frc: FontRenderContext, probes: FontProbes): Boolean =
+    fonts.forall(GlyphAdvances.layoutAdvanceMatchesSum(_, frc, probes)) &&
       (fonts.length <= 1 || !java.text.Bidi.requiresBidi(text.toCharArray, 0, text.length))
 
   /** Carets read from one exact measurement of `text`: exact for any text, but a shaping of the whole row. */
@@ -95,7 +95,7 @@ private[layout] object ExactCaretXs:
     frc: FontRenderContext,
     shapedText: ShapedTextCache
   ): ShapedCaretStops.Stops =
-    if measuresByGlyphs(text, spans.map(_.font), frc) then
+    if measuresByGlyphs(text, spans.map(_.font), frc, shapedText.probes) then
       shapedText.countExactMeasurement()
       ShapedCaretStops.of(text, spans, frc, shapedText.glyphAdvances)
     else
