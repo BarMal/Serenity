@@ -75,13 +75,17 @@ object ThemeManager:
     case InlineCode, Link
 
   private def highlightMarkdownLine(line: String, theme: Theme): List[StyledText] =
-    val markerColor  = theme.colorFor(SyntaxElement.Delimiter)
-    val headingColor = theme.colorFor(SyntaxElement.Keyword)
+    val markerColor = theme.colorFor(SyntaxElement.Delimiter)
 
     line match
       case headingPattern(marker, content) =>
-        StyledText(marker, TextStyle.bold, markerColor.foreground, theme.background) ::
-          withInlineMarkdownStyling(content, theme, TextStyle.bold, Some(headingColor.foreground))
+        StyledText(marker, TextStyle.bold, theme.colorFor(SyntaxElement.HeadingMarker).foreground, theme.background) ::
+          withInlineMarkdownStyling(
+            content,
+            theme,
+            TextStyle.bold,
+            Some(theme.colorFor(SyntaxElement.Heading).foreground)
+          )
       case unorderedListPattern(marker, content) =>
         StyledText(marker, TextStyle.bold, markerColor.foreground, theme.background) ::
           withInlineMarkdownStyling(content, theme)

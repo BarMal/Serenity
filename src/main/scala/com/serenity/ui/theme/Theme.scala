@@ -43,6 +43,9 @@ final case class Theme(
   /** Raised surface colour pair used by panels, overlays, and chrome. */
   def surface: ThemeColor = panel
 
+  /** Scrollbar thumb colours, derived from the theme's own background and foreground. */
+  def scrollbar: ScrollbarColors = ScrollbarColors.derive(this)
+
   /** Status treatments for error and warning feedback. */
   def status: ThemeStatus = ThemeStatus(error, warning)
 
@@ -62,7 +65,10 @@ final case class Theme(
   def selectionTextContrast: Double = Theme.contrastRatio(selection.foreground, selection.background)
 
   def colorFor(element: SyntaxElement): ThemeColor =
-    syntaxColors.getOrElse(element, ThemeColor(foreground, background, TextStyle.normal))
+    syntaxColors
+      .get(element)
+      .orElse(SyntaxElement.fallback(element).map(colorFor))
+      .getOrElse(ThemeColor(foreground, background, TextStyle.normal))
 
   def foregroundColor: RenderColor = foreground
   def backgroundColor: RenderColor = background

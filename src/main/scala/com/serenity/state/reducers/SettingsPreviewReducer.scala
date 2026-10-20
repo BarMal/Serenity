@@ -27,6 +27,7 @@ object SettingsPreviewReducer:
     intent match
       case SettingsIntent.Font(font)               => isPreviewableFont(font)
       case SettingsIntent.Cursor(_)                => true
+      case SettingsIntent.Headings(_)              => true
       case SettingsIntent.StatusLine(statusLine)   => isPreviewableStatusLine(statusLine)
       case SettingsIntent.TextDisplay(textDisplay) => isPreviewableTextDisplay(textDisplay)
       case SettingsIntent.InterfaceChrome(_)       => true

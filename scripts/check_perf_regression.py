@@ -15,6 +15,10 @@ is itself enough to clear 2x. `--min-baseline-ms` (below) is a different guard -
 anything but noise, regardless of how large the baseline is. Both guards must pass for a ratio-flagged benchmark to
 actually fail the build.
 
+Memory: `footprint.*` rows carry `retained_bytes` (heap held by a built state after GC) and fail when current exceeds
+1.25x baseline AND grows by more than 1 MiB. `allocation_p50_bytes` regressions past 1.5x with a delta over 64 KiB are
+printed as warnings only, unless `--gate-allocation` is passed. A baseline lacking these columns is skipped with a note.
+
 A missing baseline (a cache-cold run: cache eviction, or a branch with none yet) fails loudly by default rather than
 silently passing with nothing compared -- that silence was the second gap an audit of #1503 found. Pass
 `--allow-missing-baseline` only for the run that is meant to establish a fresh baseline (a push to master, where the
@@ -43,6 +47,18 @@ class Row:
     name: str
     p50_ms: float
     p95_ms: float
+    allocation_p50_bytes: int | None = None
+    allocation_p95_bytes: int | None = None
+    retained_bytes: int | None = None
+
+
+def _optional_bytes(fields: list[str], index: int) -> int | None:
+    if index >= len(fields) or not fields[index].strip():
+        return None
+    try:
+        return int(float(fields[index]))
+    except ValueError:
+        return None
 
 
 def parse_csv(path: str) -> dict[str, Row]:
@@ -61,7 +77,14 @@ def parse_csv(path: str) -> dict[str, Row]:
                 p95_ms = float(fields[6])
             except (ValueError, IndexError):
                 continue
-            rows[name] = Row(name, p50_ms, p95_ms)
+            rows[name] = Row(
+                name,
+                p50_ms,
+                p95_ms,
+                _optional_bytes(fields, 8),
+                _optional_bytes(fields, 9),
+                _optional_bytes(fields, 10),
+            )
     return rows
 
 
@@ -109,7 +132,77 @@ def build_parser() -> argparse.ArgumentParser:
             "else so a cache-cold run cannot pass without ever being compared."
         ),
     )
+    parser.add_argument(
+        "--retained-threshold",
+        type=float,
+        default=1.25,
+        help="Fail a footprint.* row whose retained_bytes exceeds baseline times this multiplier (default: 1.25)",
+    )
+    parser.add_argument(
+        "--min-retained-delta-bytes",
+        type=int,
+        default=1024 * 1024,
+        help="Ignore a retained-heap regression whose absolute growth is below this floor (default: 1 MiB)",
+    )
+    parser.add_argument(
+        "--allocation-threshold",
+        type=float,
+        default=1.5,
+        help="Flag a benchmark whose allocation_p50_bytes exceeds baseline times this multiplier (default: 1.5)",
+    )
+    parser.add_argument(
+        "--min-allocation-delta-bytes",
+        type=int,
+        default=64 * 1024,
+        help="Ignore an allocation regression whose absolute growth is below this floor (default: 64 KiB)",
+    )
+    parser.add_argument(
+        "--gate-allocation",
+        action="store_true",
+        help="Fail the build on allocation regressions instead of only printing warnings (default: report-only)",
+    )
     return parser
+
+
+def _exceeds(baseline: int, current: int, ratio: float, min_delta: int) -> bool:
+    return baseline > 0 and current / baseline > ratio and current - baseline > min_delta
+
+
+def check_memory(baseline: dict[str, Row], current: dict[str, Row], args: argparse.Namespace) -> int:
+    """Gates retained heap and reports allocation; returns the number of failures. A side without the column is
+    skipped with a note, so an old baseline cannot crash or fail the check."""
+    failures = 0
+    skipped_retained = skipped_allocation = 0
+    for name, now in sorted(current.items()):
+        before = baseline.get(name)
+        if before is None:
+            continue
+        if now.retained_bytes is not None:
+            if before.retained_bytes is None:
+                skipped_retained += 1
+            elif _exceeds(before.retained_bytes, now.retained_bytes, args.retained_threshold, args.min_retained_delta_bytes):
+                failures += 1
+                print(
+                    f"::error::{name}: retained heap {before.retained_bytes} -> {now.retained_bytes} bytes "
+                    f"({now.retained_bytes / before.retained_bytes:.2f}x, +{now.retained_bytes - before.retained_bytes} bytes)"
+                )
+        if now.allocation_p50_bytes is not None:
+            if before.allocation_p50_bytes is None:
+                skipped_allocation += 1
+            elif _exceeds(
+                before.allocation_p50_bytes, now.allocation_p50_bytes, args.allocation_threshold, args.min_allocation_delta_bytes
+            ):
+                level = "error" if args.gate_allocation else "warning"
+                failures += 1 if args.gate_allocation else 0
+                print(
+                    f"::{level}::{name}: allocation p50 {before.allocation_p50_bytes} -> {now.allocation_p50_bytes} "
+                    f"bytes/invocation ({now.allocation_p50_bytes / before.allocation_p50_bytes:.2f}x)"
+                )
+    if skipped_retained:
+        print(f"::notice::{skipped_retained} footprint row(s) skipped: baseline has no retained_bytes column/value.")
+    if skipped_allocation:
+        print(f"::notice::{skipped_allocation} row(s) skipped for allocation: baseline has no allocation value.")
+    return failures
 
 
 def main_with_args(argv: list[str]) -> int:
@@ -153,10 +246,15 @@ def main_with_args(argv: list[str]) -> int:
         if is_regression:
             regressions.append((name, baseline_row.p50_ms, current_row.p50_ms, ratio))
 
+    memory_failures = check_memory(baseline, current, args)
+
     if regressions:
         print(f"\n::error::{len(regressions)} benchmark(s) regressed past {args.threshold}x baseline p50:")
         for name, base_ms, cur_ms, ratio in regressions:
             print(f"  - {name}: {base_ms:.5f}ms -> {cur_ms:.5f}ms ({ratio:.2f}x)")
+        return 1
+
+    if memory_failures:
         return 1
 
     print("\nNo benchmark regressed past the threshold.")

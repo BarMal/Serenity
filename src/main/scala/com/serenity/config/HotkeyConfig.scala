@@ -130,7 +130,7 @@ final case class HotkeyTrigger(
       ).flatten
     val keyPart =
       keyType match
-        case InputKey.Character  => character.map(_.toString).getOrElse("")
+        case InputKey.Character  => character.map(char => if char == ' ' then "space" else char.toString).getOrElse("")
         case InputKey.Ctrl       => "ctrl"
         case InputKey.Alt        => "alt"
         case InputKey.Shift      => "shift"
@@ -197,6 +197,8 @@ object HotkeyTrigger:
         key match
           case "enter" =>
             Some(HotkeyTrigger(InputKey.Enter, None, modifiers))
+          case "space" =>
+            Some(HotkeyTrigger(InputKey.Character, Some(' '), modifiers))
           case "backspace" =>
             Some(HotkeyTrigger(InputKey.Backspace, None, modifiers))
           case "delete" =>

@@ -68,7 +68,7 @@ object EditorPaneComponent:
     */
   def joinsRun(event: TextEntryEvent): Boolean =
     event match
-      case _: InsertChar | DeleteBackward | DeleteForward | DeleteWordBackward | DeleteWordForward | DeleteToLineStart |
-          DeleteToLineEnd | Enter | NewLine | MoveLeft | MoveRight =>
+      case _: InsertChar | _: InsertText | DeleteBackward | DeleteForward | DeleteWordBackward | DeleteWordForward |
+          DeleteToLineStart | DeleteToLineEnd | Enter | NewLine | MoveLeft | MoveRight =>
         true
       case _ => false

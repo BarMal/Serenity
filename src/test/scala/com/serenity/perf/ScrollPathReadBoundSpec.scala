@@ -71,11 +71,11 @@ class ScrollPathReadBoundSpec extends AnyFlatSpec with Matchers:
     List("reduce" -> reduced, "damage" -> damaged, "render" -> drawn)
 
   "A one-line wheel scroll through a 50k-line document" should "read only the visible lines when wrapping" in
-    readsPerStep(AppConfig.default).foreach { (step, count) =>
+    readsPerStep(AppConfig.conventional).foreach { (step, count) =>
       withClue(s"$step read $count lines: ")(count should be <= margin)
     }
 
   it should "read only the visible lines without wrapping" in
-    readsPerStep(AppConfig.default.withWordWrap(false)).foreach { (step, count) =>
+    readsPerStep(AppConfig.conventional.withWordWrap(false)).foreach { (step, count) =>
       withClue(s"$step read $count lines: ")(count should be <= margin)
     }

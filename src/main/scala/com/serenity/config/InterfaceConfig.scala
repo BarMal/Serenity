@@ -81,7 +81,12 @@ final case class InterfaceConfig(
     // the flush-to-edge density it always had), rather than baking either surface's default in here -- see
     // `AppState.effectiveUiElementGap`. `Some` is honoured on both surfaces unchanged.
     elementGap: Option[Double] = None,
-    outlineThicknessPx: Int = 2
+    outlineThicknessPx: Int = 2,
+    menuBar: MenuBarMode = MenuBarMode.Hidden,
+    fileDialog: FileDialogMode = FileDialogMode.Auto,
+    // The field's own default is the conventional layout, like the chrome settings it stands for; what a fresh install
+    // gets is `AppConfig.default`, built by `LayoutPreset`.
+    layout: UiLayout = UiLayout.Conventional
 ):
 
   def normalized: InterfaceConfig =
@@ -96,7 +101,8 @@ final case class InputConfig(
     // Lines a single wheel notch scrolls. Three is the platform convention (`java.awt.event.MouseWheelEvent`'s own
     // unit-scroll default, and what most terminals send per notch), but it is a matter of taste and pointing device.
     wheelScrollLines: Int = 3,
-    panelEscapeReturnsTo: PerMode[PanelEscapeTarget] = PerMode.both(PanelEscapeTarget.Editor)
+    panelEscapeReturnsTo: PerMode[PanelEscapeTarget] = PerMode.both(PanelEscapeTarget.Editor),
+    summon: SummonConfig = SummonConfig()
 ):
 
   def normalized: InputConfig =

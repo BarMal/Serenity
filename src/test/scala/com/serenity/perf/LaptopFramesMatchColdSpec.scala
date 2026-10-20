@@ -45,7 +45,8 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
         deviceScaleX = LaptopFrameBenchmarks.DeviceScale,
         deviceScaleY = LaptopFrameBenchmarks.DeviceScale,
         contentPersists = true,
-        layerCacheOwnerOverride = Some(screen)
+        layerCacheOwnerOverride = Some(screen),
+        textCaches = caches.surfaceText
       )
       val _ = RendererFramePlanner.renderFrame(
         state,

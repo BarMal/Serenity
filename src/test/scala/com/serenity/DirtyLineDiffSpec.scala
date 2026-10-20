@@ -9,7 +9,7 @@ import com.serenity.richtext.{
   RichTextRange
 }
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
-import com.serenity.ui.layout.{DirtyLineDiff, TextLayoutSnapshot}
+import com.serenity.ui.layout.{DirtyLineDiff, DropCapSnapshots, TextLayoutSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -235,4 +235,29 @@ class DirtyLineDiffSpec extends AnyFlatSpec with Matchers:
     val after = richSnapshot(bold, taller)
 
     DirtyLineDiff.dirtyRows(Some(before), after) shouldBe Set(0, 1, 2)
+  }
+
+  "DirtyLineDiff with a drop cap" should "repaint the whole glyph span when only a later row of it changed" in {
+    val before = DropCapSnapshots.snapshot(DropCapSnapshots.dropCap(3, rows = 5), DropCapSnapshots.body(2))
+    val after = before.copy(visualLines =
+      before.visualLines.updated(2, before.visualLines(2).copy(row = before.visualLines(2).row.copy(text = "edited")))
+    )
+
+    DirtyLineDiff.dirtyRows(Some(before), after) shouldBe Set(0, 1, 2)
+  }
+
+  it should "leave the rows beneath the glyph alone when nothing in the span changed" in {
+    val before = DropCapSnapshots.snapshot(DropCapSnapshots.dropCap(3, rows = 5), DropCapSnapshots.body(2))
+    val after = before.copy(visualLines =
+      before.visualLines.updated(4, before.visualLines(4).copy(row = before.visualLines(4).row.copy(text = "edited")))
+    )
+
+    DirtyLineDiff.dirtyRows(Some(before), after) shouldBe Set(4)
+  }
+
+  it should "repaint the span a row's key change falls in" in {
+    val snapshot = DropCapSnapshots.snapshot(DropCapSnapshots.dropCap(3, rows = 5), DropCapSnapshots.body(2))
+    val before   = Vector.fill(7)("plain")
+
+    DirtyLineDiff.dirtyRows(Some(snapshot), snapshot, before, before.updated(1, "selected")) shouldBe Set(0, 1, 2)
   }

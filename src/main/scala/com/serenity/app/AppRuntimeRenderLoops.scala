@@ -270,7 +270,8 @@ private[serenity] object AppRuntimeRenderLoops:
     stateManager.getCurrentState.flatMap { state =>
       cachedTranslators(state.persisted.config, translatorCache).flatMap(translators =>
         inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state, translators)) >>
-          inputRouter.setCursorPeekEnabled(state.persisted.config.surfaceConfig.commandRunnerCursorPeekEnabled)
+          inputRouter.setCursorPeekEnabled(state.persisted.config.surfaceConfig.commandRunnerCursorPeekEnabled) >>
+          inputRouter.setSummonConfig(state.persisted.config.summon)
       )
     }
 

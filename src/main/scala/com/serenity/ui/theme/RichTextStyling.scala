@@ -2,6 +2,7 @@ package com.serenity.ui.theme
 
 import com.serenity.richtext.{InlineAtom, InlineMark, ParagraphRole, RichTextDocument}
 import com.serenity.ui.color.RenderColor
+import com.serenity.ui.openings.{ChapterOpenings, ParagraphRoles}
 
 object RichTextStyling:
 
@@ -34,11 +35,18 @@ object RichTextStyling:
     startColumn: Int,
     endColumn: Int,
     theme: Theme,
-    scale: Float = 1.0f
+    scale: Float = 1.0f,
+    headings: HeadingSettings = HeadingSettings.default,
+    roles: ParagraphRoles = ParagraphRoles.enabled
   ): List[StyledText] =
-    slices(document, bufferLine, startColumn, endColumn).map {
+    slices(document, bufferLine, startColumn, endColumn, roles).map {
       case (content, style, role) =>
-        StyledText(content, scaledTextStyle(style, role, scale), foregroundColor(style, theme), theme.background)
+        StyledText(
+          content,
+          scaledTextStyle(style, role, scale, headings),
+          foregroundColor(style, role, theme, headings),
+          theme.background
+        )
     }
 
   /** The font-only view of a rich line, shared with the measured layout so caret advances and per-line heights are
@@ -49,18 +57,22 @@ object RichTextStyling:
     bufferLine: Int,
     startColumn: Int,
     endColumn: Int,
-    scale: Float = 1.0f
+    scale: Float = 1.0f,
+    headings: HeadingSettings = HeadingSettings.default,
+    roles: ParagraphRoles = ParagraphRoles.enabled
   ): List[RichSpan] =
-    slices(document, bufferLine, startColumn, endColumn).map {
-      case (content, style, role) => RichSpan(content, scaledTextStyle(style, role, scale))
+    slices(document, bufferLine, startColumn, endColumn, roles).map {
+      case (content, style, role) => RichSpan(content, scaledTextStyle(style, role, scale, headings))
     }
 
   private def slices(
     document: RichTextDocument,
     bufferLine: Int,
     startColumn: Int,
-    endColumn: Int
+    endColumn: Int,
+    roles: ParagraphRoles
   ): List[(String, com.serenity.richtext.RichTextStyle, ParagraphRole)] =
+    val role = roles.layoutRole(document, bufferLine)
     document
       .paragraphAt(bufferLine)
       .map { paragraph =>
@@ -68,7 +80,7 @@ object RichTextStyling:
           .foldLeft((0, List.empty[(String, com.serenity.richtext.RichTextStyle, ParagraphRole)])) {
             case ((offset, acc), run) =>
               val nextOffset = offset + run.text.length
-              val slice      = sliceRun(run, paragraph.role, offset, startColumn, endColumn)
+              val slice      = sliceRun(run, role, offset, startColumn, endColumn)
               (nextOffset, slice.fold(acc)(_ :: acc))
           }
           ._2
@@ -104,13 +116,18 @@ object RichTextStyling:
   private def scaledTextStyle(
     style: com.serenity.richtext.RichTextStyle,
     role: ParagraphRole,
-    scale: Float
+    scale: Float,
+    headings: HeadingSettings
   ): TextStyle =
-    val resolved = textStyle(style, role)
+    val resolved = textStyle(style, role, headings)
     resolved.copy(fontSize = resolved.fontSize.map(_ * scale))
 
-  private def textStyle(style: com.serenity.richtext.RichTextStyle, role: ParagraphRole): TextStyle =
-    headingStyle(role).combine(
+  private def textStyle(
+    style: com.serenity.richtext.RichTextStyle,
+    role: ParagraphRole,
+    headings: HeadingSettings
+  ): TextStyle =
+    headingStyle(role, headings).combine(
       TextStyle(
         isBold = style.marks.contains(InlineMark.Bold),
         isItalic = style.marks.contains(InlineMark.Italic),
@@ -120,36 +137,29 @@ object RichTextStyling:
       )
     )
 
-  private def headingStyle(role: ParagraphRole): TextStyle =
+  private def headingStyle(role: ParagraphRole, headings: HeadingSettings): TextStyle =
     role match
       case ParagraphRole.Body =>
         TextStyle.normal
       case ParagraphRole.Heading(level) =>
-        TextStyle(
-          isBold = true,
-          fontSize = Some(headingFontSize(level))
-        )
+        headings.textStyle(level)
       case ParagraphRole.DropCap(_) =>
         // The paragraph's own runs render at their ordinary (non-inflated) style -- only the singled-out first
         // character uses the large glyph size, via [[dropCapGlyphStyle]]. Mirrors how a printed drop cap's body text
         // is set at the normal size around the oversized initial.
         TextStyle.normal
 
-  private def headingFontSize(level: Int): Float =
-    level match
-      case 1 => 22.0f
-      case 2 => 18.0f
-      case 3 => 16.0f
-      case _ => 14.0f
-
-  /** The font size, in the same units as [[ProseZoomBaselinePx]], a drop cap glyph spanning `lines` visual lines should
-    * render at -- so it visually occupies about that many lines of the paragraph's normal line height, the way a
-    * printed drop cap sits flush with the top and bottom of the lines it spans. `baseFontSizePx` is the paragraph's own
-    * (unscaled) body font size; `lines` is clamped to at least 1 (matching [[ParagraphRole.dropCap]]'s own clamp, so a
-    * corrupt/hand-edited session value can't shrink or invert the glyph).
+  /** The font size a drop cap glyph spanning `lines` visual lines is set at, so that the top of its capitals is level
+    * with the top of the body's capitals on the first line and its baseline sits on the baseline of the last: the
+    * glyph's capitals are then `(lines - 1)` line heights plus the body's own capital height tall. `glyphCapHeightEm`
+    * is the glyph font's capital height per unit of font size. `lines` is clamped to at least 1 (matching
+    * [[ParagraphRole.dropCap]]'s own clamp, so a corrupt/hand-edited session value can't shrink or invert the glyph).
     */
-  def dropCapGlyphFontSize(baseFontSizePx: Float, lines: Int): Float =
-    baseFontSizePx.max(1.0f) * lines.max(1).toFloat
+  def dropCapGlyphFontSize(bodyCapHeightPx: Float, lineHeightPx: Float, glyphCapHeightEm: Float, lines: Int): Float =
+    val spanPx = (lines.max(1) - 1) * lineHeightPx + bodyCapHeightPx
+    spanPx / glyphCapHeightEm.max(MinCapHeightEm)
+
+  private val MinCapHeightEm: Float = 0.01f
 
   /** The role rendering/layout should treat `role` as, honouring the `document.drop_caps_enabled` config toggle. When
     * the toggle is off, a [[ParagraphRole.DropCap]] degrades to [[ParagraphRole.Body]] for this purpose only -- the
@@ -158,31 +168,31 @@ object RichTextStyling:
     * unchanged.
     */
   def effectiveRole(role: ParagraphRole, dropCapsEnabled: Boolean): ParagraphRole =
-    role match
-      case ParagraphRole.DropCap(_) if !dropCapsEnabled => ParagraphRole.Body
-      case other                                        => other
+    ChapterOpenings.degraded(role, dropCapsEnabled)
 
-  /** The resolved, zoom-scaled style for a drop cap paragraph's singled-out first character: bold, sized to span
-    * `role.lines` visual lines at the paragraph's base body font size, with any inline styling on that character
-    * (family/colour/explicit marks) layered on top the same way [[textStyle]] layers inline style over role style.
-    * Returns `None` for a non-drop-cap role, since there is no glyph to size in that case.
+  /** The style a drop cap paragraph's own text is set in around the glyph: the ordinary body style of its first run. */
+  def dropCapBodyStyle(firstCharacterStyle: com.serenity.richtext.RichTextStyle, scale: Float): TextStyle =
+    scaledTextStyle(firstCharacterStyle, ParagraphRole.Body, scale, HeadingSettings.default)
+
+  /** The style for a drop cap paragraph's singled-out first character: bold, at `glyphFontSizePx` (see
+    * [[dropCapGlyphFontSize]]), with any inline styling on that character (family/marks) layered on top the same way
+    * [[textStyle]] layers inline style over role style. Returns `None` for a non-drop-cap role, since there is no glyph
+    * to style in that case.
     */
   def dropCapGlyphStyle(
     firstCharacterStyle: com.serenity.richtext.RichTextStyle,
     role: ParagraphRole,
-    baseFontSizePx: Float,
-    scale: Float = 1.0f
+    glyphFontSizePx: Float
   ): Option[TextStyle] =
     role match
-      case ParagraphRole.DropCap(lines) =>
-        val glyphSize = dropCapGlyphFontSize(baseFontSizePx, lines) * scale
+      case _: ParagraphRole.DropCap =>
         Some(
           TextStyle(
             isBold = true,
             isItalic = firstCharacterStyle.marks.contains(InlineMark.Italic),
             isUnderlined = firstCharacterStyle.marks.contains(InlineMark.Underline),
             fontFamily = firstCharacterStyle.fontFamily,
-            fontSize = Some(glyphSize)
+            fontSize = Some(glyphFontSizePx)
           )
         )
       case _ => None
@@ -198,13 +208,14 @@ object RichTextStyling:
     bufferLine: Int,
     startColumn: Int,
     endColumn: Int,
-    baseFontSizePx: Float,
-    scale: Float = 1.0f
+    glyphFontSizePx: Float,
+    scale: Float = 1.0f,
+    roles: ParagraphRoles = ParagraphRoles.enabled
   ): (Option[RichSpan], List[RichSpan]) =
-    val spans = styledFontSpans(document, bufferLine, startColumn, endColumn, scale)
-    val role  = document.paragraphAt(bufferLine).map(_.role)
+    val spans = styledFontSpans(document, bufferLine, startColumn, endColumn, scale, roles = roles)
+    val role  = roles.layoutRole(document, bufferLine)
     (role, startColumn, spans) match
-      case (Some(dropCap: ParagraphRole.DropCap), 0, firstSpan :: restOfFirstSpan) if firstSpan.text.nonEmpty =>
+      case (dropCap: ParagraphRole.DropCap, 0, firstSpan :: restOfFirstSpan) if firstSpan.text.nonEmpty =>
         val firstCharacterStyle = document
           .paragraphAt(bufferLine)
           .flatMap(_.runs.headOption)
@@ -215,13 +226,23 @@ object RichTextStyling:
         val glyphText = firstSpan.text.take(charCount)
         val remainder = firstSpan.text.drop(charCount)
         val glyphStyle =
-          dropCapGlyphStyle(firstCharacterStyle, dropCap, baseFontSizePx, scale).getOrElse(firstSpan.style)
+          dropCapGlyphStyle(firstCharacterStyle, dropCap, glyphFontSizePx).getOrElse(firstSpan.style)
         val remainderSpan = Option.when(remainder.nonEmpty)(RichSpan(remainder, firstSpan.style))
         (Some(RichSpan(glyphText, glyphStyle)), remainderSpan.toList ++ restOfFirstSpan)
       case _ => (None, spans)
 
-  private def foregroundColor(style: com.serenity.richtext.RichTextStyle, theme: Theme): RenderColor =
-    style.color.flatMap(hexColor).getOrElse(theme.foreground)
+  private def foregroundColor(
+    style: com.serenity.richtext.RichTextStyle,
+    role: ParagraphRole,
+    theme: Theme,
+    headings: HeadingSettings
+  ): RenderColor =
+    style.color.flatMap(hexColor).getOrElse(roleColor(role, theme, headings))
+
+  private def roleColor(role: ParagraphRole, theme: Theme, headings: HeadingSettings): RenderColor =
+    role match
+      case ParagraphRole.Heading(level) => headings.colourFor(level, markdown = false).resolve(theme)
+      case _                            => theme.foreground
 
   private def hexColor(value: String): Option[RenderColor] =
     val normalized = value.stripPrefix("#")

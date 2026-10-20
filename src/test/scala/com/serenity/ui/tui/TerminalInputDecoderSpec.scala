@@ -35,6 +35,27 @@ class TerminalInputDecoderSpec extends AnyFlatSpec with Matchers:
     decodeAll(bytes("é")) shouldBe List(tok(InputKey.Character, Some('é')))
   }
 
+  it should "decode a code point outside the BMP as one Text token, not drop it" in {
+    decodeAll(bytes("\uD83D\uDE00")) shouldBe List(DecodedToken.Text("\uD83D\uDE00"))
+    decodeAll(bytes("\uD842\uDFB7")) shouldBe List(DecodedToken.Text("\uD842\uDFB7"))
+  }
+
+  it should "decode a code point outside the BMP between ordinary characters in order" in {
+    decodeAll(bytes("a\uD83D\uDE00b")) shouldBe
+      List(tok(InputKey.Character, Some('a')), DecodedToken.Text("\uD83D\uDE00"), tok(InputKey.Character, Some('b')))
+  }
+
+  it should "hold a partial 4-byte sequence as remainder until it completes" in {
+    val all    = bytes("\uD83D\uDE00")
+    val result = TerminalInputDecoder.decode(all.take(3))
+    result.tokens shouldBe empty
+    result.remainder.toList shouldBe all.take(3).toList
+  }
+
+  it should "decode a CSI-u key report for a code point outside the BMP as a Text token" in {
+    decodeAll(csi("128512u")) shouldBe List(DecodedToken.Text("\uD83D\uDE00"))
+  }
+
   it should "decode the arrow keys" in {
     decodeAll(csi("A")) shouldBe List(tok(InputKey.ArrowUp))
     decodeAll(csi("B")) shouldBe List(tok(InputKey.ArrowDown))

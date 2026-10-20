@@ -26,7 +26,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(List(cursor)))
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
-    val initial = AppState.initial
+    val initial = AppState.initial(AppConfig.conventional)
     initial.copy(
       persisted = initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
@@ -76,7 +76,8 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   it should "clamp an above-cursor peek overlay into the active pane when the cursor is near the top" in {
     val base = baseState(cursor = CursorPosition(0, 5))
     val state = base.copy(
-      persisted = base.persisted.copy(config = AppState.initial.persisted.config.withUiElementGap(Some(0.5))),
+      persisted = base.persisted
+        .copy(config = AppState.initial(AppConfig.conventional).persisted.config.withUiElementGap(Some(0.5))),
       runtime = base.runtime.copy(uiSurfaces =
         List(
           UiSurface(
@@ -149,7 +150,11 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val base = baseState()
     val state = base.copy(
       persisted = base.persisted.copy(config =
-        AppState.initial.persisted.config.withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact)
+        AppState
+          .initial(AppConfig.conventional)
+          .persisted
+          .config
+          .withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact)
       ),
       runtime = base.runtime.copy(uiSurfaces =
         List(
@@ -183,7 +188,12 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val state = base.copy(
       persisted = base.persisted
         .copy(config =
-          AppState.initial.persisted.config.withUiElementGap(Some(0)).withCommandRunnerCursorGapRows(Some(3))
+          AppState
+            .initial(AppConfig.conventional)
+            .persisted
+            .config
+            .withUiElementGap(Some(0))
+            .withCommandRunnerCursorGapRows(Some(3))
         ),
       runtime = base.runtime.copy(uiSurfaces =
         List(
@@ -278,9 +288,10 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
         viewport = Viewport(topLine = 0, topVisualLine = 2, leftColumn = 0, visibleColumns = 80, visibleLines = 20)
       )
     val pane    = EditorPane.withBuffer(paneId, bufferId)
-    val initial = AppState.initial
+    val initial = AppState.initial(AppConfig.conventional)
     val state = initial.copy(
       persisted = initial.persisted.copy(
+        config = initial.persisted.config.withUiElementGap(Some(1)),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -290,8 +301,11 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.Surface(SurfaceId("command-runner"))
       ),
-      runtime = initial.runtime.copy(uiSurfaces =
-        List(
+      runtime = initial.runtime.copy(
+        // Rows are counted in cells: the viewport's `topVisualLine` below is the wrapped row of a cell grid, whose gap
+        // is set to the cell the windowed editor leaves by default.
+        capabilities = com.serenity.frontend.FrontendCapabilities.tui(),
+        uiSurfaces = List(
           UiSurface(
             SurfaceId("command-runner"),
             SurfaceContent.CommandPalette(
@@ -332,10 +346,10 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
         viewport = Viewport(topLine = 8, leftColumn = 0, visibleLines = 30, visibleColumns = 80)
       )
     val pane    = EditorPane.withBuffer(paneId, bufferId)
-    val initial = AppState.initial
+    val initial = AppState.initial(AppConfig.conventional)
     val state = initial.copy(
       persisted = initial.persisted.copy(
-        config = initial.persisted.config.withWordWrap(false),
+        config = initial.persisted.config.withWordWrap(false).withFontConfig(MeasuredRows.driftingFontConfig),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -365,17 +379,18 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
 
-    val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
-    val contentRect = CursorLayout.contentRectForPane(paneRect)
+    val rect = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
+    val caretRow =
+      MeasuredRows.caretRow(state, layout, paneId, cursor).getOrElse(fail("Expected the cursor to be painted"))
 
-    rect.y shouldBe contentRect.y + (cursor.line - buffer.viewport.topLine) + 2
+    rect.y shouldBe caretRow + 2
   }
 
   it should "size command runner overlays from configured visible rows" in {
     val base = baseState()
     val state = base.copy(
-      persisted = base.persisted.copy(config = AppState.initial.persisted.config.withCommandRunnerVisibleRows(Some(7))),
+      persisted = base.persisted
+        .copy(config = AppState.initial(AppConfig.conventional).persisted.config.withCommandRunnerVisibleRows(Some(7))),
       runtime = base.runtime.copy(uiSurfaces =
         List(
           UiSurface(
@@ -403,12 +418,13 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val commands = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .updateSearchTerm("op")(using registry)
     val cursor = CursorPosition(1, 2)
     val base   = baseState(cursor = cursor)
     val state = base.copy(
-      persisted = base.persisted.copy(config = AppState.initial.persisted.config.withUiElementGap(Some(2))),
+      persisted = base.persisted
+        .copy(config = AppState.initial(AppConfig.conventional).persisted.config.withUiElementGap(Some(2))),
       runtime = base.runtime.copy(uiSurfaces =
         List(
           UiSurface(
@@ -439,11 +455,14 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
   it should "preserve fractional cursor and nested-surface gaps as logical-pixel offsets" in {
     val cursor = CursorPosition(1, 2)
-    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.conventional)
     val base   = baseState(cursor = cursor)
     val state = base.copy(
       persisted = base.persisted.copy(config =
-        AppState.initial.persisted.config
+        AppState
+          .initial(AppConfig.conventional)
+          .persisted
+          .config
           .withAppMode(com.serenity.config.AppMode.Prose)
           .withUiElementGap(Some(0.25))
           .withCommandRunnerCursorGapRows(Some(0.5))
@@ -509,10 +528,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
     layout.belowCursorOverlayRect.map(_.height) shouldBe Some(
-      ModalSurfaceComposition.frameHeight(
-        prompt,
-        SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
-      )
+      ModalSurfaceComposition.frameHeightFor(prompt, layout.belowCursorOverlayRect.map(_.width).getOrElse(0), state)
     )
   }
 
@@ -536,7 +552,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
       layout.belowCursorOverlayRect.map(_.height) shouldBe Some(
-        ModalSurfaceComposition.frameHeight(modal, targetRows = 2)
+        ModalSurfaceComposition.frameHeight(modal, targetRows = 2, width = 72)
       )
     }
 end CursorOverlayLayoutSpec

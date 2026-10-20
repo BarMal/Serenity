@@ -10,7 +10,7 @@ import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, ShapedTextCache}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -89,7 +89,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
 
   private def rowWidthPx(runs: List[MockRenderSurface#DrawRunPxCall], usesTextFont: Boolean): Float =
     val measureFont = if usesTextFont then textFont else codeFont
-    TextLayoutSnapshot.caretXsForText(runs.map(_.s).mkString, measureFont).lastOption.getOrElse(0.0f)
+    TextLayoutSnapshot.caretXsForText(runs.map(_.s).mkString, measureFont, ShapedTextCache()).lastOption.getOrElse(0.0f)
 
   "RendererEntryPoints.render with a large horizontal margin (text font)" should
     "keep every wrapped row within the margin-adjusted content width" in {

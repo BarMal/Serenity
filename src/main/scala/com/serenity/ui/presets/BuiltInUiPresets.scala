@@ -21,7 +21,7 @@ private[presets] object BuiltInUiPresets:
   private def writingPreset: UiPreset =
     UiPreset(
       name = "Writing",
-      config = AppConfig.default
+      config = AppConfig.conventional
         .withAppMode(AppMode.Prose)
         .withLineNumbers(false)
         .withStatusLine(
@@ -32,11 +32,11 @@ private[presets] object BuiltInUiPresets:
         .withInterfaceDensity(InterfaceDensity.Spacious)
         .withProseMeasure(Some(ProseMeasure.Default))
         .withSmartPunctuation(true)
-        .withSpellCheck(AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = true))
+        .withSpellCheck(AppConfig.conventional.languageToolsConfig.spellCheck.copy(enabled = true))
         .withTypewriterScrolling(true)
         .withFocusedTextBody(true)
         .withFontConfig(
-          AppConfig.default.editorConfig.fontConfig.copy(
+          AppConfig.conventional.editorConfig.fontConfig.copy(
             textFontFamily = Font.SERIF,
             textFontSize = 18.0f,
             uiFontSize = 13.0f
@@ -48,7 +48,7 @@ private[presets] object BuiltInUiPresets:
   private def documentationPreset: UiPreset =
     UiPreset(
       name = "Documentation",
-      config = AppConfig.default
+      config = AppConfig.conventional
         .withAppMode(AppMode.Prose)
         .withLineNumbers(true)
         .withoutStatusLine
@@ -56,7 +56,7 @@ private[presets] object BuiltInUiPresets:
         .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
         .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
         .withFontConfig(
-          AppConfig.default.editorConfig.fontConfig.copy(
+          AppConfig.conventional.editorConfig.fontConfig.copy(
             textFontFamily = Font.SANS_SERIF,
             textFontSize = 14.0f,
             fontSize = 13.0f
@@ -68,7 +68,7 @@ private[presets] object BuiltInUiPresets:
   private def codePreset: UiPreset =
     UiPreset(
       name = "Code",
-      config = AppConfig.default
+      config = AppConfig.conventional
         .withAppMode(AppMode.Code)
         .withLineNumbers(true)
         .withInterfaceDensity(InterfaceDensity.Compact)
@@ -89,7 +89,7 @@ private[presets] object BuiltInUiPresets:
   private def compactPreset: UiPreset =
     UiPreset(
       name = "Compact",
-      config = AppConfig.default
+      config = AppConfig.conventional
         .withAppMode(AppMode.Code)
         .withLineNumbers(true)
         .withPaneHeaders(true)
@@ -104,7 +104,7 @@ private[presets] object BuiltInUiPresets:
   private def reviewPreset: UiPreset =
     UiPreset(
       name = "Review",
-      config = AppConfig.default
+      config = AppConfig.conventional
         .withAppMode(AppMode.Code)
         .withLineNumbers(true)
         .withInterfaceDensity(InterfaceDensity.Comfortable)

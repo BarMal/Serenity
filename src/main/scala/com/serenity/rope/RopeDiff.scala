@@ -4,17 +4,17 @@ import scala.annotation.{tailrec, unused}
 
 /** Finds the offset range within an edited `Rope` that may have changed, without reconstructing either rope's text.
   *
-  * `Rope.insert`/`delete` rebuild only the path from the root to the edited leaf, so every subtree an edit did not
-  * touch keeps the exact same object reference in the new tree ([[Node]] and [[Leaf]] both fast-path `equals` on `eq`
-  * for this reason). [[changedOffsetRange]] walks both trees together, skipping any subtree pair that is `eq` without
+  * `Rope.insert`/`delete` copy only the path from the root to the edited leaf, so every subtree an edit did not touch
+  * keeps the exact same object reference in the new tree ([[Branch]] and [[Leaf]] both fast-path `equals` on `eq` for
+  * this reason). [[changedOffsetRange]] walks both trees together, skipping any subtree pair that is `eq` without
   * looking inside it, and falls back to a plain character scan only once it reaches leaf-sized subtrees -- so the cost
   * of finding "what changed" is proportional to how much of the tree an edit actually touched, not to the document's
   * size.
   *
-  * Where the two trees' shapes do not line up (after a rebuild, or an edit that moved a subtree boundary) the walk
-  * descends whichever side is taller and reads the other through an offset window, so nothing is split, rebuilt or
-  * rebalanced to compare them. The range is the exact common prefix and suffix of the two texts; a subtree a rebalance
-  * rebuilt costs the walk its leaves, not the text it holds.
+  * Where the two trees' shapes do not line up (after an edit that split or merged nodes) the walk descends whichever
+  * side is taller and reads the other through an offset window, so nothing is split, rebuilt or rebalanced to compare
+  * them. The range is the exact common prefix and suffix of the two texts; a subtree an edit rebuilt costs the walk its
+  * leaves, not the text it holds.
   */
 object RopeDiff:
 
@@ -50,33 +50,46 @@ object RopeDiff:
     else if isSameReference(a, b) && aSkip == bSkip then length
     else
       a match
-        case aNode: Node if isTaller(aNode, b) => splitRun(aNode, aSkip, b, bSkip, length, fromEnd)
+        case aBranch: Branch if isTaller(aBranch, b) => splitRun(aBranch, aSkip, b, bSkip, length, fromEnd)
         case _ =>
           b match
-            case bNode: Node => splitRun(bNode, bSkip, a, aSkip, length, fromEnd)
+            case bBranch: Branch => splitRun(bBranch, bSkip, a, aSkip, length, fromEnd)
             case Leaf(bText) =>
               a match
                 case Leaf(aText) => sharedChars(aText, aSkip, bText, bSkip, length, fromEnd)
                 case _           => 0
 
-  private def isTaller(node: Node, other: Rope): Boolean =
+  private def isTaller(branch: Branch, other: Rope): Boolean =
     other match
-      case otherNode: Node => node.height >= otherNode.height
-      case _               => true
+      case otherBranch: Branch => branch.height >= otherBranch.height
+      case _                   => true
 
-  /** [[commonRun]] with `node`, the taller side, read through its children: the window falls in one of them or spans
-    * both, and `other` is only ever read through the same window.
+  /** [[commonRun]] with `branch`, the taller side, read through its children: the window starts in one of them and may
+    * run on through the next ones, and `other` is only ever read through the same window. Each child is visited at most
+    * once and nothing is allocated, so the cost is the depth plus the children the window crosses.
     */
-  private def splitRun(node: Node, nodeSkip: Int, other: Rope, otherSkip: Int, length: Int, fromEnd: Boolean): Int =
-    val first  = if fromEnd then node.right else node.left
-    val second = if fromEnd then node.left else node.right
-    if nodeSkip >= first.weight then commonRun(second, nodeSkip - first.weight, other, otherSkip, length, fromEnd)
-    else if nodeSkip + length <= first.weight then commonRun(first, nodeSkip, other, otherSkip, length, fromEnd)
-    else
-      val inFirst = first.weight - nodeSkip
-      val shared  = commonRun(first, nodeSkip, other, otherSkip, inFirst, fromEnd)
-      if shared < inFirst then shared
-      else shared + commonRun(second, 0, other, otherSkip + inFirst, length - inFirst, fromEnd)
+  private def splitRun(
+    branch: Branch,
+    branchSkip: Int,
+    other: Rope,
+    otherSkip: Int,
+    length: Int,
+    fromEnd: Boolean
+  ): Int =
+    val count = branch.children.size
+
+    @tailrec
+    def visit(step: Int, skip: Int, taken: Int, shared: Int): Int =
+      if taken >= length || step >= count then shared
+      else
+        val child = branch.children(if fromEnd then count - 1 - step else step)
+        if skip >= child.weight then visit(step + 1, skip - child.weight, taken, shared)
+        else
+          val inChild = math.min(child.weight - skip, length - taken)
+          val run     = commonRun(child, skip, other, otherSkip + taken, inChild, fromEnd)
+          if run < inChild then shared + run else visit(step + 1, 0, taken + inChild, shared + inChild)
+
+    visit(0, branchSkip, 0, 0)
 
   @tailrec
   private def sharedChars(

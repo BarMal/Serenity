@@ -13,15 +13,21 @@ import com.serenity.config.{
   ConfigManager,
   ConfigNotice,
   ConfigRestart,
+  FocusedKeymapConfig,
+  HotkeyConfig,
   HotkeyOverrides,
+  LayoutPin,
+  LayoutPreset,
   LineNumberLayout,
   StatusLinePlacement,
-  StatusSegment
+  StatusSegment,
+  SummonConfig,
+  UiLayout
 }
 import com.serenity.io.{FileStamp, TimestampedBackup}
 import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{CommandRunnerReducer, SettingsPreviewReducer}
+import com.serenity.state.reducers.{CommandRunnerReducer, ModalStateReducer, SettingsPreviewReducer}
 
 /** Config-update infrastructure and the settings-intent dispatch that drives it: appearance, cursor, panel chrome,
   * spell-check, and general settings all funnel through the same commit-then-persist path. The state change commits
@@ -119,6 +125,10 @@ final private[manager] class StateManagerConfigEffects(
       case SettingsIntent.StatusLine(statusLineIntent)   => interpretStatusLineIntent(statusLineIntent)
       case SettingsIntent.Cursor(cursorIntent)           => interpretCursorIntent(cursorIntent)
       case SettingsIntent.TextDisplay(textDisplayIntent) => interpretTextDisplayIntent(textDisplayIntent)
+      case SettingsIntent.Headings(headingsIntent) =>
+        applyConfigUpdate(config =>
+          config.withHeadingsConfig(HeadingsConfigEdit(headingsIntent)(config.headingsConfig))
+        ).void
       case SettingsIntent.InterfaceChrome(interfaceChromeIntent) =>
         interpretInterfaceChromeIntent(interfaceChromeIntent)
       case SettingsIntent.SpellCheck(spellCheckIntent) => interpretSpellCheckIntent(spellCheckIntent, state)
@@ -243,10 +253,112 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withInterfaceDensity(density)).void
       case InterfaceChromeIntent.SetWindowChromeMode(mode) =>
         updateAppearanceConfig(_.withWindowChromeMode(mode)).void
+      case InterfaceChromeIntent.SetMenuBarMode(mode) =>
+        updateAppearanceConfig(_.withMenuBarMode(mode)).void
+      case InterfaceChromeIntent.SetUiLayout(layout) =>
+        switchLayout(layout)
+      case InterfaceChromeIntent.ToggleUiLayout =>
+        currentState.flatMap(current => switchLayout(current.persisted.config.uiLayout.toggled))
+      case InterfaceChromeIntent.SetSummonModifiers(modifiers) =>
+        changeSummon(config => config.summon.withModifiersChecked(modifiers, hotkeysOf(config), keymapsOf(config)))
+      case InterfaceChromeIntent.SetSummonLock(lock) =>
+        changeSummon(_.summon.withLockChecked(lock))
+      case InterfaceChromeIntent.SetSummonLetter(element, letter) =>
+        changeSummon(config => config.summon.withLetterChecked(element, letter, hotkeysOf(config), keymapsOf(config)))
+      case InterfaceChromeIntent.ReviewUiLayoutOverride(layout) =>
+        pinsAwayFrom(layout).flatMap {
+          case Left(error) => reportUnreadable(error)
+          case Right(pins) =>
+            editor.updateModelValidated(model =>
+              Some(model.copy(app = UiPresetTransitions.openLayoutReview(model.app, layout, pins)))
+            )
+        }
+      case InterfaceChromeIntent.ConfirmUiLayoutOverride(layout, useLayoutKeys) =>
+        applyLayout(layout, useLayoutKeys.toSet)
       case InterfaceChromeIntent.SetWheelScrollLines(lines) =>
         updateConfig(_.withWheelScrollLines(lines)).void
       case InterfaceChromeIntent.SetPanelEscapeTarget(mode, target) =>
         updateConfig(_.withPanelEscapeTarget(mode, target)).void
+
+  private def hotkeysOf(config: AppConfig): HotkeyConfig = config.inputConfig.hotkeyConfig
+
+  private def keymapsOf(config: AppConfig): FocusedKeymapConfig = config.inputConfig.focusedKeymapConfig
+
+  /** Applies a summon change, or says why it was left: a chord that another summon chord, a hotkey or the lock key
+    * holds would never fire.
+    */
+  private def changeSummon(change: AppConfig => Option[SummonConfig]): IO[Unit] =
+    currentState.flatMap { state =>
+      change(state.persisted.config) match
+        case Some(summon) => updateConfig(_.withSummon(summon)).void
+        case None =>
+          showNotice(
+            Notice(
+              NoticeLevel.Warning,
+              "That key is already taken by another summon chord, the lock key or a hotkey, so the summon setting was left as it was."
+            )
+          )
+    }
+
+  /** Moves the chrome the layout supplies. Chrome the file sets, to something the layout would change, is asked about
+    * first rather than silently kept: a person who switches layout expects to see it change.
+    */
+  private def switchLayout(layout: UiLayout): IO[Unit] =
+    pinsAwayFrom(layout).flatMap {
+      case Left(error) => reportUnreadable(error)
+      case Right(Nil)  => applyLayout(layout, Set.empty)
+      case Right(pins) =>
+        editor.updateModelValidated(model =>
+          Some(
+            model.copy(app =
+              ModalStateReducer.show(Modal.Confirm(ConfirmPrompt.layoutOverride(layout, pins)), model.app).state
+            )
+          )
+        )
+    }
+
+  /** The chrome the file sets that `layout` would give another value, as the live config has it. */
+  private def pinsAwayFrom(layout: UiLayout): IO[Either[ConfigError, List[LayoutPin]]] =
+    (settingKeys, currentState).mapN((keys, state) => keys.map(LayoutPreset.pins(state.persisted.config, _, layout)))
+
+  private def settingKeys: IO[Either[ConfigError, Set[String]]] =
+    configPersistencePath.fold(IO.pure(Right(Set.empty[String])))(ConfigManager.settingKeysIO)
+
+  private def reportUnreadable(error: ConfigError): IO[Unit] =
+    showConfigNotice(List(ConfigNotice.unreadableForLayoutSwitch(error.path, error)))
+
+  /** Switches to `layout`. Of the chrome the file pins, `useLayout` goes back to the layout -- its lines come out of
+    * the file, so it follows the layout from then on -- and the rest stays as the file has it, as does anything changed
+    * in this session.
+    */
+  private def applyLayout(layout: UiLayout, useLayout: Set[String]): IO[Unit] =
+    pinsAwayFrom(layout).flatMap {
+      case Left(error) => reportUnreadable(error)
+      case Right(pins) =>
+        val released = pins.map(_.key).filter(useLayout.contains).toSet
+        releaseFromFile(released) *> settingKeys.flatMap {
+          case Left(error) => reportUnreadable(error)
+          case Right(keys) =>
+            updateAppearanceConfig(config =>
+              LayoutPreset.adopt(LayoutPreset.rebase(config, layout, keys), layout, released)
+            ).void
+        }
+    }
+
+  /** A key the file keeps anyway -- written inside a block, say -- still takes the layout's value, written back as one.
+    */
+  private def releaseFromFile(keys: Set[String]): IO[Unit] =
+    configFile.filter(_ => keys.nonEmpty).traverse_ { file =>
+      file.release(keys).flatMap {
+        case Left(error) => reportSaveFailure(error)
+        case Right(stuck) =>
+          IO.whenA(stuck.nonEmpty)(
+            logger.warn(
+              s"[CONFIG] Could not remove ${stuck.toList.sorted.mkString(", ")} from ${file.path}; set to the layout's value instead"
+            )
+          )
+      }
+    }
 
   private def interpretSpellCheckIntent(intent: SpellCheckIntent, state: AppState): IO[Unit] =
     SpellCheckConfigEdit(intent) match
@@ -363,7 +475,10 @@ final private[manager] class StateManagerConfigEffects(
         file.noteSeen(stamp) >> showConfigNotice(List(ConfigNotice.unparseableOnReload(file.path, error)))
       case ConfigFileChange.Edited(loaded, stamp) =>
         (deviceTextScaleProvider, file.onDisk, currentState.map(_.persisted.config)).flatMapN { (scale, disk, live) =>
-          val config   = loaded.config.withFontConfig(loaded.config.editorConfig.fontConfig.resolveAutoTextScale(scale))
+          val config = HotkeyOverrides.likeRunning(
+            live,
+            loaded.config.withFontConfig(loaded.config.editorConfig.fontConfig.resolveAutoTextScale(scale))
+          )
           val unseen   = !disk.flatMap(_.stamp).contains(stamp)
           val problems = Option.when(unseen)(ConfigNotice.forLoad(file.path, loaded.report)).flatten.toList
           if disk.exists(_.encoded == ConfigManager.configToString(config)) then

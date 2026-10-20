@@ -84,7 +84,8 @@ object RendererEntryPoints:
         codeFont.toAwt,
         swingWin.canvas,
         publishFrame,
-        swingWin.acquireBaseImage
+        swingWin.acquireBaseImage,
+        caches.surfaceText
       )
     )
     val viewportSize = swingWin.viewportSize

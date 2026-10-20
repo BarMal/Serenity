@@ -19,7 +19,7 @@ class DamageProducerScreenRowsSpec extends AnyFlatSpec with Matchers:
   private val hundredThousandLines = (1 to 100_000).map(line => s"line $line").mkString("\n")
 
   private def stateWithContent(text: String, cursor: CursorPosition = CursorPosition(0, 0)): AppState =
-    withBuffer(AppState.initial)(buffer =>
+    withBuffer(AppState.initial(com.serenity.config.AppConfig.conventional))(buffer =>
       buffer.copy(document = buffer.document.copy(content = Rope(text)), editing = EditingState(List(cursor)))
     )
 

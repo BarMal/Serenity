@@ -74,6 +74,8 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
     // Records that the bindings were adjusted for a terminal at startup; it is a property of the running frontend,
     // never written to the file (HotkeyOverridesSpec).
     "inputConfig.hotkeyConfig.terminalAdjusted",
+    // The summon lock is a single key, so it never carries modifiers of its own; the key itself varies.
+    "inputConfig.summon.lock.modifiers",
     "inputConfig.hotkeyConfig.overrides",
     "inputConfig.focusedKeymapConfig.editor.bindings",
     "inputConfig.focusedKeymapConfig.commandRunner.bindings",

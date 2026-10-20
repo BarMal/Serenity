@@ -31,7 +31,8 @@ final private[manager] class MouseHitTesting(
     pinnedPanel: PinnedPanelMouseHitTesting,
     startupPage: StartupPageMouseHitTesting,
     commentLens: CommentLensMouseHitTesting,
-    tabBarDrag: TabBarDragHitTesting
+    tabBarDrag: TabBarDragHitTesting,
+    scrollbar: ScrollbarHitTesting
 )(using balance: com.serenity.rope.Balance):
 
   private def commit[A](transition: Transition[A]): IO[A] =
@@ -42,6 +43,7 @@ final private[manager] class MouseHitTesting(
       case MouseButton.Secondary =>
         if MouseHitTestGeometry.isInsideFloatingSurface(click, state, port.authoritativeScene) then IO.unit
         else contextMenu.openEditorContextMenu(click, state)
+      case MouseButton.Primary if scrollbarClaims(click, state) => IO.unit
       case MouseButton.Primary =>
         startupPage.handleStartupPageMouseClick(click, state).flatMap {
           case true => IO.unit
@@ -84,6 +86,10 @@ final private[manager] class MouseHitTesting(
       case _ =>
         IO.unit
 
+  private def scrollbarClaims(click: MouseClick, state: AppState): Boolean =
+    scrollbar.claimsClick(click, state) &&
+      !MouseHitTestGeometry.isInsideFloatingSurface(click, state, port.authoritativeScene)
+
   private def beginGesture(gesture: PointerGesture): IO[Unit] =
     commit(MouseHitTesting.recordGesture(gesture))
 
@@ -99,28 +105,32 @@ final private[manager] class MouseHitTesting(
               if MouseHitTestGeometry.isInsideFloatingSurface(press, state, port.authoritativeScene) then
                 beginGesture(PointerGesture.Other)
               else
-                tabBarDrag.handleTabBarPress(press, state).flatMap {
-                  case true => beginGesture(PointerGesture.TabReorder)
+                scrollbar.handleScrollbarPress(press, state).flatMap {
+                  case true => beginGesture(PointerGesture.ScrollbarDrag)
                   case false =>
-                    pinnedPanel.resizeHandleAt(press, state) match
-                      case Some(_: PointerHitTarget.DockEdge) => beginGesture(PointerGesture.PanelResize)
-                      case Some(_)                            => beginGesture(PointerGesture.TextAreaResize)
-                      case None =>
-                        pinnedPanel.handlePinnedPanelMouseSelect(press, state, focusPanel = true).flatMap {
-                          case true => beginGesture(PointerGesture.Other)
-                          case false =>
-                            editorTargeting
-                              .resolveMouseTarget(press, state)
-                              .flatMap { target =>
-                                val gesture =
-                                  if target.isDefined then PointerGesture.TextSelection else PointerGesture.Other
-                                commit(
-                                  MouseHitTesting
-                                    .editorPress(press, target)
-                                    .flatMap(_ => MouseHitTesting.recordGesture(gesture))
-                                )
-                              }
-                        }
+                    tabBarDrag.handleTabBarPress(press, state).flatMap {
+                      case true => beginGesture(PointerGesture.TabReorder)
+                      case false =>
+                        pinnedPanel.resizeHandleAt(press, state) match
+                          case Some(_: PointerHitTarget.DockEdge) => beginGesture(PointerGesture.PanelResize)
+                          case Some(_)                            => beginGesture(PointerGesture.TextAreaResize)
+                          case None =>
+                            pinnedPanel.handlePinnedPanelMouseSelect(press, state, focusPanel = true).flatMap {
+                              case true => beginGesture(PointerGesture.Other)
+                              case false =>
+                                editorTargeting
+                                  .resolveMouseTarget(press, state)
+                                  .flatMap { target =>
+                                    val gesture =
+                                      if target.isDefined then PointerGesture.TextSelection else PointerGesture.Other
+                                    commit(
+                                      MouseHitTesting
+                                        .editorPress(press, target)
+                                        .flatMap(_ => MouseHitTesting.recordGesture(gesture))
+                                    )
+                                  }
+                            }
+                    }
                 }
           }
       }
@@ -135,6 +145,7 @@ final private[manager] class MouseHitTesting(
         case Some(PointerGesture.PanelResize)    => pinnedPanel.handlePinnedPanelResizeDrag(drag, state).void
         case Some(PointerGesture.TextAreaResize) => pinnedPanel.handleTextAreaResizeDrag(drag, state).void
         case Some(PointerGesture.TabReorder)     => tabBarDrag.handleTabBarDrag(drag, state).void
+        case Some(PointerGesture.ScrollbarDrag)  => scrollbar.handleScrollbarDrag(drag, state).void
         case Some(PointerGesture.TextSelection)  => editorDrag(drag, state)
         case Some(PointerGesture.Other)          => IO.unit
         case None                                => dragFromPointer(drag, state)
@@ -203,11 +214,16 @@ final private[manager] class MouseHitTesting(
 
 private[manager] object MouseHitTesting:
 
+  /** Beginning any gesture but a scrollbar drag lets go of a thumb an earlier press took hold of. */
   def recordGesture(gesture: PointerGesture): Transition[Unit] =
     Transition.modify(state =>
       val pointer = state.runtime.pointerGesture
-      if pointer.activeGesture.contains(gesture) then state
-      else state.copy(runtime = state.runtime.copy(pointerGesture = pointer.copy(activeGesture = Some(gesture))))
+      val grab    = pointer.scrollbarGrab.filter(_ => gesture == PointerGesture.ScrollbarDrag)
+      if pointer.activeGesture.contains(gesture) && pointer.scrollbarGrab == grab then state
+      else
+        state.copy(runtime =
+          state.runtime.copy(pointerGesture = pointer.copy(activeGesture = Some(gesture), scrollbarGrab = grab))
+        )
     )
 
   def recordPointerShape(shape: PointerShape, underModal: Boolean = false): Transition[Unit] =

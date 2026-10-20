@@ -90,7 +90,9 @@ final case class UiSceneSnapshot(
     floating: List[SceneNode],
     modalBackdrop: Option[SceneNode],
     modal: List[SceneNode],
-    focusOrder: List[SceneNodeId]
+    focusOrder: List[SceneNodeId],
+    // Where each pane with a scrollbar sits in its document: rendering paints the bar from it, mouse targeting drags it.
+    paneScrolls: Map[PaneId, PaneScroll] = Map.empty
 ):
 
   def nodesInPaintOrder: List[SceneNode] =
@@ -113,6 +115,9 @@ final case class UiSceneSnapshot(
 
   def withColumnSnapshots(snapshots: Map[PaneId, Vector[ColumnSnapshotPlacement]]): UiSceneSnapshot =
     copy(columnSnapshots = snapshots)
+
+  def withPaneScrolls(scrolls: Map[PaneId, PaneScroll]): UiSceneSnapshot =
+    copy(paneScrolls = scrolls)
 
 object UiSceneSnapshot:
 

@@ -106,6 +106,13 @@ object CommandRegistry:
       label = "Toggle Line Numbers"
     ),
     Command.typed(
+      "toggle-layout",
+      "Switch between the minimal layout and the conventional one: line numbers, pane headers, status bar, tab strip and scrollbar. Anything you set yourself keeps its value.",
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.ToggleUiLayout)),
+      CommandCategory.View,
+      label = "Toggle Layout"
+    ),
+    Command.typed(
       "toggle-status-line",
       "Show or hide the status line: the pinned gutter row at the bottom, or the floating row at the caret.",
       CommandIntent.Settings(SettingsIntent.StatusLine(StatusLineIntent.ToggleVisibility)),

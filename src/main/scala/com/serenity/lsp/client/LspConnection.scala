@@ -8,7 +8,13 @@ import cats.effect.*
 import cats.effect.std.Queue
 import cats.syntax.all.*
 import com.serenity.lsp.config.{LanguageId, LspServerConfig}
-import com.serenity.lsp.model.{Diagnostic, SemanticTokensFeatures, SemanticTokensLegend, TextDocumentSyncKind}
+import com.serenity.lsp.model.{
+  Diagnostic,
+  PositionEncoding,
+  SemanticTokensFeatures,
+  SemanticTokensLegend,
+  TextDocumentSyncKind
+}
 import fs2.Stream
 import fs2.io.readInputStream
 import io.circe.Json
@@ -446,12 +452,32 @@ object LspConnection:
       initializeResult <- conn
         .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(pid, rootUri))
         .handleErrorWith(ex => logger.error(ex)("[LSP] initialize failed") >> IO.raiseError(ex))
+      _ <- requireOfferedPositionEncoding(conn, initializeResult, logger)
       _ <- conn.recordSemanticTokensLegend(LspProtocol.parseSemanticTokensLegend(initializeResult))
       _ <- conn.recordSemanticTokensFeatures(LspProtocol.parseSemanticTokensFeatures(initializeResult))
       _ <- conn.setSyncKind(TextDocumentSyncKind.fromInitializeResult(initializeResult))
       _ <- conn.sendNotification(LspMethod("initialized"), LspProtocol.initializedParams)
       _ <- logger.info(s"[LSP] Handshake complete: ${conn.languageId.id}")
     yield ()
+
+  /** Every position this client reads or sends is a UTF-16 column, so a server that answers in another encoding would
+    * have its edits land in the wrong place; it is refused instead (#1965).
+    */
+  private def requireOfferedPositionEncoding(
+    conn: LspConnection,
+    initializeResult: Json,
+    logger: Logger[IO]
+  ): IO[Unit] =
+    val encoding = PositionEncoding.fromInitializeResult(initializeResult)
+    IO.unlessA(PositionEncoding.offered.contains(encoding))(
+      logger.error(s"[LSP] ${conn.languageId.id} answered with position encoding ${encoding.label}") >>
+        IO.raiseError(
+          new IllegalStateException(
+            s"The ${conn.languageId.id} server uses the ${encoding.label} position encoding, " +
+              s"but Serenity offered only ${PositionEncoding.offered.map(_.label).mkString(", ")}"
+          )
+        )
+    )
 
   private def closeQuietly(closeable: AutoCloseable): IO[Unit] =
     IO.blocking(closeable.close()).attempt.void

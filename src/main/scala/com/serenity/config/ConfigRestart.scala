@@ -9,11 +9,14 @@ object ConfigRestart:
 
   private val startupOnly: List[(String, AppConfig => Any)] = List(
     "window.chrome"                  -> (_.windowChromeMode),
+    "ui.file_dialog"                 -> (_.fileDialogMode),
+    "ui.menu_bar"                    -> (_.menuBarMode),
     "window.preferred.width/height"  -> (_.preferredWindowSize),
     "lsp.* language server settings" -> (_.languageToolsConfig.lspUserConfig),
     "startup.warm_up"                -> (_.surfaceConfig.startupWarmUpEnabled),
     "ui.render.backend"              -> (_.surfaceConfig.renderBackend),
-    "ui.render.wayland"              -> (_.surfaceConfig.renderWayland)
+    "ui.render.wayland"              -> (_.surfaceConfig.renderWayland),
+    "performance.memory.compact"     -> (_.surfaceConfig.memoryCompactionEnabled)
   )
 
   /** The startup-only settings `after` sets differently from `before`. */

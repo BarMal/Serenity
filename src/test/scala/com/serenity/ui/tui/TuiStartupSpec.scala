@@ -52,8 +52,9 @@ class TuiStartupSpec extends TuiSpec:
   it should "widen that gutter again once the document reaches three digits" in
     runTui(TuiEnvironment.withLines(120)) {
       verify("three-digit gutter") { screen =>
-        screen.rowText(1).stripTrailing shouldBe "  1 line 0"
-        screen.rowText(11).stripTrailing shouldBe " 11 line 10"
+        // Not the last column, which carries the scrollbar of a document longer than the screen.
+        screen.rowText(1).dropRight(1).stripTrailing shouldBe "  1 line 0"
+        screen.rowText(11).dropRight(1).stripTrailing shouldBe " 11 line 10"
         screen.caret shouldBe (4, 1)
       }
     }

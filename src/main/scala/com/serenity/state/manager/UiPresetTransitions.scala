@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
-import com.serenity.command.{CommandRunner, SettingsPage, SettingsSurfaceState}
-import com.serenity.config.{AppConfig, DefaultDocumentMode}
+import com.serenity.command.{CommandRunner, PresetDiffPurpose, SettingsPage, SettingsSurfaceState}
+import com.serenity.config.{AppConfig, DefaultDocumentMode, LayoutPin, UiLayout}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.core.EditorState
@@ -72,6 +72,12 @@ private[manager] object UiPresetTransitions:
       preset = preset
     )
     updateCommandRunner(ensureCommandRunnerSurfaceForReview(state))(_.openPresetDiffReview(preset.name, changes))
+
+  /** The same review, for a config file that pins chrome `layout` would change: checked keys go back to the layout. */
+  def openLayoutReview(state: AppState, layout: UiLayout, pins: List[LayoutPin]): AppState =
+    updateCommandRunner(ensureCommandRunnerSurfaceForReview(state))(
+      _.openPresetDiffReview(layout.label, UiPresetDiff.layoutChanges(pins), PresetDiffPurpose.SwitchLayout(layout))
+    )
 
   /** A bare, minimally-activated command-runner surface to host the review when none is already open -- unlike
     * `StateManagerOperationBoundary.ensureCommandRunnerSurface`, this needs no `CommandRegistry`: the review's items

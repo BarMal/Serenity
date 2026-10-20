@@ -10,7 +10,9 @@ the stdlib `unittest` runner:
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import os
 import sys
 import tempfile
@@ -123,6 +125,121 @@ class CheckPerfRegressionTests(unittest.TestCase):
         _write_csv(self.current_path, [("borderline.op", 2.5, 3.0)])  # 2.5x ratio, +1.5ms absolute
         self.assertEqual(self._run(["--min-baseline-ms", "0.001", "--min-regression-delta-ms", "2.0"]), 0)
         self.assertEqual(self._run(["--min-baseline-ms", "0.001", "--min-regression-delta-ms", "1.0"]), 1)
+
+
+def _write_memory_csv(path: str, rows: list[tuple[str, float, int | None, int | None]], legacy_header: bool = False) -> None:
+    """Rows are (name, p50_ms, allocation_p50_bytes, retained_bytes). `legacy_header` writes the pre-memory layout."""
+    with open(path, "w") as handle:
+        if legacy_header:
+            handle.write("name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms\n")
+        else:
+            handle.write(
+                "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,"
+                "allocation_p50_bytes,allocation_p95_bytes,retained_bytes\n"
+            )
+        for name, p50, allocation, retained in rows:
+            if legacy_header:
+                handle.write(f"{name},0,0,0,0,{p50},{p50},0\n")
+            else:
+                alloc = "" if allocation is None else allocation
+                held = "" if retained is None else retained
+                handle.write(f"{name},0,0,0,0,{p50},{p50},0,{alloc},{alloc},{held}\n")
+
+
+MIB = 1024 * 1024
+KIB = 1024
+
+
+class MemoryMetricTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.baseline_path = os.path.join(self._tmpdir.name, "baseline.csv")
+        self.current_path = os.path.join(self._tmpdir.name, "current.csv")
+
+    def _run(self, argv: list[str] | None = None) -> int:
+        return check_perf_regression.main_with_args([self.baseline_path, self.current_path, *(argv or [])])
+
+    def _retained(self, baseline: int, current: int) -> int:
+        _write_memory_csv(self.baseline_path, [("footprint.doc", 0.0, None, baseline)])
+        _write_memory_csv(self.current_path, [("footprint.doc", 0.0, None, current)])
+        return self._run()
+
+    def _allocation(self, baseline: int, current: int, argv: list[str] | None = None) -> int:
+        _write_memory_csv(self.baseline_path, [("laptop.frame", 1.0, baseline, None)])
+        _write_memory_csv(self.current_path, [("laptop.frame", 1.0, current, None)])
+        return self._run(argv)
+
+    def test_parse_reads_allocation_and_retained_columns(self) -> None:
+        _write_memory_csv(self.current_path, [("a", 1.0, 4096, 8192)])
+        row = check_perf_regression.parse_csv(self.current_path)["a"]
+        self.assertEqual((row.allocation_p50_bytes, row.retained_bytes), (4096, 8192))
+
+    def test_parse_leaves_memory_columns_unset_on_a_legacy_csv(self) -> None:
+        _write_memory_csv(self.current_path, [("a", 1.0, None, None)], legacy_header=True)
+        row = check_perf_regression.parse_csv(self.current_path)["a"]
+        self.assertEqual((row.allocation_p50_bytes, row.retained_bytes), (None, None))
+
+    def test_retained_growth_past_ratio_and_one_mib_fails(self) -> None:
+        self.assertEqual(self._retained(10 * MIB, 14 * MIB), 1)
+
+    def test_retained_growth_exactly_at_the_ratio_passes(self) -> None:
+        self.assertEqual(self._retained(8 * MIB, 10 * MIB), 0)
+
+    def test_retained_growth_past_ratio_but_under_one_mib_passes(self) -> None:
+        self.assertEqual(self._retained(100 * KIB, 500 * KIB), 0)
+
+    def test_retained_growth_past_one_mib_but_under_ratio_passes(self) -> None:
+        self.assertEqual(self._retained(100 * MIB, 110 * MIB), 0)
+
+    def test_retained_shrinking_passes(self) -> None:
+        self.assertEqual(self._retained(10 * MIB, 2 * MIB), 0)
+
+    def test_retained_thresholds_are_configurable(self) -> None:
+        _write_memory_csv(self.baseline_path, [("footprint.doc", 0.0, None, 10 * MIB)])
+        _write_memory_csv(self.current_path, [("footprint.doc", 0.0, None, 12 * MIB)])
+        self.assertEqual(self._run(), 0)
+        self.assertEqual(self._run(["--retained-threshold", "1.1", "--min-retained-delta-bytes", str(MIB)]), 1)
+
+    def test_allocation_regression_only_warns(self) -> None:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(self._allocation(100 * KIB, 400 * KIB), 0)
+        self.assertIn("::warning::", out.getvalue())
+        self.assertIn("laptop.frame", out.getvalue())
+
+    def test_allocation_regression_fails_when_gated(self) -> None:
+        self.assertEqual(self._allocation(100 * KIB, 400 * KIB, ["--gate-allocation"]), 1)
+
+    def test_allocation_under_ratio_does_not_warn(self) -> None:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(self._allocation(1000 * KIB, 1400 * KIB, ["--gate-allocation"]), 0)
+        self.assertNotIn("::warning::", out.getvalue())
+
+    def test_allocation_under_64_kib_delta_does_not_warn(self) -> None:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(self._allocation(10 * KIB, 60 * KIB, ["--gate-allocation"]), 0)
+        self.assertNotIn("::warning::", out.getvalue())
+
+    def test_baseline_without_memory_columns_is_skipped_with_a_note(self) -> None:
+        _write_memory_csv(self.baseline_path, [("footprint.doc", 0.0, None, None)], legacy_header=True)
+        _write_memory_csv(self.current_path, [("footprint.doc", 0.0, 50 * MIB, 50 * MIB)])
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(self._run(["--gate-allocation"]), 0)
+        self.assertIn("::notice::", out.getvalue())
+
+    def test_current_without_memory_columns_does_not_crash(self) -> None:
+        _write_memory_csv(self.baseline_path, [("footprint.doc", 0.0, 1 * MIB, 10 * MIB)])
+        _write_memory_csv(self.current_path, [("footprint.doc", 0.0, None, None)], legacy_header=True)
+        self.assertEqual(self._run(["--gate-allocation"]), 0)
+
+    def test_latency_gate_still_applies_to_rows_with_memory_columns(self) -> None:
+        _write_memory_csv(self.baseline_path, [("laptop.frame", 10.0, 1 * MIB, None)])
+        _write_memory_csv(self.current_path, [("laptop.frame", 25.0, 1 * MIB, None)])
+        self.assertEqual(self._run(), 1)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 package com.serenity.testkit
 
-import com.serenity.rope.{Balance, Leaf, Node, Rope}
+import com.serenity.rope.{Balance, Leaf, Rope, RopeBuilder}
 import com.serenity.state.models.{BufferId, CursorPosition, PaneId, Selection}
 import org.scalacheck.{Arbitrary, Cogen, Gen}
 
@@ -30,23 +30,19 @@ object Generators:
 
   /** An arbitrarily shaped rope whose content is exactly `text`.
     *
-    * Splits at arbitrary points and never rebalances, so the resulting trees are deliberately lopsided in ways
-    * `Rope.apply` would never produce. Depth is bounded so generation terminates on long strings.
+    * Cuts the text at an arbitrary number of arbitrary points, so the leaves are of every size down to a single
+    * character and the trees differ in leaf boundaries and in height, in ways `Rope.apply` would never produce. The
+    * number of cuts is bounded by `1 << maxDepth` so generation terminates on long strings.
     */
   def ropeOfShape(text: String, maxDepth: Int = 6): Gen[Rope] =
     if text.isEmpty || maxDepth <= 0 then Gen.const(Leaf(text))
     else
-      Gen.frequency(
-        1 -> Gen.const(Leaf(text)),
-        3 -> Gen
-          .chooseNum(0, text.length)
-          .flatMap { splitAt =>
-            for
-              left  <- ropeOfShape(text.take(splitAt), maxDepth - 1)
-              right <- ropeOfShape(text.drop(splitAt), maxDepth - 1)
-            yield Node(left, right)
-          }
-      )
+      for
+        count <- Gen.chooseNum(0, 1 << maxDepth)
+        cuts  <- Gen.listOfN(count, Gen.chooseNum(0, text.length))
+      yield
+        val boundaries = 0 +: cuts.sorted :+ text.length
+        RopeBuilder.fromLeaves(boundaries.zip(boundaries.drop(1)).map((from, until) => text.substring(from, until)))
 
   /** Two ropes holding identical content in different tree shapes, with that content. */
   val differentlyShapedRopes: Gen[(Rope, Rope, String)] =

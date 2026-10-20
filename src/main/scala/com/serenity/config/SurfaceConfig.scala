@@ -13,6 +13,8 @@ final case class SurfaceConfig(
     // so this defaults to the smaller, non-disruptive mode and callers opt into margin mode explicitly (#1222).
     commentDisplayMode: CommentDisplayMode = CommentDisplayMode.Floating,
     wordWrapEnabled: Boolean = true,
+    scrollbarEnabled: Boolean = true,
+    tabStrip: TabStripMode = TabStripMode.Auto,
     // Whether Up/Down under word wrap follow visual rows (the wrapped screen line) rather than jumping straight to
     // the previous/next logical line. Independent of wordWrapEnabled itself: only takes effect while wrap is also on.
     visualLineCursorNavigation: Boolean = true,
@@ -80,6 +82,7 @@ final case class SurfaceConfig(
     frameTimingEnabled: Boolean = false,
     latencyTraceEnabled: Boolean = false,
     startupWarmUpEnabled: Boolean = true,
+    memoryCompactionEnabled: Boolean = true,
     // How strongly a misspelled-word/LSP diagnostic's severity colour shows through its highlight, versus the colour
     // it's painted over -- the current (possibly focus-mode-dimmed) foreground/background, not always the theme's own
     // full-intensity ones (#1530). Was a hardcoded literal in `RendererHighlights` (#1529); 0.45 matches that literal

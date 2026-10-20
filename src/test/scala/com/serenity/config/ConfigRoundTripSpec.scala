@@ -7,10 +7,22 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.TestTemp
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment, ThemeFollowConfig}
-import com.serenity.keystroke.Modifier
+import com.serenity.keystroke.{InputKey, Modifier}
+import com.serenity.richtext.ParagraphAlignment
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.openings.{
+  EpigraphRule,
+  HandDropCapRule,
+  LetterMode,
+  OpeningRules,
+  OpeningSettings,
+  RaisedRowRule,
+  SceneBreakRule
+}
+import com.serenity.ui.theme.{DropCapColour, HeadingColour}
 import com.typesafe.config.ConfigFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -65,12 +77,11 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withSmartPunctuation(true)
     .withLargeFilePolicy(LargeFilePolicy(warnAboveChars = 1234, toolingOffAboveChars = 5678, optimizations = false))
     .withIndentation(IndentationSettings(tabSize = 2, insertSpaces = false))
-    .withLineNumbers(false)
+    .withLineNumbers(true)
     .withLineNumberLayout(
       LineNumberLayout(side = LineNumberSide.Both, marginLeft = Some(2), marginRight = 3, padding = Some(1))
     )
-    .withoutStatusLine
-    .withPaneHeaders(false)
+    .withPaneHeaders(true)
     .withCommentDisplayMode(CommentDisplayMode.Margin)
     .withWordWrap(false)
     .withVisualLineCursorNavigation(false)
@@ -98,7 +109,11 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withLayerCaching(true)
     .withFrameTiming(true)
     .withLatencyTrace(true)
+    .withMemoryCompaction(false)
     .withStartupWarmUp(false)
+    .withScrollbar(true)
+    .withTabStrip(TabStripMode.Auto)
+    .withUiLayout(UiLayout.Conventional)
     .withDiagnosticHighlightBlendWeight(0.2)
     .withCursorMode(CursorMode.Steady)
     .withChapterGhosts(false)
@@ -112,6 +127,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withWordGoal(Some(50000))
     .withCommentAuthor(Some("Ada Lovelace"))
     .withDropCapsEnabled(false)
+    .withDropCapGapEm(1.25f)
+    .withDropCapColour(DropCapColour.Fixed(RenderColor.fromRgba(0x12, 0x34, 0x56)))
     .withAutoSaveMode(AutoSaveMode.OnFocusChange)
     .withAutoSaveDelayMillis(2500L)
     .withAppMode(AppMode.Prose)
@@ -119,6 +136,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withUiElementGap(Some(2.0))
     .withUiOutlineThicknessPx(3)
+    .withFileDialogMode(FileDialogMode.Swing)
     .withThemeFollowConfig(
       ThemeFollowConfig(followSystem = true, lightTheme = "paper", darkTheme = "ink", highContrastTheme = "contrast")
     )
@@ -128,6 +146,14 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withTextAreaBottomInset(5.0)
     .withMinimumPaneWidth(24)
     .withWindowChromeMode(WindowChromeMode.Native)
+    .withMenuBarMode(MenuBarMode.Visible)
+    .withSummon(
+      SummonConfig(
+        modifiers = Set(Modifier.Ctrl, Modifier.Alt),
+        lock = HotkeyTrigger(InputKey.Enter, None, Set.empty),
+        letters = Map(ChromeElement.LineNumbers -> 'x', ChromeElement.PaneHeaders -> 'z')
+      )
+    )
     .withFontConfig(
       FontConfig(
         codeFontFamily = "Iosevka",
@@ -140,7 +166,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
         textLigatures = false,
         uiLigatures = true,
         textScaleMode = FontLoader.TextScaleMode.Manual,
-        textScaleMultiplier = 1.25
+        textScaleMultiplier = 1.25,
+        fallbackFamilies = List("Noto Sans CJK JP", "Symbola")
       )
     )
     .withCursorColors(
@@ -187,6 +214,46 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
         firstLineIndent = Some(18f)
       )
     )
+    .withHeadingsConfig(
+      HeadingsConfig(
+        levels = Vector(
+          HeadingLevelConfig(size = Some(2.5f), bold = Some(false)),
+          HeadingLevelConfig(italic = Some(true), align = Some(ParagraphAlignment.Center)),
+          HeadingLevelConfig(
+            family = Some("Charter"),
+            colour = Some(HeadingColour.Fixed(RenderColor.fromRgba(0x12, 0x34, 0x56, 0x78)))
+          ),
+          HeadingLevelConfig(align = Some(ParagraphAlignment.Right), spaceAfter = Some(0.5f), rule = Some(true)),
+          HeadingLevelConfig(
+            size = Some(1.25f),
+            italic = Some(true),
+            spaceBefore = Some(1.5f),
+            underline = Some(true),
+            colour = Some(HeadingColour.Muted)
+          ),
+          HeadingLevelConfig(
+            bold = Some(false),
+            align = Some(ParagraphAlignment.Justify),
+            underline = Some(false),
+            rule = Some(false)
+          )
+        ),
+        colour = Some(HeadingColour.Text),
+        damping = false,
+        dampingThresholdPt = 36.0f
+      )
+    )
+    .withOpeningsConfig(
+      OpeningSettings(
+        enabled = true,
+        letterMode = LetterMode.Hybrid,
+        raisedRow = RaisedRowRule.Clamp,
+        hybridSinkLines = 5,
+        smallCapsFirstLine = true,
+        epigraphMarker = "motto",
+        rules = OpeningRules(EpigraphRule.ExplicitOnly, SceneBreakRule.SmallCapsOnly, HandDropCapRule.OpeningWins)
+      )
+    )
 
   private def differences(path: String, before: Any, after: Any): List[String] =
     (before, after) match
@@ -225,6 +292,9 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     // Records that the bindings were adjusted for a terminal at startup; it is a property of the running frontend,
     // never written to the file (HotkeyOverridesSpec).
     "inputConfig.hotkeyConfig.terminalAdjusted",
+    // The summon lock is a single key pressed while the chord is held, so it never carries modifiers of its own
+    // (`SummonConfig.parseLock` refuses any); the key itself is moved off its default in `mutated`.
+    "inputConfig.summon.lock.modifiers",
     "inputConfig.hotkeyConfig.bindings"
   )
 

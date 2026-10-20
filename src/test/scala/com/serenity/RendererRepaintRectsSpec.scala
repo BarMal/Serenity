@@ -47,21 +47,31 @@ class RendererRepaintRectsSpec extends AnyFlatSpec with Matchers:
 
   private def stateWith(cursor: CursorPosition, placement: StatusLinePlacement): AppState =
     val buffer = Buffer.fromString(bufferId, lines.mkString("\n")).copy(editing = EditingState(List(cursor)))
-    val config = AppState.initial.persisted.config
-    AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(buffer.id -> buffer),
-        bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
-        ),
-        focus = Focus.EditorPane(paneId),
-        theme = Theme.light,
-        config = config.copy(statusLine = config.statusLine.copy(placement = placement))
+    val config = AppState.initial(com.serenity.config.AppConfig.conventional).persisted.config
+    AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(buffer.id -> buffer),
+            bufferOrder = List(buffer.id),
+            layout = AppState
+              .initial(com.serenity.config.AppConfig.conventional)
+              .persisted
+              .layout
+              .copy(
+                editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+                activeEditorPaneId = Some(paneId),
+                workspaceTree =
+                  Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
+              ),
+            focus = Focus.EditorPane(paneId),
+            theme = Theme.light,
+            config = config.copy(statusLine = config.statusLine.copy(placement = placement))
+          )
       )
-    )
 
   private def withBuffer(state: AppState)(update: Buffer => Buffer): AppState =
     state.copy(persisted =
@@ -122,7 +132,8 @@ class RendererRepaintRectsSpec extends AnyFlatSpec with Matchers:
       logicalWidthPx = widthPx,
       logicalHeightPx = heightPx,
       contentPersists = persists,
-      layerCacheOwnerOverride = Some(screen)
+      layerCacheOwnerOverride = Some(screen),
+      textCaches = caches.surfaceText
     )
     RendererFramePlanner
       .renderFrame(

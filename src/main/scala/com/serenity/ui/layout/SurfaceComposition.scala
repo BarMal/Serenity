@@ -3,7 +3,7 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.FontRenderContext
 
-import com.serenity.ui.renderer.FontFirstUse
+import com.serenity.ui.renderer.{FontFirstUse, ShapedTextCache}
 
 /** Stable keyboard-focus identity for an interactive surface primitive. */
 final case class SurfaceFocusId(value: String)
@@ -24,20 +24,25 @@ final case class SurfaceIntrinsicSize(width: Double, height: Double)
 final case class SurfaceCompositionMetrics(
     font: Font,
     fontRenderContext: FontRenderContext,
-    lineHeightPx: Double
+    lineHeightPx: Double,
+    shapedText: ShapedTextCache
 ):
 
   /** Measure text with the same proportional shaping helper used by editor and overlay rendering. */
   def textWidth(text: String): Double =
-    TextLayoutSnapshot.caretXsForText(text, font, fontRenderContext).lastOption.getOrElse(0.0f).toDouble
+    TextLayoutSnapshot.caretXsForText(text, font, shapedText, fontRenderContext).lastOption.getOrElse(0.0f).toDouble
 
 object SurfaceCompositionMetrics:
 
   /** Build immutable composition metrics from a UI font and render context. */
-  def fromFont(font: Font, fontRenderContext: FontRenderContext): SurfaceCompositionMetrics =
+  def fromFont(
+    font: Font,
+    fontRenderContext: FontRenderContext,
+    shapedText: ShapedTextCache
+  ): SurfaceCompositionMetrics =
     FontFirstUse.settle(font, fontRenderContext)
     val lineHeight = math.max(1.0, font.getLineMetrics("Mg", fontRenderContext).getHeight.toDouble)
-    SurfaceCompositionMetrics(font, fontRenderContext, lineHeight)
+    SurfaceCompositionMetrics(font, fontRenderContext, lineHeight, shapedText)
 
 /** Paint operation emitted by the declarative surface layout. */
 enum SurfacePaintKind:

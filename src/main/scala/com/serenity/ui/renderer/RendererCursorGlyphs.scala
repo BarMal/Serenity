@@ -31,30 +31,44 @@ object RendererCursorGlyphs:
         val isPrimaryCursor = cursorIndex == 0
         val shouldRenderCursor =
           context.cursorVisible || (buffer.editing.cursors.size > 1 && !isPrimaryCursor)
-        calculateCursorVisualPosition(cursor.position, snapshot) match
-          case Some((visualLine, xPx)) if shouldRenderCursor =>
+        val rowMetrics = RendererPaneContent.textRowMetrics(rect, context, snapshot)
+        caretPlacement(cursor.position, rect, context.cellMetrics, snapshot, rowMetrics) match
+          case Some((visualLine, caret)) if shouldRenderCursor =>
             if RendererPaneContent.visualLineVisible(rect, visualLine, context, snapshot)
             then
-              val effectiveCursorColor = cursorColorFor(config, theme, context, isPrimaryCursor)
-              val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
-              val rowMetrics           = RendererPaneContent.textRowMetrics(rect, context, snapshot)
-              val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
-              val screenYPx            = rowMetrics.cursorTopPx(visualLine)
-              // Caret is as tall as the row it sits on, so on a heading line it grows with the heading (#1542 prose scale).
-              val caretHeightPx = rowMetrics.rowHeightPx(visualLine)
-              caretWithin(rect, context.cellMetrics, screenXPx, caretWidthPx) match
-                case Some((caretXPx, widthPx)) =>
-                  context.surface.pixels.fillPixelRect(
-                    caretXPx,
-                    screenYPx,
-                    widthPx,
-                    caretHeightPx,
-                    effectiveCursorColor
-                  )
-                  List(PixelRect(caretXPx, screenYPx, widthPx, caretHeightPx))
-                case None => Nil
+              context.surface.pixels.fillPixelRect(
+                caret.xPx,
+                caret.yPx,
+                caret.widthPx,
+                caret.heightPx,
+                cursorColorFor(config, theme, context, isPrimaryCursor)
+              )
+              List(caret)
             else Nil
           case _ => Nil
+    }
+
+  /** Where a caret at `position` is drawn within `rect`, and on which visual row: the pixel rect it fills, clipped to
+    * the pane. Shared by painting and by anything that must hang off the painted caret (a floating surface's anchor),
+    * so the two cannot disagree about the caret's row or column.
+    */
+  def caretPlacement(
+    position: CursorPosition,
+    rect: LayoutRect,
+    cellMetrics: CellMetrics,
+    snapshot: TextLayoutSnapshot,
+    rowMetrics: TextRowMetrics
+  ): Option[(Int, PixelRect)] =
+    calculateCursorVisualPosition(position, snapshot).flatMap {
+      case (visualLine, xPx) =>
+        val caretWidthPx = math.max(2, math.round(cellMetrics.charWidth * 0.12f))
+        val screenXPx    = cellMetrics.toPixelX(rect.x) + math.round(xPx)
+        val screenYPx    = rowMetrics.cursorTopPx(visualLine)
+        // Caret is as tall as the row it sits on, so on a heading line it grows with the heading (#1542 prose scale).
+        val caretHeightPx = rowMetrics.rowHeightPx(visualLine)
+        caretWithin(rect, cellMetrics, screenXPx, caretWidthPx).map((caretXPx, widthPx) =>
+          visualLine -> PixelRect(caretXPx, screenYPx, widthPx, caretHeightPx)
+        )
     }
 
   /** The (visual-row index, caret x) the caret is drawn at. Row selection is delegated to

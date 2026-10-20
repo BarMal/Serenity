@@ -13,6 +13,7 @@ final case class FrameSurfaceRequest(
     canvas: JPanel,
     onFlush: BufferedImage => Unit,
     acquireImage: (Int, Int, Int) => BufferedImage,
+    textCaches: SurfaceTextCaches,
     contentPersists: Boolean = true
 )
 
@@ -29,5 +30,6 @@ object FrameSurfaceFactory:
       request.canvas,
       request.onFlush,
       request.acquireImage,
+      request.textCaches,
       request.contentPersists
     )

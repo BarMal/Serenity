@@ -24,15 +24,19 @@ private[richtext] object DocxLinks:
   final private case class Existing(hyperlinks: Map[String, String], allIds: Set[String])
 
   /** Relationship id to external target, for the relationships that are hyperlinks. */
-  def hyperlinkTargets(relationships: Array[Byte]): Map[String, String] =
-    existing(RichTextXmlParser.parse(relationships)).hyperlinks
+  def hyperlinkTargets(relationships: Array[Byte]): Either[RichTextCodecException, Map[String, String]] =
+    RichTextXmlParser.parse(relationships, "DOCX").map(existing(_).hyperlinks)
 
   /** Ids for `targets`: the id an existing hyperlink relationship already has, or a fresh one that clashes with none.
     */
-  def allocate(targets: List[String], relationships: Option[String]): DocxLinks =
-    val known = relationships
-      .map(text => existing(RichTextXmlParser.parse(text.getBytes(StandardCharsets.UTF_8))))
-      .getOrElse(Existing(Map.empty, Set.empty))
+  def allocate(targets: List[String], relationships: Option[String]): Either[RichTextCodecException, DocxLinks] =
+    relationships
+      .fold[Either[RichTextCodecException, Existing]](Right(Existing(Map.empty, Set.empty)))(text =>
+        RichTextXmlParser.parse(text.getBytes(StandardCharsets.UTF_8), "DOCX").map(existing)
+      )
+      .map(allocated(targets, _))
+
+  private def allocated(targets: List[String], known: Existing): DocxLinks =
     val byTarget = known.hyperlinks.toList.sortBy(_._1).reverseIterator.map((id, target) => target -> id).toMap
     val missing  = targets.filterNot(_.startsWith("#")).distinct.filterNot(byTarget.contains)
     val freshIds =

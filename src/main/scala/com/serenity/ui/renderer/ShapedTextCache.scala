@@ -20,9 +20,19 @@ final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.Default
 
   private val generations = AtomicReference(Generations(newMap(), newMap()))
   private val shapedN     = AtomicLong(0)
+  private val exactN      = AtomicLong(0)
 
   /** How many stretches were shaped, as opposed to served from the cache. */
   def shapings: Long = shapedN.get()
+
+  /** How many exact measurements (one `TextLayout` or one shaped stretch of a row or candidate) caret and fit
+    * measurement built through this cache: the cost wrapping pays when summed glyph advances cannot answer, which the
+    * wrap specs bound per paragraph.
+    */
+  def exactMeasurements: Long = exactN.get()
+
+  private[serenity] def countExactMeasurement(): Unit =
+    val _ = exactN.incrementAndGet()
 
   def holds(text: String, font: Font, fontRenderContext: FontRenderContext): Boolean =
     val key  = Key(text, font, fontRenderContext)
@@ -62,9 +72,6 @@ object ShapedTextCache:
 
   private val FirstCharNeedingLayout = '\u0300'
 
-  /** Shared by every surface that is not handed its own: shaping is a pure function of its key. */
-  val shared: ShapedTextCache = new ShapedTextCache()
-
   final private case class Key(text: String, font: Font, fontRenderContext: FontRenderContext)
 
   private type Stretches = ConcurrentHashMap[Key, ShapedStretch]
@@ -85,6 +92,7 @@ final class ShapedStretch private (
     fontRenderContext: FontRenderContext,
     glyphCodes: Array[Int],
     charIndices: Array[Int],
+    rightToLeft: Array[Boolean],
     xs: Array[Float],
     ys: Array[Float],
     val advance: Float
@@ -101,6 +109,12 @@ final class ShapedStretch private (
 
   /** The index in the text of the character the glyph was shaped from; a ligature reports its first character. */
   def charIndexAt(glyph: Int): Int = charIndices(glyph)
+
+  /** Whether the glyph belongs to a right-to-left run, where its leading edge is its right one. */
+  def isRightToLeft(glyph: Int): Boolean = rightToLeft(glyph)
+
+  /** The glyph's own advance: unlike [[rightEdgeAt]] it holds nothing of the kerning with its neighbour. */
+  def advanceAt(glyph: Int): Float = whole.getGlyphMetrics(glyph).getAdvance
 
   def xAt(glyph: Int): Float = xs(glyph)
 
@@ -145,6 +159,7 @@ object ShapedStretch:
   final private case class ShapedRun(
       glyphCodes: Array[Int],
       charIndices: Array[Int],
+      rightToLeft: Boolean,
       xs: Array[Float],
       ys: Array[Float],
       advance: Float
@@ -161,6 +176,7 @@ object ShapedStretch:
       fontRenderContext,
       shaped.flatMap(_.glyphCodes).toArray,
       shaped.flatMap(_.charIndices).toArray,
+      shaped.flatMap(run => Array.fill(run.charIndices.length)(run.rightToLeft)).toArray,
       shaped.zip(offsets).flatMap((run, offset) => run.xs.map(_ + offset)).toArray,
       shaped.flatMap(_.ys).toArray,
       offsets.lastOption.getOrElse(0.0f)
@@ -191,6 +207,7 @@ object ShapedStretch:
     ShapedRun(
       glyphs.getGlyphCodes(0, count, new Array[Int](count)),
       glyphs.getGlyphCharIndices(0, count, new Array[Int](count)).map(_ + run.start),
+      run.rightToLeft,
       Array.tabulate(count)(glyph => positions(2 * glyph)),
       Array.tabulate(count)(glyph => positions(2 * glyph + 1)),
       positions(2 * count)

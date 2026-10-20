@@ -11,8 +11,12 @@ import com.serenity.state.models.AppState
   * for the gutter's width, so an edit that leaves both alone keeps the memo current. State is only ever replaced, never
   * mutated, so an unchanged reference is an unchanged input; a value-equal but rebuilt input costs a recompute, never a
   * stale layout.
+  *
+  * It has no parameters so that every memo is equal to every other, as [[com.serenity.markdown.MarkdownBlockIndexMemo]]
+  * does: a state that carries one still equals the same state with another, since what the memo holds never changes
+  * what the state means.
   */
-final class ChromeLayoutMemo(capacity: Int = ChromeLayoutMemo.DefaultCapacity):
+final case class ChromeLayoutMemo():
 
   private val entries      = new AtomicReference[List[ChromeLayoutMemo.Entry]](Nil)
   private val computations = new AtomicInteger(0)
@@ -29,7 +33,9 @@ final class ChromeLayoutMemo(capacity: Int = ChromeLayoutMemo.DefaultCapacity):
       case None =>
         val layout = compute
         computations.incrementAndGet()
-        entries.updateAndGet(current => (ChromeLayoutMemo.Entry(key, layout) :: current).take(capacity))
+        entries.updateAndGet(current =>
+          (ChromeLayoutMemo.Entry(key, layout) :: current).take(ChromeLayoutMemo.DefaultCapacity)
+        )
         layout
 
 object ChromeLayoutMemo:
@@ -65,6 +71,7 @@ object ChromeLayoutMemo:
         gutterCounterWidth = LayoutEngine.lineNumberCounterWidth(state),
         values = List(
           statusLineSurface,
+          state.chrome,
           persisted.bufferOrder.size,
           runtime.pointerGesture.cursorPeekResolvedAnchor
         ),

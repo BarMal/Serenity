@@ -20,6 +20,8 @@ class ConfigRestartSpec extends AnyFlatSpec with Matchers:
       List("ui.render.backend")
     ConfigRestart.changed(base, base.withRenderWayland(WaylandRender.XWayland)) shouldBe
       List("ui.render.wayland")
+    ConfigRestart.changed(base, base.withMemoryCompaction(!base.surfaceConfig.memoryCompactionEnabled)) shouldBe
+      List("performance.memory.compact")
   }
 
   it should "name nothing for settings that apply live" in {

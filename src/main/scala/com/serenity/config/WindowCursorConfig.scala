@@ -4,6 +4,7 @@ import java.awt.Color
 
 import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.theme.{DropCapColour, DropCapGap}
 
 final case class PreferredWindowSize(width: Int, height: Int):
   def normalized: PreferredWindowSize =
@@ -69,7 +70,11 @@ final case class DocumentConfig(
     // How long edits must pause before the whole-document spell-check analysis and the outline re-parse run. Longer
     // waits spend less CPU while typing at the price of staler squiggles and outline.
     analysisDebounceMillis: Long = 150L,
-    outlineDebounceMillis: Long = 150L
+    outlineDebounceMillis: Long = 150L,
+    // The room between a drop cap's glyph and the text beside it, in em of the body font. It moves the rows that wrap
+    // beside the glyph, so it is part of layout; the colour below only repaints the glyph.
+    dropCapGapEm: Float = DropCapGap.Default,
+    dropCapColour: DropCapColour = DropCapColour.Accent
 )
 
 final case class AppModeConfig(

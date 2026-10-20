@@ -29,19 +29,29 @@ class RendererScreenRowDamageSpec extends AnyFlatSpec with Matchers:
 
   private def stateWith(content: String, cursor: CursorPosition): AppState =
     val buffer = Buffer.fromString(bufferId, content).copy(editing = EditingState(List(cursor)))
-    AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(buffer.id -> buffer),
-        bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
-        ),
-        focus = Focus.EditorPane(paneId),
-        theme = Theme.light
+    AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(buffer.id -> buffer),
+            bufferOrder = List(buffer.id),
+            layout = AppState
+              .initial(com.serenity.config.AppConfig.conventional)
+              .persisted
+              .layout
+              .copy(
+                editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+                activeEditorPaneId = Some(paneId),
+                workspaceTree =
+                  Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
+              ),
+            focus = Focus.EditorPane(paneId),
+            theme = Theme.light
+          )
       )
-    )
 
   private def withBuffer(state: AppState)(update: Buffer => Buffer): AppState =
     state.copy(persisted =

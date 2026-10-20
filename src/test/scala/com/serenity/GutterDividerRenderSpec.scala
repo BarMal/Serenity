@@ -21,18 +21,23 @@ class GutterDividerRenderSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(1), lines)
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 10, visibleColumns = 20))
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(buffer.id -> buffer),
-        bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
-        ),
-        theme = Theme.light
+    val state = AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(buffer.id -> buffer),
+            bufferOrder = List(buffer.id),
+            layout = Layout(
+              editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+              activeEditorPaneId = Some(PaneId(0)),
+              workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
+            ),
+            theme = Theme.light
+          )
       )
-    )
     val surface  = new MockRenderSurface(80, 24)
     val viewport = ViewportSize(80, 24)
     val layout   = LayoutEngine.calculateLayout(state, viewport)

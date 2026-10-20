@@ -43,6 +43,15 @@ private[state] object EditorEditSupport:
       val entry = HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(before))
       List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, grouping)))
 
+  /** The undo entry for `edits` made to `before` (#1965): in `paneId` when a pane shows the buffer, detached otherwise.
+    */
+  def undoEntry(before: Buffer, paneId: Option[PaneId], edits: List[MultiCursorEdit]): Option[HistoryEntry] =
+    Option.when(edits.nonEmpty)(
+      paneId.fold[HistoryEntry](HistoryEntry.DetachedBufferEdit(before.id, BufferSnapshot.fromBuffer(before)))(pane =>
+        HistoryEntry.BufferEdit(before.id, pane, BufferSnapshot.fromBuffer(before))
+      )
+    )
+
   val standalone: List[MultiCursorEdit] => EditGrouping = _ => EditGrouping.Standalone
 
   /** Typing `edits` into `before`: whitespace typed straight after a word opens a new undo step. */

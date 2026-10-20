@@ -43,7 +43,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
         markdownViewMode = MarkdownViewMode.LivePreview,
         defaultMode = DefaultDocumentMode.RichText
       ),
-      interfaceConfig = InterfaceConfig(density = InterfaceDensity.Compact),
+      interfaceConfig = InterfaceConfig(density = InterfaceDensity.Compact, menuBar = MenuBarMode.Alt),
       windowConfig = WindowConfig(chromeMode = WindowChromeMode.NativeThemed),
       languageToolsConfig = LanguageToolsConfig(spellCheck = SpellCheckConfig(enabled = true)),
       editorConfig = EditorConfig(
@@ -70,6 +70,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("status-placement") shouldBe 0
     selections("interface-density") shouldBe 0
     selections("window-chrome") shouldBe 2
+    selections("menu-bar") shouldBe 1
     selections("markdown-view") shouldBe 2
     selections("default-document-mode") shouldBe 2
     selections("drop-caps-enabled") shouldBe 0
