@@ -69,3 +69,14 @@ class UndoStateRetentionSpec extends AnyFlatSpec with Matchers:
     history.nextUndo(state).map(_._2) shouldBe Some(entry)
     history.retainingBuffers(_ => false).nextUndo(state) shouldBe None
   }
+
+  "A group" should "be the next undo when it was recorded after the working buffer's own steps, and outlive buffers" in {
+    val state    = AppState.initial
+    val bufferId = state.persisted.buffers.keys.head
+    val older    = HistoryEntry.BufferEdit(bufferId, PaneId(0), snapshot)
+    val group    = HistoryEntry.Group(List(HistoryEntry.DetachedBufferEdit(bufferId, snapshot)))
+    val history  = UndoState().pushUndo(older).pushUndo(group)
+
+    (history.nextUndo(state).map(_._2), history.retainingBuffers(_ => false).nextUndo(state).map(_._2)) shouldBe
+      (Some(group), Some(group))
+  }

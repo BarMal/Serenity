@@ -76,10 +76,17 @@ class RenameEditReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
+  private def recordedEntries(result: ReducerResult): List[HistoryEntry] =
+    result.effects.collect { case AppEffect.Undo(UndoEffect.RecordBoundary(entry, _)) => entry }
+
+  private def membersOf(entry: HistoryEntry): List[HistoryEntry] = entry match
+    case HistoryEntry.Group(entries) => entries
+    case single                      => List(single)
+
   private def undoBufferIds(result: ReducerResult): List[BufferId] =
-    result.effects.collect {
-      case AppEffect.Undo(UndoEffect.RecordBoundary(entry: HistoryEntry.BufferEdit, _)) =>
-        entry.bufferId
+    recordedEntries(result).flatMap(membersOf).collect {
+      case edit: HistoryEntry.BufferEdit         => edit.bufferId
+      case edit: HistoryEntry.DetachedBufferEdit => edit.bufferId
     }
 
   it should "apply edits to every open buffer, not only the focused one, and record an undo step for each" in {
@@ -94,6 +101,7 @@ class RenameEditReducerSpec extends AnyFlatSpec with Matchers:
     result.state.persisted.buffers(bufferId).document.content.collect() shouldBe "val renamed = 1"
     result.state.persisted.buffers(secondId).document.content.collect() shouldBe "def f = renamed"
     undoBufferIds(result).toSet shouldBe Set(bufferId, secondId)
+    recordedEntries(result) should matchPattern { case List(HistoryEntry.Group(_)) => }
     quickInfoText(result.state) shouldBe Some("Renamed 2 location(s) in 2 open file(s).")
   }
 
@@ -174,8 +182,9 @@ class RenameEditReducerSpec extends AnyFlatSpec with Matchers:
     result.effects.collect {
       case AppEffect.File(FileEffect.OpenForRenameEdit(pending)) => pending
     } should matchPattern {
-      case List(PendingRename(`unopenedEdits`, `anchor`, 1, 1, 0, _, _)) =>
+      case List(PendingRename(`unopenedEdits`, `anchor`, 1, 1, 0, _, _, List(_: HistoryEntry.BufferEdit))) =>
     }
+    recordedEntries(result) shouldBe Nil
     quickInfoText(result.state) shouldBe None
   }
 
@@ -192,7 +201,8 @@ class RenameEditReducerSpec extends AnyFlatSpec with Matchers:
       editedBuffers = 1,
       heldBack = 0,
       focus = Focus.EditorPane(PaneId(0)),
-      activePane = Some(PaneId(0))
+      activePane = Some(PaneId(0)),
+      undoEntries = Nil
     )
 
     val result = RenameEditReducer.afterOpening(pending, reopened)
@@ -206,11 +216,40 @@ class RenameEditReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "report a file that still could not be opened as not updated" in {
     val before  = stateWith("val old = 1")
-    val pending = PendingRename(unopenedEdits, anchor, 1, 1, 0, Focus.EditorPane(PaneId(0)), Some(PaneId(0)))
+    val pending = PendingRename(unopenedEdits, anchor, 1, 1, 0, Focus.EditorPane(PaneId(0)), Some(PaneId(0)), Nil)
 
     val result = RenameEditReducer.afterOpening(pending, before)
 
     quickInfoText(result.state) shouldBe Some(
       "Renamed 1 location(s) in this file. 1 file(s) not open in any buffer were not updated."
     )
+  }
+
+  it should "record one undo step for the open buffer's edit and the opened file's together" in {
+    val base  = stateWithTwoBuffers("val old = 1", "def f = old")
+    val first = RenameEditReducer.apply(Map(uri -> List(renameTo(4, 7, "renamed"))), anchor, base)
+    val queued = PendingRename(
+      Map(secondUri -> List(renameTo(8, 11, "renamed"))),
+      anchor,
+      1,
+      1,
+      0,
+      Focus.EditorPane(PaneId(0)),
+      Some(PaneId(0)),
+      undoEntries = first.effects.collect { case AppEffect.Undo(UndoEffect.RecordBoundary(entry, _)) => entry }
+    )
+
+    val result = RenameEditReducer.afterOpening(queued, first.state)
+
+    recordedEntries(result) should matchPattern { case List(HistoryEntry.Group(List(_, _))) => }
+    undoBufferIds(result).toSet shouldBe Set(bufferId, secondId)
+  }
+
+  it should "record a plain undo step, not a group, when only one buffer is edited" in {
+    val before = stateWith("val old = 1")
+    val edits  = Map(uri -> List(renameTo(4, 7, "renamed")))
+
+    recordedEntries(RenameEditReducer.apply(edits, anchor, before)) should matchPattern {
+      case List(_: HistoryEntry.BufferEdit) =>
+    }
   }
