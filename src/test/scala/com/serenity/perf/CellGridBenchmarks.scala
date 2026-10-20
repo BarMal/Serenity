@@ -13,7 +13,8 @@ import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoi
 
 /** The GUI cell grid -- the layout a monospaced font with ligatures off and an exact integer advance gets -- on plain
   * ASCII code, which must cost what it did, and on code with CJK, Hangul and symbols, which it now places on two cells
-  * and draws in a fallback font (#1866). Courier Prime at 10 px has a 6 px advance, so it takes the cell layout.
+  * and draws in a fallback font, and with emoji, which the bundled emoji face draws (#1866). Courier Prime at 10 px has
+  * a 6 px advance, so it takes the cell layout.
   */
 private[perf] object CellGridBenchmarks:
 
@@ -39,6 +40,10 @@ private[perf] object CellGridBenchmarks:
   private def mixedLine(index: Int): String =
     if index % 2 == 0 then asciiLine(index)
     else s"val greeting$index = \"你好，世界 こんにちは 안녕하세요 → ★\" // mixed $index"
+
+  private def emojiLine(index: Int): String =
+    if index % 2 == 0 then asciiLine(index)
+    else s"val reaction$index = \"\ud83d\ude00 \ud83d\ude80 \ud83c\udf89 \u2728\" // emoji $index"
 
   private def text(line: Int => String): String = Vector.tabulate(Lines)(line).mkString("\n")
 
@@ -102,6 +107,7 @@ private[perf] object CellGridBenchmarks:
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
     val asciiFrame  = frameOf(stateOf(text(asciiLine)))
     val mixedFrame  = frameOf(stateOf(text(mixedLine)))
+    val emojiFrame  = frameOf(stateOf(text(emojiLine)))
     val asciiLayout = layoutOf(asciiLine)
     val mixedLayout = layoutOf(mixedLine)
     List(
@@ -118,6 +124,13 @@ private[perf] object CellGridBenchmarks:
         12,
         () => assert(hasPixels(mixedFrame()), "cell-grid mixed frame drew nothing"),
         () => mixedFrame()
+      ),
+      BenchmarkRunner.Benchmark(
+        "render.cell_grid.frame_emoji",
+        3,
+        12,
+        () => assert(hasPixels(emojiFrame()), "cell-grid emoji frame drew nothing"),
+        () => emojiFrame()
       ),
       BenchmarkRunner.Benchmark(
         "layout.cell_grid.ascii_lines",
