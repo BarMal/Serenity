@@ -5,24 +5,21 @@ import java.nio.charset.StandardCharsets
 import scala.util.Random
 
 import com.serenity.lsp.client.LspFramer
-import fs2.Chunk
 import io.circe.Json
 import io.circe.syntax.*
+import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class LspFramerSpec extends AnyFlatSpec with Matchers:
+class LspFramerSpec extends AnyFlatSpec with Matchers with EitherValues:
 
   private def message(id: Int, text: String): Json =
     Json.obj("jsonrpc" -> "2.0".asJson, "id" -> id.asJson, "result" -> text.asJson)
 
-  private def feedAll(decoder: LspFramer.FrameDecoder, chunks: Seq[Array[Byte]]): List[Json] =
-    val decoded = chunks.toList.flatMap(chunk => decoder.feed(Chunk.array(chunk)))
-    decoder.finish()
-    decoded
+  private def run(chunks: Seq[Array[Byte]]): FramerRuns.Outcome = FramerRuns.pure(chunks)
 
   private def feedAll(chunks: Seq[Array[Byte]]): List[Json] =
-    feedAll(new LspFramer.FrameDecoder, chunks)
+    run(chunks).value._1
 
   private def splitAt(bytes: Array[Byte], cuts: Seq[Int]): List[Array[Byte]] =
     val boundaries = (0 +: cuts.sorted :+ bytes.length).distinct
@@ -66,17 +63,17 @@ class LspFramerSpec extends AnyFlatSpec with Matchers:
   it should "scan for the header terminator once per frame rather than once per byte" in {
     val messages = (1 to 100).toList.map(id => message(id, s"payload-$id"))
     val bytes    = messages.flatMap(LspFramer.encode).toArray
-    val decoder  = new LspFramer.FrameDecoder
 
-    feedAll(decoder, List(bytes)) shouldBe messages
+    val (decoded, decoder) = run(List(bytes)).value
+
+    decoded shouldBe messages
     decoder.headerScans should be <= messages.length + 1
   }
 
   it should "scan once per chunk while a header is incomplete and not at all while a body is pending" in {
-    val bytes   = LspFramer.encode(message(1, "x" * 4096))
-    val decoder = new LspFramer.FrameDecoder
+    val bytes = LspFramer.encode(message(1, "x" * 4096))
 
-    val decoded = feedAll(decoder, bytes.grouped(7).toList)
+    val (decoded, decoder) = run(bytes.grouped(7).toList).value
 
     decoded shouldBe List(message(1, "x" * 4096))
     val headerLength = bytes.indexOfSlice("\r\n\r\n".getBytes(StandardCharsets.US_ASCII)) + 4
@@ -84,17 +81,18 @@ class LspFramerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "decode a 1 MB frame delivered in 8 KB chunks with a single header scan" in {
-    val large   = message(1, "y" * (1024 * 1024))
-    val bytes   = LspFramer.encode(large)
-    val decoder = new LspFramer.FrameDecoder
+    val large = message(1, "y" * (1024 * 1024))
+    val bytes = LspFramer.encode(large)
 
-    feedAll(decoder, bytes.grouped(8 * 1024).toList) shouldBe List(large)
+    val (decoded, decoder) = run(bytes.grouped(8 * 1024).toList).value
+
+    decoded shouldBe List(large)
     decoder.headerScans shouldBe 1
   }
 
   it should "report invalid JSON bodies with the offending text" in {
     val framing = "Content-Length: 5\r\n\r\n{nope".getBytes(StandardCharsets.UTF_8)
-    val failure = intercept[RuntimeException](feedAll(List(framing)))
+    val failure = run(List(framing)).left.value
 
     failure.getMessage should include("JSON parse error")
     failure.getMessage should include("{nope")

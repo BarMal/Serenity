@@ -1,32 +1,19 @@
 package com.serenity.rope
 
-import scala.annotation.tailrec
+import com.serenity.rope.btree.BTreeBuild
 
 /** Builds a rope from text that is already LF-only, one leaf at a time, in time linear in its length. */
 object RopeBuilder:
 
-  /** `leaves` joined left to right, paired level by level so the tree is as shallow as the leaf count allows. Unlike
-    * [[Rope.apply]], no character is copied: each leaf string is the one passed in.
+  /** `leaves` joined left to right under as few levels of branches as their number allows. Unlike [[Rope.apply]], no
+    * character is copied: each leaf string is the one passed in, unless it is longer than a leaf may be.
     */
   def fromLeaves(leaves: Iterable[String])(using Balance): Rope =
-    pairUp(leaves.iterator.filter(_.nonEmpty).map[Rope](Leaf(_)).toVector)
+    BTreeBuild.fromLeafValues(leaves)
 
-  @tailrec
-  private def pairUp(level: Vector[Rope])(using Balance): Rope =
-    level match
-      case Vector()       => Leaf("")
-      case Vector(single) => single
-      case _ =>
-        pairUp(
-          level
-            .grouped(2)
-            .map[Rope] {
-              case Vector(left, right) => Node(left, right)
-              case Vector(only)        => only
-              case _                   => Leaf("")
-            }
-            .toVector
-        )
+  /** The given leaf objects themselves, joined in order; for specs that need particular leaf instances in a tree. */
+  private[rope] def ofLeaves(leaves: Leaf*)(using Balance): Rope =
+    BTreeBuild.assemble(leaves.filter(_.weight > 0).toVector)
 
 /** A rope's text as the leaves it is stored in. */
 object RopeChunks:

@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.io.FileDialog
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -35,6 +36,7 @@ trait StateManagerTestSupport:
           onFontConfigChanged = onFontConfigChanged,
           deviceTextScaleProvider = deviceTextScaleProvider,
           sessionRootOverride = Some(root),
+          initialConfig = AppConfig.conventional,
           fileDialog = fileDialog,
           dictionaryCache = SharedDictionary.default
         )

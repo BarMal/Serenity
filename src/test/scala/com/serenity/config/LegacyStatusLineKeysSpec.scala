@@ -20,7 +20,7 @@ class LegacyStatusLineKeysSpec extends AnyFlatSpec with Matchers:
   "the old gutter defaults" should "read as today's default pinned row" in {
     val result = load("display.gutter = true\ncursor.info_bar.segments = off\n")
 
-    result.config.statusLine shouldBe AppConfig.default.statusLine
+    result.config.statusLine shouldBe AppConfig.conventional.statusLine
     result.report.deprecatedEntries.map(entry => entry.key -> entry.replacement) should contain allOf (
       "display.gutter"           -> "status.placement",
       "cursor.info_bar.segments" -> "status.segments"

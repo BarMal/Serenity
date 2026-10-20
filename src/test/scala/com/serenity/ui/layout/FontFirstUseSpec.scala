@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
-import com.serenity.ui.renderer.{FontFirstUse, FontSpec, ShapedStretch, StyledFontCache}
+import com.serenity.ui.renderer.{FontFirstUse, FontSpec, ShapedStretch, ShapedTextCache, StyledFontCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -98,19 +98,19 @@ class FontFirstUseSpec extends AnyFlatSpec with Matchers:
     FontFirstUse.isSettled(shaped, frc) shouldBe true
 
     val extent = unsettledFont()
-    FontLineExtents.shared(FontLineExtents.Key(extent, frc))
+    FontLineExtents().of(extent, frc)
     FontFirstUse.isSettled(extent, frc) shouldBe true
 
     val underlined = unsettledFont()
-    StyledFontCache.shared.underlineOf(underlined)
+    StyledFontCache().underlineOf(underlined)
     FontFirstUse.isSettled(underlined, frc) shouldBe true
 
     val dropCap = unsettledFont()
-    DropCapLayout.glyphWidthPx(dropCap, frc, "A")
+    DropCapWidths()(dropCap, frc, "A")
     FontFirstUse.isSettled(dropCap, frc) shouldBe true
 
     val advanced = unsettledFont()
-    GlyphAdvances.measure("Hoxi", 0, 4, 0, LineFontResolver(advanced, Vector.empty), frc)
+    GlyphAdvances.measure("Hoxi", 0, 4, 0, LineFontResolver(advanced, Vector.empty), frc, ShapedTextCache())
     FontFirstUse.isSettled(advanced, frc) shouldBe true
 
     val measured = unsettledFont()
@@ -118,7 +118,7 @@ class FontFirstUseSpec extends AnyFlatSpec with Matchers:
     FontFirstUse.isSettled(measured, frc) shouldBe true
 
     val caret = unsettledFont()
-    TextCaretMeasurement.rawMeasuredCaretXs("To fi", 0, LineFontResolver(caret, Vector.empty), frc)
+    TextCaretMeasurement.rawMeasuredCaretXs("To fi", 0, LineFontResolver(caret, Vector.empty), frc, ShapedTextCache())
     FontFirstUse.isSettled(caret, frc) shouldBe true
 
     val glyphs = unsettledFont()

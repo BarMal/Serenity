@@ -53,6 +53,9 @@ given Decoder[SessionLayout] = Decoder.instance { cursor =>
 given Encoder[SessionFocus] = deriveEncoder
 given Decoder[SessionFocus] = deriveDecoder
 
+given Encoder[SessionOpenings] = deriveEncoder
+given Decoder[SessionOpenings] = deriveDecoder
+
 given Encoder[SessionBuffer] = deriveEncoder
 
 given Encoder[SessionCursorPosition] = deriveEncoder
@@ -143,6 +146,7 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     contentRef       <- cursor.getOrElse[Option[String]]("contentRef")(None)
     nextCommentId    <- cursor.getOrElse[Option[Int]]("nextCommentId")(None)
     indentation      <- cursor.getOrElse[Option[String]]("indentation")(None)
+    openings         <- cursor.getOrElse[Option[SessionOpenings]]("openings")(None)
   yield SessionBuffer(
     id,
     filePath,
@@ -167,7 +171,8 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     notes,
     contentRef,
     nextCommentId,
-    indentation
+    indentation,
+    openings
   )
 }
 
@@ -192,6 +197,7 @@ given Decoder[SessionState] = Decoder.instance { cursor =>
     recentFilesByMode <- cursor.getOrElse[Map[String, List[String]]]("recentFilesByMode")(Map.empty)
     recentFolders     <- cursor.getOrElse[List[String]]("recentFolders")(Nil)
     commandUsage      <- cursor.getOrElse[Map[String, Int]]("commandUsage")(Map.empty)
+    lockedChrome      <- cursor.getOrElse[List[String]]("lockedChrome")(Nil)
   yield SessionState(
     buffers = buffers,
     layout = layout,
@@ -203,6 +209,7 @@ given Decoder[SessionState] = Decoder.instance { cursor =>
     recentFilesByMode = recentFilesByMode,
     recentFolders = recentFolders,
     commandUsage = commandUsage,
+    lockedChrome = lockedChrome,
     schemaVersion = schemaVersion
   )
 }

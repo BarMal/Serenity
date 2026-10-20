@@ -5,12 +5,15 @@ import com.serenity.lsp.client.DocumentUri
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.text.TextStatistics
 import com.serenity.ui.layout.{Layout, SpacingScale, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
-import com.serenity.ui.theme.Theme
+import com.serenity.ui.theme.{HeadingSettings, Theme}
 
 final case class AppState(
     persisted: Persisted,
     runtime: Runtime = Runtime()
 ):
+
+  /** What the chrome shows now: the config's choice with anything summoned added. See [[EffectiveChrome]]. */
+  lazy val chrome: EffectiveChrome = EffectiveChrome.of(persisted.config, runtime.summons)
 
   // The paned buffers' annotation and semantic-token indexes are read by the renderer every frame. They are derived
   // values (#1864): `withBufferIndexesRefreshed` brings their memos up to date once per commit, recomputing only those
@@ -79,6 +82,13 @@ final case class AppState(
       if runtime.capabilities.isCellGrid then 0.0 else effectiveUiElementGapDefaultCells
     )
 
+  /** The heading settings for this state's surface. A level left on auto is today's look on a pixel surface and the
+    * terminal's ladder of weight, slant, underline and colour on a cell grid, where size cannot tell the levels apart.
+    */
+  def effectiveHeadingSettings: HeadingSettings =
+    if runtime.capabilities.isCellGrid then persisted.config.terminalHeadingSettings
+    else persisted.config.headingSettings
+
   /** [[LineNumberLayout.marginLeft]], resolved the same way as [[effectiveUiElementGap]]. */
   def effectiveLineNumberMarginLeft: Int =
     persisted.config.surfaceConfig.lineNumberLayout.marginLeft.getOrElse(
@@ -130,9 +140,9 @@ final case class AppState(
     * always leads with the safe-mode label, even with nothing open.
     */
   def statusLineText: Option[String] =
-    if !persisted.config.statusLine.isShown then None
+    if !chrome.statusLine.isShown then None
     else
-      val text = StatusLineText.render(this, persisted.config.statusLine.segments)
+      val text = StatusLineText.render(this, chrome.statusLine.segments)
       if runtime.safeMode then Some((StatusLineText.SafeModeLabel :: text.toList).mkString(StatusLineText.Separator))
       else text
 
@@ -140,13 +150,13 @@ final case class AppState(
     * changes on screen, so with any other placement it needs no frames at all.
     */
   def typingHidesFloatingStatusLine: Boolean =
-    persisted.config.statusLine.isFloating && runtime.typingActivity.isActive
+    chrome.statusLine.isFloating && runtime.typingActivity.isActive
 
   /** The floating status row, derived each frame rather than stored: it follows the caret and steps aside for the
     * length of a typing burst (`runtime.typingActivity`) so nothing near the caret moves while text is going in.
     */
   def floatingStatusLineSurface: Option[UiSurface] =
-    if !persisted.config.statusLine.isFloating || runtime.typingActivity.isActive then None
+    if !chrome.statusLine.isFloating || runtime.typingActivity.isActive then None
     else
       for
         text   <- statusLineText
@@ -161,10 +171,13 @@ final case class AppState(
     * rather than stored -- carries the same `TabListContent.build` snapshot the mode/tab corner widget's own popup list
     * uses, so there is no separate "open tabs" state to keep in sync. Only appears with 2+ open buffers: with one
     * buffer there is nothing to switch between, so `LayoutEngine` reserves no strip (`LayoutEngine.showsTabBar`) and
-    * this returns `None` to match (issue #1074 decision).
+    * this returns `None` to match (issue #1074 decision). `editor.tab_strip = off` shows it never.
     */
+  def showsTabStrip: Boolean =
+    chrome.tabStrip && persisted.bufferOrder.size >= 2
+
   def tabBarSurface: Option[UiSurface] =
-    Option.when(persisted.bufferOrder.size >= 2) {
+    Option.when(showsTabStrip) {
       val tabList = TabListContent.build(this)
       UiSurface(
         id = UiSurface.TabBarSurfaceId,
@@ -208,7 +221,7 @@ final case class AppState(
       startOffset = content.lineColumnToOffset(selection.start.line, selection.start.column)
       endOffset   = content.lineColumnToOffset(selection.end.line, selection.end.column)
       if endOffset > startOffset
-    yield TextStatistics.ofRange(content, startOffset, endOffset)
+    yield runtime.rangeStatistics.of(content, startOffset, endOffset)
 
   def floatingSurfaces: List[UiSurface] =
     runtime.uiSurfaces.filter {

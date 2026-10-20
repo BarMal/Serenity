@@ -5,9 +5,11 @@ import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import com.serenity.config.{AppConfig, TextAreaInsets}
+import com.serenity.diagnostics.FrameCounts
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.FrameMismatchDump
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{
   EditorPaneRenderPlan,
@@ -62,7 +64,7 @@ trait PersistedFrameFixture:
         Viewport(topLine = topLine, leftColumn = 0, visibleLines = viewport.height, visibleColumns = viewport.width),
       editing = EditingState(List(cursor))
     )
-    val initial = AppState.initial
+    val initial = AppState.initial(AppConfig.conventional)
     initial.copy(persisted =
       initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
@@ -74,7 +76,7 @@ trait PersistedFrameFixture:
         ),
         focus = Focus.EditorPane(paneId),
         theme = Theme.light,
-        config = withMargins(AppConfig.default.withoutStatusLine)
+        config = withMargins(AppConfig.conventional.withoutStatusLine)
       )
     )
 
@@ -98,7 +100,12 @@ trait PersistedFrameFixture:
       )
     )
 
-  private def surfaceOver(image: BufferedImage, scale: Double, persists: Boolean): Java2DRenderSurface =
+  private def surfaceOver(
+    image: BufferedImage,
+    scale: Double,
+    persists: Boolean,
+    caches: RenderCaches
+  ): Java2DRenderSurface =
     new Java2DRenderSurface(
       image,
       cellMetrics,
@@ -109,12 +116,14 @@ trait PersistedFrameFixture:
       deviceScaleX = scale,
       deviceScaleY = scale,
       contentPersists = persists,
-      layerCacheOwnerOverride = Some(ScreenIdentity(image))
+      layerCacheOwnerOverride = Some(ScreenIdentity(image)),
+      textCaches = caches.surfaceText
     )
 
   final protected class Session(scale: Double = 2.0):
     private val caches = RenderCaches.create()
     private val token  = ScreenIdentity(new javax.swing.JPanel)
+    caches.frameCounters.setEnabled(true)
 
     private val pool =
       Vector.fill(2)(
@@ -131,6 +140,9 @@ trait PersistedFrameFixture:
     /** The pixel region the last frame bounded its present to, `None` when it asked for the whole canvas. */
     def repaintRegion: Option[List[PixelRect]] = region.get()
 
+    /** What the last frame drew, kept and presented, as the frame counters counted it. */
+    def lastFrame: FrameCounts = caches.frameCounters.lastFrame
+
     /** The image the next frame draws into, which holds the frame before the last. */
     def pendingImage: BufferedImage = pool(frames.get() % pool.size)
 
@@ -141,7 +153,7 @@ trait PersistedFrameFixture:
         .renderFrame(
           state,
           cursorVisible = false,
-          surfaceOver(image, scale, persists = true),
+          surfaceOver(image, scale, persists = true, caches),
           viewport,
           caches.authoritativeScene.forState(state, viewport, codeFont, textFont),
           codeFont,
@@ -169,7 +181,7 @@ trait PersistedFrameFixture:
     val _ = RendererFramePlanner.renderFrame(
       state,
       cursorVisible = false,
-      surfaceOver(image, scale, persists = false),
+      surfaceOver(image, scale, persists = false, caches),
       viewport,
       caches.authoritativeScene.forState(state, viewport, codeFont, textFont),
       codeFont,
@@ -185,8 +197,12 @@ trait PersistedFrameFixture:
     image
 
   protected def differingPixels(a: BufferedImage, b: BufferedImage): Seq[(Int, Int)] =
-    for
-      x <- 0 until a.getWidth
-      y <- 0 until a.getHeight
-      if (a.getRGB(x, y) & 0xffffff) != (b.getRGB(x, y) & 0xffffff)
-    yield (x, y)
+    val differing =
+      for
+        x <- 0 until a.getWidth
+        y <- 0 until a.getHeight
+        if (a.getRGB(x, y) & 0xffffff) != (b.getRGB(x, y) & 0xffffff)
+      yield (x, y)
+    if differing.nonEmpty then
+      val _ = FrameMismatchDump.write(getClass.getSimpleName, a, b, differing)
+    differing

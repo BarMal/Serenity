@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import com.serenity.config.LayoutPin
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
 
@@ -12,10 +13,17 @@ object StartupRecoveryState:
     state: AppState,
     safeMode: Boolean,
     crashLoopAfter: Option[Int],
-    unexpectedExit: Option[String] = None
+    unexpectedExit: Option[String] = None,
+    layoutPins: List[LayoutPin] = Nil
   ): AppState =
     val flagged = state.copy(runtime = state.runtime.copy(safeMode = safeMode))
     val prompt = crashLoopAfter
       .map(ConfirmPrompt.startedInSafeMode)
       .orElse(unexpectedExit.map(ConfirmPrompt.closedUnexpectedly))
-    prompt.fold(flagged)(shown => ModalStateReducer.show(Modal.Confirm(shown), flagged).state)
+    val layoutPrompt = Option.when(layoutPins.nonEmpty)(
+      ConfirmPrompt.layoutOverrideAtStartup(flagged.persisted.config.uiLayout, layoutPins)
+    )
+    // The layout question waits under the more urgent one, which is answered first.
+    (layoutPrompt.toList ++ prompt.toList).foldLeft(flagged)((current, shown) =>
+      ModalStateReducer.show(Modal.Confirm(shown), current).state
+    )

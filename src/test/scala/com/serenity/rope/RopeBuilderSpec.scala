@@ -21,11 +21,26 @@ class RopeBuilderSpec extends AnyFlatSpec with Matchers:
     RopeBuilder.fromLeaves(List("", "")).collect() shouldBe ""
   }
 
-  it should "build a rope that needs no rebalancing" in {
+  it should "build a valid B-tree" in {
     val rope = RopeBuilder.fromLeaves(leavesOf(777))
-    rope.isDepthBalanced shouldBe true
-    rope.isHeightBalanced shouldBe true
-    rope.rebalance shouldBe theSameInstanceAs(rope)
+    RopeInvariants.violations(rope, checkFigures = false) shouldBe Nil
+    rope.height should be <= 5
+  }
+
+  it should "keep each leaf string as it was passed in rather than copying it" in {
+    val leaves = leavesOf(40)
+    val kept   = RopeChunks.of(RopeBuilder.fromLeaves(leaves)).toVector
+
+    kept.size shouldBe leaves.size
+    kept.zip(leaves).foreach((chunk, leaf) => chunk should be theSameInstanceAs leaf)
+  }
+
+  it should "cut a leaf that is longer than a leaf may be" in {
+    val tiny = Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 5)
+    val rope = RopeBuilder.fromLeaves(List("abcdefghijkl", "mn"))(using tiny)
+
+    RopeChunks.of(rope).foreach(_.length should be <= 5)
+    rope.collect() shouldBe "abcdefghijklmn"
   }
 
   it should "keep the rope editable" in {

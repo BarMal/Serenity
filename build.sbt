@@ -160,8 +160,7 @@ lazy val root = (project in file("."))
     wartremoverExcluded ++= Seq(
       baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "ui" / "terminal",
       baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "ui" / "accessibility",
-      baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "lsp" / "client",
-      baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "richtext"
+      baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "lsp" / "client"
     ),
     architectureBaselineFile := baseDirectory.value / "project" / "architecture-baseline.tsv",
     architectureChecksSelfTest := {
@@ -336,7 +335,8 @@ lazy val root = (project in file("."))
     // one level more specific than the plain `Test / testOptions` above that `testOnly` still falls back to
     // unfiltered, so `realBoundaryTest` below can name these specs directly and still run them.
     Test / test / testOptions := (Test / testOptions).value ++ Seq(
-      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.RealBoundaryTest")
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.RealBoundaryTest"),
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeapMeasurementTest")
     )
   )
 
@@ -350,6 +350,14 @@ realBoundaryTest := (Test / testOnly)
   .toTask(
     " com.serenity.lsp.LspConnectionRealSocketIntegrationSpec com.serenity.ui.tui.TerminalShellRealSignalIntegrationSpec"
   )
+  .value
+
+// Runs the specs that read the whole JVM heap (see HeapMeasurementTest) on their own, so no other suite allocates or
+// stalls on their forced collections while they measure.
+lazy val heapMeasurementTest = taskKey[Unit]("Run the heap-measurement specs excluded from `sbt test`")
+
+heapMeasurementTest := (Test / testOnly)
+  .toTask(" com.serenity.perf.FootprintBenchmarksSpec")
   .value
 
 libraryDependencies ++= Seq(

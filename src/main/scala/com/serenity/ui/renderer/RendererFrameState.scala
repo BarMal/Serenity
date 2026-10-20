@@ -314,6 +314,8 @@ final class RendererFrameState(initialCapacity: Int):
   def rememberSnapshots(surface: RenderSurface, snapshots: Map[PaneId, TextLayoutSnapshot]): Unit =
     surface.persistentContentKey.foreach(key => previousSnapshots.put(key, snapshots))
 
+  private[renderer] val screenSnapshots = new ScreenSnapshots(cacheCapacity)
+
   /** Each pane's [[PaneFrameRecord.rowGhosts]] as of the previous frame planned for a surface, to find the rows whose
     * ghost changed without any buffer damage saying so.
     */
@@ -326,6 +328,37 @@ final class RendererFrameState(initialCapacity: Int):
   def rememberRowGhosts(key: SurfaceContentIdentity, ghosts: Map[PaneId, Vector[Option[String]]]): Unit =
     previousRowGhosts.put(key, ghosts)
 
+  /** The scrollbars each pixel buffer still holds, as `key` last drew them, and what the screen last showed of each
+    * bar, to present a bar when it has moved.
+    */
+  private val bufferBars =
+    new BoundedRefCache[SurfaceContentIdentity, Map[PaneId, RendererScrollbars.Held]](cacheCapacity)
+  private val screenScrollbars = new BoundedRefCache[ScreenIdentity, Map[PaneId, ScrollbarVisual]](cacheCapacity)
+
+  def heldBars(key: SurfaceContentIdentity): Map[PaneId, RendererScrollbars.Held] =
+    bufferBars.get(key).getOrElse(Map.empty)
+
+  def rememberHeldBars(key: SurfaceContentIdentity, bars: Map[PaneId, RendererScrollbars.Held]): Unit =
+    bufferBars.put(key, bars)
+
+  /** The panes whose bar in `current` differs from the one `output`'s screen last showed, which `current` then becomes;
+    * every bar when there is no screen to measure against.
+    */
+  def scrollbarsChangedOnScreen(output: Option[FrameOutput], current: Map[PaneId, ScrollbarVisual]): Set[PaneId] =
+    output.fold(current.keySet) { value =>
+      screenScrollbars.modify(tracked =>
+        (
+          tracked.updated(value.screenToken, current),
+          RendererScrollbars.changed(current, tracked.getOrElse(value.screenToken, Map.empty))
+        )
+      )
+    }
+
+  private val screenPaneExtents = new BoundedRefCache[ScreenIdentity, Map[PaneId, PixelRect]](cacheCapacity)
+
+  def bandsVacatedOnScreen(output: Option[FrameOutput], current: Map[PaneId, PixelRect]): List[PixelRect] =
+    output.fold(Nil)(value => screenPaneExtents.modify(ScreenPaneExtents.exchange(value.screenToken, current)))
+
   /** Drops `key`'s remembered previous-frame snapshots and floating-panel rects -- used by
     * [[RendererFramePlanner.forgetPreservedContent]] when a surface's preserved pixels are no longer valid, since both
     * are reuse promises about pixels that surface no longer holds.
@@ -334,6 +367,7 @@ final class RendererFrameState(initialCapacity: Int):
     previousSnapshots.remove(key)
     previousRowGhosts.remove(key)
     previousFloatingSurfaceRects.remove(key)
+    bufferBars.remove(key)
     forgetPanelCompositions(key)
 
   private val bufferDamage    = new BoundedRefCache[SurfaceContentIdentity, Damage](cacheCapacity)
@@ -449,6 +483,8 @@ final class RendererFrameState(initialCapacity: Int):
   def forgetScreenState(screenToken: ScreenIdentity): Unit =
     screenDamage.remove(screenToken)
     screenPaneIds.remove(screenToken)
+    screenScrollbars.remove(screenToken)
+    screenSnapshots.forget(screenToken)
 
   /** Folds `damage` into every buffer identity already being tracked for `output`'s screen (every identity, if there is
     * no output to scope by), via [[DamageAccumulator.accumulateBuffers]] -- called unconditionally on every frame,

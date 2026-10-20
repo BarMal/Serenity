@@ -21,7 +21,7 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
 
-  private val bareConfig = AppConfig.default.withLineNumbers(false).withoutStatusLine
+  private val bareConfig = AppConfig.conventional.withLineNumbers(false).withoutStatusLine
 
   given Balance    = Balance.default
   given Logger[IO] = Slf4jLogger.getLogger[IO]
@@ -51,8 +51,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       editing = EditingState(List(cursor)),
       viewport = viewport
     )
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
@@ -105,13 +105,13 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.JsonLang)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 8, visibleLines = 4, topVisualLine = 1)
       )
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
-        config = AppConfig.default.withoutStatusLine.withWordWrap(true)
+        config = AppConfig.conventional.withoutStatusLine.withWordWrap(true)
       )
     )
     val viewportSize = ViewportSize(11, 6)
@@ -143,8 +143,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val buffer =
       val base = Buffer.fromString(bufferId, "content")
       base.copy(document = base.document.copy(filePath = Some(Path.of(title))))
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
@@ -227,7 +227,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val codeFont = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val textFont = FontLoader
       .loadTextFont(
-        FontConfig(textFontFamily = "Serif", fontSize = 22.0f)
+        FontConfig(textFontFamily = "Serif", textFontSize = 22.0f)
       )
       .unsafeRunSync()
     val codeMetrics = CellMetrics.fromFont(codeFont)
@@ -260,7 +260,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       codeFont,
       cellMetricsOverride = Some(CellMetrics.fromFont(codeFont)),
       textFontOverride = Some(textFont),
-      config = AppConfig.default.withLineNumbers(true).withoutStatusLine
+      config = AppConfig.conventional.withLineNumbers(true).withoutStatusLine
     )
 
     val firstTextRun =
@@ -317,8 +317,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
           selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, text.length)))
         )
       )
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
@@ -363,8 +363,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
         editing = EditingState(List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
       )
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
@@ -402,8 +402,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
         editing = EditingState(List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
       )
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
@@ -458,8 +458,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
         editing = EditingState(List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
       )
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
@@ -502,8 +502,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
         editing = EditingState(List(CursorPosition(0, 1)))
       )
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),

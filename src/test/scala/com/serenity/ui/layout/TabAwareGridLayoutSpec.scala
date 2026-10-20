@@ -4,6 +4,7 @@ import java.awt.Font
 
 import com.serenity.state.models.IndentationSettings
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -21,7 +22,7 @@ class TabAwareGridLayoutSpec extends AnyFlatSpec with Matchers:
 
   private def caretXs(text: String, tabSize: Int, cells: CellMetrics): List[Float] =
     TextCaretMeasurement
-      .caretXs(text, 0, singleFontResolver(font, tabSize), frc, measuredLayout = false, cells)
+      .caretXs(text, 0, singleFontResolver(font, tabSize), frc, measuredLayout = false, cells, ShapedTextCache())
       .toList
 
   "Grid caret stops" should "advance a tab to the next stop at the configured size" in {
@@ -111,6 +112,7 @@ class TabAwareGridLayoutSpec extends AnyFlatSpec with Matchers:
         10,
         10,
         font,
+        ShapedTextCache(),
         frc,
         cellMetricsOverride = Some(oneCell),
         forceCellLayout = true,
@@ -126,6 +128,7 @@ class TabAwareGridLayoutSpec extends AnyFlatSpec with Matchers:
       12,
       10,
       font,
+      ShapedTextCache(),
       frc,
       cellMetricsOverride = Some(oneCell),
       forceCellLayout = true

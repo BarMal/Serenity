@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import com.serenity.config.*
+import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
@@ -262,7 +263,6 @@ enum StatusLineIntent:
   /** Sets or clears (`None`) the active document's word-count goal the `WordGoal` segment shows progress against. */
   case SetWordGoal(goal: Option[Int])
 
-/** Panel/text-area chrome: line numbers, gutter, word wrap, toolbar, spacing, window chrome and sitter, insets. */
 /** What the editor surface itself shows around and inside the text: chrome rows, wrap, scrolling, insets. */
 enum TextDisplayIntent:
   case ToggleLineNumbers
@@ -305,6 +305,16 @@ enum InterfaceChromeIntent:
   case SetUiOutlineThicknessPx(thickness: Int)
   case SetInterfaceDensity(density: InterfaceDensity)
   case SetWindowChromeMode(mode: WindowChromeMode)
+  case SetMenuBarMode(mode: MenuBarMode)
+  case SetUiLayout(layout: UiLayout)
+  case ToggleUiLayout
+  case SetSummonModifiers(modifiers: Set[Modifier])
+  case SetSummonLock(lock: HotkeyTrigger)
+  case SetSummonLetter(element: ChromeElement, letter: Option[Char])
+  // `useLayoutKeys` are the `LayoutPin.key`s handed back to the layout; every other key the file pins stays as the
+  // file has it. Reached from the prompt a switch (or the first launch) opens, never from the palette.
+  case ReviewUiLayoutOverride(layout: UiLayout)
+  case ConfirmUiLayoutOverride(layout: UiLayout, useLayoutKeys: List[String])
   case SetWheelScrollLines(lines: Int)
   case SetPanelEscapeTarget(mode: AppMode, target: PanelEscapeTarget)
 
@@ -352,6 +362,7 @@ enum SettingsIntent:
   case Cursor(intent: CursorIntent)
   case StatusLine(intent: StatusLineIntent)
   case TextDisplay(intent: TextDisplayIntent)
+  case Headings(intent: HeadingsIntent)
   case InterfaceChrome(intent: InterfaceChromeIntent)
   case SpellCheck(intent: SpellCheckIntent)
   case General(intent: GeneralSettingsIntent)

@@ -11,7 +11,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
-import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, ShapedTextCache}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -47,7 +47,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
   ): AppState =
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .updateSearchTerm(searchTerm)(using registry)
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
@@ -55,7 +55,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
         editing = EditingState(cursors)
       )
 
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),
@@ -128,7 +128,9 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     searchRun.yPx shouldBe cellMetrics.toPixelY(commandContentRect.y)
 
     val searchCursorXPx = cellMetrics.toPixelX(commandContentRect.x) +
-      math.round(TextLayoutSnapshot.caretXsForText(searchText, uiFont, surface.fontRenderContext.get).last)
+      math.round(
+        TextLayoutSnapshot.caretXsForText(searchText, uiFont, ShapedTextCache(), surface.fontRenderContext.get).last
+      )
     val searchCursorYPx = cellMetrics.toPixelY(commandContentRect.y)
     surface.fillPixelRectCalls.exists(call =>
       call.xPx == searchCursorXPx &&
@@ -169,15 +171,15 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val commands = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .updateSearchTerm("open")(using registry)
     val content = (1 to 60).map(i => s"line $i").mkString("\n")
 
-    def overlayFor(cursor: CursorPosition): (LayoutRect, LayoutRect) =
+    def overlayFor(cursor: CursorPosition): (LayoutRect, LayoutRect, Int) =
       val buffer = Buffer
         .fromString(bufferId, content)
         .copy(editing = EditingState(List(cursor)))
-      val initialState = AppState.initial
+      val initialState = AppState.initial(AppConfig.conventional.withFontConfig(MeasuredRows.driftingFontConfig))
       val state = initialState.copy(
         persisted = initialState.persisted.copy(
           buffers = Map(bufferId -> buffer),
@@ -200,15 +202,20 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       val paneRect = LayoutEngine
         .calculatePaneLayouts(state, layout)
         .getOrElse(paneId, fail("Expected pane layout"))
+      val caretRow =
+        MeasuredRows.caretRow(state, layout, paneId, cursor).getOrElse(fail("Expected the cursor to be painted"))
 
-      layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay")) ->
-        CursorLayout.contentRectForPane(paneRect)
+      (
+        layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay")),
+        CursorLayout.contentRectForPane(paneRect),
+        caretRow
+      )
 
-    val (topOverlay, topContentRect)     = overlayFor(CursorPosition(0, 0))
-    val (lowerOverlay, lowerContentRect) = overlayFor(CursorPosition(20, 0))
+    val (topOverlay, _, topCaretRow)                    = overlayFor(CursorPosition(0, 0))
+    val (lowerOverlay, lowerContentRect, lowerCaretRow) = overlayFor(CursorPosition(20, 0))
 
-    topOverlay.y shouldBe topContentRect.y + 2
-    lowerOverlay.y shouldBe lowerContentRect.y + 22
+    topOverlay.y shouldBe topCaretRow + 2
+    lowerOverlay.y shouldBe lowerCaretRow + 2
     lowerOverlay.y should be > topOverlay.y
     // Horizontally centered on screen, not cursor-anchored (bug fix): both cursors sit at column 0, but the palette's
     // x position depends only on the content rect's width, not the cursor's row.
@@ -232,14 +239,14 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val registry          = CommandRegistry(commands)
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
+      .activate(registry, AppConfig.conventional.withShowAllSettingsRegardlessOfMode(true))
       .openSettings
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
         editing = EditingState(List(CursorPosition(1, 2)))
       )
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),
@@ -328,7 +335,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .openSettings
       .enterSelectedGroup
     val buffer = Buffer
@@ -336,7 +343,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       .copy(
         editing = EditingState(List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),
@@ -389,7 +396,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .updateSearchTerm("UI Outline Thickness")
       .enterSelectedGroup
     val buffer = Buffer
@@ -397,7 +404,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       .copy(
         editing = EditingState(List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),

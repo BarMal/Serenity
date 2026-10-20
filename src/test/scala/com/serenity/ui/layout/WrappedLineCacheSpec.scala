@@ -191,6 +191,16 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
     wrap(prose, cache, bufferLine = 5, maxVisualLines = 1) shouldBe full.take(1).map(_.copy(bufferLine = 5))
   }
 
+  it should "keep serving the very rows a row-limited wrap handed out once a full wrap replaces it" in {
+    val cache    = WrappedLineCache.bounded()
+    val limited  = wrap(prose, cache, maxVisualLines = 2)
+    val full     = wrap(prose, cache)
+    val rowsKept = limited.zip(full).map((before, after) => before.row eq after.row)
+    rowsKept shouldBe Vector(true, true)
+    full.drop(2).map(_.row) should not be empty
+    wrap(prose, cache, maxVisualLines = 2).map(_.row).zip(limited.map(_.row)).forall(_ eq _) shouldBe true
+  }
+
   private val variedLines = Table(
     "line",
     "",

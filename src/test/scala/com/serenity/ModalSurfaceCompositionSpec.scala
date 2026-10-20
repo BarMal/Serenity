@@ -47,8 +47,8 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     compact.hitRegions.map(_.actionId) shouldBe comfortable.hitRegions.map(_.actionId)
     compact.hitRegions.map(_.rect.height).distinct shouldBe List(1.0)
     comfortable.hitRegions.map(_.rect.height).distinct shouldBe List(2.0)
-    ModalSurfaceComposition.frameHeight(closePrompt(), targetRows = 1) shouldBe 7
-    ModalSurfaceComposition.frameHeight(closePrompt(), targetRows = 2) shouldBe 10
+    ModalSurfaceComposition.frameHeight(closePrompt(), targetRows = 1, width = 72) shouldBe 7
+    ModalSurfaceComposition.frameHeight(closePrompt(), targetRows = 2, width = 72) shouldBe 10
   }
 
   it should "scale confirm action targets with interface density without changing action identity" in {
@@ -61,8 +61,8 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     compact.hitRegions.map(_.actionId) shouldBe comfortable.hitRegions.map(_.actionId)
     compact.hitRegions.map(_.rect.height).distinct shouldBe List(1.0)
     comfortable.hitRegions.map(_.rect.height).distinct shouldBe List(2.0)
-    ModalSurfaceComposition.frameHeight(Modal.Confirm(prompt), targetRows = 1) shouldBe 7
-    ModalSurfaceComposition.frameHeight(Modal.Confirm(prompt), targetRows = 2) shouldBe 10
+    ModalSurfaceComposition.frameHeight(Modal.Confirm(prompt), targetRows = 1, width = 72) shouldBe 7
+    ModalSurfaceComposition.frameHeight(Modal.Confirm(prompt), targetRows = 2, width = 72) shouldBe 10
   }
 
   it should "map the close prompt's action identities back to its Save, Close Anyway and Cancel choices" in {
@@ -170,7 +170,7 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       Vector(FindResult(1, 2), FindResult(4, 5), FindResult(7, 8)),
       currentIndex = 1
     )
-    val frame = LayoutRect(10, 4, 60, ModalSurfaceComposition.frameHeight(modal, targetRows = 1))
+    val frame = LayoutRect(10, 4, 60, ModalSurfaceComposition.frameHeight(modal, targetRows = 1, width = 72))
 
     val plan = ModalSurfaceComposition.forModal(modal, frame, targetRows = 1).getOrElse(fail("expected find plan"))
 
@@ -186,7 +186,7 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
 
   it should "keep the zero-match footer below the query in a frame derived from the find workflow" in {
     val modal = Modal.Find(TextField.of("missing"), Vector.empty, currentIndex = 0)
-    val frame = LayoutRect(10, 4, 60, ModalSurfaceComposition.frameHeight(modal, targetRows = 1))
+    val frame = LayoutRect(10, 4, 60, ModalSurfaceComposition.frameHeight(modal, targetRows = 1, width = 72))
 
     val plan = ModalSurfaceComposition.forModal(modal, frame, targetRows = 1).getOrElse(fail("expected find plan"))
 
@@ -408,8 +408,8 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     val withCreateHint = ModalSurfaceComposition
       .forModal(Modal.FileWorkflow(readyToCreate), frame, targetRows = 1, customBindings)
       .getOrElse(fail("expected file workflow composition"))
-    val hintLine = withCreateHint.paintBoxes.flatMap(_.text).find(_.contains("Submit")).getOrElse(fail("expected hint"))
-    hintLine should include("Create dir ctrl+n")
+    val hintLines = withCreateHint.paintBoxes.flatMap(_.text).dropWhile(!_.contains("Submit"))
+    hintLines.mkString(" ") should include("Create dir ctrl+n")
 
     val noMissingDirs = FileWorkflowState(mode = FileWorkflowMode.SaveAs, filename = "notes.scala")
     val withoutCreateHint = ModalSurfaceComposition
@@ -419,20 +419,35 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "derive preferred frame height from each workflow composition" in {
-    ModalSurfaceComposition.frameHeight(Modal.TextPrompt(TextPrompt.gotoLine("")), targetRows = 1) shouldBe 3
-    ModalSurfaceComposition.frameHeight(Modal.Find(TextField.of("needle"), Vector.empty, 0), targetRows = 1) shouldBe 5
+    ModalSurfaceComposition.frameHeight(
+      Modal.TextPrompt(TextPrompt.gotoLine("")),
+      targetRows = 1,
+      width = 72
+    ) shouldBe 3
+    ModalSurfaceComposition.frameHeight(
+      Modal.Find(TextField.of("needle"), Vector.empty, 0),
+      targetRows = 1,
+      width = 72
+    ) shouldBe 5
     ModalSurfaceComposition.frameHeight(
       Modal.Find(TextField.of("needle"), Vector(FindResult(0, 0)), 0),
-      targetRows = 1
+      targetRows = 1,
+      width = 72
     ) shouldBe 6
     ModalSurfaceComposition.frameHeight(
       Modal.ReplaceWorkflow(ReplaceWorkflowState(statusMessage = Some("Nothing to replace"))),
-      targetRows = 1
+      targetRows = 1,
+      width = 72
     ) shouldBe 8
-    ModalSurfaceComposition.frameHeight(Modal.ReplaceWorkflow(ReplaceWorkflowState()), targetRows = 2) shouldBe 9
+    ModalSurfaceComposition.frameHeight(
+      Modal.ReplaceWorkflow(ReplaceWorkflowState()),
+      targetRows = 2,
+      width = 72
+    ) shouldBe 9
     ModalSurfaceComposition.frameHeight(
       Modal.ReplaceWorkflow(ReplaceWorkflowState(statusMessage = Some("Nothing to replace"))),
-      targetRows = 2
+      targetRows = 2,
+      width = 72
     ) shouldBe 10
     ModalSurfaceComposition.frameHeight(
       Modal.FileWorkflow(
@@ -441,7 +456,8 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
           suggestions = List(FileWorkflowSuggestion("one", false), FileWorkflowSuggestion("two", false))
         )
       ),
-      targetRows = 1
+      targetRows = 1,
+      width = 200
     ) shouldBe 10
   }
 
@@ -506,8 +522,8 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   it should "grow by one row for its query" in {
     val choices = Vector(pickerChoice("Draft"), pickerChoice("Notes"))
 
-    ListPickerComposition.frameHeight(ListPicker.filterable("Open session", choices)) shouldBe
-      ListPickerComposition.frameHeight(ListPicker.of("Open session", choices, "None")) + 1
+    ListPickerComposition.frameHeight(ListPicker.filterable("Open session", choices), ModalWrap.ofContent(70)) shouldBe
+      ListPickerComposition.frameHeight(ListPicker.of("Open session", choices, "None"), ModalWrap.ofContent(70)) + 1
   }
 
   it should "end with a muted, unclickable row counting its choices while its source has more to load" in {
@@ -520,8 +536,11 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     plan.paintBoxes.lastOption.map(_.tone) shouldBe Some(OverlayTone.Muted)
     plan.paintBoxes.map(_.rect.y).distinct.size shouldBe 5
     plan.hitRegions.flatMap(_.actionId) shouldBe List(0, 1).map(ListPickerComposition.choiceActionId)
-    ListPickerComposition.frameHeight(picker) shouldBe
-      ListPickerComposition.frameHeight(picker.copy(source = Some(PickerSource.BufferText()))) + 1
+    ListPickerComposition.frameHeight(picker, ModalWrap.ofContent(70)) shouldBe
+      ListPickerComposition.frameHeight(
+        picker.copy(source = Some(PickerSource.BufferText())),
+        ModalWrap.ofContent(70)
+      ) + 1
   }
 
   "A confirm prompt" should "tone each choice by its emphasis: primary as accent, danger as error" in {

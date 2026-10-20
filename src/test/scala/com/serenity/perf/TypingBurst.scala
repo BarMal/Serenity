@@ -45,7 +45,7 @@ object TypingBurst:
     frameTimings: FrameTimings = FrameTimings()
   ): IO[AppRuntimeRenderLoops.InputBatchContext] =
     for
-      router          <- InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default))
+      router          <- InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.conventional))
       cursorVisible   <- Ref.of[IO, Boolean](true)
       translatorCache <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
     yield AppRuntimeRenderLoops.InputBatchContext(
@@ -133,7 +133,7 @@ object TypingBurst:
     def argument(index: Int, default: Int): Int =
       numbers.lift(index).flatMap(_.toIntOption).filter(_ > 0).getOrElse(default)
     val keys              = argument(0, 200)
-    val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager(config = AppConfig.default.withWordWrap(true))
+    val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager(config = AppConfig.conventional.withWordWrap(true))
     if sweep then
       List(10, 30, 60, 200).foreach { keysPerSecond =>
         (1 to argument(1, 3)).foreach(round =>

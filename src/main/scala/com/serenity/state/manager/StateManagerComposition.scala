@@ -185,6 +185,7 @@ private[manager] class StateManagerComposition(
     def reloadBuffer(bufferId: BufferId): IO[Unit]                   = filePersistence.reloadBuffer(bufferId)
     def forceSaveExistingBuffer(bufferId: BufferId): IO[Unit]        = filePersistence.forceSaveExistingBuffer(bufferId)
     def loadFile(path: Path): IO[Unit]                               = filePersistence.loadFile(path)
+    def openFile(path: Path): IO[Unit]                               = filePersistence.openFile(path)
     def openFromDialog(dialog: com.serenity.io.FileDialog): IO[Unit] = filePersistence.openFromDialog(dialog)
     def openFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
       filePersistence.openFolderFromDialog(dialog, openFolder)

@@ -21,7 +21,16 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
     * defaults, as they would be on the machine that wrote them. A hotkey they never mention takes the default of the
     * platform doing the reading.
     */
-  private val linuxWrittenDefault = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("linux"))
+  private val linuxWrittenDefault =
+    AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("linux")).withOlderBuildsChrome
+
+  extension (config: AppConfig)
+
+    /** The stored fixtures were written by builds that always showed line numbers, pane headers and the status bar, and
+      * name them. They predate the scrollbar and the tab strip, which come from the layout they ask for: minimal.
+      */
+    private def withOlderBuildsChrome: AppConfig =
+      config.withLineNumbers(true).withPaneHeaders(true).withStatusLinePlacement(StatusLinePlacement.Pinned)
 
   private def load(lines: Seq[String]): ConfigLoadResult =
     val file = TestTemp.file("serenity-removed-keys", ".conf")
@@ -274,7 +283,7 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
     val decoded = json.as[SessionState].getOrElse(fail("the stored session no longer decodes"))
 
     val hotkeysOfThisPlatform = AppConfig.default.inputConfig.hotkeyConfig
-    decoded.config.withHotkeyConfig(hotkeysOfThisPlatform) shouldBe AppConfig.default
+    decoded.config.withHotkeyConfig(hotkeysOfThisPlatform) shouldBe AppConfig.default.withOlderBuildsChrome
       .withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
       .withWordWrap(false)
       .withLineNumbers(false)

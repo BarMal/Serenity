@@ -14,7 +14,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
+      .activate(registry, AppConfig.conventional.withShowAllSettingsRegardlessOfMode(true))
       .updateSearchTerm("default document")
 
     val floating = SurfaceContentResolver.resolve(
@@ -38,7 +38,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
 
   it should "resolve option rows into label, hint, and selected value columns" in {
     val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default)
+      .activate(CommandRegistry.default, AppConfig.conventional)
       .copy(
         optionSelections = Map("interface-density" -> 1),
         surface = CommandRunnerSurface
@@ -67,7 +67,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
 
   it should "render nested submenu headers as breadcrumbs" in {
     val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default)
+      .activate(CommandRegistry.default, AppConfig.conventional)
       .copy(
         surface = CommandRunnerSurface.Settings(drilled =
           Some(
@@ -104,7 +104,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
     */
   it should "always render the selected settings-root group's own row, even when its preview needs the whole item budget" in {
     val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
+      .activate(CommandRegistry.default, AppConfig.conventional.withShowAllSettingsRegardlessOfMode(true))
       .copy(surface = CommandRunnerSurface.Settings(root = CommandPaletteState(selectedIndex = 3), drilled = None))
 
     val resolved = SurfaceContentResolver.resolve(
@@ -124,7 +124,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
   // font families are carousels like every other option row.
   it should "resolve the flat preset edit page with every editable setting as a row" in {
     val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default)
+      .activate(CommandRegistry.default, AppConfig.conventional)
       .copy(
         surface = CommandRunnerSurface.Settings(drilled =
           Some(
@@ -157,7 +157,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
 
   it should "expand the selected preset group's own children inline as the capped group preview" in {
     val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default)
+      .activate(CommandRegistry.default, AppConfig.conventional)
       .copy(
         surface = CommandRunnerSurface
           .Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1))))
@@ -178,7 +178,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
 
   it should "render the settings-group-browsing key hint, distinct from the transient action-word footer" in {
     val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default)
+      .activate(CommandRegistry.default, AppConfig.conventional)
       .copy(surface = CommandRunnerSurface.Settings(drilled = None))
 
     val resolved = SurfaceContentResolver.resolve(
@@ -194,7 +194,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
 
   it should "render the editing-value key hint while a settings input is mid-edit" in {
     val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default)
+      .activate(CommandRegistry.default, AppConfig.conventional)
       .copy(surface =
         CommandRunnerSurface.Settings(drilled =
           Some(
@@ -217,7 +217,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
 
   it should "render the recording-a-keybinding key hint while a keybinding is mid-record" in {
     val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default)
+      .activate(CommandRegistry.default, AppConfig.conventional)
       .copy(surface =
         CommandRunnerSurface.Settings(drilled =
           Some(
@@ -252,7 +252,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.conventional)
       .copy(surface =
         CommandRunnerSurface
           .Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 2))))
@@ -288,7 +288,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
   it should "mark font submenu labels with their preview font family" in {
     val family = FontLoader.availableTextFamilies.head
     val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
+      .activate(CommandRegistry.default, AppConfig.conventional.withShowAllSettingsRegardlessOfMode(true))
       .copy(surface =
         CommandRunnerSurface.Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("text-font"))))
       )

@@ -46,6 +46,10 @@ object StorageLocation:
     else if hasUriScheme(trimmed) && !isWindowsAbsolutePath(trimmed) then parseUri(trimmed)
     else Right(Local(Path.of(trimmed)))
 
+  /** The local path a `file:` URI names, or `None` for any other URI or text. */
+  def localPath(uri: String): Option[Path] =
+    parse(uri).toOption.collect { case Local(path) => path }
+
   private def parseUri(value: String): Either[String, StorageLocation] =
     catchMessage("Invalid storage URI")(URI.create(value)).flatMap { uri =>
       Option(uri.getScheme).map(_.toLowerCase) match

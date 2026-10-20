@@ -19,18 +19,23 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree")
     val pane   = EditorPane.withBuffer(paneId, bufferId)
 
-    AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        focus = Focus.EditorPane(paneId)
+    AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(
+        persisted = AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> pane),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+            ),
+            focus = Focus.EditorPane(paneId)
+          )
       )
-    )
 
   // The requested `size` is seeded into the tree as a ratio against `viewport` (issue #817: the tree's ratio is the
   // sole size record for a docked panel), so it must match whatever viewport the test later renders at for the

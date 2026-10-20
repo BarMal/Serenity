@@ -163,12 +163,20 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
     val program = for
       windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
       earlyRace <- IO.race(
-        AppRuntime.awaitFocusedIdleTick(IO.pure(AppState.initial), windowFocused, GuiFrontend.cursorIdleInterval),
+        AppRuntime.awaitFocusedIdleTick(
+          IO.pure(AppState.initial(AppConfig.conventional)),
+          windowFocused,
+          GuiFrontend.cursorIdleInterval
+        ),
         IO.sleep(150.millis)
       )
       _ <- windowFocused.set(true)
       lateRace <- IO.race(
-        AppRuntime.awaitFocusedIdleTick(IO.pure(AppState.initial), windowFocused, GuiFrontend.cursorIdleInterval),
+        AppRuntime.awaitFocusedIdleTick(
+          IO.pure(AppState.initial(AppConfig.conventional)),
+          windowFocused,
+          GuiFrontend.cursorIdleInterval
+        ),
         IO.sleep(2.seconds)
       )
     yield
@@ -179,7 +187,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "sleep for the cursor idle interval, not block, while the window is focused" in {
-    val fastConfig = AppConfig.default
+    val fastConfig = AppConfig.conventional
     val state      = AppState.initial(fastConfig)
 
     val program = for
@@ -197,7 +205,11 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
 
   it should "never wake the idle tick in TUI blink mode -- the caret is delegated to the terminal, zero wakeups" in {
     val tuiBlinkState =
-      AppState.initial.copy(runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui()))
+      AppState
+        .initial(AppConfig.conventional)
+        .copy(runtime =
+          AppState.initial(AppConfig.conventional).runtime.copy(capabilities = FrontendCapabilities.tui())
+        )
 
     val program = for
       windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
@@ -213,7 +225,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "never wake the idle tick in GUI steady mode -- a solid caret has nothing to redraw (#1886)" in {
-    val steadyState = AppState.initial(AppConfig.default.withCursorMode(CursorMode.Steady))
+    val steadyState = AppState.initial(AppConfig.conventional.withCursorMode(CursorMode.Steady))
 
     GuiFrontend.cursorIdleInterval(steadyState.persisted.config) shouldBe None
 
@@ -229,7 +241,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "skip idle cursor rendering entirely while unfocused, then resume once focus returns" in {
-    val fastConfig = AppConfig.default
+    val fastConfig = AppConfig.conventional
     val state      = AppState.initial(fastConfig)
 
     val program = for
@@ -276,7 +288,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "never render an idle cursor frame in TUI blink mode -- zero idle wakeups, terminal owns the caret" in {
-    val fastConfig = AppConfig.default
+    val fastConfig = AppConfig.conventional
     val state = AppState
       .initial(fastConfig)
       .copy(runtime = AppState.initial(fastConfig).runtime.copy(capabilities = FrontendCapabilities.tui()))
@@ -322,7 +334,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   it should "pause idle cursor rendering while unfocused and resume once focus returns, via registerFocusCallback wiring" in {
     given Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeFocusWiringSpec"))
 
-    val fastConfig          = AppConfig.default
+    val fastConfig          = AppConfig.conventional
     val focusCallbackHolder = new java.util.concurrent.atomic.AtomicReference[Option[Boolean => Unit]](None)
 
     val program = for
@@ -408,7 +420,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
                 _: com.serenity.state.manager.RenderCaches
               ) => IO.raiseError(RuntimeException("idle render failed"))
             ),
-            appConfig = AppConfig.default,
+            appConfig = AppConfig.conventional,
             makeStateManager = Some(logger =>
               StateManager.apply(
                 logger,

@@ -50,6 +50,7 @@ object SpellChecker:
 
   private[spellcheck] def lineDiagnostics(line: ProseLine, dictionary: DictionaryContext): List[Diagnostic] =
     line.words
+      .flatMap(CheckableScripts.checkable(_, dictionary.declaredUncoveredScripts))
       .flatMap(word => misspelledParts(line.text, word, dictionary))
       .map(misspelled => unknownWordDiagnostic(line.index, misspelled, dictionary))
 

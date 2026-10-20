@@ -71,7 +71,9 @@ object ConfigurableThemeManager:
     val mandatory = ThemeFieldSchema.mandatorySyntaxFields.map(field => (field.element, field.select(syntax)))
     val optional =
       ThemeFieldSchema.syntaxFields.map(field => (field.element, field.select(syntax).getOrElse(field.default)))
-    val conversions = mandatory ++ optional
+    val inherited =
+      ThemeFieldSchema.inheritingSyntaxFields.flatMap(field => field.select(syntax).map(field.element -> _))
+    val conversions = mandatory ++ optional ++ inherited
 
     val results = conversions.map {
       case (element, config) =>

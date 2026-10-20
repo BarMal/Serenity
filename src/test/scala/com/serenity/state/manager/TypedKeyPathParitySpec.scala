@@ -7,7 +7,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Random
 
 import cats.effect.IO
-import cats.effect.unsafe.implicits.global
+import cats.effect.unsafe.IORuntime
 import cats.syntax.all.*
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{Event, ExtendSelectionRight, InsertChar, OpenGotoLine, ResizeEvent}
@@ -15,7 +15,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, HistoryStacks, HistoryStep, UndoState}
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, SteppedClock}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -30,6 +30,11 @@ class TypedKeyPathParitySpec extends AnyFlatSpec with Matchers:
 
   given Balance           = Balance.default
   given LoggerFactory[IO] = NoOpFactory[IO]
+
+  // Undo grouping ends a run after a one-second pause between keys, read off the monotonic clock. Two editors fed the
+  // same keys one after the other meet that pause at different keys whenever the machine stalls, so the clock is
+  // stepped rather than read.
+  given IORuntime = SteppedClock.runtime
 
   private val words = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod".split(" ")
 

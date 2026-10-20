@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
-import com.serenity.rope.{Balance, Leaf, Node, Rope}
+import com.serenity.rope.{Balance, Leaf, Rope, RopeBuilder}
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -27,7 +27,7 @@ class SavedAfterRebuildSpec extends AnyFlatSpec with Matchers:
   private val save    = FileSave(bufferId, path, written, SaveKind.Save, writtenAtSubmit = 0L)
 
   "A save whose text the buffer still holds in a different rope shape" should "leave the buffer clean" in {
-    val reshaped = bufferHolding(Node(Leaf("al"), Leaf("pha")), dirty = true)
+    val reshaped = bufferHolding(RopeBuilder.fromLeaves(List("al", "pha")), dirty = true)
 
     val merged = FileResults.saved(stateWith(reshaped), save, written).persisted.buffers(bufferId).document
 
@@ -35,7 +35,7 @@ class SavedAfterRebuildSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not rewrite the content or bump its version" in {
-    val reshaped = bufferHolding(Node(Leaf("al"), Leaf("pha")), dirty = true)
+    val reshaped = bufferHolding(RopeBuilder.fromLeaves(List("al", "pha")), dirty = true)
 
     val merged = FileResults.saved(stateWith(reshaped), save, written).persisted.buffers(bufferId).document
 
@@ -44,7 +44,7 @@ class SavedAfterRebuildSpec extends AnyFlatSpec with Matchers:
   }
 
   "A save whose text the buffer has since changed" should "leave the buffer dirty, whatever the rope shape" in {
-    val typed = bufferHolding(Node(Leaf("al"), Leaf("pha!")), dirty = true)
+    val typed = bufferHolding(RopeBuilder.fromLeaves(List("al", "pha!")), dirty = true)
 
     FileResults.saved(stateWith(typed), save, written).persisted.buffers(bufferId).document.isDirty shouldBe true
   }

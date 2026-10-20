@@ -26,9 +26,15 @@ object ConfigFileFormat:
     case Field(key: String)
     case Group(settings: (AppConfig, String) => List[(String, HoconValue)])
 
-  /** `osName` picks the platform defaults that hotkeys are compared against, so the file holds only what differs. */
-  def render(config: AppConfig, osName: String = HotkeyOverrides.runningOs): String =
+  /** `osName` picks the platform defaults that hotkeys are compared against, so the file holds only what differs.
+    * `omitting` names settings left out, their comment lines kept: the chrome a layout supplies is not worth writing.
+    */
+  def render(config: AppConfig, osName: String = HotkeyOverrides.runningOs, omitting: Set[String] = Set.empty): String =
     lines(config, osName)
+      .filter {
+        case Right((key, _)) => !omitting.contains(key)
+        case Left(_)         => true
+      }
       .map {
         case Left(comment)       => comment
         case Right((key, value)) => s"$key = ${value.rendered}"
@@ -108,6 +114,10 @@ object ConfigFileFormat:
     field("editor.tab_size"),
     field("editor.insert_spaces"),
     field("editor.word_wrap"),
+    comment("A scrollbar in each editor pane: a thin overlay in the window, the last column in a terminal"),
+    field("editor.scrollbar"),
+    comment("The tab strip: auto shows it once two or more files are open, off never does"),
+    field("editor.tab_strip"),
     field("editor.visual_line_navigation"),
     comment("Keep the cursor's line vertically centred (typewriter scrolling), padding past the document's end"),
     field("editor.typewriter_scrolling"),
@@ -152,6 +162,10 @@ object ConfigFileFormat:
     field("document.comment_author"),
     comment("Multi-line drop caps: render a drop-cap paragraph's first character as a large, multi-line glyph"),
     field("document.drop_caps_enabled"),
+    comment("Room between the ink of a drop cap's glyph and the text beside it, in em of the body font (0-2)"),
+    field("document.drop_cap_gap"),
+    comment("Drop cap colour: text, heading (what headings.colour gives a level 1 heading), accent or #RRGGBB"),
+    field("document.drop_cap_colour"),
     comment("Show a chapter note's overview, faded, under an empty chapter when a session starts"),
     field("document.chapter_ghosts"),
     comment("Milliseconds edits must pause before spell check re-analyses the document and the outline re-parses"),
@@ -184,6 +198,11 @@ object ConfigFileFormat:
     field("typography.prose.ligatures"),
     field("typography.code.ligatures"),
     field("typography.ui.ligatures"),
+    comment(
+      "Fonts tried, in order, for characters the code, prose or UI font has no glyph for (CJK, Arabic, symbols); " +
+        "the system's own fonts follow. Family names, e.g. [\"Noto Sans CJK JP\"]"
+    ),
+    field("typography.fallback.families"),
     comment("Prose line length in characters (e.g. 66ch) while the workspace is in prose mode, or off"),
     field("typography.prose.measure"),
     comment("How all text adapts to the display: auto, manual (uses the factor below), off"),
@@ -199,12 +218,145 @@ object ConfigFileFormat:
     field("export.typography.margin"),
     field("export.typography.first_line_indent"),
     blank,
+    comment("Headings: each level's size is a multiple of the body size, and every setting is auto (the default look)"),
+    comment("unless set. Bold and italic take auto, true or false; align takes auto, left, centre, right or justify."),
+    comment("Colour takes auto (follow headings.colour), text, heading (the theme's heading colour) or #RRGGBB."),
+    comment(
+      "A paragraph's own alignment still wins. space_before and space_after are the room above the first line and"
+    ),
+    comment(
+      "below the last line of a heading, in em of its own font size (0-8, auto is none); a terminal rounds them to"
+    ),
+    comment("whole rows. No space is added above the first line of a document or a page."),
+    comment(
+      "Underline takes auto, true or false. A terminal has no sizes, so auto there climbs a ladder: level 1 bold and"
+    ),
+    comment(
+      "underlined, 2 bold, 3 bold italic, and levels 4 to 6 bold in the accent, string and muted colours. Set a key"
+    ),
+    comment(
+      "to take a level off it. Colour also takes accent, secondary or muted. Rule takes auto, true or false; a terminal with"
+    ),
+    comment("it on draws a line of box-drawing cells in the row below the heading, which space_after auto reserves."),
+    field("headings.h1.size"),
+    field("headings.h1.bold"),
+    field("headings.h1.italic"),
+    field("headings.h1.family"),
+    field("headings.h1.colour"),
+    field("headings.h1.align"),
+    field("headings.h1.space_before"),
+    field("headings.h1.space_after"),
+    field("headings.h1.underline"),
+    field("headings.h1.rule"),
+    field("headings.h2.size"),
+    field("headings.h2.bold"),
+    field("headings.h2.italic"),
+    field("headings.h2.family"),
+    field("headings.h2.colour"),
+    field("headings.h2.align"),
+    field("headings.h2.space_before"),
+    field("headings.h2.space_after"),
+    field("headings.h2.underline"),
+    field("headings.h2.rule"),
+    field("headings.h3.size"),
+    field("headings.h3.bold"),
+    field("headings.h3.italic"),
+    field("headings.h3.family"),
+    field("headings.h3.colour"),
+    field("headings.h3.align"),
+    field("headings.h3.space_before"),
+    field("headings.h3.space_after"),
+    field("headings.h3.underline"),
+    field("headings.h3.rule"),
+    field("headings.h4.size"),
+    field("headings.h4.bold"),
+    field("headings.h4.italic"),
+    field("headings.h4.family"),
+    field("headings.h4.colour"),
+    field("headings.h4.align"),
+    field("headings.h4.space_before"),
+    field("headings.h4.space_after"),
+    field("headings.h4.underline"),
+    field("headings.h4.rule"),
+    field("headings.h5.size"),
+    field("headings.h5.bold"),
+    field("headings.h5.italic"),
+    field("headings.h5.family"),
+    field("headings.h5.colour"),
+    field("headings.h5.align"),
+    field("headings.h5.space_before"),
+    field("headings.h5.space_after"),
+    field("headings.h5.underline"),
+    field("headings.h5.rule"),
+    field("headings.h6.size"),
+    field("headings.h6.bold"),
+    field("headings.h6.italic"),
+    field("headings.h6.family"),
+    field("headings.h6.colour"),
+    field("headings.h6.align"),
+    field("headings.h6.space_before"),
+    field("headings.h6.space_after"),
+    field("headings.h6.underline"),
+    field("headings.h6.rule"),
+    comment(
+      "headings.colour is auto (rich-text headings in the text colour, Markdown headings in the heading colour),"
+    ),
+    comment("text, heading, accent, secondary or muted, for both kinds of document."),
+    field("headings.colour"),
+    comment("Above a body of damping_threshold points (before any device scale) heading sizes grow more slowly"),
+    field("headings.damping"),
+    field("headings.damping_threshold"),
+    blank,
+    comment("Chapter openings: the first paragraph after each chapter title (and, per scene_break, after a scene"),
+    comment("break) can be set off. enabled is off by default. letter is drop, raised or hybrid (a raised letter"),
+    comment("that sinks hybrid_sink_lines, 2-6, lines); raised_row is grow or clamp; small_caps sets the first line"),
+    comment("in small capitals. epigraph is auto, never or marker (only paragraphs carrying epigraph_marker); a"),
+    comment("scene_break is none, small-caps or full; hand_drop_cap, for an opening that already has a hand-made"),
+    comment("drop cap, is hand, hand-small-caps or opening. A document can override every one of these."),
+    field("openings.enabled"),
+    field("openings.letter"),
+    field("openings.raised_row"),
+    field("openings.hybrid_sink_lines"),
+    field("openings.small_caps"),
+    field("openings.epigraph"),
+    field("openings.epigraph_marker"),
+    field("openings.scene_break"),
+    field("openings.hand_drop_cap"),
+    blank,
     comment("Look: interface density (compact, comfortable, spacious)"),
     field("ui.density"),
     comment("How strongly a misspelled-word/diagnostic highlight's severity colour shows through (0.0-1.0)"),
     field("ui.diagnostic_highlight_blend_weight"),
+    comment(
+      "File dialogs for open and save: auto uses the system dialog unless GTK's schemas are missing (which would"
+    ),
+    comment(
+      "crash the app), then Swing's own; native always uses the system dialog; swing never does. Needs a restart"
+    ),
+    field("ui.file_dialog"),
     field("ui.element_gap"),
     field("ui.outline_thickness"),
+    comment("Layout: minimal starts with line numbers, pane headers, the status bar, the tab strip and the scrollbar"),
+    comment("all off, conventional with all of them on. It only chooses what those start as: any of their own keys"),
+    comment("(editor.line_numbers, editor.pane_headers, status.placement, editor.tab_strip, editor.scrollbar) you"),
+    comment("set anywhere in this file still wins"),
+    field("ui.layout"),
+    comment("Menu bar in the desktop window: hidden (every command stays in the command runner), alt (shown while Alt"),
+    comment("is tapped on its own) or visible (always shown). Applies after restart"),
+    field("ui.menu_bar"),
+    comment("Hold a chord to show hidden chrome for as long as it is held: the modifiers below with the letter of the"),
+    comment(
+      "element (line numbers, status bar, tab strip, scrollbar, pane headers). Press the lock key while holding it"
+    ),
+    comment("to keep the element shown; press the chord again to hide it. A letter set to off has no chord. The"),
+    comment("terminal cannot see a key released, so there the chord shows and locks, and pressing it again hides"),
+    field("ui.summon.modifiers"),
+    field("ui.summon.lock"),
+    field("ui.summon.line_numbers"),
+    field("ui.summon.status_bar"),
+    field("ui.summon.tab_strip"),
+    field("ui.summon.scrollbar"),
+    field("ui.summon.pane_headers"),
     comment("Where Escape in a focused panel returns focus, per app mode: editor (the active pane) or previous"),
     comment("(whatever had focus before the panel)"),
     field("ui.panel.escape_returns_to.code"),
@@ -236,6 +388,12 @@ object ConfigFileFormat:
     field("ui.render.latency_trace"),
     comment("After the first frame, briefly exercise typing and drawing off-screen so early keystrokes are not slow"),
     field("startup.warm_up"),
+    comment("Return unused heap to the operating system sooner (smaller idle memory, a little more collector work)."),
+    comment(
+      "Applies at startup, so a change needs a restart. Under G1 it sets MinHeapFreeRatio=10, MaxHeapFreeRatio=30"
+    ),
+    comment("and G1PeriodicGCInterval=30000; false leaves the JVM's launch values alone."),
+    field("performance.memory.compact"),
     blank,
     comment(
       "Window chrome: auto uses themed chrome on Linux; native preserves OS snap/window animations; native-themed " +

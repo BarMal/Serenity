@@ -42,7 +42,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "use the full workspace width when no explicit text measure is configured" in {
-    val state        = AppState.initial
+    val state        = ChromeOn.initial
     val viewportSize = ViewportSize(100, 30)
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
@@ -55,8 +55,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "remove single-pane chrome when the selected configuration disables pane headers" in {
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(config = AppConfig.default.withPaneHeaders(false))
+    val state = ChromeOn.initial.copy(persisted =
+      ChromeOn.initial.persisted.copy(config = AppConfig.conventional.withPaneHeaders(false))
     )
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val pane   = LayoutEngine.calculateEditorPaneLayouts(state, layout)(PaneId(0))
@@ -67,7 +67,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expose owned child rectangles for editor pane chrome and content" in {
-    val state        = AppState.initial
+    val state        = ChromeOn.initial
     val viewportSize = ViewportSize(100, 30)
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
@@ -80,9 +80,9 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expose a single editor workspace contract for panes, line numbers, and gutter" in {
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        config = AppConfig.default
+    val state = ChromeOn.initial.copy(persisted =
+      ChromeOn.initial.persisted.copy(
+        config = AppConfig.conventional
           .withLineNumbers(true)
           .withStatusLinePlacement(StatusLinePlacement.Pinned)
           .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20))
@@ -116,15 +116,15 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
   it should "derive reusable line-number row slots from the shared workspace contract" in {
     val buffer = Buffer.fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(persisted =
+      ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
+        layout = ChromeOn.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0))
         ),
-        config = AppConfig.default.withLineNumbers(true)
+        config = AppConfig.conventional.withLineNumbers(true)
       )
     )
     val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
@@ -146,25 +146,22 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   it should "place cursors using the pane content rectangle owned by editor pane layout" in {
     val buffer =
       Buffer.fromString(BufferId(0), "abc\ndef").copy(editing = EditingState(List(CursorPosition(1, 2))))
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
+        layout = ChromeOn.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0))
         )
-      )
+      ),
+      runtime = ChromeOn.initial.runtime.copy(capabilities = com.serenity.frontend.FrontendCapabilities.tui())
     )
     val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val paneLayout       = LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0))
 
-    val cursorPosition = CursorLayout.calculateScreenPositionInContent(
-      CursorPosition(1, 2),
-      buffer.document.content,
-      paneLayout.contentRect,
-      buffer.viewport
-    )
+    val cursorPosition =
+      LayoutEngine.laidOutPanes(state, calculatedLayout).screenPosition(PaneId(0), CursorPosition(1, 2))
 
     cursorPosition shouldBe Some(ScreenPosition(paneLayout.contentRect.x + 2, paneLayout.contentRect.y + 1))
   }
@@ -172,13 +169,14 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   it should "apply text area insets inside the workspace without resizing pinned panels or line numbers" in {
     val renderViewport = ViewportSize(100, 30)
     val buffer         = Buffer.fromString(BufferId(0), "one\ntwo\nthree")
-    val baseState = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val baseState = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
-        config =
-          AppConfig.default.withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20, top = 0.10, bottom = 0.15))
+        config = AppConfig.conventional.withTextAreaInsets(
+          TextAreaInsets(left = 0.10, right = 0.20, top = 0.10, bottom = 0.15)
+        )
       ),
-      runtime = AppState.initial.runtime.copy(viewportSize = Some(renderViewport))
+      runtime = ChromeOn.initial.runtime.copy(viewportSize = Some(renderViewport))
     )
     val state = DockedPanelFixtures.dockAllContent(
       baseState,
@@ -211,14 +209,14 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
   it should "apply configured gaps between pinned panels and the editor workspace" in {
     val renderViewport = ViewportSize(100, 30)
-    val baseState = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default
+    val baseState = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
+        config = AppConfig.conventional
           .withLineNumbers(false)
           .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0))
           .withUiElementGap(Some(2))
       ),
-      runtime = AppState.initial.runtime.copy(viewportSize = Some(renderViewport))
+      runtime = ChromeOn.initial.runtime.copy(viewportSize = Some(renderViewport))
     )
     val state = DockedPanelFixtures.dockAllContent(
       baseState,
@@ -354,7 +352,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       )
     )
     val state = AppState(
-      persisted = Persisted(
+      persisted = ChromeOn.empty.persisted.copy(
         layout = Layout(
           editorPanes = Map(
             first  -> EditorPane.empty(first),
@@ -364,7 +362,6 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
           activeEditorPaneId = Some(first),
           workspaceTree = Some(tree)
         ),
-        buffers = Map.empty,
         focus = Focus.EditorPane(first)
       )
     )
@@ -399,7 +396,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       )
     )
     val state = AppState(
-      persisted = Persisted(
+      persisted = ChromeOn.empty.persisted.copy(
         layout = Layout(
           editorPanes = Map(
             first  -> EditorPane.empty(first),
@@ -409,7 +406,6 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
           activeEditorPaneId = Some(first),
           workspaceTree = Some(tree)
         ),
-        buffers = Map.empty,
         focus = Focus.EditorPane(first)
       )
     )
@@ -528,8 +524,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.BelowCursor)
     )
     val bufferId = BufferId(1)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> Buffer.fromString(bufferId, "palette")),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -538,7 +534,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         )
       ),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
+      runtime = ChromeOn.initial.runtime.copy(uiSurfaces = List(surface))
     )
 
     LayoutEngine.calculateLayout(state, ViewportSize(100, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(72)
@@ -564,8 +560,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(Some(CursorPosition(0, farRightColumn)), SurfacePlacement.BelowCursor)
     )
     val bufferId = BufferId(1)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> Buffer.fromString(bufferId, "x" * 200)),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -574,7 +570,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         )
       ),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
+      runtime = ChromeOn.initial.runtime.copy(uiSurfaces = List(surface))
     )
 
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(160, 30))
@@ -598,8 +594,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(Some(CursorPosition(0, farRightColumn)), SurfacePlacement.BelowCursor)
     )
     val bufferId = BufferId(1)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> Buffer.fromString(bufferId, "x" * 200)),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -608,7 +604,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         )
       ),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
+      runtime = ChromeOn.initial.runtime.copy(uiSurfaces = List(surface))
     )
 
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(160, 30))
@@ -627,8 +623,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.ModalWorkflow(Modal.ListPicker(BufferTextSearch.picker)),
       SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.BelowCursor)
     )
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(bufferId -> Buffer.fromString(bufferId, "search")),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -637,7 +633,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         )
       ),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
+      runtime = ChromeOn.initial.runtime.copy(uiSurfaces = List(surface))
     )
 
     LayoutEngine.calculateLayout(state, ViewportSize(100, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(95)

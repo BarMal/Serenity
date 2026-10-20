@@ -82,8 +82,18 @@ class StyledFontCacheSpec extends AnyFlatSpec with Matchers:
     val runStyles = TextStyle.normal :: styles
 
     def paintFrame(): Unit =
-      val image   = new BufferedImage(210, 130, BufferedImage.TYPE_INT_ARGB)
-      val surface = new Java2DRenderSurface(image, metrics, base, _ => (), 210, 130, 1.0, 1.0, styledFonts = cache)
+      val image = new BufferedImage(210, 130, BufferedImage.TYPE_INT_ARGB)
+      val surface = new Java2DRenderSurface(
+        image,
+        metrics,
+        base,
+        _ => (),
+        210,
+        130,
+        1.0,
+        1.0,
+        textCaches = SurfaceTextCaches.fresh().copy(styledFonts = cache)
+      )
       surface.clearViewport(RenderColor.fromAwt(Color.BLACK))
       surface.setForegroundColor(RenderColor.fromAwt(Color.WHITE))
       runStyles.zipWithIndex.foreach { (style, row) =>
@@ -105,7 +115,17 @@ class StyledFontCacheSpec extends AnyFlatSpec with Matchers:
     val cache   = StyledFontCache()
     val metrics = CellMetrics(charWidth = 7, lineHeight = 13, ascent = 10)
     val image   = new BufferedImage(210, 130, BufferedImage.TYPE_INT_ARGB)
-    val surface = new Java2DRenderSurface(image, metrics, base, _ => (), 210, 130, 1.0, 1.0, styledFonts = cache)
+    val surface = new Java2DRenderSurface(
+      image,
+      metrics,
+      base,
+      _ => (),
+      210,
+      130,
+      1.0,
+      1.0,
+      textCaches = SurfaceTextCaches.fresh().copy(styledFonts = cache)
+    )
 
     (0 until 5).foreach { row =>
       surface.enableStyle(TextStyle.normal)

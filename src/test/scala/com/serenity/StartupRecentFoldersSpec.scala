@@ -71,7 +71,13 @@ class StartupRecentFoldersSpec extends AnyFlatSpec with Matchers with StateManag
         sessionRootOverride = Some(sessionRoot),
         dictionaryCache = SharedDictionary.default
       )
-      state <- AppStartup.initializeState(manager, manager.sessionStartupInfo, Theme.default, ViewportSize(80, 24))
+      state <- AppStartup.initializeState(
+        manager,
+        manager.sessionStartupInfo,
+        Theme.default,
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
+      )
     yield (manager, state)
 
   private def startPageOf(state: AppState): StartupPage =

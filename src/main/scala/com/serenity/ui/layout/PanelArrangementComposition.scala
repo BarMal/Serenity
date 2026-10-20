@@ -21,11 +21,14 @@ object PanelArrangementComposition:
   def forArrangement(
     arrangement: PanelArrangement,
     frameRect: LayoutRect,
-    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]]
+    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]],
+    measure: TextMeasure = TextMeasure.Cells
   ): ResolvedSurfaceComposition =
     val content = SurfaceFrameLayout(frameRect).contentRect
     val bounds  = ModalSurfaceComposition.logicalRect(content.x, content.y, content.width, content.height)
-    val lines   = (("Arrange Panels", OverlayTone.Normal, None) :: sectionLines(arrangement)) :+ footer(modalBindings)
+    val lines =
+      (("Arrange Panels", OverlayTone.Normal, None) :: sectionLines(arrangement)) ++
+        footerLines(modalBindings, ModalWrap.ofContent(content.width, measure))
     val boxes = lines.zipWithIndex.map {
       case ((text, tone, panel), row) =>
         ModalSurfaceComposition.textBox(
@@ -39,8 +42,13 @@ object PanelArrangementComposition:
     }
     ModalSurfaceComposition.plan(bounds, boxes)
 
-  def frameHeight(arrangement: PanelArrangement): Int =
-    SurfaceFrameLayout.DefaultBorderCells * 2 + 2 + sectionLines(arrangement).size
+  def frameHeight(
+    arrangement: PanelArrangement,
+    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]],
+    wrap: ModalWrap
+  ): Int =
+    SurfaceFrameLayout.DefaultBorderCells * 2 + 1 + sectionLines(arrangement).size +
+      footerLines(modalBindings, wrap).size
 
   private def sectionLines(arrangement: PanelArrangement): List[(String, OverlayTone, Option[PanelId])] =
     arrangement.sections.toList.flatMap { (section, panels) =>
@@ -56,10 +64,13 @@ object PanelArrangementComposition:
       case ArrangementSection.Hidden => "Hidden"
       case edge                      => edge.toString
 
-  private def footer(modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]]): (String, OverlayTone, Option[PanelId]) =
+  private def footerLines(
+    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]],
+    wrap: ModalWrap
+  ): List[(String, OverlayTone, Option[PanelId])] =
     def key(action: ModalKeyAction) = modalBindings.get(action).flatMap(_.headOption).map(_.render).getOrElse("unbound")
-    (
-      s"${key(ModalKeyAction.MoveItemUp)}/${key(ModalKeyAction.MoveItemDown)} move · enter show/hide · esc close",
-      OverlayTone.Muted,
-      None
-    )
+    wrap
+      .lines(
+        s"${key(ModalKeyAction.MoveItemUp)}/${key(ModalKeyAction.MoveItemDown)} move · enter show/hide · esc close"
+      )
+      .map((_, OverlayTone.Muted, None))
