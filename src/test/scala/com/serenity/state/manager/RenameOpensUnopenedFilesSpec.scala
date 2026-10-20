@@ -8,6 +8,7 @@ import com.serenity.TestTemp
 import com.serenity.keystroke.events.{LspEvent, Undo}
 import com.serenity.lsp.model.{LspPosition, LspRange, LspTextEdit}
 import com.serenity.rope.Balance
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.SharedDictionary
 import org.scalatest.OptionValues
@@ -62,5 +63,42 @@ class RenameOpensUnopenedFilesSpec extends AnyFlatSpec with Matchers with Eventu
       sm.applyEvent(Undo).unsafeRunSync()
       eventually {
         opened(sm, file).map(_.document.content.collect()) shouldBe Some("def f = old")
+      }
+    }
+
+  it should "revert an open buffer and an opened file together with a single undo" in
+    TestTemp.within("rename-open-group") { dir =>
+      val openFile = dir.resolve("Open.scala")
+      val unopened = dir.resolve("Unopened.scala")
+      Files.writeString(openFile, "")
+      Files.writeString(unopened, "def f = old")
+      val sm       = stateManager()
+      val bufferId = sm.getCurrentState.unsafeRunSync().persisted.buffers.keys.head
+      sm.setBufferFilePath(bufferId, openFile).unsafeRunSync()
+      val insert = LspTextEdit(LspRange(LspPosition(0, 0), LspPosition(0, 0)), "val x = 1")
+      val rename = LspTextEdit(LspRange(LspPosition(0, 8), LspPosition(0, 11)), "renamed")
+
+      sm.applyEvent(
+        LspEvent.LspRenameReceived(
+          Map(openFile.toUri.toString -> List(insert), unopened.toUri.toString -> List(rename)),
+          CursorPosition(0, 0)
+        )
+      ).unsafeRunSync()
+      eventually {
+        (
+          opened(sm, openFile).map(_.document.content.collect()),
+          opened(sm, unopened).map(_.document.content.collect())
+        ) shouldBe
+          (Some("val x = 1"), Some("def f = renamed"))
+      }
+
+      sm.applyEvent(Undo).unsafeRunSync()
+
+      eventually {
+        (
+          opened(sm, openFile).map(_.document.content.collect()),
+          opened(sm, unopened).map(_.document.content.collect())
+        ) shouldBe
+          (Some(""), Some("def f = old"))
       }
     }
