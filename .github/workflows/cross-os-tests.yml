@@ -63,7 +63,7 @@ jobs:
         env:
           HANG_SECONDS: '900'
         run: |
-          bash .github/scripts/tmp-sample.sh &
+          export SBT_OPTS="$SBT_OPTS -XX:StartFlightRecording:filename=jvm-diag/rec.jfr,settings=profile,duration=420s"
           bash .github/scripts/run-tests-with-hang-dump.sh sbt -v "testOnly com.serenity.state.manager.ColumnPagingNavigationSpec com.serenity.state.manager.KeepWithNextColumnPagingSpec com.serenity.state.manager.ColumnPixelPagingSpec"
 
       # The console log of a Windows/macOS run can drop the assertion text (see build.sbt's Test/testOptions), so the
