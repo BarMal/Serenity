@@ -2,6 +2,7 @@ package com.serenity.ui.layout
 
 import java.awt.font.TextAttribute
 
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -17,7 +18,14 @@ class CaretStopsTuiSpec extends AnyFlatSpec with Matchers:
   "A forced cell layout" should "place every caret stop on its cell, whatever the font kerns" in {
     val text = "AVAWAY To WWWW"
     val stops =
-      TextLayoutSnapshot.caretXsForText(text, kernedInter, frc, Some(CellMetrics.cellUnit), forceCellLayout = true)
+      TextLayoutSnapshot.caretXsForText(
+        text,
+        kernedInter,
+        ShapedTextCache(),
+        frc,
+        Some(CellMetrics.cellUnit),
+        forceCellLayout = true
+      )
 
     stops shouldBe Vector.tabulate(text.length + 1)(_.toFloat)
   }

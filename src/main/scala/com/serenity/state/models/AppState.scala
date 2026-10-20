@@ -221,7 +221,7 @@ final case class AppState(
       startOffset = content.lineColumnToOffset(selection.start.line, selection.start.column)
       endOffset   = content.lineColumnToOffset(selection.end.line, selection.end.column)
       if endOffset > startOffset
-    yield TextStatistics.ofRange(content, startOffset, endOffset)
+    yield runtime.rangeStatistics.of(content, startOffset, endOffset)
 
   def floatingSurfaces: List[UiSurface] =
     runtime.uiSurfaces.filter {

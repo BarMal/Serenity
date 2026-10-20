@@ -34,7 +34,7 @@ import com.serenity.diagnostics.{
   TuiConsoleLogFilter
 }
 import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend}
-import com.serenity.input.SwingInputHandler
+import com.serenity.input.{ImeDiagnostics, SwingInputHandler}
 import com.serenity.io.{FileDialogSelection, SwingFileDialog}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
@@ -402,7 +402,8 @@ object Main extends IOApp:
                       () => swingWin.metrics,
                       () => displayState.uiMetrics,
                       actualAppConfig.inputConfig.wheelScrollLines,
-                      frameTimings
+                      frameTimings,
+                      ImeDiagnostics.fromEnvironment(sys.env)
                     )
                   ).flatTap(menuInput.complete(_).void),
                 renderFull = (state, vis, cc, damage, caches) =>

@@ -362,35 +362,45 @@ object RendererHighlights:
           }
           .foreach {
             case (chunkStart, chunkEnd, style) =>
-              val chunkRangeStart = visualLine.startColumn + chunkStart
-              val chunkRangeEnd   = visualLine.startColumn + chunkEnd
-              val chunkText =
-                if chunkStart < visualLine.text.length then
-                  visualLine.text.substring(chunkStart, math.min(chunkEnd, visualLine.text.length))
-                else " "
-              val startXPx = lineOriginPx + visualLine.xForColumn(chunkRangeStart).getOrElse(visualLine.widthPx)
-              val endXPx =
-                if chunkRangeStart == chunkRangeEnd - 1 && chunkRangeStart >= visualLine.endColumn then
-                  startXPx + context.cellMetrics.charWidth
-                else lineOriginPx + visualLine.xForColumn(chunkRangeEnd).getOrElse(visualLine.widthPx)
-              val desiredWidthPx = math.max(context.cellMetrics.charWidth.toFloat, endXPx - startXPx)
-              RendererCursorGlyphs.measuredRunWidthWithin(rect, context, startXPx, startXPx + desiredWidthPx).foreach {
-                widthPx =>
-                  val combinedStyle = style.combine(extraStyle)
-                  surface.setForegroundColor(foreground)
-                  surface.setBackgroundColor(background)
-                  surface.enableStyle(combinedStyle)
-                  try
-                    surface.text.drawRunPx(
-                      startXPx,
-                      lineTopPx,
-                      widthPx,
-                      RendererPaneContent.rowHeightPxFor(visualLine, snapshot),
-                      RendererPaneContent.rowAscentPxFor(visualLine, snapshot),
-                      chunkText,
-                      clipGlyphToRun = true
-                    )
-                  finally surface.disableStyle(combinedStyle)
+              val chunkLength = visualLine.text.length
+              val pieces =
+                if chunkStart < chunkLength then
+                  MeasuredLineRuns.fontPieces(visualLine, chunkStart, math.min(chunkEnd, chunkLength))
+                else Vector((chunkStart, chunkEnd, None))
+              pieces.foreach {
+                case (pieceStart, pieceEnd, family) =>
+                  val chunkRangeStart = visualLine.startColumn + pieceStart
+                  val chunkRangeEnd   = visualLine.startColumn + pieceEnd
+                  val chunkText =
+                    if pieceStart < chunkLength then
+                      visualLine.text.substring(pieceStart, math.min(pieceEnd, chunkLength))
+                    else " "
+                  val startXPx = lineOriginPx + visualLine.xForColumn(chunkRangeStart).getOrElse(visualLine.widthPx)
+                  val endXPx =
+                    if chunkRangeStart == chunkRangeEnd - 1 && chunkRangeStart >= visualLine.endColumn then
+                      startXPx + context.cellMetrics.charWidth
+                    else lineOriginPx + visualLine.xForColumn(chunkRangeEnd).getOrElse(visualLine.widthPx)
+                  val desiredWidthPx = math.max(context.cellMetrics.charWidth.toFloat, endXPx - startXPx)
+                  RendererCursorGlyphs
+                    .measuredRunWidthWithin(rect, context, startXPx, startXPx + desiredWidthPx)
+                    .foreach { widthPx =>
+                      val combinedStyle = style.combine(extraStyle)
+                      surface.setForegroundColor(foreground)
+                      surface.setBackgroundColor(background)
+                      surface.enableStyle(combinedStyle)
+                      def draw(): Unit =
+                        surface.text.drawRunPx(
+                          startXPx,
+                          lineTopPx,
+                          widthPx,
+                          RendererPaneContent.rowHeightPxFor(visualLine, snapshot),
+                          RendererPaneContent.rowAscentPxFor(visualLine, snapshot),
+                          chunkText,
+                          clipGlyphToRun = true
+                        )
+                      try family.fold(draw())(surface.text.withFallbackFamily(_)(draw()))
+                      finally surface.disableStyle(combinedStyle)
+                    }
               }
           }
     else

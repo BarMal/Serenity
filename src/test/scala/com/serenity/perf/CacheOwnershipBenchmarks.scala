@@ -12,20 +12,13 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Buffer, BufferId, CursorPosition, EditingState, PaneId}
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{
-  ColdFontProbes,
-  FontLineExtents,
-  LayoutEngine,
-  ProseColumn,
-  ScreenPosition,
-  TextLayoutSnapshot
-}
+import com.serenity.ui.layout.{ColdFontProbes, LayoutEngine, ProseColumn, ScreenPosition, TextLayoutSnapshot}
 
 /** Scenarios that make a move of a process-wide cache into state a runtime owns measurable: what such a move costs when
   * the cache is cold, and what two runtimes in one process stop sharing.
   *
-  *   - `layout.anchor_wrap.*`: locating a caret through `LayoutEngine.laidOutPanes`, whose `anchorWrappedLines` cache
-  *     is process-wide.
+  *   - `layout.anchor_wrap.*`: locating a caret through `LayoutEngine.laidOutPanes`, whose wrap cache was process-wide
+  *     and is now the state's own (`Runtime.anchorWraps`).
   *   - `layout.cold_font.*`: the first use of a font. Every call is given a font no cache has seen, so each row times
   *     the probe that fills one cache: `GlyphAdvances`, `ShapingBarriers`, `FontLineExtents`, `ProseColumn`, and
   *     `TextLayoutSnapshot`'s measured-layout memo. A cache a runtime owns is cold for every new runtime, not only for
@@ -146,9 +139,7 @@ private[perf] object CacheOwnershipBenchmarks:
     List(
       coldProbe("layout.cold_font.glyph_advances", proseBase)(ColdFontProbes.glyphAdvances)(_._4 > 0),
       coldProbe("layout.cold_font.shaping_barriers", proseBase)(ColdFontProbes.shapingBarriers)(_ >= 1),
-      coldProbe("layout.cold_font.font_line_extents", proseBase)((font, frc) => FontLineExtents.of(font, frc))(
-        _.heightPx > 0
-      ),
+      coldProbe("layout.cold_font.font_line_extents", proseBase)(ColdFontProbes.lineExtents)(_.heightPx > 0),
       coldProbe("layout.cold_font.measured_layout_memo.proportional", proseBase)(ColdFontProbes.measuredLayoutDecision)(
         identity
       ),

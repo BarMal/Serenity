@@ -3,7 +3,8 @@ package com.serenity.state.models
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.markdown.MarkdownBlockIndexMemo
 import com.serenity.project.ProjectPresence
-import com.serenity.ui.layout.ViewportSize
+import com.serenity.text.RangeStatisticsMemo
+import com.serenity.ui.layout.{AnchorWrapCache, ChromeLayoutMemo, ViewportSize}
 
 /** State that is never persisted -- reset to defaults (or recomputed) on every session restore. */
 final case class Runtime(
@@ -66,6 +67,12 @@ final case class Runtime(
     bufferIndexMemos: BufferIndexMemos = BufferIndexMemos.empty,
     // Never persisted: the Markdown block index of recently indexed content, so caret movement need not rescan it.
     markdownBlockIndexes: MarkdownBlockIndexMemo = MarkdownBlockIndexMemo(),
+    // Never persisted: the last word/character count of a selection, so the status line need not recount it every frame.
+    rangeStatistics: RangeStatisticsMemo = RangeStatisticsMemo(),
+    // Never persisted: the last chrome layouts, which one keystroke's scene, hit-testing and accessibility paths share.
+    chromeLayouts: ChromeLayoutMemo = ChromeLayoutMemo(),
+    // Never persisted: the wraps measured while locating a caret, which are a function of the state alone.
+    anchorWraps: AnchorWrapCache = AnchorWrapCache(),
     // Never persisted: the notes pane's source headings as of its last retarget (#1848). See `NotesPaneSync`.
     chapterHeadingMemo: ChapterHeadingMemo = ChapterHeadingMemo.empty,
     // Never persisted: whether resolved comments still show in the lens, the highlights and comment navigation. Resolved

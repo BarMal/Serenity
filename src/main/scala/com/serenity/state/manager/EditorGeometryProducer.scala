@@ -162,6 +162,7 @@ object EditorGeometryProducer:
     val dropCapsEnabled     = state.persisted.config.documentConfig.dropCapsEnabled
     val markdownViewMode    = state.persisted.config.inlineMarkdownViewMode
     val tabSize             = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
+    val fontFallback        = state.persisted.config.editorConfig.fontConfig.fallback
     val headings            = state.effectiveHeadingSettings
     val openings            = buffer.effectiveOpenings(state.persisted.config.openingsConfig)
     val visualRows =
@@ -177,7 +178,8 @@ object EditorGeometryProducer:
         tabSize,
         headings = headings,
         openings = openings,
-        dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
+        dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+        fallback = fontFallback
       )
     val cursorRowInWindow =
       if !wordWrapEnabled then cursor.line - windowTopLine
@@ -204,7 +206,8 @@ object EditorGeometryProducer:
                 tabSize = tabSize,
                 headings = headings,
                 openings = openings,
-                dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
+                dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+                fallback = fontFallback
               )
           )
     val windowTopVisualLine = math.max(0, cursorRowInWindow - rowsAbove)
@@ -237,7 +240,8 @@ object EditorGeometryProducer:
         tabSize = tabSize,
         headings = headings,
         openings = openings,
-        dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
+        dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+        fallback = fontFallback
       )
     EditorGeometry(snapshot.navigationGeometry, metrics.charWidth, panelWidthColumns)
 

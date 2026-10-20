@@ -17,6 +17,8 @@ import com.serenity.ui.renderer.FontFirstUse
   */
 object LegacyLineMeasurement:
 
+  private val lineExtents = FontLineExtents()
+
   def wrap(
     text: String,
     bufferLine: Int,
@@ -35,15 +37,38 @@ object LegacyLineMeasurement:
     if maxVisualLines <= 0 then Vector.empty
     else if text.isEmpty then Vector(inset(shape("", baseColumn, baseColumn), paragraphRole, 0, dropCapIndentPx))
     else
+      /** The home row's wrap gives back the width of the character the glyph is drawn in place of, as its placement
+        * does.
+        */
+      def replacedCharacterWidthPx(startColumn: Int): Float =
+        val first = text.substring(startColumn, startColumn + Character.charCount(text.codePointAt(startColumn)))
+        shape(first, baseColumn + startColumn, baseColumn + startColumn + first.length)
+          .xForColumn(baseColumn + startColumn + first.length)
+          .getOrElse(0.0f)
+
       @annotation.tailrec
       def loop(startColumn: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
         if startColumn >= text.length || acc.length >= maxVisualLines then acc
         else
-          val insetPx      = DropCapLayout.leftInsetPx(paragraphRole, acc.length, dropCapIndentPx)
-          val wrapWidthPx  = math.max(1, panelWidthPx - math.round(insetPx))
+          val spanInsetPx = DropCapLayout.leftInsetPx(paragraphRole, acc.length, dropCapIndentPx)
+          val givenBackPx =
+            if DropCapLayout.isHomeRow(paragraphRole, acc.length, baseColumn + startColumn) then
+              replacedCharacterWidthPx(startColumn).min(spanInsetPx)
+            else 0.0f
+          val wrapWidthPx  = math.max(1, panelWidthPx - math.round(spanInsetPx))
           val segmentStart = baseColumn + startColumn
           val fitted =
-            fittingLength(text, startColumn, wrapWidthPx, segmentStart, resolver, frc, measuredLayout, cellMetrics)
+            fittingLength(
+              text,
+              startColumn,
+              wrapWidthPx,
+              givenBackPx,
+              segmentStart,
+              resolver,
+              frc,
+              measuredLayout,
+              cellMetrics
+            )
           val segmentLength = wordBoundarySegmentLength(text, startColumn, fitted)
           val end           = startColumn + segmentLength
           val row           = shape(text.substring(startColumn, end), segmentStart, baseColumn + end)
@@ -82,7 +107,8 @@ object LegacyLineMeasurement:
           }
       then caretStops
       else caretStops.sortBy(_.xPx)
-    val (heightPx, ascentPx) = if measuredLayout then resolver.lineMetrics(frc, startColumn, endColumn) else (0, 0)
+    val (heightPx, ascentPx) =
+      if measuredLayout then resolver.lineMetrics(frc, lineExtents, startColumn, endColumn) else (0, 0)
     TextVisualLine(
       bufferLine = bufferLine,
       startColumn = startColumn,
@@ -128,7 +154,34 @@ object LegacyLineMeasurement:
   ): Vector[Float] =
     layoutEdges(text, absoluteStartColumn, resolver, frc).carets
 
+  /** [[unsnappedEdges]] with each wide character of a code line set to two cells of the primary font and each one-cell
+    * fallback character to one, the edges after it moved to match: the rule the production path adds, applied here row
+    * by row.
+    */
   def layoutEdges(
+    text: String,
+    absoluteStartColumn: Int,
+    resolver: LineFontResolver,
+    frc: FontRenderContext
+  ): RowEdges =
+    val edges = unsnappedEdges(text, absoluteStartColumn, resolver, frc)
+    if resolver.wideCellPx <= 0.0f then edges
+    else
+      val carets =
+        WideCells.snapped(
+          IArray.from(edges.carets),
+          text,
+          resolver.wideCellPx,
+          index => resolver.isFallbackAt(absoluteStartColumn + index)
+        )
+      RowEdges(
+        carets.toVector,
+        edges.trailing.map(trailing =>
+          trailing.zipWithIndex.map((edge, index) => edge + carets(index) - edges.carets(index))
+        )
+      )
+
+  private def unsnappedEdges(
     text: String,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
@@ -245,25 +298,33 @@ object LegacyLineMeasurement:
     line: String,
     from: Int,
     panelWidthPx: Int,
+    givenBackPx: Float,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics
   ): Int =
+    val widthPx = panelWidthPx.toFloat + givenBackPx
     if !measuredLayout then
       val charWidth = math.max(1, cellMetrics.charWidth)
       if cellMetrics.displayWidthAware then
-        fittingDisplayWidthSegmentLength(line, from, panelWidthPx, charWidth, resolver.tabSize)
-      else fittingUniformSegmentLength(line, from, panelWidthPx, charWidth, resolver.tabSize)
+        fittingDisplayWidthSegmentLength(
+          line,
+          from,
+          panelWidthPx + math.round(givenBackPx),
+          charWidth,
+          resolver.tabSize
+        )
+      else fittingUniformSegmentLength(line, from, panelWidthPx + math.round(givenBackPx), charWidth, resolver.tabSize)
     else
       val remaining = line.length - from
       @annotation.tailrec
       def loop(limit: Int): Int =
         val edges      = layoutEdges(line.substring(from, from + limit), absoluteStartColumn, resolver, frc)
         val carets     = edges.trailing.getOrElse(normalizeCollapsedCarets(edges.carets))
-        val maxFitting = carets.zipWithIndex.takeWhile(_._1 <= panelWidthPx.toFloat).map(_._2).lastOption.getOrElse(0)
-        if limit >= remaining || carets.lastOption.exists(_ > panelWidthPx.toFloat) || maxFitting < limit then
+        val maxFitting = carets.zipWithIndex.takeWhile(_._1 <= widthPx).map(_._2).lastOption.getOrElse(0)
+        if limit >= remaining || carets.lastOption.exists(_ > widthPx) || maxFitting < limit then
           math.max(1, maxFitting)
         else loop(math.min(remaining, math.max(limit + 1, limit * 2)))
       loop(math.min(remaining, math.max(16, panelWidthPx / math.max(1, cellMetrics.charWidth) + 32)))
