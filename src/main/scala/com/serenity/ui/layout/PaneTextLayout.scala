@@ -64,6 +64,7 @@ object PaneTextLayout:
             .caretXsForText(
               "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
               font,
+              wrappedLines.shapedText,
               TextLayoutSnapshot.defaultFontRenderContext()
             )
             .lastOption

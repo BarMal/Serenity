@@ -5,6 +5,7 @@ import javax.swing.JPanel
 
 import cats.effect.{IO, Resource}
 import com.serenity.frontend.FrontendRuntime
+import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.{
   FontSpec,
@@ -35,7 +36,7 @@ object OffscreenWarmUpFrames:
         Java2DRenderSurface.deviceImageDimension(height, scale.y),
         BufferedImage.TYPE_INT_ARGB
       )
-      def surface(snapshot: RuntimeDisplayState.Snapshot): Java2DRenderSurface =
+      def surface(snapshot: RuntimeDisplayState.Snapshot, caches: RenderCaches): Java2DRenderSurface =
         new Java2DRenderSurface(
           image,
           snapshot.codeMetrics,
@@ -46,7 +47,8 @@ object OffscreenWarmUpFrames:
           deviceScaleX = scale.x,
           deviceScaleY = scale.y,
           contentPersists = true,
-          layerCacheOwnerOverride = Some(screen)
+          layerCacheOwnerOverride = Some(screen),
+          textCaches = caches.surfaceText
         )
 
       FrontendRuntime.OffscreenFrames(
@@ -56,7 +58,7 @@ object OffscreenWarmUpFrames:
             RendererEntryPoints.render(
               state,
               cursorVisible = false,
-              surface(snapshot),
+              surface(snapshot, caches),
               viewportSize(),
               FontSpec.fromAwt(snapshot.codeFont),
               FontSpec.fromAwt(snapshot.textFont),
@@ -74,7 +76,7 @@ object OffscreenWarmUpFrames:
             val _ = RendererCursorOverlay.renderCursorOnly(
               state,
               cursorVisible = true,
-              surface(snapshot),
+              surface(snapshot, caches),
               viewportSize(),
               FontSpec.fromAwt(snapshot.codeFont),
               FontSpec.fromAwt(snapshot.textFont),

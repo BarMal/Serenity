@@ -8,6 +8,7 @@ import scala.util.Random
 import com.serenity.state.models.MeasuredRow
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
 import com.serenity.ui.layout.WrapFixtures.*
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -18,7 +19,7 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
     layouts.filter(layout => !layout.forceCellLayout && TextLayoutSnapshot.shouldUseMeasuredLayout(layout.font, frc))
 
   private def cold(text: String, layout: Layout, widthPx: Int): RowWrap =
-    TextLayoutSnapshot.wrapRows(keyFor(text, layout, widthPx), Int.MaxValue)
+    TextLayoutSnapshot.wrapRows(keyFor(text, layout, widthPx), Int.MaxValue, ShapedTextCache())
 
   // -- ICU's lookahead ---------------------------------------------------------------------------------------------
 
@@ -63,14 +64,18 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
 
   "a cut between a space and the next character" should "be clean in the default prose font, whatever the character" in
     (' ' to '~').foreach(char =>
-      withClue(s"'$char': ")(ShapingBarriers.cutsCleanly(defaultProse, frc, char) shouldBe true)
+      withClue(s"'$char': ")(ShapingBarriers.cutsCleanly(defaultProse, frc, char, ShapedTextCache()) shouldBe true)
     )
 
   it should "be unclean where the font kerns against a space" in {
     assume(liberationSerifKerned.isDefined, "Liberation Serif is not installed")
     val font = liberationSerifKerned.get
-    "ATVWY".foreach(char => withClue(s"'$char': ")(ShapingBarriers.cutsCleanly(font, frc, char) shouldBe false))
-    "abcdefghij".foreach(char => withClue(s"'$char': ")(ShapingBarriers.cutsCleanly(font, frc, char) shouldBe true))
+    "ATVWY".foreach(char =>
+      withClue(s"'$char': ")(ShapingBarriers.cutsCleanly(font, frc, char, ShapedTextCache()) shouldBe false)
+    )
+    "abcdefghij".foreach(char =>
+      withClue(s"'$char': ")(ShapingBarriers.cutsCleanly(font, frc, char, ShapedTextCache()) shouldBe true)
+    )
   }
 
   it should "have been worth probing: cutting at every space changes advances in such a font" in {
@@ -78,10 +83,10 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
     val font          = liberationSerifKerned.get
     val resolver      = singleFontResolver(font)
     val text          = "the To AV Wa Ty Yo end"
-    val whole         = GlyphAdvances.measure(text, 0, text.length, 0, resolver, frc)
+    val whole         = GlyphAdvances.measure(text, 0, text.length, 0, resolver, frc, ShapedTextCache())
     val cutAt         = text.indexOf("To")
-    val right         = GlyphAdvances.measure(text, cutAt, text.length, 0, resolver, frc)
-    val left          = GlyphAdvances.measure(text, 0, cutAt, 0, resolver, frc)
+    val right         = GlyphAdvances.measure(text, cutAt, text.length, 0, resolver, frc, ShapedTextCache())
+    val left          = GlyphAdvances.measure(text, 0, cutAt, 0, resolver, frc, ShapedTextCache())
     val spaceBeforeTo = cutAt - 1
     val differs = whole.isContextFree(spaceBeforeTo, cutAt) != left.isContextFree(spaceBeforeTo, cutAt) ||
       whole.caretsFrom(spaceBeforeTo, 1)(1) != left.caretsFrom(spaceBeforeTo, 1)(1) ||
@@ -108,12 +113,12 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
       val after  = change.applyTo(before)
       val oldKey = keyFor(before, layout, width)
       val newKey = keyFor(after, layout, width)
-      val old    = TextLayoutSnapshot.wrapRows(oldKey, Int.MaxValue)
+      val old    = TextLayoutSnapshot.wrapRows(oldKey, Int.MaxValue, ShapedTextCache())
       (old.trace, Option.when(IncrementalWrap.traceable(newKey))(())) match
         case (Some(trace), Some(_)) =>
-          val resumed = IncrementalWrap.rewrap(newKey, Seq(Predecessor(oldKey, old.rows, trace)))
+          val resumed = IncrementalWrap.rewrap(newKey, Seq(Predecessor(oldKey, old.rows, trace)), ShapedTextCache())
           resumed.foreach { wrapped =>
-            val whole = GlyphAdvances.measure(after, 0, after.length, 0, newKey.resolver, frc)
+            val whole = GlyphAdvances.measure(after, 0, after.length, 0, newKey.resolver, frc, ShapedTextCache())
             withClue(s"${layout.name} $change in '${before.take(80)}': ") {
               wrapped.trace.flatMap(_.advances).exists(sameAdvances(_, whole, after.length)) shouldBe true
             }
@@ -145,14 +150,18 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
         val after  = change.applyTo(before)
         val oldKey = keyFor(before, layout, width)
         val newKey = keyFor(after, layout, width)
-        val old    = TextLayoutSnapshot.wrapRows(oldKey, Int.MaxValue)
+        val old    = TextLayoutSnapshot.wrapRows(oldKey, Int.MaxValue, ShapedTextCache())
         val resumed =
-          old.trace.flatMap(trace => IncrementalWrap.rewrap(newKey, Seq(Predecessor(oldKey, old.rows, trace))))
+          old.trace.flatMap(trace =>
+            IncrementalWrap.rewrap(newKey, Seq(Predecessor(oldKey, old.rows, trace)), ShapedTextCache())
+          )
         withClue(s"${layout.name} $change: ") {
           resumed.isDefined shouldBe true
-          val whole = GlyphAdvances.measure(after, 0, after.length, 0, newKey.resolver, frc)
+          val whole = GlyphAdvances.measure(after, 0, after.length, 0, newKey.resolver, frc, ShapedTextCache())
           resumed.flatMap(_.trace).flatMap(_.advances).exists(sameAdvances(_, whole, after.length)) shouldBe true
-          bitwiseRows(resumed.get.rows) shouldBe bitwiseRows(TextLayoutSnapshot.wrapRows(newKey, Int.MaxValue).rows)
+          bitwiseRows(resumed.get.rows) shouldBe bitwiseRows(
+            TextLayoutSnapshot.wrapRows(newKey, Int.MaxValue, ShapedTextCache()).rows
+          )
         }
       }
     }

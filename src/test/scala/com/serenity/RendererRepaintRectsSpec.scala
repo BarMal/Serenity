@@ -132,7 +132,8 @@ class RendererRepaintRectsSpec extends AnyFlatSpec with Matchers:
       logicalWidthPx = widthPx,
       logicalHeightPx = heightPx,
       contentPersists = persists,
-      layerCacheOwnerOverride = Some(screen)
+      layerCacheOwnerOverride = Some(screen),
+      textCaches = caches.surfaceText
     )
     RendererFramePlanner
       .renderFrame(

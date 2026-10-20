@@ -62,9 +62,6 @@ object ShapedTextCache:
 
   private val FirstCharNeedingLayout = '\u0300'
 
-  /** Shared by every surface that is not handed its own: shaping is a pure function of its key. */
-  val shared: ShapedTextCache = new ShapedTextCache()
-
   final private case class Key(text: String, font: Font, fontRenderContext: FontRenderContext)
 
   private type Stretches = ConcurrentHashMap[Key, ShapedStretch]
