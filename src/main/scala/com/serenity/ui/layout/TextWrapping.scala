@@ -9,7 +9,7 @@ import scala.annotation.tailrec
 import com.serenity.state.models.{AppState, TypographyRole}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.renderer.{MeasuredTextAdvances, SurfaceTextInset}
+import com.serenity.ui.renderer.{MeasuredTextAdvances, ShapedTextCache, SurfaceTextInset}
 
 /** What a line of dialog text is measured against: terminal cells, or the pixels of the GUI font it is drawn in.
   * `cellPx` is the grid cell a frame's width is counted in, and `insetPx` the room a GUI frame's text inset takes from
@@ -17,7 +17,14 @@ import com.serenity.ui.renderer.{MeasuredTextAdvances, SurfaceTextInset}
   */
 enum TextMeasure:
   case Cells
-  case Pixels(font: Font, fontRenderContext: FontRenderContext, cellPx: Int, insetPx: Double)
+
+  case Pixels(
+      font: Font,
+      fontRenderContext: FontRenderContext,
+      cellPx: Int,
+      insetPx: Double,
+      advances: MeasuredTextAdvances
+  )
 
 object TextMeasure:
 
@@ -29,9 +36,11 @@ object TextMeasure:
 
   /** Pixel measuring needs a font to measure against, which a terminal does not have. */
   def forState(state: AppState): TextMeasure =
-    if GuiWrapsInPixels && !state.runtime.capabilities.isCellGrid then pixelsFor(state) else Cells
+    if GuiWrapsInPixels && !state.runtime.capabilities.isCellGrid then
+      pixelsFor(state, MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache()))
+    else Cells
 
-  def pixelsFor(state: AppState): Pixels =
+  def pixelsFor(state: AppState, advances: MeasuredTextAdvances): Pixels =
     val fontConfig = state.persisted.config.editorConfig.fontConfig
     val gui = guiFonts.computeIfAbsent(
       fontConfig,
@@ -45,7 +54,8 @@ object TextMeasure:
       gui.font,
       TextLayoutSnapshot.defaultFontRenderContext(),
       gui.cellPx,
-      SurfaceTextInset.px(state.persisted.config)
+      SurfaceTextInset.px(state.persisted.config),
+      advances
     )
 
 object TextWrapping:
@@ -72,9 +82,9 @@ object TextWrapping:
   private def fitsIn(widthCells: Int, measure: TextMeasure): String => Boolean =
     measure match
       case TextMeasure.Cells => row => cellsOf(row) <= widthCells
-      case TextMeasure.Pixels(font, frc, cellPx, insetPx) =>
+      case TextMeasure.Pixels(font, frc, cellPx, insetPx, advances) =>
         val limitPx = math.max(1.0, widthCells * cellPx - insetPx)
-        row => MeasuredTextAdvances.shared.advanceOf(row, font, frc) <= limitPx
+        row => advances.advanceOf(row, font, frc) <= limitPx
 
   private def cellsOf(row: String): Int =
     row.codePoints().map(codePoint => if codePoint < NarrowBelow then 1 else CharWidth.of(codePoint)).sum()

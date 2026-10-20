@@ -37,19 +37,24 @@ class TextStatisticsRangeSpec extends AnyFlatSpec with Matchers with ScalaCheckP
     TextStatistics.ofRange(rope, 1, 7).wordCount shouldBe 2
   }
 
-  it should "be remembered for the same rope and selection" in {
+  it should "be remembered by a memo for the same rope and selection" in {
     val rope = Rope("one two three four")
+    val memo = RangeStatisticsMemo()
 
-    val first = TextStatistics.ofRange(rope, 0, 13)
+    val first = memo.of(rope, 0, 13)
 
-    TextStatistics.ofRange(rope, 0, 13) should be theSameInstanceAs first
+    memo.of(rope, 0, 13) should be theSameInstanceAs first
+    memo.computations shouldBe 1L
   }
 
   it should "be recomputed for the same selection of an edited rope" in {
     val rope   = Rope("one two three")
     val edited = rope.insert(3, " and").getOrElse(rope)
 
-    TextStatistics.ofRange(rope, 0, 7).wordCount shouldBe 2
-    TextStatistics.ofRange(edited, 0, 7).wordCount shouldBe 2
-    TextStatistics.ofRange(edited, 0, 11).wordCount shouldBe 3
+    val memo = RangeStatisticsMemo()
+
+    memo.of(rope, 0, 7).wordCount shouldBe 2
+    memo.of(edited, 0, 7).wordCount shouldBe 2
+    memo.of(edited, 0, 11).wordCount shouldBe 3
+    memo.computations shouldBe 3L
   }

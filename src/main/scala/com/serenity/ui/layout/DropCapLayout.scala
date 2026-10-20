@@ -8,7 +8,7 @@ import scala.annotation.tailrec
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{MeasuredRow, TextVisualLine}
 import com.serenity.ui.openings.LetterShape
-import com.serenity.ui.renderer.FontFirstUse
+import com.serenity.ui.renderer.ShapedTextCache
 import com.serenity.ui.theme.DropCapGap
 
 /** Pure geometry for a multi-line drop cap paragraph: which of a paragraph's visual lines the glyph spans, and the left
@@ -53,6 +53,28 @@ object DropCapLayout:
     if row.text.isEmpty then 0.0f
     else row.xForColumn(row.startColumn + Character.charCount(row.text.codePointAt(0))).getOrElse(0.0f)
 
+  /** [[replacedCharacterWidthPx]] before the row exists: the width `text`'s first character measures, which the home
+    * row's wrap gives back so the text it does draw has the room the other spanned rows have.
+    */
+  private[layout] def replacedCharacterWidthPx(
+    text: String,
+    baseColumn: Int,
+    resolver: TextCaretMeasurement.LineFontResolver,
+    frc: FontRenderContext,
+    shapedText: ShapedTextCache
+  ): Float =
+    if text.isEmpty then 0.0f
+    else
+      val carets =
+        ExactCaretXs.layoutCaretXs(
+          text.take(Character.charCount(text.codePointAt(0))),
+          baseColumn,
+          resolver,
+          frc,
+          shapedText
+        )
+      carets(carets.length - 1)
+
   /** A cached row read onto `bufferLine`. The drop cap indent is the only offset the row carries until alignment. The
     * home row, which does not draw its first character (the glyph is drawn in its place), gives the width of that
     * character back, so the text it does draw starts at the indent like every other spanned row; its caret stops keep
@@ -79,25 +101,6 @@ object DropCapLayout:
     val grown = if row.heightPx > 0 then dropCap.growthPx else 0
     row.copy(heightPx = row.heightPx + grown, ascentPx = row.ascentPx + grown, dropCapHeightPx = dropCap.heightPx)
 
-  /** The glyph's measured advance width at `glyphFont` (already sized via
-    * `RichTextStyling.dropCapGlyphStyle`/`TextStyle.styledFont`), for a single character/grapheme of `glyphText`.
-    * Returns 0 for an empty glyph.
-    */
-  def glyphWidthPx(glyphFont: Font, frc: FontRenderContext, glyphText: String): Float =
-    if glyphText.isEmpty then 0.0f
-    else glyphWidths(GlyphKey(glyphFont, frc, glyphText))
-
-  /** How many glyph widths were measured rather than served from the cache. */
-  private[layout] def glyphWidthMeasurements: Long = glyphWidths.measurements
-
-  final private case class GlyphKey(font: Font, frc: FontRenderContext, text: String)
-
-  private val glyphWidths =
-    MeasurementMemo[GlyphKey, Float](maxEntries = 256) { key =>
-      FontFirstUse.settle(key.font, key.frc)
-      key.font.getStringBounds(key.text, key.frc).getWidth.toFloat
-    }
-
   /** The room a drop cap paragraph keeps beside its glyph. */
   val DefaultGapEm: Float = DropCapGap.Default
 
@@ -121,10 +124,11 @@ object DropCapLayout:
     effectiveRole: ParagraphRole,
     proseScale: Float,
     gapEm: Float,
+    memos: LayoutMemos,
     shape: LetterShape = LetterShape.Drop
   ): Reserve =
     DropCapGlyph
-      .forParagraph(baseFont, frc, richDocument, lineIndex, effectiveRole, proseScale, shape)
+      .forParagraph(baseFont, frc, richDocument, lineIndex, effectiveRole, proseScale, memos, shape)
       .fold(Reserve.none)(glyph => Reserve(glyph.indentPx(gapEm), glyph.heightPx + glyph.growthPx, glyph.growthPx))
 
   /** The left margin, in pixels, every line a drop cap spans starts at: the glyph's ink edge and the gap, the same on

@@ -79,11 +79,26 @@ class KeepWithNextColumnPagingSpec extends AnyFlatSpec with Matchers:
     def moved: Boolean      = headingColumn == 1 && runWhole
     def asMeasured: Boolean = if runFitsWithFollower then kept else moved
 
+  /** The fewest grid rows, from the default up, whose column holds one filler, the run and the row after it: the sweep
+    * needs a document in which a run that fits beside a filler exists, and how tall a column that takes depends on the
+    * heights the platform's font measures.
+    */
+  private def gridRowsFor(scale: Int, lead: List[RichTextParagraph], follower: RichTextParagraph): Int =
+    val source   = leadAfterFillers(1, lead, follower)
+    val measured = measure(ColumnPagingFixture(scale, 2, source = source))
+    val needed   = measured.stackPx(0, 1 + lead.size) + measured.placePx(1 + lead.size)
+    Iterator
+      .from(ColumnPagingFixture.DefaultGridRows)
+      .find(rows => ColumnPagingFixture(scale, 2, rows, source).columnHeightPx >= needed)
+      .getOrElse(ColumnPagingFixture.DefaultGridRows)
+
   private def sweep(scale: Int, lead: List[RichTextParagraph], follower: RichTextParagraph): Vector[Outcome] =
+    val gridRows  = gridRowsFor(scale, lead, follower)
     val oneFiller = measure(ColumnPagingFixture(scale, 2, source = leadAfterFillers(1, lead, follower))).stackPx(0, 1)
-    val fitting = ColumnPagingFixture(scale, 2, source = leadAfterFillers(1, lead, follower)).columnHeightPx / oneFiller
+    val fitting =
+      ColumnPagingFixture(scale, 2, gridRows, leadAfterFillers(1, lead, follower)).columnHeightPx / oneFiller
     (0 to fitting).toVector.map { fillers =>
-      val fixture      = ColumnPagingFixture(scale, 2, source = leadAfterFillers(fillers, lead, follower))
+      val fixture      = ColumnPagingFixture(scale, 2, gridRows, leadAfterFillers(fillers, lead, follower))
       val measured     = measure(fixture)
       val used         = measured.stackPx(0, fillers)
       val run          = measured.stackPx(fillers, lead.size)

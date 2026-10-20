@@ -82,8 +82,9 @@ Local mutation that genuinely earns its place is scoped with `// scalafix:off Di
 | `AsInstanceOf`, `IsInstanceOf` | Pattern matching over casting |
 
 `Null`, `Throw`, `OptionPartial` and `IterableOps` are reported as **warnings only** — each needs its
-own migration. Java/AWT interop (`ui/terminal`, `ui/accessibility`), the LSP framer and the richtext
-codecs are excluded, since they sit at the outermost boundary where those constructs are legitimate.
+own migration. Java/AWT interop (`ui/terminal`, `ui/accessibility`) and the LSP framer are excluded, since they
+sit at the outermost boundary where those constructs are legitimate. The richtext codecs are checked like everything
+else; the JAXP callbacks that must throw carry a `@SuppressWarnings` saying why.
 Tests are exempt entirely.
 
 To take a deliberate exception, annotate the declaration and say why:
@@ -119,6 +120,14 @@ entry means deleting it:
 ```bash
 sbt writeArchitectureBaseline   # after removing a violation, to bank the win
 ```
+
+`architectureCheck` also enforces purity (`project/PurityChecks.scala`, #1677), at the level of declarations, so a local
+`var` or mutable collection inside a method is fine. A top-level `object` may not declare a `val`/`lazy val`/`var` that
+holds `AtomicReference/Integer/Long/Boolean`, `synchronized`, `ThreadLocal`, `ConcurrentHashMap`, `mutable.`, or a
+`java.util` `HashMap`/`LinkedHashMap`/`ArrayDeque`/`ArrayList`/`WeakHashMap`/`IdentityHashMap` (only where the file
+imports it), and may not hold an instance of a class that has such a member (`new Cache`, `Cache.bounded()`).
+Declarations that cannot move are named in `ArchitectureChecks.PurityAllowlist` with a reason, apart from the baseline;
+`docs/allowlist-review.md` argues each one's redesign.
 
 The baseline may shrink, never grow. If you must add to it, explain the entry in review: CI's
 `architecture` job fails a PR whose baseline entry count or total measured lines/hits grows unless the

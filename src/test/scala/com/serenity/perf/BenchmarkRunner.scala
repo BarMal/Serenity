@@ -10,7 +10,8 @@ object BenchmarkRunner:
   /** Every frame benchmark is tracked by prefix, so a new `laptop.*`, `render.*` or `command_runner.*` benchmark is
     * covered without being listed. The set below adds the individually chosen ones from other families.
     */
-  private val AllocationTrackedPrefixes = List("laptop.", "render.", "command_runner.")
+  private val AllocationTrackedPrefixes =
+    List("laptop.", "render.", "command_runner.", "layout.anchor_wrap.", "layout.cold_font.")
 
   private[perf] def tracksAllocation(name: String): Boolean =
     AllocationTracked.contains(name) || AllocationTrackedPrefixes.exists(name.startsWith)
@@ -123,6 +124,30 @@ object BenchmarkRunner:
 
   private val sink = new java.util.concurrent.atomic.AtomicLong(0L)
 
+  /** `-Dserenity.bench.slowdown=2` makes every timed call take that many times as long, by spinning for the extra time
+    * after it. It stands in for a real regression when the CI gate itself is being checked: a gate that cannot see an
+    * injected 2x slowdown cannot see a real one. Unset or at most 1, the benchmark runs untouched.
+    */
+  private[perf] def slowdownFactor(property: Option[String]): Option[Double] =
+    property.flatMap(_.toDoubleOption).filter(_ > 1.0)
+
+  private val Slowdown = slowdownFactor(sys.props.get("serenity.bench.slowdown"))
+
+  @annotation.tailrec
+  private def spinUntil(deadline: Long): Unit =
+    if System.nanoTime() < deadline then
+      Thread.onSpinWait()
+      spinUntil(deadline)
+
+  private def slowed(run: () => Any): () => Any =
+    Slowdown.fold(run) { factor => () =>
+      val started = System.nanoTime()
+      val result  = run()
+      val taken   = System.nanoTime() - started
+      spinUntil(System.nanoTime() + ((factor - 1.0) * taken).toLong)
+      result
+    }
+
   /** `identityHashCode` rather than `hashCode`: it reads the object header instead of traversing the value, so it does
     * not add the cost of hashing an `AppState` to every measured invocation. It pins the returned result, which escapes
     * in production too, while leaving a benchmark's internal short-lived allocations free to be scalar-replaced.
@@ -203,7 +228,8 @@ object BenchmarkRunner:
   private[perf] def runMatching(prefixes: List[String], benchmarks: List[Benchmark]): List[BenchmarkResult] =
     benchmarks.filter(b => prefixes.isEmpty || prefixes.exists(b.name.startsWith)).map(runBenchmark)
 
-  private[perf] def runBenchmark(benchmark: Benchmark): BenchmarkResult =
+  private[perf] def runBenchmark(declared: Benchmark): BenchmarkResult =
+    val benchmark = declared.copy(run = slowed(declared.run))
     benchmark.verify()
     val (warmupInvocations, warmupAcc) =
       warmUp(benchmark.run, System.nanoTime() + WarmupBudgetNanos, 0, benchmark.warmups, 0L)

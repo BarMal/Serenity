@@ -77,7 +77,8 @@ class DropCapFitGeometrySpec extends AnyFlatSpec with Matchers:
       theme = theme,
       glyphColour = theme.highlighted.foreground,
       xOriginPx = 0.0f,
-      lineTopPx = 0
+      lineTopPx = 0,
+      memos = LayoutMemos()
     )
     val call       = surface.drawRunPxCalls.head
     val glyphStyle = surface.styleCalls.collectFirst { case surface.StyleCall("enable", style) => style }.get

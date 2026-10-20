@@ -64,6 +64,7 @@ object PaneTextLayout:
             .caretXsForText(
               "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
               font,
+              wrappedLines.shapedText,
               TextLayoutSnapshot.defaultFontRenderContext()
             )
             .lastOption
@@ -106,7 +107,8 @@ object PaneTextLayout:
         tabSize = buffer.effectiveIndentation(config.indentation).tabSize,
         headings = state.effectiveHeadingSettings,
         openings = buffer.effectiveOpenings(config.openingsConfig),
-        dropCapGapEm = config.documentConfig.dropCapGapEm
+        dropCapGapEm = config.documentConfig.dropCapGapEm,
+        fallback = config.editorConfig.fontConfig.fallback
       )
       // Only a genuinely multi-column page carries per-column placements. A single fitted column is fully served by
       // the active snapshot alone (identical to the pre-multi-column render path, including its column-transition
@@ -142,7 +144,8 @@ object PaneTextLayout:
             tabSize = buffer.effectiveIndentation(config.indentation).tabSize,
             headings = state.effectiveHeadingSettings,
             openings = buffer.effectiveOpenings(config.openingsConfig),
-            dropCapGapEm = config.documentConfig.dropCapGapEm
+            dropCapGapEm = config.documentConfig.dropCapGapEm,
+            fallback = config.editorConfig.fontConfig.fallback
           )
         )
       PaneTextLayout(activeSnapshot, placements, viewport, width, font, fontMetrics, gridMetrics, forceCellLayout)
@@ -162,6 +165,7 @@ object PaneTextLayout:
         tabSize = buffer.effectiveIndentation(config.indentation).tabSize,
         headings = state.effectiveHeadingSettings,
         openings = buffer.effectiveOpenings(config.openingsConfig),
-        dropCapGapEm = config.documentConfig.dropCapGapEm
+        dropCapGapEm = config.documentConfig.dropCapGapEm,
+        fallback = config.editorConfig.fontConfig.fallback
       )
       PaneTextLayout(single, Vector.empty, viewport, width, font, fontMetrics, gridMetrics, forceCellLayout)

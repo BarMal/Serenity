@@ -100,7 +100,8 @@ private[serenity] object UiSceneBuilder:
           known = wholeLines.get,
           headings = state.effectiveHeadingSettings,
           openings = buffer.effectiveOpenings(state.persisted.config.openingsConfig),
-          dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm
+          dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+          fallback = state.persisted.config.editorConfig.fontConfig.fallback
         )
     PaneScroll.of(rows, viewport.topLine, viewport.topVisualLine, viewport.visibleLines)
 

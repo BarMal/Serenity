@@ -7,7 +7,7 @@ import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, ShapedTextCache}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -71,7 +71,10 @@ class WordWrapRenderingSpec extends AnyFlatSpec with Matchers:
     contentRuns.map(_.s).mkString shouldBe content
     contentRows.length should be >= 2
     contentRows.foreach { (_, runs) =>
-      val rowWidthPx = TextLayoutSnapshot.caretXsForText(runs.map(_.s).mkString, textFont).lastOption.getOrElse(0.0f)
+      val rowWidthPx = TextLayoutSnapshot
+        .caretXsForText(runs.map(_.s).mkString, textFont, ShapedTextCache())
+        .lastOption
+        .getOrElse(0.0f)
       rowWidthPx should be <= panelWidthPx
     }
     cursorRects should have size 1

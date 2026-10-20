@@ -1,25 +1,32 @@
 package com.serenity.richtext
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+import java.io.ByteArrayInputStream
 import java.nio.file.{Files, Path}
 import java.util.zip.ZipInputStream
 
 import scala.annotation.tailrec
-import scala.util.control.NonFatal
+import scala.util.Using
 
+import cats.effect.IO
 import org.xml.sax.{ErrorHandler, SAXParseException}
 
 /** Every entry name of a package, plus the bytes of the entries a decoder asked for. */
 final case class ArchiveContents(entryNames: Set[String], entries: Map[String, Array[Byte]])
 
-class RichTextCodecException(message: String, cause: Throwable | Null = null) extends RuntimeException(message, cause)
+class RichTextCodecException(message: String, cause: Option[Throwable]) extends RuntimeException(message):
+  cause.foreach(initCause)
+
+  def this(message: String) = this(message, None)
+  def this(message: String, cause: Throwable) = this(message, Some(cause))
 
 object RichTextArchive:
   private[richtext] val MaxArchiveBytes: Long = 64L * 1024L * 1024L
   private[richtext] val MaxXmlEntryBytes: Int = 8 * 1024 * 1024
 
-  private val BufferSize = 8192
-
+  /** The JAXP `ErrorHandler` contract reports a parse error by throwing; this is the only way to make the parser stop.
+    * `RichTextXmlParser.parse` contains the exception and returns it as a `Left`.
+    */
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   val SilentXmlErrorHandler: ErrorHandler = new ErrorHandler:
     override def warning(exception: SAXParseException): Unit =
       ()
@@ -30,71 +37,56 @@ object RichTextArchive:
     override def fatalError(exception: SAXParseException): Unit =
       throw exception
 
-  def readFile(path: Path, format: String): Array[Byte] =
-    val size = Files.size(path)
-    if size > MaxArchiveBytes then
-      throw RichTextCodecException(s"$format document is too large ($size bytes, limit $MaxArchiveBytes bytes)")
-    Files.readAllBytes(path)
+  def readFile(path: Path, format: String): IO[Array[Byte]] =
+    IO.blocking(Files.size(path)).flatMap { size =>
+      if size > MaxArchiveBytes then IO.raiseError(tooLarge(format, size))
+      else IO.blocking(Files.readAllBytes(path))
+    }
 
-  def requireArchiveSize(bytes: Array[Byte], format: String): Unit =
-    if bytes.length > MaxArchiveBytes then
-      throw RichTextCodecException(
-        s"$format document is too large (${bytes.length} bytes, limit $MaxArchiveBytes bytes)"
-      )
+  def requireArchiveSize(bytes: Array[Byte], format: String): Either[RichTextCodecException, Unit] =
+    Either.cond(bytes.length <= MaxArchiveBytes, (), tooLarge(format, bytes.length.toLong))
 
-  def zipEntry(bytes: Array[Byte], name: String, format: String): Option[Array[Byte]] =
-    requireArchiveSize(bytes, format)
-    val input = ZipInputStream(ByteArrayInputStream(bytes))
-    try
-      Iterator
-        .continually(input.getNextEntry)
-        .takeWhile(_ != null)
-        .find(_.getName == name)
-        .map(_ => readBoundedEntry(input, name, format, MaxXmlEntryBytes))
-    catch
-      case error: RichTextCodecException => throw error
-      case NonFatal(error)               => throw RichTextCodecException(s"$format archive could not be read", error)
-    finally input.close()
+  def zipEntry(bytes: Array[Byte], name: String, format: String): Either[RichTextCodecException, Option[Array[Byte]]] =
+    read(bytes, format, Set(name)).map(_.entries.get(name))
 
   /** Reads the package in one pass: all entry names, and the bytes of the `wanted` entries only. */
-  def read(bytes: Array[Byte], format: String, wanted: Set[String]): ArchiveContents =
-    requireArchiveSize(bytes, format)
-    val input = ZipInputStream(ByteArrayInputStream(bytes))
-    try
-      val (names, entries) = Iterator
-        .continually(input.getNextEntry)
-        .takeWhile(_ != null)
-        .foldLeft((Set.empty[String], Map.empty[String, Array[Byte]])) {
-          case ((names, entries), entry) =>
-            val name = entry.getName
-            if wanted.contains(name) then
-              (names + name, entries.updated(name, readBoundedEntry(input, name, format, MaxXmlEntryBytes)))
-            else (names + name, entries)
-        }
-      ArchiveContents(names, entries)
-    catch
-      case error: RichTextCodecException => throw error
-      case NonFatal(error)               => throw RichTextCodecException(s"$format archive could not be read", error)
-    finally input.close()
+  def read(bytes: Array[Byte], format: String, wanted: Set[String]): Either[RichTextCodecException, ArchiveContents] =
+    requireArchiveSize(bytes, format).flatMap { _ =>
+      Using(ZipInputStream(ByteArrayInputStream(bytes)))(collect(_, format, wanted, Set.empty, Map.empty)).toEither.left
+        .map(error => RichTextCodecException(s"$format archive could not be read", error))
+        .flatten
+    }
+
+  @tailrec
+  private def collect(
+    input: ZipInputStream,
+    format: String,
+    wanted: Set[String],
+    names: Set[String],
+    entries: Map[String, Array[Byte]]
+  ): Either[RichTextCodecException, ArchiveContents] =
+    Option(input.getNextEntry) match
+      case None => Right(ArchiveContents(names, entries))
+      case Some(entry) =>
+        val name = entry.getName
+        if wanted.contains(name) then
+          readBoundedEntry(input, name, format, MaxXmlEntryBytes) match
+            case Left(error)  => Left(error)
+            case Right(bytes) => collect(input, format, wanted, names + name, entries.updated(name, bytes))
+        else collect(input, format, wanted, names + name, entries)
 
   private def readBoundedEntry(
     input: ZipInputStream,
     name: String,
     format: String,
     maxBytes: Int
-  ): Array[Byte] =
-    val output = ByteArrayOutputStream()
-    val buffer = Array.ofDim[Byte](BufferSize)
+  ): Either[RichTextCodecException, Array[Byte]] =
+    val bytes = input.readNBytes(maxBytes + 1)
+    Either.cond(
+      bytes.length <= maxBytes,
+      bytes,
+      RichTextCodecException(s"$format entry $name is too large (limit $maxBytes bytes)")
+    )
 
-    @tailrec
-    def loop(totalBytes: Int): Unit =
-      val read = input.read(buffer)
-      if read >= 0 then
-        val nextTotal = totalBytes + read
-        if nextTotal > maxBytes then
-          throw RichTextCodecException(s"$format entry $name is too large (limit $maxBytes bytes)")
-        output.write(buffer, 0, read)
-        loop(nextTotal)
-
-    loop(0)
-    output.toByteArray
+  private def tooLarge(format: String, size: Long): RichTextCodecException =
+    RichTextCodecException(s"$format document is too large ($size bytes, limit $MaxArchiveBytes bytes)")

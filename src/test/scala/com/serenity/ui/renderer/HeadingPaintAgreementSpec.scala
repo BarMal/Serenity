@@ -62,7 +62,7 @@ class HeadingPaintAgreementSpec extends AnyFlatSpec with Matchers:
 
     painted.fontSize shouldBe Some(3.0f * 12.0f * snapshot.proseScale)
     val paintedFont = TextStyle.styledFont(font, painted)
-    row.heightPx shouldBe FontLineExtents.of(paintedFont, frc).heightPx
+    row.heightPx shouldBe FontLineExtents().of(paintedFont, frc).heightPx
   }
 
   it should "still use today's 22pt at the default settings" in {

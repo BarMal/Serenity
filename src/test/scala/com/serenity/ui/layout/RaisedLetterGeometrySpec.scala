@@ -121,7 +121,8 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       theme = theme,
       glyphColour = theme.highlighted.foreground,
       xOriginPx = 0.0f,
-      lineTopPx = originPx + laid.textTopOf(laid.home)
+      lineTopPx = originPx + laid.textTopOf(laid.home),
+      memos = LayoutMemos()
     )
     val call       = surface.drawRunPxCalls.head
     val glyphStyle = surface.styleCalls.collectFirst { case surface.StyleCall("enable", style) => style }.get
@@ -161,7 +162,8 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       theme = theme,
       glyphColour = theme.highlighted.foreground,
       xOriginPx = 0.0f,
-      lineTopPx = topPx
+      lineTopPx = topPx,
+      memos = LayoutMemos()
     )
     surface.flush()
     def changed(y: Int) = (0 until image.getWidth).count(x => (image.getRGB(x, y) & 0xffffff) != untouched)

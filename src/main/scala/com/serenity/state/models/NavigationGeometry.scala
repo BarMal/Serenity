@@ -35,7 +35,13 @@ final case class MeasuredRow(
     reservedBelowPx: Int = 0,
     // A drop cap paragraph's home row records the height from its own top down to the foot of the glyph drawn from it,
     // so what the glyph covers can be read off the layout.
-    dropCapHeightPx: Int = 0
+    dropCapHeightPx: Int = 0,
+    // Stretches drawn on their own, from their own caret stop, as (startOffset, endOffset, slot) triples ascending by
+    // offset from `startColumn`: a stretch in a fallback font (slot n draws in `fallbackFamilies(n - 1)`) or a wide
+    // character snapped to its two cells. Everything between them is drawn in the row's own font. Empty, and the one
+    // shared array, when the row has none.
+    fontRuns: IArray[Int] = MeasuredRow.NoFontRuns,
+    fallbackFamilies: Vector[String] = Vector.empty
 ):
 
   // Arrays compare by reference, so the generated equals would call two identical measurements different. Row
@@ -46,7 +52,8 @@ final case class MeasuredRow(
         widthPx == that.widthPx && heightPx == that.heightPx && ascentPx == that.ascentPx &&
         reservedBelowPx == that.reservedBelowPx && dropCapHeightPx == that.dropCapHeightPx &&
         caretXs.sameElements(that.caretXs) && caretOffsets.sameElements(that.caretOffsets) &&
-        landingXs.sameElements(that.landingXs) && landingOffsets.sameElements(that.landingOffsets))
+        landingXs.sameElements(that.landingXs) && landingOffsets.sameElements(that.landingOffsets) &&
+        fontRuns.sameElements(that.fontRuns) && fallbackFamilies == that.fallbackFamilies)
     case _ => false
 
   override def hashCode: Int =
@@ -101,6 +108,8 @@ final case class MeasuredRow(
     math.abs(landingXs(candidate) + offsetPx - xPx) < math.abs(landingXs(incumbent) + offsetPx - xPx)
 
 object MeasuredRow:
+
+  val NoFontRuns: IArray[Int] = IArray.empty[Int]
 
   /** A row built from stop objects. `xSorted` empty means "order `stops` by x". */
   def fromStops(
@@ -158,6 +167,8 @@ final case class TextVisualLine(
     caretColumn,
     dropCapHeightPx,
     endColumn,
+    fallbackFamilies,
+    fontRuns,
     heightPx,
     reservedBelowPx,
     startColumn,

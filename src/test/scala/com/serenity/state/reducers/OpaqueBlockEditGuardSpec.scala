@@ -53,6 +53,9 @@ class OpaqueBlockEditGuardSpec extends AnyFlatSpec with Matchers with OptionValu
   it should "do nothing after the block" in
     untouched(InsertChar('x'), bufferAt(CursorPosition(2, 1)))
 
+  it should "do nothing for committed text" in
+    untouched(InsertText("こんにちは"), bufferAt(CursorPosition(2, 1)))
+
   it should "do nothing for a tab" in
     untouched(TabKey, bufferAt(CursorPosition(2, 1)))
 

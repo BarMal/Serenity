@@ -6,6 +6,7 @@ import java.awt.font.TextAttribute
 import scala.util.Random
 
 import com.serenity.state.models.TextVisualLine
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -41,20 +42,35 @@ class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDriven
   private val kernedFonts = Table("font", kernedSerif, kernedSans)
   private val widths      = Table("width", 97, 233, 480, 900)
 
-  private def constructedWhile[A](body: => A): (A, Long) =
-    val before = ExactCaretXs.exactMeasurementsConstructed
-    val result = body
-    (result, ExactCaretXs.exactMeasurementsConstructed - before)
+  private def wrap(
+    text: String,
+    widthPx: Int,
+    font: Font,
+    shaper: ShapedTextCache = ShapedTextCache()
+  ): Vector[TextVisualLine] =
+    TextLayoutSnapshot.boundedVisualLinesForText(
+      text,
+      3,
+      widthPx,
+      font,
+      frc,
+      wrapCache = WrappedLineCache.measuring(shaper, LayoutMemos())
+    )
 
-  private def wrap(text: String, widthPx: Int, font: Font): Vector[TextVisualLine] =
-    TextLayoutSnapshot.boundedVisualLinesForText(text, 3, widthPx, font, frc)
+  /** The rows `text` wraps to, with how many exact measurements that wrap built: counted by the shaper it wrapped
+    * through, so specs running side by side do not see each other's.
+    */
+  private def constructedWhile(text: String, widthPx: Int, font: Font): (Vector[TextVisualLine], Long) =
+    val shaper = ShapedTextCache()
+    val rows   = wrap(text, widthPx, font, shaper)
+    (rows, shaper.exactMeasurements)
 
   "Wrapping kerned prose" should "build a constant number of exact measurements however many rows wrap" in
     forAll(kernedFonts) { font =>
       TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc) shouldBe true
       wrap("warm up the font probes", 200, font)
       forAll(widths) { widthPx =>
-        val (rows, built) = constructedWhile(wrap(kernedProse, widthPx, font))
+        val (rows, built) = constructedWhile(kernedProse, widthPx, font)
         withClue(s"$font at $widthPx px, ${rows.length} rows: ") {
           rows.length should be > 2
           built should be <= MostLayoutsPerParagraph
@@ -67,7 +83,7 @@ class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDriven
   it should "pay for the one row that lands on the panel's width, not for every row" in
     forAll(Table("width", 454, 551)) { widthPx =>
       wrap("warm up the font probes", 200, kernedInter)
-      val (rows, built) = constructedWhile(wrap(kernedProse, widthPx, kernedInter))
+      val (rows, built) = constructedWhile(kernedProse, widthPx, kernedInter)
       withClue(s"Inter 13 at $widthPx px, ${rows.length} rows: ") {
         rows.length should be > 10
         built should be <= MostLayoutsPerParagraph

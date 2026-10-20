@@ -71,21 +71,9 @@ private[perf] object LaptopFrameBenchmarks:
     ViewportSize(LogicalWidthPx / cellMetrics.charWidth, LogicalHeightPx / cellMetrics.lineHeight)
   private val bufferId = BufferId(1)
 
-  def proseState: AppState =
-    val base   = BenchmarkFixtures.editorState(BenchmarkFixtures.loremIpsumProse(paragraphs = 300), None)
-    val buffer = base.persisted.buffers(bufferId)
-    val sized = buffer.copy(
-      viewport = buffer.viewport.copy(visibleColumns = viewport.width, visibleLines = viewport.height),
-      editing = EditingState(List(CursorPosition(150, 40)))
-    )
-    base.copy(
-      persisted = base.persisted.copy(
-        config = AppConfig.conventional,
-        buffers = Map(bufferId -> sized),
-        focus = Focus.EditorPane(PaneId(0))
-      ),
-      runtime = base.runtime.copy(viewportSize = Some(viewport))
-    )
+  def proseState: AppState = proseStateOf(BenchmarkFixtures.loremIpsumProse(paragraphs = 300))
+
+  def proseStateOf(text: String): AppState = LaptopProse.stateOf(text, viewport, bufferId)
 
   def proseWithPinnedPanelState: AppState =
     DockedPanelFixtures.dock(
@@ -120,7 +108,8 @@ private[perf] object LaptopFrameBenchmarks:
       logicalWidthPx = LogicalWidthPx,
       logicalHeightPx = LogicalHeightPx,
       deviceScaleX = DeviceScale,
-      deviceScaleY = DeviceScale
+      deviceScaleY = DeviceScale,
+      textCaches = caches.surfaceText
     )
     RendererEntryPoints.render(
       state,
@@ -443,7 +432,8 @@ private[perf] object LaptopFrameBenchmarks:
         deviceScaleX = DeviceScale,
         deviceScaleY = DeviceScale,
         contentPersists = true,
-        layerCacheOwnerOverride = Some(screen)
+        layerCacheOwnerOverride = Some(screen),
+        textCaches = caches.surfaceText
       )
       val _ = RendererFramePlanner.renderFrame(
         state,

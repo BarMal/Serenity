@@ -71,7 +71,7 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
       heightPx,
       deviceScale,
       deviceScale,
-      shapedText = cache
+      textCaches = SurfaceTextCaches.fresh().copy(shapedText = cache)
     )
     surface.setForegroundColor(black)
     surface.setBackgroundColor(white)
@@ -101,7 +101,7 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
     CharacterRenderer.computeGraphemeSpans(text).map(_.startLocalIndex)
 
   private def lineOf(text: String): TextVisualLine =
-    val carets = TextLayoutSnapshot.caretXsForText(text, font, frc)
+    val carets = TextLayoutSnapshot.caretXsForText(text, font, ShapedTextCache(), frc)
     val stops =
       (graphemeStarts(text) :+ text.length).map(column => TextCaretStop(column, carets.lift(column).getOrElse(0.0f)))
     TextVisualLine(0, 0, text.length, text, carets.lastOption.getOrElse(0.0f), stops)
@@ -250,7 +250,10 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
   private val ligaturedInter = kerned(BundledInterFont.ligatured(14f))
 
   private def stretchAndCarets(text: String, face: Font) =
-    (ShapedTextCache().stretchOf(text, face, frc), TextLayoutSnapshot.caretXsForText(text, face, frc))
+    (
+      ShapedTextCache().stretchOf(text, face, frc),
+      TextLayoutSnapshot.caretXsForText(text, face, ShapedTextCache(), frc)
+    )
 
   "A caret stop" should "sit at the x of the glyph the line draws for its character, kerned or not" in
     List("platform serif" -> font, "bundled Inter" -> kernedInter).foreach {
@@ -274,15 +277,21 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
       carets.last shouldBe stretch.advance +- 0.01f
     }
 
+  // The platform's faces form whatever ligatures their fonts and the platform's shaper give them -- none for a
+  // monospace face, and none for Windows' serif -- so only the bundled face is required to ligate.
   it should "divide a ligature's span evenly between the characters it stands for" in
-    List("platform serif" -> font, "ligatured Inter" -> ligaturedInter).foreach {
-      case (name, face) =>
+    List(
+      ("platform serif", font, false),
+      ("platform monospace", kerned(new Font(Font.MONOSPACED, Font.PLAIN, 14)), false),
+      ("ligatured Inter", ligaturedInter, true)
+    ).foreach {
+      case (name, face, mustLigate) =>
         val text              = "office waffle ffl fi -> => AV"
         val (stretch, carets) = stretchAndCarets(text, face)
         val glyphStarts       = (0 until stretch.glyphCount).map(stretch.charIndexAt)
         val ligatures = glyphStarts.zip(glyphStarts.drop(1) :+ text.length).filter((from, until) => until - from > 1)
 
-        withClue(s"$name: ")(ligatures should not be empty)
+        if mustLigate then withClue(s"$name: ")(ligatures should not be empty)
         ligatures.foreach { (from, until) =>
           val startX = stretch.leftEdgeOf(from).getOrElse(Float.NaN)
           val endX   = stretch.leftEdgeOf(until).getOrElse(stretch.advance)
@@ -359,7 +368,7 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
       heightPx,
       deviceScale,
       deviceScale,
-      shapedText = cache
+      textCaches = SurfaceTextCaches.fresh().copy(shapedText = cache)
     )
     surface.setForegroundColor(black)
     surface.setBackgroundColor(white)

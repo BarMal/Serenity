@@ -9,11 +9,13 @@ import com.serenity.ui.layout.*
   */
 private[renderer] object RendererRepaintRegion:
 
-  /** Each dirty row's band, the line-number cells beside the active pane's dirty rows (a number changes only with its
-    * row, so it repaints with it), the pinned status row when `damage` names [[Damage.Chrome]], and the header of each
-    * pane a [[Damage.PaneChrome]] names, the tab strip when `damage` names it, and the scrollbar column of each pane
-    * whose bar the screen shows differently ('scrollbarTracks') -- coalesced into a few disjoint rects, so a caret row
-    * and the status row far below it stay two narrow rects rather than one spanning every row between them.
+  /** Each dirty row's band with the margin a frame keeps with its row ([[RendererChromePlan.withBleed]]: a glyph's
+    * antialiasing can land a pixel past the column), the line-number cells beside the active pane's dirty rows (a
+    * number changes only with its row, so it repaints with it), the pinned status row when `damage` names
+    * [[Damage.Chrome]], and the header of each pane a [[Damage.PaneChrome]] names, the tab strip when `damage` names
+    * it, and the scrollbar column of each pane whose bar the screen shows differently ('scrollbarTracks') -- coalesced
+    * into a few disjoint rects, so a caret row and the status row far below it stay two narrow rects rather than one
+    * spanning every row between them.
     */
   def rects(
     state: AppState,
@@ -34,7 +36,8 @@ private[renderer] object RendererRepaintRegion:
           else Nil
         val dirty = dirtyRows(paneId, record)
         dirty.toList.flatMap { row =>
-          record.rowRects.lift(row).toList ++ lineNumberRows.flatMap(_.lift(row))
+          record.rowRects.lift(row).map(RendererChromePlan.withBleed(context)).toList ++
+            lineNumberRows.flatMap(_.lift(row))
         } ++ columnRailRects(context, renderPlan, paneId, dirty)
     }
     val statusRow = contract.gutterRect.filter(_ => Damage.touchesChrome(damage))

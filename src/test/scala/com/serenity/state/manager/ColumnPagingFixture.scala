@@ -9,12 +9,15 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
   CellMetrics,
   LayoutEngine,
+  LayoutMemos,
   TextLayoutSnapshot,
   ViewportSize,
   WorkspaceNode,
   WorkspaceNodeId,
-  WorkspaceTree
+  WorkspaceTree,
+  WrappedLineCache
 }
+import com.serenity.ui.renderer.ShapedTextCache
 import com.serenity.ui.theme.RichTextStyling
 
 /** A multi-column pane over a rich document whose rows are not all one line tall: headings at three sizes with space
@@ -24,7 +27,7 @@ import com.serenity.ui.theme.RichTextStyling
 final class ColumnPagingFixture(
     val scale: Int,
     val columnCount: Int,
-    val gridRows: Int = 14,
+    val gridRows: Int = ColumnPagingFixture.DefaultGridRows,
     val source: RichTextDocument = ColumnPagingFixture.document
 ):
 
@@ -73,6 +76,15 @@ final class ColumnPagingFixture(
   /** The cells one column wraps its text in, as `CursorViewport` and the painter both derive them. */
   val textColumns: Int = math.max(1, buffer.viewport.visibleColumns - LayoutEngine.perColumnGutterWidth(state))
 
+  /** Every layout here measures its wraps afresh, over one shaper that stays warm, as when the shaped-text cache was
+    * process-wide.
+    */
+  private val shaping = ShapedTextCache()
+
+  private val memos = LayoutMemos()
+
+  private def uncached: WrappedLineCache = WrappedLineCache.measuring(shaping, memos)
+
   val widthPx: Int = TextLayoutSnapshot.gridWrapWidthPx(textColumns, fontConfig)
 
   /** The rows one column draws, sized the way the renderer sizes the pane it paints. */
@@ -92,7 +104,8 @@ final class ColumnPagingFixture(
       font,
       proseScale = RichTextStyling.proseZoom(font.getSize2D),
       columnCount = count,
-      headings = state.persisted.config.headingSettings
+      headings = state.persisted.config.headingSettings,
+      wrapCache = uncached
     )
 
   /** Every row of the document in order, laid out as one endless column. */
@@ -103,7 +116,7 @@ final class ColumnPagingFixture(
     val cursor = CursorPosition(id._1, id._2)
     from.copy(
       editing = EditingState(List(cursor)),
-      viewport = CursorViewport.adjustForCursorColumnMode(from, state, cursor)
+      viewport = CursorViewport.adjustForCursorColumnMode(from, state, cursor, uncached)
     )
 
   /** The pages the cursor can anchor, in document order, each placed from a cold viewport. */
@@ -124,6 +137,8 @@ final class ColumnPagingFixture(
     shown.headOption
 
 object ColumnPagingFixture:
+
+  val DefaultGridRows: Int = 14
 
   type RowId = (Int, Int)
 

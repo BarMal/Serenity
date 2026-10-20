@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
@@ -25,17 +26,29 @@ class LigatureFontShapingSpec extends AnyFlatSpec with Matchers:
   private val heightPx    = 40
   private val deviceScale = 2.0
 
-  private def surfaceOver(image: BufferedImage): Java2DRenderSurface =
-    new Java2DRenderSurface(image, metrics, font, _ => (), widthPx, heightPx, deviceScale, deviceScale)
+  private def surfaceOver(image: BufferedImage, caches: RenderCaches): Java2DRenderSurface =
+    new Java2DRenderSurface(
+      image,
+      metrics,
+      font,
+      _ => (),
+      widthPx,
+      heightPx,
+      deviceScale,
+      deviceScale,
+      textCaches = caches.surfaceText
+    )
 
   "Laying out a line of the ligature code font" should "leave it shaped for the painter, under the key it paints with" in {
     val line    = "val answer = items.map(_ + 1).filter(_ >= 2) // a => b != c, distinct to this spec"
-    val surface = surfaceOver(new BufferedImage(widthPx * 2, heightPx * 2, BufferedImage.TYPE_INT_ARGB))
+    val caches  = RenderCaches.create()
+    val surface = surfaceOver(new BufferedImage(widthPx * 2, heightPx * 2, BufferedImage.TYPE_INT_ARGB), caches)
     val frc     = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
-    ShapedTextCache.shared.holds(line, font, frc) shouldBe false
+    caches.shapedText.holds(line, font, frc) shouldBe false
 
-    val rows = TextLayoutSnapshot.boundedVisualLinesForText(line, 0, widthPx, font, frc)
+    val rows =
+      TextLayoutSnapshot.boundedVisualLinesForText(line, 0, widthPx, font, frc, wrapCache = caches.wrappedLines)
 
     rows.map(_.text) shouldBe Vector(line)
-    ShapedTextCache.shared.holds(line, font, frc) shouldBe true
+    caches.shapedText.holds(line, font, frc) shouldBe true
   }

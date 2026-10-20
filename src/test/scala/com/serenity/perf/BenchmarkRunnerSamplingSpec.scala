@@ -60,7 +60,9 @@ class BenchmarkRunnerSamplingSpec extends AnyFlatSpec with Matchers:
       "laptop.render.new_frame",
       "laptop.input.anything",
       "render.markdown.live_preview",
-      "command_runner.palette.keystroke"
+      "command_runner.palette.keystroke",
+      "layout.anchor_wrap.warm_caret_lookup",
+      "layout.cold_font.glyph_advances"
     ).foreach(name => withClue(name)(BenchmarkRunner.tracksAllocation(name) shouldBe true))
 
   it should "keep the explicitly listed benchmarks and skip the rest" in {
@@ -85,5 +87,13 @@ class BenchmarkRunnerSamplingSpec extends AnyFlatSpec with Matchers:
       allocationP50Bytes = None,
       allocationP95Bytes = None
     )
+
+  "slowdownFactor" should "read a factor above one" in {
+    BenchmarkRunner.slowdownFactor(Some("2")) shouldBe Some(2.0)
+  }
+
+  it should "leave the benchmark untouched when unset, one, below one or not a number" in {
+    List(None, Some("1"), Some("0.5"), Some("fast")).map(BenchmarkRunner.slowdownFactor) shouldBe List.fill(4)(None)
+  }
 
 end BenchmarkRunnerSamplingSpec
