@@ -36,7 +36,7 @@ skiko="$work/skiko"
 fetch() {
   if [ "$os" = linux ] && [ "$(id -u)" = 0 ]; then
     apt-get update -y
-    apt-get install -y --no-install-recommends tzdata git curl ca-certificates unzip zip g++ openjdk-17-jdk-headless
+    apt-get install -y --no-install-recommends tzdata git curl ca-certificates unzip zip g++ openjdk-17-jdk
   fi
   git clone --quiet --depth 1 --branch "$SKIA_TAG" https://github.com/JetBrains/skia "$skia"
   git clone --quiet --depth 1 --branch "$SKIKO_TAG" https://github.com/JetBrains/skiko "$skiko"
