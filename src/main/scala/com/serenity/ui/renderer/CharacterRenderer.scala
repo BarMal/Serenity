@@ -81,18 +81,18 @@ object CharacterRenderer:
         if index < 0 then paint(column + 1)
         else
           val codePoint = text.codePointAt(index)
-          val width     = Character.charCount(codePoint)
+          val end       = CellRuns.endOfMarks(text, index + Character.charCount(codePoint))
           val cell      = cellOf(column)
-          val cells     = math.max(1, cellOf(column + width) - cell)
+          val cells     = cellOf(column + end - index) - cell
           if cell >= leftCell && cell < rightCell then
             val shown =
-              if Character.isISOControl(codePoint) then " ".repeat(cells) else String(Character.toChars(codePoint))
+              if Character.isISOControl(codePoint) then " ".repeat(math.max(1, cells)) else text.substring(index, end)
             familyAt(index).fold(surface.putString(cell, y, shown))(family =>
               surface.text.withFallbackFamily(family)(
-                withinCells(surface, cell, y, cells)(surface.putString(cell, y, shown))
+                withinCells(surface, cell, y, math.max(1, cells))(surface.putString(cell, y, shown))
               )
             )
-          paint(column + width)
+          paint(column + end - index)
     paint(rangeStart)
 
   def renderChar(
@@ -298,7 +298,7 @@ object CharacterRenderer:
           case visible if isVisibleCodePoint(visible) =>
             val start = if state.currentText.length == 0 then state.currentX else state.currentStartX
             state.currentText.appendAll(Character.toChars(visible))
-            state.copy(currentStartX = start, currentX = state.currentX + displayWidth(visible))
+            state.copy(currentStartX = start, currentX = state.currentX + CharWidth.of(visible))
           case _ =>
             val flushed = state.flush
             flushed.copy(currentStartX = flushed.currentX)
@@ -310,19 +310,6 @@ object CharacterRenderer:
 
   private def isVisibleCodePoint(codePoint: Int): Boolean =
     !Character.isISOControl(codePoint)
-
-  /** How many cells a codepoint occupies on the grid: none for a combining mark, which composes onto the glyph before
-    * it, otherwise its display width. [[com.serenity.ui.tui.TerminalScreenBuffer.putString]] advances by exactly this,
-    * so a run laid out here lands on the cells the one before it actually filled -- counting one per codepoint instead
-    * left every run after a wide glyph starting inside that glyph.
-    */
-  private def displayWidth(codePoint: Int): Int =
-    val category = Character.getType(codePoint)
-    if category == Character.NON_SPACING_MARK ||
-        category == Character.COMBINING_SPACING_MARK ||
-        category == Character.ENCLOSING_MARK
-    then 0
-    else CharWidth.of(codePoint)
 
   /** A run on the cell grid: the stretches the primary font draws as one string, and each character a fallback font
     * draws alone on the cell the caret stops put it on, since its glyph's advance has nothing to do with the grid.
@@ -338,8 +325,7 @@ object CharacterRenderer:
           case None => surface.putString(startCell, y, stretch)
           case Some(name) =>
             surface.text.withFallbackFamily(name) {
-              stretch.codePoints().toArray.foldLeft(startCell) { (cell, codePoint) =>
-                val shown = String(Character.toChars(codePoint))
+              CellRuns.clusters(stretch).foldLeft(startCell) { (cell, shown) =>
                 val cells = CellRuns.cellsIn(shown)
                 withinCells(surface, cell, y, cells)(surface.putString(cell, y, shown))
                 cell + cells
@@ -386,7 +372,7 @@ object CharacterRenderer:
             if index >= run.content.length then index
             else
               val codePoint = run.content.codePointAt(index)
-              val width     = displayWidth(codePoint)
+              val width     = CharWidth.of(codePoint)
               if usedCells + width > allowedCells then index
               else fittingLength(index + Character.charCount(codePoint), usedCells + width)
 

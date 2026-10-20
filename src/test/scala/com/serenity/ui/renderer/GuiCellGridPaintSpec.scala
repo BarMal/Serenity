@@ -54,3 +54,16 @@ class GuiCellGridPaintSpec extends AnyFlatSpec with Matchers:
     letter should not be empty
     letter.head should be >= (3 * cell)
   }
+
+  "A combining mark on the GUI cell grid" should "fill no cell of its own" in {
+    val image = painted("e\u0301x")
+    // `e` with its mark is one cell and `x` another: cells 1 and 2, nothing past them.
+    (1 to 2).foreach(column => rgb(image, column * cell + cell - 1, metrics.lineHeight + 1) shouldBe redRgb)
+    rgb(image, 3 * cell + 1, metrics.lineHeight + 1) shouldBe whiteRgb
+  }
+
+  it should "stay with a wide glyph, drawn with it on its two cells" in {
+    val image = painted("中\u0301a")
+    (1 to 3).foreach(column => rgb(image, column * cell + cell - 1, metrics.lineHeight + 1) shouldBe redRgb)
+    rgb(image, 4 * cell + 1, metrics.lineHeight + 1) shouldBe whiteRgb
+  }
