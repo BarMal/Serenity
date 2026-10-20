@@ -6,6 +6,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, RendererHighlights}
 import com.serenity.ui.theme.Theme
@@ -29,12 +30,17 @@ class KeywordHighlightRenderingSpec extends AnyFlatSpec with Matchers:
 
   private val text = "Liz saw Lizard and Liz again."
 
-  private def stateWith(notesPaneOpen: Boolean = true, visible: Boolean = true): AppState =
+  private def stateWith(
+    notesPaneOpen: Boolean = true,
+    visible: Boolean = true,
+    selection: Option[Selection] = None
+  ): AppState =
     val manuscriptPane = PaneId(0)
     val notesPane      = PaneId(1)
     val base           = Buffer.fromString(manuscriptId, text)
     val manuscript = base.copy(
       document = base.document.copy(language = Some(LanguageId.Markdown)),
+      editing = EditingStateFixtures(cursors = List(CursorPosition(0, 0)), selection = selection),
       annotations = Annotations(notes = Map(NoteKey.Keyword("liz") -> Notes(noteId)))
     )
     val note    = Buffer.fromString(noteId, "Liz is the captain").copy(hidden = true)
@@ -91,6 +97,16 @@ class KeywordHighlightRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "not be washed once the highlights are switched off" in {
     washed(render(stateWith(visible = false))) shouldBe Nil
+  }
+
+  it should "be painted under the selection, which still reads on top of it" in {
+    val selected  = Selection(CursorPosition(0, 0), CursorPosition(0, 3))
+    val drawn     = render(stateWith(selection = Some(selected))).drawRunPxCalls
+    val wash      = drawn.indexWhere(_.background == RendererHighlights.keywordBackground(Theme.light))
+    val selection = drawn.indexWhere(call => call.s == "Liz" && call.background == Theme.light.highlighted.background)
+
+    wash should be >= 0
+    selection should be > wash
   }
 
   it should "leave the document untouched" in {

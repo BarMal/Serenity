@@ -126,8 +126,7 @@ enum ViewIntent:
   case ToggleMaximisePanel
 
   /** Shows the note for the chapter the cursor is in beside the manuscript, creating it the first time. */
-  case OpenChapterNote
-  case OpenKeywordNote
+  case OpenChapterNote, OpenKeywordNote
 
   /** Shows or hides the faded overview under empty chapters; the notes themselves are untouched. */
   case ToggleChapterGhosts
