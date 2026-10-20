@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import com.serenity.keystroke.events.{Event, InsertChar, ResizeEvent, TextEntryEvent}
+import com.serenity.keystroke.events.{Event, InsertChar, InsertText, ResizeEvent, TextEntryEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, Focus, Runtime}
 import com.serenity.state.reducers.{AppEventReducer, ReducerResult, SettingsPreviewReducer, SystemEventReducer}
@@ -54,9 +54,9 @@ private[manager] object EventPipelineTransitions:
       case _                   => false
     def stamped(runtime: Runtime): Runtime = if inEditor then runtime.observeEditKey(nowNanos) else runtime
     event match
-      case _: InsertChar     => state.copy(runtime = stamped(state.runtime.observeTyping(nowNanos)))
-      case _: TextEntryEvent => if inEditor then state.copy(runtime = stamped(state.runtime)) else state
-      case _                 => state
+      case _: (InsertChar | InsertText) => state.copy(runtime = stamped(state.runtime.observeTyping(nowNanos)))
+      case _: TextEntryEvent            => if inEditor then state.copy(runtime = stamped(state.runtime)) else state
+      case _                            => state
 
   /** Advances each buffer's `markdownPreviewEditGeneration`, marking an edit burst the preview has not caught up with.
     */
