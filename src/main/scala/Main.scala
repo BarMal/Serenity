@@ -18,7 +18,18 @@ import com.serenity.config.{
   ConfigMigrationWarning,
   ConfigNotice
 }
-import com.serenity.diagnostics.{CrashRecord, FrameKind, FramePhase, FrameTimings, LogLocation, LogMigration, PreviousRun, RuntimeIdentity, Trace, TuiConsoleLogFilter}
+import com.serenity.diagnostics.{
+  CrashRecord,
+  FrameKind,
+  FramePhase,
+  FrameTimings,
+  LogLocation,
+  LogMigration,
+  PreviousRun,
+  RuntimeIdentity,
+  Trace,
+  TuiConsoleLogFilter
+}
 import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend}
 import com.serenity.input.{ImeDiagnostics, SwingInputHandler}
 import com.serenity.io.{FileDialogSelection, SwingFileDialog}
