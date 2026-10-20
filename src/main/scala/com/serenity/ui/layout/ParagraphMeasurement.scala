@@ -52,9 +52,9 @@ final private[layout] class ParagraphMeasurement private (
     * candidate leaves the window, holds a character whose shaping depends on its neighbours beyond a kerning pair, or
     * lands too near the width for float rounding between the two measurements to be ruled out.
     */
-  def measuredFit(from: Int, panelWidthPx: Int): Option[SegmentFit] =
+  def measuredFit(from: Int, panelWidthPx: Int, givenBackPx: Float = 0.0f): Option[SegmentFit] =
     val remaining = spec.text.length - from
-    val width     = panelWidthPx.toFloat
+    val width     = panelWidthPx.toFloat + givenBackPx
     @annotation.tailrec
     def loop(limit: Int): Option[SegmentFit] =
       advances match

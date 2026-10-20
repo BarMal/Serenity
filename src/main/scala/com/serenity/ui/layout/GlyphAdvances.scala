@@ -6,7 +6,7 @@ import java.text.AttributedString
 
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 import com.serenity.ui.renderer.FontProbes.{PairProbe, Probe}
-import com.serenity.ui.renderer.{FontFirstUse, FontProbes, ShapedTextCache}
+import com.serenity.ui.renderer.{FontFirstUse, FontProbes, GlyphAdvance, ShapedTextCache}
 
 /** Each character's glyph advance over a span of text, read from one glyph vector per font run instead of a
   * `TextLayout` caret query per character. A character is context-free when its advance is the same however the text
@@ -241,9 +241,9 @@ private[layout] object GlyphAdvances:
     val nominal  = font.createGlyphVector(frc, runChars)
     if nominal.getNumGlyphs == runChars.length && layoutAdvanceMatchesSum(font, frc, shapedText.probes) then
       val codes = nominal.getGlyphCodes(0, runChars.length, new Array[Int](runChars.length))
-      val memo  = GlyphAdvanceMemo(nominal)
+      val memo  = GlyphAdvanceMemo(nominal, font, frc, shapedText.glyphAdvances)
       runChars.indices.foreach { index =>
-        val advance = memo.advance(codes(index), index)
+        val advance = memo.advance(codes(index))
         advances(start + index) = advance
         contextFree(start + index) = isContextFreeCharacter(runChars(index)) &&
           !Font.textRequiresLayout(runChars, index, index + 1) &&
@@ -312,18 +312,23 @@ private[layout] object GlyphAdvances:
     faithful.indices.foreach(char => if !faithful(char) then contextFree(start + char) = false)
 
   /** A glyph's advance depends only on the glyph, so each distinct glyph code in a run is read once. */
-  final private class GlyphAdvanceMemo(glyphs: GlyphVector):
+  final private class GlyphAdvanceMemo(
+      glyphs: GlyphVector,
+      font: Font,
+      frc: FontRenderContext,
+      advanceOf: GlyphAdvance
+  ):
     private val capacity = Integer.highestOneBit(math.max(16, math.min(glyphs.getNumGlyphs, 1024)) * 2)
     private val keys     = new Array[Int](capacity)
     private val values   = new Array[Float](capacity)
     private val filled   = new Array[Boolean](capacity)
 
-    def advance(code: Int, glyphIndex: Int): Float =
+    def advance(code: Int): Float =
       @annotation.tailrec
       def probe(slot: Int, remaining: Int): Float =
-        if remaining == 0 then glyphs.getGlyphMetrics(glyphIndex).getAdvance
+        if remaining == 0 then advanceOf.of(font, frc, code)
         else if !filled(slot) then
-          val measured = glyphs.getGlyphMetrics(glyphIndex).getAdvance
+          val measured = advanceOf.of(font, frc, code)
           filled(slot) = true
           keys(slot) = code
           values(slot) = measured

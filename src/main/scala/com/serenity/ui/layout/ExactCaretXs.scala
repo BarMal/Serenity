@@ -97,7 +97,7 @@ private[layout] object ExactCaretXs:
   ): ShapedCaretStops.Stops =
     if measuresByGlyphs(text, spans.map(_.font), frc, shapedText.probes) then
       shapedText.countExactMeasurement()
-      ShapedCaretStops.of(text, spans, frc)
+      ShapedCaretStops.of(text, spans, frc, shapedText.glyphAdvances)
     else
       val attributed = AttributedString(text)
       spans.foreach(span => attributed.addAttribute(TextAttribute.FONT, span.font, span.start, span.end))
