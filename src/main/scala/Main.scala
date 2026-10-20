@@ -466,6 +466,7 @@ object Main extends IOApp:
                     logger,
                     policy = SessionManager.SessionPolicy.interactive,
                     sessionRootOverride = session.rootOverride,
+                    endInputMethodComposition = IO(swingWin.endInputMethodComposition()),
                     onFontConfigChanged = config =>
                       displayState.update(config) >>
                         IO.blocking {
