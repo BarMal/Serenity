@@ -1,5 +1,7 @@
 package com.serenity.config
 
+import java.util.concurrent.atomic.AtomicReference
+
 import scala.jdk.CollectionConverters.*
 
 import ch.qos.logback.classic.Level
@@ -23,8 +25,15 @@ import org.scalatest.matchers.should.Matchers
   */
 class ConfigFieldDecodeSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach:
 
-  private val logger   = LogbackLoggers.named("com.serenity.config.ConfigField")
-  private val appender = new ListAppender[ILoggingEvent]()
+  private val logger = LogbackLoggers.named("com.serenity.config.ConfigField")
+
+  // The logger is JVM-wide, so a suite running beside this one can warn on it while a test here is deciding. `decode`
+  // logs on the calling thread, so only the events this test's own thread logs are kept.
+  private val testThread = new AtomicReference[String]("")
+
+  private val appender = new ListAppender[ILoggingEvent]:
+    override protected def append(event: ILoggingEvent): Unit =
+      if event.getThreadName == testThread.get then super.append(event)
 
   private val densityField: ConfigField[InterfaceDensity] =
     ConfigRegistry.fields
@@ -34,6 +43,7 @@ class ConfigFieldDecodeSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
       .getOrElse(fail("ConfigRegistry has no field with sessionKey 'interfaceDensity'"))
 
   override def beforeEach(): Unit =
+    testThread.set(Thread.currentThread.getName)
     appender.list.clear()
     appender.start()
     logger.addAppender(appender)
@@ -75,4 +85,16 @@ class ConfigFieldDecodeSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
 
     densityField.get(decoded) shouldBe InterfaceDensity.Compact
     warnMessages.exists(_.contains("interfaceDensity")) shouldBe true
+  }
+
+  it should "stay silent for a missing field even while another thread logs a warning on the same logger" in {
+    // The logger is JVM-wide, so another suite running beside this one can warn on it at any moment.
+    val other = new Thread(() => logger.warn("a warning from another suite's decode"))
+    other.start()
+    other.join()
+
+    val decoded = densityField.decode(Json.obj().hcursor, AppConfig.default)
+
+    decoded shouldBe AppConfig.default
+    warnMessages shouldBe empty
   }

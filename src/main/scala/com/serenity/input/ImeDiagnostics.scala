@@ -132,7 +132,7 @@ object ImeDiagnostics:
     val extra = if others.isEmpty then "" else s" +${others.mkString(",")}"
     s"[$start,$end) $state$extra"
 
-  private def highlightOf(value: AnyRef): Option[InputMethodHighlight] = value match
+  private[input] def highlightOf(value: AnyRef): Option[InputMethodHighlight] = value match
     case highlight: InputMethodHighlight => Some(highlight)
     case annotation: Annotation          => Option(annotation.getValue).flatMap(highlightOf)
     case _                               => None

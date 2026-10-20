@@ -9,7 +9,7 @@ import com.serenity.richtext.ParagraphRole
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
-import com.serenity.ui.renderer.FontFirstUse
+import com.serenity.ui.renderer.{FontFirstUse, FontProbes}
 
 /** The wrap-and-measure algorithm as it stood before per-paragraph measurement: every row fitted by laying out a
   * candidate prefix with `TextLayout`, and every row's carets read back from a `TextLayout` of that row alone. Kept as
@@ -51,14 +51,24 @@ object LegacyLineMeasurement:
         if startColumn >= text.length || acc.length >= maxVisualLines then acc
         else
           val spanInsetPx = DropCapLayout.leftInsetPx(paragraphRole, acc.length, dropCapIndentPx)
-          val insetPx =
+          val givenBackPx =
             if DropCapLayout.isHomeRow(paragraphRole, acc.length, baseColumn + startColumn) then
-              (spanInsetPx - replacedCharacterWidthPx(startColumn)).max(0.0f)
-            else spanInsetPx
-          val wrapWidthPx  = math.max(1, panelWidthPx - math.round(insetPx))
+              replacedCharacterWidthPx(startColumn).min(spanInsetPx)
+            else 0.0f
+          val wrapWidthPx  = math.max(1, panelWidthPx - math.round(spanInsetPx))
           val segmentStart = baseColumn + startColumn
           val fitted =
-            fittingLength(text, startColumn, wrapWidthPx, segmentStart, resolver, frc, measuredLayout, cellMetrics)
+            fittingLength(
+              text,
+              startColumn,
+              wrapWidthPx,
+              givenBackPx,
+              segmentStart,
+              resolver,
+              frc,
+              measuredLayout,
+              cellMetrics
+            )
           val segmentLength = wordBoundarySegmentLength(text, startColumn, fitted)
           val end           = startColumn + segmentLength
           val row           = shape(text.substring(startColumn, end), segmentStart, baseColumn + end)
@@ -181,7 +191,7 @@ object LegacyLineMeasurement:
     else
       val fonts = (0 until text.length).map(index => resolver.fontAt(absoluteStartColumn + index)).distinct
       val bidi  = java.text.Bidi.requiresBidi(text.toCharArray, 0, text.length)
-      if !fonts.forall(GlyphAdvances.layoutAdvanceMatchesSum(_, frc)) || (bidi && fonts.length > 1) then
+      if !fonts.forall(GlyphAdvances.layoutAdvanceMatchesSum(_, frc, FontProbes())) || (bidi && fonts.length > 1) then
         RowEdges(textLayoutCaretXs(text, absoluteStartColumn, resolver, frc), None)
       else glyphEdges(text, absoluteStartColumn, resolver, frc, bidi)
 
@@ -288,25 +298,33 @@ object LegacyLineMeasurement:
     line: String,
     from: Int,
     panelWidthPx: Int,
+    givenBackPx: Float,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics
   ): Int =
+    val widthPx = panelWidthPx.toFloat + givenBackPx
     if !measuredLayout then
       val charWidth = math.max(1, cellMetrics.charWidth)
       if cellMetrics.displayWidthAware then
-        fittingDisplayWidthSegmentLength(line, from, panelWidthPx, charWidth, resolver.tabSize)
-      else fittingUniformSegmentLength(line, from, panelWidthPx, charWidth, resolver.tabSize)
+        fittingDisplayWidthSegmentLength(
+          line,
+          from,
+          panelWidthPx + math.round(givenBackPx),
+          charWidth,
+          resolver.tabSize
+        )
+      else fittingUniformSegmentLength(line, from, panelWidthPx + math.round(givenBackPx), charWidth, resolver.tabSize)
     else
       val remaining = line.length - from
       @annotation.tailrec
       def loop(limit: Int): Int =
         val edges      = layoutEdges(line.substring(from, from + limit), absoluteStartColumn, resolver, frc)
         val carets     = edges.trailing.getOrElse(normalizeCollapsedCarets(edges.carets))
-        val maxFitting = carets.zipWithIndex.takeWhile(_._1 <= panelWidthPx.toFloat).map(_._2).lastOption.getOrElse(0)
-        if limit >= remaining || carets.lastOption.exists(_ > panelWidthPx.toFloat) || maxFitting < limit then
+        val maxFitting = carets.zipWithIndex.takeWhile(_._1 <= widthPx).map(_._2).lastOption.getOrElse(0)
+        if limit >= remaining || carets.lastOption.exists(_ > widthPx) || maxFitting < limit then
           math.max(1, maxFitting)
         else loop(math.min(remaining, math.max(limit + 1, limit * 2)))
       loop(math.min(remaining, math.max(16, panelWidthPx / math.max(1, cellMetrics.charWidth) + 32)))

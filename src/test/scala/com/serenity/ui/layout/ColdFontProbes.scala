@@ -21,9 +21,9 @@ private[serenity] object ColdFontProbes:
     val measured =
       GlyphAdvances.measure(AdvanceText, 0, AdvanceText.length, 0, singleFontResolver(font), frc, shapedText)
     (
-      GlyphAdvances.layoutAdvanceMatchesSum(font, frc),
-      GlyphAdvances.shapingMaySubstitute(font, frc),
-      GlyphAdvances.advancesAreUniform(font, frc),
+      GlyphAdvances.layoutAdvanceMatchesSum(font, frc, shapedText.probes),
+      GlyphAdvances.shapingMaySubstitute(font, frc, shapedText.probes),
+      GlyphAdvances.advancesAreUniform(font, frc, shapedText.probes),
       measured.length
     )
 
@@ -31,6 +31,6 @@ private[serenity] object ColdFontProbes:
     ShapingBarriers.cutAtOrAfter(AdvanceText, 1, font, frc, shapedText)
 
   def measuredLayoutDecision(font: Font, frc: FontRenderContext): Boolean =
-    TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc)
+    TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc, shapedText.probes)
 
   def lineExtents(font: Font, frc: FontRenderContext): FontLineExtents.Extent = extents.of(font, frc)

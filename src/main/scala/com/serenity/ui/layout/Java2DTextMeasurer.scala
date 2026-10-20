@@ -18,7 +18,8 @@ final case class Java2DTextMeasurer(
 
   val metricsKey: MetricsKey = MetricsKey("java2d", Vector(frc))
 
-  def measuresProportionally(font: FontSpec): Boolean = TextLayoutSnapshot.shouldUseMeasuredLayout(font.toAwt, frc)
+  def measuresProportionally(font: FontSpec): Boolean =
+    TextLayoutSnapshot.shouldUseMeasuredLayout(font.toAwt, frc, shapedText.probes)
 
   def cellMetrics(font: FontSpec): CellMetrics = CellMetrics.fromFont(font.toAwt)
 

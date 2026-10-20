@@ -75,10 +75,25 @@ class DropCapWrapWidthSpec extends AnyFlatSpec with Matchers:
       )
     TextLayoutSnapshot.fromBuffer(buffer, widthPx, serif, frc)
 
+  private val fixedWidths = List(230, 262, 300, 333, 377, 411, 480)
+
+  /** Panel widths at and beside the trailing edge of every word and the space after it, where a pixel of room decides
+    * whether the word fits: a fixed list of widths meets those edges only by luck of the platform's font metrics.
+    */
+  private def wordEdgeWidths(lines: Int, frc: FontRenderContext): List[Int] =
+    val indent  = math.round(snapshot(lines, 300, frc).visualLines(1).xOffsetPx)
+    val visible = bodySnapshot(prose.drop(1), 100000, frc).visualLines.head
+    val edges =
+      visible.text.indices.filter(index => visible.text(index) == ' ').flatMap(index => visible.xForColumn(index + 1))
+    edges
+      .flatMap(edge => (-1 to 1).map(beside => indent + math.ceil(edge.toDouble).toInt + beside))
+      .filter(_ >= 200)
+      .toList
+
   for
     (scale, frc) <- frcs
     lines        <- List(2, 3)
-    widthPx      <- List(230, 262, 300, 333, 377, 411, 480)
+    widthPx      <- (fixedWidths ++ wordEdgeWidths(lines, frc)).distinct.sorted
   do
     s"the first line of a $lines-line drop cap at $scale, ${widthPx}px" should
       "break where its visible text breaks at the panel width less the indent" in {
