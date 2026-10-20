@@ -172,6 +172,7 @@ object CursorViewport:
             cursor.column,
             if isTui then wrapWidthPx else gridWidthPx,
             font,
+            wrapCache.shapedText,
             cellMetricsOverride = cellMetricsOverride,
             forceCellLayout = forceCellLayout,
             tabSize = tabSize

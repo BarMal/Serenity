@@ -201,8 +201,9 @@ object TerminalInputHandler:
       reader   = readerOverride.getOrElse(terminal.reader())
       pumpRead = readSource.getOrElse((gate: ReadGate) => IO.interruptible(gate.read(reader)))
       // rawReadLoop runs on a dedicated fiber so the CE3 compute pool is never blocked waiting for the terminal;
-      // guarantee(rawFiber.cancel) tears it down whenever readLoop exits (naturally or via cancellation).
-      fiber <- rawReadLoop(pumpRead, rawQueue, escDeadline, metrics, beforeEachRead).start.flatMap { rawFiber =>
+      // `background` starts it uncancelably and cancels it whenever readLoop exits (naturally or via cancellation), so
+      // a shutdown landing between the start and the clean-up cannot leave it, or the reader it parks, running.
+      fiber <- rawReadLoop(pumpRead, rawQueue, escDeadline, metrics, beforeEachRead).background.surround {
         readLoop(
           rawQueue,
           queue,
@@ -216,7 +217,6 @@ object TerminalInputHandler:
           wheelScrollLines,
           metrics
         )
-          .guarantee(rawFiber.cancel)
       }.start
     yield new TerminalInputHandler(
       inputRouter,
@@ -362,7 +362,7 @@ object TerminalInputHandler:
 
       def arbiter: IO[Unit] = pumpQueue.take.flatMap(forward)
 
-      pump.start.flatMap(pumpFiber => arbiter.guarantee(pumpFiber.cancel))
+      pump.background.surround(arbiter)
     }
 
   private def readLoop(

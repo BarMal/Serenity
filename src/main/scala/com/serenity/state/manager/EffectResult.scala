@@ -27,8 +27,10 @@ import com.serenity.state.reducers.{
   CommandRunnerReducer,
   ModalEventReducer,
   NoticeReducer,
+  PendingRename,
   PinnedPanelContentReducer,
   ReducerResult,
+  RenameEditReducer,
   ThemeStateReducer
 }
 import com.serenity.text.TextEncoding
@@ -62,6 +64,9 @@ private[manager] enum EffectResult:
   case FileReopenFailed(bufferId: BufferId, encoding: TextEncoding)
   case FileLoaded(path: Path, loaded: Buffer)
   case FileLoadFailed(path: Path, error: Throwable)
+
+  /** The files a rename names that no buffer held are open now, so its remaining edits can be applied (#1965). */
+  case RenameFilesOpened(pending: PendingRename)
 
   /** A preset store operation finished: `previews` is the store's listing afterwards, when it was read. Always applied,
     * so a failed write is still reported.
@@ -217,6 +222,7 @@ private[manager] object EffectResult:
       case projectTask @ (ProjectTaskOutput(_, _) | ProjectTaskFinished(_, _)) =>
         reduce(state, projectTask, wrapCache).state
       case expired: CommandRunnerBindingExpired => reduce(state, expired, wrapCache).state
+      case renamed: RenameFilesOpened           => reduce(state, renamed, wrapCache).state
 
   /** [[applyIfCurrent]] together with the effects its transition emits; only the cases matched here emit any. */
   def reduce(
@@ -227,6 +233,7 @@ private[manager] object EffectResult:
     result match
       case PickerSearched(pickerId, query, searched) =>
         PickerSearchTransitions.applied(state, pickerId, query, searched)
+      case RenameFilesOpened(pending)           => RenameEditReducer.afterOpening(pending, state)
       case ProjectTaskOutput(taskId, chunk)     => ProjectTaskTransitions.outputArrived(state, taskId, chunk)
       case ProjectTaskFinished(taskId, outcome) => ProjectTaskTransitions.finished(state, taskId, outcome)
       case CommandRunnerBindingExpired(recordedAtMillis) =>

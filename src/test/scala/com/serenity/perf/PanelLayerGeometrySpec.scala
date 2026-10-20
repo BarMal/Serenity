@@ -95,7 +95,8 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
         deviceScaleX = LaptopFrameBenchmarks.DeviceScale,
         deviceScaleY = LaptopFrameBenchmarks.DeviceScale,
         contentPersists = true,
-        layerCacheOwnerOverride = Some(screen)
+        layerCacheOwnerOverride = Some(screen),
+        textCaches = caches.surfaceText
       ):
         override def layerBuffers: Option[LayerBufferSupport] = super.layerBuffers.map { real =>
           new LayerBufferSupport:

@@ -43,7 +43,8 @@ object RendererFloatingPanels:
           state.persisted.config,
           layerContext.cursorVisible,
           layerContext.uiFont,
-          layerContext.cellMetrics
+          layerContext.cellMetrics,
+          layerContext.caches.measuredAdvances
         )
       overlay.surfaceId.flatMap(panels.sites.get) match
         case Some(site) =>
@@ -107,7 +108,8 @@ object RendererFloatingPanels:
         state.persisted.config,
         context.cursorVisible,
         context.uiFont,
-        context.cellMetrics
+        context.cellMetrics,
+        context.caches.measuredAdvances
       )
     }
 
@@ -136,7 +138,7 @@ object RendererFloatingPanels:
         def paintContent(layerContext: RenderContext): Unit =
           surface.content match
             case SurfaceContent.MarkdownPreview(bufferId, title) =>
-              renderMarkdownPreviewPanel(bufferId, title, rect, node.contentRect, state, layerContext)
+              renderMarkdownPreviewPanel(bufferId, title, rect, node.contentRect, state, scene, layerContext)
             case _ =>
               PinnedPanelRenderer.render(
                 layerContext.surface,
@@ -177,6 +179,7 @@ object RendererFloatingPanels:
     rect: LayoutRect,
     contentRect: LayoutRect,
     state: AppState,
+    scene: UiSceneSnapshot,
     context: RenderContext
   ): Unit =
     val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = s"Preview: $title", rows = Nil)
@@ -191,11 +194,51 @@ object RendererFloatingPanels:
     state.persisted.buffers.get(bufferId).foreach { buffer =>
       val textRect     = markdownPreviewTextRect(rect, contentRect, context)
       val previewState = readingState(state)
-      val previewBuffer =
-        buffer.clearSelections.copy(viewport = buffer.viewport.copy(topVisualLine = 0, leftColumn = 0))
-      val previewSnapshot = RendererPaneSetup.snapshotForBuffer(previewBuffer, textRect, previewState, context)
+      val lineStart =
+        buffer.clearSelections.copy(viewport = MarkdownPreviewScroll.previewViewport(buffer.viewport))
+      val lineStartSnapshot = RendererPaneSetup.snapshotForBuffer(lineStart, textRect, previewState, context)
+      val (previewBuffer, previewSnapshot) = followEditorWithinLine(buffer, lineStart, lineStartSnapshot)(
+        scene,
+        state,
+        textRect,
+        previewState,
+        context
+      )
       RendererPaneContent.renderReadOnlyText(previewBuffer, textRect, previewState, context, previewSnapshot)
     }
+
+  /** Moves the preview from the start of the editor's top line to the same fraction of that line, so it scrolls with
+    * the editor row by row instead of jumping a wrapped paragraph at a time.
+    */
+  private def followEditorWithinLine(editorBuffer: Buffer, lineStart: Buffer, lineStartSnapshot: TextLayoutSnapshot)(
+    scene: UiSceneSnapshot,
+    state: AppState,
+    textRect: LayoutRect,
+    previewState: AppState,
+    context: RenderContext
+  ): (Buffer, TextLayoutSnapshot) =
+    val editorViewport = editorBuffer.viewport
+    val row = for
+      paneId   <- editorPaneShowing(state, editorBuffer.id)
+      snapshot <- scene.textSnapshot(paneId)
+      previewRows = MarkdownPreviewScroll.leadingRows(lineStartSnapshot, editorViewport.topLine)
+      target = MarkdownPreviewScroll.previewRow(
+        editorViewport.topVisualLine,
+        MarkdownPreviewScroll.editorRows(editorViewport, snapshot),
+        previewRows
+      )
+      if target > 0
+    yield target
+    row.fold((lineStart, lineStartSnapshot)) { target =>
+      val scrolled = lineStart.copy(viewport = lineStart.viewport.copy(topVisualLine = target))
+      (scrolled, RendererPaneSetup.snapshotForBuffer(scrolled, textRect, previewState, context))
+    }
+
+  private def editorPaneShowing(state: AppState, bufferId: BufferId): Option[PaneId] =
+    val panes = state.persisted.layout.editorPanes
+    state.persisted.layout.activeEditorPaneId
+      .filter(id => panes.get(id).exists(_.bufferId.contains(bufferId)))
+      .orElse(panes.collectFirst { case (id, pane) if pane.bufferId.contains(bufferId) => id })
 
   private def readingState(state: AppState): AppState =
     val config = state.persisted.config

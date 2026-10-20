@@ -33,7 +33,7 @@ class SummonedChromeFrameSpec extends AnyFlatSpec with Matchers:
     val height = viewport.height * metrics.lineHeight
     val image  = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
     val surface =
-      new Java2DRenderSurface(image, metrics, font, _ => (), width, height, 1.0, 1.0)
+      new Java2DRenderSurface(image, metrics, font, _ => (), width, height, 1.0, 1.0, textCaches = caches.surfaceText)
     RendererEntryPoints.render(
       state,
       cursorVisible = true,

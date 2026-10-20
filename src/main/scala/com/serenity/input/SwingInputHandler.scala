@@ -26,7 +26,8 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     uiMetrics: () => CellMetrics,
     wheelScrollLines: Int = InputConfig().wheelScrollLines,
     frameTimings: FrameTimings = FrameTimings(),
-    imeDiagnostics: Option[ImeDiagnostics.Sink] = None
+    imeDiagnostics: Option[ImeDiagnostics.Sink] = None,
+    summonReleaseTimer: (() => Unit) => SummonReleaseTimer = SummonReleaseTimer.swing
 ) extends InputHandler[F]:
 
   def this(component: java.awt.Component, inputRouter: InputRouter[F, E], metrics: () => CellMetrics) =
@@ -81,16 +82,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   private val lastKeyPress       = new AtomicReference[Option[(KeyStroke, Long)]](None)
   private val summonState        = new AtomicReference[SummonChordTracker.State](SummonChordTracker.State.empty)
 
-  /** Settles a release the auto-repeat window did not turn out to be part of a repeat. One-shot, restarted by each
-    * release, on the event dispatch thread like the key listeners.
-    */
-  private val summonReleaseTimer =
-    val timer = new javax.swing.Timer(
-      (SummonChordTracker.RepeatGapMillis + 8).toInt,
-      _ => applySummon(SummonChordTracker.flushed)
-    )
-    timer.setRepeats(false)
-    timer
+  private val summonReleases = summonReleaseTimer(() => applySummon(SummonChordTracker.flushed))
 
   /** The last key press this handler queued and when it arrived, for [[MenuActivationGuard]]. The arrival time is read
     * from the clock here rather than from `KeyEvent.getWhen`, whose time base the platform decides.
@@ -204,7 +196,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     val result = step(summonState.get())
     summonState.set(result.state)
     result.signals.foreach(signal => enqueueRaw(summonEvent(signal)))
-    if result.state.pendingRelease.nonEmpty then summonReleaseTimer.restart()
+    if result.state.pendingRelease.nonEmpty then summonReleases.restart()
     result.consumed
 
   private def applySummon(step: SummonChordTracker.State => SummonChordTracker.Result): Unit =

@@ -5,6 +5,8 @@ import com.serenity.keystroke.events.{ColumnLeft, ColumnRight, EditorEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.ColumnPagingFixture.{RowId, paneId, rowId}
 import com.serenity.state.models.*
+import com.serenity.ui.layout.WrappedLineCache
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -16,6 +18,10 @@ class ColumnPagingNavigationSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  private val shaping = ShapedTextCache()
+
+  private def uncached: WrappedLineCache = WrappedLineCache.sharing(shaping)
+
   private def cursorOf(state: AppState, fixture: ColumnPagingFixture): CursorPosition =
     state.persisted.buffers(fixture.buffer.id).editing.cursorPositions.head
 
@@ -24,7 +30,11 @@ class ColumnPagingNavigationSpec extends AnyFlatSpec with Matchers:
     fixture.truth.reverse.find((line, column) => line == cursor.line && column <= cursor.column)
 
   private def move(state: AppState, event: EditorEvent): AppState =
-    CursorViewport.ensureVisibleCursors(state, VerticalNavSupport.dispatch(event, paneId, state).state)
+    CursorViewport.ensureVisibleCursors(
+      state,
+      VerticalNavSupport.dispatch(event, paneId, state, uncached).state,
+      uncached
+    )
 
   /** The column, counted from the first column of the document, the cursor is in -- when the page the viewport anchors
     * shows it.

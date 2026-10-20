@@ -14,6 +14,7 @@ import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -192,7 +193,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
         lineText = buffer.document.content.getLine(0).getOrElse(""),
         cursorColumn = 8,
         visibleWidthPx = CellMetrics.fromFont(font).charWidth * 4,
-        font = font
+        font = font,
+        shapedText = ShapedTextCache()
       )
 
       buffer.document.content.collect() shouldBe "iiiiiiii"

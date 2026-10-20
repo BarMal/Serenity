@@ -7,7 +7,7 @@ import javax.swing.JPanel
 
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.{Java2DRenderSurface, RenderImage}
+import com.serenity.ui.renderer.{Java2DRenderSurface, RenderImage, SurfaceTextCaches}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -28,7 +28,8 @@ class Java2DLayerSurfaceSpec extends AnyFlatSpec with Matchers:
       logicalHeightPx = 50,
       deviceScaleX = 2.0,
       deviceScaleY = 2.0,
-      onFlush = image => flushedRef.set(Some(image))
+      onFlush = image => flushedRef.set(Some(image)),
+      textCaches = SurfaceTextCaches.fresh()
     )
     layer.viewportWidth shouldBe 10
     layer.viewportHeight shouldBe 5
@@ -44,7 +45,16 @@ class Java2DLayerSurfaceSpec extends AnyFlatSpec with Matchers:
     val font       = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val flushedRef = new AtomicReference[Option[BufferedImage]](None)
 
-    val layer = Java2DRenderSurface.forLayer(metrics, font, 40, 40, 1.0, 1.0, image => flushedRef.set(Some(image)))
+    val layer = Java2DRenderSurface.forLayer(
+      metrics,
+      font,
+      40,
+      40,
+      1.0,
+      1.0,
+      image => flushedRef.set(Some(image)),
+      SurfaceTextCaches.fresh()
+    )
     layer.flush()
 
     (new Color(flushedRef.get().get.getRGB(5, 5), true)).getAlpha shouldBe 0
@@ -64,6 +74,7 @@ class Java2DLayerSurfaceSpec extends AnyFlatSpec with Matchers:
       deviceScaleX = 1.0,
       deviceScaleY = 1.0,
       onFlush = image => flushedRef.set(Some(image)),
+      textCaches = SurfaceTextCaches.fresh(),
       recycled = Some(recycled)
     )
     layer.flush()
@@ -86,6 +97,7 @@ class Java2DLayerSurfaceSpec extends AnyFlatSpec with Matchers:
       deviceScaleX = 1.0,
       deviceScaleY = 1.0,
       onFlush = image => flushedRef.set(Some(image)),
+      textCaches = SurfaceTextCaches.fresh(),
       recycled = Some(recycled)
     )
     layer.flush()
@@ -130,9 +142,9 @@ class Java2DLayerSurfaceSpec extends AnyFlatSpec with Matchers:
     val metrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 12)
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
 
-    val first  = Java2DRenderSurface.forFrame(metrics, font, canvas, _ => ())
-    val second = Java2DRenderSurface.forFrame(metrics, font, canvas, _ => ())
-    val other  = Java2DRenderSurface.forFrame(metrics, font, new JPanel(), _ => ())
+    val first  = SingleUseFrameSurface(metrics, font, canvas, _ => ())
+    val second = SingleUseFrameSurface(metrics, font, canvas, _ => ())
+    val other  = SingleUseFrameSurface(metrics, font, new JPanel(), _ => ())
 
     first.layerCacheOwner shouldBe second.layerCacheOwner
     first.layerCacheOwner should not be other.layerCacheOwner

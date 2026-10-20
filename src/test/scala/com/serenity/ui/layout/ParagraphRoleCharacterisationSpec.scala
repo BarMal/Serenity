@@ -7,7 +7,7 @@ import com.serenity.config.AppConfig
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextPosition, RichTextRange}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, RichTextState, Viewport}
-import com.serenity.ui.renderer.DropCapRenderer
+import com.serenity.ui.renderer.{DropCapRenderer, ShapedTextCache}
 import com.serenity.ui.theme.RichTextStyling
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -85,7 +85,8 @@ class ParagraphRoleCharacterisationSpec extends AnyFlatSpec with Matchers:
       RichTextContext(Some(document(dropCap)), 1.0f, dropCapsEnabled),
       lineIndex = 0,
       lineLength = prose.length,
-      lineText = prose
+      lineText = prose,
+      shapedText = ShapedTextCache()
     )
 
   "dropCapSplitFontSpans" should "single the first character out at the paragraph's start" in {

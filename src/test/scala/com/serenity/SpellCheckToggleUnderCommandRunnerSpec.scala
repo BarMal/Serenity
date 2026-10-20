@@ -124,7 +124,8 @@ class SpellCheckToggleUnderCommandRunnerSpec extends AnyFlatSpec with Matchers:
         out => captured.set(Option(out)),
         logicalWidthPx = widthPx,
         logicalHeightPx = heightPx,
-        contentPersists = true
+        contentPersists = true,
+        textCaches = caches.surfaceText
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
