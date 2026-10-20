@@ -4,6 +4,7 @@ import java.awt.Color
 import java.nio.file.Files
 
 import com.serenity.config.*
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -65,7 +66,8 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.editorConfig.fontConfig.fallbackFamilies shouldBe List("Noto Sans CJK JP", "Symbola")
-    config.editorConfig.fontConfig.fallback.slotFamilies shouldBe Vector("Noto Sans CJK JP", "Symbola", "Dialog")
+    config.editorConfig.fontConfig.fallback.slotFamilies shouldBe
+      Vector("Noto Sans CJK JP", "Symbola") ++ FontLoader.emojiFontFamily :+ "Dialog"
     ConfigManager.configToString(config) should include(
       """typography.fallback.families = ["Noto Sans CJK JP", "Symbola"]"""
     )
