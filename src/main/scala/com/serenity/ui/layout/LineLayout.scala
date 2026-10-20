@@ -40,7 +40,17 @@ private[layout] object LineLayout:
     // A slice of a line cannot be scanned for the markup that opened before it.
     val lineText = if baseColumn == 0 then text else ""
     val inputs =
-      lineLayoutInputs(font, frc, measuredLayout, richText, bufferLine, lineLength, lineText, wrapCache.shapedText)
+      lineLayoutInputs(
+        font,
+        frc,
+        measuredLayout,
+        richText,
+        bufferLine,
+        lineLength,
+        lineText,
+        wrapCache.shapedText,
+        wrapCache.layoutMemos
+      )
     TextLayoutSnapshot.wrapLogicalLine(
       text,
       bufferLine,
@@ -69,12 +79,14 @@ private[layout] object LineLayout:
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
     richText: RichTextContext,
-    shapedText: ShapedTextCache
+    shapedText: ShapedTextCache,
+    memos: LayoutMemos
   ): Vector[TextVisualLine] =
     val startColumn = math.min(viewport.leftColumn, rawLine.length)
     val endColumn   = math.min(rawLine.length, startColumn + math.max(1, viewport.visibleColumns) + OverscanColumns)
     val slice       = rawLine.slice(startColumn, endColumn)
-    val inputs = lineLayoutInputs(font, frc, measuredLayout, richText, lineIndex, rawLine.length, rawLine, shapedText)
+    val inputs =
+      lineLayoutInputs(font, frc, measuredLayout, richText, lineIndex, rawLine.length, rawLine, shapedText, memos)
     val row =
       TextLayoutSnapshot.measureSegment(
         slice,
@@ -84,7 +96,8 @@ private[layout] object LineLayout:
         frc,
         measuredLayout,
         cellMetrics,
-        shapedText
+        shapedText,
+        memos
       )
     val wrapped = DropCapLayout.reservingGlyphHeight(
       Vector(DropCapLayout.placed(row, lineIndex, inputs.paragraphRole, lineWithinParagraph = 0, inputs.dropCap)),
@@ -122,7 +135,8 @@ private[layout] object LineLayout:
           lineIndex,
           rawLine.length,
           rawLine,
-          wrapCache.shapedText
+          wrapCache.shapedText,
+          wrapCache.layoutMemos
         )
       val wrapped = TextLayoutSnapshot.wrapLogicalLine(
         rawLine,
@@ -173,7 +187,8 @@ private[layout] object LineLayout:
     lineIndex: Int,
     lineLength: Int,
     lineText: String,
-    shapedText: ShapedTextCache
+    shapedText: ShapedTextCache,
+    memos: LayoutMemos
   ): LineLayoutInputs =
     val markdownRuns =
       if measuredLayout && richText.markdown.isActive then Some(richText.markdown.runsOn(lineIndex, lineText))
@@ -203,6 +218,7 @@ private[layout] object LineLayout:
           paragraphRole,
           richText.proseScale,
           richText.dropCapGapEm,
+          memos,
           richText.letterShape(lineIndex)
         )
       else DropCapLayout.Reserve.none

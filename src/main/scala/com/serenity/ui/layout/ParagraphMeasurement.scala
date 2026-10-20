@@ -17,7 +17,7 @@ final private[layout] class ParagraphMeasurement private (
     end: Int,
     boundaries: Array[Int],
     val advances: Option[GlyphAdvances],
-    shapedText: ShapedTextCache
+    val shapedText: ShapedTextCache
 ):
   import ParagraphMeasurement.*
 

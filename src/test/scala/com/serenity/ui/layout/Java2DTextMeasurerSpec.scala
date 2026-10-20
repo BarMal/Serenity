@@ -124,7 +124,7 @@ class Java2DTextMeasurerSpec extends TextMeasurerContract:
   property("line metrics over any column span equal LineFontResolver.lineMetrics") {
     forAll(genJava2DSpan) { (line, frc, from, until) =>
       val (startColumn, endColumn) = (line.startColumn + from, line.startColumn + until + 1)
-      val (heightPx, ascentPx)     = resolverFor(line.fonts).lineMetrics(frc, startColumn, endColumn)
+      val (heightPx, ascentPx)     = resolverFor(line.fonts).lineMetrics(frc, FontLineExtents(), startColumn, endColumn)
       line.measurer.lineMetrics(line.fonts, startColumn, endColumn) shouldBe LineMetrics(heightPx, ascentPx)
     }
   }
@@ -142,11 +142,11 @@ class Java2DTextMeasurerSpec extends TextMeasurerContract:
     }
   }
 
-  property("a glyph's width equals DropCapLayout.glyphWidthPx") {
+  property("a glyph's width equals DropCapWidths") {
     forAll(genText, Gen.oneOf(awtFonts), Gen.oneOf(oneX, twoX)) { (text, font, frc) =>
       val width = Java2DTextMeasurer(frc).glyphWidthPx(FontSpec.fromAwt(font), text)
       java.lang.Float.floatToRawIntBits(width) shouldBe
-        java.lang.Float.floatToRawIntBits(DropCapLayout.glyphWidthPx(font, frc, text))
+        java.lang.Float.floatToRawIntBits(DropCapWidths()(font, frc, text))
     }
   }
 
