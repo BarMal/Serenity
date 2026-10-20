@@ -81,4 +81,3 @@ class TuiConsoleLogFilterSpec extends AnyFlatSpec with Matchers:
       console.getFilterChainDecision(event) shouldBe FilterReply.DENY
     finally console.clearAllFilters()
   }
-
