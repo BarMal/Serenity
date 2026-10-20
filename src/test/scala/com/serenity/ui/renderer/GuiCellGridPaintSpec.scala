@@ -22,10 +22,11 @@ class GuiCellGridPaintSpec extends AnyFlatSpec with Matchers:
   private val redRgb   = 0xff0000
   private val whiteRgb = 0xffffff
 
-  private def painted(text: String): BufferedImage =
+  /** `text` painted from cell 1 in the foreground `ink` on the red background. */
+  private def painted(text: String, ink: RenderColor = black): BufferedImage =
     val image   = new BufferedImage(40 * cell, 3 * metrics.lineHeight, BufferedImage.TYPE_INT_RGB)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => (), 40 * cell, 3 * metrics.lineHeight, 1.0, 1.0)
-    surface.setForegroundColor(black)
+    surface.setForegroundColor(ink)
     surface.setBackgroundColor(white)
     surface.clearViewport(white)
     surface.setBackgroundColor(red)
@@ -41,7 +42,8 @@ class GuiCellGridPaintSpec extends AnyFlatSpec with Matchers:
     }.toVector
 
   "A wide glyph on the GUI cell grid" should "fill the background of every cell the string takes" in {
-    val image = painted("中a")
+    // Drawn in the background's own colour, so no glyph's ink can show through the pixels sampled.
+    val image = painted("中a", ink = red)
     // 中 takes two cells and `a` one, starting at cell 1: the string covers cells 1 to 3.
     (1 to 3).foreach(column => rgb(image, column * cell + cell - 1, metrics.lineHeight + 1) shouldBe redRgb)
     rgb(image, 4 * cell + 1, metrics.lineHeight + 1) shouldBe whiteRgb
@@ -56,14 +58,14 @@ class GuiCellGridPaintSpec extends AnyFlatSpec with Matchers:
   }
 
   "A combining mark on the GUI cell grid" should "fill no cell of its own" in {
-    val image = painted("e\u0301x")
+    val image = painted("e\u0301x", ink = red)
     // `e` with its mark is one cell and `x` another: cells 1 and 2, nothing past them.
     (1 to 2).foreach(column => rgb(image, column * cell + cell - 1, metrics.lineHeight + 1) shouldBe redRgb)
     rgb(image, 3 * cell + 1, metrics.lineHeight + 1) shouldBe whiteRgb
   }
 
   it should "stay with a wide glyph, drawn with it on its two cells" in {
-    val image = painted("中\u0301a")
+    val image = painted("中\u0301a", ink = red)
     (1 to 3).foreach(column => rgb(image, column * cell + cell - 1, metrics.lineHeight + 1) shouldBe redRgb)
     rgb(image, 4 * cell + 1, metrics.lineHeight + 1) shouldBe whiteRgb
   }
