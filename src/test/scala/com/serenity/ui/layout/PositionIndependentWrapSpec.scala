@@ -138,7 +138,7 @@ class PositionIndependentWrapSpec extends AnyFlatSpec with Matchers:
     val centredRows = visualLines(buffer(List(centred)), cache, panel)
 
     centredRows.zip(plainRows).foreach { (aligned, unaligned) =>
-      val available = math.max(0.0f, panel.toFloat - unaligned.widthPx)
+      val available = math.max(0.0f, panel.toFloat - unaligned.xOffsetPx - unaligned.widthPx)
       aligned.xOffsetPx shouldBe unaligned.xOffsetPx + available / 2.0f
       aligned.xForColumn(aligned.startColumn) shouldBe Some(aligned.xOffsetPx)
     }

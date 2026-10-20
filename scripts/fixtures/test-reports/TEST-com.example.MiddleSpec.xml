@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuite errors="0" failures="1" hostname="name-host" name="com.example.MiddleSpec" tests="7"
+ time="3.125" timestamp="2026-10-10T12:00:02">
+  <testcase name="fails" classname="com.example.MiddleSpec" time="3.0">
+    <failure message="boom" type="class org.scalatest.exceptions.TestFailedException"/>
+  </testcase>
+</testsuite>

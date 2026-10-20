@@ -3,10 +3,10 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.{FontRenderContext, GlyphVector, TextAttribute, TextLayout}
 import java.text.AttributedString
-import java.util.concurrent.ConcurrentHashMap
 
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
-import com.serenity.ui.renderer.{FontFirstUse, ShapedTextCache}
+import com.serenity.ui.renderer.FontProbes.{PairProbe, Probe}
+import com.serenity.ui.renderer.{FontFirstUse, FontProbes, GlyphAdvance, ShapedTextCache}
 
 /** Each character's glyph advance over a span of text, read from one glyph vector per font run instead of a
   * `TextLayout` caret query per character. A character is context-free when its advance is the same however the text
@@ -103,10 +103,6 @@ private[layout] object GlyphAdvances:
   /** Below this a non-zero advance could be mistaken for a collapsed caret by `normalizeCollapsedCarets`. */
   private val SmallestDistinctAdvancePx = 0.05f
 
-  final private case class Probe(font: Font, frc: FontRenderContext)
-
-  private val layoutAgreement = ConcurrentHashMap[Probe, java.lang.Boolean]()
-
   private val AgreementProbeText = "Hoxi "
 
   /** Whether `TextLayout` ends a row where the shaped glyphs' advances do, kerning included: a slanted face (a
@@ -114,11 +110,8 @@ private[layout] object GlyphAdvances:
     * slant overhang, so every row's trailing edge, and with it where rows wrap, would differ from the sum. Read off the
     * font once, since the font alone does not say whether its italic is synthesised.
     */
-  def layoutAdvanceMatchesSum(font: Font, frc: FontRenderContext): Boolean =
-    layoutAgreement.computeIfAbsent(
-      Probe(font, frc),
-      probe => SettledProbe(probeLayoutAdvance(probe.font, probe.frc)): java.lang.Boolean
-    )
+  def layoutAdvanceMatchesSum(font: Font, frc: FontRenderContext, probes: FontProbes): Boolean =
+    probes.layoutAgreement(Probe(font, frc))(probe => SettledProbe(probeLayoutAdvance(probe.font, probe.frc)))
 
   private def probeLayoutAdvance(font: Font, frc: FontRenderContext): Boolean =
     FontFirstUse.settle(font, frc)
@@ -129,19 +122,15 @@ private[layout] object GlyphAdvances:
     text.addAttribute(TextAttribute.FONT, font)
     math.abs(TextLayout(text.getIterator, frc).getAdvance - summed) <= ShapingTolerancePx
 
-  private val substitutions = ConcurrentHashMap[Probe, java.lang.Boolean]()
-
   private val SubstitutionProbeText = "-> => ->> =>> ffl fi fl "
 
   /** Whether `TextLayout` can give a character a glyph, or an advance, other than the one `createGlyphVector` maps it
     * to: either the font asks for ligatures or kerning, or its own tables substitute glyphs (an arrow ligature, a
     * contextual alternate) however the font was requested, as Inter's do.
     */
-  def shapingMaySubstitute(font: Font, frc: FontRenderContext): Boolean =
-    font.hasLayoutAttributes || substitutions.computeIfAbsent(
-      Probe(font, frc),
-      probe => SettledProbe(probeSubstitution(probe.font, probe.frc)): java.lang.Boolean
-    )
+  def shapingMaySubstitute(font: Font, frc: FontRenderContext, probes: FontProbes): Boolean =
+    font.hasLayoutAttributes ||
+      probes.substitution(Probe(font, frc))(probe => SettledProbe(probeSubstitution(probe.font, probe.frc)))
 
   private def probeSubstitution(font: Font, frc: FontRenderContext): Boolean =
     FontFirstUse.settle(font, frc)
@@ -152,18 +141,13 @@ private[layout] object GlyphAdvances:
     count != shaped.getNumGlyphs || nominal.getGlyphCodes(0, count, new Array[Int](count)).toSeq !=
       shaped.getGlyphCodes(0, count, new Array[Int](count)).toSeq
 
-  private val uniformAdvances = ConcurrentHashMap[Probe, java.lang.Boolean]()
-
   private val UniformProbeText = "iIm.W0 "
 
   /** Whether every glyph of the font advances alike, as a monospaced face's do. Substituting one of its glyphs for
     * another cannot then change where the text after it starts, whichever way the text is cut into rows.
     */
-  def advancesAreUniform(font: Font, frc: FontRenderContext): Boolean =
-    uniformAdvances.computeIfAbsent(
-      Probe(font, frc),
-      probe => SettledProbe(probeUniformAdvances(probe.font, probe.frc)): java.lang.Boolean
-    )
+  def advancesAreUniform(font: Font, frc: FontRenderContext, probes: FontProbes): Boolean =
+    probes.uniformAdvance(Probe(font, frc))(probe => SettledProbe(probeUniformAdvances(probe.font, probe.frc)))
 
   private def probeUniformAdvances(font: Font, frc: FontRenderContext): Boolean =
     FontFirstUse.settle(font, frc)
@@ -171,18 +155,11 @@ private[layout] object GlyphAdvances:
     val advances = (0 until glyphs.getNumGlyphs).map(glyphs.getGlyphMetrics(_).getAdvance)
     advances.maxOption.zip(advances.minOption).forall((widest, narrowest) => widest - narrowest <= ShapingTolerancePx)
 
-  final private case class PairProbe(font: Font, frc: FontRenderContext, first: Char, second: Char)
-
-  private val pairKernings = ConcurrentHashMap[PairProbe, java.lang.Float]()
-
   /** How far `first` pulls `second` closer (negative) when the two are shaped side by side. Read from the pair alone,
     * since a width taken from glyph positions along a long run carries rounding that differs from run to run.
     */
-  private def pairKerning(font: Font, frc: FontRenderContext, first: Char, second: Char): Float =
-    pairKernings.computeIfAbsent(
-      PairProbe(font, frc, first, second),
-      probe => SettledProbe(probePairKerning(probe)): java.lang.Float
-    )
+  private def pairKerning(font: Font, frc: FontRenderContext, first: Char, second: Char, probes: FontProbes): Float =
+    probes.pairKerning(PairProbe(font, frc, first, second))(probe => SettledProbe(probePairKerning(probe)))
 
   private def probePairKerning(probe: PairProbe): Float =
     FontFirstUse.settle(probe.font, probe.frc)
@@ -262,17 +239,17 @@ private[layout] object GlyphAdvances:
     FontFirstUse.settle(font, frc)
     val runChars = java.util.Arrays.copyOfRange(chars, start, end)
     val nominal  = font.createGlyphVector(frc, runChars)
-    if nominal.getNumGlyphs == runChars.length && layoutAdvanceMatchesSum(font, frc) then
+    if nominal.getNumGlyphs == runChars.length && layoutAdvanceMatchesSum(font, frc, shapedText.probes) then
       val codes = nominal.getGlyphCodes(0, runChars.length, new Array[Int](runChars.length))
-      val memo  = GlyphAdvanceMemo(nominal)
+      val memo  = GlyphAdvanceMemo(nominal, font, frc, shapedText.glyphAdvances)
       runChars.indices.foreach { index =>
-        val advance = memo.advance(codes(index), index)
+        val advance = memo.advance(codes(index))
         advances(start + index) = advance
         contextFree(start + index) = isContextFreeCharacter(runChars(index)) &&
           !Font.textRequiresLayout(runChars, index, index + 1) &&
           (advance == 0.0f || advance >= SmallestDistinctAdvancePx)
       }
-      if shapingMaySubstitute(font, frc) && (start until end).exists(contextFree(_)) then
+      if shapingMaySubstitute(font, frc, shapedText.probes) && (start until end).exists(contextFree(_)) then
         clearShapedCharacters(runChars, start, font, frc, shapedText, codes, advances, kernAfter, contextFree)
       java.lang.System.arraycopy(contextFree, start, measurable, start, end - start)
       (start until end).foreach(char => if kernAfter(char) != 0.0f then contextFree(char) = false)
@@ -297,7 +274,7 @@ private[layout] object GlyphAdvances:
   ): Unit =
     val count                    = runChars.length
     val shaped                   = shapedText.stretchOf(String(runChars), font, frc)
-    val substitutionKeepsAdvance = advancesAreUniform(font, frc)
+    val substitutionKeepsAdvance = advancesAreUniform(font, frc, shapedText.probes)
     val faithful                 = new Array[Boolean](count)
 
     @annotation.tailrec
@@ -325,7 +302,7 @@ private[layout] object GlyphAdvances:
           val onLine       = onBaseline(glyph, last)
           if unchanged && sameWidth && onLine then (first until until).foreach(faithful(_) = true)
           else if keepsGlyph && onLine && last + 1 < shaped.glyphCount && until < count then
-            val pair = pairKerning(font, frc, runChars(first), runChars(until))
+            val pair = pairKerning(font, frc, runChars(first), runChars(until), shapedText.probes)
             if pair != 0.0f && math.abs(shapedWidth - nominalWidth - pair) <= ShapingTolerancePx then
               faithful(first) = true
               kernAfter(start + first) = pair
@@ -335,18 +312,23 @@ private[layout] object GlyphAdvances:
     faithful.indices.foreach(char => if !faithful(char) then contextFree(start + char) = false)
 
   /** A glyph's advance depends only on the glyph, so each distinct glyph code in a run is read once. */
-  final private class GlyphAdvanceMemo(glyphs: GlyphVector):
+  final private class GlyphAdvanceMemo(
+      glyphs: GlyphVector,
+      font: Font,
+      frc: FontRenderContext,
+      advanceOf: GlyphAdvance
+  ):
     private val capacity = Integer.highestOneBit(math.max(16, math.min(glyphs.getNumGlyphs, 1024)) * 2)
     private val keys     = new Array[Int](capacity)
     private val values   = new Array[Float](capacity)
     private val filled   = new Array[Boolean](capacity)
 
-    def advance(code: Int, glyphIndex: Int): Float =
+    def advance(code: Int): Float =
       @annotation.tailrec
       def probe(slot: Int, remaining: Int): Float =
-        if remaining == 0 then glyphs.getGlyphMetrics(glyphIndex).getAdvance
+        if remaining == 0 then advanceOf.of(font, frc, code)
         else if !filled(slot) then
-          val measured = glyphs.getGlyphMetrics(glyphIndex).getAdvance
+          val measured = advanceOf.of(font, frc, code)
           filled(slot) = true
           keys(slot) = code
           values(slot) = measured
