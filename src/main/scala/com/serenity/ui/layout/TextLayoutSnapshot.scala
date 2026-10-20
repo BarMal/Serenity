@@ -459,13 +459,13 @@ object TextLayoutSnapshot:
   ): WrappedRow =
     import spec.{baseColumn, cellMetrics, dropCapIndentPx, frc, measuredLayout, paragraphRole, resolver, text}
     val spanInsetPx = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapIndentPx)
-    val insetPx =
+    val givenBackPx =
       if DropCapLayout.isHomeRow(paragraphRole, lineWithinParagraph, baseColumn + startColumn) then
-        (spanInsetPx - DropCapLayout.replacedCharacterWidthPx(text, baseColumn, resolver, frc)).max(0.0f)
-      else spanInsetPx
-    val wrapWidthPx      = math.max(1, spec.panelWidthPx - math.round(insetPx))
+        DropCapLayout.replacedCharacterWidthPx(text, baseColumn, resolver, frc).min(spanInsetPx)
+      else 0.0f
+    val wrapWidthPx      = math.max(1, spec.panelWidthPx - math.round(spanInsetPx))
     val segmentStart     = baseColumn + startColumn
-    val fit              = fittingSegment(paragraph, text, startColumn, wrapWidthPx, segmentStart, spec)
+    val fit              = fittingSegment(paragraph, text, startColumn, wrapWidthPx, segmentStart, spec, givenBackPx)
     val segmentLength    = wordBoundarySegmentLength(text, startColumn, fit.length)
     val endColumnInSlice = startColumn + segmentLength
     val row = measureSegment(
