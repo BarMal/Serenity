@@ -2,6 +2,7 @@ package com.serenity.state.manager
 
 import com.serenity.diagnostics.FrameCounters
 import com.serenity.markdown.MarkdownPreviewCache
+import com.serenity.state.reducers.CompositionRevisions
 import com.serenity.ui.layout.WrappedLineCache
 import com.serenity.ui.renderer.{
   GraphemeSegmentationCache,
@@ -46,7 +47,8 @@ final class RenderCaches private (
     val shapedText: ShapedTextCache,
     val styledFonts: StyledFontCache,
     val labelSprites: LabelSprites,
-    val measuredAdvances: MeasuredTextAdvances
+    val measuredAdvances: MeasuredTextAdvances,
+    val compositionRevisions: CompositionRevisions
 ):
 
   /** What a Java2D surface drawing for this owner paints text through. */
@@ -73,5 +75,6 @@ object RenderCaches:
       shapedText,
       StyledFontCache(),
       LabelSprites(LabelSprites.DefaultCapacity),
-      MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText)
+      MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText),
+      new CompositionRevisions
     )

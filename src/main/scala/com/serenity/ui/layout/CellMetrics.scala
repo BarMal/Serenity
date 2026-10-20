@@ -6,10 +6,10 @@ import com.serenity.ui.renderer.FontFirstUse
   * size. Derived from FontMetrics at startup and font changes only.
   *
   * @param displayWidthAware
-  *   whether a glyph on this grid may occupy more than one cell -- true only for a real character-cell terminal
-  *   ([[CellMetrics.cellUnit]]), where a wide glyph takes two cells and [[CharWidth]] says which do. A font-derived
-  *   grid leaves this false: there the advance of any one glyph is the font's business, and the cell path assumes a
-  *   uniform per-character advance as it always has.
+  *   whether a glyph on this grid may occupy more than one cell: a wide glyph takes two cells and [[CharWidth]] says
+  *   which do. True for the terminal ([[CellMetrics.cellUnit]]) and for a font-derived grid, whose cell layout -- the
+  *   one a monospaced font without ligatures gets -- places and paints a wide glyph on two cells exactly as the
+  *   terminal does. Measured layout ignores it: there the advance of any one glyph is the font's business.
   */
 final case class CellMetrics(charWidth: Int, lineHeight: Int, ascent: Int, displayWidthAware: Boolean = false):
   def isValid: Boolean        = charWidth > 0 && lineHeight > 0
@@ -54,7 +54,12 @@ object CellMetrics:
     val g     = image.createGraphics()
     g.setFont(font)
     FontFirstUse.settle(font, g.getFontRenderContext)
-    val fm     = g.getFontMetrics
-    val result = CellMetrics(math.max(1, fm.charWidth('M')), math.max(1, fm.getHeight), math.max(1, fm.getAscent))
+    val fm = g.getFontMetrics
+    val result = CellMetrics(
+      math.max(1, fm.charWidth('M')),
+      math.max(1, fm.getHeight),
+      math.max(1, fm.getAscent),
+      displayWidthAware = true
+    )
     g.dispose()
     result

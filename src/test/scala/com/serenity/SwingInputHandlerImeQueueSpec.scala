@@ -71,3 +71,23 @@ class SwingInputHandlerImeQueueSpec extends AnyFlatSpec with Matchers:
       )
     )
   }
+
+  "The input-method listener" should "queue what the platform reports, in order with the keys, and consume the event" in {
+    val panel   = new JPanel
+    val handler = handlerOn(panel)
+
+    typed(panel, 'a')
+    val event = inputMethodEvent(panel, "漢字かな", committed = 2)
+    panel.getInputMethodListeners.head.inputMethodTextChanged(event)
+    typed(panel, 'b')
+
+    event.isConsumed shouldBe true
+    firstEvents(handler, 4) shouldBe Some(
+      List(
+        InsertChar('a'),
+        ImeCommit("漢字"),
+        ImeComposing("かな", List(CompositionClause(0, 2, selected = false)), Some(0)),
+        InsertChar('b')
+      )
+    )
+  }

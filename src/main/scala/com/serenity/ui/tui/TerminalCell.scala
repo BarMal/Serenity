@@ -11,19 +11,20 @@ import com.serenity.ui.theme.TextStyle
 enum CellSpan:
   case Narrow, Wide, Continuation
 
-/** One cell of a [[TerminalScreenBuffer]]: a single Unicode codepoint (not a full grapheme cluster) plus the colour and
-  * style it was drawn with.
+/** One cell of a [[TerminalScreenBuffer]]: a single Unicode codepoint plus the combining marks composed onto it (a mark
+  * takes no cell of its own, so it lives in its base's), and the colour and style it was drawn with.
   */
 final case class TerminalCell(
     codePoint: Int,
     fg: Color,
     bg: Color,
     style: TextStyle,
-    span: CellSpan
+    span: CellSpan,
+    marks: String = ""
 ):
   /** The printable text for this cell -- empty for [[CellSpan.Continuation]], which is never drawn on its own. */
   def text: String =
-    if span == CellSpan.Continuation then "" else new String(Character.toChars(codePoint))
+    if span == CellSpan.Continuation then "" else new String(Character.toChars(codePoint)) + marks
 
 object TerminalCell:
 

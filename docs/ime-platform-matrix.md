@@ -9,9 +9,9 @@ input-method events yet; this page says what to measure on each platform before 
 SERENITY_IME_DIAGNOSTICS=1 serenity
 ```
 
-With the variable unset the canvas has no input-method listener and no `InputMethodRequests`, so behaviour is
-unchanged. With it set, the windowed interface logs one line per event to the normal log (logger `ImeDiagnostics`, level
-INFO):
+The editor always listens for input-method events and answers the platform's requests (see
+`docs/ime-composition-model.md`); this variable only adds the log below. It is how the matrix further down is filled in.
+With it set, the windowed interface logs one line per event to the normal log (logger `ImeDiagnostics`, level INFO):
 
 ```
 t=1760900000000 IME id=INPUT_METHOD_TEXT_CHANGED committed=2 length=4 caret=3 leading visible=none codePoints=[3053,3093,306B,3061] runs=[[0,2) plain; [2,4) CONVERTED selected]
@@ -24,9 +24,8 @@ whole text including the committed prefix; `caret` and `visible` as character in
 per code point, so astral characters show as one; `runs` the attribute runs, with the input-method highlight state
 (`RAW`/`CONVERTED`) and whether the run is the selected clause. Text is never logged as characters.
 
-The `REQ` lines record which `InputMethodRequests` methods the platform actually calls. The requests object reports an
-empty document and places the candidate window at the canvas origin: it exists to see what the platform asks for, not
-to position anything.
+The `REQ` lines record which `InputMethodRequests` methods the platform actually calls. The editor reports an empty
+document (no reconversion, nothing to cancel) and places the candidate window at the primary caret.
 
 ## What to test, on each platform
 

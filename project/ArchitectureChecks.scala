@@ -343,11 +343,6 @@ object ArchitectureChecks {
       "logback builds this filter by reflection from `logback.xml`, so no value can be injected into it; a static flag set once from `Frontend.logRouting` before the first logger exists is the only channel."
     ),
     PurityChecks.Allowed(
-      "main/scala/com/serenity/ui/presets/UiPresetIndex.scala",
-      "UiPresetStore.inProcessLocks",
-      "One lock per preset file must be shared by every `UiPresetStore` in the process that names it; per-instance locks would let two stores write the same file at once. The mutual exclusion is the point, so the state is inherently process-wide."
-    ),
-    PurityChecks.Allowed(
       "main/scala/com/serenity/ui/renderer/FontFirstUse.scala",
       "FontFirstUse.NoContexts",
       "An empty sentinel map that is only ever read (`getOrDefault`), never written, so the miss path allocates nothing. It carries no state."

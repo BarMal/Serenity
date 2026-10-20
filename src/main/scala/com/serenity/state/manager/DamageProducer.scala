@@ -2,6 +2,7 @@ package com.serenity.state.manager
 
 import cats.syntax.all.*
 import com.serenity.config.{AppConfig, RenderDamageGranularity}
+import com.serenity.document.KeywordHighlights
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.rope.{Balance, RopeDiff}
 import com.serenity.spellcheck.SpellChecker
@@ -52,12 +53,24 @@ object DamageProducer:
               granularity
             )
     }
-    val damage = bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+|
+    val damage = bufferDamage |+| compositionDamage(before, after) |+| chromeDamage(before, after) |+|
+      fullRenderDamage(before, after) |+|
       paneChromeDamage(before, after) |+| statusLineDamage(before, after) |+| tabBarDamage(before, after)
     // Every combine regroups all the facts it holds, so a transition that grabs no thumb does not pay for one.
     scrollbarDamage(before, after) match
       case Damage.Nothing => damage
       case grabbed        => damage |+| grabbed
+
+  /** The pre-edit is drawn into the text, so the buffer shows differently when one begins, changes or ends (#2008) -
+    * though none of its own state does. Whole-buffer, since a pre-edit can reflow the rows below it.
+    */
+  private def compositionDamage(before: AppState, after: AppState): Damage =
+    if before.runtime.composition == after.runtime.composition then Damage.Nothing
+    else
+      List(before, after)
+        .flatMap(_.runtime.composition)
+        .map(composition => Damage.BufferAll(composition.bufferId): Damage)
+        .combineAll
 
   /** Everything about one buffer's own state that can dirty its visible rows without necessarily touching its rope
     * content -- cursor and selection movement, comment/diagnostic annotation changes, and a language reclassification
@@ -80,6 +93,7 @@ object DamageProducer:
       selectionDamage(bufferId, beforeBuffer, afterBuffer) |+|
       findMatchDamage(bufferId, before, after) |+|
       commentDamage(bufferId, beforeBuffer, afterBuffer) |+|
+      keywordHighlightDamage(bufferId, before, after) |+|
       diagnosticDamage(bufferId, before, after, beforeBuffer, afterBuffer) |+|
       languageDamage(bufferId, beforeBuffer, afterBuffer) |+|
       viewportDamage(bufferId, beforeBuffer, afterBuffer) |+|
@@ -225,6 +239,14 @@ object DamageProducer:
         val changed       = beforeResults.diff(afterResults) ++ afterResults.diff(beforeResults)
         val current       = found.flatMap(_.resultSet.selectedResult)
         Damage.BufferRows(bufferId, (changed ++ current).map(_.line))
+
+  /** Keyword highlights appear and go with the notes pane, the toggle and the keyword notes rather than with any edit,
+    * so a change in which terms are painted repaints the whole buffer.
+    */
+  private def keywordHighlightDamage(bufferId: BufferId, before: AppState, after: AppState): Damage =
+    if KeywordHighlights.paintedTerms(before, bufferId) == KeywordHighlights.paintedTerms(after, bufferId) then
+      Damage.Nothing
+    else Damage.BufferAll(bufferId)
 
   private def commentDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.annotations.documentComments == after.annotations.documentComments then Damage.Nothing

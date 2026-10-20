@@ -77,7 +77,7 @@ final class TerminalScreenBuffer(val width: Int, val height: Int):
     try body
     finally clipRef.set(previous)
 
-  def putString(x: Int, y: Int, s: String): Unit = putFrom(s, 0, x, y)
+  def putString(x: Int, y: Int, s: String): Unit = putFrom(s, 0, x, y, -1)
 
   /** Fills the rectangle with `char` in the current colours: one array fill per row, however many cells it covers. */
   def fillRect(x: Int, y: Int, w: Int, h: Int, char: Char): Unit =
@@ -121,15 +121,28 @@ final class TerminalScreenBuffer(val width: Int, val height: Int):
 
   private def inBounds(x: Int, y: Int): Boolean = x >= 0 && x < width && y >= 0 && y < height
 
-  @tailrec private def putFrom(s: String, index: Int, col: Int, y: Int): Unit =
+  /** `base` is the column of the last character this call wrote, the one a combining mark composes onto, or -1 when
+    * there is none (a mark with no base before it, or whose base was clipped away, is left out rather than borrowing a
+    * cell another call wrote).
+    */
+  @tailrec private def putFrom(s: String, index: Int, col: Int, y: Int, base: Int): Unit =
     if index < s.length then
       val codePoint  = s.codePointAt(index)
       val glyphWidth = CharWidth.of(codePoint)
-      if glyphWidth == 2 then
-        writeCell(col, y, CellGrid.pack(codePoint, CellSpan.Wide), penStyleId.get())
-        writeCell(col + 1, y, CellGrid.pack(' '.toInt, CellSpan.Continuation), penStyleId.get())
-      else writeCell(col, y, CellGrid.pack(codePoint, CellSpan.Narrow), penStyleId.get())
-      putFrom(s, index + Character.charCount(codePoint), col + glyphWidth, y)
+      val next       = index + Character.charCount(codePoint)
+      if glyphWidth == 0 then
+        if base >= 0 then attachMark(base, y, codePoint)
+        putFrom(s, next, col, y, base)
+      else
+        if glyphWidth == 2 then
+          writeCell(col, y, CellGrid.pack(codePoint, CellSpan.Wide), penStyleId.get())
+          writeCell(col + 1, y, CellGrid.pack(' '.toInt, CellSpan.Continuation), penStyleId.get())
+        else writeCell(col, y, CellGrid.pack(codePoint, CellSpan.Narrow), penStyleId.get())
+        putFrom(s, next, col + glyphWidth, y, if inBounds(col, y) && clipRef.get().contains(col, y) then col else -1)
+
+  private def attachMark(x: Int, y: Int, codePoint: Int): Unit =
+    grid.appendMarks(x, y, String(Character.toChars(codePoint)))
+    dirtyRows.set(y)
 
   /** Overwrite one cell, then repair whichever half of a wide glyph the overwrite just orphaned: if the cell replaced
     * was a [[CellSpan.Wide]] leader, its continuation to the right no longer has a leader; if it was a
