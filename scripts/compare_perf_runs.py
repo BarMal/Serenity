@@ -25,7 +25,16 @@ silently trusted either way.
 Usage:
     compare_perf_runs.py --base b1.csv b2.csv b3.csv --head h1.csv h2.csv h3.csv [--threshold 1.75]
 
-Exit codes: 0 no regression, 1 a regression, or fewer than `--min-pairs` usable pairs for every benchmark.
+Confirming before failing (issue #1731): a benchmark that clears the threshold on three pairs may have met a slow spell
+on the runner, as `render.markdown.live_preview` did on CI (1.93x, then 1.35x on a re-run of the same commit). So the
+first pass does not fail on timing alone. With `--write-flagged FILE` it writes the names it flagged and exits 2; the
+caller re-measures just those benchmarks in fresh pairs on the same runner and runs this script again with
+`--only FILE` on the new runs, which fails only if they are still past the threshold. The second judgement uses the new
+pairs alone, not the old ones with the new, so the benchmark that was picked for being the worst of ninety does not
+count its own first luck twice. Retained-heap and allocation checks are not noisy in this way and fail on the first pass.
+
+Exit codes: 0 no regression (or every flagged benchmark was forgiven), 1 a regression, a memory failure, or fewer than
+`--min-pairs` usable pairs for every benchmark, 2 timing regressions to confirm (only with `--write-flagged`).
 """
 
 from __future__ import annotations
@@ -140,6 +149,8 @@ def main_with_args(argv: list[str]) -> int:
     parser.add_argument("--min-regression-delta-ms", type=float, default=DEFAULT_MIN_DELTA_MS)
     parser.add_argument("--min-pairs", type=int, default=DEFAULT_MIN_PAIRS)
     parser.add_argument("--unstable-spread", type=float, default=DEFAULT_UNSTABLE_SPREAD)
+    parser.add_argument("--write-flagged", metavar="FILE", help="Write the timing regressions to FILE, one name a line, and exit 2 for them")
+    parser.add_argument("--only", metavar="FILE", help="Judge only the benchmarks named in FILE, from runs made to confirm them")
     args = parser.parse_args(argv)
 
     if len(args.base) != len(args.head):
@@ -152,6 +163,14 @@ def main_with_args(argv: list[str]) -> int:
     verdicts = judge(
         base_runs, head_runs, args.threshold, args.min_regression_delta_ms, args.min_pairs, args.unstable_spread
     )
+    if args.only:
+        with open(args.only) as handle:
+            named = {line.strip() for line in handle if line.strip()}
+        verdicts = [v for v in verdicts if v.name in named]
+        missing = sorted(named - {v.name for v in verdicts})
+        if missing:
+            print(f"::error::The confirmation runs have no usable pairs for: {', '.join(missing)}.")
+            return 1
     if not verdicts:
         print(f"::error::No benchmark has {args.min_pairs} usable base/head pairs -- nothing was compared.")
         return 1
@@ -161,16 +180,29 @@ def main_with_args(argv: list[str]) -> int:
         flag = " <-- REGRESSION" if v.regressed else (" (unstable base)" if v.unstable else "")
         print(f"{v.name:<55} {v.base_ms:>12.5f} {v.head_ms:>12.5f} {v.ratio:>6.2f}x {v.pairs:>5}{flag}")
     regressions = [v for v in verdicts if v.regressed]
+    level = "warning" if args.write_flagged else "error"
     for v in regressions:
         print(
-            f"::error::{v.name}: median head/base ratio {v.ratio:.2f}x over {v.pairs} paired runs "
+            f"::{level}::{v.name}: median head/base ratio {v.ratio:.2f}x over {v.pairs} paired runs "
             f"({v.base_ms:.5f}ms -> {v.head_ms:.5f}ms), past {args.threshold}x."
         )
     unstable = [v for v in verdicts if v.unstable and not v.regressed]
     if unstable:
         print(f"::notice::{len(unstable)} benchmark(s) had base runs more than {args.unstable_spread}x apart; see log.")
+    if args.only:
+        if regressions:
+            return 1
+        print("\nEvery flagged benchmark was back under the threshold on the confirmation runs; the first reading is forgiven.")
+        return 0
     memory_failures = check_memory(median_rows(base_runs), median_rows(head_runs), build_parser().parse_args(["-", "-"]))
-    if regressions or memory_failures:
+    if memory_failures:
+        return 1
+    if regressions and args.write_flagged:
+        with open(args.write_flagged, "w") as handle:
+            handle.writelines(f"{v.name}\n" for v in regressions)
+        print(f"\n{len(regressions)} benchmark(s) past the threshold; they need confirming before the build fails.")
+        return 2
+    if regressions:
         return 1
     print("\nNo benchmark regressed past the threshold.")
     return 0

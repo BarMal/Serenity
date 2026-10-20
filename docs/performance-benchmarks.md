@@ -450,6 +450,20 @@ B H). For each benchmark the verdict is the **median of the three head/base p50 
 allocation checks run on the per-benchmark medians as before. `scripts/compare_perf_runs.py` is the gate;
 `scripts/study_perf_gate.py` scores it against recorded runs.
 
+**Confirming before failing.** The first live runs of this gate on `ubuntu-latest` produced a false positive:
+`render.markdown.live_preview` read 1.93x (0.593 to 1.024 ms) in one run of a commit and 1.35x (0.365 to 0.442 ms) when
+the same commit's job was re-run, with `layer_cache_on.idle_frame_2x` at 1.69x beside it. So a benchmark past 1.75x is
+only *flagged* on the first three pairs. The job then re-measures just the flagged benchmarks (`PerformanceBenchmarks`
+takes benchmark names as arguments) in three fresh pairs on the same runner, `confirm-*` in the uploaded artifact, and
+fails only if those pairs are past 1.75x too. The confirmation is judged on its own pairs, not pooled with the first
+three: the flagged benchmark was picked for being the worst of about ninety, and pooling would count that luck twice. A
+retained-heap regression is not noisy this way and fails on the first pass. Cost: nothing when no benchmark is
+flagged, and about 5 minutes a run for six runs of a handful of benchmarks when one is. `scripts/test_compare_perf_runs.py`
+(`ConfirmBeforeFailingTests`) shows an injected 2x flagged and then confirmed, and a one-off spike flagged and then
+forgiven. By construction the confirmation can only turn failures into passes, so the A/A rate in the table below is an
+upper bound; a persistent 2x slowdown must clear the threshold twice, which at the measured 95% per pass is about 90%
+(an estimate assuming the two passes are independent, not a measurement).
+
 **Injecting a slowdown.** `-Dserenity.bench.slowdown=2` makes every timed call take twice as long (it spins for the
 extra time), so a gate can be shown a regression it must catch. `scripts/test_compare_perf_runs.py` carries the same
 case as a red test: the old rule passes base `[5, 30, 6]` ms against head `[10, 60, 12]`, the new one fails it.

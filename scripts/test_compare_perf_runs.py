@@ -107,5 +107,104 @@ class PairedGateTests(unittest.TestCase):
         self.assertEqual(compare_perf_runs.main_with_args(["--base", *base, "--head", *head]), 1)
 
 
+class ConfirmBeforeFailingTests(unittest.TestCase):
+    """The CI path: a first pass of three pairs that only flags, then fresh pairs of just the flagged benchmarks."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.flagged = os.path.join(self._tmpdir.name, "flagged.txt")
+
+    def _run(self, prefix: str, side: str, p50s: dict[str, float]) -> str:
+        path = os.path.join(self._tmpdir.name, f"{prefix}-{side}.csv")
+        with open(path, "w") as handle:
+            handle.write("Serenity performance benchmarks\n")
+            handle.write("name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,allocation_p95_bytes,retained_bytes\n")
+            for name, p50 in p50s.items():
+                handle.write(f"{name},1,1,1,0,{p50},{p50 * 1.2},0,,,\n")
+        return path
+
+    def _runs(self, prefix: str, side: str, series: list[dict[str, float]]) -> list[str]:
+        return [self._run(f"{prefix}{i}", side, p50s) for i, p50s in enumerate(series, 1)]
+
+    def _first_pass(self, base: list[dict[str, float]], head: list[dict[str, float]]) -> int:
+        return compare_perf_runs.main_with_args(
+            [
+                "--base", *self._runs("first", "base", base),
+                "--head", *self._runs("first", "head", head),
+                "--write-flagged", self.flagged,
+            ]
+        )
+
+    def _confirm(self, base: list[dict[str, float]], head: list[dict[str, float]]) -> int:
+        return compare_perf_runs.main_with_args(
+            [
+                "--base", *self._runs("again", "base", base),
+                "--head", *self._runs("again", "head", head),
+                "--only", self.flagged,
+            ]
+        )
+
+    @staticmethod
+    def _series(values: list[float], name: str = "op", steady: float = 4.0) -> list[dict[str, float]]:
+        return [{name: value, "steady": steady} for value in values]
+
+    def _flagged_names(self) -> list[str]:
+        with open(self.flagged) as handle:
+            return handle.read().split()
+
+    def test_an_injected_2x_slowdown_is_flagged_and_then_confirmed(self) -> None:
+        base = self._series([5.0, 30.0, 6.0])
+        head = self._series([10.0, 60.0, 12.0])
+        self.assertEqual(self._first_pass(base, head), 2)
+        self.assertEqual(self._flagged_names(), ["op"])
+        # fresh pairs on the same runner: the slowdown is still there
+        self.assertEqual(self._confirm(self._series([5.5, 5.0, 5.2]), self._series([11.0, 10.2, 10.5])), 1)
+
+    def test_a_one_off_spike_is_flagged_and_then_forgiven(self) -> None:
+        base = self._series([5.0, 5.0, 5.0])
+        head = self._series([10.0, 10.0, 5.0])  # two spiked head runs: past 1.75x on the median
+        self.assertEqual(self._first_pass(base, head), 2)
+        self.assertEqual(self._confirm(self._series([5.0, 5.1, 5.0]), self._series([5.1, 5.0, 5.2])), 0)
+
+    def test_nothing_flagged_passes_without_a_confirmation(self) -> None:
+        self.assertEqual(self._first_pass(self._series([5.0, 5.1, 5.0]), self._series([5.1, 5.0, 5.2])), 0)
+        self.assertFalse(os.path.exists(self.flagged))
+
+    def test_only_the_flagged_benchmarks_are_judged_on_the_confirmation_runs(self) -> None:
+        self.assertEqual(self._first_pass(self._series([5.0] * 3), self._series([10.0] * 3)), 2)
+        # `steady` is slower on every confirmation pair, but it was not flagged, so it is not this pass's business
+        again_base = [{"op": 5.0, "steady": 4.0}] * 3
+        again_head = [{"op": 5.0, "steady": 40.0}] * 3
+        self.assertEqual(self._confirm(again_base, again_head), 0)
+
+    def test_the_confirmation_does_not_count_the_first_pass_again(self) -> None:
+        # three bad pairs first, three good pairs after: judged on the new pairs alone, so it is forgiven
+        self.assertEqual(self._first_pass(self._series([5.0] * 3), self._series([10.0] * 3)), 2)
+        self.assertEqual(self._confirm(self._series([5.0] * 3), self._series([5.0] * 3)), 0)
+
+    def test_a_flagged_benchmark_missing_from_the_confirmation_runs_fails(self) -> None:
+        self.assertEqual(self._first_pass(self._series([5.0] * 3), self._series([10.0] * 3)), 2)
+        self.assertEqual(self._confirm([{"steady": 4.0}] * 3, [{"steady": 4.0}] * 3), 1)
+
+    def test_a_retained_heap_regression_fails_the_first_pass_outright(self) -> None:
+        mib = 1024 * 1024
+
+        def with_heap(prefix: str, side: str, retained: int) -> list[str]:
+            paths = []
+            for i in range(3):
+                path = os.path.join(self._tmpdir.name, f"{prefix}{i}-{side}.csv")
+                with open(path, "w") as handle:
+                    handle.write("name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,allocation_p95_bytes,retained_bytes\n")
+                    handle.write(f"footprint.doc,0,0,0,0,0.5,0.5,0,,,{retained}\n")
+                paths.append(path)
+            return paths
+
+        code = compare_perf_runs.main_with_args(
+            ["--base", *with_heap("h", "base", 10 * mib), "--head", *with_heap("h", "head", 20 * mib), "--write-flagged", self.flagged]
+        )
+        self.assertEqual(code, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

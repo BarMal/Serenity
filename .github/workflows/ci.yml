@@ -282,40 +282,31 @@ jobs:
       # suite -- `sbt test` never touches it.
       - name: Run performance benchmarks on base and head
         shell: bash
+        env:
+          SCREEN: ${{ matrix.screen }}
+          DPI: ${{ matrix.dpi }}
+          SCALE: ${{ matrix.scale }}
         run: |
           set -euo pipefail
           mkdir -p perf-runs
-          # sbt prefixes every line of runMain's stdout with "[info] " and `sbt -v` wraps it in ANSI colour escapes;
-          # strip both, keeping from the suite's own title line onward so earlier sbt log noise is excluded. A run that
-          # crashes leaves an empty CSV, which the comparison skips or reports.
-          # A run that produced no rows measured nothing: dependency resolution failing on the runner's network (seen as
-          # a missing scala3-sbt-bridge) says nothing about the commit, so it gets one more attempt. A benchmark that
-          # runs and is slow is never retried -- the paired comparison below decides that.
-          bench() {
-            local dir="$1" out="$2" attempt
-            for attempt in 1 2; do
-              (cd "$dir" && xvfb-run -a -s "-screen 0 ${{ matrix.screen }} -dpi ${{ matrix.dpi }}" \
-                sbt -v 'set Test / run / javaOptions += "-Dsun.java2d.uiScale=${{ matrix.scale }}"' \
-                "Test/runMain com.serenity.perf.PerformanceBenchmarks") > "$out.raw" 2>&1 || true
-              sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$out.raw" \
-                | sed -n '/^\[info\] Serenity performance benchmarks$/,$p' \
-                | sed 's/^\[info\] //' > "$out"
-              echo "$out (attempt $attempt): $(grep -c . "$out" || true) lines"
-              if [ -s "$out" ]; then break; fi
-            done
-          }
           for pair in 1 2 3; do
             if [ $((pair % 2)) -eq 1 ]; then first=base; second=head; else first=head; second=base; fi
             for side in "$first" "$second"; do
               if [ "$side" = base ]; then dir="$RUNNER_TEMP/base"; else dir="."; fi
-              bench "$dir" "perf-runs/$side-$pair.csv"
+              bash .github/scripts/run-perf-benchmark.sh "$dir" "perf-runs/$side-$pair.csv"
             done
           done
 
-      # Fails when, for some benchmark, the median of the three pairs' head/base p50 ratios is past 1.75x (and the
-      # median head p50 is more than 50 us above the base's). See scripts/compare_perf_runs.py for why that statistic,
-      # and docs/performance-benchmarks.md ("Paired-ratio gate", #1731) for how it did on recorded runs.
+      # A benchmark whose median pair ratio is past 1.75x (and more than 50 us above the base's) is only flagged here:
+      # the same runner re-measures just those benchmarks in three fresh pairs (confirm-*), and the build fails only if
+      # they are still past the threshold on those. A retained-heap regression fails at once. See
+      # scripts/compare_perf_runs.py, and docs/performance-benchmarks.md ("Paired-ratio gate", #1731).
       - name: Check for a performance regression
+        shell: bash
+        env:
+          SCREEN: ${{ matrix.screen }}
+          DPI: ${{ matrix.dpi }}
+          SCALE: ${{ matrix.scale }}
         run: |
           set -euo pipefail
           for run in perf-runs/head-1.csv perf-runs/head-2.csv perf-runs/head-3.csv; do
@@ -325,9 +316,27 @@ jobs:
               exit 1
             fi
           done
+          status=0
           python3 scripts/compare_perf_runs.py \
             --base perf-runs/base-1.csv perf-runs/base-2.csv perf-runs/base-3.csv \
-            --head perf-runs/head-1.csv perf-runs/head-2.csv perf-runs/head-3.csv
+            --head perf-runs/head-1.csv perf-runs/head-2.csv perf-runs/head-3.csv \
+            --write-flagged perf-runs/flagged.txt || status=$?
+          if [ "$status" -ne 2 ]; then exit "$status"; fi
+          echo "::group::Confirming $(wc -l < perf-runs/flagged.txt) flagged benchmark(s) on fresh pairs"
+          cat perf-runs/flagged.txt
+          mapfile -t flagged < perf-runs/flagged.txt
+          for pair in 1 2 3; do
+            if [ $((pair % 2)) -eq 1 ]; then first=base; second=head; else first=head; second=base; fi
+            for side in "$first" "$second"; do
+              if [ "$side" = base ]; then dir="$RUNNER_TEMP/base"; else dir="."; fi
+              bash .github/scripts/run-perf-benchmark.sh "$dir" "perf-runs/confirm-$side-$pair.csv" "${flagged[@]}"
+            done
+          done
+          echo "::endgroup::"
+          python3 scripts/compare_perf_runs.py \
+            --base perf-runs/confirm-base-1.csv perf-runs/confirm-base-2.csv perf-runs/confirm-base-3.csv \
+            --head perf-runs/confirm-head-1.csv perf-runs/confirm-head-2.csv perf-runs/confirm-head-3.csv \
+            --only perf-runs/flagged.txt
 
       - name: Archive benchmark results
         if: always()
