@@ -4,10 +4,12 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, GraphicsEnvironment, Rectangle, Robot, Toolkit}
 import javax.swing.{JComponent, JPanel, SwingUtilities}
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.WindowChromeMode
-import com.serenity.testkit.DisplayExclusive
+import com.serenity.testkit.{AwaitCondition, DisplayExclusive}
 import com.serenity.ui.accessibility.{
   AccessibilityRole,
   AccessibilitySnapshot,
@@ -117,14 +119,22 @@ class SwingWindowProxyPaintSpec extends AnyFlatSpec with Matchers:
               Toolkit.getDefaultToolkit.sync()
 
               val origin = canvas.getLocationOnScreen
-              val shot = new Robot().createScreenCapture(
-                new Rectangle(origin.x + region.x, origin.y + region.y, region.width, region.height)
-              )
-              (for
-                y <- 0 until region.height
-                x <- 0 until region.width
-                if (shot.getRGB(x, y) & 0xffffff) != (frame.getRGB(region.x + x, region.y + y) & 0xffffff)
-              yield 1).size
+              def mismatchesOnScreen: Int =
+                val shot = new Robot().createScreenCapture(
+                  new Rectangle(origin.x + region.x, origin.y + region.y, region.width, region.height)
+                )
+                (for
+                  y <- 0 until region.height
+                  x <- 0 until region.width
+                  if (shot.getRGB(x, y) & 0xffffff) != (frame.getRGB(region.x + x, region.y + y) & 0xffffff)
+                yield 1).size
+              () => mismatchesOnScreen
+            }.flatMap { capture =>
+              // The screen shows a frame once the window system has composited it, which on macOS lags behind
+              // Toolkit.sync; a stale buffer left by the repaint stays wrong, so waiting cannot hide it.
+              AwaitCondition
+                .awaitValue(IO.blocking(capture()), 10.seconds)(_ == 0)
+                .handleErrorWith(_ => IO.blocking(capture()))
             }
           }
           .unsafeRunSync()

@@ -16,6 +16,7 @@ private[renderer] object LayerSurfaces:
     deviceScaleX: Double,
     deviceScaleY: Double,
     onFlush: BufferedImage => Unit,
+    textCaches: SurfaceTextCaches,
     recycled: Option[BufferedImage],
     activity: SurfaceActivity,
     bounds: Option[PixelRect]
@@ -45,6 +46,7 @@ private[renderer] object LayerSurfaces:
       deviceScaleY = deviceScaleY,
       contentPersists = false,
       imageOriginPx = origin,
+      textCaches = textCaches,
       activity = activity
     )
 

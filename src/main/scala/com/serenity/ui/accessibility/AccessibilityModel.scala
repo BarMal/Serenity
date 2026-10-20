@@ -268,9 +268,8 @@ object AccessibilitySnapshot:
     frameRect: LayoutRect,
     state: AppState
   ): List[AccessibleNode] =
-    val targetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
     ModalSurfaceComposition
-      .forModal(modal, frameRect, targetRows)
+      .forState(modal, frameRect, state)
       .toList
       .flatMap { composition =>
         // A heading (e.g. the file workflow's "Open"/"Save As" title) carries no focusId, so it can never appear

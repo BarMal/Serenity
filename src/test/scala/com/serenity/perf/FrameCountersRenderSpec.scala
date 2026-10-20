@@ -45,7 +45,8 @@ class FrameCountersRenderSpec extends AnyFlatSpec with Matchers:
         deviceScaleX = LaptopFrameBenchmarks.DeviceScale,
         deviceScaleY = LaptopFrameBenchmarks.DeviceScale,
         contentPersists = true,
-        layerCacheOwnerOverride = Some(screen)
+        layerCacheOwnerOverride = Some(screen),
+        textCaches = caches.surfaceText
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
@@ -152,7 +153,8 @@ class FrameCountersRenderSpec extends AnyFlatSpec with Matchers:
       logicalWidthPx = LaptopFrameBenchmarks.LogicalWidthPx,
       logicalHeightPx = LaptopFrameBenchmarks.LogicalHeightPx,
       deviceScaleX = LaptopFrameBenchmarks.DeviceScale,
-      deviceScaleY = LaptopFrameBenchmarks.DeviceScale
+      deviceScaleY = LaptopFrameBenchmarks.DeviceScale,
+      textCaches = caches.surfaceText
     )
 
     val _ = RendererFramePlanner.renderFrame(

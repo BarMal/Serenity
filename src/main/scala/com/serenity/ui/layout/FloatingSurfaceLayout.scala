@@ -14,23 +14,34 @@ object FloatingSurfaceLayout:
   private[layout] def calculateFloatingSurfaceRect(
     surface: UiSurface,
     state: AppState,
-    paneLayouts: Map[PaneId, EditorPaneLayout],
+    panes: LaidOutPanes,
     topYOverride: Option[Int] = None,
     forcedHeight: Option[Int] = None
   ): Option[LayoutRect] =
     for
       paneId     <- state.persisted.layout.activeEditorPaneId
       pane       <- state.persisted.layout.editorPanes.get(paneId)
-      paneLayout <- paneLayouts.get(paneId)
+      paneLayout <- panes.layouts.get(paneId)
       bufferId   <- pane.bufferId
       buffer     <- state.persisted.buffers.get(bufferId)
-      rect <- calculateFloatingSurfaceRect(surface, buffer, paneLayout.contentRect, state, topYOverride, forcedHeight)
+      rect <- calculateFloatingSurfaceRect(
+        surface,
+        buffer,
+        paneId,
+        paneLayout.contentRect,
+        panes,
+        state,
+        topYOverride,
+        forcedHeight
+      )
     yield rect
 
   private def calculateFloatingSurfaceRect(
     surface: UiSurface,
     buffer: Buffer,
+    paneId: PaneId,
     contentRect: LayoutRect,
+    panes: LaidOutPanes,
     state: AppState,
     topYOverride: Option[Int],
     forcedHeight: Option[Int]
@@ -39,13 +50,13 @@ object FloatingSurfaceLayout:
       case SurfaceContent.CommandRunnerPeek(_) =>
         calculateFrozenCursorPeekRect(surface, contentRect, state)
       case _ =>
-        calculateLiveFloatingSurfaceRect(surface, buffer, contentRect, state, topYOverride, forcedHeight)
+        calculateLiveFloatingSurfaceRect(surface, buffer, paneId, contentRect, panes, state, topYOverride, forcedHeight)
 
   /** The cursor-peek prototype's own rect resolution -- deliberately never calls [[floatingAnchor]] or
-    * `CursorLayout.calculateScreenPositionInContent`: `state.runtime.pointerGesture.cursorPeekResolvedAnchor` was
-    * already resolved once, at render time, by `CursorPeekAnchorResolution` (state.manager), and is reused verbatim
-    * here on every subsequent paint rather than re-derived, so a reformat underneath an open peek cannot move it.
-    * Sizing (`calculateFloatingSurfaceWidth`/`calculateFloatingSurfaceHeight`) is still shared with the live path for a
+    * `LaidOutPanes.screenPosition`: `state.runtime.pointerGesture.cursorPeekResolvedAnchor` was already resolved once,
+    * at render time, by `CursorPeekAnchorResolution` (state.manager), and is reused verbatim here on every subsequent
+    * paint rather than re-derived, so a reformat underneath an open peek cannot move it. Sizing
+    * (`calculateFloatingSurfaceWidth`/`calculateFloatingSurfaceHeight`) is still shared with the live path for a
     * consistent look.
     */
   private def calculateFrozenCursorPeekRect(
@@ -74,7 +85,9 @@ object FloatingSurfaceLayout:
   private def calculateLiveFloatingSurfaceRect(
     surface: UiSurface,
     buffer: Buffer,
+    paneId: PaneId,
     contentRect: LayoutRect,
+    panes: LaidOutPanes,
     state: AppState,
     topYOverride: Option[Int],
     forcedHeight: Option[Int]
@@ -83,19 +96,13 @@ object FloatingSurfaceLayout:
     val gapRows        = wholeRowOrigin(floatingCursorGapRows(state, surface.content))
 
     for
-      anchor <- floatingAnchor(surface, state, buffer)
-      screenPosition <- CursorLayout.calculateScreenPositionInContent(
-        anchor,
-        buffer.document.content,
-        contentRect,
-        buffer.viewport,
-        state.persisted.config.surfaceConfig.wordWrapEnabled
-      )
+      anchor         <- floatingAnchor(surface, state, buffer)
+      screenPosition <- panes.screenPosition(paneId, anchor)
       if surface.content match
         case SurfaceContent.ContextualToolbar(_) => contentRect.contains(screenPosition.x, screenPosition.y)
         case _                                   => true
     yield
-      val horizontalAnchorX = toolbarSelectionEndScreenPosition(surface, buffer, contentRect, state)
+      val horizontalAnchorX = toolbarSelectionEndScreenPosition(surface, buffer, paneId, panes)
         .filter(_.y == screenPosition.y)
         .map(selectionEnd => (screenPosition.x + selectionEnd.x) / 2)
         .getOrElse(screenPosition.x)
@@ -114,7 +121,7 @@ object FloatingSurfaceLayout:
             contentRect.x,
             math.min(horizontalAnchorX - (preferredWidth / 2), contentRect.right - preferredWidth)
           )
-      val preferredBelowY = toolbarSelectionEndScreenPosition(surface, buffer, contentRect, state)
+      val preferredBelowY = toolbarSelectionEndScreenPosition(surface, buffer, paneId, panes)
         .map(_.y + 1 + gapRows)
         .getOrElse(screenPosition.y + 1 + gapRows)
       val roomOnPreferredSide = surface.presentation match
@@ -155,20 +162,12 @@ object FloatingSurfaceLayout:
   private def toolbarSelectionEndScreenPosition(
     surface: UiSurface,
     buffer: Buffer,
-    contentRect: LayoutRect,
-    state: AppState
+    paneId: PaneId,
+    panes: LaidOutPanes
   ): Option[ScreenPosition] =
     surface.content match
       case SurfaceContent.ContextualToolbar(_) =>
-        buffer.primarySelection.flatMap(selection =>
-          CursorLayout.calculateScreenPositionInContent(
-            selection.end,
-            buffer.document.content,
-            contentRect,
-            buffer.viewport,
-            state.persisted.config.surfaceConfig.wordWrapEnabled
-          )
-        )
+        buffer.primarySelection.flatMap(selection => panes.screenPosition(paneId, selection.end))
       case _ =>
         None
 
@@ -177,22 +176,16 @@ object FloatingSurfaceLayout:
   private[layout] def calculateFloatingAnchorFrame(
     surface: UiSurface,
     state: AppState,
-    paneLayouts: Map[PaneId, EditorPaneLayout]
+    panes: LaidOutPanes
   ): Option[FloatingAnchorFrame] =
     for
-      paneId     <- state.persisted.layout.activeEditorPaneId
-      pane       <- state.persisted.layout.editorPanes.get(paneId)
-      paneLayout <- paneLayouts.get(paneId)
-      bufferId   <- pane.bufferId
-      buffer     <- state.persisted.buffers.get(bufferId)
-      anchor     <- floatingAnchor(surface, state, buffer)
-      screenPosition <- CursorLayout.calculateScreenPositionInContent(
-        anchor,
-        buffer.document.content,
-        paneLayout.contentRect,
-        buffer.viewport,
-        state.persisted.config.surfaceConfig.wordWrapEnabled
-      )
+      paneId         <- state.persisted.layout.activeEditorPaneId
+      pane           <- state.persisted.layout.editorPanes.get(paneId)
+      paneLayout     <- panes.layouts.get(paneId)
+      bufferId       <- pane.bufferId
+      buffer         <- state.persisted.buffers.get(bufferId)
+      anchor         <- floatingAnchor(surface, state, buffer)
+      screenPosition <- panes.screenPosition(paneId, anchor)
     yield FloatingAnchorFrame(paneLayout.contentRect, screenPosition)
 
   private def calculateFloatingSurfaceWidth(maxWidth: Int): Int =

@@ -8,6 +8,8 @@ import scala.annotation.tailrec
 import com.serenity.config.MarkdownViewMode
 import com.serenity.rope.ChangeSet
 import com.serenity.state.models.{Buffer, BufferId, IndentationSettings}
+import com.serenity.ui.openings.OpeningSettings
+import com.serenity.ui.theme.HeadingSettings
 
 /** How many visual rows the logical lines of one buffer's content wrap into under one wrap setting -- the counts
   * scrolling, centring, page moves and jumps place the viewport with. Every answer is exact: it measures each line it
@@ -59,6 +61,9 @@ final private[layout] case class VisualRowKey(
     dropCapsEnabled: Boolean
 )
 
+/** What the pixels a line's rows stack to depend on besides [[VisualRowKey]]: the prose zoom scales every run. */
+final private[layout] case class BandHeightKey(rows: VisualRowKey, proseScale: Float)
+
 object VisualRowCounts:
 
   /** Counts `buffer`'s lines as [[TextLayoutSnapshot.boundedVisualLinesForText]] wraps them, through `wrapCache`'s
@@ -75,7 +80,10 @@ object VisualRowCounts:
     dropCapsEnabled: Boolean = true,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     tabSize: Int = IndentationSettings.DefaultTabSize,
-    known: Int => Option[Int] = _ => None
+    known: Int => Option[Int] = _ => None,
+    headings: HeadingSettings = HeadingSettings.default,
+    openings: OpeningSettings = OpeningSettings.default,
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm
   ): VisualRowCounts =
     val content = buffer.document.content
     val frc     = TextLayoutSnapshot.defaultFontRenderContext()
@@ -88,7 +96,10 @@ object VisualRowCounts:
         forceCellLayout,
         wrapCache,
         frc,
-        tabSize
+        tabSize,
+        headings,
+        openings,
+        dropCapGapEm
       )
     def measure(line: Int): Int =
       known(line).getOrElse(wrap(line))

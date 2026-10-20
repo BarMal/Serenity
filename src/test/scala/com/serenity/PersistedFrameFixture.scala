@@ -9,6 +9,7 @@ import com.serenity.diagnostics.FrameCounts
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.FrameMismatchDump
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{
   EditorPaneRenderPlan,
@@ -99,7 +100,12 @@ trait PersistedFrameFixture:
       )
     )
 
-  private def surfaceOver(image: BufferedImage, scale: Double, persists: Boolean): Java2DRenderSurface =
+  private def surfaceOver(
+    image: BufferedImage,
+    scale: Double,
+    persists: Boolean,
+    caches: RenderCaches
+  ): Java2DRenderSurface =
     new Java2DRenderSurface(
       image,
       cellMetrics,
@@ -110,7 +116,8 @@ trait PersistedFrameFixture:
       deviceScaleX = scale,
       deviceScaleY = scale,
       contentPersists = persists,
-      layerCacheOwnerOverride = Some(ScreenIdentity(image))
+      layerCacheOwnerOverride = Some(ScreenIdentity(image)),
+      textCaches = caches.surfaceText
     )
 
   final protected class Session(scale: Double = 2.0):
@@ -146,7 +153,7 @@ trait PersistedFrameFixture:
         .renderFrame(
           state,
           cursorVisible = false,
-          surfaceOver(image, scale, persists = true),
+          surfaceOver(image, scale, persists = true, caches),
           viewport,
           caches.authoritativeScene.forState(state, viewport, codeFont, textFont),
           codeFont,
@@ -174,7 +181,7 @@ trait PersistedFrameFixture:
     val _ = RendererFramePlanner.renderFrame(
       state,
       cursorVisible = false,
-      surfaceOver(image, scale, persists = false),
+      surfaceOver(image, scale, persists = false, caches),
       viewport,
       caches.authoritativeScene.forState(state, viewport, codeFont, textFont),
       codeFont,
@@ -190,8 +197,12 @@ trait PersistedFrameFixture:
     image
 
   protected def differingPixels(a: BufferedImage, b: BufferedImage): Seq[(Int, Int)] =
-    for
-      x <- 0 until a.getWidth
-      y <- 0 until a.getHeight
-      if (a.getRGB(x, y) & 0xffffff) != (b.getRGB(x, y) & 0xffffff)
-    yield (x, y)
+    val differing =
+      for
+        x <- 0 until a.getWidth
+        y <- 0 until a.getHeight
+        if (a.getRGB(x, y) & 0xffffff) != (b.getRGB(x, y) & 0xffffff)
+      yield (x, y)
+    if differing.nonEmpty then
+      val _ = FrameMismatchDump.write(getClass.getSimpleName, a, b, differing)
+    differing

@@ -1,17 +1,17 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.{FontRenderContext, TextAttribute, TextHitInfo, TextLayout}
-import java.text.AttributedString
+import java.awt.font.FontRenderContext
 
 import com.serenity.ui.layout.TextCaretMeasurement.{ColumnFontRun, LineFontResolver}
 import com.serenity.ui.layout.TextMeasurer.{FontRun, LineFonts, LineMetrics, MetricsKey, ShapedRun}
-import com.serenity.ui.renderer.{FontFirstUse, FontSpec}
+import com.serenity.ui.renderer.{FontFirstUse, FontSpec, ShapedTextCache}
 
 /** [[TextMeasurer]] over Java2D at one `FontRenderContext`, answering exactly as the layout's own Java2D measurement
   * does.
   */
-final case class Java2DTextMeasurer(frc: FontRenderContext) extends TextMeasurer:
+final case class Java2DTextMeasurer(frc: FontRenderContext, shapedText: ShapedTextCache = ShapedTextCache())
+    extends TextMeasurer:
 
   val metricsKey: MetricsKey = MetricsKey("java2d", Vector(frc))
 
@@ -30,7 +30,7 @@ final case class Java2DTextMeasurer(frc: FontRenderContext) extends TextMeasurer
     LineMetrics(heightPx, ascentPx)
 
   def rawCaretXs(text: String, startColumn: Int, fonts: LineFonts): IArray[Float] =
-    TextCaretMeasurement.rawMeasuredCaretXs(text, startColumn, resolverFor(fonts), frc)
+    TextCaretMeasurement.rawMeasuredCaretXs(text, startColumn, resolverFor(fonts), frc, shapedText)
 
   def glyphWidthPx(font: FontSpec, text: String): Float = DropCapLayout.glyphWidthPx(font.toAwt, frc, text)
 
@@ -52,28 +52,20 @@ final case class Java2DTextMeasurer(frc: FontRenderContext) extends TextMeasurer
 
   def exactCaretXs(text: String, startColumn: Int, fonts: LineFonts): IArray[Float] =
     if text.isEmpty then IArray(0.0f)
+    else ExactCaretXs.layoutCaretXs(text, startColumn, resolverFor(fonts), frc)
+
+  override def exactEdges(text: String, startColumn: Int, fonts: LineFonts): IArray[Float] =
+    if text.isEmpty then IArray(0.0f)
     else
-      val attributed = AttributedString(text)
-      itemise(text, 0, text.length, startColumn, fonts).foreach { run =>
-        FontFirstUse.settle(run.font.toAwt, frc)
-        attributed.addAttribute(
-          TextAttribute.FONT,
-          run.font.toAwt,
-          run.startColumn - startColumn,
-          run.endColumn - startColumn
-        )
-      }
-      val layout = TextLayout(attributed.getIterator, frc)
-      val carets = new Array[Float](text.length + 1)
-      (0 until text.length).foreach(index => carets(index) = layout.getCaretInfo(TextHitInfo.leading(index))(0))
-      carets(text.length) = layout.getAdvance
-      IArray.unsafeFromArray(carets)
+      val resolver = resolverFor(fonts)
+      val stops    = ExactCaretXs.layoutStops(text, startColumn, resolver, frc)
+      stops.trailing.getOrElse(TextCaretMeasurement.normalizeCollapsedCarets(stops.carets, resolver, startColumn))
 
   def shapingCutAtOrAfter(text: String, from: Int, font: FontSpec): Int =
-    ShapingBarriers.cutAtOrAfter(text, from, font.toAwt, frc)
+    ShapingBarriers.cutAtOrAfter(text, from, font.toAwt, frc, shapedText)
 
   def shapingCutAtOrBefore(text: String, limit: Int, font: FontSpec): Int =
-    ShapingBarriers.cutAtOrBefore(text, limit, font.toAwt, frc)
+    ShapingBarriers.cutAtOrBefore(text, limit, font.toAwt, frc, shapedText)
 
   private[layout] def mayMeasureByAdvances(text: String): Boolean = GlyphAdvances.hasContextFreeCharacters(text)
 
@@ -84,7 +76,7 @@ final case class Java2DTextMeasurer(frc: FontRenderContext) extends TextMeasurer
     startColumn: Int,
     fonts: LineFonts
   ): GlyphAdvances =
-    GlyphAdvances.measure(text, from, until, startColumn, resolverFor(fonts), frc)
+    GlyphAdvances.measure(text, from, until, startColumn, resolverFor(fonts), frc, shapedText)
 
   private def resolverFor(fonts: LineFonts): LineFontResolver =
     LineFontResolver(

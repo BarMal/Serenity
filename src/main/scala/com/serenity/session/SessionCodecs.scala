@@ -9,7 +9,7 @@ import com.serenity.config.*
 import com.serenity.lsp.config.{LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
 import com.serenity.ui.fonts.FontLoader.{FontConfig, TextScaleMode}
-import com.serenity.ui.theme.ColorFormat
+import com.serenity.ui.theme.{ColorFormat, DropCapColour}
 import io.circe.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.given
@@ -137,10 +137,14 @@ given Encoder[WindowConfig]        = deriveEncoder
 given Decoder[WindowConfig]        = deriveDecoder
 given Encoder[CursorConfig]        = deriveEncoder
 given Decoder[CursorConfig]        = deriveDecoder
-given Encoder[DocumentConfig]      = deriveEncoder
-given Decoder[DocumentConfig]      = deriveDecoder
-given Encoder[InterfaceConfig]     = deriveEncoder
-given Decoder[InterfaceConfig]     = deriveDecoder
+given Encoder[DropCapColour]       = configKeyEncoder(DropCapColour.configKey)
+given Decoder[DropCapColour] =
+  Decoder.decodeString.emap(value => DropCapColour.fromConfigKey(value).toRight(s"Unknown DropCapColour: $value"))
+
+given Encoder[DocumentConfig]  = deriveEncoder
+given Decoder[DocumentConfig]  = deriveDecoder
+given Encoder[InterfaceConfig] = deriveEncoder
+given Decoder[InterfaceConfig] = deriveDecoder
 
 given Encoder[TextAreaInsets] = deriveEncoder
 given Decoder[TextAreaInsets] = deriveDecoder

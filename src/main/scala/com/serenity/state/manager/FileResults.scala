@@ -96,6 +96,7 @@ private[manager] object FileResults:
           disk.document
             .replacingContentOf(current.document)
             .keepingChosenIndentationOf(current.document)
+            .keepingOpeningsOf(current.document)
             .copy(savedGeneration = current.document.savedGeneration + 1)
         withBuffer(
           state,

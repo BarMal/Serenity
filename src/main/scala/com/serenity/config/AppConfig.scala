@@ -7,6 +7,8 @@ import com.serenity.keystroke.events.Event
 import com.serenity.lsp.config.LspUserConfig
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.openings.OpeningSettings
+import com.serenity.ui.theme.{DropCapColour, DropCapGap, HeadingSettings}
 
 /** Global application configuration */
 final case class AppConfig(
@@ -22,8 +24,26 @@ final case class AppConfig(
     appModeConfig: AppModeConfig = AppModeConfig(),
     statusLine: StatusLineConfig = StatusLineConfig.default,
     exportTypographyConfig: ExportTypographyConfig = ExportTypographyConfig(),
-    autoSaveConfig: AutoSaveConfig = AutoSaveConfig()
+    autoSaveConfig: AutoSaveConfig = AutoSaveConfig(),
+    headingsConfig: HeadingsConfig = HeadingsConfig(),
+    openingsConfig: OpeningSettings = OpeningSettings.default
 ):
+
+  /** Resolved once per config: the logical body is the prose size before any device scale, so a hi-DPI display never
+    * tightens the headings.
+    */
+  lazy val headingSettings: HeadingSettings =
+    headingsConfig.settings(editorConfig.fontConfig.logicalTextFontSize)
+
+  /** The same settings for a terminal, where a level left on auto climbs the ladder and a rule can be drawn. */
+  lazy val terminalHeadingSettings: HeadingSettings =
+    headingsConfig.settings(editorConfig.fontConfig.logicalTextFontSize, terminal = true)
+
+  def withHeadingsConfig(config: HeadingsConfig): AppConfig =
+    copy(headingsConfig = config)
+
+  def withOpeningsConfig(config: OpeningSettings): AppConfig =
+    copy(openingsConfig = config.normalized)
 
   def withEditorConfig(config: EditorConfig): AppConfig =
     copy(editorConfig = config.normalized)
@@ -354,6 +374,13 @@ final case class AppConfig(
   /** Create a new config with the multi-line drop cap paragraph role's rendering enabled or disabled. */
   def withDropCapsEnabled(enabled: Boolean): AppConfig =
     withDocumentConfig(documentConfig.copy(dropCapsEnabled = enabled))
+
+  /** The room beside a drop cap's glyph, in em of the body font, kept within what the config file accepts. */
+  def withDropCapGapEm(gapEm: Float): AppConfig =
+    withDocumentConfig(documentConfig.copy(dropCapGapEm = DropCapGap.clamped(gapEm)))
+
+  def withDropCapColour(colour: DropCapColour): AppConfig =
+    withDocumentConfig(documentConfig.copy(dropCapColour = colour))
 
   def withAutoSaveConfig(config: AutoSaveConfig): AppConfig =
     copy(autoSaveConfig = config)

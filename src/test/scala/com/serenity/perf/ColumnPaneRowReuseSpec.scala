@@ -10,6 +10,7 @@ import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -24,14 +25,22 @@ class ColumnPaneRowReuseSpec extends AnyFlatSpec with Matchers:
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
   private val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val textFont    = Font(Font.SERIF, Font.PLAIN, 14)
   private val uiFont      = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
   private val cellMetrics = CellMetrics.fromFont(codeFont)
   private val uiMetrics   = CellMetrics.fromFont(uiFont)
   private val viewport    = ViewportSize(1500 / cellMetrics.charWidth, 1000 / cellMetrics.lineHeight)
 
+  private val fontConfig =
+    AppConfig.conventional.editorConfig.fontConfig.copy(textFontFamily = Font.SERIF, textFontSize = 14f)
+  private val textFont = FontLoader.previewTextFont(fontConfig)
+
   private val columnConfig =
-    AppConfig.conventional.withColumnMode(true).withColumnTargetWidth(40).withLineNumbers(false)
+    AppConfig.conventional
+      .withFontConfig(fontConfig)
+      .withColumnMode(true)
+      .withColumnTargetWidth(40)
+      .withLineNumbers(false)
+
   private val railedConfig = columnConfig.withLineNumbers(true)
 
   final private class PersistingImage:
@@ -51,7 +60,8 @@ class ColumnPaneRowReuseSpec extends AnyFlatSpec with Matchers:
         deviceScaleX = LaptopFrameBenchmarks.DeviceScale,
         deviceScaleY = LaptopFrameBenchmarks.DeviceScale,
         contentPersists = true,
-        layerCacheOwnerOverride = Some(screen)
+        layerCacheOwnerOverride = Some(screen),
+        textCaches = caches.surfaceText
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
@@ -72,12 +82,7 @@ class ColumnPaneRowReuseSpec extends AnyFlatSpec with Matchers:
       (image, caches.frameCounters.lastFrame)
 
   private def differing(drawn: BufferedImage, state: AppState): Seq[(Int, Int)] =
-    val cold = LaptopFrameBenchmarks.renderedFrame(
-      state,
-      RenderCaches.create(),
-      LaptopFrameBenchmarks.frameImage(),
-      cursorVisible = false
-    )
+    val (cold, _) = PersistingImage().render(state, Damage.Everything)
     for
       x <- 0 until drawn.getWidth
       y <- 0 until drawn.getHeight

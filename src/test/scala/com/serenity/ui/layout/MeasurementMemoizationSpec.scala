@@ -33,11 +33,13 @@ class MeasurementMemoizationSpec extends AnyFlatSpec with Matchers:
     rows.distinct.size shouldBe 1
   }
 
-  it should "report the ceiling of the font's own line height and ascent" in {
+  it should "report the ceiling of the font's ascent over the ceiling of its descent and leading" in {
     val font    = new Font(Font.SERIF, Font.PLAIN, 23)
     val line    = font.getLineMetrics("Mg", frc)
     val metrics = LineFontResolver(font, Vector.empty).lineMetrics(frc, 0, 4)
-    metrics shouldBe (math.ceil(line.getHeight.toDouble).toInt, math.ceil(line.getAscent.toDouble).toInt)
+    val ascent  = math.ceil(line.getAscent.toDouble).toInt
+    val descent = math.ceil((line.getDescent + line.getLeading).toDouble).toInt
+    metrics shouldBe (ascent + descent, ascent)
   }
 
   it should "measure afresh at another render scale" in {

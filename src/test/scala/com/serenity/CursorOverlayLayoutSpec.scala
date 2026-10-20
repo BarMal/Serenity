@@ -291,6 +291,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val initial = AppState.initial(AppConfig.conventional)
     val state = initial.copy(
       persisted = initial.persisted.copy(
+        config = initial.persisted.config.withUiElementGap(Some(1)),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -300,8 +301,11 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.Surface(SurfaceId("command-runner"))
       ),
-      runtime = initial.runtime.copy(uiSurfaces =
-        List(
+      runtime = initial.runtime.copy(
+        // Rows are counted in cells: the viewport's `topVisualLine` below is the wrapped row of a cell grid, whose gap
+        // is set to the cell the windowed editor leaves by default.
+        capabilities = com.serenity.frontend.FrontendCapabilities.tui(),
+        uiSurfaces = List(
           UiSurface(
             SurfaceId("command-runner"),
             SurfaceContent.CommandPalette(
@@ -345,7 +349,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val initial = AppState.initial(AppConfig.conventional)
     val state = initial.copy(
       persisted = initial.persisted.copy(
-        config = initial.persisted.config.withWordWrap(false),
+        config = initial.persisted.config.withWordWrap(false).withFontConfig(MeasuredRows.driftingFontConfig),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -375,11 +379,11 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
 
-    val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
-    val contentRect = CursorLayout.contentRectForPane(paneRect)
+    val rect = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
+    val caretRow =
+      MeasuredRows.caretRow(state, layout, paneId, cursor).getOrElse(fail("Expected the cursor to be painted"))
 
-    rect.y shouldBe contentRect.y + (cursor.line - buffer.viewport.topLine) + 2
+    rect.y shouldBe caretRow + 2
   }
 
   it should "size command runner overlays from configured visible rows" in {
@@ -524,10 +528,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
     layout.belowCursorOverlayRect.map(_.height) shouldBe Some(
-      ModalSurfaceComposition.frameHeight(
-        prompt,
-        SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
-      )
+      ModalSurfaceComposition.frameHeightFor(prompt, layout.belowCursorOverlayRect.map(_.width).getOrElse(0), state)
     )
   }
 
@@ -551,7 +552,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
       layout.belowCursorOverlayRect.map(_.height) shouldBe Some(
-        ModalSurfaceComposition.frameHeight(modal, targetRows = 2)
+        ModalSurfaceComposition.frameHeight(modal, targetRows = 2, width = 72)
       )
     }
 end CursorOverlayLayoutSpec

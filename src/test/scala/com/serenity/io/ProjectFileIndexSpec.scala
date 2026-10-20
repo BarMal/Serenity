@@ -52,7 +52,7 @@ class ProjectFileIndexSpec extends AnyFlatSpec with Matchers:
     ProjectFileIndex.emptyReading(reads.reader, global, firstPartialAt = 4096)
 
   private def listed(index: ProjectFileIndex, root: Path): Vector[String] =
-    index.listing(root, _ => IO.unit).unsafeRunSync().files.map(_.toString)
+    index.listing(root, _ => IO.unit).unsafeRunSync().files.map(ProjectFileWalker.slashed)
 
   "ProjectFileIndex" should "list a project's files without those its ignore files exclude" in {
     val root = tree("a.txt", "src/b.log", "src/c.txt", "out/d.txt")

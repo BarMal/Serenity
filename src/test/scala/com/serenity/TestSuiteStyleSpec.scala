@@ -77,7 +77,6 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
   private val ThreadSleepAllowlist = Map(
     "app/instance/InstanceLockSpec.scala"         -> "child JVM parks forever so the lock stays held",
     "spellcheck/DictionaryCacheSharingSpec.scala" -> "simulates a slow dictionary build the sharing must not repeat",
-    "SwingWindowPresentSpec.scala"                -> "paint thread holds its lease briefly while acquire blocks",
     "testkit/StallSampler.scala"                  -> "production default for the injected sleep",
     "testkit/StallSamplerSpec.scala"              -> "yields the sampler thread once its scripted delays run out",
     "testkit/RuntimeShutdownWatch.scala"          -> "the watcher's own sampling interval on a daemon thread",

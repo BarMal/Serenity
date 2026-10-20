@@ -112,7 +112,7 @@ object WrapFixtures extends Assertions:
       )
     }
 
-  def bitwiseRows(rows: Vector[MeasuredRow]): Vector[Any] = bitwise(rows.map(TextVisualLine(0, _, 0.0f)))
+  def bitwiseRows(rows: Vector[MeasuredRow]): Vector[Any] = bitwise(rows.map(TextVisualLine(0, _, 0.0f, 0, 0)))
 
   def assertSameAsCold(
     actual: Vector[TextVisualLine],

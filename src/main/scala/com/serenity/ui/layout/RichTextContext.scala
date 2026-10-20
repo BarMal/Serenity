@@ -5,22 +5,46 @@ import java.awt.font.FontRenderContext
 
 import com.serenity.config.MarkdownViewMode
 import com.serenity.markdown.{MarkdownBlockSpans, MarkdownInlineView, MarkerMode}
-import com.serenity.richtext.RichTextDocument
+import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{Buffer, Cursor, IndentationSettings}
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.theme.RichTextStyling
+import com.serenity.ui.openings.{
+  ChapterOpenings,
+  LetterShape,
+  OpeningContext,
+  OpeningSettings,
+  ParagraphRoles,
+  VirtualDropCaps
+}
+import com.serenity.ui.theme.{HeadingSettings, RichTextStyling}
 
 /** The inputs a logical line's wrap depends on besides its text: the rich-text paragraph styles that choose each run's
-  * font and a drop cap's role, the prose zoom that scales them, whether drop caps are enabled at all, and how the
-  * line's inline Markdown is restyled. `tabSize` is the width a tab takes on the cell grid.
+  * font and a drop cap's role, the prose zoom that scales them, whether drop caps are enabled at all, the chapter
+  * openings that are set as drop caps, and how the line's inline Markdown is restyled. `tabSize` is the width a tab
+  * takes on the cell grid, `headings` the look its heading paragraphs resolve to and `dropCapGapEm` the room beside a
+  * drop cap's glyph.
   */
 final case class RichTextContext(
     document: Option[RichTextDocument],
     proseScale: Float,
     dropCapsEnabled: Boolean,
     markdown: MarkdownInlineView = MarkdownInlineView.Off,
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    headings: HeadingSettings = HeadingSettings.default,
+    virtualDropCaps: Option[VirtualDropCaps] = None,
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm,
+    resolver: ChapterOpenings.Resolver = ChapterOpenings.standard
 ):
+
+  val roles: ParagraphRoles = ParagraphRoles(OpeningContext(dropCapsEnabled, virtualDropCaps), resolver)
+
+  /** The role `line`'s paragraph lays out with; body text where there is no rich document. */
+  def layoutRole(line: Int): ParagraphRole =
+    document.fold(ParagraphRole.Body)(roles.layoutRole(_, line))
+
+  /** How `line`'s paragraph sets its first letter, when its role is a drop cap's. */
+  def letterShape(line: Int): LetterShape =
+    document.fold[LetterShape](LetterShape.Drop)(roles.shapeAt(_, line))
 
   /** Hiding a marker means measuring glyph by glyph, which a font laid out on the cell grid is not. */
   def requiresMeasuredLayout: Boolean = markdown.isActive
@@ -41,15 +65,22 @@ object RichTextContext:
     cellGrid: Boolean = false,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
     frc: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext(),
-    tabSize: Int = IndentationSettings.DefaultTabSize
+    tabSize: Int = IndentationSettings.DefaultTabSize,
+    headings: HeadingSettings = HeadingSettings.default,
+    openings: OpeningSettings = OpeningSettings.default,
+    dropCapGapEm: Float = DropCapLayout.DefaultGapEm
   ): RichTextContext =
-    val content = buffer.document.content
+    val content  = buffer.document.content
+    val document = buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(content.lineCount, content.weight))
     RichTextContext(
-      buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(content.lineCount, content.weight)),
+      document,
       RichTextStyling.proseZoom(font.getSize2D),
       dropCapsEnabled,
       markdownViewFor(buffer, markdownViewMode, cellGrid, wrapCache, font, frc),
-      tabSize
+      tabSize,
+      headings,
+      document.flatMap(wrapCache.virtualDropCaps(_, openings)),
+      dropCapGapEm
     )
 
   /** How `buffer`'s inline Markdown is restyled under `viewMode`. A buffer carrying a rich-text document styles its own
@@ -74,7 +105,9 @@ object RichTextContext:
       )
       val mono = FontLoader.isMonospacedFont(font)
       val columns =
-        wrapCache.tableColumns(buffer.id, content, font, frc)(MarkdownTableMetrics.columnsFor(content, font, frc, mono))
+        wrapCache.tableColumns(buffer.id, content, font, frc)(
+          MarkdownTableMetrics.columnsFor(content, font, frc, mono, wrapCache.shapedText)
+        )
       MarkdownInlineView(
         mode,
         if mode == MarkerMode.Live then revealedLines(buffer) else Vector.empty,

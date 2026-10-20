@@ -23,7 +23,9 @@ class OpenFolderModalCompositionSpec extends AnyFlatSpec with Matchers:
   private def texts(plan: ResolvedSurfaceComposition): List[String] = plan.paintBoxes.flatMap(_.text)
 
   private def hintLine(plan: ResolvedSurfaceComposition): String =
-    texts(plan).find(_.contains("Cancel")).getOrElse(fail("expected a key hint line"))
+    texts(plan).dropWhile(!_.contains("Cancel")) match
+      case Nil  => fail("expected a key hint line")
+      case rows => rows.mkString(" ")
 
   private val folderForm = FileWorkflowState(
     mode = FileWorkflowMode.OpenFolder,

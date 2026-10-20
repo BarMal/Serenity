@@ -16,7 +16,12 @@ private[renderer] object ColumnPaneRows:
     * column mode.
     */
   def flatSnapshot(columns: Vector[ColumnSnapshotPlacement]): Option[TextLayoutSnapshot] =
-    columns.headOption.map(first => first.snapshot.copy(visualLines = columns.flatMap(_.snapshot.visualLines)))
+    columns.headOption.map(first =>
+      first.snapshot.copy(
+        visualLines = columns.flatMap(_.snapshot.visualLines),
+        columnBreaks = firstRows(columns).drop(1)
+      )
+    )
 
   /** The pane row each column's first row has, in column order. */
   def firstRows(columns: Vector[ColumnSnapshotPlacement]): Vector[Int] =

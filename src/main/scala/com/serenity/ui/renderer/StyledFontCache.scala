@@ -49,9 +49,6 @@ final class StyledFontCache(maxBaseFonts: Int = 16, maxStylesPerBaseFont: Int = 
 
 object StyledFontCache:
 
-  /** Shared by every surface that is not handed its own: a styled font is a pure function of its key. */
-  val shared: StyledFontCache = new StyledFontCache()
-
   /** An underline's offset and thickness belong to the font, not to the surface that paints it. */
   private val MeasuringContext = FontRenderContext(AffineTransform(), true, true)
 

@@ -3,11 +3,12 @@ package com.serenity.ui.renderer
 import java.awt.Font
 
 import com.serenity.MockRenderSurface
+import com.serenity.config.{AppConfig, HeadingsConfig}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.state.models.{AppState, TextCaretStop, TextVisualLine}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.TextLayoutSnapshot
-import com.serenity.ui.theme.TextStyle
+import com.serenity.ui.theme.{DropCapColour, HeadingColour, SyntaxElement, TextStyle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -39,6 +40,51 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
     call.lineHeightPx shouldBe 48
     call.ascentPx shouldBe 36
     call.foreground shouldBe RenderColor.fromRgba(255, 0, 0)
+  }
+
+  it should "cut a glyph that would reach below the rows the pane draws, since no row would repaint the rest" in {
+    val surface = MockRenderSurface(80, 40)
+
+    DropCapRenderer.renderGlyphPx(
+      surface,
+      xOriginPx = 10.0f,
+      yTopPx = 5,
+      glyphWidthPx = 24.0f,
+      glyphHeightPx = 48,
+      glyphAscentPx = 36,
+      glyphText = "C",
+      glyphStyle = TextStyle(isBold = true, fontSize = Some(36.0f)),
+      foreground = RenderColor.fromRgba(255, 0, 0),
+      background = RenderColor.Black,
+      clipBottomPx = 35
+    )
+
+    val call = surface.drawRunPxCalls.head
+    call.lineHeightPx shouldBe 30
+    call.ascentPx shouldBe 36
+    call.clipGlyphToRun shouldBe true
+  }
+
+  it should "draw a glyph that fits above the rows' bottom whole and unclipped" in {
+    val surface = MockRenderSurface(80, 40)
+
+    DropCapRenderer.renderGlyphPx(
+      surface,
+      xOriginPx = 10.0f,
+      yTopPx = 5,
+      glyphWidthPx = 24.0f,
+      glyphHeightPx = 48,
+      glyphAscentPx = 36,
+      glyphText = "C",
+      glyphStyle = TextStyle(isBold = true, fontSize = Some(36.0f)),
+      foreground = RenderColor.fromRgba(255, 0, 0),
+      background = RenderColor.Black,
+      clipBottomPx = 53
+    )
+
+    val call = surface.drawRunPxCalls.head
+    call.lineHeightPx shouldBe 48
+    call.clipGlyphToRun shouldBe false
   }
 
   it should "draw nothing for an empty glyph" in {
@@ -105,7 +151,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
 
       val (drawLine, drawSegments) = DropCapRenderer.adjustHomeLineDraw(
         snapshot = snapshot,
-        state = state,
         visualLine = visualLine,
         styledSegments = None,
         measured = true,
@@ -113,9 +158,9 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
         baseFont = font,
         frc = Some(frc),
         theme = state.persisted.theme,
+        glyphColour = state.persisted.theme.highlighted.foreground,
         xOriginPx = 0.0f,
-        lineTopPx = 0,
-        normalLineHeightPx = 16
+        lineTopPx = 0
       )
 
       surface.drawRunPxCalls should have size 1
@@ -140,7 +185,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
 
     val (_, drawSegments) = DropCapRenderer.adjustHomeLineDraw(
       snapshot = snapshot,
-      state = state,
       visualLine = visualLine,
       styledSegments = segments,
       measured = true,
@@ -148,15 +192,41 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       baseFont = font,
       frc = Some(frc),
       theme = state.persisted.theme,
+      glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
-      lineTopPx = 0,
-      normalLineHeightPx = 16
+      lineTopPx = 0
     )
 
     drawSegments.map(_.map(_.content)) shouldBe Some(List("ello", " world"))
     drawSegments.map(_.map(_.foregroundColor)) shouldBe Some(
       List(RenderColor.fromRgba(255, 0, 0), RenderColor.fromRgba(0, 0, 255))
     )
+  }
+
+  it should "paint the glyph in the colour it is given, not the theme's text colour" in {
+    val (snapshot, visualLine) = dropCapSnapshot("Hello world")
+    val state                  = AppState.empty
+    val surface                = MockRenderSurface(200, 40)
+    val font                   = Font(Font.SANS_SERIF, Font.PLAIN, 12)
+    val frc                    = TextLayoutSnapshot.defaultFontRenderContext()
+    val chosen                 = RenderColor.fromRgba(200, 80, 30)
+
+    DropCapRenderer.adjustHomeLineDraw(
+      snapshot = snapshot,
+      visualLine = visualLine,
+      styledSegments = None,
+      measured = true,
+      surface = surface,
+      baseFont = font,
+      frc = Some(frc),
+      theme = state.persisted.theme,
+      glyphColour = chosen,
+      xOriginPx = 0.0f,
+      lineTopPx = 0
+    )
+
+    surface.drawRunPxCalls.head.foreground shouldBe chosen
+    surface.drawRunPxCalls.head.foreground should not be state.persisted.theme.foreground
   }
 
   it should "leave the visual line and segments unchanged on the cell/TUI path" in {
@@ -167,7 +237,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
 
     val (drawLine, drawSegments) = DropCapRenderer.adjustHomeLineDraw(
       snapshot = snapshot,
-      state = state,
       visualLine = visualLine,
       styledSegments = None,
       measured = false,
@@ -175,9 +244,9 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       baseFont = font,
       frc = None,
       theme = state.persisted.theme,
+      glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
-      lineTopPx = 0,
-      normalLineHeightPx = 16
+      lineTopPx = 0
     )
 
     drawLine shouldBe visualLine
@@ -196,7 +265,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
 
     val (drawLine, _) = DropCapRenderer.adjustHomeLineDraw(
       snapshot = snapshot,
-      state = state,
       visualLine = visualLine,
       styledSegments = None,
       measured = true,
@@ -204,9 +272,9 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       baseFont = font,
       frc = Some(frc),
       theme = state.persisted.theme,
+      glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
-      lineTopPx = 0,
-      normalLineHeightPx = 16
+      lineTopPx = 0
     )
 
     drawLine shouldBe visualLine
@@ -224,6 +292,40 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
     surface.styleCalls.map(_.style) should contain(TextStyle(isBold = true))
   }
 
+  it should "use the configured drop cap colour, accent by default" in {
+    val (snapshot, visualLine) = dropCapSnapshot("Hello world")
+    val theme                  = AppState.empty.persisted.theme
+    val custom                 = RenderColor.fromRgba(200, 80, 30)
+
+    List(
+      None                              -> theme.highlighted.foreground,
+      Some(DropCapColour.Text)          -> theme.foreground,
+      Some(DropCapColour.Accent)        -> theme.highlighted.foreground,
+      Some(DropCapColour.Fixed(custom)) -> custom
+    ).foreach {
+      case (colour, expected) =>
+        val config  = colour.fold(AppConfig.default)(AppConfig.default.withDropCapColour)
+        val surface = MockRenderSurface(200, 40)
+
+        DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, AppState.empty(config), visualLine, surface, x = 2, y = 1)
+
+        withClue(s"$colour: ")(surface.getFg(2, 1) shouldBe expected)
+    }
+  }
+
+  it should "resolve the heading colour from the heading settings" in {
+    val (snapshot, visualLine) = dropCapSnapshot("Hello world")
+    val config = AppConfig.default
+      .withDropCapColour(DropCapColour.Heading)
+      .withHeadingsConfig(HeadingsConfig(colour = Some(HeadingColour.Heading)))
+    val state   = AppState.empty(config)
+    val surface = MockRenderSurface(200, 40)
+
+    DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, surface, x = 2, y = 1)
+
+    surface.getFg(2, 1) shouldBe state.persisted.theme.colorFor(SyntaxElement.Heading).foreground
+  }
+
   it should "do nothing for a non-drop-cap paragraph" in {
     val document                  = RichTextDocument(List(RichTextParagraph.plain("Hello world")))
     val (dropCapSnap, visualLine) = dropCapSnapshot("Hello world")
@@ -237,9 +339,11 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "do nothing when the config toggle is off, even for a drop cap paragraph" in {
-    val (snapshot, visualLine) = dropCapSnapshot("Hello world")
-    val state                  = AppState.empty(com.serenity.config.AppConfig.default.withDropCapsEnabled(false))
-    val surface                = MockRenderSurface(200, 40)
+    val (enabledSnapshot, visualLine) = dropCapSnapshot("Hello world")
+    val snapshot =
+      enabledSnapshot.copy(roles = com.serenity.ui.openings.ParagraphRoles.standard(dropCapsEnabled = false))
+    val state   = AppState.empty(com.serenity.config.AppConfig.default.withDropCapsEnabled(false))
+    val surface = MockRenderSurface(200, 40)
 
     DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, surface, x = 2, y = 1)
 

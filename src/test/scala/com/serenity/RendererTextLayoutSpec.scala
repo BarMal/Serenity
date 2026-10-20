@@ -227,7 +227,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val codeFont = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val textFont = FontLoader
       .loadTextFont(
-        FontConfig(textFontFamily = "Serif", fontSize = 22.0f)
+        FontConfig(textFontFamily = "Serif", textFontSize = 22.0f)
       )
       .unsafeRunSync()
     val codeMetrics = CellMetrics.fromFont(codeFont)

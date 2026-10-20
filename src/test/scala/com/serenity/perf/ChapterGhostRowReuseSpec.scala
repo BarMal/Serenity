@@ -4,6 +4,7 @@ import java.awt.Font
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.config.{HeadingsConfig, MarkdownViewMode}
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.lsp.config.LanguageId
@@ -85,7 +86,8 @@ class ChapterGhostRowReuseSpec extends AnyFlatSpec with Matchers:
         deviceScaleX = LaptopFrameBenchmarks.DeviceScale,
         deviceScaleY = LaptopFrameBenchmarks.DeviceScale,
         contentPersists = true,
-        layerCacheOwnerOverride = Some(screen)
+        layerCacheOwnerOverride = Some(screen),
+        textCaches = caches.surfaceText
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
@@ -172,6 +174,51 @@ class ChapterGhostRowReuseSpec extends AnyFlatSpec with Matchers:
 
   "Frames of a pane showing chapter ghosts" should "equal frames drawn from scratch, there and back" in
     List(typing, rewrittenNote, firstProse).foreach { (before, after) =>
+      val frames = PersistingImage()
+      val _      = frames.render(before, Damage.Everything)
+
+      val (there, _) = frames.render(after, DamageProducer.forTransition(before, after))
+      val thereDiffs = differing(there, after)
+      val (back, _)  = frames.render(before, DamageProducer.forTransition(after, before))
+      val backDiffs  = differing(back, before)
+
+      withClue(s"the frame changed into, ${summary(thereDiffs)}: ")(thereDiffs shouldBe empty)
+      withClue(s"the frame changed back out of, ${summary(backDiffs)}: ")(backDiffs shouldBe empty)
+    }
+
+  private def withSpacedHeadings(state: AppState): AppState =
+    state.copy(persisted =
+      state.persisted.copy(config =
+        state.persisted.config
+          .withMarkdownViewMode(MarkdownViewMode.LivePreview)
+          .withHeadingsConfig(
+            HeadingsConfig().withLevel(1)(_.copy(spaceBefore = Some(1.0f), spaceAfter = Some(0.5f)))
+          )
+      )
+    )
+
+  private def spaced(transition: (AppState, AppState)): (AppState, AppState) =
+    withSpacedHeadings(transition._1) -> withSpacedHeadings(transition._2)
+
+  "The fixture with spaced headings" should "keep the ghost on the blank lines under the heading, below its space" in {
+    val (before, _) = spaced(typing)
+    val scene       = RenderCaches.create().authoritativeScene.forState(before, viewport, codeFont, textFont)
+    val rows        = scene.textSnapshot(paneId).map(_.visualLines).getOrElse(fail("expected a snapshot"))
+
+    rows.map(_.bufferLine).take(4) shouldBe Vector(0, 1, 2, 3)
+    rows.find(_.bufferLine == 4).map(_.spaceBeforePx).getOrElse(0) should be > 0
+    rows.find(_.bufferLine == 0).map(_.spaceAfterPx).getOrElse(0) should be > 0
+  }
+
+  "A typing frame under spaced headings" should "redraw the typed row and keep the rest" in
+    keepsUnaffectedRows(spaced(typing))
+
+  "A rewritten chapter note under spaced headings" should "redraw only the rows of the ghost that changed" in
+    keepsUnaffectedRows(spaced(rewrittenNote))
+
+  "Frames of a pane showing chapter ghosts under spaced headings" should
+    "equal frames drawn from scratch, there and back" in
+    List(typing, rewrittenNote, firstProse).map(spaced).foreach { (before, after) =>
       val frames = PersistingImage()
       val _      = frames.render(before, Damage.Everything)
 

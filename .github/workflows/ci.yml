@@ -162,9 +162,15 @@ jobs:
           mkdir -p jvm-diag
           echo "SBT_OPTS=-Xlog:gc*,safepoint:file=jvm-diag/gc-safepoint.log:time,uptime,level,tags -Dserenity.test.stallLog=jvm-diag/stalls.log" >> "$GITHUB_ENV"
 
+      # Ten specs `assume` a display and were cancelled on this headless runner, so nothing on Linux ran them. The perf
+      # job's virtual display, at a size that fits its largest window, lets them run; the one spec that needs AWT to be
+      # headless is cancelled in its place.
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
       - name: Run tests
         # Fails with a thread dump after 40 minutes instead of holding the runner for 6 hours on a hang.
-        run: bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test
+        run: xvfb-run -a -s "-screen 0 1920x1200x24" bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test
 
       # The console log of a failed run drops per-test detail (see the -u note in build.sbt), so the JUnit XML is the
       # only place a property failure's name, shrunk arguments and Init Seed survive.
@@ -257,7 +263,7 @@ jobs:
 
       # Stdlib `unittest`, no Python dependency to install.
       - name: Test the benchmark comparison scripts
-        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_summarize_jvm_diag -v
+        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_abba_compare scripts.test_summarize_jvm_diag -v
 
       # The benchmark suite builds a real `SwingWindow` (`PerformanceBenchmarks.main`'s `SwingWindow.resource`), which
       # needs a display even though nothing is ever shown on screen -- a runner with no X server at all raises
