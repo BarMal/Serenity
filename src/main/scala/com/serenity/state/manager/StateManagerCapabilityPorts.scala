@@ -82,6 +82,9 @@ private[manager] trait EffectFilePort:
   def submitSave(bufferId: BufferId, onFailure: Throwable => IO[Unit]): IO[Unit]
   def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit]
   def loadFile(path: Path): IO[Unit]
+
+  /** Opens `path` and returns once its buffer is in the state: for lane jobs, not the dispatcher. */
+  def openFile(path: Path): IO[Unit]
   def openFromDialog(dialog: com.serenity.io.FileDialog): IO[Unit]
   def openFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit]
   def openFileOrFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit]

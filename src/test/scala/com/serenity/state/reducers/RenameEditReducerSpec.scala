@@ -107,7 +107,7 @@ class RenameEditReducerSpec extends AnyFlatSpec with Matchers:
     result.state.persisted.buffers(secondId).document.content.collect() shouldBe "def f = renamed"
   }
 
-  it should "leave the buffer untouched and report files that are not open in any buffer" in {
+  it should "leave the open buffer untouched and ask for a file that no buffer holds to be opened" in {
     val before   = stateWith("val old = 1")
     val otherUri = Path.of("/tmp/serenity-rename-spec/other.scala").toUri.toString
     val edits = Map(
@@ -117,9 +117,10 @@ class RenameEditReducerSpec extends AnyFlatSpec with Matchers:
     val result = RenameEditReducer.apply(edits, anchor, before)
 
     result.state.persisted.buffers(bufferId).document.content.collect() shouldBe "val old = 1"
-    quickInfoText(result.state) shouldBe Some(
-      "Renamed 0 location(s) in this file. 1 file(s) not open in any buffer were not updated."
-    )
+    result.effects.collect {
+      case AppEffect.File(FileEffect.OpenForRenameEdit(pending)) =>
+        pending.edits.keySet
+    } shouldBe List(Set(otherUri))
   }
 
   it should "apply nothing, in any file, when one document's edits overlap, and say so" in {
@@ -156,4 +157,60 @@ class RenameEditReducerSpec extends AnyFlatSpec with Matchers:
       case AppEffect.Undo(UndoEffect.RecordBoundary(entry: HistoryEntry.DetachedBufferEdit, _)) =>
         entry.bufferId
     } shouldBe List(secondId)
+  }
+
+  private val otherPath = Path.of("/tmp/serenity-rename-spec/unopened.scala")
+  private val otherUri  = otherPath.toUri.toString
+  private def renameTo(from: Int, to: Int, text: String) =
+    LspTextEdit(LspRange(LspPosition(0, from), LspPosition(0, to)), text)
+
+  it should "ask for files that no buffer holds to be opened, with their edits, and show no summary yet" in {
+    val before = stateWith("val old = 1")
+    val edits  = Map(uri -> List(renameTo(4, 7, "renamed")), otherUri -> List(renameTo(8, 11, "renamed")))
+
+    val result = RenameEditReducer.apply(edits, anchor, before)
+
+    result.state.persisted.buffers(bufferId).document.content.collect() shouldBe "val renamed = 1"
+    result.effects.collect {
+      case AppEffect.File(FileEffect.OpenForRenameEdit(pending)) => pending
+    } should matchPattern {
+      case List(PendingRename(`unopenedEdits`, `anchor`, 1, 1, 0, _, _)) =>
+    }
+    quickInfoText(result.state) shouldBe None
+  }
+
+  private val unopenedEdits = Map(otherUri -> List(renameTo(8, 11, "renamed")))
+
+  "RenameEditReducer.afterOpening" should "edit the files that are now open, summarise the whole rename, and restore focus" in {
+    val base      = stateWithTwoBuffers("val old = 1", "def f = old")
+    val reopened  = base.copy(persisted = base.persisted.copy(focus = Focus.EditorPane(PaneId(1))))
+    val withOther = Path.of("/tmp/serenity-rename-spec/second.scala")
+    val pending = PendingRename(
+      Map(withOther.toUri.toString -> List(renameTo(8, 11, "renamed"))),
+      anchor,
+      applied = 1,
+      editedBuffers = 1,
+      heldBack = 0,
+      focus = Focus.EditorPane(PaneId(0)),
+      activePane = Some(PaneId(0))
+    )
+
+    val result = RenameEditReducer.afterOpening(pending, reopened)
+
+    result.state.persisted.buffers(secondId).document.content.collect() shouldBe "def f = renamed"
+    undoBufferIds(result) shouldBe List(secondId)
+    result.state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+    result.state.persisted.layout.activeEditorPaneId shouldBe Some(PaneId(0))
+    quickInfoText(result.state) shouldBe Some("Renamed 2 location(s) in 2 open file(s).")
+  }
+
+  it should "report a file that still could not be opened as not updated" in {
+    val before  = stateWith("val old = 1")
+    val pending = PendingRename(unopenedEdits, anchor, 1, 1, 0, Focus.EditorPane(PaneId(0)), Some(PaneId(0)))
+
+    val result = RenameEditReducer.afterOpening(pending, before)
+
+    quickInfoText(result.state) shouldBe Some(
+      "Renamed 1 location(s) in this file. 1 file(s) not open in any buffer were not updated."
+    )
   }

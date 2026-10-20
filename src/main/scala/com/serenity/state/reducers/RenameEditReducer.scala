@@ -9,19 +9,56 @@ import com.serenity.lsp.model.LspTextEdit
 import com.serenity.state.models.*
 import com.serenity.ui.layout.PeekContent
 
-/** Applies a `textDocument/rename` response's `WorkspaceEdit` (#1467, #1965) to every open buffer whose document it
-  * names, each as its own undo step. This client has no path yet to open, edit and persist a document that no buffer
-  * holds, so edits for those uris are dropped; the peek message shown afterward always reports how many locations were
-  * edited and how many files were left untouched, so a multi-file rename is never silently partial.
+/** Applies a `textDocument/rename` response's `WorkspaceEdit` (#1467, #1965). Every open buffer the edit names is
+  * edited at once, each as its own undo step. A file no buffer holds is opened as a buffer first and then edited the
+  * same way, left unsaved: [[apply]] edits what is open and asks for the rest to be opened ([[PendingRename]]), and
+  * [[afterOpening]] finishes once they are. The peek shown at the end says how many locations were edited and how many
+  * files could not be, so a multi-file rename is never silently partial. An edit whose changes to one file overlap is
+  * applied nowhere.
   */
 object RenameEditReducer:
 
   def apply(edits: Map[String, List[LspTextEdit]], anchor: CursorPosition, state: AppState): ReducerResult =
     val outcome = WorkspaceEditReducer.applyToOpenBuffers(edits, state)
-    val summary =
-      if outcome.overlappingUris.nonEmpty then rejectedPeek(state, anchor, outcome.overlappingUris)
-      else summaryPeek(outcome.result.state, anchor, outcome)
+    if outcome.overlappingUris.nonEmpty then rejectedPeek(state, anchor, outcome.overlappingUris)
+    else if outcome.unopenedUris.isEmpty then summarised(outcome, anchor)
+    else
+      val pending = PendingRename(
+        edits.filter((uri, _) => outcome.unopenedUris.contains(uri)),
+        anchor,
+        outcome.appliedCount,
+        outcome.editedBuffers,
+        outcome.heldBack,
+        state.persisted.focus,
+        state.persisted.layout.activeEditorPaneId
+      )
+      ReducerResult(
+        outcome.result.state,
+        outcome.result.effects :+ AppEffect.File(FileEffect.OpenForRenameEdit(pending))
+      )
+
+  def afterOpening(pending: PendingRename, state: AppState): ReducerResult =
+    val outcome = WorkspaceEditReducer.applyToOpenBuffers(pending.edits, state)
+    val whole = outcome.copy(
+      result = outcome.result.copy(state = focusRestored(outcome.result.state, pending)),
+      appliedCount = pending.applied + outcome.appliedCount,
+      editedBuffers = pending.editedBuffers + outcome.editedBuffers,
+      heldBack = pending.heldBack + outcome.heldBack
+    )
+    summarised(whole, pending.anchor)
+
+  private def summarised(outcome: WorkspaceEditReducer.Outcome, anchor: CursorPosition): ReducerResult =
+    val summary = summaryPeek(outcome.result.state, anchor, outcome)
     ReducerResult(summary.state, outcome.result.effects ++ summary.effects)
+
+  /** Opening a file focuses it; the user was somewhere else. */
+  private def focusRestored(state: AppState, pending: PendingRename): AppState =
+    val layout = state.persisted.layout
+    pending.activePane.filter(layout.editorPanes.contains).fold(state) { paneId =>
+      state.copy(persisted =
+        state.persisted.copy(focus = pending.focus, layout = layout.copy(activeEditorPaneId = Some(paneId)))
+      )
+    }
 
   private def rejectedPeek(state: AppState, anchor: CursorPosition, overlappingUris: Set[String]): ReducerResult =
     val names = overlappingUris.toList.sorted.map(fileName).mkString(", ")
