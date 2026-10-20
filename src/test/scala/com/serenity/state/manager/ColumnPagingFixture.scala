@@ -11,10 +11,10 @@ import com.serenity.ui.layout.{
   LayoutEngine,
   TextLayoutSnapshot,
   ViewportSize,
-  WrappedLineCache,
   WorkspaceNode,
   WorkspaceNodeId,
-  WorkspaceTree
+  WorkspaceTree,
+  WrappedLineCache
 }
 import com.serenity.ui.renderer.ShapedTextCache
 import com.serenity.ui.theme.RichTextStyling
