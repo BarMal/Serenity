@@ -152,6 +152,26 @@ private[renderer] object MeasuredLineRuns:
     }
     segments ++ Option.when(covered < text.length)(segment(covered, text.length, 0))
 
+  /** The stretches of `[from, until)` (offsets into the row's text) that one font draws, each with the fallback family
+    * that draws it: the line's own font between the fallback runs.
+    */
+  def fontPieces(visualLine: TextVisualLine, from: Int, until: Int): Vector[(Int, Int, Option[String])] =
+    val fonts    = visualLine.fontRuns
+    val declared = Vector.tabulate(fonts.length / 3)(run => (fonts(3 * run), fonts(3 * run + 1), fonts(3 * run + 2)))
+    def familyOf(slot: Int): Option[String] =
+      Option.when(slot > 0)(visualLine.fallbackFamilies.lift(slot - 1)).flatten
+    val cuts = declared
+      .flatMap((low, high, slot) =>
+        val start = math.max(low, from)
+        val end   = math.min(high, until)
+        Option.when(start < end)((start, end, familyOf(slot)))
+      )
+    val (reached, pieces) = cuts.foldLeft((from, Vector.empty[(Int, Int, Option[String])])) {
+      case ((at, found), (start, end, family)) =>
+        (end, found ++ Option.when(start > at)((at, start, None)) :+ ((start, end, family)))
+    }
+    pieces ++ Option.when(reached < until)((reached, until, None))
+
   /** Places each run in its style stretch -- the consecutive runs of one style, which draw in one font and so can be
     * shaped as one text -- where `runs` are the runs of `text`.
     */
