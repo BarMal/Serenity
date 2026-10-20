@@ -368,7 +368,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
 
   "Grapheme boundaries" should "come from one sweep, matching a scan cluster by cluster" in
     forAll(corpus) { line =>
-      ParagraphMeasurement.graphemeBoundaryOffsets(line).toVector shouldBe LegacyLineMeasurement
+      ParagraphMeasurement.graphemeBoundaryOffsets(line, new BoundaryScratch).toVector shouldBe LegacyLineMeasurement
         .graphemeBoundaryOffsets(line)
     }
 

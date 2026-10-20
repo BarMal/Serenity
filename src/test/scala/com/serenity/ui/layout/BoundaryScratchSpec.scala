@@ -1,8 +1,8 @@
 package com.serenity.ui.layout
 
-import java.text.BreakIterator
 import java.util.concurrent.atomic.AtomicReference
 
+import com.ibm.icu.text.BreakIterator
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
