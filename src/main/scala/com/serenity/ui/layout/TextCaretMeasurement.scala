@@ -23,8 +23,8 @@ private[layout] object TextCaretMeasurement:
     * uses to pad a cell out to its column. A run with a non-primary `slot` is drawn in a fallback font because the
     * line's own font has no glyph for it; `fixedLinePitch` keeps such runs out of a row's height, as a code buffer's
     * rows do not grow for them. A positive `wideCellPx` is the cell a code line is laid out on: each character the
-    * terminal counts as two cells ([[CharWidth]]) takes exactly two of them, whatever font draws it. A run's slot `n`
-    * names `fallbackFamilies(n - 1)`.
+    * terminal counts as two cells ([[CharWidth]]) takes exactly two of them, whatever font draws it, and each one-cell
+    * character a fallback font draws takes exactly one. A run's slot `n` names `fallbackFamilies(n - 1)`.
     */
   final private[layout] case class ColumnFontRun(
       startColumn: Int,
@@ -83,6 +83,9 @@ private[layout] object TextCaretMeasurement:
 
     def fontAt(column: Int): Font =
       runAt(column).map(_.font).getOrElse(baseFont)
+
+    def isFallbackAt(column: Int): Boolean =
+      hasFallback && runAt(column).exists(_.slot != FontSlot.Primary)
 
     /** `[startColumn, endColumn)` cut into maximal ranges of one font each, hidden ranges kept apart. */
     def fontRuns(startColumn: Int, endColumn: Int): Vector[FontSpan] =

@@ -5,9 +5,10 @@ import java.awt.font.FontRenderContext
 
 import com.serenity.ui.renderer.FontFirstUse
 
-/** The two-column rule of a code line. A character the terminal counts as two cells ([[CharWidth]]) takes exactly two
-  * cells of the primary font's float advance, whichever font draws its glyph, so a wide character in a code buffer
-  * lines up with the rest of the grid and with what the terminal paints.
+/** The cell rule of a code line. A character the terminal counts as two cells ([[CharWidth]]) takes exactly two cells
+  * of the primary font's float advance, whichever font draws its glyph, and a one-cell character that a fallback font
+  * draws takes exactly one, so what follows either stays on the primary's grid and lines up with what the terminal
+  * paints.
   */
 private[layout] object WideCells:
 
@@ -22,18 +23,31 @@ private[layout] object WideCells:
     FontFirstUse.settle(font, frc)
     font.createGlyphVector(frc, "0").getGlyphMetrics(0).getAdvance
 
-  /** `advances` with each wide character of `chars` set to two cells. A surrogate pair is left to [[snapped]]. */
-  def snapAdvances(chars: Array[Char], advances: Array[Float], cellPx: Float): Unit =
+  /** Whether the code line sets `codePoint` on the cell grid: a wide character, or a one-cell character drawn in a
+    * fallback font, which would otherwise keep its glyph's own advance and push the columns after it off the grid.
+    */
+  def isSnapped(codePoint: Int, inFallback: Boolean): Boolean =
+    isWide(codePoint) || (inFallback && CharWidth.of(codePoint) == 1)
+
+  private def cellsOf(codePoint: Int): Int = if isWide(codePoint) then 2 else 1
+
+  /** `advances` with each snapped character of `chars` set to its cells, `inFallback` saying whether the character at
+    * an index is drawn in a fallback font. A surrogate pair is left to [[snapped]].
+    */
+  def snapAdvances(chars: Array[Char], advances: Array[Float], cellPx: Float, inFallback: Int => Boolean): Unit =
     if cellPx > 0.0f then
       chars.indices.foreach { index =>
-        if !Character.isSurrogate(chars(index)) && isWide(chars(index).toInt) then advances(index) = 2 * cellPx
+        val char = chars(index)
+        if !Character.isSurrogate(char) && isSnapped(char.toInt, inFallback(index)) then
+          advances(index) = cellsOf(char.toInt) * cellPx
       }
 
-  /** `carets` (a leading stop per character plus the trailing edge) with each wide character widened or narrowed to two
-    * cells and every stop after it moved to match.
+  /** `carets` (a leading stop per character plus the trailing edge) with each snapped character widened or narrowed to
+    * its cells and every stop after it moved to match. `inFallback` says whether the character at an index of `text` is
+    * drawn in a fallback font.
     */
-  def snapped(carets: IArray[Float], text: String, cellPx: Float): IArray[Float] =
-    if cellPx <= 0.0f || !hasWide(text) then carets
+  def snapped(carets: IArray[Float], text: String, cellPx: Float, inFallback: Int => Boolean): IArray[Float] =
+    if cellPx <= 0.0f then carets
     else
       val shifted = new Array[Float](carets.length)
       @annotation.tailrec
@@ -42,7 +56,9 @@ private[layout] object WideCells:
         if index < text.length then
           val codePoint = text.codePointAt(index)
           val end       = index + Character.charCount(codePoint)
-          val delta     = if isWide(codePoint) then 2 * cellPx - (carets(end) - carets(index)) else 0.0f
+          val delta =
+            if isSnapped(codePoint, inFallback(index)) then cellsOf(codePoint) * cellPx - (carets(end) - carets(index))
+            else 0.0f
           (index + 1 until end).foreach(inner => shifted(inner) = carets(inner) + shift + delta)
           walk(end, shift + delta)
       walk(0, 0.0f)

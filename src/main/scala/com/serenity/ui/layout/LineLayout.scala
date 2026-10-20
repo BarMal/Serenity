@@ -295,7 +295,9 @@ private[layout] object LineLayout:
       if !monospaced then itemised
       else
         val coded = if itemised eq styled then styled else itemised.copy(fixedLinePitch = true)
-        if WideCells.hasWide(text) then coded.copy(wideCellPx = WideCells.cellAdvancePx(font, frc)) else coded
+        if WideCells.hasWide(text) || (itemised ne styled) then
+          coded.copy(wideCellPx = WideCells.cellAdvancePx(font, frc))
+        else coded
 
   private def markdownAwareResolver(
     font: Font,

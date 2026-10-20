@@ -13,7 +13,7 @@ private[layout] object RowFontRuns:
 
   def of(resolver: LineFontResolver, text: String, startColumn: Int, endColumn: Int): IArray[Int] =
     val slotRuns = resolver.slotRuns(startColumn, endColumn)
-    val snapping = resolver.wideCellPx > 0.0f && WideCells.hasWide(text)
+    val snapping = resolver.wideCellPx > 0.0f
     if slotRuns.isEmpty && !snapping then MeasuredRow.NoFontRuns
     else
       val slots = new Array[Int](text.length)
@@ -30,7 +30,8 @@ private[layout] object RowFontRuns:
           val codePoint = text.codePointAt(index)
           val next      = index + Character.charCount(codePoint)
           val slot      = slots(index)
-          if snapping && WideCells.isWide(codePoint) then walk(next, -1, 0, closed(index) ++ Vector(index, next, slot))
+          if snapping && WideCells.isSnapped(codePoint, slot != 0) then
+            walk(next, -1, 0, closed(index) ++ Vector(index, next, slot))
           else if slot == 0 then walk(next, -1, 0, closed(index))
           else if openStart >= 0 && openSlot == slot then walk(next, openStart, openSlot, found)
           else walk(next, index, slot, closed(index))

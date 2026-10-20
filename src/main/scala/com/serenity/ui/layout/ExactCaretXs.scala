@@ -59,19 +59,26 @@ private[layout] object ExactCaretXs:
     val laidOut =
       if resolver.hasHidden then visibleStops(text, absoluteStartColumn, resolver, frc)
       else plainStops(text, absoluteStartColumn, resolver, frc)
-    withExtraAdvances(snappedToCells(laidOut, text, resolver), absoluteStartColumn, resolver)
+    withExtraAdvances(snappedToCells(laidOut, text, absoluteStartColumn, resolver), absoluteStartColumn, resolver)
 
-  /** `stops` with each wide character of a code line set to two cells ([[WideCells]]), the edges after it moved to
-    * match.
+  /** `stops` with each wide character of a code line set to two cells and each one-cell fallback character to one
+    * ([[WideCells]]), the edges after it moved to match.
     */
   private def snappedToCells(
     stops: ShapedCaretStops.Stops,
     text: String,
+    absoluteStartColumn: Int,
     resolver: LineFontResolver
   ): ShapedCaretStops.Stops =
-    if resolver.wideCellPx <= 0.0f || !WideCells.hasWide(text) then stops
+    if resolver.wideCellPx <= 0.0f then stops
     else
-      val carets = WideCells.snapped(stops.carets, text, resolver.wideCellPx)
+      val carets =
+        WideCells.snapped(
+          stops.carets,
+          text,
+          resolver.wideCellPx,
+          index => resolver.isFallbackAt(absoluteStartColumn + index)
+        )
       ShapedCaretStops.Stops(
         carets,
         stops.trailing.map(edges =>

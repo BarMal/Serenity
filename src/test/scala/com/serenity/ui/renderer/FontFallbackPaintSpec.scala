@@ -111,3 +111,14 @@ class FontFallbackPaintSpec extends AnyFlatSpec with Matchers:
     letter should not be empty
     letter.head.toFloat should be >= (originX + 2 * cell - 1)
   }
+
+  "A narrow fallback symbol in a code row" should "be drawn at its caret, with the letter after it on the next cell" in {
+    val line   = rowOf("★a", codeFont)
+    val image  = paint(line, codeFont)
+    val cell   = line.row.caretXs(1)
+    val symbol = inkColumns(image, originX.toInt, (originX + cell).toInt)
+    symbol should not be empty
+    val letter = inkColumns(image, (originX + cell).toInt, (originX + line.row.caretXs(2)).toInt + 1)
+    letter should not be empty
+    letter.head.toFloat should be >= (originX + cell - 1)
+  }

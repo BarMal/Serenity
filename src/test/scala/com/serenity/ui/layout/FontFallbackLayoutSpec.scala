@@ -121,11 +121,33 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
     row.row.caretXs.toVector.map(_ / cell) shouldBe Vector(0.0f, 2.0f, 4.0f, 5.0f).map(identity)
   }
 
-  it should "give a narrow fallback symbol its own advance" in {
+  it should "snap a narrow fallback symbol to exactly one cell" in {
     val cell = advanceOf("a", codeFont)
     val row  = rowOf("a★b", codeFont)
-    row.row.caretXs(2) - row.row.caretXs(1) shouldBe 0.8f * sizePx +- 0.01f
-    row.widthPx shouldBe (2 * cell + 0.8f * sizePx) +- 0.01f
+    row.row.caretXs(2) - row.row.caretXs(1) shouldBe cell +- 0.001f
+    row.widthPx shouldBe 3 * cell +- 0.001f
+  }
+
+  it should "keep the columns after a narrow fallback symbol on the primary's grid" in {
+    val cell = advanceOf("a", codeFont)
+    val row  = rowOf("a★★b c", codeFont)
+    row.row.caretXs.toVector.map(_ / cell) shouldBe Vector(0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f)
+  }
+
+  it should "paint each narrow fallback symbol on its own, at its snapped caret" in {
+    val row = rowOf("a★★b", codeFont)
+    row.fontRuns.toVector shouldBe Vector(1, 2, 1, 2, 3, 1)
+  }
+
+  it should "lay out a line of fallback symbols on the cell grid when it holds no wide character" in {
+    val inputs = LineLayout.lineLayoutInputs(codeFont, frc, true, context(), 0, 3, "a★b", ShapedTextCache())
+    inputs.resolver.wideCellPx should be > 0.0f
+  }
+
+  it should "leave a symbol the primary font covers on its own advance" in {
+    val covered = rowOf("a→b", codeFont)
+    covered.row.fontRuns.toVector shouldBe empty
+    covered.row.caretXs(2) - covered.row.caretXs(1) shouldBe advanceOf("→", codeFont) +- 0.001f
   }
 
   it should "keep the spaces and punctuation around a wide character on the primary's grid" in {
