@@ -34,8 +34,8 @@ import com.serenity.diagnostics.{
   TuiConsoleLogFilter
 }
 import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend}
-import com.serenity.input.SwingInputHandler
-import com.serenity.io.SwingFileDialog
+import com.serenity.input.{ImeDiagnostics, SwingInputHandler}
+import com.serenity.io.{FileDialogSelection, SwingFileDialog}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.RestartMode
@@ -234,11 +234,13 @@ object Main extends IOApp:
       opens <- LaunchOpens.resolve(launchOptions.openPaths)
       _     <- opens.notice.traverse_(logger.warn(_))
       appConfig = resolveAppConfig(loaded.config, launchOptions)
-      startup   = Startup(plan, requestRestart, StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker))
+      _                         <- MemoryCompaction.apply(appConfig.surfaceConfig.memoryCompactionEnabled)
+      (askedPlan, reviewNotice) <- LayoutOverrideReview.planned(plan, configLoaded = configResult.isRight, appConfig)
+      startup = Startup(askedPlan, requestRestart, StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker))
       // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
       instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten
       notice = plan.noticeWith(
-        Option((configNotice.toList ++ instanceNotice ++ opens.notice).mkString(" ")).filter(_.nonEmpty)
+        Option((configNotice.toList ++ reviewNotice ++ instanceNotice ++ opens.notice).mkString(" ")).filter(_.nonEmpty)
       )
       // The first file opens as part of startup; the folder and the other files open as a later launch's would.
       startupOptions = launchOptions.copy(openPaths = opens.files)
@@ -355,7 +357,8 @@ object Main extends IOApp:
         .use { (swingWin, paintEc) =>
           val actualAppConfig =
             resolveAutoTextScale(appConfig, swingWin.detectedDeviceTextScale)
-          val fileDialog = SwingFileDialog(swingWin.canvas)
+          val fileDialogSelection = FileDialogSelection.forThisProcess(actualAppConfig.fileDialogMode)
+          val fileDialog          = SwingFileDialog(swingWin.canvas, fileDialogSelection)
           val initialScaleSync =
             if actualAppConfig.editorConfig.fontConfig != appConfig.editorConfig.fontConfig then
               displayState.update(actualAppConfig.editorConfig.fontConfig) >>
@@ -399,7 +402,8 @@ object Main extends IOApp:
                       () => swingWin.metrics,
                       () => displayState.uiMetrics,
                       actualAppConfig.inputConfig.wheelScrollLines,
-                      frameTimings
+                      frameTimings,
+                      ImeDiagnostics.fromEnvironment(sys.env)
                     )
                   ).flatTap(menuInput.complete(_).void),
                 renderFull = (state, vis, cc, damage, caches) =>
@@ -433,9 +437,10 @@ object Main extends IOApp:
                     )
                   ),
                 frameTimings = frameTimings,
-                menus = Option.when(SwingMenuBar.enabledFor(System.getProperty("os.name", "")))(
-                  SwingMenuBar.resource(swingWin, menuInput.get)
-                ),
+                menus =
+                  Option.when(SwingMenuBar.enabledFor(System.getProperty("os.name", ""), actualAppConfig.menuBarMode))(
+                    SwingMenuBar.resource(swingWin, menuInput.get, actualAppConfig.menuBarMode)
+                  ),
                 offscreenFrames = Some(
                   OffscreenWarmUpFrames.forCanvas(
                     swingWin.canvas,
@@ -446,7 +451,7 @@ object Main extends IOApp:
                 applyPointerShape = shape => IO(swingWin.updatePointerShape(shape))
               )
 
-              initialScaleSync >> AppRuntime.run(
+              initialScaleSync >> logger.info(s"[FILE_DIALOG] ${fileDialogSelection.description}") >> AppRuntime.run(
                 initialViewportSize = swingWin.viewportSize,
                 checkResize = IO(swingWin.doResizeIfNecessary()),
                 runtime = frontendRuntime,

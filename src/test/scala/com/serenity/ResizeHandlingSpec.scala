@@ -34,7 +34,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, initialConfig = AppConfig.conventional)(using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -86,35 +86,43 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val secondPaneId = PaneId(1)
     val firstBuffer  = Buffer.fromString(BufferId(0), "first")
     val secondBuffer = Buffer.fromString(BufferId(1), "second")
-    val initialState = com.serenity.state.models.AppState.initial.copy(
-      persisted = com.serenity.state.models.AppState.initial.persisted.copy(
-        buffers = Map(firstBuffer.id -> firstBuffer, secondBuffer.id -> secondBuffer),
-        bufferOrder = List(firstBuffer.id, secondBuffer.id),
-        layout = Layout(
-          editorPanes = Map(
-            firstPaneId  -> EditorPane.withBuffer(firstPaneId, firstBuffer.id),
-            secondPaneId -> EditorPane.withBuffer(secondPaneId, secondBuffer.id)
-          ),
-          activeEditorPaneId = Some(firstPaneId),
-          workspaceTree = Some(
-            WorkspaceTree(
-              WorkspaceNode.Split(
-                WorkspaceNodeId("editors"),
-                SplitAxis.Horizontal,
-                0.5,
-                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${firstPaneId.value}"), firstPaneId),
-                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${secondPaneId.value}"), secondPaneId)
+    val initialState = com.serenity.state.models.AppState
+      .initial(AppConfig.conventional)
+      .copy(
+        persisted = com.serenity.state.models.AppState
+          .initial(AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(firstBuffer.id -> firstBuffer, secondBuffer.id -> secondBuffer),
+            bufferOrder = List(firstBuffer.id, secondBuffer.id),
+            layout = Layout(
+              editorPanes = Map(
+                firstPaneId  -> EditorPane.withBuffer(firstPaneId, firstBuffer.id),
+                secondPaneId -> EditorPane.withBuffer(secondPaneId, secondBuffer.id)
+              ),
+              activeEditorPaneId = Some(firstPaneId),
+              workspaceTree = Some(
+                WorkspaceTree(
+                  WorkspaceNode.Split(
+                    WorkspaceNodeId("editors"),
+                    SplitAxis.Horizontal,
+                    0.5,
+                    WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${firstPaneId.value}"), firstPaneId),
+                    WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${secondPaneId.value}"), secondPaneId)
+                  )
+                )
               )
-            )
+            ),
+            focus = Focus.EditorPane(firstPaneId)
+          ),
+        runtime = com.serenity.state.models.AppState
+          .initial(AppConfig.conventional)
+          .runtime
+          .copy(
+            nextBufferId = BufferId(2),
+            nextPaneId = PaneId(2)
           )
-        ),
-        focus = Focus.EditorPane(firstPaneId)
-      ),
-      runtime = com.serenity.state.models.AppState.initial.runtime.copy(
-        nextBufferId = BufferId(2),
-        nextPaneId = PaneId(2)
       )
-    )
     val newSize = ViewportSize(120, 40)
 
     val resizedState = com.serenity.state.reducers.SystemEventReducer
@@ -154,11 +162,16 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
       width = ViewportAxisSizing(percent = 0.8, maxCells = None),
       height = ViewportAxisSizing(percent = 1.0, maxCells = Some(20))
     )
-    val initialState = com.serenity.state.models.AppState.initial.copy(
-      persisted = com.serenity.state.models.AppState.initial.persisted.copy(
-        config = AppConfig.default.withViewportSizing(viewportSizing)
+    val initialState = com.serenity.state.models.AppState
+      .initial(AppConfig.conventional)
+      .copy(
+        persisted = com.serenity.state.models.AppState
+          .initial(AppConfig.conventional)
+          .persisted
+          .copy(
+            config = AppConfig.conventional.withViewportSizing(viewportSizing)
+          )
       )
-    )
     val newSize = ViewportSize(120, 40)
 
     val resizedState = com.serenity.state.reducers.SystemEventReducer
@@ -180,7 +193,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, initialConfig = AppConfig.conventional)(using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -210,7 +223,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, initialConfig = AppConfig.conventional)(using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -257,7 +270,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, initialConfig = AppConfig.conventional)(using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -295,21 +308,30 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
       "This is a very long line that should definitely wrap when displayed in a narrow terminal window but should fit on one line in a wide terminal"
     val bufferId = BufferId(0)
     val paneId   = PaneId(0)
-    val state = com.serenity.state.models.AppState.initial.copy(
-      persisted = com.serenity.state.models.AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> Buffer.fromString(bufferId, longLine)),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
-        )
-      ),
-      runtime = com.serenity.state.models.AppState.initial.runtime.copy(
-        nextBufferId = BufferId(1),
-        nextPaneId = PaneId(1)
+    val state = com.serenity.state.models.AppState
+      .initial(AppConfig.conventional)
+      .copy(
+        persisted = com.serenity.state.models.AppState
+          .initial(AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> Buffer.fromString(bufferId, longLine)),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree =
+                Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
+            )
+          ),
+        runtime = com.serenity.state.models.AppState
+          .initial(AppConfig.conventional)
+          .runtime
+          .copy(
+            nextBufferId = BufferId(1),
+            nextPaneId = PaneId(1)
+          )
       )
-    )
 
     // Start with narrow terminal (40 chars wide)
     val narrowSize        = ViewportSize(40, 20)

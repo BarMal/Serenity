@@ -27,6 +27,11 @@ enum Damage:
     */
   case BufferScrolled(bufferId: BufferId)
   case PaneChrome(paneId: PaneId)
+
+  /** One pane's scrollbar looks different for a reason its buffer's own damage does not say, such as the thumb being
+    * taken hold of. A scroll or an edit moves the thumb too, but the renderer sees that in the bar's own geometry.
+    */
+  case Scrollbar(paneId: PaneId)
   case Surface(surfaceId: SurfaceId)
 
   /** The pinned status row, and nothing else. Line numbers are not part of it: each is repainted with its own row, so
@@ -107,13 +112,15 @@ object Damage:
       case _                                                                             => false
     }
 
-  /** As [[isBufferRowsOnly]], also allowing [[Chrome]], [[PaneChrome]] and the tab strip's [[Surface]]: the status row,
-    * each pane's header and the strip have a known rect of their own, so they can join a bounded repaint rather than
-    * force the whole canvas. Any other surface may reach pixels its rect does not describe, so it still does not.
+  /** As [[isBufferRowsOnly]], also allowing [[Chrome]], [[PaneChrome]], [[Scrollbar]] and the tab strip's [[Surface]]:
+    * the status row, each pane's header and scrollbar, and the strip have a known rect of their own, so they can join a
+    * bounded repaint rather than force the whole canvas. Any other surface may reach pixels its rect does not describe,
+    * so it still does not.
     */
   def isBufferRowsOrChromeOnly(damage: Damage): Boolean =
     flatten(damage).forall {
-      case BufferRows(_, _) | BufferCells(_, _, _, _) | BufferAll(_) | BufferScrolled(_) | Chrome | PaneChrome(_) =>
+      case BufferRows(_, _) | BufferCells(_, _, _, _) | BufferAll(_) | BufferScrolled(_) | Chrome | PaneChrome(_) |
+          Scrollbar(_) =>
         true
       case Surface(id) => id == UiSurface.TabBarSurfaceId
       case _           => false
@@ -124,6 +131,10 @@ object Damage:
 
   def touchesChrome(damage: Damage): Boolean =
     flatten(damage).contains(Chrome)
+
+  /** The panes whose scrollbar a [[Scrollbar]] fact anywhere in `damage` names. */
+  def scrollbarPaneIds(damage: Damage): Set[PaneId] =
+    flatten(damage).collect { case Scrollbar(id) => id }
 
   /** The panes whose header a [[PaneChrome]] fact anywhere in `damage` names. */
   def paneChromeIds(damage: Damage): Set[PaneId] =
@@ -183,8 +194,8 @@ object Damage:
         }
 
       val chromeAndSurfaces = items.filter {
-        case PaneChrome(_) | Surface(_) | Chrome => true
-        case _                                   => false
+        case PaneChrome(_) | Scrollbar(_) | Surface(_) | Chrome => true
+        case _                                                  => false
       }
 
       val leaves: Set[Damage] =

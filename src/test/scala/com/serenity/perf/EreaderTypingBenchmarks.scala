@@ -27,9 +27,9 @@ private[perf] object EreaderTypingBenchmarks:
     */
   private val ProseTypingLine = 150
 
-  private val config = AppConfig.default.withColumnMode(true).withColumnTargetWidth(40).withLineNumbers(true)
+  private val config = AppConfig.conventional.withColumnMode(true).withColumnTargetWidth(40).withLineNumbers(true)
 
-  private val singleColumnConfig = AppConfig.default
+  private val singleColumnConfig = AppConfig.conventional
 
   /** A manuscript whose first chapter is empty under a chapter note, so its blank lines carry the note's ghost, ahead
     * of the prose typed into.

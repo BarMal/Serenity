@@ -233,19 +233,31 @@ private[renderer] object RendererChromePlan:
       state.persisted.layout.orderedPaneIds.filter(state.persisted.layout.editorPanes.contains).flatMap { paneId =>
         renderPlan.paneLayouts.get(paneId).map(paneId -> _)
       }
+    val toPixels = pixelRectOf(context.cellMetrics)
     val spacers =
       if repaint.spacers then Nil
       else
-        List(contract.leftSpacerRect, contract.rightSpacerRect) ++
-          editorPaneLayouts.flatMap((_, layout) => List(layout.topSpacerRect, layout.bottomSpacerRect))
+        List(
+          trimmedTowardsContent(context, toPixels(contract.leftSpacerRect), contentOnRight = true),
+          trimmedTowardsContent(context, toPixels(contract.rightSpacerRect), contentOnRight = false)
+        ) ++ editorPaneLayouts.flatMap((_, layout) => List(layout.topSpacerRect, layout.bottomSpacerRect)).map(toPixels)
     val statusRow = contract.gutterRect.filter(_ => !repaint.statusRow).toList
     val headers = editorPaneLayouts.collect {
       case (paneId, layout) if !repaint.headers.includes(paneId) =>
         contract.paneHeaderRect(paneId).getOrElse(layout.headerRect)
     }
-    (spacers ++ statusRow ++ headers).map(pixelRectOf(context.cellMetrics)) ++
+    spacers ++ (statusRow ++ headers).map(toPixels) ++
       keptLineNumberBands(state, context, renderPlan, panes, repaint.lineNumberRows) ++
       keptColumnRailBands(state, context, renderPlan, repaint)
+
+  /** A side spacer without the margin ([[BleedPx]]) beside the text: a glyph's antialiasing can land a pixel there, and
+    * only the row's own redraw clears it. The margin beside a kept row is kept with the row's band; beside a row drawn
+    * again, or one that is gone, it is cleared, where a kept spacer would hold the last frame's fringe.
+    */
+  private def trimmedTowardsContent(context: RenderContext, spacer: PixelRect, contentOnRight: Boolean): PixelRect =
+    if !context.surface.addressesPixels then spacer
+    else if contentOnRight then spacer.copy(widthPx = (spacer.widthPx - BleedPx).max(0))
+    else spacer.copy(xPx = spacer.xPx + BleedPx, widthPx = (spacer.widthPx - BleedPx).max(0))
 
   /** The rail bands of every multi-column pane's rows that `repaint` leaves alone. */
   private def keptColumnRailBands(
@@ -282,7 +294,7 @@ private[renderer] object RendererChromePlan:
     for
       paneId <- state.persisted.layout.activeEditorPaneId.toList
       record <- panes.get(paneId).toList
-      if state.persisted.config.surfaceConfig.showLineNumbers
+      if state.chrome.lineNumbers
       rect <- contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList
       band <- RendererGutter.keptRowBands(state, context, record.snapshot, rect, rows)
     yield band

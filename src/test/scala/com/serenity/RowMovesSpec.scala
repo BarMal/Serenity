@@ -1,7 +1,8 @@
 package com.serenity
 
+import com.serenity.richtext.ParagraphRole
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
-import com.serenity.ui.layout.{PixelRect, RowBands, RowMoves, RowRun, TextLayoutSnapshot}
+import com.serenity.ui.layout.{DropCapSnapshots, PixelRect, RowBands, RowMoves, RowRun, TextLayoutSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -110,4 +111,53 @@ class RowMovesSpec extends AnyFlatSpec with Matchers:
     val scattered = (3 until 40 by 4).toSet
 
     runs(snapshot(lines(0 until 40)), snapshot(lines(2 until 42)), unreusable = scattered) shouldBe Nil
+  }
+
+  private val scrolledBody = DropCapSnapshots.Paragraph(ParagraphRole.Body, rows = 6, firstRow = 2)
+
+  private val spanBefore =
+    DropCapSnapshots.snapshot(DropCapSnapshots.body(8), DropCapSnapshots.dropCap(4, rows = 5), DropCapSnapshots.body(6))
+
+  private val spanScrolledUp =
+    DropCapSnapshots.snapshotSharingDocument(spanBefore)(
+      scrolledBody,
+      DropCapSnapshots.dropCap(4, rows = 5),
+      DropCapSnapshots.body(6)
+    )
+
+  "RowMoves with a drop cap" should "move a glyph's span along with the rows around it" in {
+    runs(spanBefore, spanScrolledUp).flatMap(_.rows) should contain allOf (6, 7, 8, 9)
+  }
+
+  it should "draw all of a span when one of its rows is unreusable" in {
+    val reused = runs(spanBefore, spanScrolledUp, unreusable = Set(7)).flatMap(_.rows).toSet
+
+    reused should contain noneOf (6, 7, 8, 9)
+  }
+
+  it should "draw the rows under a glyph whose home row has scrolled out, which carry its pixels" in {
+    val before = DropCapSnapshots.snapshot(DropCapSnapshots.dropCap(3, rows = 6), DropCapSnapshots.body(8))
+    val after = DropCapSnapshots.snapshotSharingDocument(before)(
+      DropCapSnapshots.Paragraph(ParagraphRole.dropCap(3), rows = 5, firstRow = 1),
+      DropCapSnapshots.body(8)
+    )
+
+    val reused = runs(before, after).flatMap(_.rows).toSet
+
+    reused should contain noneOf (0, 1)
+    reused should contain(3)
+  }
+
+  it should "draw the rows a glyph's home row has newly come to lead, which it would wipe" in {
+    val before = DropCapSnapshots.snapshot(
+      DropCapSnapshots.Paragraph(ParagraphRole.dropCap(3), rows = 5, firstRow = 1),
+      DropCapSnapshots.body(8)
+    )
+    val after =
+      DropCapSnapshots.snapshotSharingDocument(before)(DropCapSnapshots.dropCap(3, rows = 6), DropCapSnapshots.body(8))
+
+    val reused = runs(before, after).flatMap(_.rows).toSet
+
+    reused should contain noneOf (0, 1, 2)
+    reused should contain(4)
   }

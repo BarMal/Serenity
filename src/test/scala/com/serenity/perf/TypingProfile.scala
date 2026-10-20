@@ -170,7 +170,7 @@ object TypingProfile:
     val dictionaryCache   = Option.when(options.coldDictionary)(DictionaryCache())
     val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager(dictionaryCache = dictionaryCache)
     dictionaryCache.filter(_ => options.preloadDictionary).foreach { cache =>
-      StartupWarmUp.preloadSpellDictionary(AppConfig.default, cache).unsafeRunAndForget()
+      StartupWarmUp.preloadSpellDictionary(AppConfig.conventional, cache).unsafeRunAndForget()
     }
     if options.warmMs > 0 then println(s"warm burst rounds=${warmBurst(options.warmMs)}")
     if options.realWarmMs > 0 then println(realWarmUp(options.realWarmMs))
@@ -215,7 +215,7 @@ object TypingProfile:
   /** The app's own warm-up pipeline, interrupted `milliseconds` after it starts like a first keystroke would. */
   private def realWarmUp(milliseconds: Long): String =
     given Logger[IO] = NoOpLogger[IO]
-    val config       = AppConfig.default
+    val config       = AppConfig.conventional
     val program = for
       display    <- RuntimeDisplayState.create(config.editorConfig.fontConfig)
       firstInput <- Deferred[IO, Unit]

@@ -108,6 +108,10 @@ private[config] object ConfigFieldsLanguageAndTypography:
       _.editorConfig.fontConfig.textScaleMultiplier,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(textScaleMultiplier = value))
     ),
+    field("typography.fallback.families", "font.fallback.families", "font_fallback_families")(stringList)(
+      _.editorConfig.fontConfig.fallbackFamilies,
+      (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(fallbackFamilies = value))
+    ),
     field("typography.code.ligatures", "font.code.ligatures", "font_code_ligatures")(boolean)(
       _.editorConfig.fontConfig.codeLigatures,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(enableLigatures = value))

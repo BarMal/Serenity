@@ -46,8 +46,8 @@ class AltShiftChordTypingSpec extends AnyFlatSpec with Matchers:
   private def chord(letter: Char) = KeyStrokeInfo(InputKey.Character, Some(letter), Set(Modifier.Alt, Modifier.Shift))
   private def typed(char: Char)   = KeyStrokeInfo(InputKey.Character, Some(char), Set.empty)
 
-  "An unbound Option+Shift+S on macOS" should "type the glyph the OS delivered, unchanged" in {
-    val events = route("Mac OS X", chord('s'), typed('Í'))
+  "An unbound Option+Shift+J on macOS" should "type the glyph the OS delivered, unchanged" in {
+    val events = route("Mac OS X", chord('j'), typed('Í'))
 
     events.collect { case InsertChar(char) => char } shouldBe List('Í')
     events.head shouldBe a[UnhandledEvent[?]]
@@ -67,6 +67,6 @@ class AltShiftChordTypingSpec extends AnyFlatSpec with Matchers:
   }
 
   "A plain character after an unbound chord" should "still type" in {
-    route("Linux", chord('s'), typed('S'), typed('x')).collect { case InsertChar(char) => char } shouldBe
-      List('S', 'x')
+    route("Linux", chord('j'), typed('J'), typed('x')).collect { case InsertChar(char) => char } shouldBe
+      List('J', 'x')
   }

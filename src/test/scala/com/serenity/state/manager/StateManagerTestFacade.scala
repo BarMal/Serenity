@@ -26,7 +26,7 @@ import org.typelevel.log4cats.{Logger, LoggerFactory}
 object StateManagerTestFacade:
 
   /** A state manager over the shared warm dictionary, for specs that are not about dictionary loading. */
-  def warmStateManager(logger: Logger[IO], initialConfig: AppConfig = AppConfig.default)(using
+  def warmStateManager(logger: Logger[IO], initialConfig: AppConfig = AppConfig.conventional)(using
     Balance,
     LoggerFactory[IO]
   ): IO[StateManager] =

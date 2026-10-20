@@ -6,8 +6,10 @@ import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
   CellMetrics,
+  ColumnPaging,
   LayoutEngine,
   RichTextContext,
+  ScrollbarLayout,
   TextLayoutSnapshot,
   ViewportSize,
   VisualRowCounts,
@@ -80,6 +82,52 @@ object EditorGeometryProducer:
     rowsAbove: Int,
     wrapCache: WrappedLineCache
   ): EditorGeometry =
+    val surfaceConfig = state.persisted.config.surfaceConfig
+    if surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled then columnGeometry(state, buffer, wrapCache)
+    else rowWindowGeometry(state, buffer, rowsAbove, wrapCache)
+
+  /** In column mode a move by column needs to know where columns break, which depends on how tall each row is. The
+    * window is the cursor's column with the one before and the one after, laid out by the same pager the painter and
+    * the viewport use, and carries where each of those columns starts.
+    */
+  private def columnGeometry(state: AppState, buffer: Buffer, wrapCache: WrappedLineCache): EditorGeometry =
+    val fontConfig        = state.persisted.config.editorConfig.fontConfig
+    val font              = FontLoader.previewFontForRole(fontConfig, buffer.typographyRole)
+    val isTui             = state.runtime.capabilities.isCellGrid
+    val metrics           = if isTui then CellMetrics.cellUnit else CellMetrics.fromFont(font)
+    val panelWidthColumns = effectivePanelWidth(state, buffer)
+    val panelWidthPx =
+      if isTui then panelWidthColumns * CellMetrics.cellUnit.charWidth
+      else TextLayoutSnapshot.gridWrapWidthPx(panelWidthColumns, fontConfig)
+    val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
+    val visibleLines        = math.max(1, CursorViewport.rowsDrawnPerScreen(buffer.viewport, fontConfig, font, isTui))
+    val pager = CursorViewport
+      .columnPagerFor(buffer, state, panelWidthPx, font, visibleLines, cellMetricsOverride, isTui, wrapCache)
+    val cursor = buffer.editing.cursorPositions.headOption.getOrElse(CursorPosition(0, 0))
+    val cursorRow = TextLayoutSnapshot.visualLineIndexForCursor(
+      buffer.document.content.getLine(cursor.line).getOrElse(""),
+      cursor.column,
+      panelWidthPx,
+      font,
+      wordWrapEnabled = true,
+      cellMetricsOverride = cellMetricsOverride,
+      forceCellLayout = isTui,
+      rowAffinity = cursor.rowAffinity,
+      wrapCache = wrapCache,
+      bufferLine = cursor.line,
+      richText = pager.richText
+    )
+    val starts  = pager.startsThrough(ColumnPaging.ColumnStart(cursor.line, cursorRow))
+    val columns = pager.fill(starts(math.max(0, starts.length - 2)), 3)
+    val breaks  = columns.scanLeft(0)(_ + _.length).dropRight(1)
+    EditorGeometry(NavigationGeometry(columns.flatten, breaks), metrics.charWidth, panelWidthColumns)
+
+  private def rowWindowGeometry(
+    state: AppState,
+    buffer: Buffer,
+    rowsAbove: Int,
+    wrapCache: WrappedLineCache
+  ): EditorGeometry =
     val font    = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, buffer.typographyRole)
     val isTui   = state.runtime.capabilities.isCellGrid
     val metrics = if isTui then CellMetrics.cellUnit else CellMetrics.fromFont(font)
@@ -114,6 +162,9 @@ object EditorGeometryProducer:
     val dropCapsEnabled     = state.persisted.config.documentConfig.dropCapsEnabled
     val markdownViewMode    = state.persisted.config.inlineMarkdownViewMode
     val tabSize             = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
+    val fontFallback        = state.persisted.config.editorConfig.fontConfig.fallback
+    val headings            = state.effectiveHeadingSettings
+    val openings            = buffer.effectiveOpenings(state.persisted.config.openingsConfig)
     val visualRows =
       VisualRowCounts.forBuffer(
         buffer,
@@ -124,7 +175,11 @@ object EditorGeometryProducer:
         wrapCache,
         dropCapsEnabled,
         markdownViewMode,
-        tabSize
+        tabSize,
+        headings = headings,
+        openings = openings,
+        dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+        fallback = fontFallback
       )
     val cursorRowInWindow =
       if !wordWrapEnabled then cursor.line - windowTopLine
@@ -141,7 +196,19 @@ object EditorGeometryProducer:
             wrapCache = wrapCache,
             bufferLine = cursor.line,
             richText = RichTextContext
-              .forBuffer(buffer, font, dropCapsEnabled, markdownViewMode, isTui, wrapCache, tabSize = tabSize)
+              .forBuffer(
+                buffer,
+                font,
+                dropCapsEnabled,
+                markdownViewMode,
+                isTui,
+                wrapCache,
+                tabSize = tabSize,
+                headings = headings,
+                openings = openings,
+                dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+                fallback = fontFallback
+              )
           )
     val windowTopVisualLine = math.max(0, cursorRowInWindow - rowsAbove)
     // Without rich text a snapshot folds each line into exactly the rows `visualRows` counts, so the window can start
@@ -170,7 +237,11 @@ object EditorGeometryProducer:
         dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
         wrapCache = wrapCache,
         markdownViewMode = markdownViewMode,
-        tabSize = tabSize
+        tabSize = tabSize,
+        headings = headings,
+        openings = openings,
+        dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
+        fallback = fontFallback
       )
     EditorGeometry(snapshot.navigationGeometry, metrics.charWidth, panelWidthColumns)
 
@@ -189,7 +260,8 @@ object EditorGeometryProducer:
 
   private def fullPanelWidth(state: AppState): Int =
     val viewportSize = state.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
-    LayoutEngine.calculateLayout(state, viewportSize).editorPanelRect.width
+    val panelWidth   = LayoutEngine.calculateLayout(state, viewportSize).editorPanelRect.width
+    panelWidth - ScrollbarLayout.terminalColumns(state, panelWidth)
 
   /** One column's TEXT width in cells for `buffer`'s own pane, derived the same way
     * `CursorViewport.adjustForCursorColumnMode` (via `columnCountForBuffer`) and `RendererPaneSetup` do -- the count

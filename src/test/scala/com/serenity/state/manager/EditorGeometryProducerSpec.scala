@@ -49,12 +49,9 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
   private val narrowRun = "i" * 200
 
   "EditorGeometryProducer.forPane" should "wrap at exactly the panel's column count in TUI mode" in {
-    val buffer   = Buffer.fromString(bufferId, narrowRun)
-    val tuiState = stateWith(buffer, isTuiMode = true)
-    val panelWidthColumns = com.serenity.ui.layout.LayoutEngine
-      .calculateLayout(tuiState, ViewportSize(80, 24))
-      .editorPanelRect
-      .width
+    val buffer            = Buffer.fromString(bufferId, narrowRun)
+    val tuiState          = stateWith(buffer, isTuiMode = true)
+    val panelWidthColumns = panelWidthColumnsFor(tuiState)
 
     val geometry = EditorGeometryProducer.forPane(tuiState, paneId).getOrElse(fail("expected geometry for pane"))
     val firstRow = geometry.navigation.visualLines.headOption.getOrElse(fail("expected at least one visual line"))
@@ -76,8 +73,11 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
     (firstRow.endColumn - firstRow.startColumn) should be > panelWidthColumns
   }
 
+  /** The columns text wraps in: the editor panel, less the column a terminal gives its scrollbar. */
   private def panelWidthColumnsFor(state: AppState): Int =
-    com.serenity.ui.layout.LayoutEngine.calculateLayout(state, ViewportSize(80, 24)).editorPanelRect.width
+    val panelWidth =
+      com.serenity.ui.layout.LayoutEngine.calculateLayout(state, ViewportSize(80, 24)).editorPanelRect.width
+    panelWidth - com.serenity.ui.layout.ScrollbarLayout.terminalColumns(state, panelWidth)
 
   "EditorGeometryProducer.forPane, for vertical navigation" should
     "cover the cursor's own line even when a heavily-wrapped line at the viewport top would fill the window" in {

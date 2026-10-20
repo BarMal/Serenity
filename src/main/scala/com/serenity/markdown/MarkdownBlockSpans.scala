@@ -14,8 +14,6 @@ import com.serenity.markdown.MarkdownInlineSpans.{Run, Style}
   */
 object MarkdownBlockSpans:
 
-  private val HeadingScales = Vector(1.8f, 1.5f, 1.25f, 1.1f, 1.0f, 1.0f)
-
   private val Plain    = Style(bold = false, italic = false, code = false)
   private val Glyph    = Plain.copy(bold = true, muted = true)
   private val Dimmed   = Plain.copy(muted = true)
@@ -24,8 +22,6 @@ object MarkdownBlockSpans:
 
   /** The stretches of a line that stay as they are written, and the style given to the rest of it from `bodyFrom`. */
   final private case class Block(fixed: Vector[Run], body: Option[Style], bodyFrom: Int)
-
-  def headingScale(level: Int): Float = HeadingScales.lift(level - 1).getOrElse(1.0f)
 
   /** Whether `line` holds anything [[scan]] might find, which lets layout skip prose without a closer look. */
   def mayContainMarkup(line: String): Boolean =
@@ -78,7 +74,7 @@ object MarkdownBlockSpans:
             else if MarkdownBlockLens.isThematicBreak(line) then hiddenLine(line)
             else heading(line).orElse(listItem(line)).orElse(quote(line))
 
-  private def headingStyle(level: Int): Style = Plain.copy(bold = true, scale = headingScale(level))
+  private def headingStyle(level: Int): Style = Plain.copy(headingLevel = level)
 
   private def isBlank(char: Char): Boolean = char == ' ' || char == '\t'
 
@@ -191,6 +187,6 @@ object MarkdownBlockSpans:
       italic = base.italic || inline.italic,
       code = inline.code,
       muted = base.muted || inline.muted,
-      scale = base.scale,
+      headingLevel = base.headingLevel,
       strike = base.strike || inline.strike
     )

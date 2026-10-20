@@ -9,7 +9,8 @@ import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.layout.{CellMetrics, LayoutMemos, TextLayoutSnapshot}
+import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
@@ -20,7 +21,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
   given Balance    = Balance.default
   given Logger[IO] = Slf4jLogger.getLogger[IO]
 
-  // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Node` tree
+  // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Branch` tree
   // while itself extending the still-open `Leaf` purely to satisfy the type system -- every method that matters for
   // this test forwards to `delegate` rather than using anything inherited from `Leaf`.
   final class CountingLineCountRope(delegate: Rope, lineCountCount: AtomicInteger) extends Leaf(delegate.collect()):
@@ -38,15 +39,6 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
 
     override val endsWithNewline: Boolean =
       delegate.endsWithNewline
-
-    override def isWeightBalanced: Boolean =
-      delegate.isWeightBalanced
-
-    override def isHeightBalanced: Boolean =
-      delegate.isHeightBalanced
-
-    override def rebalance: Rope =
-      this
 
     override def index(i: Int): Option[Char] =
       delegate.index(i)
@@ -383,7 +375,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    val line = TextLayoutSnapshot.visualLineForText(text, bufferLine = 0, font)
+    val line = TextLayoutSnapshot.visualLineForText(text, bufferLine = 0, font, ShapedTextCache(), LayoutMemos())
 
     line.caretStops.map(_.column) shouldBe (0 to text.length).toVector
     line.caretStops.sliding(2).forall {
@@ -437,7 +429,8 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       lineText = "iiiiiiiiWW",
       cursorColumn = 10,
       visibleWidthPx = CellMetrics.fromFont(font).charWidth * 4,
-      font = font
+      font = font,
+      shapedText = ShapedTextCache()
     )
 
     leftColumn should be <= 7
@@ -478,6 +471,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val xs = TextLayoutSnapshot.caretXsForText(
       "abcde",
       font,
+      ShapedTextCache(),
       cellMetricsOverride = Some(override1x1),
       forceCellLayout = true
     )
@@ -518,6 +512,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val xs = TextLayoutSnapshot.caretXsForText(
       "a漢b",
       font,
+      ShapedTextCache(),
       cellMetricsOverride = Some(CellMetrics.cellUnit),
       forceCellLayout = true
     )
@@ -531,6 +526,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val xs = TextLayoutSnapshot.caretXsForText(
       "🚀b",
       font,
+      ShapedTextCache(),
       cellMetricsOverride = Some(CellMetrics.cellUnit),
       forceCellLayout = true
     )
@@ -548,6 +544,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val xs = TextLayoutSnapshot.caretXsForText(
       "a漢b",
       font,
+      ShapedTextCache(),
       cellMetricsOverride = Some(metrics),
       forceCellLayout = true
     )

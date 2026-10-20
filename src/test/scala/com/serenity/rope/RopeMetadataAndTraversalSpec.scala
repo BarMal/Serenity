@@ -55,7 +55,7 @@ class RopeMetadataAndTraversalSpec extends AnyFlatSpec with Matchers:
     deleted.endsWithNewline.shouldBe(false)
     deleted.lineCount.shouldBe(1)
 
-    val rebuilt = concatenated.rebuild
+    val rebuilt = RopeBuilder.fromLeaves(concatenated.collect().grouped(4).toList)
     rebuilt.collect() shouldBe "alpha\nbeta\ngamma"
     rebuilt.newlineCount.shouldBe(2)
     rebuilt.lastLineLength.shouldBe("gamma".length)
@@ -112,7 +112,7 @@ class RopeMetadataAndTraversalSpec extends AnyFlatSpec with Matchers:
     deleted.wordCount.shouldBe(3)
     deleted.nonWhitespaceCount.shouldBe("alphabetagamma".length)
 
-    val rebuilt = concatenated.rebuild
+    val rebuilt = RopeBuilder.fromLeaves(concatenated.collect().grouped(4).toList)
     rebuilt.wordCount.shouldBe(3)
     rebuilt.nonWhitespaceCount.shouldBe("alphabetagamma".length)
 
@@ -174,8 +174,8 @@ class RopeMetadataAndTraversalSpec extends AnyFlatSpec with Matchers:
   it should "resolve offsets to line and column positions without collecting skipped branches" in new ChunkedRopeSpecScope:
     val skippedContent = (1 to 200).map(index => s"skip-$index").mkString("", "\n", "\n")
     val skippedBranch  = ExplodingIndexRope(Rope(skippedContent))
-    val targetBranch   = Rope("target-line\n")
-    val rope           = Node(skippedBranch, targetBranch)
+    val targetBranch   = Leaf("target-line\n")
+    val rope           = RopeBuilder.ofLeaves(skippedBranch, targetBranch)
 
     rope.offsetToLineColumn(skippedBranch.weight + 6) shouldBe (skippedBranch.newlineCount, 6)
 
@@ -192,8 +192,8 @@ class RopeMetadataAndTraversalSpec extends AnyFlatSpec with Matchers:
   it should "skip preceding rope branches when resolving later lines" in new ChunkedRopeSpecScope:
     val skippedContent = (1 to 200).map(index => s"skip-$index").mkString("", "\n", "\n")
     val skippedBranch  = ExplodingIndexRope(Rope(skippedContent))
-    val targetBranch   = Rope("target-line\n")
-    val rope           = Node(skippedBranch, targetBranch)
+    val targetBranch   = Leaf("target-line\n")
+    val rope           = RopeBuilder.ofLeaves(skippedBranch, targetBranch)
     val targetLine     = skippedBranch.newlineCount
 
     rope.getLine(targetLine) shouldBe Some("target-line")
@@ -216,8 +216,9 @@ class RopeMetadataAndTraversalSpec extends AnyFlatSpec with Matchers:
     rope.linesFrom(4, 1) shouldBe Vector.empty
 
   it should "traverse leaf chunks directly for visible lines and search" in new ChunkedRopeSpecScope:
-    val rope: Rope = Node(
-      Node(new IndexForbiddenLeaf("alpha\nbe"), new IndexForbiddenLeaf("ta\n")),
+    val rope: Rope = RopeBuilder.ofLeaves(
+      new IndexForbiddenLeaf("alpha\nbe"),
+      new IndexForbiddenLeaf("ta\n"),
       new IndexForbiddenLeaf("🙂🙂")
     )
 
@@ -233,10 +234,10 @@ class RopeMetadataAndTraversalSpec extends AnyFlatSpec with Matchers:
       Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
 
   // `Rope` is sealed, so this can no longer extend it directly; it extends the still-open `Leaf` purely to satisfy
-  // the type system when embedded as a `Node` child, seeded with the delegate's own text so a stray `case
+  // the type system when embedded as a `Branch` child, seeded with the delegate's own text so a stray `case
   // Leaf(value)` match elsewhere at least reads the right characters. Every metadata accessor still forwards to
   // `delegate` rather than using anything inherited from `Leaf`, so callers that go through the `Rope` interface
-  // (not a `Leaf`/`Node` pattern match) see this as an opaque, non-Leaf, non-Node rope exactly as before sealing.
+  // (not a `Leaf`/`Branch` pattern match) see this as an opaque, non-Leaf, non-Branch rope exactly as before sealing.
   //
   // One guarantee this test double could make before sealing is now narrower: sealing means we can no longer
   // construct a *genuine* third `Rope` implementation, so production helpers that pattern-match `case Leaf(v)`
@@ -244,7 +245,7 @@ class RopeMetadataAndTraversalSpec extends AnyFlatSpec with Matchers:
   // `offsetToLineColumnIn`, `chunksInRange` (and so `getLine`/`linesFrom`/`linesIteratorFrom`/`searchAll`) -- would
   // now match this double structurally and take the Leaf fast path instead of the guarded `index`/`collect`
   // override. `getLine`/`lineColumnToOffset` (used by the "skip preceding rope branches" test below) are unaffected
-  // because the traversal never recurses into this delegate's branch -- the enclosing `Node` dispatches purely on
+  // because the traversal never recurses into this delegate's branch -- the enclosing `Branch` dispatches purely on
   // `weight`/`newlineCount`/`endsWithNewline`, all ordinary virtual calls. A future test that pattern-matches into
   // this specific node would no longer be caught by the guard.
   final class ExplodingIndexRope(delegate: Rope)(using Balance) extends Leaf(delegate.collect()):
@@ -262,15 +263,6 @@ class RopeMetadataAndTraversalSpec extends AnyFlatSpec with Matchers:
 
     override val endsWithNewline: Boolean =
       delegate.endsWithNewline
-
-    override def isWeightBalanced: Boolean =
-      delegate.isWeightBalanced
-
-    override def isHeightBalanced: Boolean =
-      delegate.isHeightBalanced
-
-    override def rebalance: Rope =
-      this
 
     override def splitAt(index: Int): Option[(Rope, Rope)] =
       delegate.splitAt(index)
@@ -304,15 +296,6 @@ class RopeMetadataAndTraversalSpec extends AnyFlatSpec with Matchers:
 
     override val endsWithNewline: Boolean =
       delegate.endsWithNewline
-
-    override def isWeightBalanced: Boolean =
-      delegate.isWeightBalanced
-
-    override def isHeightBalanced: Boolean =
-      delegate.isHeightBalanced
-
-    override def rebalance: Rope =
-      this
 
     override def splitAt(index: Int): Option[(Rope, Rope)] =
       delegate.splitAt(index)

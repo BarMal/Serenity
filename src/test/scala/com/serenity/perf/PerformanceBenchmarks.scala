@@ -30,10 +30,10 @@ object PerformanceBenchmarks:
         case ((window, presentWindow), projectRoot) =>
           IO {
             val all = benchmarks(window, projectRoot) ++ LaptopFrameBenchmarks.benchmarks(presentWindow) ++
-              RichDocumentOpenBenchmarks.benchmarks
+              CacheOwnershipBenchmarks.benchmarks ++ RichDocumentOpenBenchmarks.benchmarks
             val unknown = BenchmarkIterationCounts.JitSettled -- all.map(_.name)
             require(unknown.isEmpty, s"JitSettled names no benchmark: ${unknown.mkString(", ")}")
-            val results = BenchmarkRunner.runMatching(args.toList, all)
+            val results = BenchmarkRunner.runMatching(args.toList, all) ++ FootprintBenchmarks.runMatching(args.toList)
             BenchmarkRunner.printResults(results)
           }
       }
@@ -48,6 +48,7 @@ object PerformanceBenchmarks:
       DamageBenchmarks.benchmarks() ++
       TuiBenchmarks.benchmarks() ++
       CommandRunnerBenchmarks.benchmarks() ++
+      ModalWrapBenchmarks.benchmarks() ++
       EqualsBenchmarks.benchmarks() ++
       FindReplaceBenchmarks.benchmarks() ++
       lspAndProjectBenchmarks(projectRoot) ++

@@ -25,7 +25,9 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     metrics: () => CellMetrics,
     uiMetrics: () => CellMetrics,
     wheelScrollLines: Int = InputConfig().wheelScrollLines,
-    frameTimings: FrameTimings = FrameTimings()
+    frameTimings: FrameTimings = FrameTimings(),
+    imeDiagnostics: Option[ImeDiagnostics.Sink] = None,
+    summonReleaseTimer: (() => Unit) => SummonReleaseTimer = SummonReleaseTimer.swing
 ) extends InputHandler[F]:
 
   def this(component: java.awt.Component, inputRouter: InputRouter[F, E], metrics: () => CellMetrics) =
@@ -78,6 +80,9 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   private val pendingModifierTap = new AtomicReference[ModifierTapState](ModifierTapState.empty)
   private val wheelRemainder     = new AtomicReference[WheelScrollState](WheelScrollState.empty)
   private val lastKeyPress       = new AtomicReference[Option[(KeyStroke, Long)]](None)
+  private val summonState        = new AtomicReference[SummonChordTracker.State](SummonChordTracker.State.empty)
+
+  private val summonReleases = summonReleaseTimer(() => applySummon(SummonChordTracker.flushed))
 
   /** The last key press this handler queued and when it arrived, for [[MenuActivationGuard]]. The arrival time is read
     * from the clock here rather than from `KeyEvent.getWhen`, whose time base the platform decides.
@@ -148,14 +153,65 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
 
   component.addKeyListener(new KeyAdapter:
     override def keyTyped(e: KeyEvent): Unit =
-      translateTyped(e).foreach(enqueueKey(_, e))
+      imeDiagnostics.foreach(_(ImeDiagnostics.describe(e, System.currentTimeMillis())))
+      if !swallowedForSummon() then translateTyped(e).foreach(enqueueKey(_, e))
     override def keyPressed(e: KeyEvent): Unit =
       lastKeyPress.set(Some((KeyStroke.getKeyStrokeForEvent(e), System.currentTimeMillis)))
-      translatePressed(e).foreach(enqueueKey(_, e))
-      modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierPressed(modifier, e.getWhen)))
+      val consumed = trackSummon(
+        SummonChordTracker.pressed(
+          _,
+          inputRouter.summonConfig,
+          SummonKeys.rawKey(e),
+          SummonKeys.modifiersOf(e),
+          e.getWhen
+        )
+      )
+      if !consumed then
+        translatePressed(e).foreach(enqueueKey(_, e))
+        modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierPressed(modifier, e.getWhen)))
     override def keyReleased(e: KeyEvent): Unit =
+      applySummon(SummonChordTracker.released(_, inputRouter.summonConfig, SummonKeys.rawKey(e), e.getWhen))
       translateModifierReleased(e)
       modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierReleased(modifier, e.getWhen))))
+
+  // Installed only when diagnostics are on, so the default component carries no input-method hooks (#2008).
+  imeDiagnostics.foreach { sink =>
+    component.addInputMethodListener(ImeDiagnostics.listener(sink))
+    component match
+      case host: ImeRequestsHost => host.installInputMethodRequests(ImeDiagnostics.requests(component, sink))
+      case _                     => ()
+  }
+
+  // A summon chord is held, so a window that loses focus (Alt+Tab, say) never sees the release.
+  component.addFocusListener(
+    new FocusAdapter:
+      override def focusLost(e: FocusEvent): Unit =
+        applySummon(SummonChordTracker.reset)
+  )
+
+  /** Applies a step of the summon tracker, sends what it signalled in order with the rest of the input, and answers
+    * whether the key was the chord's, and so is kept from typing or reaching a hotkey.
+    */
+  private def trackSummon(step: SummonChordTracker.State => SummonChordTracker.Result): Boolean =
+    val result = step(summonState.get())
+    summonState.set(result.state)
+    result.signals.foreach(signal => enqueueRaw(summonEvent(signal)))
+    if result.state.pendingRelease.nonEmpty then summonReleases.restart()
+    result.consumed
+
+  private def applySummon(step: SummonChordTracker.State => SummonChordTracker.Result): Unit =
+    val _ = trackSummon(step)
+
+  private def swallowedForSummon(): Boolean =
+    val (next, swallowed) = SummonChordTracker.typed(summonState.get())
+    summonState.set(next)
+    swallowed
+
+  private def summonEvent(signal: SummonChordTracker.Signal): Event =
+    signal match
+      case SummonChordTracker.Signal.Held(element)     => ChromeSummonPressed(element)
+      case SummonChordTracker.Signal.Released(element) => ChromeSummonReleased(element)
+      case SummonChordTracker.Signal.Locked            => ChromeSummonLocked
 
   // AWT reports a wheel notch as one "unit scroll" of `getScrollAmount` units; the platform's own amount is a system
   // preference this setting stands in for, so a notch is `wheelScrollLines` lines whatever the OS says. A block scroll

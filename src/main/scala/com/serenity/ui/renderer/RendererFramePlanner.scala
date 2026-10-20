@@ -131,12 +131,15 @@ object RendererFramePlanner:
             prepared.renderPlan.columnSnapshots
           )
         )
-        val panels    = FramePanels.of(state, context, finalizedScene)
-        val framePlan = planFrame(state, context, editorRenderPlan, viewportSize, output, damage, panels)
+        val panels     = FramePanels.of(state, context, finalizedScene)
+        val scrollbars = RendererScrollbars.visualsFor(state, context, editorRenderPlan, panels)
+        val framePlan  = planFrame(state, context, editorRenderPlan, viewportSize, output, damage, panels, scrollbars)
         // Recorded *after* `planFrame` (and thus `dirtyRowsFor`) has read this surface's snapshots for this frame, so
         // this frame's own snapshots become "previous" only for the frame after it -- see
         // `previousSnapshots`' doc comment.
         caches.frameState.rememberSnapshots(surface, editorRenderPlan.recordSnapshots)
+        caches.frameState.screenSnapshots.remember(output, editorRenderPlan.recordSnapshots)
+        val settled = RendererScrollbars.release(context, scrollbars, framePlan)
         framePlan match
           case Some(plan) if plan.preserved.nonEmpty =>
             RendererScrollReuse.clearKeeping(surface, state.persisted.theme.background, plan)
@@ -144,6 +147,8 @@ object RendererFramePlanner:
             surface.clearViewport(state.persisted.theme.background)
         val framePanels = panels.keeping(framePlan.fold(Set.empty[SurfaceId])(_.keptPanels))
         paintFrameLayers(state, context, editorRenderPlan, finalizedScene, framePlan, damage, framePanels)
+        RendererScrollbars.paint(context, scrollbars, settled)
+        RendererScrollbars.paintTerminal(state, context, editorRenderPlan, panels)
         commitFramePlan(framePlan, output)
         FrameCounting.planned(caches.frameCounters, framePlan, viewportSize, cellMetrics)
         Some(editorRenderPlan)
@@ -319,7 +324,8 @@ object RendererFramePlanner:
     viewportSize: ViewportSize,
     output: Option[FrameOutput],
     damage: Damage,
-    panels: FramePanels
+    panels: FramePanels,
+    scrollbars: Map[PaneId, ScrollbarVisual]
   ): Option[FramePlan] =
     context.caches.frameState.accumulateBufferDamage(output, damage)
     context.caches.frameState.accumulateScreenDamage(output, damage)
@@ -354,9 +360,12 @@ object RendererFramePlanner:
         val previousGhosts = context.caches.frameState.previousRowGhostsFor(persistenceKey)
         val redraws = panes.map { (paneId, record) =>
           val moving = movable && renderPlan.columnSnapshotsFor(paneId).isEmpty
-          val ghostRows = DirtyLineDiff.dilate(
-            RendererChapterGhosts.changedRows(previousGhosts.getOrElse(paneId, Vector.empty), record.rowGhosts),
-            record.rowRects.length
+          val ghostRows = DropCapLayout.closedOverGlyphs(
+            DirtyLineDiff.dilate(
+              RendererChapterGhosts.changedRows(previousGhosts.getOrElse(paneId, Vector.empty), record.rowGhosts),
+              record.rowRects.length
+            ),
+            record.snapshot
           )
           val dirty =
             damageDirtyRows(effectiveDamage, record, persistenceKey, context.caches, scrollIsEveryRow = !moving) ++
@@ -420,6 +429,12 @@ object RendererFramePlanner:
         // so the repaint region is measured against damage accumulated since the screen was last published to, and
         // only when every pane is reusable and the published pane set hasn't shifted underneath it.
         val screenDamageSincePublish = context.caches.frameState.drainScreenDamage(output)
+        val screenSnapshots          = context.caches.frameState.screenSnapshots.shownOn(output)
+        val screenScrollbars         = context.caches.frameState.scrollbarsChangedOnScreen(output, scrollbars)
+        val screenVacated = context.caches.frameState.bandsVacatedOnScreen(
+          output,
+          panes.flatMap((paneId, record) => PixelRect.unionOf(record.rowRects).map(paneId -> _))
+        )
         val boundedRepaintEligible =
           !context.caches.frameState.screenPaneIdsChanged(output, paneIds) && allPanesReusable && !geometryChanged &&
             ghostPaneIds.isEmpty && Damage.isBufferRowsOrChromeOnly(screenDamageSincePublish)
@@ -431,7 +446,8 @@ object RendererFramePlanner:
               renderPlan,
               panes,
               screenDamageSincePublish,
-              dirtyRowsFor(screenDamageSincePublish, _, _, persistenceKey, context.caches)
+              dirtyRowsFor(screenDamageSincePublish, _, _, screenSnapshots, persistenceKey, context.caches),
+              RendererScrollbars.strips(context, renderPlan, screenScrollbars) ++ screenVacated
             )
           }
 
@@ -459,8 +475,8 @@ object RendererFramePlanner:
     * stale under any theme with a transparent pane background. `Damage.Everything` dirties every row, since it carries
     * no per-buffer detail to translate.
     *
-    * Unioned with [[DirtyLineDiff.dirtyRows]] comparing this pane's previous frame's [[TextLayoutSnapshot]] (this
-    * owner's [[RendererFrameState.previousSnapshotsFor]]) against `record.snapshot`: `Damage`'s buffer-line facts only
+    * Unioned with [[DirtyLineDiff.dirtyRows]] comparing this pane's [[TextLayoutSnapshot]] as the screen last showed it
+    * (`screenSnapshots`, from [[ScreenSnapshots.shownOn]]) against `record.snapshot`: `Damage`'s buffer-line facts only
     * ever name the paragraph actually edited, so a paragraph whose own content is untouched but whose *screen row*
     * moved -- because an earlier paragraph's edit changed how many rows it wraps into -- is otherwise never marked
     * dirty, leaving stale pixels from the row's old frame in place. `TextVisualLine` carries no cursor/selection state,
@@ -472,12 +488,12 @@ object RendererFramePlanner:
     damage: Damage,
     paneId: PaneId,
     record: PaneFrameRecord,
+    screenSnapshots: Map[PaneId, TextLayoutSnapshot],
     persistenceKey: SurfaceContentIdentity,
     caches: com.serenity.state.manager.RenderCaches
   ): Set[Int] =
-    val previousSnapshot = caches.frameState.previousSnapshotsFor(persistenceKey).get(paneId)
     damageDirtyRows(damage, record, persistenceKey, caches, scrollIsEveryRow = true) ++
-      DirtyLineDiff.dirtyRows(previousSnapshot, record.snapshot)
+      DirtyLineDiff.dirtyRows(screenSnapshots.get(paneId), record.snapshot)
 
   /** The rows `damage` itself marks dirty -- [[dirtyRowsFor]] without the comparison of snapshots. A scroll
     * ([[Damage.BufferScrolled]]) marks every row unless the caller goes on to find where the rows moved to
@@ -498,9 +514,12 @@ object RendererFramePlanner:
         case (bufferLine, row) if facts.lines.contains(bufferLine) => row
       }.toSet
       val dirty = lineRows ++ rowsUnderSpans(record, facts.spans)
-      DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
-        record.overflowingRows ++
-        vacatedFloatingSurfaceRows(damage, record, persistenceKey, caches)
+      DropCapLayout.closedOverGlyphs(
+        DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
+          record.overflowingRows ++
+          vacatedFloatingSurfaceRows(damage, record, persistenceKey, caches),
+        record.snapshot
+      )
 
   /** The visual rows each span's columns fall on. A column at a wrap boundary matches both rows it sits between, as the
     * caret lookup does. A span that matches no row of its line (whitespace dropped at a wrap, say) dirties the whole

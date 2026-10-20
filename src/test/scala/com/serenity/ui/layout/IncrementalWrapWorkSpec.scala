@@ -27,6 +27,22 @@ class IncrementalWrapWorkSpec extends AnyFlatSpec with Matchers:
     coldRows should be >= rows - 5
     (second.rowsComputed - first.rowsComputed, second.charsMeasured - first.charsMeasured)
 
+  /** Rows the edit forces a cold re-wrap to produce anew: those equal to no old row, shifted by the length change. */
+  private def rowsMatchingNoShiftedOldRow(layoutName: String)(change: String => String): Int =
+    val layout = layouts.find(_.name == layoutName).get
+    val width  = 36 * layout.charWidthPx + 2
+    val before = paragraphFor(Random(31L), layout, width, rows)
+    val after  = change(before)
+    val delta  = after.length - before.length
+    val old = wrap(before, WrappedLineCache.Uncached, layout, width).map(row => (row.startColumn, row.endColumn)).toSet
+    wrap(after, WrappedLineCache.Uncached, layout, width).count { row =>
+      !old((row.startColumn, row.endColumn)) && !old((row.startColumn - delta, row.endColumn - delta))
+    }
+
+  /** Rows redone beyond those that change: the margin row ahead of the edit and the rows up to where the walk resyncs.
+    */
+  private val IncrementalWrapMargin = 3
+
   "typing a character at the end of a 40-row paragraph" should "re-wrap a handful of rows" in
     Vector("default-prose", "sans", "serif-kerned-ligatured", "mono-cells").foreach { name =>
       val (rowsComputed, _) = costOf(name)(_ + "x")
@@ -42,7 +58,8 @@ class IncrementalWrapWorkSpec extends AnyFlatSpec with Matchers:
   "typing a character in the middle of a 40-row paragraph" should "re-wrap a handful of rows" in
     Vector("default-prose", "sans", "serif-kerned-ligatured", "mono-cells").foreach { name =>
       val (rowsComputed, measured) = costOf(name)(text => text.patch(text.length / 2, "x", 0))
-      withClue(s"$name: ")(rowsComputed should be <= 6L)
+      val changed                  = rowsMatchingNoShiftedOldRow(name)(text => text.patch(text.length / 2, "x", 0))
+      withClue(s"$name: ")(rowsComputed should be <= changed + IncrementalWrapMargin.toLong)
       if name != "mono-cells" then withClue(s"$name: ")(measured should be <= 160L)
     }
 

@@ -21,7 +21,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Node` tree
+  // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Branch` tree
   // while itself extending the still-open `Leaf` purely to satisfy the type system -- every method that matters for
   // this test forwards to `delegate` rather than using anything inherited from `Leaf`.
   final class NonCollectingRope(delegate: Rope) extends Leaf(delegate.collect()):
@@ -39,15 +39,6 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
     override val endsWithNewline: Boolean =
       delegate.endsWithNewline
-
-    override def isWeightBalanced: Boolean =
-      delegate.isWeightBalanced
-
-    override def isHeightBalanced: Boolean =
-      delegate.isHeightBalanced
-
-    override def rebalance: Rope =
-      this
 
     override def index(i: Int): Option[Char] =
       delegate.index(i)
@@ -90,15 +81,6 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
     override val endsWithNewline: Boolean =
       delegate.endsWithNewline
-
-    override def isWeightBalanced: Boolean =
-      delegate.isWeightBalanced
-
-    override def isHeightBalanced: Boolean =
-      delegate.isHeightBalanced
-
-    override def rebalance: Rope =
-      this
 
     override def index(i: Int): Option[Char] =
       delegate.index(i)

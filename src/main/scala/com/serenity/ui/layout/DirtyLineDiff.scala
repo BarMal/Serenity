@@ -1,6 +1,8 @@
 package com.serenity.ui.layout
 
-import com.serenity.richtext.RichTextParagraph
+import com.serenity.richtext.{ParagraphRole, RichTextParagraph}
+import com.serenity.state.models.TextVisualLine
+import com.serenity.ui.openings.OpeningInvalidation
 
 /** Diffs two consecutive frames of one editor pane's text layout and reports which visible rows can no longer reuse the
   * pixels an earlier frame left on the surface.
@@ -28,12 +30,19 @@ object DirtyLineDiff:
       case Some(previousSnapshot) =>
         if !comparableShape(previousSnapshot, current) then allRows(current)
         else
-          val reflowFrom = richReflowStart(previousSnapshot, current)
-          current.visualLines.indices.filter { row =>
+          val reflowFrom =
+            List(
+              richReflowStart(previousSnapshot, current),
+              extentReflowStart(previousSnapshot, current),
+              columnReflowStart(previousSnapshot, current)
+            ).flatten.minOption
+          val changed = current.visualLines.indices.filter { row =>
             reflowFrom.exists(row >= _) ||
             !previousSnapshot.visualLines.lift(row).contains(current.visualLines(row)) ||
-            richParagraphEdited(previousSnapshot, current, current.visualLines(row).bufferLine)
+            richParagraphEdited(previousSnapshot, current, current.visualLines(row).bufferLine) ||
+            openingGovernorEdited(previousSnapshot, current, current.visualLines(row).bufferLine)
           }.toSet
+          closedOverGlyphs(changed, previousSnapshot, current)
 
   /** As [[dirtyRows]], additionally comparing a caller-supplied style key per row.
     *
@@ -57,9 +66,13 @@ object DirtyLineDiff:
             currentRowKeys.length == current.visualLines.length
         if !alignedKeys then allRows(current)
         else
-          layoutDirty ++ current.visualLines.indices.filter { row =>
-            !previousRowKeys.lift(row).contains(currentRowKeys(row))
-          }
+          closedOverGlyphs(
+            layoutDirty ++ current.visualLines.indices.filter { row =>
+              !previousRowKeys.lift(row).contains(currentRowKeys(row))
+            },
+            previousSnapshot,
+            current
+          )
     end match
 
   /** Grow a dirty set by one row in each direction, bounded to `rowCount`.
@@ -71,6 +84,14 @@ object DirtyLineDiff:
   def dilate(rows: Set[Int], rowCount: Int): Set[Int] =
     if rows.isEmpty then Set.empty
     else rows.flatMap(row => Set(row - 1, row, row + 1)).filter(row => row >= 0 && row < rowCount)
+
+  /** A drop cap glyph is one opaque box painted by its first row over every row it spans, so a span with any dirty row
+    * is dirty whole, in the frame being drawn and in the one whose pixels are kept.
+    */
+  def closedOverGlyphs(rows: Set[Int], previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Set[Int] =
+    DropCapLayout
+      .closedOverGlyphs(DropCapLayout.closedOverGlyphs(rows, previous), current)
+      .filter(row => row < current.visualLines.length)
 
   private def allRows(snapshot: TextLayoutSnapshot): Set[Int] =
     snapshot.visualLines.indices.toSet
@@ -85,10 +106,18 @@ object DirtyLineDiff:
     (previous.richTextDocument, current.richTextDocument) match
       case (Some(before), Some(after)) if !(before eq after) =>
         (before.paragraphAt(line), after.paragraphAt(line)) match
-          case (Some(was), Some(now)) => was != now
+          case (Some(was), Some(now)) => withoutRole(was) != withoutRole(now) || roleDiffers(previous, current, line)
           case (None, None)           => false
           case _                      => true
       case _ => false
+
+  /** A paragraph can gain or lose chapter-opening status when the title, scene break or epigraph above it is edited,
+    * without itself changing.
+    */
+  private def openingGovernorEdited(previous: TextLayoutSnapshot, current: TextLayoutSnapshot, line: Int): Boolean =
+    (previous.richTextDocument, current.richTextDocument) match
+      case (Some(before), Some(after)) if !(before eq after) => OpeningInvalidation.governorEdited(before, after, line)
+      case _                                                 => false
 
   /** The first visible row below which rows may have moved without their own text changing: a paragraph whose role or
     * alignment changed, or a row whose measured height or ascent did. Rows above it keep their position.
@@ -101,15 +130,49 @@ object DirtyLineDiff:
           previous.visualLines
             .lift(row)
             .exists(old => old.heightPx != line.heightPx || old.ascentPx != line.ascentPx) ||
-          formattingDiffers(before.paragraphAt(line.bufferLine), after.paragraphAt(line.bufferLine))
+          formattingDiffers(previous, current, line.bufferLine)
         }
       case _ => None
 
-  private def formattingDiffers(before: Option[RichTextParagraph], after: Option[RichTextParagraph]): Boolean =
-    (before, after) match
-      case (Some(was), Some(now)) => was.role != now.role || was.alignment != now.alignment
+  /** The first visible row whose band is taller or shorter than the row it replaces -- a heading's space gained or
+    * lost, say. Rows below it keep their text but not their place, and are dirty with it however their own lines
+    * compare.
+    */
+  private def extentReflowStart(previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Option[Int] =
+    current.visualLines.indices.find { row =>
+      previous.visualLines.lift(row).exists(old => extentOf(old) != extentOf(current.visualLines(row)))
+    }
+
+  /** The first row from which a multi-column page's columns break differently: rows from there on sit in another column
+    * or at another height, whatever their own lines say.
+    */
+  private def columnReflowStart(previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Option[Int] =
+    val size = math.max(previous.columnBreaks.length, current.columnBreaks.length)
+    (0 until size).collectFirst {
+      case index if previous.columnBreaks.lift(index) != current.columnBreaks.lift(index) =>
+        List(previous.columnBreaks.lift(index), current.columnBreaks.lift(index)).flatten.minOption.getOrElse(0)
+    }
+
+  private def extentOf(line: TextVisualLine): Int =
+    line.spaceBeforePx + line.heightPx + line.reservedBelowPx + line.spaceAfterPx
+
+  private def formattingDiffers(previous: TextLayoutSnapshot, current: TextLayoutSnapshot, line: Int): Boolean =
+    (
+      previous.richTextDocument.flatMap(_.paragraphAt(line)),
+      current.richTextDocument.flatMap(_.paragraphAt(line))
+    ) match
+      case (Some(was), Some(now)) => roleDiffers(previous, current, line) || was.alignment != now.alignment
       case (None, None)           => false
       case _                      => true
+
+  private def roleDiffers(previous: TextLayoutSnapshot, current: TextLayoutSnapshot, line: Int): Boolean =
+    (previous.richTextDocument, current.richTextDocument) match
+      case (Some(before), Some(after)) =>
+        previous.roles.roleFor(before, line) != current.roles.roleFor(after, line)
+      case _ => false
+
+  private def withoutRole(paragraph: RichTextParagraph): RichTextParagraph =
+    paragraph.copy(role = ParagraphRole.Body)
 
   /** Whether rows of `previous` and `current` can be compared at all: nothing about the whole snapshot moved. */
   def comparableShape(previous: TextLayoutSnapshot, current: TextLayoutSnapshot): Boolean =
@@ -118,6 +181,8 @@ object DirtyLineDiff:
       previous.ascentPx == current.ascentPx &&
       previous.isProportional == current.isProportional &&
       previous.usesMeasuredLayout == current.usesMeasuredLayout &&
+      previous.roles.context.virtualDropCaps.map(_.signature) ==
+      current.roles.context.virtualDropCaps.map(_.signature) &&
       sameRichParagraphCount(previous, current) &&
       previous.markdownInline.mode == current.markdownInline.mode &&
       previous.markdownInline.padsAlike(current.markdownInline, current.visualLines.map(_.bufferLine).distinct)

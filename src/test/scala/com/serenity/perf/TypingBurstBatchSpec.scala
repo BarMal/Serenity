@@ -31,7 +31,7 @@ class TypingBurstBatchSpec extends AnyFlatSpec with Matchers:
   /** A prose editor that has already typed one key, so its wrap cache holds the rows around the cursor. */
   private def warmEditor(): (StateManager, BufferId) =
     val editor @ (stateManager, _) =
-      LaptopFrameBenchmarks.proseStateManager(config = AppConfig.default.withWordWrap(true))
+      LaptopFrameBenchmarks.proseStateManager(config = AppConfig.conventional.withWordWrap(true))
     val _ = TypingBurst.typeEachAlone(stateManager, List('w')).unsafeRunSync()
     editor
 

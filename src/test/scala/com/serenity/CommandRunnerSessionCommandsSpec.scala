@@ -191,7 +191,13 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
     savedManager.updateBuffer(bufferId, "startup session").unsafeRunSync()
     executeCommandThroughRunner(savedManager, "save-session", "save-session")
     AppStartup
-      .initializeState(restored, restored.sessionStartupInfo, Theme.default, startupViewport)
+      .initializeState(
+        restored,
+        restored.sessionStartupInfo,
+        Theme.default,
+        startupViewport,
+        appConfig = com.serenity.config.AppConfig.conventional
+      )
       .unsafeRunSync()
     // Quick-resume is the Tab hint pinned to the start page's bottom, not a navigable list entry.
     restored.applyEvent(TabKey).unsafeRunSync()

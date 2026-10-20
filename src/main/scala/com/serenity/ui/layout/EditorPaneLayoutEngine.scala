@@ -134,13 +134,16 @@ object EditorPaneLayoutEngine:
       if state.persisted.layout.activeEditorPaneId.contains(paneId) then
         activeWorkspaceHeaderRect(paneRect.y, calculatedLayout, headerHeight)
       else paneHeaderRect
+    val bandRect         = contentRectForPane(paneRect, insets, headerHeight)
+    val scrollbarColumns = ScrollbarLayout.terminalColumns(state, bandRect.width)
     EditorPaneLayout(
       paneRect = paneRect,
       headerRect = headerRect,
       titleRect = headerRect,
-      contentRect = contentRectForPane(paneRect, insets, headerHeight),
+      contentRect = bandRect.copy(width = bandRect.width - scrollbarColumns),
       topSpacerRect = topSpacerRectForPane(paneRect, insets, headerHeight),
-      bottomSpacerRect = bottomSpacerRectForPane(paneRect, insets, headerHeight)
+      bottomSpacerRect = bottomSpacerRectForPane(paneRect, insets, headerHeight),
+      scrollbarRect = LayoutRect(bandRect.right - scrollbarColumns, bandRect.y, scrollbarColumns, bandRect.height)
     )
 
   private[layout] def contentRectForPane(paneRect: LayoutRect): LayoutRect =

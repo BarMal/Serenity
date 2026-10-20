@@ -78,6 +78,22 @@ binding is a single key; the three commands are in the palette and can be given 
 `Ctrl+D` used to split the pane side by side; that is now `Ctrl+Alt+V`. Toggle Notes Pin moved from `Ctrl+Shift+L` to
 `Ctrl+Alt+P` for the same reason. A key you set yourself in `config.conf` is never taken over by a default: if you bound `Ctrl+D` to something else, the occurrence command simply starts unbound.
 
+## Summoning chrome
+
+These are not global hotkeys, so they are not in the table above: they act while held. Hold `Alt+Shift` and press
+
+| Chord           | While held                  | Config key               |
+| --------------- | --------------------------- | ------------------------ |
+| `Alt+Shift+L`   | Shows the line numbers      | `ui.summon.line_numbers` |
+| `Alt+Shift+S`   | Shows the status bar        | `ui.summon.status_bar`   |
+| `Alt+Shift+T`   | Shows the tab strip         | `ui.summon.tab_strip`    |
+| `Alt+Shift+B`   | Shows the scrollbar         | `ui.summon.scrollbar`    |
+| `Alt+Shift+H`   | Shows the pane headers      | `ui.summon.pane_headers` |
+
+`Space` pressed during the hold (`ui.summon.lock`) keeps the element shown after release; the chord pressed again hides
+it. In the terminal, which reports no key release, the chord toggles instead. See layout.md for the details and for
+changing the keys.
+
 ## Changing a binding
 
 In `~/.serenity/config.conf`, give the config key from the table a list of triggers:

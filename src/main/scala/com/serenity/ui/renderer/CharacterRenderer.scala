@@ -141,7 +141,13 @@ object CharacterRenderer:
 
       val shaped = surface.text.shapesStretchesOf(text)
 
-      def paintRun(run: MeasuredRun, stretch: String, from: Int, until: Int): Unit =
+      def paintRun(
+        run: MeasuredRun,
+        stretch: String,
+        from: Int,
+        until: Int,
+        family: Option[String] = None
+      ): Unit =
         val startXPx      = xOriginPx + run.minXPx
         val endXPx        = xOriginPx + run.maxXPx
         val clippedEndXPx = clipRightXPx.fold(endXPx)(_.min(endXPx))
@@ -150,16 +156,40 @@ object CharacterRenderer:
           surface.setForegroundColor(run.foreground)
           surface.setBackgroundColor(run.background)
           withStyle(surface, run.style) {
-            if shaped then
-              surface.text.drawShapedRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, stretch, from, until)
-            else surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text)
+            // A fallback glyph can stand taller than the row it sits in, and ink outside the row is not ink a repaint
+            // of the rows beside it would put back, so it is cut to the row.
+            val clipToRow = family.isDefined
+            def draw(): Unit =
+              if shaped then
+                surface.text.drawShapedRunPx(
+                  startXPx,
+                  yPx,
+                  widthPx,
+                  lineHeightPx,
+                  ascentPx,
+                  stretch,
+                  from,
+                  until,
+                  clipToRow
+                )
+              else surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text, clipToRow)
+            family.fold(draw())(surface.text.withFallbackFamily(_)(draw()))
           }
 
-      if shaped then
-        MeasuredLineRuns
-          .stretched(runs, text)
-          .foreach(placed => paintRun(placed.run, placed.stretch, placed.from, placed.until))
-      else runs.foreach(run => paintRun(run, run.text, 0, run.text.length))
+      def paintSegment(segment: FontSegment): Unit =
+        if shaped then
+          MeasuredLineRuns
+            .stretched(segment.runs, segment.text)
+            .foreach(placed => paintRun(placed.run, placed.stretch, placed.from, placed.until, segment.family))
+        else segment.runs.foreach(run => paintRun(run, run.text, 0, run.text.length, segment.family))
+
+      if visualLine.fontRuns.isEmpty then
+        if shaped then
+          MeasuredLineRuns
+            .stretched(runs, text)
+            .foreach(placed => paintRun(placed.run, placed.stretch, placed.from, placed.until))
+        else runs.foreach(run => paintRun(run, run.text, 0, run.text.length))
+      else MeasuredLineRuns.byFont(visualLine, runs).foreach(paintSegment)
 
   private def renderStyledLine(
     surface: RenderSurface,

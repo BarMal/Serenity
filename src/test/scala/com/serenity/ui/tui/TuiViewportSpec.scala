@@ -84,7 +84,8 @@ class TuiViewportSpec extends TuiSpec:
       verify("wide terminal") { screen =>
         screen.width shouldBe 240
         screen.rowText(1).take(3) shouldBe " 1 "
-        screen.rowText(1).count(_ == 'x') shouldBe 237
+        // 240 columns, less the gutter and the column the scrollbar takes.
+        screen.rowText(1).count(_ == 'x') shouldBe 236
         screen.rowsContaining("x") should have size 2
       }
     }

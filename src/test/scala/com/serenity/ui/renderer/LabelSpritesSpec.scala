@@ -26,7 +26,7 @@ class LabelSpritesSpec extends AnyFlatSpec with Matchers:
       logicalHeightPx = 60,
       deviceScaleX = scale,
       deviceScaleY = scale,
-      labelSprites = sprites
+      textCaches = SurfaceTextCaches.fresh().copy(labelSprites = sprites)
     )
     surface.setBackgroundColor(white)
     surface.setForegroundColor(black)

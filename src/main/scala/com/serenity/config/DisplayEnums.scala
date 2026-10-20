@@ -96,6 +96,62 @@ object WindowChromeMode:
       case "native" | "os" | "system"                          => Some(WindowChromeMode.Native)
       case _                                                   => None
 
+/** Whether the desktop window shows a menu bar. Every command a menu holds stays reachable from the command runner, so
+  * `Hidden` loses none of them.
+  */
+enum MenuBarMode(val configKey: String):
+  case Hidden  extends MenuBarMode("hidden")
+  case Alt     extends MenuBarMode("alt")
+  case Visible extends MenuBarMode("visible")
+
+object MenuBarMode:
+
+  def fromConfigKey(value: String): Option[MenuBarMode] =
+    MenuBarMode.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
+
+/** Which chrome the window starts from. A layout is a base the config file is read over: `Minimal` begins with line
+  * numbers, pane headers, the status bar, the tab strip and the scrollbar all off, `Conventional` with all of them on,
+  * and a key the user writes still wins over either.
+  */
+enum UiLayout(val configKey: String):
+  case Minimal      extends UiLayout("minimal")
+  case Conventional extends UiLayout("conventional")
+
+  def toggled: UiLayout = this match
+    case Minimal      => Conventional
+    case Conventional => Minimal
+
+  def label: String = configKey.capitalize
+
+object UiLayout:
+
+  def fromConfigKey(value: String): Option[UiLayout] =
+    UiLayout.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
+
+/** Whether the tab strip is shown: `Auto` once two or more buffers are open, `Off` never. */
+enum TabStripMode(val configKey: String):
+  case Auto extends TabStripMode("auto")
+  case Off  extends TabStripMode("off")
+
+object TabStripMode:
+
+  def fromConfigKey(value: String): Option[TabStripMode] =
+    TabStripMode.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
+
+enum FileDialogMode(val configKey: String):
+  case Auto   extends FileDialogMode("auto")
+  case Native extends FileDialogMode("native")
+  case Swing  extends FileDialogMode("swing")
+
+object FileDialogMode:
+
+  def fromConfigKey(value: String): Option[FileDialogMode] =
+    value.trim.toLowerCase match
+      case "auto"   => Some(FileDialogMode.Auto)
+      case "native" => Some(FileDialogMode.Native)
+      case "swing"  => Some(FileDialogMode.Swing)
+      case _        => None
+
 enum MarkdownViewMode(val configKey: String):
   case Source       extends MarkdownViewMode("source")
   case SplitPreview extends MarkdownViewMode("split-preview")

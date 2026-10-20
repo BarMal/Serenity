@@ -354,7 +354,8 @@ object RendererCursorOverlay:
       codeFont.toAwt,
       swingWin.canvas,
       swingWin.onBaseImageReady,
-      swingWin.acquireBaseImage
+      swingWin.acquireBaseImage,
+      caches.surfaceText
     )
     // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.
@@ -396,7 +397,9 @@ object RendererCursorOverlay:
           damage,
           caches
         )
-        .fold(false) { renderPlan =>
+        // No plan means the start page was drawn under a blocking prompt: no caret and nothing to reuse, but the
+        // window must still repaint it, or the frame stays unseen until something else does.
+        .fold(swingWin.onCursorOverlayReady(None)(Nil)) { renderPlan =>
           val baseDirtyRects = repaintRegion.get().map(_.map(RendererFrameState.toAwtRectangle))
           swingWin.onCursorOverlayReady(baseDirtyRects) {
             val cursorSurface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont.toAwt, swingWin.canvas)

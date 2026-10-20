@@ -1,5 +1,6 @@
 package com.serenity
 
+import com.serenity.config.{AppConfig, TabStripMode}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -14,7 +15,7 @@ class LayoutEngineTabBarSpec extends AnyFlatSpec with Matchers:
   behavior of "LayoutEngine tab bar reservation"
 
   it should "reserve no tab bar strip with a single buffer open" in {
-    val state        = AppState.initial // one buffer, by construction
+    val state        = AppState.initial(AppConfig.conventional) // one buffer, by construction
     val viewportSize = ViewportSize(100, 30)
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
@@ -31,7 +32,7 @@ class LayoutEngineTabBarSpec extends AnyFlatSpec with Matchers:
 
   it should "reserve a one-row strip at the top of the frame once 2+ buffers are open, shrinking the workspace beneath it by exactly that row" in {
     val secondBuffer      = Buffer.fromString(BufferId(1), "second")
-    val singleBufferState = AppState.initial
+    val singleBufferState = AppState.initial(AppConfig.conventional)
     val twoBufferState = singleBufferState.copy(persisted =
       singleBufferState.persisted.copy(
         buffers = singleBufferState.persisted.buffers + (secondBuffer.id -> secondBuffer),
@@ -56,7 +57,7 @@ class LayoutEngineTabBarSpec extends AnyFlatSpec with Matchers:
 
   it should "revert to no reserved strip once a session drops back to a single buffer" in {
     val secondBuffer = Buffer.fromString(BufferId(1), "second")
-    val base         = AppState.initial
+    val base         = AppState.initial(AppConfig.conventional)
     val twoBuffers = base.copy(persisted =
       base.persisted.copy(
         buffers = base.persisted.buffers + (secondBuffer.id -> secondBuffer),
@@ -72,4 +73,26 @@ class LayoutEngineTabBarSpec extends AnyFlatSpec with Matchers:
     val viewportSize = ViewportSize(100, 30)
 
     LayoutEngine.calculateLayout(backToOne, viewportSize).tabBarRect shouldBe None
+  }
+
+  it should "reserve no strip with 2+ buffers open while the tab strip is off, leaving the workspace the whole frame" in {
+    val secondBuffer = Buffer.fromString(BufferId(1), "second")
+    val base         = AppState.initial(AppConfig.conventional.withTabStrip(TabStripMode.Off))
+    val twoBuffers = base.copy(persisted =
+      base.persisted.copy(
+        buffers = base.persisted.buffers + (secondBuffer.id -> secondBuffer),
+        bufferOrder = base.persisted.bufferOrder :+ secondBuffer.id
+      )
+    )
+    val viewportSize = ViewportSize(100, 30)
+
+    val withStripOff = LayoutEngine.calculateLayout(twoBuffers, viewportSize)
+    val withStripAuto = LayoutEngine.calculateLayout(
+      twoBuffers.copy(persisted = twoBuffers.persisted.copy(config = AppConfig.conventional)),
+      viewportSize
+    )
+
+    withStripOff.tabBarRect shouldBe None
+    withStripOff.editorPanelRect.y shouldBe withStripAuto.editorPanelRect.y - 1
+    withStripOff.editorPanelRect.height shouldBe withStripAuto.editorPanelRect.height + 1
   }

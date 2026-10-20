@@ -49,7 +49,8 @@ class StartupOpenFileOrFolderSpec extends AnyFlatSpec with Matchers with StateMa
       stateManager.sessionStartupInfo,
       Theme.default,
       ViewportSize(80, 24),
-      capabilities = capabilities
+      capabilities = capabilities,
+      appConfig = com.serenity.config.AppConfig.conventional
     )
 
   "The start page where one Open... is supported" should "list New document, Open... and then the recent files" in {
@@ -179,7 +180,7 @@ class StartupOpenFileOrFolderSpec extends AnyFlatSpec with Matchers with StateMa
 
   "The Open... palette command" should "be hidden where there is no combined dialog and offered where there is" in {
     val command = CommandRegistry.default.findCommand("open-file-or-folder").getOrElse(fail("no open-file-or-folder"))
-    val context = AppState.empty.commandRunnerContext
+    val context = AppState.empty(com.serenity.config.AppConfig.conventional).commandRunnerContext
 
     command.intent shouldBe CommandIntent.File(FileIntent.OpenFileOrFolder)
     CommandAvailability.of(command, context).isOffered shouldBe false
@@ -189,12 +190,15 @@ class StartupOpenFileOrFolderSpec extends AnyFlatSpec with Matchers with StateMa
   it should "leave Open File... and Open Folder... offered either way" in {
     for names <- List("open", "open-folder"); supported <- List(false, true) do
       val command = CommandRegistry.default.findCommand(names).getOrElse(fail(s"no $names"))
-      val context = AppState.empty.commandRunnerContext.copy(opensFileOrFolder = supported)
+      val context = AppState
+        .empty(com.serenity.config.AppConfig.conventional)
+        .commandRunnerContext
+        .copy(opensFileOrFolder = supported)
       CommandAvailability.of(command, context).isRunnable shouldBe true
   }
 
   "The command context" should "take the combined dialog from the running frontend's capabilities" in {
-    val state = AppState.empty
+    val state = AppState.empty(com.serenity.config.AppConfig.conventional)
     state.commandRunnerContext.opensFileOrFolder shouldBe false
     state
       .copy(runtime = state.runtime.copy(capabilities = combined))

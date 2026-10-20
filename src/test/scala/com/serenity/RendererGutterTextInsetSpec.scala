@@ -39,19 +39,28 @@ class RendererGutterTextInsetSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(1), lines)
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 10, visibleColumns = 20))
-    AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(buffer.id -> buffer),
-        bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
-        ),
-        theme = Theme.light,
-        config = AppState.initial.persisted.config.withLineNumberLayout(lineNumberLayout)
+    AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(buffer.id -> buffer),
+            bufferOrder = List(buffer.id),
+            layout = Layout(
+              editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+              activeEditorPaneId = Some(PaneId(0)),
+              workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
+            ),
+            theme = Theme.light,
+            config = AppState
+              .initial(com.serenity.config.AppConfig.conventional)
+              .persisted
+              .config
+              .withLineNumberLayout(lineNumberLayout)
+          )
       )
-    )
 
   private def render(state: AppState, surface: MockRenderSurface): Unit =
     val viewport    = ViewportSize(80, 24)
@@ -107,18 +116,23 @@ class RendererGutterTextInsetSpec extends AnyFlatSpec with Matchers:
       document = plain.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Scala)),
       viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 10, visibleColumns = 20)
     )
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(buffer.id -> buffer),
-        bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
-        ),
-        theme = Theme.light
+    val state = AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(buffer.id -> buffer),
+            bufferOrder = List(buffer.id),
+            layout = Layout(
+              editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+              activeEditorPaneId = Some(PaneId(0)),
+              workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
+            ),
+            theme = Theme.light
+          )
       )
-    )
     val surface = new MockRenderSurface(80, 24)
     render(state, surface)
 

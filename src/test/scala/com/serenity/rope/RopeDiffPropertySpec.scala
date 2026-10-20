@@ -8,8 +8,9 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 /** `RopeDiff.changedOffsetRange` only earns its keep as a damage producer if it never under-reports: everything outside
   * the returned range must be provably identical between `before` and `after`, whatever shape the rope tree happens to
-  * be in and however a rebalance may have widened the report. These properties check that directly against the
-  * `String`s the ropes were built from, rather than against `RopeDiff`'s own reasoning about itself.
+  * be in and however an edit may have split or merged leaves and widened the report. These properties check that
+  * directly against the `String`s the ropes were built from, rather than against `RopeDiff`'s own reasoning about
+  * itself.
   */
 class RopeDiffPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matchers:
 
@@ -80,10 +81,10 @@ class RopeDiffPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wit
     }
   }
 
-  property("a rebuilt rope reports exactly the edit made after the rebuild") {
+  property("a rope re-cut at other leaf boundaries reports exactly the edit made after the re-cut") {
     forAll(Generators.ropeWithText, Generators.genText) {
       case ((original, text), inserted) =>
-        val rebuilt = original.rebuild
+        val rebuilt = Rope.fromLeafValues(text.grouped(7).toVector)
         forAll(Gen.chooseNum(0, text.length)) { at =>
           val after = rebuilt.insert(at, inserted).getOrElse(fail("expected insert to succeed"))
           RopeDiff.changedOffsetRange(original, after) shouldBe exactRange(

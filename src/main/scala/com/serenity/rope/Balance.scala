@@ -7,5 +7,5 @@ object Balance:
   def default: Balance = Balance(
     weightBalance = 1000,
     heightBalance = 5,
-    leafChunkSize = 1000
+    leafChunkSize = 2048
   )

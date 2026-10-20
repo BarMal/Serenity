@@ -32,6 +32,7 @@ private[app] object AppRuntimeLogging:
       case com.serenity.keystroke.events.MoveLeft       => false
       case com.serenity.keystroke.events.MoveRight      => false
       case com.serenity.keystroke.events.InsertChar(_)  => false
+      case com.serenity.keystroke.events.InsertText(_)  => false
       case com.serenity.keystroke.events.DeleteBackward => false
       case com.serenity.keystroke.events.DeleteForward  => false
       case _                                            => true

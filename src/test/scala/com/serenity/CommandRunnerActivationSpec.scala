@@ -35,7 +35,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     )).find(_.id == id)
 
   "CommandRunner.activate" should "reflect non-default ligature settings in option selections per font role" in {
-    val config = AppConfig.default.withFontConfig(
+    val config = AppConfig.conventional.withFontConfig(
       FontConfig(enableLigatures = false, textLigatures = false, uiLigatures = true)
     )
     val runner = CommandRunner.empty.activate(registry, config)
@@ -46,7 +46,8 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "split font settings into code, prose, and UI groups" in {
-    val runner = CommandRunner.empty.activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
+    val runner =
+      CommandRunner.empty.activate(registry, AppConfig.conventional.withShowAllSettingsRegardlessOfMode(true))
     val groupIds = runner.settingsGroups.flatMap(group =>
       group.id :: descendants(group).collect { case child: CommandSurfaceItem.GroupItem => child.id }
     )
@@ -66,7 +67,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reflect non-default code font family in option selections" in {
-    val config = AppConfig.default.withFontConfig(FontConfig(codeFontFamily = "Courier New"))
+    val config = AppConfig.conventional.withFontConfig(FontConfig(codeFontFamily = "Courier New"))
     val runner = CommandRunner.empty.activate(registry, config)
 
     val expectedIndex = com.serenity.ui.fonts.FontLoader.availableMonospaceFamilies.indexOf("Courier New")
@@ -75,7 +76,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "include keymap editing rows seeded from current bindings" in {
-    val config = AppConfig.default
+    val config = AppConfig.conventional
       .withHotkeyOverride(HotkeyAction.ToggleCommandRunner, "ctrl+k")
       .withKeymapBinding(KeymapGroup.CommandRunner)(CommandRunnerKeyAction.Submit, "ctrl+enter")
     val runner = CommandRunner.empty.activate(registry, config)
@@ -106,7 +107,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expose interface density and restart-only window chrome in the interface layout settings group" in {
-    val config = AppConfig.default
+    val config = AppConfig.conventional
       .withInterfaceDensity(InterfaceDensity.Compact)
       .withWindowChromeMode(WindowChromeMode.NativeThemed)
       .withUiElementGap(Some(2))
@@ -120,8 +121,11 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     settingsGroup(runner, "settings-interface-layout").map(_.children.map(_.id)) should contain(
       List(
         "interface-density",
+        "ui-layout",
         "window-chrome",
-        "command-runner-key-hints"
+        "menu-bar",
+        "command-runner-key-hints",
+        "settings-summon"
       )
     )
     settingsGroup(runner, "settings-interface-layout")
@@ -161,7 +165,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expose focused text body and contextual toolbar in the text display settings group" in {
-    val config = AppConfig.default
+    val config = AppConfig.conventional
       .withFocusedTextBody(true)
       .withContextualToolbarEnabled(false)
     val runner = CommandRunner.empty.activate(registry, config)
@@ -189,7 +193,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expose contextual toolbar display mode in the text display settings group" in {
-    val config = AppConfig.default.withContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly)
+    val config = AppConfig.conventional.withContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly)
     val runner = CommandRunner.empty.activate(registry, config)
 
     runner.optionSelections.get("contextual-toolbar-display") shouldBe Some(1)
@@ -216,7 +220,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   )
 
   it should "expose the status line's placement and one toggle per segment in its own settings group" in {
-    val config = AppConfig.default.withStatusLineSegments(List(StatusSegment.Position))
+    val config = AppConfig.conventional.withStatusLineSegments(List(StatusSegment.Position))
     val runner = CommandRunner.empty.activate(registry, config)
 
     runner.optionSelections.get("status-position") shouldBe Some(0)
@@ -229,7 +233,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   // the direction that would actually move the segment -- Position (first) has no "earlier", Title (last) has no
   // "later" -- rather than the fixed definition order with both directions always offered.
   it should "expose reorder commands, in current order and gated by position, once 2+ status segments are shown" in {
-    val config = AppConfig.default.withStatusLineSegments(List(StatusSegment.Position, StatusSegment.Title))
+    val config = AppConfig.conventional.withStatusLineSegments(List(StatusSegment.Position, StatusSegment.Title))
     val runner = CommandRunner.empty.activate(registry, config)
 
     settingsGroup(runner, "settings-status-line").map(_.children.map(_.id)) shouldBe
@@ -240,7 +244,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expose the status line placement as pinned, floating or off" in {
-    val config = AppConfig.default.withStatusLinePlacement(StatusLinePlacement.Floating)
+    val config = AppConfig.conventional.withStatusLinePlacement(StatusLinePlacement.Floating)
     val runner = CommandRunner.empty.activate(registry, config)
 
     runner.optionSelections.get("status-placement") shouldBe Some(1)
@@ -252,7 +256,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expose the render cadence options with current selections" in {
-    val config = AppConfig.default
+    val config = AppConfig.conventional
       .withRenderFpsTarget(RenderFpsTarget.Fps120)
       .withRenderDamageGranularity(RenderDamageGranularity.Cells)
     val runner = CommandRunner.empty.activate(registry, config)
@@ -301,24 +305,25 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   }
 
   "CommandRunner.activate with capabilities" should "default to GUI and carry the flag into settingsGroups (issue #1112)" in {
-    val defaultRunner = CommandRunner.empty.activate(registry, AppConfig.default)
+    val defaultRunner = CommandRunner.empty.activate(registry, AppConfig.conventional)
     defaultRunner.capabilities shouldBe FrontendCapabilities.gui
     settingsGroup(defaultRunner, "settings-typography").flatMap(_.hint) shouldBe
       Some("Typefaces for prose, code, and interface")
 
     // Every typography row a code workspace shows is GUI-only, so on a terminal the group has nothing left to offer.
-    val tuiRunner = CommandRunner.empty.activate(registry, AppConfig.default, capabilities = FrontendCapabilities.tui())
+    val tuiRunner =
+      CommandRunner.empty.activate(registry, AppConfig.conventional, capabilities = FrontendCapabilities.tui())
     tuiRunner.capabilities.isCellGrid shouldBe true
     settingsGroup(tuiRunner, "settings-typography") shouldBe None
   }
 
   "CommandRunner.activate with keyboardFidelityTier" should "default to Full and carry the negotiated tier through (issue #1194)" in {
-    val defaultRunner = CommandRunner.empty.activate(registry, AppConfig.default)
+    val defaultRunner = CommandRunner.empty.activate(registry, AppConfig.conventional)
     defaultRunner.capabilities.keyboardFidelityTier shouldBe KeyboardFidelityTier.Full
 
     val cappedRunner = CommandRunner.empty.activate(
       registry,
-      AppConfig.default,
+      AppConfig.conventional,
       capabilities = FrontendCapabilities.tui(KeyboardFidelityTier.ModifyOtherKeys)
     )
     cappedRunner.capabilities.keyboardFidelityTier shouldBe KeyboardFidelityTier.ModifyOtherKeys

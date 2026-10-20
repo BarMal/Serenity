@@ -315,12 +315,7 @@ object OverlayViewModel:
   ): Option[ResolvedSurfaceComposition] =
     content match
       case SurfaceContent.ModalWorkflow(modal) =>
-        ModalSurfaceComposition.forModal(
-          modal,
-          rect,
-          SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity),
-          state.persisted.config.inputConfig.focusedKeymapConfig.modal.bindings
-        )
+        ModalSurfaceComposition.forState(modal, rect, state)
       case SurfaceContent.ContextMenu(menu) =>
         Some(
           ContextMenuSurfaceComposition.forMenu(

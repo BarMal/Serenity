@@ -173,6 +173,46 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     pasted shouldBe Some(pasteText)
   }
 
+  "a code point outside the BMP" should "reach the pipeline as one InsertText, in order with the keys around it" in {
+    val events = eventsFrom(bytes("a\uD842\uDFB7b"), 3)
+
+    events shouldBe List(
+      com.serenity.keystroke.events.InsertChar('a'),
+      com.serenity.keystroke.events.InsertText("\uD842\uDFB7"),
+      com.serenity.keystroke.events.InsertChar('b')
+    )
+  }
+
+  "surrogateStep" should "hold a high surrogate and join it with the low surrogate that follows" in {
+    val high = 0xd842
+    val low  = 0xdfb7
+
+    val (heldOutcomes, pending) = TerminalInputHandler.surrogateStep(None, high)
+    heldOutcomes shouldBe Nil
+    pending shouldBe Some(high.toChar)
+
+    val (joined, afterJoin) = TerminalInputHandler.surrogateStep(pending, low)
+    joined.collect { case TerminalInputHandler.ReadOutcome.Bytes(value) => new String(value, "UTF-8") } shouldBe
+      List("\uD842\uDFB7")
+    afterJoin shouldBe None
+  }
+
+  it should "pass a high surrogate with no partner on ahead of the next character, so that character is not lost" in {
+    val (outcomes, pending) = TerminalInputHandler.surrogateStep(Some(0xd842.toChar), 'a'.toInt)
+
+    outcomes.length shouldBe 2
+    outcomes.lastOption.collect { case TerminalInputHandler.ReadOutcome.Bytes(value) => value.toList } shouldBe
+      Some(List('a'.toByte))
+    pending shouldBe None
+  }
+
+  it should "pass a held high surrogate on ahead of end of input" in {
+    val (outcomes, _) = TerminalInputHandler.surrogateStep(Some(0xd842.toChar), -1)
+
+    outcomes.length shouldBe 2
+    outcomes.lastOption shouldBe Some(TerminalInputHandler.ReadOutcome.Eof)
+  }
+
   "a kitty-protocol bare Ctrl press, release, press" should "double-tap-emit InputKey.Ctrl via the shared detector" in {
     val input  = csi("57442u") ++ csi("57442;1:3u") ++ csi("57442u")
     val reader = new FakeTerminalReader

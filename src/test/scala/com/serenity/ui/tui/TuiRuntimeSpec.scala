@@ -97,7 +97,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       openPath = Some(file),
       configPersistencePath = None,
       hasDisplay = false,
@@ -128,7 +128,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       openPath = Some(file),
       configPersistencePath = None,
       hasDisplay = false,
@@ -166,7 +166,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       openPath = Some(file),
       configPersistencePath = None,
       hasDisplay = false,
@@ -184,7 +184,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       // A path inside a directory that does not exist: StateManager.openFile fails opening it, which should still
       // leave the terminal properly restored via TerminalShell's Resource release.
       openPath = Some(java.nio.file.Path.of("/nonexistent-tui-runtime-failure-dir/does-not-exist.md")),
@@ -216,7 +216,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       openPath = Some(file),
       configPersistencePath = None,
       hasDisplay = false,
@@ -245,7 +245,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       openPath = Some(file),
       configPersistencePath = None,
       hasDisplay = false,
@@ -288,7 +288,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(harness.terminal),
-      appConfig = AppConfig.default,
+      appConfig = AppConfig.conventional,
       openPath = Some(file),
       configPersistencePath = None,
       hasDisplay = false,
