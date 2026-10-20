@@ -121,3 +121,23 @@ class RenameEditReducerSpec extends AnyFlatSpec with Matchers:
       "Renamed 0 location(s) in this file. 1 file(s) not open in any buffer were not updated."
     )
   }
+
+  it should "apply nothing, in any file, when one document's edits overlap, and say so" in {
+    val before = stateWithTwoBuffers("val old = 1", "def f = old")
+    val edits = Map(
+      uri -> List(LspTextEdit(LspRange(LspPosition(0, 4), LspPosition(0, 7)), "renamed")),
+      secondUri -> List(
+        LspTextEdit(LspRange(LspPosition(0, 4), LspPosition(0, 9)), "renamed"),
+        LspTextEdit(LspRange(LspPosition(0, 8), LspPosition(0, 11)), "renamed")
+      )
+    )
+
+    val result = RenameEditReducer.apply(edits, anchor, before)
+
+    result.state.persisted.buffers(bufferId).document.content.collect() shouldBe "val old = 1"
+    result.state.persisted.buffers(secondId).document.content.collect() shouldBe "def f = old"
+    undoBufferIds(result) shouldBe Nil
+    quickInfoText(result.state) shouldBe Some(
+      "Rename not applied: 1 file(s) have overlapping edits (" + secondPath.getFileName + ")."
+    )
+  }

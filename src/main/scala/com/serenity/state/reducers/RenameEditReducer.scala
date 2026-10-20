@@ -1,5 +1,10 @@
 package com.serenity.state.reducers
 
+import java.net.URI
+import java.nio.file.Path
+
+import scala.util.Try
+
 import com.serenity.lsp.model.LspTextEdit
 import com.serenity.state.models.*
 import com.serenity.ui.layout.PeekContent
@@ -13,8 +18,21 @@ object RenameEditReducer:
 
   def apply(edits: Map[String, List[LspTextEdit]], anchor: CursorPosition, state: AppState): ReducerResult =
     val outcome = WorkspaceEditReducer.applyToOpenBuffers(edits, state)
-    val summary = summaryPeek(outcome.result.state, anchor, outcome)
+    val summary =
+      if outcome.overlappingUris.nonEmpty then rejectedPeek(state, anchor, outcome.overlappingUris)
+      else summaryPeek(outcome.result.state, anchor, outcome)
     ReducerResult(summary.state, outcome.result.effects ++ summary.effects)
+
+  private def rejectedPeek(state: AppState, anchor: CursorPosition, overlappingUris: Set[String]): ReducerResult =
+    val names = overlappingUris.toList.sorted.map(fileName).mkString(", ")
+    PeekStateReducer.show(
+      PeekContent.QuickInfo(s"Rename not applied: ${overlappingUris.size} file(s) have overlapping edits ($names)."),
+      anchor,
+      state
+    )
+
+  private def fileName(uri: String): String =
+    Try(Path.of(URI.create(uri)).getFileName.toString).getOrElse(uri)
 
   private def summaryPeek(
     state: AppState,

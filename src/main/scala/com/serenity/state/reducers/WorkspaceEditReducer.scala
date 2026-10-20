@@ -11,22 +11,29 @@ import com.serenity.state.undo.EditGrouping
 object WorkspaceEditReducer:
 
   /** What [[applyToOpenBuffers]] did: `editedBuffers` counts buffers that took at least one edit, `heldBack` the edits
-    * left unapplied (e.g. beside a read-only block), and `unopenedUris` the uris no open buffer matched.
+    * left unapplied (e.g. beside a read-only block), `unopenedUris` the uris no open buffer matched, and
+    * `overlappingUris` the documents whose edits overlap -- when there are any, nothing is applied anywhere.
     */
   final case class Outcome(
       result: ReducerResult,
       appliedCount: Int,
       editedBuffers: Int,
       heldBack: Int,
-      unopenedUris: Set[String]
+      unopenedUris: Set[String],
+      overlappingUris: Set[String] = Set.empty
   )
 
   def apply(edits: Map[String, List[LspTextEdit]], state: AppState): ReducerResult =
     applyToOpenBuffers(edits, state).result
 
   def applyToOpenBuffers(edits: Map[String, List[LspTextEdit]], state: AppState): Outcome =
-    val openUris = state.persisted.buffers.values.flatMap(_.document.filePath.map(_.toUri.toString)).toSet
-    val initial  = Outcome(ReducerResult.noEffects(state), 0, 0, 0, edits.keySet -- openUris)
+    val openUris    = state.persisted.buffers.values.flatMap(_.document.filePath.map(_.toUri.toString)).toSet
+    val overlapping = edits.collect { case (uri, documentEdits) if LspTextEdit.overlap(documentEdits) => uri }.toSet
+    val initial     = Outcome(ReducerResult.noEffects(state), 0, 0, 0, edits.keySet -- openUris, overlapping)
+    if overlapping.nonEmpty then initial
+    else applyToBuffers(edits, state, initial)
+
+  private def applyToBuffers(edits: Map[String, List[LspTextEdit]], state: AppState, initial: Outcome): Outcome =
     state.persisted.buffers.values.foldLeft(initial) { (outcome, buffer) =>
       val bufferEdits = buffer.document.filePath.flatMap(path => edits.get(path.toUri.toString)).getOrElse(Nil)
       if bufferEdits.isEmpty then outcome
