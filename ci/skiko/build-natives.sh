@@ -136,7 +136,10 @@ build_skiko() {
 
 collect() {
   mkdir -p "$out"
-  cp -R "$skiko/build/repo/." "$out/"
+  repos="$(find "$skiko" -maxdepth 3 -type d -path '*/build/repo' -not -path '*/node_modules/*')"
+  echo "Maven build repositories found: ${repos:-none}"
+  [ "$(printf '%s\n' "$repos" | grep -c .)" -eq 1 ] || { echo "expected exactly one build/repo under $skiko" >&2; exit 1; }
+  cp -R "$repos/." "$out/"
   find "$out" -type f | sort
 }
 
