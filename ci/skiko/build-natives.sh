@@ -50,6 +50,11 @@ prepare() {
   elif [ "$group" = linux-arm64 ]; then
     (cd "$skia" && ./tools/skia_release/prepare_linux_arm.sh)
   fi
+  # What Skiko's own native link needs on Linux (its DEVELOPMENT.md) and Skia's prepare script does not install: the
+  # build asks pkg-config for dbus-1 and links X11, Xrandr, GL and, on arm64, EGL.
+  if [ "$os" = linux ]; then
+    apt-get install -y --no-install-recommends pkg-config libdbus-1-dev libx11-dev libxrandr-dev libgl1-mesa-dev libegl1-mesa-dev
+  fi
 }
 
 build_skia() {
