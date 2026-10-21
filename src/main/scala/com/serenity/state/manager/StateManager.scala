@@ -59,6 +59,9 @@ trait StateEngine extends StateReader, StateUpdater, EventApplier:
   def applyEventBatch[A](inputs: List[A], steps: EventBatchSteps[A]): IO[EventBatch[A]] =
     EventBatch.applying(inputs, steps, getModel, applyEvent)
 
+enum QuitOutcome:
+  case Completed, Abandoned
+
 /** Owns application shutdown and periodic session persistence.
   *
   * A capability record per #1017 -- see `FileService` below for the shape rationale. `StateManager` holds one of these
@@ -69,6 +72,10 @@ trait StateEngine extends StateReader, StateUpdater, EventApplier:
   */
 final case class RuntimeLifecycle(
     awaitQuit: IO[Unit],
+    /** Runs the same orderly quit as the quit hotkey -- unsaved-changes prompt included -- and answers once it has
+      * either finished or been called off, so a caller outside the editor knows which.
+      */
+    requestQuit: IO[QuitOutcome],
     forceQuit: IO[Unit],
     intervalSaveStream: Stream[IO, Unit],
     /** Completes once lane work accepted so far (config/preset writes, searches) and the results it hands back have
@@ -204,6 +211,7 @@ object StateManager:
     @unused parentLogger: Logger[IO],
     policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy(),
     onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
+    endInputMethodComposition: IO[Unit] = IO.unit,
     deviceTextScaleProvider: IO[Double] = IO.pure(1.0),
     sessionRootOverride: Option[Path] = None,
     initialConfig: AppConfig = AppConfig.default,
@@ -249,6 +257,7 @@ object StateManager:
         lspQueue = lspQueue,
         mouseTargetCacheRef = mouseTargetCacheRef,
         onFontConfigChanged = onFontConfigChanged,
+        endInputMethodComposition = endInputMethodComposition,
         deviceTextScaleProvider = deviceTextScaleProvider,
         configPersistencePath = configPersistencePath,
         configOnDisk = configPersistencePath.map(_ => initialConfig),
@@ -337,6 +346,7 @@ object StateManager:
       runtime.lspQueue,
       runtime.mouseTargetCacheRef,
       runtime.onFontConfigChanged,
+      runtime.endInputMethodComposition,
       runtime.deviceTextScaleProvider,
       runtime.configPersistencePath,
       runtime.uiPresetStore,

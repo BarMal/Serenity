@@ -31,6 +31,7 @@ private[manager] class StateManagerComposition(
     val lspQueue: LspEffectQueue,
     val mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     val onFontConfigChanged: FontConfig => IO[Unit],
+    val endInputMethodComposition: IO[Unit],
     val deviceTextScaleProvider: IO[Double],
     val configPersistencePath: Option[Path],
     val uiPresetStore: UiPresetStore,
@@ -50,24 +51,25 @@ private[manager] class StateManagerComposition(
 
   private val modelCommit = operations.modelCommit
 
-  private val runtimeThemeNamesRef           = themeNamesRef
-  private val runtimeQuitSignal              = quitSignal
-  private val runtimeLogger                  = logger
-  private val runtimeThemeManager            = themeManager
-  private val runtimeLspQueue                = lspQueue
-  private val runtimeRunProjectTask          = runProjectTask
-  private val runtimeMouseTargetCacheRef     = mouseTargetCacheRef
-  private val runtimeOnFontConfigChanged     = onFontConfigChanged
-  private val runtimeDeviceTextScaleProvider = deviceTextScaleProvider
-  private val runtimeConfigPersistencePath   = configPersistencePath
-  private val runtimeConfigOnDisk            = configOnDisk
-  private val runtimeUiPresetStore           = uiPresetStore
-  private val runtimeWindowSizeProvider      = windowSizeProvider
-  private val runtimeFileDialog              = fileDialog
-  private val runtimeMarkdownPreviewWindow   = markdownPreviewWindow
-  private val runtimeFileManager             = fileManager
-  private val runtimeSessionPersistence      = sessionPersistence
-  private val runtimeRenderCaches            = renderCaches
+  private val runtimeThemeNamesRef             = themeNamesRef
+  private val runtimeQuitSignal                = quitSignal
+  private val runtimeLogger                    = logger
+  private val runtimeThemeManager              = themeManager
+  private val runtimeLspQueue                  = lspQueue
+  private val runtimeRunProjectTask            = runProjectTask
+  private val runtimeMouseTargetCacheRef       = mouseTargetCacheRef
+  private val runtimeOnFontConfigChanged       = onFontConfigChanged
+  private val runtimeEndInputMethodComposition = endInputMethodComposition
+  private val runtimeDeviceTextScaleProvider   = deviceTextScaleProvider
+  private val runtimeConfigPersistencePath     = configPersistencePath
+  private val runtimeConfigOnDisk              = configOnDisk
+  private val runtimeUiPresetStore             = uiPresetStore
+  private val runtimeWindowSizeProvider        = windowSizeProvider
+  private val runtimeFileDialog                = fileDialog
+  private val runtimeMarkdownPreviewWindow     = markdownPreviewWindow
+  private val runtimeFileManager               = fileManager
+  private val runtimeSessionPersistence        = sessionPersistence
+  private val runtimeRenderCaches              = renderCaches
 
   private val filePersistence =
     new StateManagerFilePersistence(
@@ -102,21 +104,22 @@ private[manager] class StateManagerComposition(
       modelCommit.updateValidatedPlaced(transition))
 
   private val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
-    def currentState: IO[AppState] = modelCommit.currentState
-    val themeNamesRef              = runtimeThemeNamesRef
-    val quitSignal                 = runtimeQuitSignal
-    val logger                     = runtimeLogger
-    val themeManager               = runtimeThemeManager
-    val lspQueue                   = runtimeLspQueue
-    val runProjectTask             = runtimeRunProjectTask
-    val onFontConfigChanged        = runtimeOnFontConfigChanged
-    val deviceTextScaleProvider    = runtimeDeviceTextScaleProvider
-    val configPersistencePath      = runtimeConfigPersistencePath
-    override val configOnDisk      = runtimeConfigOnDisk
-    val uiPresetStore              = runtimeUiPresetStore
-    val windowSizeProvider         = runtimeWindowSizeProvider
-    val markdownPreviewWindow      = runtimeMarkdownPreviewWindow
-    val renderCaches               = runtimeRenderCaches
+    def currentState: IO[AppState]         = modelCommit.currentState
+    val themeNamesRef                      = runtimeThemeNamesRef
+    val quitSignal                         = runtimeQuitSignal
+    val logger                             = runtimeLogger
+    val themeManager                       = runtimeThemeManager
+    val lspQueue                           = runtimeLspQueue
+    val runProjectTask                     = runtimeRunProjectTask
+    val onFontConfigChanged                = runtimeOnFontConfigChanged
+    override val endInputMethodComposition = runtimeEndInputMethodComposition
+    val deviceTextScaleProvider            = runtimeDeviceTextScaleProvider
+    val configPersistencePath              = runtimeConfigPersistencePath
+    override val configOnDisk              = runtimeConfigOnDisk
+    val uiPresetStore                      = runtimeUiPresetStore
+    val windowSizeProvider                 = runtimeWindowSizeProvider
+    val markdownPreviewWindow              = runtimeMarkdownPreviewWindow
+    val renderCaches                       = runtimeRenderCaches
 
   private val effectEditorPort: EffectEditorPort = new EffectEditorPort:
     def enqueueEvent(event: Event): IO[Unit] = operations.enqueueEvent(event)
@@ -412,6 +415,7 @@ private[manager] class StateManagerComposition(
   val runtimeLifecycle: RuntimeLifecycle = RuntimeLifecycle(
     // Quitting lets queued persistence finish before the runtime tears down (see `shutdownEffects`).
     awaitQuit = quitSignal.get >> operations.shutdownEffects(),
+    requestQuit = workflow.requestQuit,
     awaitEffects = operations.awaitEffects,
     forceQuit = forceQuit,
     intervalSaveStream = intervalSaveStream,

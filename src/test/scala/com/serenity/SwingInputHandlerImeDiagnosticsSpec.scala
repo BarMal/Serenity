@@ -26,6 +26,8 @@ class SwingInputHandlerImeDiagnosticsSpec extends AnyFlatSpec with Matchers:
     private val installedRef = new AtomicReference[Option[java.awt.im.InputMethodRequests]](None)
     def installed: Option[java.awt.im.InputMethodRequests]                          = installedRef.get()
     def installInputMethodRequests(requests: java.awt.im.InputMethodRequests): Unit = installedRef.set(Some(requests))
+    val caret                                   = new AtomicReference[Option[java.awt.Rectangle]](None)
+    def caretBounds: Option[java.awt.Rectangle] = caret.get()
 
   private def handlerOn(component: JPanel, sink: Option[String => Unit]): SwingInputHandler[IO, Event] =
     val router = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
@@ -48,11 +50,11 @@ class SwingInputHandlerImeDiagnosticsSpec extends AnyFlatSpec with Matchers:
       null
     )
 
-  "SwingInputHandler" should "register no input-method listener and no requests when diagnostics are off" in {
+  "SwingInputHandler" should "listen for input-method events and answer its requests whether or not diagnostics are on" in {
     val panel = new HostPanel
     val _     = handlerOn(panel, None)
-    panel.getInputMethodListeners shouldBe empty
-    panel.installed shouldBe None
+    panel.getInputMethodListeners.length shouldBe 1
+    panel.installed should not be empty
   }
 
   it should "log an InputMethodEvent when diagnostics are on" in {
@@ -74,10 +76,18 @@ class SwingInputHandlerImeDiagnosticsSpec extends AnyFlatSpec with Matchers:
     seen.toList.exists(_.contains("CARET_POSITION_CHANGED")) shouldBe true
   }
 
-  it should "install input-method requests on a host component when diagnostics are on" in {
+  it should "install input-method requests on a host component" in {
     val panel = new HostPanel
     val _     = handlerOn(panel, Some(_ => ()))
     panel.installed should not be empty
+  }
+
+  it should "answer the platform's request for a text location with the host's caret, so the candidate window follows it" in {
+    val panel = new HostPanel
+    val _     = handlerOn(panel, None)
+    panel.caret.set(Some(new java.awt.Rectangle(10, 20, 2, 16)))
+
+    panel.installed.map(_.getTextLocation(null)) shouldBe Some(new java.awt.Rectangle(10, 20, 2, 16))
   }
 
   it should "tolerate a component that cannot host requests" in {
