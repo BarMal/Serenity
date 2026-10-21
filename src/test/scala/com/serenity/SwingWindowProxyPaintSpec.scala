@@ -147,10 +147,9 @@ class SwingWindowProxyPaintSpec extends AnyFlatSpec with Matchers:
                     if onScreen(corner._1 + region.x + x, corner._2 + region.y + y) !=
                       (frame.getRGB(region.x + x, region.y + y) & 0xffffff)
                   yield 1).size
-                val (best, corner) = ScreenLocation
-                  .candidateCorners((reported.x, reported.y), found, slack = 2)
-                  .map(corner => mismatchesAt(corner) -> corner)
-                  .minBy(_._1)
+                val (best, corner) = ScreenLocation.bestAlignment(
+                  ScreenLocation.candidateCorners((reported.x, reported.y), found, slack = 2)
+                )(mismatchesAt)
                 best -> s"best alignment at $corner of the toolkit's (${reported.x},${reported.y}) and the first stripe pixel $found; windows: ${showingWindows()}"
               () => mismatchesOnScreen
             }.flatMap { capture =>

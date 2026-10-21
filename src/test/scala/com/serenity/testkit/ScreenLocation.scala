@@ -31,3 +31,9 @@ object ScreenLocation:
         dx     <- -slack to slack
       yield (x + dx, y + dy)
     (reported :: found.toList ::: near).distinct
+
+  /** The candidate corner with the fewest mismatches, and that count. The count is what a spec asserts to be zero:
+    * taking the best of several alignments finds where the window really is, and does not loosen what a pass requires.
+    */
+  def bestAlignment(corners: List[(Int, Int)])(mismatchesAt: ((Int, Int)) => Int): (Int, (Int, Int)) =
+    corners.map(corner => mismatchesAt(corner) -> corner).minBy(_._1)
