@@ -3,7 +3,7 @@ package com.serenity.richtext
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
-import java.util.zip.{ZipEntry, ZipOutputStream}
+import java.util.zip.ZipOutputStream
 
 import scala.util.Using
 
@@ -146,6 +146,6 @@ object DocxDocumentCodec:
       |</Relationships>""".stripMargin
 
   private def writeZipEntry(zip: ZipOutputStream, name: String, content: String): Unit =
-    zip.putNextEntry(ZipEntry(name))
+    zip.putNextEntry(NewPackageEntry.named(name))
     zip.write(content.getBytes(StandardCharsets.UTF_8))
     zip.closeEntry()

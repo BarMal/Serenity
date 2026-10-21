@@ -258,8 +258,18 @@ object RendererPaneContent:
     val activeBodyLines   = focusedTextBodyLines(buffer, state)
     val rowMetrics        = textRowMetrics(rect, context, snapshot)
     val rowsBottomPx      = rowMetrics.lineTopPx(visualLines.size).min(rowMetrics.contentBottomPx)
-    val findMatchesByLine = findMatchesOnDrawnRows(buffer, state, visualLines, dirtyRows)
+    val findMatchesByLine = RendererHighlights.findMatchesOnDrawnRows(buffer, state, visualLines, dirtyRows)
     FrameCounting.rowsPainted(context.caches.frameCounters, visualLines.size, dirtyRows)
+
+    // A terminal has no fonts to fall back between; the GUI cell grid draws what the buffer's font lacks in the chain.
+    val cellFallback =
+      Option.when(context.surface.text.fontRenderContext.isDefined)(
+        CellFallback(
+          context.fontForBuffer(buffer),
+          state.persisted.config.editorConfig.fontConfig.fallback,
+          context.caches.wrappedLines
+        )
+      )
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
@@ -323,7 +333,8 @@ object RendererPaneContent:
                 semanticTokens = lineSemanticTokens,
                 maxColumn = Some(rect.right),
                 highlightCache = context.caches.themeHighlightCache,
-                tabWidth = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
+                tabWidth = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
+                fallback = cellFallback
               )
               DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, context.surface, screenX, screenY)
               RendererHeadingRules.paintCells(
@@ -357,7 +368,8 @@ object RendererPaneContent:
               state.persisted.theme,
               context,
               snapshot,
-              styledSegments
+              styledSegments,
+              fallback = cellFallback
             )
 
             RendererHighlights.renderDiagnosticHighlights(
@@ -373,7 +385,22 @@ object RendererPaneContent:
               styledSegments,
               dimmed = !activeBodyLines(visualLine.bufferLine),
               blendWeight = state.persisted.config.surfaceConfig.diagnosticHighlightBlendWeight,
-              clipBottomPx = rowsBottomPx
+              clipBottomPx = rowsBottomPx,
+              fallback = cellFallback
+            )
+
+            RendererHighlights.renderKeywordHighlights(
+              context.surface,
+              annotations.keywordsByLine.getOrElse(visualLine.bufferLine, Nil),
+              visualLine,
+              rect,
+              screenY,
+              lineTopPx,
+              state.persisted.theme,
+              context,
+              snapshot,
+              styledSegments,
+              fallback = cellFallback
             )
 
             RendererHighlights.renderFindMatchHighlights(
@@ -386,7 +413,8 @@ object RendererPaneContent:
               state.persisted.theme,
               context,
               snapshot,
-              styledSegments
+              styledSegments,
+              fallback = cellFallback
             )
 
             RendererHighlights.renderSelectionHighlights(
@@ -399,21 +427,9 @@ object RendererPaneContent:
               state.persisted.theme,
               context,
               snapshot,
-              styledSegments
+              styledSegments,
+              fallback = cellFallback
             )
-    }
-
-  private def findMatchesOnDrawnRows(
-    buffer: Buffer,
-    state: AppState,
-    visualLines: Vector[TextVisualLine],
-    dirtyRows: Option[Set[Int]]
-  ): Map[Int, List[FindHighlight]] =
-    FindHighlights.paintedFindState(state, buffer.id).fold(Map.empty[Int, List[FindHighlight]]) { found =>
-      val drawnLines = visualLines.zipWithIndex.collect {
-        case (visualLine, row) if dirtyRows.forall(_.contains(row)) => visualLine.bufferLine
-      }.toSet
-      FindHighlights.onLines(buffer.document.content, found, drawnLines)
     }
 
   def visualLineFits(

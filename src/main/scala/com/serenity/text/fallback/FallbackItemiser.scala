@@ -13,7 +13,7 @@ final case class FallbackRun(from: Int, until: Int, slot: FontSlot)
   *     covers it, so neutrals inside CJK or Arabic text do not flap back to the primary font, unless `stickyNeutrals`
   *     is off, as on a monospaced grid where every neutral the primary covers belongs in its cell;
   *   - otherwise the first slot covering every codepoint, ignoring default-ignorables such as ZWJ and selectors, then
-  *     the first slot covering the base, with VS15 trying the non-emoji slots first;
+  *     the first slot covering the base, with the emoji slot tried last unless the cluster asks for emoji presentation;
   *   - a cluster no slot covers stays in the primary, whose missing glyph then does not split the run.
   */
 object FallbackItemiser:
@@ -94,10 +94,10 @@ object FallbackItemiser:
       case Presentation.Unspecified => previous.filter(slot => stickyNeutrals && isNeutral(base) && coversCluster(slot))
     val candidates = Vector.tabulate(coverage.slotCount)(FontSlot(_))
     val ordered = presentation match
-      case Presentation.Text =>
+      case Presentation.Text | Presentation.Unspecified =>
         val (emojiSlots, textSlots) = candidates.partition(isEmojiSlot)
         textSlots ++ emojiSlots
-      case Presentation.Emoji | Presentation.Unspecified => candidates
+      case Presentation.Emoji => candidates
     preferred
       .orElse(ordered.find(coversCluster))
       .orElse(ordered.find(coverage.covers(_, base)))

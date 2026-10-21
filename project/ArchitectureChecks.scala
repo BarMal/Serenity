@@ -323,34 +323,9 @@ object ArchitectureChecks {
       "The word-boundary twin of `threadLocalBreakIterator`, kept separate so word motion's grapheme questions do not evict its text; same thread confinement and the same perf constraint (#1277)."
     ),
     PurityChecks.Allowed(
-      "main/scala/com/serenity/ui/layout/ParagraphMeasurement.scala",
-      "ParagraphMeasurement.threadLocalCharacterBreaks",
-      "Thread-confined `BreakIterator` scratch on the paragraph-measurement hot path; moving it was a perf problem (#1277)."
-    ),
-    PurityChecks.Allowed(
-      "main/scala/com/serenity/ui/layout/TextLayoutSnapshot.scala",
-      "TextLayoutSnapshot.threadLocalLineBreakIterator",
-      "Thread-confined line-break `BreakIterator` scratch used while wrapping; moving it was a perf problem (#1277)."
-    ),
-    PurityChecks.Allowed(
       "main/scala/com/serenity/rope/RopeCharacterSource.scala",
       "RopeCharacterSource.lastUsed",
       "Per-thread memo of the last adapter made for a rope. Its identity is the anchor the thread's `BreakIterator` cache compares, so it must live and die with those thread-locals."
-    ),
-    PurityChecks.Allowed(
-      "main/scala/com/serenity/diagnostics/TuiConsoleLogFilter.scala",
-      "TuiConsoleLogFilter.suppressConsole",
-      "logback builds this filter by reflection from `logback.xml`, so no value can be injected into it; a static flag set once from `Frontend.logRouting` before the first logger exists is the only channel."
-    ),
-    PurityChecks.Allowed(
-      "main/scala/com/serenity/ui/presets/UiPresetIndex.scala",
-      "UiPresetStore.inProcessLocks",
-      "One lock per preset file must be shared by every `UiPresetStore` in the process that names it; per-instance locks would let two stores write the same file at once. The mutual exclusion is the point, so the state is inherently process-wide."
-    ),
-    PurityChecks.Allowed(
-      "main/scala/com/serenity/ui/renderer/FontFirstUse.scala",
-      "FontFirstUse.NoContexts",
-      "An empty sentinel map that is only ever read (`getOrDefault`), never written, so the miss path allocates nothing. It carries no state."
     )
   )
 
