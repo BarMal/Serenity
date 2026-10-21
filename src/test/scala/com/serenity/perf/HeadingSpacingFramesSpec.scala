@@ -66,17 +66,25 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
       }
     )
 
-  final private class Pooled(window: Window, scale: Double, persists: Boolean = true):
+  private val oracleImages = OracleImages()
 
-    private val images = Vector.fill(2)(
-      new BufferedImage(
-        math.ceil(window.width * scale).toInt,
-        math.ceil(window.height * scale).toInt,
-        BufferedImage.TYPE_INT_RGB
+  private val pooledImages = 2
+
+  private def deviceWidthPx(window: Window, scale: Double): Int  = math.ceil(window.width * scale).toInt
+  private def deviceHeightPx(window: Window, scale: Double): Int = math.ceil(window.height * scale).toInt
+
+  final private class Pooled(window: Window, scale: Double, persists: Boolean, frames: FrameImages):
+
+    def this(window: Window, scale: Double, persists: Boolean = true) =
+      this(
+        window,
+        scale,
+        persists,
+        FrameImages(deviceWidthPx(window, scale), deviceHeightPx(window, scale), pooledImages)
       )
-    )
 
-    private val screenImage = new BufferedImage(images.head.getWidth, images.head.getHeight, BufferedImage.TYPE_INT_RGB)
+    private val images      = frames.drawn
+    private val screenImage = frames.screen
     private val caches      = RenderCaches.create()
     private val screen      = ScreenIdentity(this)
     private val drawn       = AtomicInteger(0)
@@ -138,12 +146,14 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
       finally g.dispose()
 
   private def differing(window: Window, drawn: BufferedImage, state: AppState, scale: Double): Seq[(Int, Int)] =
-    val cold = Pooled(window, scale, persists = false).render(state, Damage.Everything)
-    for
-      x <- 0 until drawn.getWidth
-      y <- 0 until drawn.getHeight
-      if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
-    yield (x, y)
+    oracleImages.lend(deviceWidthPx(window, scale), deviceHeightPx(window, scale), pooledImages) { frames =>
+      val cold = Pooled(window, scale, persists = false, frames).render(state, Damage.Everything)
+      for
+        x <- 0 until drawn.getWidth
+        y <- 0 until drawn.getHeight
+        if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
+      yield (x, y)
+    }
 
   private def summary(d: Seq[(Int, Int)]): String =
     val ys = d.map(_._2)
