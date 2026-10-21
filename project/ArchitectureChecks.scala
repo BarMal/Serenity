@@ -341,11 +341,6 @@ object ArchitectureChecks {
       "main/scala/com/serenity/diagnostics/TuiConsoleLogFilter.scala",
       "TuiConsoleLogFilter.suppressConsole",
       "logback builds this filter by reflection from `logback.xml`, so no value can be injected into it; a static flag set once from `Frontend.logRouting` before the first logger exists is the only channel."
-    ),
-    PurityChecks.Allowed(
-      "main/scala/com/serenity/ui/renderer/FontFirstUse.scala",
-      "FontFirstUse.NoContexts",
-      "An empty sentinel map that is only ever read (`getOrDefault`), never written, so the miss path allocates nothing. It carries no state."
     )
   )
 

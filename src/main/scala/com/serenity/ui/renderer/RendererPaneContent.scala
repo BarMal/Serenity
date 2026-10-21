@@ -261,6 +261,16 @@ object RendererPaneContent:
     val findMatchesByLine = RendererHighlights.findMatchesOnDrawnRows(buffer, state, visualLines, dirtyRows)
     FrameCounting.rowsPainted(context.caches.frameCounters, visualLines.size, dirtyRows)
 
+    // A terminal has no fonts to fall back between; the GUI cell grid draws what the buffer's font lacks in the chain.
+    val cellFallback =
+      Option.when(context.surface.text.fontRenderContext.isDefined)(
+        CellFallback(
+          context.fontForBuffer(buffer),
+          state.persisted.config.editorConfig.fontConfig.fallback,
+          context.caches.wrappedLines
+        )
+      )
+
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
         if dirtyRows.forall(_.contains(screenLineIndex)) && rowMetrics.lineFits(screenLineIndex) then
@@ -323,7 +333,8 @@ object RendererPaneContent:
                 semanticTokens = lineSemanticTokens,
                 maxColumn = Some(rect.right),
                 highlightCache = context.caches.themeHighlightCache,
-                tabWidth = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
+                tabWidth = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
+                fallback = cellFallback
               )
               DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, context.surface, screenX, screenY)
               RendererHeadingRules.paintCells(
@@ -357,7 +368,8 @@ object RendererPaneContent:
               state.persisted.theme,
               context,
               snapshot,
-              styledSegments
+              styledSegments,
+              fallback = cellFallback
             )
 
             RendererHighlights.renderDiagnosticHighlights(
@@ -373,7 +385,8 @@ object RendererPaneContent:
               styledSegments,
               dimmed = !activeBodyLines(visualLine.bufferLine),
               blendWeight = state.persisted.config.surfaceConfig.diagnosticHighlightBlendWeight,
-              clipBottomPx = rowsBottomPx
+              clipBottomPx = rowsBottomPx,
+              fallback = cellFallback
             )
 
             RendererHighlights.renderKeywordHighlights(
@@ -386,7 +399,8 @@ object RendererPaneContent:
               state.persisted.theme,
               context,
               snapshot,
-              styledSegments
+              styledSegments,
+              fallback = cellFallback
             )
 
             RendererHighlights.renderFindMatchHighlights(
@@ -399,7 +413,8 @@ object RendererPaneContent:
               state.persisted.theme,
               context,
               snapshot,
-              styledSegments
+              styledSegments,
+              fallback = cellFallback
             )
 
             RendererHighlights.renderSelectionHighlights(
@@ -412,7 +427,8 @@ object RendererPaneContent:
               state.persisted.theme,
               context,
               snapshot,
-              styledSegments
+              styledSegments,
+              fallback = cellFallback
             )
     }
 

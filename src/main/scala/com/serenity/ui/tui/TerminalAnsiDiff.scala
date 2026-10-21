@@ -162,7 +162,7 @@ object TerminalAnsiDiff:
         sb.append(CursorMotion.between(pass.cursor, CursorPos(x, y), frame.width))
           .append(SgrState.transition(pass.pen, pen)),
         CellGrid.codePointOf(glyph)
-      )
+      ).append(frame.marksAt(x, y))
       Pass(Some(pen), Some(CursorPos(x + advance, y)), wrote = true)
 
   private def appendCodePoint(sb: StringBuilder, codePoint: Int): StringBuilder =
