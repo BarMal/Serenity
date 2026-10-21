@@ -50,6 +50,7 @@ object PerformanceBenchmarks:
       TuiBenchmarks.benchmarks() ++
       CommandRunnerBenchmarks.benchmarks() ++
       ModalWrapBenchmarks.benchmarks() ++
+      EditorConfigBenchmarks.benchmarks() ++
       EqualsBenchmarks.benchmarks() ++
       FindReplaceBenchmarks.benchmarks() ++
       lspAndProjectBenchmarks(projectRoot) ++

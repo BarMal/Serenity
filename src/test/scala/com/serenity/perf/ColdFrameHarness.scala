@@ -44,19 +44,18 @@ trait ColdFrameHarness:
       .withScrollbar(false)
       .withTabStrip(TabStripMode.Off)
 
-  final protected class Pooled(scale: Double, persists: Boolean = true):
+  private def imagePoolSize(persists: Boolean): Int = if persists then 2 else 1
 
-    private val pool = 2
+  private def deviceWidthPx(scale: Double): Int  = math.ceil(windowWidth * scale).toInt
+  private def deviceHeightPx(scale: Double): Int = math.ceil(windowHeight * scale).toInt
 
-    private val images = Vector.fill(if persists then pool else 1)(
-      new BufferedImage(
-        math.ceil(windowWidth * scale).toInt,
-        math.ceil(windowHeight * scale).toInt,
-        BufferedImage.TYPE_INT_RGB
-      )
-    )
+  final protected class Pooled(scale: Double, persists: Boolean, frames: FrameImages):
 
-    private val screenImage = new BufferedImage(images.head.getWidth, images.head.getHeight, BufferedImage.TYPE_INT_RGB)
+    def this(scale: Double, persists: Boolean = true) =
+      this(scale, persists, FrameImages(deviceWidthPx(scale), deviceHeightPx(scale), imagePoolSize(persists)))
+
+    private val images      = frames.drawn
+    private val screenImage = frames.screen
     private val caches      = RenderCaches.create()
     caches.frameCounters.setEnabled(true)
     private val screen = ScreenIdentity(this)
@@ -121,13 +120,24 @@ trait ColdFrameHarness:
             }
       finally g.dispose()
 
+  protected val oracleImages: OracleImages = OracleImages()
+
+  /** Draws the cold frame of `state` into lent images, with caches made for this frame alone, and runs `use` on it
+    * before the images go back; the frame is valid only inside `use`.
+    */
+  protected def coldFrameWith[A](state: AppState, scale: Double)(use: BufferedImage => A): A =
+    oracleImages.lend(deviceWidthPx(scale), deviceHeightPx(scale), imagePoolSize(persists = false)) { frames =>
+      use(Pooled(scale, persists = false, frames).render(state, Damage.Everything))
+    }
+
   protected def differing(drawn: BufferedImage, state: AppState, scale: Double): Seq[(Int, Int)] =
-    val cold = Pooled(scale, persists = false).render(state, Damage.Everything)
-    for
-      x <- 0 until drawn.getWidth
-      y <- 0 until drawn.getHeight
-      if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
-    yield (x, y)
+    coldFrameWith(state, scale) { cold =>
+      for
+        x <- 0 until drawn.getWidth
+        y <- 0 until drawn.getHeight
+        if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
+      yield (x, y)
+    }
 
   protected def summary(d: Seq[(Int, Int)]): String =
     val ys = d.map(_._2)
