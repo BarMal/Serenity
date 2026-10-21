@@ -84,12 +84,14 @@ class TerminalCombiningMarkSpec extends AnyFlatSpec with Matchers:
     buf.snapshot(0, 0).text shouldBe " "
   }
 
-  "flushDiff" should "write the mark straight after its base and advance the cursor by the base's width alone" in {
+  "flushDiff" should "write the mark straight after its base, then address the next cell absolutely" in {
     val buf = buffer(width = 4, height = 1)
     buf.putString(0, 0, s"e${acute}xy")
 
     val encoded = buf.flushDiff(scrollRegions = false, startPen = None)
-    encoded.ansi should include(s"e${acute}xy")
+    encoded.ansi should include(s"e$acute")
+    // #2365: after a cluster of more than one codepoint the cursor is addressed absolutely, not assumed.
+    encoded.ansi should include(s"$esc[1;2Hxy")
   }
 
   "TerminalAnsiDiff.emit" should "repaint a cell whose only change is a mark" in {
