@@ -18,7 +18,7 @@ import com.serenity.perf.BenchmarkFixtures.{
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, WrappedLineCache}
 import com.serenity.ui.renderer.{
   CharacterRenderer,
   FontSpec,
@@ -68,6 +68,7 @@ private[perf] object RenderBenchmarks:
     val diagnosticsState = withBenchmarkDiagnostics(commentsState)
     val plainScrollState = scrolledToDeepViewport(multilineState)
     val layoutSnapshot   = visibleViewportLayout(plainScrollState)
+    val unremembered     = WrappedLineCache.measuring(renderCaches.shapedText, renderCaches.wrappedLines.layoutMemos)
     prepareCursorBaseFrame(plainScrollState, cursorWindow, renderCaches)
     val fullFrame              = renderedFrame(richState, deviceScale = 1.0, renderCaches)
     val diagnosticsAndComments = renderedFrame(diagnosticsState, deviceScale = 1.0, renderCaches)
@@ -86,7 +87,8 @@ private[perf] object RenderBenchmarks:
               buffer,
               panelWidthPx = frameWidthPx,
               monoFont,
-              wordWrapEnabled = false
+              wordWrapEnabled = false,
+              wrapCache = unremembered
             )
           }
       ),

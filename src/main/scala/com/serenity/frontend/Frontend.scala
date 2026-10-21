@@ -7,8 +7,8 @@ import com.serenity.keystroke.KeyboardFidelityTier
 
 /** Whether the console (STDOUT) log appender should be denied entirely -- issue #1215: in TUI mode stdout is the
   * terminal surface `TerminalRenderSurface` owns exclusively, and an ordinary console log line racing its ANSI writes
-  * corrupts the display and drags the terminal's real cursor away. See `TuiConsoleLogFilter`'s own doc for why a static
-  * flag, not a constructor argument, is still how this actually reaches the filter.
+  * corrupts the display and drags the terminal's real cursor away. `Main` hands it to `TuiConsoleLogFilter.install`,
+  * which attaches the filter to the console appender in code.
   */
 final case class LogRouting(suppressConsole: Boolean)
 

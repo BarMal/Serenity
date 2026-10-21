@@ -145,6 +145,18 @@ object TerminalEmulator:
     def write(col: Int, row: Int, cell: TerminalCell): Unit =
       if col >= 0 && col < width && row >= 0 && row < height then cells(row)(col) = cell
 
+    def read(col: Int, row: Int): Option[TerminalCell] =
+      Option.when(col >= 0 && col < width && row >= 0 && row < height)(cells(row)(col))
+
+    /** A combining mark composes onto the cell before column `col` (the leading cell, when that one is a wide glyph's
+      * continuation) and moves nothing.
+      */
+    def composeMark(col: Int, row: Int, codePoint: Int): Unit =
+      val back = read(col - 1, row).map(cell => if cell.span == CellSpan.Continuation then 2 else 1).getOrElse(1)
+      read(col - back, row).foreach { base =>
+        write(col - back, row, base.copy(marks = base.marks + String(Character.toChars(codePoint))))
+      }
+
     def clear(fromIndex: Int, untilIndex: Int, pen: Pen): Unit =
       (math.max(0, fromIndex) until math.min(width * height, untilIndex))
         .foreach(index => write(index % width, index / width, TerminalCell.blank(pen.fg, pen.bg)))
@@ -232,6 +244,12 @@ object TerminalEmulator:
     val grid   = new Grid(Array.tabulate(height, width)((row, col) => start.frame(col, row)), width, height)
 
     def printCodePoint(state: Interp, codePoint: Int): Interp =
+      if CharWidth.of(codePoint) == 0 then
+        grid.composeMark(state.cursor.col, math.min(state.cursor.row, height - 1), codePoint)
+        state
+      else printBase(state, codePoint)
+
+    def printBase(state: Interp, codePoint: Int): Interp =
       val glyphWidth = CharWidth.of(codePoint)
       val start =
         if state.cursor.col + glyphWidth > width then state.cursor.copy(col = 0, row = state.cursor.row + 1)

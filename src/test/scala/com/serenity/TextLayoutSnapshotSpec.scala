@@ -537,7 +537,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     xs shouldBe Vector(0.0f, 2.0f, 2.0f, 3.0f)
   }
 
-  it should "keep a font-derived cell grid advancing one cell per character" in {
+  it should "advance a wide character two cells on a font-derived cell grid, as the terminal grid does" in {
     val font    = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)
 
@@ -549,7 +549,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       forceCellLayout = true
     )
 
-    xs shouldBe Vector(0.0f, 1.0f, 2.0f, 3.0f).map(_ * metrics.charWidth)
+    xs shouldBe Vector(0.0f, 1.0f, 3.0f, 4.0f).map(_ * metrics.charWidth)
   }
 
   it should "wrap a cellUnit layout on the cell the glyph actually fills, never splitting one" in {

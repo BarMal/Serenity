@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
 final class FontFirstUse:
   import FontFirstUse.*
 
-  private val settled = new ConcurrentHashMap[Font, ConcurrentHashMap[FontRenderContext, java.lang.Boolean]]()
+  private val settled = new ConcurrentHashMap[Font, java.util.Map[FontRenderContext, java.lang.Boolean]]()
   private val lock    = new Object
 
   def isSettled(font: Font, frc: FontRenderContext): Boolean =
@@ -42,7 +42,7 @@ object FontFirstUse:
 
   private val MaxSettled = 4096
 
-  private val NoContexts = new ConcurrentHashMap[FontRenderContext, java.lang.Boolean]()
+  private val NoContexts: java.util.Map[FontRenderContext, java.lang.Boolean] = java.util.Map.of()
 
   private val WarmUpText = "Hoxi AVATAR fi To"
 

@@ -9,7 +9,7 @@ import com.serenity.state.models.{TextCaretStop, TextVisualLine}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.ui.renderer.{FontProbes, ShapedTextCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
@@ -73,7 +73,7 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
 
   "The bundled code font with ligatures on" should "still be measured, not laid out on the cell grid" in {
     FontLoader.ligaturesEnabled(codeFont) shouldBe true
-    TextLayoutSnapshot.shouldUseMeasuredLayout(codeFont, frc) shouldBe true
+    TextLayoutSnapshot.shouldUseMeasuredLayout(codeFont, frc, FontProbes()) shouldBe true
   }
 
   it should "wrap code exactly where per-row TextLayout measurement did, with the same caret stops" in
@@ -116,7 +116,7 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
 
   it should "fit a row of code from the measured advances rather than the per-row search" in
     codeLines.foreach { line =>
-      val paragraph = ParagraphMeasurement(keyFor(line, 233), 0, Int.MaxValue, ShapedTextCache())
+      val paragraph = ParagraphMeasurement(keyFor(line, 233), 0, Int.MaxValue, ShapedTextCache(), new BoundaryScratch)
 
       withClue(s"'$line': ") {
         paragraph.measuredFit(0, 233) should not be empty
@@ -143,6 +143,6 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
 
     val advances = GlyphAdvances.measure(line, 0, line.length, 0, singleFontResolver(kerned), frc, ShapedTextCache())
 
-    GlyphAdvances.advancesAreUniform(kerned, frc) shouldBe false
+    GlyphAdvances.advancesAreUniform(kerned, frc, FontProbes()) shouldBe false
     advances.isContextFree(0, line.length) shouldBe false
   }

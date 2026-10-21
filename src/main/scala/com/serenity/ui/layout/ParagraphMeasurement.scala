@@ -17,7 +17,8 @@ final private[layout] class ParagraphMeasurement private (
     end: Int,
     boundaries: Array[Int],
     val advances: Option[GlyphAdvances],
-    val shapedText: ShapedTextCache
+    val shapedText: ShapedTextCache,
+    breaks: BoundaryScratch
 ):
   import ParagraphMeasurement.*
 
@@ -28,7 +29,7 @@ final private[layout] class ParagraphMeasurement private (
   def coveringRowAt(from: Int, rowsLeft: Int): ParagraphMeasurement =
     val budget = rowBudget(spec)
     if from >= start && (end == spec.text.length || from + budget <= end) then this
-    else ParagraphMeasurement(spec, from, rowsLeft, shapedText)
+    else ParagraphMeasurement(spec, from, rowsLeft, shapedText, breaks)
 
   /** A row's caret-stop offsets from its start. Agrees with sweeping the row alone whenever the row both starts and
     * ends on this window's boundaries, since grapheme rules never look back past a boundary; a row cut mid-cluster (a
@@ -37,7 +38,7 @@ final private[layout] class ParagraphMeasurement private (
   def graphemeOffsets(from: Int, until: Int): IArray[Int] =
     val first = java.util.Arrays.binarySearch(boundaries, from)
     if from < start || until > end || first < 0 || java.util.Arrays.binarySearch(boundaries, until) < 0 then
-      graphemeBoundaryOffsets(spec.text.substring(from, until))
+      graphemeBoundaryOffsets(spec.text.substring(from, until), breaks)
     else
       @annotation.tailrec
       def lastInside(index: Int): Int =
@@ -52,9 +53,9 @@ final private[layout] class ParagraphMeasurement private (
     * candidate leaves the window, holds a character whose shaping depends on its neighbours beyond a kerning pair, or
     * lands too near the width for float rounding between the two measurements to be ruled out.
     */
-  def measuredFit(from: Int, panelWidthPx: Int): Option[SegmentFit] =
+  def measuredFit(from: Int, panelWidthPx: Int, givenBackPx: Float = 0.0f): Option[SegmentFit] =
     val remaining = spec.text.length - from
-    val width     = panelWidthPx.toFloat
+    val width     = panelWidthPx.toFloat + givenBackPx
     @annotation.tailrec
     def loop(limit: Int): Option[SegmentFit] =
       advances match
@@ -82,17 +83,20 @@ private[layout] object ParagraphMeasurement:
 
   private[layout] val MaxWindowChars = 16384
 
-  private val threadLocalCharacterBreaks: ThreadLocal[BreakIterator] =
-    ThreadLocal.withInitial(() => BreakIterator.getCharacterInstance())
-
-  def apply(spec: WrappedLineKey, from: Int, rowsLeft: Int, shapedText: ShapedTextCache): ParagraphMeasurement =
+  def apply(
+    spec: WrappedLineKey,
+    from: Int,
+    rowsLeft: Int,
+    shapedText: ShapedTextCache,
+    breaks: BoundaryScratch
+  ): ParagraphMeasurement =
     val budget = rowBudget(spec).toLong
     val wanted = math.max(budget, math.min(MaxWindowChars.toLong, rowsLeft.toLong * budget))
     val end    = math.min(spec.text.length.toLong, from + wanted).toInt
     val advances = Option.when(spec.measuredLayout)(
       GlyphAdvances.measure(spec.text, from, end, spec.baseColumn, spec.resolver, spec.frc, shapedText)
     )
-    new ParagraphMeasurement(spec, from, end, boundariesOf(spec.text, from, end), advances, shapedText)
+    new ParagraphMeasurement(spec, from, end, boundariesOf(spec.text, from, end, breaks), advances, shapedText, breaks)
 
   /** A window over the whole of `spec.text` whose advances were assembled rather than measured in one sweep. It holds
     * no grapheme boundaries, so every row sweeps its own, which agrees with reading them off a window's boundaries.
@@ -100,9 +104,10 @@ private[layout] object ParagraphMeasurement:
   def assembled(
     spec: WrappedLineKey,
     advances: Option[GlyphAdvances],
-    shapedText: ShapedTextCache
+    shapedText: ShapedTextCache,
+    breaks: BoundaryScratch
   ): ParagraphMeasurement =
-    new ParagraphMeasurement(spec, 0, spec.text.length, Array.empty[Int], advances, shapedText)
+    new ParagraphMeasurement(spec, 0, spec.text.length, Array.empty[Int], advances, shapedText, breaks)
 
   /** The first candidate the per-row search measures, in characters. */
   def initialCandidateLength(panelWidthPx: Int, cellMetrics: CellMetrics): Int =
@@ -110,11 +115,11 @@ private[layout] object ParagraphMeasurement:
 
   private def rowBudget(spec: WrappedLineKey): Int = 2 * initialCandidateLength(spec.panelWidthPx, spec.cellMetrics)
 
-  def graphemeBoundaryOffsets(text: String): IArray[Int] =
-    IArray.unsafeFromArray(boundariesOf(text, 0, text.length))
+  def graphemeBoundaryOffsets(text: String, breaks: BoundaryScratch): IArray[Int] =
+    IArray.unsafeFromArray(boundariesOf(text, 0, text.length, breaks))
 
-  private def boundariesOf(text: String, from: Int, until: Int): Array[Int] =
-    val breaks = threadLocalCharacterBreaks.get()
+  private def boundariesOf(text: String, from: Int, until: Int, scratch: BoundaryScratch): Array[Int] =
+    val breaks = scratch.characterBreaks
     breaks.setText(StringCharacterIterator(text, from, until, from))
     val found = new Array[Int](until - from + 1)
     @annotation.tailrec

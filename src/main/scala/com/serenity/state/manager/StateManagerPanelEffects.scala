@@ -63,6 +63,8 @@ final private[manager] class StateManagerPanelEffects(
         commitApp(ChapterNoteTransitions.openCurrentKeywordNote(_, SplitAxis.Horizontal))
       case ViewIntent.ToggleChapterGhosts =>
         commitApp(ChapterNoteTransitions.toggleGhosts)
+      case ViewIntent.ToggleTermHighlights =>
+        commitApp(ChapterNoteTransitions.toggleTermHighlights)
       case ViewIntent.ToggleNotesPin =>
         commitApp(ChapterNoteTransitions.toggleNotesPin)
       case ViewIntent.TogglePanelShown(id) =>
