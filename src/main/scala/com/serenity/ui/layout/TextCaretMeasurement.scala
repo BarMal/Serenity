@@ -384,7 +384,7 @@ private[layout] object TextCaretMeasurement:
         val end      = CharWidth.clusterEnd(text, index)
         val advanced = cells + clusterAdvance(text, index, end, cells, tabSize)
         stops(index) = cells * charWidth
-        (index + 1 until end).foreach(inner => stops(inner) = advanced * charWidth)
+        java.util.Arrays.fill(stops, index + 1, end, advanced * charWidth)
         loop(end, advanced)
 
     loop(0, 0)

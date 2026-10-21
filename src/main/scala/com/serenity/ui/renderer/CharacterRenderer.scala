@@ -297,7 +297,10 @@ object CharacterRenderer:
             )
           case visible if isVisibleCodePoint(visible) =>
             val start = if state.currentText.length == 0 then state.currentX else state.currentStartX
-            state.currentText.appendAll(content.substring(index, end))
+            if end == index + Character.charCount(visible) then
+              if Character.isBmpCodePoint(visible) then state.currentText.append(visible.toChar)
+              else state.currentText.appendAll(Character.toChars(visible))
+            else state.currentText.appendAll(content.substring(index, end))
             state.copy(currentStartX = start, currentX = state.currentX + CharWidth.ofCluster(content, index, end))
           case _ =>
             val flushed = state.flush
