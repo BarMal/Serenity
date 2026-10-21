@@ -5,7 +5,7 @@ name: Skiko Natives
 # stock library first. Publishing adds attested jars to the Maven repository on the `skiko-maven` branch, which GitHub Pages
 # serves; see DEVELOPMENT.md for the rebuild-on-bump procedure.
 #
-# A pull request builds all four runner groups, to keep a try cheap; a manual run chooses its targets and whether to publish.
+# A pull request builds all four runner groups (Skia is cached by pin and patch, so a warm run takes about ten minutes); a manual run chooses its targets and whether to publish.
 on:
   pull_request:
     paths:
@@ -314,9 +314,36 @@ jobs:
           path: repo
           if-no-files-found: error
 
+  merge:
+    name: Merge and scan all six jars
+    needs: [build-linux-x64, build-linux-arm64, build-macos, build-windows]
+    if: needs.build-linux-x64.result == 'success' && needs.build-linux-arm64.result == 'success' && needs.build-macos.result == 'success' && needs.build-windows.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: maven-*
+          path: incoming
+      - name: Merge the groups into one repository tree and scan all six jars
+        run: |
+          set -euo pipefail
+          . ci/skiko/pins.env
+          mkdir -p repo
+          for dir in incoming/maven-*; do cp -R "${dir}/." repo/; done
+          jars=$(find repo -name "skiko-awt-runtime-*-${NATIVES_VERSION}.jar" | sort)
+          echo "${jars}"
+          test "$(echo "${jars}" | wc -l)" -eq 6
+          python3 scripts/check_no_dng.py ${jars}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: maven-merged
+          path: repo
+          if-no-files-found: error
+
   publish:
     name: Publish
-    needs: [plan, build-linux-x64, build-linux-arm64, build-macos, build-windows]
+    needs: [plan, merge]
     if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -327,16 +354,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: maven-*
-          path: incoming
-      - name: Merge the groups into one repository tree and scan all six jars
-        run: |
-          set -euo pipefail
-          mkdir -p repo
-          for dir in incoming/maven-*; do cp -R "${dir}/." repo/; done
-          jars=$(find repo -name 'skiko-awt-runtime-*.jar' | sort)
-          test "$(echo "${jars}" | wc -l)" -eq 6
-          python3 scripts/check_no_dng.py ${jars}
+          name: maven-merged
+          path: repo
       - uses: actions/attest-build-provenance@v2
         with:
           subject-path: 'repo/**/*.jar'
