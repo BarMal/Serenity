@@ -17,15 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: before-phase2
-            ref: efcf3df262eceaca925c6185ab795f39f0988377
-          - label: caches-moved
-            ref: 46e49535de1e0e75e674aa178d3fb3ae85766db8
-          - label: clip-fallback-putstring
-            ref: 8b66fd53700b9f2e0756bfff408a1eba8d85289c
-          - label: lifting
-            ref: b599723e31ada43b20da9b19e1e3daccdb04b7de
-          - label: head-with-diagnostics
+          - label: head-with-experiments
             ref: ''
     steps:
       - name: Check out repository
@@ -45,7 +37,7 @@ jobs:
 
       - name: Run the Skia pixel specs
         shell: bash
-        run: sbt -v "testOnly com.serenity.SkiaChromeRepaintPixelsSpec com.serenity.SkiaScrollReusePixelsSpec com.serenity.SkiaFontDebugSpec"
+        run: sbt -v "testOnly com.serenity.SkiaChromeRepaintPixelsSpec com.serenity.SkiaScrollReusePixelsSpec com.serenity.SkiaFontDebugSpec com.serenity.SkiaColdWarmDebugSpec"
 
       - name: Print mismatch dumps
         if: always()
