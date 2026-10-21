@@ -36,6 +36,7 @@ class StateManagerEffectDispatcherSpec extends AnyFlatSpec with Matchers:
           explorer = value => calls.update(_ :+ s"explorer:$value"),
           workflow = value => calls.update(_ :+ s"workflow:$value"),
           lspQueue = value => calls.update(_ :+ s"lspQueue:$value"),
+          ime = value => calls.update(_ :+ s"ime:$value"),
           scheduleCommandRunnerBindingExpiry =
             recordedAtMillis => calls.update(_ :+ s"scheduleCommandRunnerBindingExpiry:$recordedAtMillis")
         )
@@ -71,6 +72,14 @@ class StateManagerEffectDispatcherSpec extends AnyFlatSpec with Matchers:
     fixture.interpreter.interpret(AppEffect.ExecuteCommandUnrecorded(command)).unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() shouldBe List(s"unrecordedCommand:$command")
+  }
+
+  it should "route Ime to the input-method dependency" in {
+    val fixture = harness()
+
+    fixture.interpreter.interpret(AppEffect.Ime(ImeEffect.Refused)).unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe List("ime:Refused")
   }
 
   it should "route ScheduleCommandRunnerBindingExpiry to its own dependency, carrying the timestamp" in {

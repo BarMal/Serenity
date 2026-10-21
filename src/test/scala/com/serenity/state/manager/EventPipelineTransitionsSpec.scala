@@ -5,6 +5,9 @@ import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{
   DeleteBackward,
   Enter,
+  ImeCancelled,
+  ImeCommit,
+  ImeComposing,
   InsertChar,
   InsertText,
   NextTab,
@@ -132,6 +135,14 @@ class EventPipelineTransitionsSpec extends AnyFlatSpec with Matchers:
 
     committed.runtime.typingActivity shouldBe typed.runtime.typingActivity
     committed.runtime.editClock.nowNanos shouldBe 7L
+  }
+
+  it should "treat a committed input-method string as typing, and pre-edit as neither typing nor an edit" in {
+    val panes = twoPanes()
+
+    EventPipelineTransitions.typingObserved(ImeCommit("字"), nowNanos = 7L)(panes).runtime.editClock.nowNanos shouldBe 7L
+    EventPipelineTransitions.typingObserved(ImeComposing("か", Nil, None), nowNanos = 7L)(panes) shouldBe panes
+    EventPipelineTransitions.typingObserved(ImeCancelled, nowNanos = 7L)(panes) shouldBe panes
   }
 
   it should "stamp the edit clock when a character is typed into an editor pane" in {

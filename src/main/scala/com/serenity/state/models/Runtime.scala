@@ -4,7 +4,7 @@ import com.serenity.frontend.FrontendCapabilities
 import com.serenity.markdown.MarkdownBlockIndexMemo
 import com.serenity.project.ProjectPresence
 import com.serenity.text.RangeStatisticsMemo
-import com.serenity.ui.layout.{AnchorWrapCache, ChromeLayoutMemo, ViewportSize}
+import com.serenity.ui.layout.{AnchorWrapCache, ChromeLayoutMemo, ProseGlyphWidths, ViewportSize}
 
 /** State that is never persisted -- reset to defaults (or recomputed) on every session restore. */
 final case class Runtime(
@@ -60,6 +60,8 @@ final case class Runtime(
     // Never persisted: whether a chapter note's overview is painted, faded, under an empty chapter. The notes themselves
     // are untouched by hiding the ghosts.
     chapterGhostsVisible: Boolean = true,
+    // Never persisted: whether keyword occurrences are highlighted while the notes pane is open on their document.
+    keywordHighlightsVisible: Boolean = true,
     // Never persisted: the pane showing chapter notes, and whether it follows the cursor's chapter or is pinned.
     notesPane: Option[NotesPane] = None,
     // Never persisted: the paned buffers' indexes as of the last commit (#1864), so the copies made in between reuse
@@ -73,6 +75,8 @@ final case class Runtime(
     chromeLayouts: ChromeLayoutMemo = ChromeLayoutMemo(),
     // Never persisted: the wraps measured while locating a caret, which are a function of the state alone.
     anchorWraps: AnchorWrapCache = AnchorWrapCache(),
+    // Never persisted: the prose font's measured widths, which only a font change alters.
+    proseGlyphWidths: ProseGlyphWidths = ProseGlyphWidths(),
     // Never persisted: the notes pane's source headings as of its last retarget (#1848). See `NotesPaneSync`.
     chapterHeadingMemo: ChapterHeadingMemo = ChapterHeadingMemo.empty,
     // Never persisted: whether resolved comments still show in the lens, the highlights and comment navigation. Resolved
@@ -82,7 +86,12 @@ final case class Runtime(
     pendingSetting: Option[PendingSetting] = None,
     // The chrome summoned over the config. Only what is locked is written to the session (`SessionState.lockedChrome`);
     // the config file is never touched by it.
-    summons: ChromeSummons = ChromeSummons.empty
+    summons: ChromeSummons = ChromeSummons.empty,
+    // Never persisted: the input method's uncommitted text (#2008). The buffer holds none of it until the commit.
+    composition: Option[Composition] = None,
+    // The input method started a composition where the editor takes no text, and was told to end it: its composing
+    // events are ignored until it commits or cancels.
+    compositionRefused: Boolean = false
 ):
 
   /** A typed character restarts the quiet window for cursor-adjacent surfaces. */

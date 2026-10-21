@@ -23,7 +23,7 @@ private[layout] object SegmentMeasurement:
     graphemeOffsets: Option[IArray[Int]] = None
   ): MeasuredRow =
     val xs = measuredXs.getOrElse(caretXs(text, startColumn, resolver, frc, measuredLayout, cellMetrics, shapedText))
-    val offsets = graphemeOffsets.getOrElse(ParagraphMeasurement.graphemeBoundaryOffsets(text))
+    val offsets = graphemeOffsets.getOrElse(ParagraphMeasurement.graphemeBoundaryOffsets(text, memos.boundaries))
     val stopXs  = IArray.tabulate(offsets.length)(index => xs(math.min(offsets(index), xs.length - 1)))
     val (landingXs, landingOffsets) =
       if resolver.hasHidden then landableStops(stopXs, offsets, startColumn, resolver)

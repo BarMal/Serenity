@@ -29,7 +29,7 @@ object Java2DGlyphCoverage:
 
   /** The coverage of `primary` and the chain `fallback` describes. */
   def of(primary: Font, fallback: FontFallback): Java2DGlyphCoverage =
-    new Java2DGlyphCoverage(primary +: fallback.fallbackFonts(primary), None)
+    new Java2DGlyphCoverage(primary +: fallback.fallbackFonts(primary), fallback.emojiSlot)
 
   def apply(primary: Font, fallbacks: Vector[Font], emoji: Option[Font]): Java2DGlyphCoverage =
     val system = Font(Font.DIALOG, primary.getStyle, 1)

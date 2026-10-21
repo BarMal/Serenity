@@ -9,7 +9,6 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
   CellMetrics,
   LayoutEngine,
-  LayoutMemos,
   TextLayoutSnapshot,
   ViewportSize,
   WorkspaceNode,
@@ -17,7 +16,6 @@ import com.serenity.ui.layout.{
   WorkspaceTree,
   WrappedLineCache
 }
-import com.serenity.ui.renderer.ShapedTextCache
 import com.serenity.ui.theme.RichTextStyling
 
 /** A multi-column pane over a rich document whose rows are not all one line tall: headings at three sizes with space
@@ -76,15 +74,6 @@ final class ColumnPagingFixture(
   /** The cells one column wraps its text in, as `CursorViewport` and the painter both derive them. */
   val textColumns: Int = math.max(1, buffer.viewport.visibleColumns - LayoutEngine.perColumnGutterWidth(state))
 
-  /** Every layout here measures its wraps afresh, over one shaper that stays warm, as when the shaped-text cache was
-    * process-wide.
-    */
-  private val shaping = ShapedTextCache()
-
-  private val memos = LayoutMemos()
-
-  private def uncached: WrappedLineCache = WrappedLineCache.measuring(shaping, memos)
-
   val widthPx: Int = TextLayoutSnapshot.gridWrapWidthPx(textColumns, fontConfig)
 
   /** The rows one column draws, sized the way the renderer sizes the pane it paints. */
@@ -96,6 +85,9 @@ final class ColumnPagingFixture(
   /** The pixels the pane gives one column: its rows of the cell grid the pane is divided into. */
   val columnHeightPx: Int = rowsPerColumn * CellMetrics.fromFont(FontLoader.previewTextFont(fontConfig)).lineHeight
 
+  /** Kept across layouts as the running editor keeps its own, so a walk over a document measures each line once. */
+  val wrapCache: WrappedLineCache = WrappedLineCache.bounded()
+
   /** The columns of the page `viewport` anchors, laid out as the painter lays them out. */
   def columnsAt(viewport: Viewport, count: Int = columnCount, rows: Int = rowsPerColumn): Vector[TextLayoutSnapshot] =
     TextLayoutSnapshot.fromBufferColumns(
@@ -104,8 +96,8 @@ final class ColumnPagingFixture(
       font,
       proseScale = RichTextStyling.proseZoom(font.getSize2D),
       columnCount = count,
-      headings = state.persisted.config.headingSettings,
-      wrapCache = uncached
+      wrapCache = wrapCache,
+      headings = state.persisted.config.headingSettings
     )
 
   /** Every row of the document in order, laid out as one endless column. */
@@ -116,7 +108,7 @@ final class ColumnPagingFixture(
     val cursor = CursorPosition(id._1, id._2)
     from.copy(
       editing = EditingState(List(cursor)),
-      viewport = CursorViewport.adjustForCursorColumnMode(from, state, cursor, uncached)
+      viewport = CursorViewport.adjustForCursorColumnMode(from, state, cursor, wrapCache)
     )
 
   /** The pages the cursor can anchor, in document order, each placed from a cold viewport. */

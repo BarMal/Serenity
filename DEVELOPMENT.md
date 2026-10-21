@@ -47,6 +47,25 @@ sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 `third-party/`; `sbt checkThirdPartyNotices` (run in CI) fails if it is stale or a dependency has no registry row. See
 [CONTRIBUTING.md](CONTRIBUTING.md#licensing).
 
+### DNG-free Skiko natives
+
+The stock Skiko natives link the Adobe DNG SDK, whose licence terms conflict with GPLv3 (#2028). `.github/workflows/skiko-natives.yml`
+rebuilds them from the upstream Skia and Skiko tags in `ci/skiko/pins.env` with the reviewed patches beside it, scans every
+jar with `scripts/check_no_dng.py` (after proving the scanner on the stock library), and on a manual run publishes the six
+jars, attested, to the `skiko-maven` branch that GitHub Pages serves.
+
+A pull request builds all four runner groups and merges and scans the six jars; nothing is published. Skia is cached by pin and
+patch, so a warm run takes about ten minutes. A cold run builds Skia for every target: roughly 20 minutes on Linux, 50 on macOS
+and Windows.
+
+To change a pin or a patch:
+
+1. Edit `ci/skiko/pins.env` or the patch, and bump `NATIVES_VERSION` (`<skiko version>-dngfree.<n>`): the cache key and the
+   Maven coordinates both follow from them.
+2. Check `git apply --check` for each patch against the new tag, and run the unit tests in `scripts/`.
+3. Open the pull request and wait for the four groups and the merge job to pass.
+4. Run the workflow manually with `groups` = `all` and `publish` = `true`, then point the build at the new `NATIVES_VERSION`.
+
 ### Changelog
 
 `CHANGELOG.md` has two kinds of level-two heading and no others:
