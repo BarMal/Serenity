@@ -215,65 +215,7 @@ jobs:
       - name: Verify Windows launcher process model
         if: runner.os == 'Windows'
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $launcherPath = (Resolve-Path 'dist/Serenity/Serenity.exe').Path
-          $launcher = Start-Process -FilePath $launcherPath -PassThru
-          $observed = @()
-          $processIds = @()
-          $normalExit = $false
-
-          try {
-            Start-Sleep -Seconds 5
-            $launcher.Refresh()
-            if ($launcher.HasExited) {
-              throw "The Serenity launcher exited before the application was running."
-            }
-
-            $processes = Get-CimInstance Win32_Process
-            $launcherProcesses = @($processes | Where-Object { $_.ProcessId -eq $launcher.Id })
-            $applicationProcesses = @($processes | Where-Object {
-              $_.ParentProcessId -eq $launcher.Id -and $_.Name -ieq 'Serenity.exe' -and $_.ExecutablePath -ieq $launcherPath
-            })
-            if ($launcherProcesses.Count -ne 1 -or $applicationProcesses.Count -ne 1) {
-              throw "Expected a Serenity.exe launcher with one Serenity.exe child; observed $($launcherProcesses.Count) launchers and $($applicationProcesses.Count) application children."
-            }
-            $observed = @($launcherProcesses + $applicationProcesses)
-
-            $observed | ForEach-Object {
-              $runtime = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
-              [pscustomobject]@{
-                ProcessId = $_.ProcessId
-                ParentProcessId = $_.ParentProcessId
-                Name = $_.Name
-                ExecutablePath = $_.ExecutablePath
-                CommandLine = $_.CommandLine
-                CpuSeconds = if ($null -eq $runtime) { $null } else { $runtime.CPU }
-                WorkingSetMiB = [math]::Round([double]$_.WorkingSetSize / 1MB, 2)
-              }
-            } | Format-List
-            $processIds = @($observed | ForEach-Object ProcessId | Sort-Object -Descending -Unique)
-            $application = Get-Process -Id $applicationProcesses[0].ProcessId -ErrorAction Stop
-            if (-not $application.CloseMainWindow()) {
-              throw "The Serenity application child did not accept a normal window-close request."
-            }
-            if (-not $application.WaitForExit(15000) -or -not $launcher.WaitForExit(15000)) {
-              throw "Serenity launcher processes did not exit after a normal window-close request."
-            }
-            $remaining = Get-Process -Id $processIds -ErrorAction SilentlyContinue
-            if ($null -ne $remaining) {
-              throw "Serenity launcher processes remained after normal shutdown: $($remaining.Id -join ', ')."
-            }
-            $normalExit = $true
-          }
-          finally {
-            if (-not $normalExit) {
-              $processIds = @($launcher.Id) + $processIds
-              $processIds | ForEach-Object {
-                Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue
-              }
-            }
-          }
+        run: ./scripts/verify-windows-launcher.ps1
 
       # Launches the packaged image itself (not the jar) so a broken jlink runtime, launcher or missing resource fails
       # here rather than on a user's machine (#2030). The script starts it with --smoke-test, which prints a ready line

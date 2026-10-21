@@ -17,6 +17,14 @@ private[reducers] object OpaqueBlockGuard:
         edited.richText.richTextDocument.exists(_.hasMixedBlock) || skippedEveryEdit(before, edited)
       }
 
+  /** Whether any cursor sits on a block line, where input-method text is not composed (#2008). Unlike [[refuses]] this
+    * looks at the cursors' own lines only: composing beside a block changes nothing there.
+    */
+  def cursorOnBlock(buffer: Buffer): Boolean =
+    buffer.richText.richTextDocument.filter(_ => buffer.richTextInSync).exists { document =>
+      buffer.cursorList.exists(cursor => document.hasOpaqueBlockBetween(cursor.position.line, cursor.position.line))
+    }
+
   /** The edit paths that apply several ranges leave out one that would join a block, so an edit that did only that
     * comes back with the text it started with, which is a refusal too.
     */

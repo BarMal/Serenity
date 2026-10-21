@@ -5,8 +5,6 @@ import com.serenity.keystroke.events.{ColumnLeft, ColumnRight, EditorEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.ColumnPagingFixture.{RowId, paneId, rowId}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutMemos, WrappedLineCache}
-import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -18,12 +16,6 @@ class ColumnPagingNavigationSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val shaping = ShapedTextCache()
-
-  private val memos = LayoutMemos()
-
-  private def uncached: WrappedLineCache = WrappedLineCache.measuring(shaping, memos)
-
   private def cursorOf(state: AppState, fixture: ColumnPagingFixture): CursorPosition =
     state.persisted.buffers(fixture.buffer.id).editing.cursorPositions.head
 
@@ -31,11 +23,11 @@ class ColumnPagingNavigationSpec extends AnyFlatSpec with Matchers:
   private def rowOf(fixture: ColumnPagingFixture, cursor: CursorPosition): Option[RowId] =
     fixture.truth.reverse.find((line, column) => line == cursor.line && column <= cursor.column)
 
-  private def move(state: AppState, event: EditorEvent): AppState =
+  private def move(fixture: ColumnPagingFixture, state: AppState, event: EditorEvent): AppState =
     CursorViewport.ensureVisibleCursors(
       state,
-      VerticalNavSupport.dispatch(event, paneId, state, uncached).state,
-      uncached
+      VerticalNavSupport.dispatch(event, paneId, state, fixture.wrapCache).state,
+      fixture.wrapCache
     )
 
   /** The column, counted from the first column of the document, the cursor is in -- when the page the viewport anchors
@@ -60,7 +52,7 @@ class ColumnPagingNavigationSpec extends AnyFlatSpec with Matchers:
 
     s"Column right $label" should "advance one column at a time through the whole document, showing the cursor" in {
       val columnCount = fixture.pages.flatMap(_.columns).size
-      val walk        = Iterator.iterate(fixture.state)(move(_, ColumnRight)).take(columnCount + 2).toVector
+      val walk        = Iterator.iterate(fixture.state)(move(fixture, _, ColumnRight)).take(columnCount + 2).toVector
       val ordinals    = walk.map(columnShown(_, fixture))
 
       ordinals.forall(_.isDefined) shouldBe true
@@ -70,9 +62,9 @@ class ColumnPagingNavigationSpec extends AnyFlatSpec with Matchers:
 
     s"Column left $label" should "retrace the columns column right walked, one at a time" in {
       val columnCount = fixture.pages.flatMap(_.columns).size
-      val atEnd       = Iterator.iterate(fixture.state)(move(_, ColumnRight)).take(columnCount + 2).toVector.last
-      val back        = Iterator.iterate(atEnd)(move(_, ColumnLeft)).take(columnCount + 2).toVector
-      val ordinals    = back.map(columnShown(_, fixture))
+      val atEnd    = Iterator.iterate(fixture.state)(move(fixture, _, ColumnRight)).take(columnCount + 2).toVector.last
+      val back     = Iterator.iterate(atEnd)(move(fixture, _, ColumnLeft)).take(columnCount + 2).toVector
+      val ordinals = back.map(columnShown(_, fixture))
 
       ordinals.forall(_.isDefined) shouldBe true
       ordinals.flatten.distinct shouldBe (0 until columnCount).toVector.reverse
@@ -81,9 +73,9 @@ class ColumnPagingNavigationSpec extends AnyFlatSpec with Matchers:
     it should "return to the column it left when column right is followed by column left" in {
       val ordinals = fixture.pages.indices.map { pageIndex =>
         val start  = fixture.state
-        val onPage = (0 until pageIndex * columns + 1).foldLeft(start)((state, _) => move(state, ColumnRight))
+        val onPage = (0 until pageIndex * columns + 1).foldLeft(start)((state, _) => move(fixture, state, ColumnRight))
         val there  = columnShown(onPage, fixture)
-        val back   = columnShown(move(move(onPage, ColumnRight), ColumnLeft), fixture)
+        val back   = columnShown(move(fixture, move(fixture, onPage, ColumnRight), ColumnLeft), fixture)
         (there, back)
       }
       val lastColumn = fixture.pages.flatMap(_.columns).size - 1

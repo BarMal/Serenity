@@ -41,6 +41,9 @@ object ChapterNoteTransitions:
   def toggleGhosts(state: AppState): AppState =
     state.copy(runtime = state.runtime.copy(chapterGhostsVisible = !state.runtime.chapterGhostsVisible))
 
+  def toggleTermHighlights(state: AppState): AppState =
+    state.copy(runtime = state.runtime.copy(keywordHighlightsVisible = !state.runtime.keywordHighlightsVisible))
+
   /** Pins the notes pane to the note it shows, or lets it follow the cursor's chapter again. */
   def toggleNotesPin(state: AppState): AppState =
     state.copy(runtime =

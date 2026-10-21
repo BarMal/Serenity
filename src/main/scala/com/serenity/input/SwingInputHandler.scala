@@ -92,6 +92,10 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   /** Queues an event from outside the AWT listeners, in order with the keys and clicks already queued. */
   def submit(event: Event): Unit = enqueueRaw(event)
 
+  /** Queues what an input-method event stands for, in order with the keys and clicks already queued. */
+  def submitInputMethodEvent(event: java.awt.event.InputMethodEvent): Unit =
+    ImeEventTranslation.fromInputMethodEvent(event).foreach(submit)
+
   private def enqueueKey(info: KeyStrokeInfo, e: KeyEvent): Unit =
     frameTimings.keyLatency.keyReceived(e.getWhen)
     enqueue(QueuedKey(info))
@@ -174,13 +178,24 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       translateModifierReleased(e)
       modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierReleased(modifier, e.getWhen))))
 
-  // Installed only when diagnostics are on, so the default component carries no input-method hooks (#2008).
-  imeDiagnostics.foreach { sink =>
-    component.addInputMethodListener(ImeDiagnostics.listener(sink))
-    component match
-      case host: ImeRequestsHost => host.installInputMethodRequests(ImeDiagnostics.requests(component, sink))
-      case _                     => ()
-  }
+  // The platform's input method reports through the listener and asks through the requests (#2008): a commit and the
+  // pre-edit reach the pipeline as events, in order with the keys. Diagnostics only observe.
+  component.addInputMethodListener(
+    new InputMethodListener:
+      override def inputMethodTextChanged(e: InputMethodEvent): Unit =
+        imeDiagnostics.foreach(_(ImeDiagnostics.describe(e, System.currentTimeMillis())))
+        submitInputMethodEvent(e)
+        e.consume()
+      override def caretPositionChanged(e: InputMethodEvent): Unit =
+        imeDiagnostics.foreach(_(ImeDiagnostics.describe(e, System.currentTimeMillis())))
+        e.consume()
+  )
+  component match
+    case host: ImeRequestsHost =>
+      host.installInputMethodRequests(
+        ImeRequests.forComponent(component, () => host.caretBounds, imeDiagnostics.getOrElse(_ => ()))
+      )
+    case _ => ()
 
   // A summon chord is held, so a window that loses focus (Alt+Tab, say) never sees the release.
   component.addFocusListener(

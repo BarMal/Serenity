@@ -4,7 +4,9 @@ import com.serenity.richtext.{ParagraphAlignment, ParagraphRole, RichTextParagra
 import com.serenity.state.models.TextVisualLine
 import com.serenity.ui.theme.HeadingSettings
 
-/** Shifts a logical line's rows by its paragraph's alignment. */
+/** Shifts a logical line's rows by its paragraph's alignment, within the room each row has left of the offset it
+  * already carries (the indent a drop cap reserves).
+  */
 private[layout] object ParagraphAlignmentLayout:
 
   def apply(
@@ -35,7 +37,7 @@ private[layout] object ParagraphAlignmentLayout:
     alignment: ParagraphAlignment,
     panelWidthPx: Int
   ): TextVisualLine =
-    val availablePx = math.max(0.0f, panelWidthPx.toFloat - line.widthPx)
+    val availablePx = math.max(0.0f, panelWidthPx.toFloat - line.xOffsetPx - line.widthPx)
     val offsetPx =
       alignment match
         case ParagraphAlignment.Left | ParagraphAlignment.Justify => 0.0f
