@@ -1,7 +1,7 @@
 package com.serenity.ui.renderer
 
-import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

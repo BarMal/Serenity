@@ -499,9 +499,16 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
   }
 
   "A Skia surface over a window's canvas" should "offer no pixel lifting, since nothing it draws is kept" in {
-    val target  = Surface.Companion.makeRasterN32Premul(width, height)
+    val target = Surface.Companion.makeRasterN32Premul(width, height)
     val surface = SkiaRenderSurface.onCanvas(
-      target.getCanvas, metrics, font, width, height, deviceScale = 1.0, caches = caches, styledFonts = styledFonts
+      target.getCanvas,
+      metrics,
+      font,
+      width,
+      height,
+      deviceScale = 1.0,
+      caches = caches,
+      styledFonts = styledFonts
     )
 
     surface.pixelLifting shouldBe None

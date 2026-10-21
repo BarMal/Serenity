@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReferenc
 
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
+import com.serenity.ui.renderer.LabelAnchor.isWhole
 import com.serenity.ui.renderer.{
   CellRuns,
   Effects,
@@ -25,7 +26,6 @@ import com.serenity.ui.renderer.{
   SurfaceContentIdentity,
   TextDrawing
 }
-import com.serenity.ui.renderer.LabelAnchor.isWhole
 import com.serenity.ui.theme.TextStyle
 import org.jetbrains.skia.{BlendMode, Canvas, IRect, Paint, PaintMode, PaintStrokeCap, PaintStrokeJoin, Rect, Surface}
 
