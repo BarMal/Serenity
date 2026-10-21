@@ -11,7 +11,15 @@ object BenchmarkRunner:
     * covered without being listed. The set below adds the individually chosen ones from other families.
     */
   private val AllocationTrackedPrefixes =
-    List("laptop.", "render.", "command_runner.", "layout.anchor_wrap.", "layout.cold_font.")
+    List(
+      "laptop.",
+      "render.",
+      "command_runner.",
+      "layout.anchor_wrap.",
+      "layout.cold_font.",
+      "text.boundary.",
+      "text.counts."
+    )
 
   private[perf] def tracksAllocation(name: String): Boolean =
     AllocationTracked.contains(name) || AllocationTrackedPrefixes.exists(name.startsWith)

@@ -109,6 +109,34 @@ Measured on the build before any cache moves (three runs agree to within 1 KiB):
 
 An expected rise in the `stable_text` rows is not a regression to fix; record it in the PR. The footprint threshold below still applies to any row that is not explained that way.
 
+## Text-boundary and rope-count scenarios
+
+These rows exist so a change to how the per-thread `BreakIterator`s are owned (the `TextEditing`, `RopeCharacterSource` and `TextCounts` entries of `PurityAllowlist`, #2350) can be measured before and after. They need no window. Run them with `sbt "Test/runMain com.serenity.perf.BoundaryCacheBenchmarks"`, or through `PerformanceBenchmarks` with the prefixes `text.boundary.` and `text.counts.`.
+
+The prose has a multi-char cluster (e with a combining acute, a thumbs-up with a skin tone, the Devanagari syllable ni) after every sixth word, and the probes sit next to those clusters. That is deliberate: `TextEditing.nextGraphemeBoundary` answers a plain neighbour without touching a `BreakIterator`, so a probe in ASCII text would time the fast path and not the thing being moved. Each grapheme row's `verify` asserts that the answer crosses a whole cluster.
+
+| Row | What it times | What an iterator-ownership change should change |
+| --- | --- | --- |
+| `text.boundary.word_motion` | 64 `nextWordBoundary` + `previousWordBoundary` pairs over one unchanged rope | the word `BreakIterator` lookup and its identity-anchor hit |
+| `text.boundary.grapheme_motion` | 64 `nextGraphemeBoundary` + `previousGraphemeBoundary` pairs across clusters of one unchanged rope | the grapheme `BreakIterator` lookup and its identity-anchor hit |
+| `text.boundary.keystroke_after_edit` | one insert into the rope, then the four boundary questions a keystroke asks of the new text | the anchor miss: a new rope each time, so `setText` runs every time |
+| `text.boundary.find_whole_word` | `FindSearch.search` with whole-word on over about 3000 paragraphs, which asks `isWholeWordRange` of every candidate | the word iterator on the find path |
+| `text.counts.rope_build` | `Rope(text).wordCount` for a fresh rope, so every leaf's `TextSummary` is computed | the word and character iterators in `TextCounts.of` |
+| `text.counts.rope_edit` | one insert into a counted rope, then its word count: only the leaf and the joins on its path recompute | the same iterators on the incremental path |
+
+Every `text.boundary.*` and `text.counts.*` row has allocation columns. Three runs of `BoundaryCacheBenchmarks` on the cloud container that wrote them (shared CPU, so compare ratios, not absolute times), p50 ms and allocation p50:
+
+| Row | p50 ms (three runs) | allocation p50 |
+| --- | ---: | ---: |
+| `text.boundary.word_motion` | 0.125 / 0.145 / 0.120 | 7.6 KiB |
+| `text.boundary.grapheme_motion` | 0.047 / 0.053 / 0.042 | 7.9 KiB |
+| `text.boundary.keystroke_after_edit` | 0.0076 / 0.0077 / 0.0067 | 7.3 KiB |
+| `text.boundary.find_whole_word` | 5.57 / 5.73 / 5.17 | 474 KiB |
+| `text.counts.rope_build` | 18.2 / 18.2 / 18.6 | 820 KiB |
+| `text.counts.rope_edit` | 0.169 / 0.162 / 0.168 | 8.7 KiB |
+
+The run-to-run spread on the sub-millisecond boundary rows is up to about 12%, so a change on them needs the ABBA protocol below, not a single before/after pair.
+
 ## ABBA protocol
 
 Use it for any change that moves a cache, a lock or an allocation off the hot path, where the CI gate (a 2x ratio) is too coarse to see the effect. A is the baseline build and B the candidate; build both with `bench-artifacts.yml` (`serenity-perf.jar`) from the merge base and the candidate head.

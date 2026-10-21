@@ -172,7 +172,7 @@ private[layout] object IncrementalWrap:
       val reaches  = candidate.trace.reaches
       val reader   = reaches.indexWhere(_ > edit.prefix)
       val kept     = math.max(0, (if reader < 0 then oldRows.length else reader) - 1)
-      val measured = ParagraphMeasurement.assembled(spec, assembled.advances, shapedText)
+      val measured = ParagraphMeasurement.assembled(spec, assembled.advances, shapedText, memos.boundaries)
 
       /** The old row that began at `column` of the old text, if any: every row after it is still right. */
       def oldRowStarting(column: Int): Option[Int] =
