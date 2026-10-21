@@ -1,4 +1,4 @@
-package com.serenity.ui.renderer
+package com.serenity.ui.skia
 
 import java.awt.image.BufferedImage
 import java.nio.ByteOrder
@@ -28,15 +28,12 @@ final class SkiaImageCache:
 
 object SkiaImageCache:
 
-  /** Shared by every surface that is not handed its own. */
-  val shared: SkiaImageCache = new SkiaImageCache()
-
   private val BytesPerPixel = 4
 
   /** Skia's native 32-bit order is BGRA on every platform Skiko ships for, which is an ARGB `int` written
     * little-endian; the pixels are copied as they are and Skia premultiplies them as it draws.
     */
-  private[renderer] def convert(source: BufferedImage): Image =
+  private[skia] def convert(source: BufferedImage): Image =
     val width  = source.getWidth
     val height = source.getHeight
     val argb   = source.getRGB(0, 0, width, height, new Array[Int](width * height), 0, width)

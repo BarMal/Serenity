@@ -1,4 +1,4 @@
-package com.serenity.ui.renderer
+package com.serenity.ui.skia
 
 import java.util.concurrent.ConcurrentHashMap
 
@@ -146,9 +146,6 @@ final class SkiaShapedTextCache(capacityPerGeneration: Int = SkiaShapedTextCache
 object SkiaShapedTextCache:
 
   val DefaultCapacity: Int = 2048
-
-  /** Shared by every surface that is not handed its own: shaping is a pure function of its key. */
-  val shared: SkiaShapedTextCache = new SkiaShapedTextCache()
 
   /** Whether `drawString`, which maps characters to glyphs and shapes nothing, would draw `text` as it should.
     * Ligatures and kerning are asked of the font by the layout attributes on the AWT font; combining marks and scripts

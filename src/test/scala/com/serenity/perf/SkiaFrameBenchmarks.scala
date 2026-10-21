@@ -46,7 +46,16 @@ private[perf] object SkiaFrameBenchmarks:
     private def deviceSize(logicalPx: Int): Int = math.ceil(logicalPx * DeviceScale).toInt
 
     def render(state: AppState, damage: Damage): FramePixels =
-      val surface = backend.surfaceOver(frame, metrics, codeFont, LogicalWidthPx, LogicalHeightPx, DeviceScale, true)
+      val surface = backend.surfaceOver(
+        frame,
+        metrics,
+        codeFont,
+        LogicalWidthPx,
+        LogicalHeightPx,
+        DeviceScale,
+        true,
+        RenderCaches.create()
+      )
       val _ = RendererFramePlanner.renderFrame(
         state,
         cursorVisible = false,

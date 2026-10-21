@@ -3,11 +3,10 @@ package com.serenity
 import java.awt.Font
 import java.awt.image.BufferedImage
 
-import scala.annotation.unused
-
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderSurface, ScreenIdentity, SkiaRenderSurface}
+import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderSurface, ScreenIdentity}
+import com.serenity.ui.skia.{SkiaRenderSurface, SkiaTextCaches}
 import org.jetbrains.skia.{Bitmap, BlendMode, ImageInfo, Paint, Rect, Surface}
 
 /** The pixels of one pooled frame, as the pixel specs read and stamp them whatever renders into them. */
@@ -132,7 +131,7 @@ object SkiaFrames extends FrameBackend:
     logicalHeightPx: Int,
     scale: Double,
     persists: Boolean,
-    @unused caches: RenderCaches
+    caches: RenderCaches
   ): RenderSurface =
     frame match
       case skia: SkiaFrame =>
@@ -144,6 +143,8 @@ object SkiaFrames extends FrameBackend:
             logicalWidthPx,
             logicalHeightPx,
             scale,
+            SkiaTextCaches.of(caches.backendCaches),
+            caches.styledFonts,
             layerCacheOwner = Some(ScreenIdentity(skia))
           )
         else
@@ -153,6 +154,8 @@ object SkiaFrames extends FrameBackend:
             FontSpec.fromAwt(font),
             logicalWidthPx,
             logicalHeightPx,
-            scale
+            scale,
+            SkiaTextCaches.of(caches.backendCaches),
+            caches.styledFonts
           )
       case other => throw new IllegalArgumentException(s"not a Skia frame: $other")

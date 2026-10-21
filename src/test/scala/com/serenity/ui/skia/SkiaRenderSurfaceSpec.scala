@@ -1,4 +1,4 @@
-package com.serenity.ui.renderer
+package com.serenity.ui.skia
 
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
@@ -7,6 +7,7 @@ import com.serenity.SkiaPixels
 import com.serenity.diagnostics.{FrameCounter, FrameCounters}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
+import com.serenity.ui.renderer.{FontSpec, RenderImage, StyledFontCache, SurfaceActivity}
 import com.serenity.ui.theme.TextStyle
 import org.jetbrains.skia.Surface
 import org.scalatest.flatspec.AnyFlatSpec
@@ -20,16 +21,18 @@ import org.scalatest.matchers.should.Matchers
   */
 class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
-  private val metrics = CellMetrics(charWidth = 7, lineHeight = 13, ascent = 10)
-  private val awtFont = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val font    = FontSpec.fromAwt(awtFont)
-  private val width   = 210
-  private val height  = 130
-  private val navy    = new Color(10, 20, 60)
+  private val metrics     = CellMetrics(charWidth = 7, lineHeight = 13, ascent = 10)
+  private val caches      = SkiaTextCaches.fresh()
+  private val styledFonts = StyledFontCache()
+  private val awtFont     = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+  private val font        = FontSpec.fromAwt(awtFont)
+  private val width       = 210
+  private val height      = 130
+  private val navy        = new Color(10, 20, 60)
 
   final private class Canvas(val surface: Surface, val scale: Double):
     val renderSurface: SkiaRenderSurface =
-      SkiaRenderSurface.retaining(surface, metrics, font, width, height, scale)
+      SkiaRenderSurface.retaining(surface, metrics, font, width, height, scale, caches, styledFonts)
 
     def pixels: Array[Int] = SkiaPixels.read(surface)
 
@@ -72,7 +75,16 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
   "A surface over a window's canvas" should "declare that it keeps nothing between frames and has no layer buffers" in {
     val surface = Surface.Companion.makeRasterN32Premul(width, height)
     val onCanvas =
-      SkiaRenderSurface.onCanvas(surface.getCanvas, metrics, font, width, height, deviceScale = 1.0)
+      SkiaRenderSurface.onCanvas(
+        surface.getCanvas,
+        metrics,
+        font,
+        width,
+        height,
+        deviceScale = 1.0,
+        caches = caches,
+        styledFonts = styledFonts
+      )
 
     onCanvas.persistentContentKey shouldBe None
     onCanvas.pixelCopying shouldBe None
@@ -87,7 +99,7 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val first  = Surface.Companion.makeRasterN32Premul(width, height)
     val second = Surface.Companion.makeRasterN32Premul(width, height)
     def retaining(over: Surface, scale: Double) =
-      SkiaRenderSurface.retaining(over, metrics, font, width, height, scale)
+      SkiaRenderSurface.retaining(over, metrics, font, width, height, scale, caches, styledFonts)
 
     retaining(first, 1.0).persistentContentKey shouldBe retaining(first, 1.0).persistentContentKey
     retaining(first, 1.0).persistentContentKey should not be retaining(second, 1.0).persistentContentKey
@@ -97,7 +109,8 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report the viewport in cells and the device scale it was built with" in {
-    val surface = SkiaRenderSurface.retaining(canvasAt(2.0).surface, metrics, font, width, height, 2.0)
+    val surface =
+      SkiaRenderSurface.retaining(canvasAt(2.0).surface, metrics, font, width, height, 2.0, caches, styledFonts)
 
     surface.viewportWidth shouldBe width / metrics.charWidth
     surface.viewportHeight shouldBe height / metrics.lineHeight
@@ -106,7 +119,8 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "measure text in the render context layout shares, scaled to the device" in {
-    val surface = SkiaRenderSurface.retaining(canvasAt(2.0).surface, metrics, font, width, height, 2.0)
+    val surface =
+      SkiaRenderSurface.retaining(canvasAt(2.0).surface, metrics, font, width, height, 2.0, caches, styledFonts)
 
     val context = surface.text.fontRenderContext.getOrElse(fail("expected a font render context"))
     context.getTransform.getScaleX shouldBe 2.0
@@ -161,8 +175,18 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave transparent pixels for a fully transparent colour on a surface that has alpha" in {
-    val target  = Surface.Companion.makeRasterN32Premul(width, height)
-    val surface = new SkiaRenderSurface(target.getCanvas, metrics, font, () => (), width, height, opaque = false)
+    val target = Surface.Companion.makeRasterN32Premul(width, height)
+    val surface = new SkiaRenderSurface(
+      target.getCanvas,
+      metrics,
+      font,
+      () => (),
+      width,
+      height,
+      opaque = false,
+      caches = caches,
+      styledFonts = styledFonts
+    )
     surface.pixels.fillPixelRect(0, 0, width, height, colour(Color.WHITE))
     surface.clearViewport(RenderColor.fromArgb(0x00102030))
     surface.flush()
@@ -342,7 +366,7 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       surface.text.drawRunPx(14f, 26, 100f, metrics.lineHeight, metrics.ascent, text)
     }
 
-    val advance             = SkiaFontCache.shared.faceFor(awtFont).font.measureTextWidth(text)
+    val advance             = caches.fonts.faceFor(awtFont).font.measureTextWidth(text)
     val (left, _, right, _) = inkBox(canvas, Color.BLACK.getRGB).getOrElse(fail("expected ink"))
     // A glyph's ink can sit up to a pixel inside its advance box and antialiasing adds one more pixel each side.
     left should (be >= 13 and be <= 17)
@@ -374,7 +398,17 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
   it should "count the runs it draws" in {
     val activity = SurfaceActivity()
     val target   = Surface.Companion.makeRasterN32Premul(width, height)
-    val surface  = new SkiaRenderSurface(target.getCanvas, metrics, font, () => (), width, height, activity = activity)
+    val surface = new SkiaRenderSurface(
+      target.getCanvas,
+      metrics,
+      font,
+      () => (),
+      width,
+      height,
+      caches = caches,
+      styledFonts = styledFonts,
+      activity = activity
+    )
     surface.text.drawRunPx(14f, 26, 56f, metrics.lineHeight, metrics.ascent, "a")
     surface.text.drawRunPx(14f, 39, 56f, metrics.lineHeight, metrics.ascent, "b")
 
@@ -409,19 +443,37 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     )
     val target = Surface.Companion.makeRasterN32Premul(width, height)
     val surface =
-      new SkiaRenderSurface(target.getCanvas, metrics, FontSpec.fromAwt(ligated), () => (), width, height)
+      new SkiaRenderSurface(
+        target.getCanvas,
+        metrics,
+        FontSpec.fromAwt(ligated),
+        () => (),
+        width,
+        height,
+        caches = caches,
+        styledFonts = styledFonts
+      )
     val stretch = "if a != b then c => d"
     surface.shapesStretchesOf(stretch) shouldBe true
 
     def paint(draw: SkiaRenderSurface => Unit): Array[Int] =
       val over = Surface.Companion.makeRasterN32Premul(width, height)
-      val s    = new SkiaRenderSurface(over.getCanvas, metrics, FontSpec.fromAwt(ligated), () => (), width, height)
+      val s = new SkiaRenderSurface(
+        over.getCanvas,
+        metrics,
+        FontSpec.fromAwt(ligated),
+        () => (),
+        width,
+        height,
+        caches = caches,
+        styledFonts = styledFonts
+      )
       blackWhite(s)
       draw(s)
       s.flush()
       SkiaPixels.read(over)
 
-    val shaped  = SkiaShapedTextCache.shared.stretchOf(stretch, SkiaFontCache.shared.faceFor(ligated).font)
+    val shaped  = caches.shapedText.stretchOf(stretch, caches.fonts.faceFor(ligated).font)
     val splitAt = 8
     val splitX  = shaped.leftEdgeOf(splitAt).getOrElse(fail("expected a glyph at the split"))
     val whole =

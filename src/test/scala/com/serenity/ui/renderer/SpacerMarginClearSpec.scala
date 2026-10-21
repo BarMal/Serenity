@@ -1,8 +1,6 @@
 package com.serenity.ui.renderer
 
-import java.awt.image.BufferedImage
-
-import com.serenity.PersistedFrameFixture
+import com.serenity.{FramePixels, PersistedFrameFixture}
 import com.serenity.config.{AppMode, ProseMeasure}
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
@@ -30,7 +28,7 @@ class SpacerMarginClearSpec extends AnyFlatSpec with Matchers with PersistedFram
       )
     )
 
-  private def stamped(image: BufferedImage, x: Int, y: Int): Boolean = (image.getRGB(x, y) & 0xffffff) == sentinel
+  private def stamped(image: FramePixels, x: Int, y: Int): Boolean = (image.rgbAt(x, y) & 0xffffff) == sentinel
 
   "A row drawn again" should "clear the pixel left of the text column that its glyphs can reach" in {
     val before  = proseState(cursorLine = 1)
@@ -46,8 +44,8 @@ class SpacerMarginClearSpec extends AnyFlatSpec with Matchers with PersistedFram
     val editedRowY   = topPx + 40
     val keptRowY     = topPx + 700
     val image        = session.pendingImage
-    image.setRGB(columnLeftPx - 1, editedRowY, sentinel)
-    image.setRGB(columnLeftPx - 1, keptRowY, sentinel)
+    image.stamp(columnLeftPx - 1, editedRowY, sentinel)
+    image.stamp(columnLeftPx - 1, keptRowY, sentinel)
 
     val (drawn, _) = session.draw(after, DamageProducer.forTransition(before, after))
 

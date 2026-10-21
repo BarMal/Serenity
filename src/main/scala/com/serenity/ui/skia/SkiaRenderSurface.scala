@@ -1,4 +1,4 @@
-package com.serenity.ui.renderer
+package com.serenity.ui.skia
 
 import java.awt.Color
 import java.awt.font.FontRenderContext
@@ -7,6 +7,22 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReferenc
 
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
+import com.serenity.ui.renderer.{
+  Effects,
+  FontSpec,
+  Java2DRenderSurface,
+  PaintedPixels,
+  PanelOutlineDrawing,
+  PixelCopying,
+  PixelDrawing,
+  RenderImage,
+  RenderSurface,
+  ScreenIdentity,
+  StyledFontCache,
+  SurfaceActivity,
+  SurfaceContentIdentity,
+  TextDrawing
+}
 import com.serenity.ui.renderer.LabelAnchor.isWhole
 import com.serenity.ui.theme.TextStyle
 import org.jetbrains.skia.{BlendMode, Canvas, IRect, Paint, PaintMode, PaintStrokeCap, PaintStrokeJoin, Rect, Surface}
@@ -38,10 +54,8 @@ final class SkiaRenderSurface(
     retainedSurface: Option[Surface] = None,
     opaque: Boolean = true,
     layerCacheOwnerOverride: Option[ScreenIdentity] = None,
-    fonts: SkiaFontCache = SkiaFontCache.shared,
-    shapedText: SkiaShapedTextCache = SkiaShapedTextCache.shared,
-    images: SkiaImageCache = SkiaImageCache.shared,
-    styledFonts: StyledFontCache = StyledFontCache.shared,
+    caches: SkiaTextCaches,
+    styledFonts: StyledFontCache,
     override val activity: SurfaceActivity = SurfaceActivity()
 ) extends RenderSurface
     with TextDrawing
@@ -50,6 +64,7 @@ final class SkiaRenderSurface(
     with PanelOutlineDrawing
     with PixelCopying:
   import SkiaRenderSurface.*
+  import caches.{fonts, images, shapedText}
 
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
@@ -184,7 +199,8 @@ final class SkiaRenderSurface(
     ascentPx: Int,
     stretch: String,
     from: Int,
-    until: Int
+    until: Int,
+    clipGlyphToRun: Boolean = false
   ): Unit =
     paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun = false) {
       val shapedBefore = shapedText.shapings
@@ -437,6 +453,8 @@ object SkiaRenderSurface:
     logicalWidthPx: Int,
     logicalHeightPx: Int,
     deviceScale: Double,
+    caches: SkiaTextCaches,
+    styledFonts: StyledFontCache,
     onFlush: () => Unit = () => (),
     layerCacheOwner: Option[ScreenIdentity] = None
   ): SkiaRenderSurface =
@@ -449,7 +467,9 @@ object SkiaRenderSurface:
       logicalHeightPx,
       deviceScale,
       deviceScale,
-      layerCacheOwnerOverride = layerCacheOwner
+      layerCacheOwnerOverride = layerCacheOwner,
+      caches = caches,
+      styledFonts = styledFonts
     )
 
   /** A surface over a raster `Surface` the caller keeps between frames. It promises what a retained image does: the
@@ -464,6 +484,8 @@ object SkiaRenderSurface:
     logicalWidthPx: Int,
     logicalHeightPx: Int,
     deviceScale: Double,
+    caches: SkiaTextCaches,
+    styledFonts: StyledFontCache,
     onFlush: () => Unit = () => (),
     layerCacheOwner: Option[ScreenIdentity] = None
   ): SkiaRenderSurface =
@@ -477,7 +499,9 @@ object SkiaRenderSurface:
       deviceScale,
       deviceScale,
       retainedSurface = Some(surface),
-      layerCacheOwnerOverride = layerCacheOwner
+      layerCacheOwnerOverride = layerCacheOwner,
+      caches = caches,
+      styledFonts = styledFonts
     )
 
   /** The device size of a surface that holds `logicalPx` at `deviceScale`, as [[Java2DRenderSurface]] sizes its image.

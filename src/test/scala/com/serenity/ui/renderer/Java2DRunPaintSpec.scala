@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.{Color, Font}
 
+import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.theme.TextStyle
@@ -31,7 +32,7 @@ abstract class RunPaintBehaviour extends AnyFlatSpec with Matchers:
   private def freshImage(): FramePixels = frames.newFrame(width, height)
 
   private def surfaceOver(image: FramePixels): RenderSurface =
-    frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false)
+    frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, RenderCaches.create())
 
   private def drawBlankRun(surface: RenderSurface, background: Color): Unit =
     surface.setBackgroundColor(RenderColor.fromAwt(background))
