@@ -16,6 +16,7 @@ import com.serenity.ui.renderer.{
   PanelOutlineDrawing,
   PixelCopying,
   PixelDrawing,
+  PixelLifting,
   RenderImage,
   RenderSurface,
   ScreenIdentity,
@@ -76,6 +77,11 @@ final class SkiaRenderSurface(
 
   override def pixelCopying: Option[PixelCopying] =
     retainedSurface.filter(_ => isWhole(deviceScaleX) && isWhole(deviceScaleY)).map(_ => this)
+
+  private val lifting =
+    retainedSurface.map(kept => SkiaPixelLifting(kept, deviceScaleX, deviceScaleY, () => painted.forgetClear()))
+
+  override def pixelLifting: Option[PixelLifting] = lifting
 
   override def layerCacheOwner: ScreenIdentity = layerCacheOwnerOverride.getOrElse(super.layerCacheOwner)
 

@@ -498,6 +498,23 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     differing should be <= 2 * metrics.lineHeight
   }
 
+  "A Skia surface over a window's canvas" should "offer no pixel lifting, since nothing it draws is kept" in {
+    val target  = Surface.Companion.makeRasterN32Premul(width, height)
+    val surface = SkiaRenderSurface.onCanvas(
+      target.getCanvas, metrics, font, width, height, deviceScale = 1.0, caches = caches, styledFonts = styledFonts
+    )
+
+    surface.pixelLifting shouldBe None
+  }
+
+  "A Skia surface over a retained raster surface" should "offer pixel lifting along with the pixels it keeps" in {
+    val target  = Surface.Companion.makeRasterN32Premul(width, height)
+    val surface = SkiaRenderSurface.retaining(target, metrics, font, width, height, 1.0, caches, styledFonts)
+
+    surface.pixelLifting shouldBe defined
+    surface.persistentContentKey shouldBe defined
+  }
+
   "SkiaFontCache" should "hand the same face for equal fonts and build each font once, whichever thread asks first" in {
     val cache = new SkiaFontCache()
     val fonts = (0 until 6).map(size => new Font(Font.SANS_SERIF, Font.PLAIN, 10 + size)).toVector
