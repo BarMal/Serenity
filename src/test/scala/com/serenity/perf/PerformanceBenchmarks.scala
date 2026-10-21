@@ -53,6 +53,7 @@ object PerformanceBenchmarks:
       EditorConfigBenchmarks.benchmarks() ++
       EqualsBenchmarks.benchmarks() ++
       FindReplaceBenchmarks.benchmarks() ++
+      BoundaryCacheBenchmarks.benchmarks() ++
       lspAndProjectBenchmarks(projectRoot) ++
       RenderBenchmarks.markdownBenchmarks()
 
