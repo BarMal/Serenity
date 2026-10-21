@@ -117,6 +117,11 @@ jobs:
             fi
           done
 
+      - name: Test the window-wait helper
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/WindowWait.Tests.ps1
+
       - name: Verify Windows launcher process model
         if: runner.os == 'Windows'
         shell: pwsh
