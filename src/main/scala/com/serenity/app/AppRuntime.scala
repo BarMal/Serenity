@@ -151,6 +151,7 @@ object AppRuntime:
     recovery: StartupRecovery.Plan = StartupRecovery.Plan.normal,
     onFirstFrame: IO[Unit] = IO.unit,
     forwardedOpens: Stream[IO, List[Path]] = Stream.empty,
+    quitRequests: Stream[IO, QuitResponse] = Stream.empty,
     fileOrFolderOpen: Boolean = false
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     (Dispatcher.parallel[IO], Supervisor[IO](await = false)).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
@@ -314,6 +315,7 @@ object AppRuntime:
                       watchInputs.discrete.as(()),
                       windowFocused,
                       forwardedOpens,
+                      quitRequests,
                       recovery.crashRecorder
                     )
                   )
@@ -337,6 +339,7 @@ object AppRuntime:
     watchInputsChanges: Stream[IO, Unit],
     windowFocused: Signal[IO, Boolean],
     forwardedOpens: Stream[IO, List[Path]],
+    quitRequests: Stream[IO, QuitResponse],
     recordCrash: StartupRecovery.CrashRecorder
   )(using logger: Logger[IO]): IO[Unit] =
     val (lifecycle, quitSignal) = (stateManager.runtimeLifecycle, stateManager.runtimeLifecycle.awaitQuit.attempt)
@@ -399,8 +402,11 @@ object AppRuntime:
       ),
       AppRuntimeRenderLoops.superviseLoop("forwarded open loop", lifecycle.forceQuit, recordCrash)(
         forwardedOpens.evalMap(openForwarded(stateManager.fileOpener)).interruptWhen(quitSignal).compile.drain
+      ),
+      AppRuntimeRenderLoops.superviseLoop("desktop quit request loop", lifecycle.forceQuit, recordCrash)(
+        DesktopHooks.serveQuitRequests(quitRequests.interruptWhen(quitSignal), lifecycle.requestQuit)
       )
-    ).parMapN((_, _, _, _, _, _, _, _, _, _, _) => ())
+    ).parMapN((_, _, _, _, _, _, _, _, _, _, _, _) => ())
 
   /** Opens what a later launch handed over (#2023). A path that fails to open must not take the editor down with it. A
     * folder becomes the Explorer root, as Open Folder makes it.
