@@ -323,16 +323,6 @@ object ArchitectureChecks {
       "The word-boundary twin of `threadLocalBreakIterator`, kept separate so word motion's grapheme questions do not evict its text; same thread confinement and the same perf constraint (#1277)."
     ),
     PurityChecks.Allowed(
-      "main/scala/com/serenity/ui/layout/ParagraphMeasurement.scala",
-      "ParagraphMeasurement.threadLocalCharacterBreaks",
-      "Thread-confined `BreakIterator` scratch on the paragraph-measurement hot path; moving it was a perf problem (#1277)."
-    ),
-    PurityChecks.Allowed(
-      "main/scala/com/serenity/ui/layout/TextLayoutSnapshot.scala",
-      "TextLayoutSnapshot.threadLocalLineBreakIterator",
-      "Thread-confined line-break `BreakIterator` scratch used while wrapping; moving it was a perf problem (#1277)."
-    ),
-    PurityChecks.Allowed(
       "main/scala/com/serenity/rope/RopeCharacterSource.scala",
       "RopeCharacterSource.lastUsed",
       "Per-thread memo of the last adapter made for a rope. Its identity is the anchor the thread's `BreakIterator` cache compares, so it must live and die with those thread-locals."

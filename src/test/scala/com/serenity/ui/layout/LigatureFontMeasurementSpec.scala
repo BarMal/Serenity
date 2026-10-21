@@ -116,7 +116,7 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
 
   it should "fit a row of code from the measured advances rather than the per-row search" in
     codeLines.foreach { line =>
-      val paragraph = ParagraphMeasurement(keyFor(line, 233), 0, Int.MaxValue, ShapedTextCache())
+      val paragraph = ParagraphMeasurement(keyFor(line, 233), 0, Int.MaxValue, ShapedTextCache(), new BoundaryScratch)
 
       withClue(s"'$line': ") {
         paragraph.measuredFit(0, 233) should not be empty

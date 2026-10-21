@@ -15,6 +15,8 @@ import org.scalatest.matchers.should.Matchers
 /** The assumptions [[IncrementalWrap]]'s exactness rests on, each checked against the thing it assumes about. */
 class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
 
+  private val breaks = new BoundaryScratch
+
   private val measuredLayouts =
     layouts.filter(layout =>
       !layout.forceCellLayout && TextLayoutSnapshot.shouldUseMeasuredLayout(layout.font, frc, FontProbes())
@@ -44,8 +46,8 @@ class IncrementalWrapSoundnessSpec extends AnyFlatSpec with Matchers:
       val first  = head + breakText(rnd, 1 + rnd.nextInt(40))
       val second = head + breakText(rnd, 1 + rnd.nextInt(40))
       withClue(s"from=$from fit=$fit head=${head.map(c => f"\\u${c.toInt}%04x").mkString}: ")(
-        TextLayoutSnapshot.wordBoundarySegmentLength(first, from, fit) shouldBe
-          TextLayoutSnapshot.wordBoundarySegmentLength(second, from, fit)
+        TextLayoutSnapshot.wordBoundarySegmentLength(first, from, fit, breaks) shouldBe
+          TextLayoutSnapshot.wordBoundarySegmentLength(second, from, fit, breaks)
       )
     }
   }
