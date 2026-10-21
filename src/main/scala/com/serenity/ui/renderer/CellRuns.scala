@@ -7,7 +7,7 @@ import com.serenity.ui.layout.CharWidth
   * on it, on the cell its caret stop is, because its glyph's own advance need not be two cells. How many cells a
   * character takes is [[CharWidth]]'s answer, here as in the caret stops and the terminal: a combining mark takes none.
   */
-private[renderer] object CellRuns:
+private[ui] object CellRuns:
 
   /** The first codepoint with a wide East Asian Width: text below it is all narrow, which lets a string with no wide
     * character skip the cut.

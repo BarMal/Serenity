@@ -85,8 +85,13 @@ private[skia] object SkiaTypefaces:
     "/fonts/CourierPrime-Regular.ttf",
     "/fonts/CourierPrime-Bold.ttf",
     "/fonts/CourierPrime-Italic.ttf",
-    "/fonts/CourierPrime-BoldItalic.ttf"
+    "/fonts/CourierPrime-BoldItalic.ttf",
+    "/fonts/NotoEmoji-Regular.ttf",
+    "/fonts/NotoEmoji-Bold.ttf"
   )
+
+  /** Whether a bundled face carries `family`, whatever the system holds. */
+  def hasBundled(family: String): Boolean = Bundled.faces.exists(_.getFamilyName.equalsIgnoreCase(family))
 
   def fontFor(awt: java.awt.Font): Font =
     val bold     = awt.isBold

@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReferenc
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{
+  CellRuns,
   Effects,
   FontSpec,
   Java2DRenderSurface,
@@ -202,12 +203,18 @@ final class SkiaRenderSurface(
     until: Int,
     clipGlyphToRun: Boolean = false
   ): Unit =
-    paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun = false) {
+    paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun) {
       val shapedBefore = shapedText.shapings
       val shaped       = shapedText.stretchOf(stretch, fonts.faceFor(currentFontRef.get()).font)
       activity.shaped(shapedText.shapings - shapedBefore)
       shaped.draw(canvas, from, until, xPx, (yPx + ascentPx).toFloat, glyphPaint())
     }
+
+  override def withFallbackFamily(family: String)(draw: => Unit): Unit =
+    val surfaceFont = currentFontRef.get()
+    currentFontRef.set(styledFonts.fallbackFontFor(surfaceFont, family))
+    try draw
+    finally currentFontRef.set(surfaceFont)
 
   override def shapesStretchesOf(text: String): Boolean =
     SkiaShapedTextCache.worthShaping(baseFontRef.get(), text)
@@ -288,10 +295,12 @@ final class SkiaRenderSurface(
     if s.nonEmpty then
       val px    = metrics.toPixelX(x)
       val py    = pixelYForRow(y)
-      val width = s.length * metrics.charWidth
+      val width = CellRuns.cellsIn(s) * metrics.charWidth
       fillBackground(bgRef.get(), px, py, width, metrics.lineHeight)
       painted.touched(px, py, width, metrics.lineHeight)
-      drawText(s, 0, s.length, px.toFloat, (py + metrics.ascent).toFloat)
+      CellRuns.pieces(s).foreach { (cell, piece) =>
+        drawText(piece, 0, piece.length, (px + cell * metrics.charWidth).toFloat, (py + metrics.ascent).toFloat)
+      }
       drawRules(px, width, py + metrics.ascent)
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
