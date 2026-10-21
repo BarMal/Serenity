@@ -39,3 +39,17 @@ class ScreenLocationSpec extends AnyFlatSpec with Matchers:
   it should "find nothing on a screen that never showed the window" in {
     ScreenLocation.firstPixelOf(screenWith(_ => ()), blue) shouldBe None
   }
+
+  "candidateCorners" should "try the toolkit's position first, then the found pixel and its neighbours" in {
+    val corners = ScreenLocation.candidateCorners((0, 59), Some((1, 60)), slack = 1)
+
+    corners.head shouldBe ((0, 59))
+    corners should contain((1, 60))
+    corners should contain allOf ((0, 59), (2, 61), (0, 61), (2, 59))
+    corners.distinct shouldBe corners
+    corners.length shouldBe 9
+  }
+
+  it should "offer only the toolkit's position when nothing was found on the screen" in {
+    ScreenLocation.candidateCorners((5, 6), None, slack = 2) shouldBe List((5, 6))
+  }

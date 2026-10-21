@@ -17,3 +17,17 @@ object ScreenLocation:
       .range(0, pixels.length)
       .find(i => (pixels(i) & 0xffffff) == (rgb & 0xffffff))
       .map(i => (i % width, i / width))
+
+  /** Where a window's corner may be: the position the toolkit reports, then the neighbourhood of the first pixel found.
+    * The first pixel of a painted colour is not always the window's own corner (a rounded or bordered edge, as on
+    * macOS, leaves the corner another colour), so a few pixels either way are tried; a spec compares at each and keeps
+    * the best.
+    */
+  def candidateCorners(reported: (Int, Int), found: Option[(Int, Int)], slack: Int): List[(Int, Int)] =
+    val near =
+      for
+        (x, y) <- found.toList
+        dy     <- -slack to slack
+        dx     <- -slack to slack
+      yield (x + dx, y + dy)
+    (reported :: found.toList ::: near).distinct

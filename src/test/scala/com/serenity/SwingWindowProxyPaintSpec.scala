@@ -127,27 +127,31 @@ class SwingWindowProxyPaintSpec extends AnyFlatSpec with Matchers:
               onEventThread(())
               Toolkit.getDefaultToolkit.sync()
 
-              // The first row of the frame is a stripe, so the first stripe pixel on the screen is the canvas's own corner.
-              // The position the toolkit reports for the window can be stale (see ScreenLocation), so it is only the
-              // fallback for a screen that shows no stripe at all.
+              // The toolkit's idea of where the window is can be stale (see ScreenLocation), and the first stripe pixel on
+              // the screen is not always the canvas's own corner (macOS rounds the window's edge), so the capture is
+              // compared at each position either could mean and the best alignment is the one judged. A region the dialog
+              // proxy corrupted matches at none of them.
               def mismatchesOnScreen: (Int, String) =
                 val screen =
                   new Robot().createScreenCapture(new Rectangle(Toolkit.getDefaultToolkit.getScreenSize))
                 val reported = canvas.getLocationOnScreen
-                val origin =
-                  ScreenLocation.firstPixelOf(screen, StripeColor).fold(reported)((x, y) => new java.awt.Point(x, y))
+                val found    = ScreenLocation.firstPixelOf(screen, StripeColor)
                 // A pixel the screen does not have cannot match.
                 def onScreen(x: Int, y: Int): Int =
                   if x < 0 || y < 0 || x >= screen.getWidth || y >= screen.getHeight then -1
                   else screen.getRGB(x, y) & 0xffffff
-                val count =
+                def mismatchesAt(corner: (Int, Int)): Int =
                   (for
                     y <- 0 until region.height
                     x <- 0 until region.width
-                    if onScreen(origin.x + region.x + x, origin.y + region.y + y) !=
+                    if onScreen(corner._1 + region.x + x, corner._2 + region.y + y) !=
                       (frame.getRGB(region.x + x, region.y + y) & 0xffffff)
                   yield 1).size
-                count -> s"canvas at (${origin.x},${origin.y}), the toolkit said (${reported.x},${reported.y}); windows: ${showingWindows()}"
+                val (best, corner) = ScreenLocation
+                  .candidateCorners((reported.x, reported.y), found, slack = 2)
+                  .map(corner => mismatchesAt(corner) -> corner)
+                  .minBy(_._1)
+                best -> s"best alignment at $corner of the toolkit's (${reported.x},${reported.y}) and the first stripe pixel $found; windows: ${showingWindows()}"
               () => mismatchesOnScreen
             }.flatMap { capture =>
               // The screen shows a frame once the window system has composited it, which on macOS lags behind
