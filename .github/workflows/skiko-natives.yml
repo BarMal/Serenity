@@ -103,7 +103,15 @@ jobs:
           key: skia-zips-linux-x64-${{ hashFiles('ci/skiko/pins.env', 'ci/skiko/skia-no-dng.patch') }}
       - name: Build the image Skiko builds its Linux natives in
         timeout-minutes: 45
-        run: docker build -t skiko-linux-compat work/skiko/skiko/docker/linux-compat
+        # The Dockerfile clones depot_tools from chromium.googlesource.com, which answers 503 now and then; a retry resumes at the
+        # failed layer because the earlier ones are cached.
+        run: |
+          for attempt in 1 2 3; do
+            docker build -t skiko-linux-compat work/skiko/skiko/docker/linux-compat && exit 0
+            echo "image build attempt ${attempt} failed" >&2
+            sleep 60
+          done
+          exit 1
       - name: Build the Skiko runtime jars
         timeout-minutes: 90
         run: docker run --rm -v "$GITHUB_WORKSPACE:/w" -w /w skiko-linux-compat bash ci/skiko/build-natives.sh linux-x64 /w/work /w/repo skiko
@@ -156,7 +164,15 @@ jobs:
           key: skia-zips-linux-arm64-${{ hashFiles('ci/skiko/pins.env', 'ci/skiko/skia-no-dng.patch') }}
       - name: Build the image Skiko builds its Linux natives in
         timeout-minutes: 45
-        run: docker build -t skiko-linux-compat work/skiko/skiko/docker/linux-compat
+        # The Dockerfile clones depot_tools from chromium.googlesource.com, which answers 503 now and then; a retry resumes at the
+        # failed layer because the earlier ones are cached.
+        run: |
+          for attempt in 1 2 3; do
+            docker build -t skiko-linux-compat work/skiko/skiko/docker/linux-compat && exit 0
+            echo "image build attempt ${attempt} failed" >&2
+            sleep 60
+          done
+          exit 1
       - name: Build the Skiko runtime jars
         timeout-minutes: 90
         run: docker run --rm -v "$GITHUB_WORKSPACE:/w" -w /w skiko-linux-compat bash ci/skiko/build-natives.sh linux-arm64 /w/work /w/repo skiko
