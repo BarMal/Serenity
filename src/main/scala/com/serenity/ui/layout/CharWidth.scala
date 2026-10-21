@@ -18,7 +18,7 @@ import com.ibm.icu.lang.{UCharacter, UProperty}
   * What takes cells is a grapheme cluster, not a codepoint: [[ofCluster]] gives an emoji cluster (a variation selector
   * 16 on an emoji base, a zero-width-joiner join, an emoji modifier, a tag sequence, a regional-indicator pair) two
   * cells whatever its parts are, and any other cluster the sum of its codepoints' [[of]]. A caller that steps through
-  * text a codepoint at a time is right while [[hasClusterChars]] is false and steps by [[clusterEnd]] when it is not.
+  * text steps by [[clusterEnd]], which answers at once for a codepoint no mark or emoji extension follows.
   */
 object CharWidth:
 
@@ -74,7 +74,10 @@ object CharWidth:
   def clusterEnd(text: String, from: Int): Int =
     val first      = text.codePointAt(from)
     val afterFirst = from + Character.charCount(first)
-    if Character.isISOControl(first) then afterFirst
+    // Nothing below U+0300 extends a cluster, so a codepoint followed by one is a cluster of its own: plain ASCII and
+    // Latin text answers here.
+    if afterFirst >= text.length || text.charAt(afterFirst) < FirstNonTrivial || Character.isISOControl(first) then
+      afterFirst
     else
       val start =
         if isRegionalIndicator(first) && afterFirst < text.length && isRegionalIndicator(text.codePointAt(afterFirst))
