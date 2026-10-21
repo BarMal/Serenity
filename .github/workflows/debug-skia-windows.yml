@@ -1,0 +1,59 @@
+name: Debug Skia Windows
+
+on:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-windebug
+
+permissions:
+  contents: read
+
+jobs:
+  specs:
+    name: Skia pixel specs (${{ matrix.label }})
+    runs-on: windows-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: before-phase2
+            ref: efcf3df262eceaca925c6185ab795f39f0988377
+          - label: caches-moved
+            ref: 46e49535de1e0e75e674aa178d3fb3ae85766db8
+          - label: clip-fallback-putstring
+            ref: 8b66fd53700b9f2e0756bfff408a1eba8d85289c
+          - label: lifting
+            ref: b599723e31ada43b20da9b19e1e3daccdb04b7de
+          - label: head-with-diagnostics
+            ref: ''
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref || github.sha }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        uses: sbt/setup-sbt@v1
+
+      - name: Run the Skia pixel specs
+        shell: bash
+        run: sbt -v "testOnly com.serenity.SkiaChromeRepaintPixelsSpec com.serenity.SkiaScrollReusePixelsSpec com.serenity.SkiaFontDebugSpec"
+
+      - name: Print mismatch dumps
+        if: always()
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for dump in target/test-reports/frame-mismatches/*.txt; do
+            echo "::group::$dump"
+            cat "$dump"
+            echo "::endgroup::"
+          done

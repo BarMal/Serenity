@@ -181,5 +181,5 @@ trait PersistedFrameFixture:
         if (left(y * a.widthPx + x) & 0xffffff) != (right(y * b.widthPx + x) & 0xffffff)
       yield (x, y)
     if differing.nonEmpty then
-      val _ = FrameMismatchDump.write(getClass.getSimpleName, a.toImage, b.toImage, differing)
+      println("DEBUG " + FrameMismatchDump.write(getClass.getSimpleName, a.toImage, b.toImage, differing))
     differing
