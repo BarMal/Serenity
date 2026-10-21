@@ -1,7 +1,9 @@
 # Purity allowlist review, entry by entry
 
-The review of every `PurityAllowlist` entry (#2350). The proposals below are research; each redesign lands in its own
-PR, and this page is updated as entries are redesigned or confirmed as "keep".
+The review of every `PurityAllowlist` entry (#2350). The proposals below are research; each redesign landed in its own
+PR. **Outcome:** S1, S2, M1 and M2+M3 were redesigned and their entries deleted; L1 to L5 were measured and kept (owner
+decision of 2026-10-21 on #2350, below). The five `L` entries are the whole of `PurityAllowlist` now. The entries below
+keep the proposals as written when they were research, with a **Done** or **Measured** note where an outcome followed.
 
 ## Decisions (owner, 2026-10-20, on #2351)
 
@@ -12,7 +14,30 @@ PR, and this page is updated as entries are redesigned or confirmed as "keep".
   redesign for each with A/B numbers before implementing it.
 - One PR per item, with TDD and the full gates; none are user-visible, so each is marked ready once green.
 
-`ArchitectureChecks.PurityAllowlist` (`project/ArchitectureChecks.scala:304`) names ten declarations that the
+## Outcome (owner, 2026-10-21, on #2350)
+
+- **Redesigned and merged:** M1 (#2353), S1 (#2355), S2 (#2356) and M2+M3 (#2359). Each deleted its allowlist entry.
+- **Kept, with the measured reasons recorded on the entries:** L1 to L5. The benchmark rows that isolate them landed
+  first (#2362). A throwaway prototype of the purest redesign (no thread-locals at all) was run against master
+  `e770f10b` with `bench/abba.sh`, four runs a side, in the order A B B A A B B A, on a 4-core container under Xvfb; the
+  figures are medians of each run's p50.
+
+| Row | Master | No thread-locals | Time | Allocation per op |
+| --- | ---: | ---: | ---: | ---: |
+| `text.boundary.word_motion` | 0.282 ms | 0.690 ms | 2.45x | 7.8 KB to 366 KB |
+| `text.boundary.grapheme_motion` | 0.089 ms | 0.442 ms | 4.98x | 8.1 KB to 395 KB |
+| `text.boundary.keystroke_after_edit` | 0.0125 ms | 0.0245 ms | 1.97x | 7.6 KB to 19.8 KB |
+| `text.boundary.find_whole_word` | 7.92 ms | 9.95 ms | 1.26x | 477 KB to 5.95 MB (12x) |
+| `text.counts.rope_build` | 21.45 ms | 22.99 ms | 1.07x | 867 KB to 5.13 MB (5.9x) |
+| `text.counts.rope_edit` | 0.213 ms | 0.246 ms | 1.15x | 9.7 KB to 125 KB (13x) |
+
+  The first group (L1 to L3) removed all caching and the second (L4, L5) gave each `TextCounts.of` fresh iterators.
+  `abba_compare` blocked on six of the boundary metrics and on both counts rows' allocation; the time ranges of
+  `keystroke_after_edit`, `rope_build` and `rope_edit` overlap, so their time ratios are within noise. The container was
+  noisier than the standalone runs recorded in `performance-benchmarks.md`, so read the ratios, not the absolutes. These
+  are the worst case, not a plumbed scratch value; a scratch can at best equal master.
+
+`ArchitectureChecks.PurityAllowlist` named ten declarations when this review was written (five remain, see Outcome) that the
 declaration-level purity rules (`project/PurityChecks.scala`, #1677, #2324) catch but that were judged unable to move
 into runtime-owned state. This page, which `ArchitectureChecks.scala:302`, `PurityChecks.scala:327` and
 `DEVELOPMENT.md:130` point at, revisits every one for a redesign. It replaces a shorter earlier version of itself; the
@@ -23,8 +48,9 @@ points where that version was wrong or incomplete are carried into the entries (
 - Every entry gives: what it is, why it is impure or exempt (with `file:line`), one or two redesigns with their
   trade-offs including performance risk, and a recommendation (or **keep**, with a justification).
 - Line numbers are from `origin/master` at the time of writing.
-- **Nothing was measured.** Performance statements are read off the code and the #1277 history the code comments cite.
-  Where an inference carries weight it is marked *Caution, here be imagine dragons*. Any redesign that touches a hot path
+- **The entry texts were written before anything was measured.** Their performance statements are read off the code and
+  the #1277 history the code comments cite; the Outcome section has the later numbers. Where an inference carries
+  weight it is marked *Caution, here be imagine dragons*. Any redesign that touches a hot path
   needs the ABBA protocol ([performance-benchmarks.md](performance-benchmarks.md#abba-protocol), `bench/abba.sh`)
   before it merges.
 - Size is the estimated size of the redesign PR: **small** is one file plus its spec; **medium** is a handful of files
@@ -34,19 +60,18 @@ points where that version was wrong or incomplete are carried into the entries (
 
 | # | Entry | Size | Recommendation |
 | --- | --- | --- | --- |
-| S1 | `FontFirstUse.NoContexts` | small | Redesign: drop the concurrent-map sentinel |
-| S2 | `TuiConsoleLogFilter.suppressConsole` | small | Redesign: attach the filter from `Main` with its `LogRouting` |
-| M1 | `UiPresetStore.inProcessLocks` | medium | Redesign, but first a failing test: the lock may not exclude (see entry) |
-| M2 | `ParagraphMeasurement.threadLocalCharacterBreaks` | medium | Redesign: pass a scratch through the wrap pass |
-| M3 | `TextLayoutSnapshot.threadLocalLineBreakIterator` | medium | Same redesign as M2 |
-| L1 | `TextEditing.threadLocalBreakIterator` | large | Keep until a benchmark can gate it |
-| L2 | `TextEditing.threadLocalWordBreakIterator` | large | Keep, with L1 |
-| L3 | `RopeCharacterSource.lastUsed` | large | Keep, with L1 |
-| L4 | `TextCounts.threadLocalWords` | large | Keep, with justification |
-| L5 | `TextCounts.threadLocalCharacters` | large | Keep, with L4 |
+| S1 | `FontFirstUse.NoContexts` | small | **Done** (#2355): dropped the concurrent-map sentinel |
+| S2 | `TuiConsoleLogFilter.suppressConsole` | small | **Done** (#2356): the filter is attached from `Main` with its `LogRouting` |
+| M1 | `UiPresetStore.inProcessLocks` | medium | **Done** (#2353): a failing test proved the lock did not exclude; now a cooperative `Mutex` |
+| M2 | `ParagraphMeasurement.threadLocalCharacterBreaks` | medium | **Done** (#2359): a `BoundaryScratch` owned by `LayoutMemos` |
+| M3 | `TextLayoutSnapshot.threadLocalLineBreakIterator` | medium | **Done** (#2359): same scratch as M2 |
+| L1 | `TextEditing.threadLocalBreakIterator` | large | **Kept** (measured, owner decision) |
+| L2 | `TextEditing.threadLocalWordBreakIterator` | large | **Kept**, with L1 |
+| L3 | `RopeCharacterSource.lastUsed` | large | **Kept**, with L1 |
+| L4 | `TextCounts.threadLocalWords` | large | **Kept** (measured, owner decision) |
+| L5 | `TextCounts.threadLocalCharacters` | large | **Kept**, with L4 |
 
-Order of work (see Decisions): M1 first, then S1, S2, and M2+M3 together. L1 to L5 start with the benchmark row that
-isolates their paths (named under L1), and each gets a proposal with A/B numbers before any implementation.
+Order of work was M1 first, then S1, S2, and M2+M3 together, then L1 to L5 (benchmark rows first, #2362).
 
 ---
 
@@ -187,6 +212,10 @@ reason in the allowlist.
 
 ### L1. `TextEditing.threadLocalBreakIterator`
 
+**Measured, kept (owner, #2350).** With no caching at all, word motion was 2.45x slower, grapheme motion 4.98x,
+`keystroke_after_edit` 1.97x, and whole-word find 1.26x with 12x the allocation (table under Outcome). A scratch value
+can at best equal the cached path, and about 16 files on the reducer path have no natural owner for one.
+
 - **Where:** `src/main/scala/com/serenity/text/TextEditing.scala:232`; read at `:245`
   (`graphemeBreakIterator`). The cache class is `BreakIteratorCache` (`:223-230`).
 - **What it is:** a per-thread grapheme `BreakIterator` paired with the identity anchor of the `CharacterSource` it was
@@ -217,6 +246,8 @@ reason in the allowlist.
 
 ### L2. `TextEditing.threadLocalWordBreakIterator`
 
+**Kept with L1** (the `word_motion` and `find_whole_word` rows above).
+
 - **Where:** `src/main/scala/com/serenity/text/TextEditing.scala:237`; read at `:164` (`isWholeWordRange`) and `:248`.
 - **What it is:** the word-boundary twin of L1, kept separate so word motion's grapheme questions do not evict its text
   (`:235-236`).
@@ -225,6 +256,8 @@ reason in the allowlist.
   one's evictions.
 
 ### L3. `RopeCharacterSource.lastUsed`
+
+**Kept with L1** (the prototype also dropped this memo).
 
 - **Where:** `src/main/scala/com/serenity/rope/RopeCharacterSource.scala:35`; read at `:42` in `of`, which backs the
   rope extension methods at `:51-70`.
@@ -239,6 +272,12 @@ reason in the allowlist.
 - **Recommendation: keep, with L1.** It cannot be fixed on its own.
 
 ### L4. `TextCounts.threadLocalWords`
+
+**Measured, kept (owner, #2350).** Fresh iterators per `TextCounts.of` made `rope_build` allocate 5.9x and `rope_edit`
+13x for +7% and +15% time (table under Outcome). **Why eager summaries (design B) were rejected:** computing every
+leaf's summary when the rope is built would let the builder own the iterators, but it gives up the
+`RopeSummaryLazinessSpec` guarantee that building, editing, searching or measuring a rope segments nothing, and it
+threads a scratch value through the rope API, with no speed upside: the work moves earlier rather than disappearing.
 
 - **Where:** `src/main/scala/com/serenity/text/TextCounts.scala:42`; read at `:66`.
 - **What it is:** a per-thread word `BreakIterator` used by `TextCounts.of` (`:62-69`) to count words and characters.
@@ -263,6 +302,8 @@ reason in the allowlist.
   segment nothing.
 
 ### L5. `TextCounts.threadLocalCharacters`
+
+**Kept with L4**, same measurements and the same rejection of eager summaries.
 
 - **Where:** `src/main/scala/com/serenity/text/TextCounts.scala:45`; read at `:64`.
 - **What it is:** the character-instance twin of L4, also passed into `countWords` for per-character scripts (`:93`).
