@@ -79,6 +79,15 @@ class AppRuntimeInputBatchSpec extends AnyFlatSpec with Matchers:
         .drain
     yield ()
 
+  /** Spell check commits its analysis in the background after the first edit, and the observer counts those commits
+    * too; the test below is about the one commit it makes itself.
+    */
+  private val withoutBackgroundAnalysis =
+    AppConfig.default.withSpellCheck(AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = false))
+
+  /** How long a slow runner can hold the test up between a batch and its next step. */
+  private val SlowRunnerLag = 1.second
+
   private def key(char: Char): PendingInput =
     PendingInput.Keystroke(KeyStrokeInfo(InputKey.Character, Some(char), Set.empty))
 
@@ -123,11 +132,12 @@ class AppRuntimeInputBatchSpec extends AnyFlatSpec with Matchers:
 
   it should "let the commit observer see background commits again once a batch is applied" in {
     val program = for
-      stateManager <- editorWithEmptyBuffer()
+      stateManager <- editorWithEmptyBuffer(withoutBackgroundAnalysis)
       observed     <- Ref.of[IO, Int](0)
       _            <- stateManager.runtimeLifecycle.observeCommits((_, _) => observed.update(_ + 1))
       _            <- runBatches(stateManager, List(List(key('a'))))
       duringInput  <- observed.get
+      _            <- IO.sleep(SlowRunnerLag)
       _ <- stateManager.updateStateValidated(state =>
         state.copy(runtime = state.runtime.copy(chapterGhostsVisible = !state.runtime.chapterGhostsVisible))
       )

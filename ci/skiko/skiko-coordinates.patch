@@ -1,0 +1,12 @@
+--- a/skiko/buildSrc/src/main/kotlin/publishing.kt
++++ b/skiko/buildSrc/src/main/kotlin/publishing.kt
+@@ -160,7 +160,8 @@
+     publishing {
+         publications.configureEach {
+             this as MavenPublication
+-            groupId = SkikoArtifacts.DEFAULT_GROUP_ID
++            // Serenity: these are not JetBrains' binaries, so they do not carry JetBrains' coordinates.
++            groupId = "io.github.barmal"
+ 
+             // Necessary for publishing to Maven Central
+             artifact(emptyJavadocJar)

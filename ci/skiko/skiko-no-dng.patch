@@ -1,0 +1,10 @@
+--- a/skiko/build.gradle.kts
++++ b/skiko/build.gradle.kts
+@@ -61,7 +61,6 @@
+         }
+         jvm {
+             macos {
+-                staticSkiaLibs("piex", "dng_sdk")
+                 linkFlags("-lobjc")
+                 frameworks(
+                     "AppKit",
